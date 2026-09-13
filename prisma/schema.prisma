@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Core ──
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String?
+  phone        String?
+  passwordHash String
+  role         Role           @default(CUSTOMER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  businesses   BusinessMember[]
+  payments     Payment[]
+  subscriptions Subscription[]
+  auditEvents  AuditEvent[]
+
+  @@index([email])
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+model Business {
+  id            String         @id @default(cuid())
+  ownerId       String
+  owner         User           @relation(fields: [ownerId], references: [id])
+  slug          String         @unique
+  name          String
+  category      String
+  phone         String?
+  whatsapp      String?
+  location      String?
+  lat           Float?
+  lng           Float?
+  description   String?        @db.Text
+  logoUrl       String?
+  coverUrl      String?
+  language      String?        @default("en")
+  theme         String         @default("clean")
+  aftercallMsg  String?
+  isPublished   Boolean        @default(false)
+  status        BusinessStatus @default(PENDING)
+  openingHours  String?        @db.Text
+  socialLinks   String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  services      Service[]
+  offer         Offer?
+  events        AnalyticsEvent[]
+  subscription  Subscription?
+  payments      Payment[]
+  members       BusinessMember[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+enum BusinessStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model BusinessMember {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   @default("OWNER")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+}
+
+model Service {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  description String? @db.Text
+  priceFrom  Int?
+  priceLabel String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+}
+
+model Offer {
+  id         String    @id @default(cuid())
+  businessId String    @unique
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  subtitle   String?
+  validUntil DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model PageTheme {
+  id     String @id @default(cuid())
+  key    String @unique
+  name   String
+  config String @db.Text
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  eventType  String
+  source     String?
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, eventType])
+  @@index([businessId, createdAt])
+}
+
+model PlanConfig {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  name         String
+  priceKES     Int
+  durationDays Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  businessId String             @unique
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User               @relation(fields: [userId], references: [id])
+  planId     String
+  plan       PlanConfig         @relation(fields: [planId], references: [id])
+  status     SubscriptionStatus @default(PENDING)
+  startAt    DateTime?
+  expiresAt  DateTime?
+  graceUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([userId])
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  reference  String        @unique
+  businessId String?
+  business   Business?     @relation(fields: [businessId], references: [id])
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  planId     String?
+  amount     Int
+  currency   String        @default("KES")
+  status     PaymentStatus @default(PENDING)
+  paystackId String?
+  raw        String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([businessId])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  EXPIRED
+  CANCELLED
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+}
+
+model ProcessedWebhook {
+  id        String   @id
+  createdAt DateTime @default(now())
+}
