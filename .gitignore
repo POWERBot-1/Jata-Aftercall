@@ -1,0 +1,44 @@
+# JATA AFTERCALL gitignore
+node_modules
+.next
+out
+dist
+build
+coverage
+
+# env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# prisma
+prisma/migrations/.keep
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# os
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# vercel
+.vercel
+
+# testing
+.coverage
+
+# secrets audit
+*.pem
+*.key
