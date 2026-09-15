@@ -56,23 +56,46 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
 
 ## One-Time Setup (10 minutes)
 
-### 1. Database (Neon free tier)
+### 1. Database (Neon free tier) — Option I: Production DB Init + Isolated Build Gate
+
+**Fresh Option I implementation (not historical recovery):**
+
+- Baseline migration exists at `prisma/migrations/20250915000000_init/migration.sql` (12 tables, 4 enums, 20 indexes, 12 FKs, 0 DROP — parity with `schema.prisma`).
+- `scripts/migrate.sh`: if `DATABASE_URL` set → `npx prisma migrate deploy`, fail fast on error, no seed, no secret logging. If `DATABASE_URL` not set → skip (preview/offline).
+- `scripts/build.sh`: isolated gate — if `DATABASE_URL` present → run `migrate.sh` (failure aborts build, `next build` NOT executed). If absent → skip migration, `prisma generate` with offline fallback, then `next build` proceeds (preview).
+- Seed remains manual/trusted: `npm run seed` creates plans, themes, demo businesses + `admin@jata.link`. No `/api/seed`, `/api/migrate`, `/api/init` endpoint. Build/migrate gate never invokes seed.
+- `package.json` build is now `bash scripts/build.sh` (via `npm run build`).
+
 1. https://neon.tech → Create project `jata-aftercall` → copy **Connection string (pooled)**.
 2. Paste as `DATABASE_URL` in hosting env + locally in `.env.local`.
-3. Run migrations:
+3. Run migrations (local dev):
    ```bash
    npm ci
-   npx prisma migrate deploy   # or: npx prisma db push (dev)
+   npx prisma migrate deploy   # or: npx prisma db push (dev) — or via gate: bash scripts/migrate.sh
    npm run seed                # creates plans, themes, 4 demo businesses + admin@jata.link
    ```
+   Production (Vercel): `DATABASE_URL` present → `npm run build` automatically runs `scripts/migrate.sh` → `migrate deploy` → `next build`. If migration fails, build fails fast (gate). No manual `migrate deploy` needed in prod, but remains idempotent if run manually.
+
+**Behavior matrix:**
+
+| `DATABASE_URL` | `scripts/migrate.sh` | `scripts/build.sh` | Result |
+|---|---|---|---|
+| absent | skip, exit 0 | skip migrate, generate fallback, next build | Preview/offline build PASS |
+| present, migrate success | deploy success | migrate success → generate → next build | Production build PASS |
+| present, migrate failure | deploy fail, exit 1 | migrate fail → build aborts, next build NOT executed | Production build FAIL (gate) |
 
 ### 2. Hosting — Vercel (recommended)
 1. https://vercel.com → **Add New Project** → Import `POWERBot-1/Jata-Aftercall`.
-2. Framework: Next.js — Build command: `npm run build` — Output: `.next`.
-3. Add all env vars above (Production + Preview).
+2. Framework: Next.js — Build command: `npm run build` (`bash scripts/build.sh` — runs migrate gate if `DATABASE_URL` set, else preview) — Output: `.next`.
+3. Add all env vars above (Production + Preview). Production must have `DATABASE_URL`; Preview may omit for offline build test.
 4. **Deploy** → get `https://jata-aftercall.vercel.app`.
 5. Set `PUBLIC_BASE_URL` to that URL and redeploy (or set before first deploy).
-6. Verify: `https://jata-aftercall.vercel.app/health` → `{"status":"ok","db":"up"}`.
+6. Verify: `https://jata-aftercall.vercel.app/health` → `{"status":"ok","db":"up"}`. If migration failed, deploy fails at build step (gate) — check logs for `[migrate] ERROR`.
+
+**Isolated gate notes:**
+- No secret logging: `DATABASE_URL` never echoed.
+- No seed in gate: `npm run seed` remains manual post-migration.
+- No `/api/seed` endpoint — verified via `grep app/api`.
 
 ### 3. Hosting — Cloudflare Pages (alternative)
 1. https://dash.cloudflare.com → Pages → **Connect to Git** → same repo.
@@ -193,15 +216,26 @@ Do not add recurring cost for convenience.
 
 ---
 
-## Commands Summary
+## Commands Summary (Option I)
 
 ```bash
 npm ci
 npx prisma generate
-npx prisma migrate deploy   # prod
+bash scripts/migrate.sh      # prod gate: runs migrate deploy if DATABASE_URL set, else skip; fail fast
+npx prisma migrate deploy   # prod (manual idempotent, also via gate)
 npx prisma migrate dev      # dev (creates migration)
-npm run seed                 # demo data + admin
-npm run build                # must pass before deploy
-npm test                     # vitest
+npm run seed                 # demo data + admin — manual, never via build gate
+npm run build                # = bash scripts/build.sh — isolated gate: migrate (if DB) → generate → next build; fail prevents build
+npm test                     # vitest — 50 tests, tenant isolation
 npm run dev
 ```
+
+**Evidence checklist (fresh Option I):**
+
+- `prisma/migrations/20250915000000_init/migration.sql` — 12 tables, 4 enums, 20 indexes, 12 FKs, 0 DROP
+- `scripts/migrate.sh` — DATABASE_URL absent → skip, present success → deploy, present failure → exit 1
+- `scripts/build.sh` — DATABASE_URL absent → skip migrate → build PASS, present failure → build NOT executed
+- Preview build without DATABASE_URL — PASS
+- No unauthenticated seed/init endpoint
+- No secrets introduced
+- Tenant/Paystack/auth unaffected
