@@ -5,12 +5,13 @@
   "description": "JATA AFTERCALL — lightweight after-interaction business conversion pages for Kenyan SMEs",
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
-    "build": "prisma generate || echo 'prisma generate failed (offline) — continuing with fallback' && next build",
+    "build": "bash scripts/build.sh",
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx prisma/seed.ts",
+    "migrate": "bash scripts/migrate.sh",
     "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'"
   },
   "dependencies": {
