@@ -3,6 +3,7 @@
 // at the data-access boundary before read, update, or delete.
 import prisma from "./db";
 import { SessionPayload } from "./auth";
+import { publicErrorMessage, SAFE_ERRORS } from "./safeError";
 
 export class TenantError extends Error {
   status: number;
@@ -58,4 +59,19 @@ export async function loadBusinessForTenant(businessId: string, session: Session
  */
 export async function assertSlugOwnershipByBusinessId(businessId: string, session: SessionPayload) {
   await assertBusinessOwnership(businessId, session);
+}
+
+/**
+ * Session-derived authorization for mutations. Never reads a URL owner id.
+ */
+export async function guardTenantMutation(session: SessionPayload | null, businessId?: string | null) {
+  if (!session) return { ok: false as const, status: 401, error: SAFE_ERRORS.signIn };
+  if (!businessId) return { ok: false as const, status: 400, error: SAFE_ERRORS.chooseBusiness };
+  try {
+    await assertBusinessOwnership(businessId, session);
+    return { ok: true as const };
+  } catch (error) {
+    const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);
+    return { ok: false as const, status: mapped.status, error: mapped.message };
+  }
 }

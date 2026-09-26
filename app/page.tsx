@@ -22,7 +22,7 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="jata-landing">
       <Navbar session={session} />
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
@@ -38,7 +38,7 @@ export default async function HomePage() {
               JATA AFTERCALL gives your business a lightweight, mobile-first page for the moment <em>after</em> a customer interacts with you — WhatsApp, Call, Directions, Services, Offer, Analytics. No bulky website. No complexity.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/register" className="rounded-full bg-zinc-900 px-7 py-3 text-sm font-semibold text-white hover:bg-black">
+              <Link href="/register" className="jata-btn jata-btn-primary">
                 Get my business page →
               </Link>
               <a href="#demo" className="rounded-full border border-zinc-200 px-7 py-3 text-sm font-semibold hover:bg-zinc-50">

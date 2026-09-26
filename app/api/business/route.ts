@@ -3,13 +3,15 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { slugify, validateSlug } from "@/lib/slug";
 import { sanitizeText, validatePhone } from "@/lib/validation";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
+import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { canSetPublished } from "@/lib/publication";
 
 export async function GET() {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
 
   const businesses = await prisma.business.findMany({
     where: session.role === "ADMIN" ? {} : { ownerId: session.userId },
@@ -21,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
 
   try {
     const body = await req.json();
@@ -86,22 +88,21 @@ export async function POST(req: Request) {
     // Plan selection happens at checkout; we leave subscription null until checkout
 
     return NextResponse.json({ business }, { status: 201 });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Failed to create business" }, { status: 500 });
+  } catch {
+    console.error("business create failed");
+    return NextResponse.json({ error: SAFE_ERRORS.businessFailed }, { status: 500 });
   }
 }
 
 // PATCH for updating business (dashboard edit)
 export async function PATCH(req: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   try {
     const body = await req.json();
     const businessId = body.businessId || body.id;
-    if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
-
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardTenantMutation(session, businessId);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) {
@@ -116,7 +117,7 @@ export async function PATCH(req: Request) {
     if (body.description !== undefined) data.description = sanitizeText(body.description, 1000) || null;
     if (body.theme !== undefined) data.theme = resolveTheme(body.theme).key;
     if (body.aftercallMsg !== undefined) data.aftercallMsg = body.aftercallMsg ? sanitizeText(body.aftercallMsg, 120) : null;
-    if (body.isPublished !== undefined) data.isPublished = !!body.isPublished;
+    if (body.isPublished !== undefined && canSetPublished(!!body.isPublished)) data.isPublished = !!body.isPublished;
     if (body.openingHours !== undefined) data.openingHours = body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null;
     if (body.socialLinks !== undefined) data.socialLinks = body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null;
 
@@ -124,9 +125,8 @@ export async function PATCH(req: Request) {
     await logAudit({ actorId: session.userId, action: "BUSINESS_UPDATED", targetType: "BUSINESS", targetId: businessId });
     return NextResponse.json({ business: updated });
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string };
-    if (err.status) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error(e);
-    return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
+    if (mapped.status === 500) console.error("business update failed");
+    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
   }
 }

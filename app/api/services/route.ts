@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
 import { sanitizeText } from "@/lib/validation";
+import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
     const businessId = body.businessId;
-    if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardTenantMutation(session, businessId);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const title = sanitizeText(body.title || "", 80);
     if (!title || title.length < 2) return NextResponse.json({ error: "Service title required" }, { status: 400 });
@@ -24,10 +24,9 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ service }, { status: 201 });
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string };
-    if (err.status) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error(e);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    const mapped = publicErrorMessage(e, SAFE_ERRORS.serviceFailed);
+    if (mapped.status === 500) console.error("service save failed");
+    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
   }
 }
 
