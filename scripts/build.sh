@@ -16,10 +16,14 @@ else
   echo "[build] DATABASE_URL not set — skipping migration gate (preview/offline)"
 fi
 
-# Step 2: Prisma generate with offline fallback
+# Step 2: Prisma generate
 echo "[build] Running prisma generate..."
-if ! npx prisma generate; then
-  echo "[build] prisma generate failed (offline) — continuing with fallback"
+if [ -n "${DATABASE_URL:-}" ]; then
+  npx prisma generate
+else
+  if ! npx prisma generate; then
+    echo "[build] prisma generate failed (offline) — continuing with fallback"
+  fi
 fi
 
 # Step 3: Next.js build
