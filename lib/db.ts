@@ -6,6 +6,8 @@
  * and are marked `force-dynamic` to avoid prerender-time DB access.
  */
 
+import { allowStubPrismaClient } from "./prismaRuntime";
+
 declare global {
   // eslint-disable-next-line no-var
   var __prisma: any | undefined;
@@ -94,11 +96,15 @@ function createFallbackPrisma(): any {
       upsert: async () => ({ id: "mock" }),
       findMany: async () => [],
     },
+    $transaction: async () => {
+      throw new Error("DB not available (fallback)");
+    },
   };
   return stub;
 }
 
 function createRealPrisma(): any {
+  const databaseUrl = process.env.DATABASE_URL;
   try {
     // eslint-disable-next-line
     const { PrismaClient } = require("@prisma/client");
@@ -107,6 +113,10 @@ function createRealPrisma(): any {
     });
     return client;
   } catch (e) {
+    if (!allowStubPrismaClient(databaseUrl)) {
+      console.error("[db] Prisma client unavailable while DATABASE_URL is configured. Refusing stub fallback.");
+      throw e;
+    }
     console.warn("PrismaClient not available (offline fallback active):", (e as Error).message);
     return createFallbackPrisma();
   }

@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
-  let db = "unknown";
+  let db: "up" | "down" = "down";
   try {
     await prisma.$queryRaw`SELECT 1`;
     db = "up";
-  } catch (e: unknown) {
-    db = `down: ${(e as Error).message?.slice(0, 120)}`;
+  } catch {
+    db = "down";
   }
   return NextResponse.json({
     status: db === "up" ? "ok" : "degraded",

@@ -3,7 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --jata-ink: #18181b;
+  --jata-paper: #fafaf8;
+  --jata-card: #ffffff;
+  --jata-line: #e4e4e7;
+  --jata-muted: #52525b;
+  --jata-accent: #d97706;
+  --jata-live: #047857;
+  --jata-danger: #b91c1c;
+  --jata-focus: #18181b;
+  --jata-radius: 1rem;
+  --jata-shadow: 0 12px 32px rgba(24, 24, 27, 0.06);
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 * {
@@ -17,14 +28,237 @@ html {
 
 body {
   font-family: var(--font-sans);
+  background: var(--jata-paper);
+  color: var(--jata-ink);
 }
 
-/* Premium typography */
 h1, h2, h3 {
   letter-spacing: -0.02em;
 }
 
-/* Sticky CTA safe area */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.jata-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(217, 119, 6, 0.12), transparent 28rem),
+    var(--jata-paper);
+}
+
+.jata-landing {
+  min-height: 100vh;
+  background: var(--jata-card);
+  color: var(--jata-ink);
+}
+
+.jata-narrow {
+  margin: 0 auto;
+  max-width: 32rem;
+  padding: 2.5rem 1rem 3rem;
+}
+
+.jata-wide {
+  margin: 0 auto;
+  max-width: 42rem;
+  padding: 2rem 1rem 3rem;
+}
+
+.jata-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.jata-brand-mark {
+  border-radius: 0.55rem;
+  background: var(--jata-ink);
+  color: white;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.jata-brand-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.jata-brand-tag {
+  display: none;
+  color: var(--jata-muted);
+  font-size: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .jata-brand-tag {
+    display: inline;
+  }
+}
+
+.jata-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--jata-line);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+}
+
+.jata-back {
+  display: inline-flex;
+  margin-top: 1.5rem;
+  color: var(--jata-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.jata-title {
+  margin-top: 1.25rem;
+  font-size: 1.75rem;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.jata-subtitle {
+  margin-top: 0.4rem;
+  color: var(--jata-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.jata-card {
+  border: 1px solid var(--jata-line);
+  border-radius: 1.25rem;
+  background: var(--jata-card);
+  box-shadow: var(--jata-shadow);
+}
+
+.jata-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.jata-label {
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.jata-input {
+  width: 100%;
+  border: 1px solid var(--jata-line);
+  border-radius: 0.85rem;
+  background: white;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.95rem;
+  color: var(--jata-ink);
+}
+
+.jata-input:focus-visible,
+.jata-btn:focus-visible,
+.jata-cta:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--jata-focus);
+  outline-offset: 2px;
+}
+
+.jata-hint {
+  color: var(--jata-muted);
+  font-size: 0.75rem;
+}
+
+.jata-error {
+  color: var(--jata-danger);
+  font-size: 0.85rem;
+}
+
+.jata-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  border-radius: 999px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.jata-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jata-btn-primary {
+  background: var(--jata-ink);
+  color: white;
+}
+
+.jata-btn-primary:hover:not(:disabled) {
+  background: black;
+}
+
+.jata-btn-secondary {
+  border: 1px solid var(--jata-line);
+  background: white;
+  color: var(--jata-ink);
+}
+
+.jata-btn-ghost {
+  background: transparent;
+  color: var(--jata-muted);
+}
+
+.jata-cta {
+  min-height: 2.75rem;
+}
+
+.jata-kicker {
+  display: inline-flex;
+  border: 1px solid var(--jata-line);
+  border-radius: 999px;
+  background: #fafafa;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.jata-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: var(--jata-live);
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.jata-draft {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #3f3f46;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.jata-section-title {
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--jata-muted);
 }

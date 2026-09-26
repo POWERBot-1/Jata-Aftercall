@@ -56,11 +56,15 @@ export default function BusinessPage({
     : business.phone
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.name + " " + (business.location || ""))}`
       : null;
+  const quoteText = `Hi ${business.name}, I would like a quote.`;
+  const quoteHref = business.whatsapp
+    ? `https://wa.me/${business.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(quoteText)}`
+    : telLink;
 
   const t = theme;
 
   return (
-    <div className={`min-h-screen ${t.colors.bg} ${t.colors.text}`}>
+    <div className={`jata-public min-h-screen ${t.colors.bg} ${t.colors.text}`}>
       {/* Optional aftercall banner */}
       {business.aftercallMsg && (
         <div className={`border-b ${t.colors.border} ${t.colors.card} py-2 text-center text-sm font-medium`}>{business.aftercallMsg}</div>
@@ -88,7 +92,7 @@ export default function BusinessPage({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => track(business.id, "WHATSAPP_CLICK")}
-                className="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-600"
+                className="jata-cta inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-600"
               >
                 WhatsApp
               </a>
@@ -99,7 +103,7 @@ export default function BusinessPage({
               <a
                 href={telLink}
                 onClick={() => track(business.id, "CALL_CLICK")}
-                className={`inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
+                className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
               >
                 Call
               </a>
@@ -115,7 +119,7 @@ export default function BusinessPage({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => track(business.id, "DIRECTION_CLICK")}
-                className={`rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
+                className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
               >
                 Get Directions
               </a>
@@ -132,10 +136,31 @@ export default function BusinessPage({
                   alert("Link copied!");
                 }
               }}
-              className={`rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
+              className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
             >
               Share
             </button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <a href="#info" className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
+              Info
+            </a>
+            {quoteHref ? (
+              <a
+                href={quoteHref}
+                target={quoteHref.startsWith("http") ? "_blank" : undefined}
+                rel={quoteHref.startsWith("http") ? "noopener noreferrer" : undefined}
+                onClick={() => track(business.id, "WHATSAPP_CLICK")}
+                className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
+              >
+                Request quote
+              </a>
+            ) : (
+              <a href="#quote" className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
+                Request quote
+              </a>
+            )}
           </div>
 
           <div className="mt-3">
@@ -156,7 +181,7 @@ export default function BusinessPage({
 
         {/* Services */}
         <section id="services" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
-          <h2 className="text-sm font-bold">Services</h2>
+          <h2 className="text-sm font-bold">Services and products</h2>
           {services.length === 0 ? (
             <p className={`mt-2 text-sm ${t.colors.muted}`}>No services listed yet.</p>
           ) : (
@@ -179,8 +204,8 @@ export default function BusinessPage({
         </section>
 
         {/* About */}
-        <section className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
-          <h2 className="text-sm font-bold">About</h2>
+        <section id="info" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+          <h2 className="text-sm font-bold">Info</h2>
           <p className={`mt-2 text-sm leading-6 ${t.colors.muted}`}>{business.description || "Welcome to " + business.name + " — serving you with quality and care."}</p>
           {business.location && (
             <div className="mt-4">
@@ -196,6 +221,16 @@ export default function BusinessPage({
         </section>
 
         {/* Contact */}
+        <section id="quote" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+          <h2 className="text-sm font-bold">Quote</h2>
+          <p className={`mt-2 text-sm ${t.colors.muted}`}>Ask {business.name} for a quote. No payment is taken on this page.</p>
+          {quoteHref ? (
+            <a href={quoteHref} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
+          ) : (
+            <p className={`mt-2 text-sm ${t.colors.muted}`}>Add a phone or WhatsApp number to receive quote requests.</p>
+          )}
+        </section>
+
         <section className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Contact</h2>
           <div className={`mt-2 space-y-1 text-sm ${t.colors.muted}`}>

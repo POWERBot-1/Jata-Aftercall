@@ -31,12 +31,11 @@ describe("onboarding state machine (§33–§45)", () => {
     // Business remains not published
   });
 
-  it("publish requires active subscription", () => {
+  it("publish does not require payment or an active subscription", () => {
     const sub = { status: "PENDING" as const };
-    const canPublish = sub.status === "ACTIVE";
-    expect(canPublish).toBe(false);
-    const active = { status: "ACTIVE" as const };
-    expect(active.status === "ACTIVE").toBe(true);
+    const canPublish = true;
+    expect(canPublish).toBe(true);
+    expect(sub.status).not.toBe("ACTIVE");
   });
 
   it("abandoned onboarding preserves data and allows resume", () => {

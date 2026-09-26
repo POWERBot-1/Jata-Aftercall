@@ -18,6 +18,7 @@ model User {
   role         Role           @default(CUSTOMER)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  ownedBusinesses Business[]
   businesses   BusinessMember[]
   payments     Payment[]
   subscriptions Subscription[]
@@ -142,6 +143,7 @@ model PlanConfig {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  subscriptions Subscription[]
 }
 
 model Subscription {

@@ -28,8 +28,8 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">Your businesses</h1>
-      <p className="text-sm text-zinc-600">Manage pages, offers, analytics & subscription. Status is live when published + subscription active.</p>
+      <h1 className="text-xl font-bold">Your business</h1>
+      <p className="text-sm text-zinc-600">Identity, live state, view and share, sectioned editing, and real activity counts. Live means published. Payment is not required.</p>
       <DashboardClient
         businesses={businesses.map((b) => ({
           id: b.id,
