@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -47,19 +48,27 @@ export default function BusinessPage({
     track(business.id, "PAGE_VIEW");
   }, [business.id]);
 
-  const waLink = business.whatsapp
-    ? `https://wa.me/${business.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${business.name}, I found your page and would like to know more.`)}`
-    : null;
+  // Kenyan normalization: 07XXXXXXXX / 01XXXXXXXX -> 254XXXXXXXXX
+  const waInquiryText = `Hi ${business.name}, I found your page and would like to know more.`;
+  const quoteText = `Hi ${business.name}, I would like a quote.`;
+
+  const normalizedWa = normalizeKePhone(business.whatsapp);
+  const waLink = normalizedWa ? getWhatsAppUrl(normalizedWa, waInquiryText) : null;
+  const waQuoteLink = normalizedWa ? getWhatsAppUrl(normalizedWa, quoteText) : null;
+
+  // tel: link — keep original but fallback to normalized if valid
   const telLink = business.phone ? `tel:${business.phone}` : null;
+  const normalizedPhone = normalizeKePhone(business.phone);
+  const telLinkNormalized = normalizedPhone ? `tel:+${normalizedPhone}` : telLink;
+
   const mapsLink = business.location
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.location)}`
     : business.phone
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.name + " " + (business.location || ""))}`
       : null;
-  const quoteText = `Hi ${business.name}, I would like a quote.`;
-  const quoteHref = business.whatsapp
-    ? `https://wa.me/${business.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(quoteText)}`
-    : telLink;
+
+  // Request Quote fallback: WhatsApp -> tel: -> #quote
+  const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
 
   const t = theme;
 
@@ -99,9 +108,9 @@ export default function BusinessPage({
             ) : (
               <span className={`inline-flex items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-4 text-sm font-semibold opacity-50`}>WhatsApp</span>
             )}
-            {telLink ? (
+            {telLinkNormalized ? (
               <a
-                href={telLink}
+                href={telLinkNormalized}
                 onClick={() => track(business.id, "CALL_CLICK")}
                 className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
               >
@@ -146,7 +155,7 @@ export default function BusinessPage({
             <a href="#info" className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
               Info
             </a>
-            {quoteHref ? (
+            {quoteHref && quoteHref !== "#quote" ? (
               <a
                 href={quoteHref}
                 target={quoteHref.startsWith("http") ? "_blank" : undefined}
@@ -224,7 +233,7 @@ export default function BusinessPage({
         <section id="quote" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Quote</h2>
           <p className={`mt-2 text-sm ${t.colors.muted}`}>Ask {business.name} for a quote. No payment is taken on this page.</p>
-          {quoteHref ? (
+          {quoteHref && quoteHref !== "#quote" ? (
             <a href={quoteHref} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
           ) : (
             <p className={`mt-2 text-sm ${t.colors.muted}`}>Add a phone or WhatsApp number to receive quote requests.</p>
@@ -237,7 +246,7 @@ export default function BusinessPage({
             {business.phone && (
               <p>
                 Phone:{" "}
-                <a href={telLink || undefined} className="font-semibold underline" onClick={() => track(business.id, "CALL_CLICK")}>
+                <a href={telLinkNormalized || undefined} className="font-semibold underline" onClick={() => track(business.id, "CALL_CLICK")}>
                   {business.phone}
                 </a>
               </p>
@@ -245,9 +254,13 @@ export default function BusinessPage({
             {business.whatsapp && (
               <p>
                 WhatsApp:{" "}
-                <a href={waLink || undefined} target="_blank" rel="noopener noreferrer" className="font-semibold underline" onClick={() => track(business.id, "WHATSAPP_CLICK")}>
-                  {business.whatsapp}
-                </a>
+                {waLink ? (
+                  <a href={waLink} target="_blank" rel="noopener noreferrer" className="font-semibold underline" onClick={() => track(business.id, "WHATSAPP_CLICK")}>
+                    {business.whatsapp}
+                  </a>
+                ) : (
+                  <span className="font-semibold">{business.whatsapp} (invalid)</span>
+                )}
               </p>
             )}
             {business.openingHours && <p>Hours: {(() => { try { return JSON.stringify(JSON.parse(business.openingHours)); } catch { return business.openingHours; } })()}</p>}
@@ -285,8 +298,8 @@ export default function BusinessPage({
           ) : (
             <span className="flex flex-1 items-center justify-center rounded-full border py-3.5 text-sm font-semibold opacity-50">WhatsApp</span>
           )}
-          {telLink ? (
-            <a href={telLink} onClick={() => track(business.id, "CALL_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText}`}>
+          {telLinkNormalized ? (
+            <a href={telLinkNormalized} onClick={() => track(business.id, "CALL_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText}`}>
               Call
             </a>
           ) : null}
