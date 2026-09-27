@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { SAFE_ERRORS } from "@/lib/safeError";
+import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
+import Link from "next/link";
 
 type Biz = {
   id: string;
@@ -59,6 +61,7 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
       <FormError>{msg}</FormError>
       {businesses.map((b) => {
         const m = metricsMap[b.id] || { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 };
+        const isActiveSub = b.subscription?.status === "ACTIVE";
         return (
           <article key={b.id} className="jata-card p-5">
             <header className="flex flex-wrap items-start justify-between gap-3">
@@ -69,6 +72,13 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
                 <p className="mt-2">
                   <span className={b.isPublished ? "jata-live" : "jata-draft"}>{b.isPublished ? "Live" : "Draft"}</span>
                   <span className="ml-2 text-xs text-zinc-500">{b.status}</span>
+                  {b.subscription ? (
+                    <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${isActiveSub ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {b.subscription.status}
+                    </span>
+                  ) : (
+                    <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">No subscription</span>
+                  )}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -79,6 +89,31 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
                 </Button>
               </div>
             </header>
+
+            {/* Subscription CTA — authorized: Subscribe / View plans and pay */}
+            <div className="mt-4 rounded-xl border border-dashed bg-zinc-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Subscription</p>
+                  {b.subscription ? (
+                    <p className="mt-1 text-sm">
+                      {b.subscription.planName} — {b.subscription.status}
+                      {b.subscription.expiresAt ? ` · Expires ${new Date(b.subscription.expiresAt).toLocaleDateString()}` : ""}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-zinc-600">No active subscription — subscribe to keep your page active beyond trial.</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Link href={getSubscriptionPageUrl(b.id)} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">
+                    {isActiveSub ? "View plans" : "Subscribe"}
+                  </Link>
+                  <Link href={getSubscriptionPageUrl(b.id)} className="rounded-full border bg-white px-4 py-2 text-xs font-semibold hover:bg-zinc-50">
+                    View plans and pay
+                  </Link>
+                </div>
+              </div>
+            </div>
 
             <section className="mt-5">
               <p className="jata-section-title">Activity</p>
