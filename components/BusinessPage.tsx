@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import Link from "next/link";
 import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
 import { getDirectionsUrl } from "@/lib/location";
 
@@ -284,7 +285,7 @@ export default function BusinessPage({
           )}
         </section>
 
-        <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <a href="/" className="underline">Create your page</a></p>
+        <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <Link href="/" className="underline">Create your page</Link></p>
       </main>
 
       {/* Sticky bottom action bar — large touch targets (§5) */}
