@@ -16,6 +16,7 @@ export type ThemeTokens = {
     primaryText: string;
     accent: string;
     border: string;
+    surfaceMuted: string;
   };
   radius: string;
 };
@@ -34,6 +35,7 @@ export const THEMES: Record<ThemeKey, ThemeTokens> = {
       primaryText: "text-white",
       accent: "bg-amber-500",
       border: "border-zinc-200",
+      surfaceMuted: "bg-zinc-50/50",
     },
     radius: "rounded-2xl",
   },
@@ -50,6 +52,8 @@ export const THEMES: Record<ThemeKey, ThemeTokens> = {
       primaryText: "text-zinc-900",
       accent: "bg-emerald-400",
       border: "border-zinc-800",
+      // Nested surface inside a card (service rows) — dark so theme text/muted tokens stay readable (D1 fix)
+      surfaceMuted: "bg-zinc-800/50",
     },
     radius: "rounded-2xl",
   },
@@ -66,6 +70,7 @@ export const THEMES: Record<ThemeKey, ThemeTokens> = {
       primaryText: "text-white",
       accent: "bg-amber-500",
       border: "border-stone-200",
+      surfaceMuted: "bg-zinc-50/50",
     },
     radius: "rounded-2xl",
   },
