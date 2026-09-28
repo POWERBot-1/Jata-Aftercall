@@ -25,7 +25,7 @@ type Business = {
 };
 
 type ThemeTokens = {
-  colors: { bg: string; card: string; text: string; muted: string; primary: string; primaryText: string; accent: string; border: string };
+  colors: { bg: string; card: string; text: string; muted: string; primary: string; primaryText: string; accent: string; border: string; surfaceMuted: string };
   radius: string;
 };
 
@@ -196,13 +196,13 @@ export default function BusinessPage({
           ) : (
             <ul className="mt-3 space-y-2">
               {services.map((s) => (
-                <li key={s.id} onClick={() => track(business.id, "SERVICE_CLICK")} className={`flex items-start justify-between rounded-xl border ${t.colors.border} bg-zinc-50/50 px-3 py-3`}>
+                <li key={s.id} onClick={() => track(business.id, "SERVICE_CLICK")} className={`flex items-start justify-between rounded-xl border ${t.colors.border} ${t.colors.surfaceMuted} px-3 py-3`}>
                   <div>
                     <p className="text-sm font-semibold">{s.title}</p>
                     {s.description && <p className={`text-xs ${t.colors.muted}`}>{s.description}</p>}
                   </div>
                   {(s.priceLabel || s.priceFrom) && (
-                    <span className={`shrink-0 rounded-full border ${t.colors.border} bg-white px-2.5 py-1 text-xs font-medium`}>
+                    <span className={`shrink-0 rounded-full border ${t.colors.border} ${t.colors.card} px-2.5 py-1 text-xs font-medium`}>
                       {s.priceLabel || `From KES ${s.priceFrom?.toLocaleString()}`}
                     </span>
                   )}
