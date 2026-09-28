@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { SAFE_ERRORS } from "@/lib/safeError";
+import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 
+type Plan = { id: string; name: string; priceKES: number; durationDays: number };
 const CATEGORIES = ["Restaurant", "Salon", "Barber", "Mechanic", "Real Estate", "Professional Services", "Retail", "Home Services", "Beauty", "Food", "Events", "Other"];
-const STEPS = ["Business", "Services & offer", "Publish"] as const;
+const STEPS = ["Business & location", "Services & offer", "Choose plan", "Publish"] as const;
 
-export default function OnboardingForm() {
+export default function OnboardingForm({ plans }: { plans: Plan[] }) {
   const [step, setStep] = useState(1);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,6 +21,8 @@ export default function OnboardingForm() {
     phone: "",
     whatsapp: "",
     location: "",
+    lat: "",
+    lng: "",
     description: "",
     theme: "clean",
     aftercallMsg: "Thanks for contacting us",
@@ -126,7 +130,7 @@ export default function OnboardingForm() {
           );
         })}
       </ol>
-      <p className="mt-3 text-xs text-zinc-500">Step {step} of 3. Publishing does not require payment.</p>
+      <p className="mt-3 text-xs text-zinc-500">Step {step} of 4. Your business is saved before checkout; publishing remains optional.</p>
       <FormError>{err}</FormError>
 
       {step === 1 && (
@@ -150,9 +154,17 @@ export default function OnboardingForm() {
               <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} inputMode="tel" />
             </Field>
           </div>
-          <Field id="onboard-location" label="Location" hint="For example Kitengela, Nairobi.">
-            <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          <Field id="onboard-location" label="Location" hint="Address, neighborhood or landmark. Leave blank if you do not want directions shown.">
+            <input maxLength={160} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="onboard-lat" label="Latitude (optional)" hint="-90 to 90">
+              <input inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+            </Field>
+            <Field id="onboard-lng" label="Longitude (optional)" hint="-180 to 180">
+              <input inputMode="decimal" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+            </Field>
+          </div>
           <Field id="onboard-description" label="Short description">
             <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </Field>
@@ -210,15 +222,34 @@ export default function OnboardingForm() {
 
       {step === 3 && business && (
         <div className="mt-4 space-y-3">
+          <p className="jata-section-title">Choose a subscription plan</p>
+          <div className="rounded-xl bg-zinc-50 p-4 text-sm">
+            <p className="font-bold">{business.name}</p>
+            <p className="text-xs text-zinc-600">Business saved · /b/{business.slug}</p>
+          </div>
+          {plans.length ? <div className="grid gap-3 sm:grid-cols-2">{plans.map((plan) => (
+            <a key={plan.id} href={getCheckoutUrl(business.id, plan.id)} className="rounded-xl border bg-white p-4 hover:bg-zinc-50">
+              <p className="font-semibold">{plan.name}</p>
+              <p className="mt-1 text-xs text-zinc-600">KES {plan.priceKES.toLocaleString()} · {plan.durationDays} days</p>
+              <span className="mt-3 inline-flex rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white">Continue to secure checkout</span>
+            </a>
+          ))}</div> : <p className="rounded-lg bg-amber-50 p-3 text-sm">No active plans are available right now. You can publish now and choose a plan later.</p>}
+          <button type="button" onClick={() => setStep(4)} className="w-full rounded-full border px-4 py-3 text-sm font-semibold">Continue without payment</button>
+        </div>
+      )}
+
+      {step === 4 && business && (
+        <div className="mt-4 space-y-3">
           <p className="jata-section-title">Publish</p>
           <div className="rounded-xl bg-zinc-50 p-4 text-sm">
             <p className="font-bold">{business.name}</p>
             <p className="text-xs text-zinc-600">/b/{business.slug}</p>
-            <p className="mt-2 text-xs">You can publish now. Payment is not required to go live.</p>
+            <p className="mt-2 text-xs">Publishing is optional and does not require payment. Your page stays a draft until you publish it.</p>
           </div>
           <a href={`/b/${business.slug}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm font-semibold underline">Preview draft</a>
           <Button disabled={loading} onClick={publish} className="w-full">{loading ? "Publishing…" : "Publish page"}</Button>
           <p className="text-center text-xs text-zinc-500">Put /b/{business.slug} on WhatsApp, social posts, posters, and receipts.</p>
+          <a href="/dashboard" className="block text-center text-sm underline">Go to dashboard</a>
         </div>
       )}
     </div>

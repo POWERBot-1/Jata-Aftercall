@@ -42,6 +42,8 @@ export default async function DashboardPage() {
           phone: b.phone,
           whatsapp: b.whatsapp,
           location: b.location,
+          lat: b.lat,
+          lng: b.lng,
           description: b.description,
           aftercallMsg: b.aftercallMsg,
           publicUrl: getBusinessUrl(b.slug),

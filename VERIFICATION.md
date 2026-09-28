@@ -121,7 +121,7 @@ Test: `tests/unit/paystack.test.ts` — valid sig passes, tampered body fails, m
 
 **Idempotency:**
 - `Payment.reference` UNIQUE — duplicate `jata_...` throws
-- `ProcessedWebhook` table stores `eventId` and `activate:<reference>` — second delivery returns `already_processed` without double extension
+- `ProcessedWebhook` stores webhook event IDs in the same transaction as payment/subscription settlement; payment status compare-and-set prevents duplicate activation/extension
 ```bash
 # manual curl test (from DEPLOYMENT.md)
 PAYLOAD='{"event":"charge.success","data":{"reference":"jata_abc","amount":99900,"currency":"KES","id":123}}'
@@ -131,8 +131,8 @@ curl -X POST https://<provider>/api/paystack/webhook -H "x-paystack-signature: $
 ```
 
 **Verify endpoint:**
-- `GET /api/paystack/verify?reference=jata_abc` — calls `https://api.paystack.co/transaction/verify/:reference` with secret, checks `amount`/`currency`, only then updates `PAYMENT.PAID` and `activateSubscriptionForPayment` (idempotent)
-- Mock mode when `PAYSTACK_SECRET_KEY` not set: `/checkout/mock?reference=...` → `/api/paystack/verify?reference=...&mock=success` activates subscription for dev/CI
+- `GET /api/paystack/verify?reference=jata_abc` — requires the signed-in payment owner (or authorized admin), calls Paystack transaction verification, checks reference/amount/currency/status, and atomically settles the payment and subscription.
+- Local test mock is available only outside production with no Paystack secret, requires an authenticated owner, and is not accepted in production.
 
 **Failure handling:**
 - `charge.failed` → `Payment.FAILED`, does not activate
@@ -157,7 +157,7 @@ handle("evt_1") → "processed" (count 1)
 handle("evt_1") → "already_processed" (count still 1)
 ```
 
-Integration-level: `app/api/paystack/webhook/route.ts` checks `isWebhookProcessed(eventId)` before `handleEvent`, and `activateSubscriptionForPayment` checks `activate:<reference>` key before extending.
+Integration-level: webhook event IDs are recorded transactionally with payment/subscription updates; a conditional PENDING-to-PAID update prevents duplicate verification from extending twice.
 
 ---
 

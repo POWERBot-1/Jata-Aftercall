@@ -1,129 +1,101 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { verifyWebhookSignature, isWebhookProcessed, markWebhookProcessed, activateSubscriptionForPayment } from "@/lib/paystack";
+import { activateSubscriptionForPayment, isWebhookProcessed, verifyTransaction, verifyWebhookSignature } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
-
-// Paystack sends raw JSON body — we must read as text for HMAC
+import { validatePaymentEvidence } from "@/lib/paymentVerification";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-paystack-signature");
-
-  if (!process.env.PAYSTACK_SECRET_KEY) {
-    // In dev without secret, allow mock webhook if header absent but body contains mock flag
-    // Still enforce idempotency for testing
-    try {
-      const parsed = JSON.parse(rawBody);
-      if (parsed?.mock === true) {
-        const r = await handleEvent(parsed, parsed.id || parsed.data?.reference || `mock-${Date.now()}`);
-        return NextResponse.json(r);
-      }
-    } catch {}
-    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
-  }
-
   if (!verifyWebhookSignature(rawBody, signature)) {
-    await logAudit({ action: "WEBHOOK_SIGNATURE_FAILED", metadata: { signature: signature?.slice(0, 20) } });
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    await logAudit({ action: "WEBHOOK_SIGNATURE_FAILED" });
+    return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
-  let event: any;
-  try {
-    event = JSON.parse(rawBody);
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  let event: unknown;
+  try { event = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 }); }
+  if (!event || typeof event !== "object") return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
+  const payload = event as { id?: string | number; event?: string; data?: Record<string, unknown> };
+  const eventId = typeof payload.id === "string" ? payload.id.trim() : typeof payload.id === "number" && Number.isSafeInteger(payload.id) ? String(payload.id) : "";
+  const type = typeof payload.event === "string" ? payload.event : "";
+  const data = payload.data;
+  if (!eventId || eventId.length > 200 || !type || type.length > 100 || !data || typeof data !== "object" || Array.isArray(data)) {
+    return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
   }
+  if (await isWebhookProcessed(eventId)) return NextResponse.json({ status: "already_processed" });
 
-  const eventId = String(event.id || event.data?.reference || `${event.event}-${event.data?.id || Date.now()}`);
-
-  // Idempotency: duplicate delivery check
-  if (await isWebhookProcessed(eventId)) {
-    return NextResponse.json({ status: "already_processed", id: eventId });
-  }
-
-  const result = await handleEvent(event, eventId);
-  return NextResponse.json(result);
-}
-
-async function handleEvent(event: any, eventId: string) {
-  const type = event.event as string; // e.g. charge.success
-
-  // Only process charge.success for activation; others update status
-  if (type === "charge.success" || type === "charge.success.test") {
-    const data = event.data;
-    const reference = data.reference as string;
-    const amount = data.amount as number;
-    const currency = data.currency as string | undefined;
-    const paystackId = String(data.id);
-
-    const payment = await prisma.payment.findUnique({ where: { reference } });
-    if (!payment) {
-      await markWebhookProcessed(eventId);
-      await logAudit({ action: "WEBHOOK_UNKNOWN_REFERENCE", metadata: { reference, event: type } });
-      return { status: "ignored", reason: "unknown reference" };
+  if (type === "refund.processed") {
+    const refundReference = typeof data.transaction_reference === "string" ? data.transaction_reference : typeof data.reference === "string" ? data.reference : "";
+    if (!refundReference || refundReference.length > 100) return NextResponse.json({ error: "Invalid webhook reference." }, { status: 400 });
+    const refundPayment = await prisma.payment.findUnique({ where: { reference: refundReference } });
+    if (!refundPayment) {
+      await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+      return NextResponse.json({ status: "ignored" });
     }
-
-    // Amount validation
-    if (amount !== payment.amount) {
-      await prisma.payment.update({ where: { reference }, data: { status: "FAILED", raw: JSON.stringify(event) } });
-      await markWebhookProcessed(eventId);
-      await logAudit({ action: "WEBHOOK_AMOUNT_MISMATCH", targetType: "PAYMENT", targetId: payment.id, metadata: { expected: payment.amount, got: amount } });
-      return { status: "rejected", reason: "amount mismatch" };
-    }
-
-    // Idempotency second layer: if already PAID, don't re-activate
-    if (payment.status === "PAID") {
-      await markWebhookProcessed(eventId);
-      return { status: "already_paid", reference };
-    }
-
-    await prisma.payment.update({
-      where: { reference },
-      data: { status: "PAID", paystackId, raw: JSON.stringify(event) },
-    });
-
-    // Activate subscription — activateSubscriptionForPayment is idempotent via its own key
-    const updated = await prisma.payment.findUnique({ where: { reference } });
-    if (updated?.businessId) {
-      await activateSubscriptionForPayment(updated.id);
-    }
-
-    await markWebhookProcessed(eventId);
-    await logAudit({ actorId: payment.userId, action: "WEBHOOK_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id, metadata: { reference } });
-    return { status: "processed", reference };
-  }
-
-  if (type === "charge.failed" || type === "charge.dispute.create") {
-    const reference = event.data?.reference;
-    if (reference) {
-      await prisma.payment.update({ where: { reference }, data: { status: "FAILED", raw: JSON.stringify(event) } }).catch(() => null);
-    }
-    await markWebhookProcessed(eventId);
-    return { status: "marked_failed", reference };
-  }
-
-  if (type === "refund.processed" || type === "refund.failed") {
-    const reference = event.data?.transaction_reference || event.data?.reference;
-    if (reference) {
-      await prisma.payment.update({ where: { reference }, data: { status: type === "refund.processed" ? "REFUNDED" : "FAILED", raw: JSON.stringify(event) } }).catch(() => null);
-      // Optionally suspend subscription on refund
-      if (type === "refund.processed") {
-        const pay = await prisma.payment.findUnique({ where: { reference } });
-        if (pay?.businessId) {
-          await prisma.subscription.update({ where: { businessId: pay.businessId }, data: { status: "SUSPENDED" } }).catch(() => null);
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.processedWebhook.create({ data: { id: eventId } });
+        const changed = await tx.payment.updateMany({ where: { id: refundPayment.id, status: "PAID" }, data: { status: "REFUNDED" } });
+        if (changed.count && refundPayment.businessId) {
+          await tx.subscription.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
         }
-      }
+      });
+      await logAudit({ actorId: refundPayment.userId, action: "WEBHOOK_REFUND_PROCESSED", targetType: "PAYMENT", targetId: refundPayment.id });
+      return NextResponse.json({ status: "refund_processed" });
+    } catch {
+      if (await isWebhookProcessed(eventId)) return NextResponse.json({ status: "already_processed" });
+      return NextResponse.json({ error: "Refund event could not be processed; Paystack may retry." }, { status: 503 });
     }
-    await markWebhookProcessed(eventId);
-    return { status: "refund_processed", reference };
   }
 
-  // Unknown event types are acknowledged but not processed — still mark to prevent replay abuse
-  await markWebhookProcessed(eventId);
-  return { status: "ignored", event: type };
+  const reference = typeof data.reference === "string" ? data.reference : "";
+  if (!reference || reference.length > 100) return NextResponse.json({ error: "Invalid webhook reference." }, { status: 400 });
+  const payment = await prisma.payment.findUnique({ where: { reference } });
+  if (!payment) {
+    await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+    await logAudit({ action: "WEBHOOK_UNKNOWN_REFERENCE", metadata: { event: type } });
+    return NextResponse.json({ status: "ignored" });
+  }
+
+  if (type === "charge.success") {
+    try {
+      const transaction = await verifyTransaction(reference);
+      const payloadId = data.id === undefined ? "" : String(data.id);
+      if (transaction.status !== "success" || !validatePaymentEvidence(payment, transaction).ok ||
+          (payloadId && String(transaction.id) !== payloadId)) {
+        await logAudit({ actorId: payment.userId, action: "WEBHOOK_TRANSACTION_MISMATCH", targetType: "PAYMENT", targetId: payment.id });
+        return NextResponse.json({ error: "Webhook transaction did not match the pending payment." }, { status: 400 });
+      }
+      const settled = await activateSubscriptionForPayment(payment.id, eventId, {
+        paystackId: String(transaction.id),
+        raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+      });
+      await logAudit({ actorId: payment.userId, action: "WEBHOOK_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id });
+      return NextResponse.json({ status: settled.alreadySettled ? "already_paid" : "processed" });
+    } catch {
+      console.error("payment webhook settlement failed");
+      return NextResponse.json({ error: "Webhook could not be processed; Paystack may retry." }, { status: 503 });
+    }
+  }
+
+  if (type === "charge.failed") {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.processedWebhook.create({ data: { id: eventId } });
+        await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
+      });
+      return NextResponse.json({ status: "marked_failed" });
+    } catch {
+      if (await isWebhookProcessed(eventId)) return NextResponse.json({ status: "already_processed" });
+      return NextResponse.json({ error: "Webhook could not be processed; Paystack may retry." }, { status: 503 });
+    }
+  }
+
+  // Acknowledge unknown signed events exactly once; they cannot activate a payment.
+  await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+  return NextResponse.json({ status: "ignored" });
 }
 
-// Paystack may retry with GET? Only accept POST; return 405 for others
 export async function GET() {
-  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
+  return NextResponse.json({ error: "Method not allowed." }, { status: 405 });
 }

@@ -185,23 +185,28 @@ describe("resolveOnboardingDestination — owner redirect decisions (Fix 2)", ()
   });
 });
 
-describe("onboarding page calls redirect() outside try/catch (Fix 2)", () => {
+describe("onboarding page and new-business subscription journey", () => {
   const source = readFileSync(path.resolve(__dirname, "../../app/onboarding/page.tsx"), "utf8");
-  // Guard the code, not the comments explaining it.
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  const form = readFileSync(path.resolve(__dirname, "../../components/OnboardingForm.tsx"), "utf8");
 
-  it("delegates the decision to resolveOnboardingDestination and redirects at top level", () => {
-    expect(code).toContain("resolveOnboardingDestination(session.userId");
-    expect(code).toContain("if (destination) redirect(destination);");
+  it("requires a signed-in user and loads active plans without redirecting existing owners", () => {
+    expect(source).toContain('if (!session) redirect("/login");');
+    expect(source).toContain('where: { isActive: true }');
+    expect(source).toContain("<OnboardingForm plans=");
+    expect(source).not.toContain("resolveOnboardingDestination");
   });
 
-  it("contains no try/catch that could swallow the NEXT_REDIRECT signal", () => {
-    expect(code).not.toMatch(/\btry\s*\{/);
-    expect(code).not.toMatch(/\bcatch\b/);
+  it("creates and saves business context before offering plan-specific checkout", () => {
+    expect(form).toContain('fetch("/api/business"');
+    expect(form).toContain("getCheckoutUrl(business.id, plan.id)");
+    expect(form).toContain("Choose a subscription plan");
+    expect(form).toContain("Continue without payment");
+    expect(form).toContain("Business & location");
   });
 
-  it("still requires a session and still reads only the owner's businesses", () => {
-    expect(code).toContain('if (!session) redirect("/login");');
-    expect(code).toContain("where: { ownerId: userId }");
+  it("collects and submits location coordinates while keeping publishing separate", () => {
+    expect(form).toContain('id="onboard-lat"');
+    expect(form).toContain('id="onboard-lng"');
+    expect(form).toContain("isPublished: true");
   });
 });

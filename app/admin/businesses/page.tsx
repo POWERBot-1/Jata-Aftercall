@@ -3,8 +3,9 @@ import AdminBusinessActions from "@/components/AdminBusinessActions";
 export const dynamic = "force-dynamic";
 
 
-export default async function AdminBusinesses({ searchParams }: { searchParams: { q?: string } }) {
-  const q = (searchParams.q || "").trim();
+export default async function AdminBusinesses({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q: query } = await searchParams;
+  const q = (query || "").trim();
   const where = q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { slug: { contains: q, mode: "insensitive" as const } }] } : {};
   const businesses = await prisma.business.findMany({ where, orderBy: { createdAt: "desc" }, take: 50, include: { owner: true, subscription: { include: { plan: true } } } });
 

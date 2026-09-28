@@ -1,6 +1,8 @@
 "use client";
 import { useEffect } from "react";
+import Link from "next/link";
 import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
+import { getDirectionsUrl } from "@/lib/location";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -13,6 +15,8 @@ type Business = {
   phone?: string | null;
   whatsapp?: string | null;
   location?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   description?: string | null;
   theme: string;
   aftercallMsg?: string | null;
@@ -61,11 +65,7 @@ export default function BusinessPage({
   const normalizedPhone = normalizeKePhone(business.phone);
   const telLinkNormalized = normalizedPhone ? `tel:+${normalizedPhone}` : telLink;
 
-  const mapsLink = business.location
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.location)}`
-    : business.phone
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.name + " " + (business.location || ""))}`
-      : null;
+  const mapsLink = getDirectionsUrl(business.location, business.lat, business.lng);
 
   // Request Quote fallback: WhatsApp -> tel: -> #quote
   const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
@@ -285,7 +285,7 @@ export default function BusinessPage({
           )}
         </section>
 
-        <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <a href="/" className="underline">Create your page</a></p>
+        <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <Link href="/" className="underline">Create your page</Link></p>
       </main>
 
       {/* Sticky bottom action bar — large touch targets (§5) */}

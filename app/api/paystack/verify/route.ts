@@ -1,80 +1,89 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { verifyTransaction, activateSubscriptionForPayment } from "@/lib/paystack";
+import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
+import { activateSubscriptionForPayment, verifyTransaction } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
+import { failedPaymentStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const reference = searchParams.get("reference");
-  if (!reference) return NextResponse.json({ error: "reference required" }, { status: 400 });
-
   const session = await getSession();
-  // Verify is allowed for authenticated user; also supports unauthenticated polling for callback (check ownership if session exists)
+  if (!session) return NextResponse.json({ error: "Please sign in to check this payment." }, { status: 401 });
+  const { searchParams } = new URL(req.url);
+  const reference = searchParams.get("reference")?.trim() || "";
+  if (!reference || reference.length > 100) return NextResponse.json({ error: "A valid payment reference is required." }, { status: 400 });
+
   const payment = await prisma.payment.findUnique({ where: { reference } });
-  if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-
-  // If session exists, enforce that this payment belongs to requester (or admin)
-  if (session && payment.userId !== session.userId && session.role !== "ADMIN") {
-    return NextResponse.json({ error: "Tenant isolation" }, { status: 403 });
+  if (!payment) return NextResponse.json({ error: "Payment not found." }, { status: 404 });
+  if (payment.userId !== session.userId && session.role !== "ADMIN") {
+    return NextResponse.json({ error: "You are not authorized to view this payment." }, { status: 403 });
   }
-
-  // Idempotency: if already PAID, short-circuit — do not re-extend
-  if (payment.status === "PAID") {
-    const sub = await prisma.subscription.findUnique({ where: { businessId: payment.businessId || "" } });
-    return NextResponse.json({ status: "PAID", payment, subscription: sub, idempotent: true });
-  }
-
-  // If no Paystack key, allow mock verification in dev via ?mock=success
-  if (!process.env.PAYSTACK_SECRET_KEY) {
-    const mock = searchParams.get("mock");
-    if (mock === "success" || searchParams.get("callback_mock") === "1") {
-      await prisma.payment.update({ where: { reference }, data: { status: "PAID", raw: JSON.stringify({ mock: true }) } });
-      const updated = await prisma.payment.findUnique({ where: { reference } });
-      if (updated?.businessId) {
-        await activateSubscriptionForPayment(updated.id);
-      }
-      await logAudit({ actorId: payment.userId, action: "PAYMENT_MOCK_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
-      const sub = await prisma.subscription.findUnique({ where: { businessId: payment.businessId || "" } });
-      return NextResponse.json({ status: "PAID", payment: updated, subscription: sub, mock: true });
+  if (payment.businessId) {
+    try { await assertBusinessOwnership(payment.businessId, session); }
+    catch (error) {
+      const status = error instanceof TenantError ? error.status : 403;
+      return NextResponse.json({ error: status === 404 ? "Business not found." : "You are not authorized to view this payment." }, { status });
     }
-    return NextResponse.json({ status: payment.status, payment, note: "PAYSTACK_SECRET_KEY not set — use ?mock=success to simulate" });
+  }
+
+  if (payment.status === "PAID") {
+    const subscription = payment.businessId ? await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } }) : null;
+    if (payment.businessId && !subscription) {
+      try {
+        const transaction = await verifyTransaction(reference);
+        const evidence = validatePaymentEvidence(payment, transaction);
+        if (transaction.status !== "success" || evidence.ok === false) {
+          return NextResponse.json({ error: "Payment is recorded but could not be safely reconciled. Please contact support." }, { status: 503 });
+        }
+        const repaired = await activateSubscriptionForPayment(payment.id, undefined, {
+          paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+        });
+        return NextResponse.json({ status: "PAID", subscriptionStatus: (repaired.subscription as { status?: string } | null)?.status ?? null, idempotent: true });
+      } catch {
+        return NextResponse.json({ error: "Payment is recorded but subscription status needs attention. Please try again or contact support." }, { status: 503 });
+      }
+    }
+    return NextResponse.json({ status: "PAID", subscriptionStatus: subscription?.status ?? null, idempotent: true });
+  }
+  if (payment.status !== "PENDING") return NextResponse.json({ status: payment.status });
+
+  const mockRequested = searchParams.get("mock") === "success";
+  if (mockRequested && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+    try {
+      const result = await activateSubscriptionForPayment(payment.id, undefined, { raw: { testMock: true }, paystackId: `mock_${payment.reference}` });
+      await logAudit({ actorId: payment.userId, action: "PAYMENT_TEST_MOCK_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
+      return NextResponse.json({ status: "PAID", subscriptionStatus: (result.subscription as { status?: string } | null)?.status ?? "ACTIVE", testMode: true });
+    } catch {
+      return NextResponse.json({ error: "This test payment could not be completed." }, { status: 409 });
+    }
   }
 
   try {
-    const data = await verifyTransaction(reference);
-    // Validate status, amount, currency server-side
-    if (data.status === "success") {
-      if (data.amount !== payment.amount) {
-        await prisma.payment.update({ where: { reference }, data: { status: "FAILED", raw: JSON.stringify(data) } });
-        await logAudit({ actorId: payment.userId, action: "PAYMENT_AMOUNT_MISMATCH", targetType: "PAYMENT", targetId: payment.id, metadata: { expected: payment.amount, got: data.amount } });
-        return NextResponse.json({ error: "Amount mismatch — payment rejected", expected: payment.amount, got: data.amount }, { status: 400 });
+    const transaction = await verifyTransaction(reference);
+    const evidence = validatePaymentEvidence(payment, transaction);
+    if (evidence.ok === false) {
+      if (evidence.reason !== "REFERENCE_MISMATCH") {
+        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
       }
-      // Currency check — Paystack may return NGN or ZAR depending on account; allow KES/NGN but log
-      // For strict KES, uncomment next block. Here we validate that currency is present.
-      // if (data.currency !== payment.currency) { ... }
-
-      await prisma.payment.update({
-        where: { reference },
-        data: { status: "PAID", paystackId: String(data.id), raw: JSON.stringify(data) },
-      });
-      const updated = await prisma.payment.findUnique({ where: { reference } });
-      if (updated?.businessId) {
-        await activateSubscriptionForPayment(updated.id);
-      }
-      await logAudit({ actorId: payment.userId, action: "PAYMENT_VERIFIED", targetType: "PAYMENT", targetId: payment.id, metadata: { paystackId: data.id } });
-      const sub = updated?.businessId ? await prisma.subscription.findUnique({ where: { businessId: updated.businessId } }) : null;
-      return NextResponse.json({ status: "PAID", payment: updated, subscription: sub });
-    } else {
-      await prisma.payment.update({ where: { reference }, data: { status: "FAILED", raw: JSON.stringify(data) } });
-      return NextResponse.json({ status: "FAILED", payment: await prisma.payment.findUnique({ where: { reference } }) });
+      const action = evidence.reason === "AMOUNT_MISMATCH" ? "PAYMENT_AMOUNT_MISMATCH" : evidence.reason === "CURRENCY_MISMATCH" ? "PAYMENT_CURRENCY_MISMATCH" : "PAYMENT_REFERENCE_MISMATCH";
+      await logAudit({ actorId: payment.userId, action, targetType: "PAYMENT", targetId: payment.id });
+      return NextResponse.json({ status: "FAILED", error: "Paystack verification did not match this payment." }, { status: 400 });
     }
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Verification failed" }, { status: 500 });
+    if (transaction.status !== "success") {
+      const status = failedPaymentStatus(transaction.status);
+      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status } });
+      return NextResponse.json({ status, message: status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed." });
+    }
+
+    const settled = await activateSubscriptionForPayment(payment.id, undefined, {
+      paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+    });
+    await logAudit({ actorId: payment.userId, action: "PAYMENT_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
+    return NextResponse.json({ status: "PAID", subscriptionStatus: (settled.subscription as { status?: string } | null)?.status ?? "ACTIVE", idempotent: settled.alreadySettled });
+  } catch {
+    console.error("payment verification failed");
+    return NextResponse.json({ error: "Payment verification is temporarily unavailable. Refresh this page to check again." }, { status: 502 });
   }
 }
 
-export async function POST(req: Request) {
-  return GET(req);
-}
+export async function POST(req: Request) { return GET(req); }

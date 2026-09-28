@@ -89,7 +89,7 @@ describe("registration lifecycle", () => {
     auditShouldThrow = false;
   });
 
-  function deps(overrides: Record<string, unknown> = {}) {
+  function deps(overrides: Record<string, unknown> = {}): any {
     return {
       hashPassword: (password: string) => bcrypt.hash(password, 4),
       transaction: db.transaction,
@@ -156,7 +156,7 @@ describe("registration lifecycle", () => {
     };
     const result = await registerOwner(valid, deps());
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok !== false) return;
     expect(result.status).toBe(500);
     expect(result.error).toBe(SAFE_ERRORS.registerUnexpected);
     expect(responseHasTechnicalDetail(result.error)).toBe(false);
