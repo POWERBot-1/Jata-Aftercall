@@ -74,6 +74,8 @@ See `DEPLOYMENT.md` — GitHub → Vercel (or Cloudflare Pages) → provider HTT
 
 All subscription payments route to **Paystack merchant 2006074 (JATA ATLAS)**. Secret never exposed to frontend; verification server-side; webhook authoritative + idempotent. See `lib/paystack.ts` and `DEPLOYMENT.md`.
 
+> **Publication policy (decision G2, 2026-09-28):** public publication is **not** gated on subscription or payment status. `PUBLISH_REQUIRES_PAYMENT = false` (`lib/publication.ts`) — payment affects only subscription state/expiry, never whether a published `/b/[slug]` page is publicly visible. This behavior is pinned by `tests/security/publication-access.test.ts`.
+
 ---
 
 ## Routes
