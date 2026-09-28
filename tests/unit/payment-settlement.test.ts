@@ -34,7 +34,7 @@ describe("atomic, idempotent payment settlement", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-    state.payment = { id: "pay-a", reference: "jata-ref", status: "PENDING", businessId: "biz-a", userId: "user-a", planId: "plan-a" };
+    state.payment = { id: "pay-a", reference: "jata-ref", status: "PENDING", businessId: "biz-a", userId: "user-a", planId: "plan-a", currency: "KES" };
     state.plan = { id: "plan-a", key: "MONTH", durationDays: 30 };
     state.subscription = null;
     state.processed = new Set();
@@ -72,6 +72,13 @@ describe("atomic, idempotent payment settlement", () => {
     expect(state.subscription.expiresAt.toISOString()).toBe("2026-01-31T00:00:00.000Z");
     expect(mocksTx.payment.updateMany).not.toHaveBeenCalled();
     expect(state.upsertCount).toBe(1);
+  });
+
+  it("cannot settle a payment recorded in a non-KES currency", async () => {
+    state.payment.currency = "USD";
+    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_CURRENCY_MISMATCH");
+    expect(state.subscription).toBeNull();
+    expect(state.upsertCount).toBe(0);
   });
 
   it("does not activate a failed/cancelled payment", async () => {

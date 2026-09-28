@@ -43,6 +43,19 @@ describe("server payment verification route", () => {
     expect(mocks.activate).toHaveBeenCalledWith("pay-a", undefined, expect.objectContaining({ paystackId: "55" }));
   });
 
+  it("keeps exact verification lookup for an already-stored legacy reference", async () => {
+    const legacyReference = "jata_0123456789abcdef";
+    mocks.payment = { ...mocks.payment, reference: legacyReference };
+    mocks.findPayment.mockResolvedValue(mocks.payment);
+    mocks.verify.mockResolvedValue({ id: 55, status: "success", reference: legacyReference, amount: 14900, currency: "KES" });
+
+    const response = await GET(request(legacyReference));
+    expect(response.status).toBe(200);
+    expect(mocks.findPayment).toHaveBeenCalledWith({ where: { reference: legacyReference } });
+    expect(mocks.verify).toHaveBeenCalledWith(legacyReference);
+    expect(mocks.activate).toHaveBeenCalledWith("pay-a", undefined, expect.any(Object));
+  });
+
   it("rejects amount and currency mismatches without activation", async () => {
     for (const evidence of [
       { id: 55, status: "success", reference: "jata-ref", amount: 100, currency: "KES" },

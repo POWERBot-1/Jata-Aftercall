@@ -2,6 +2,7 @@
 import crypto from "crypto";
 import prisma from "./db";
 import { subscriptionWindow } from "./paymentVerification";
+import { PAYMENT_CURRENCY } from "./paymentCurrency";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -14,17 +15,21 @@ function getSecret(): string {
 export type InitializeParams = {
   email: string;
   amount: number;
+  currency: typeof PAYMENT_CURRENCY;
   reference: string;
   callbackUrl?: string;
   metadata?: Record<string, unknown>;
 };
 
 export async function initializeTransaction(params: InitializeParams): Promise<{ authorization_url: string; reference: string; access_code: string }> {
+  if (!/^[A-Za-z0-9.=-]+$/.test(params.reference) || params.currency !== PAYMENT_CURRENCY) {
+    throw new Error("PAYSTACK_INITIALIZATION_INPUT_INVALID");
+  }
   const response = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
     method: "POST",
     headers: { Authorization: `Bearer ${getSecret()}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: params.email, amount: params.amount, reference: params.reference,
+      email: params.email, amount: String(params.amount), currency: params.currency, reference: params.reference,
       callback_url: params.callbackUrl, metadata: params.metadata,
     }),
     signal: AbortSignal.timeout(15000),
@@ -95,6 +100,7 @@ export async function activateSubscriptionForPayment(
     const payment = await tx.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new Error("PAYMENT_NOT_FOUND");
     if (!payment.businessId || !payment.planId) throw new Error("PAYMENT_CONTEXT_INVALID");
+    if (payment.currency !== PAYMENT_CURRENCY) throw new Error("PAYMENT_CURRENCY_MISMATCH");
 
     if (eventId) {
       const alreadySeen = await tx.processedWebhook.findUnique({ where: { id: eventId } });

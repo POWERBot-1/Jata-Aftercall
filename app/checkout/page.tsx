@@ -5,11 +5,12 @@ import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import CheckoutForm from "@/components/CheckoutForm";
 
 export const dynamic = "force-dynamic";
-type Props = { searchParams: { businessId?: string; planId?: string } };
+type Props = { searchParams: Promise<{ businessId?: string; planId?: string }> };
 
 export default async function CheckoutPage({ searchParams }: Props) {
-  const businessId = searchParams.businessId || "";
-  const planId = searchParams.planId || "";
+  const { businessId: requestedBusinessId, planId: requestedPlanId } = await searchParams;
+  const businessId = requestedBusinessId || "";
+  const planId = requestedPlanId || "";
   const session = await getSession();
   if (!session) return <main className="mx-auto max-w-md px-4 py-10">
     <h1 className="text-xl font-bold">Sign in to continue</h1>

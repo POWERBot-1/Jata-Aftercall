@@ -4,9 +4,10 @@ import { getSession } from "@/lib/auth";
 import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 export const dynamic = "force-dynamic";
 
-type Props = { searchParams: { businessId?: string } };
+type Props = { searchParams: Promise<{ businessId?: string }> };
 
 export default async function SubscriptionPage({ searchParams }: Props) {
+  const { businessId: requestedBusinessId } = await searchParams;
   const session = await getSession();
   if (!session) return null;
   const ownerFilter = session.role === "ADMIN" ? {} : { ownerId: session.userId };
@@ -16,7 +17,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
     prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }).catch(() => []),
     prisma.payment.findMany({ where: paymentFilter, orderBy: { createdAt: "desc" }, take: 20, include: { business: { select: { name: true } } } }),
   ]);
-  const requestedId = searchParams.businessId || "";
+  const requestedId = requestedBusinessId || "";
   const selected = businesses.find((business) => business.id === requestedId) ||
     businesses.find((business) => business.subscription?.status !== "ACTIVE") || businesses[0] || null;
 

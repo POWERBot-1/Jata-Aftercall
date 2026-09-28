@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { initializeTransaction, toKobo } from "@/lib/paystack";
 import { getBaseUrl } from "@/lib/url";
+import { generatePaymentReference } from "@/lib/paymentReference";
+import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -38,10 +39,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "A payment for this plan is already in progress. Check its status before starting another." }, { status: 409 });
     }
 
-    const reference = `jata_${crypto.randomUUID().replace(/-/g, "")}`;
+    const reference = generatePaymentReference();
     const amount = toKobo(plan.priceKES);
     const payment = await prisma.payment.create({
-      data: { reference, businessId, userId: session.userId, planId: plan.id, amount, currency: "KES", status: "PENDING" },
+      data: { reference, businessId, userId: session.userId, planId: plan.id, amount, currency: PAYMENT_CURRENCY, status: "PENDING" },
       select: { id: true, reference: true, amount: true, currency: true, status: true },
     });
 
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
       const initialized = await initializeTransaction({
         email: user.email,
         amount,
+        currency: PAYMENT_CURRENCY,
         reference,
         callbackUrl: `${getBaseUrl()}/checkout/callback`,
         metadata: { businessId, userId: session.userId, planId: plan.id },

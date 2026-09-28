@@ -36,10 +36,33 @@ describe("POST /api/checkout", () => {
   });
 
   it("authenticates, checks ownership, and initializes using the DB plan amount, ignoring client amount", async () => {
-    const response = await POST(request({ businessId: "business-a", planId: "plan-month", amount: 1 }));
+    const response = await POST(request({ businessId: "business-a", planId: "plan-month", amount: 1, currency: "USD" }));
     expect(response.status).toBe(200);
-    expect(mocks.paymentCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amount: 14900, planId: "plan-month", businessId: "business-a", userId: "user-a" }) }));
-    expect(mocks.initialize).toHaveBeenCalledWith(expect.objectContaining({ amount: 14900, email: "owner@example.test" }));
+    expect(mocks.paymentCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amount: 14900, planId: "plan-month", businessId: "business-a", userId: "user-a", currency: "KES" }) }));
+    expect(mocks.initialize).toHaveBeenCalledWith(expect.objectContaining({ amount: 14900, currency: "KES", email: "owner@example.test" }));
+  });
+
+  it("generates distinct provider-safe references for separate checkout attempts", async () => {
+    const createdPayments: Array<Record<string, unknown>> = [];
+    mocks.paymentCreate.mockImplementation(async ({ data }: any) => {
+      createdPayments.push(data);
+      return { id: `payment-${createdPayments.length}`, ...data };
+    });
+    mocks.initialize.mockImplementation(async ({ reference }: { reference: string }) => ({
+      authorization_url: "https://checkout.paystack.test/authorize",
+      reference,
+      access_code: "opaque",
+    }));
+
+    const first = await POST(request({ businessId: "business-a", planId: "plan-month" }));
+    const second = await POST(request({ businessId: "business-a", planId: "plan-month" }));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const references = createdPayments.map((payment) => String(payment.reference));
+    expect(references).toHaveLength(2);
+    expect(references[0]).not.toBe(references[1]);
+    expect(references).toEqual([expect.stringMatching(/^jata-[A-Za-z0-9.=-]+$/), expect.stringMatching(/^jata-[A-Za-z0-9.=-]+$/)]);
+    expect(mocks.initialize.mock.calls.map(([params]) => params.reference)).toEqual(references);
   });
 
   it("rejects unauthenticated and unauthorized requests", async () => {

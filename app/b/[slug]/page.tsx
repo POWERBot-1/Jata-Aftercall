@@ -9,7 +9,7 @@ import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 async function getBusiness(slug: string) {
   const business = await prisma.business.findUnique({
@@ -39,7 +39,8 @@ async function viewerFromSession(): Promise<PublicViewer> {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const business = await getBusiness(params.slug);
+  const { slug } = await params;
+  const business = await getBusiness(slug);
   if (!business) return { title: "Page not found", robots: { index: false, follow: false } };
   const decision = publicPageDecision({ business: accessOf(business), viewer: await viewerFromSession() });
   if (decision === "missing" || decision === "not_found") {
@@ -64,7 +65,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PublicBusinessPage({ params }: Props) {
-  const business = await getBusiness(params.slug);
+  const { slug } = await params;
+  const business = await getBusiness(slug);
   const decision = publicPageDecision({
     business: business ? accessOf(business) : null,
     viewer: await viewerFromSession(),

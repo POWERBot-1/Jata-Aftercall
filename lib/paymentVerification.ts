@@ -1,3 +1,5 @@
+import { PAYMENT_CURRENCY } from "./paymentCurrency";
+
 export type PaymentExpectation = { reference: string; amount: number; currency: string };
 export type PaymentEvidence = { reference?: unknown; amount?: unknown; currency?: unknown; status?: unknown };
 export type PaymentMismatch = "REFERENCE_MISMATCH" | "AMOUNT_MISMATCH" | "CURRENCY_MISMATCH";
@@ -5,7 +7,7 @@ export type PaymentMismatch = "REFERENCE_MISMATCH" | "AMOUNT_MISMATCH" | "CURREN
 export function validatePaymentEvidence(expected: PaymentExpectation, evidence: PaymentEvidence): { ok: true } | { ok: false; reason: PaymentMismatch } {
   if (evidence.reference !== expected.reference) return { ok: false, reason: "REFERENCE_MISMATCH" };
   if (evidence.amount !== expected.amount) return { ok: false, reason: "AMOUNT_MISMATCH" };
-  if (evidence.currency !== expected.currency) return { ok: false, reason: "CURRENCY_MISMATCH" };
+  if (expected.currency !== PAYMENT_CURRENCY || evidence.currency !== PAYMENT_CURRENCY) return { ok: false, reason: "CURRENCY_MISMATCH" };
   return { ok: true };
 }
 

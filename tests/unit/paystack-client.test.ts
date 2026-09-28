@@ -11,15 +11,25 @@ describe("Paystack server client", () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
   it("initializes only a matching reference and a hosted Paystack URL", async () => {
-    const fetchMock = vi.fn(async () => providerResponse({ status: true, data: { reference: "jata-ref", authorization_url: "https://checkout.paystack.com/session", access_code: "opaque" } }));
+    const fetchMock = vi.fn(async (_url: string | URL, _init?: RequestInit) => providerResponse({ status: true, data: { reference: "jata-ref", authorization_url: "https://checkout.paystack.com/session", access_code: "opaque" } }));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, reference: "jata-ref" })).resolves.toMatchObject({ reference: "jata-ref" });
+    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, currency: "KES", reference: "jata-ref" })).resolves.toMatchObject({ reference: "jata-ref" });
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/transaction/initialize"), expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body).toMatchObject({ amount: "14900", currency: "KES", reference: "jata-ref" });
   });
 
   it("rejects provider redirects outside Paystack and mismatched init references", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => providerResponse({ status: true, data: { reference: "other", authorization_url: "https://attacker.example/steal", access_code: "opaque" } })));
-    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, reference: "jata-ref" })).rejects.toThrow("PAYSTACK_INITIALIZATION_FAILED");
+    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, currency: "KES", reference: "jata-ref" })).rejects.toThrow("PAYSTACK_INITIALIZATION_FAILED");
+  });
+
+  it("rejects unsupported references and any non-KES initialization currency before network access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, currency: "KES", reference: "jata_bad" })).rejects.toThrow("PAYSTACK_INITIALIZATION_INPUT_INVALID");
+    await expect(initializeTransaction({ email: "a@example.test", amount: 14900, currency: "USD" as "KES", reference: "jata-valid" })).rejects.toThrow("PAYSTACK_INITIALIZATION_INPUT_INVALID");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed transaction verification responses", async () => {

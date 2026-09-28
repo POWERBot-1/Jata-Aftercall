@@ -26,11 +26,12 @@ describe("business location validation and directions", () => {
 });
 
 describe("authoritative Paystack transaction evidence", () => {
-  const payment = { reference: "jata_ref", amount: 99900, currency: "KES" };
+  const payment = { reference: "jata-ref", amount: 99900, currency: "KES" };
   it("requires exact reference, server-stored amount and currency", () => {
     expect(validatePaymentEvidence(payment, { ...payment, status: "success" })).toEqual({ ok: true });
     expect(validatePaymentEvidence(payment, { ...payment, amount: 100, status: "success" })).toEqual({ ok: false, reason: "AMOUNT_MISMATCH" });
     expect(validatePaymentEvidence(payment, { ...payment, currency: "NGN", status: "success" })).toEqual({ ok: false, reason: "CURRENCY_MISMATCH" });
+    expect(validatePaymentEvidence({ ...payment, currency: "USD" }, { ...payment, currency: "USD", status: "success" })).toEqual({ ok: false, reason: "CURRENCY_MISMATCH" });
     expect(validatePaymentEvidence(payment, { ...payment, reference: "other", status: "success" })).toEqual({ ok: false, reason: "REFERENCE_MISMATCH" });
   });
   it("calculates activation and renewal expiry from the authoritative plan duration", () => {

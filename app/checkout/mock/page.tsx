@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-export default function MockCheckout({ searchParams }: { searchParams: { reference?: string } }) {
-  const reference = searchParams.reference || "";
+export default async function MockCheckout({ searchParams }: { searchParams: Promise<{ reference?: string }> }) {
+  const { reference: requestedReference } = await searchParams;
+  const reference = requestedReference || "";
   return <main className="mx-auto max-w-md px-4 py-10 text-center">
     <h1 className="text-xl font-bold">Test checkout</h1>
     <p className="mt-2 text-sm text-zinc-600">Paystack is not configured in this non-production environment. No real payment will be made.</p>

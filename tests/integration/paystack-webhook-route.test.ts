@@ -36,6 +36,19 @@ describe("Paystack webhook", () => {
     expect(await response.json()).toEqual({ status: "processed" });
     expect(mocks.activate).toHaveBeenCalledWith("pay-a", "1234", expect.objectContaining({ paystackId: "56" }));
   });
+  it("correlates webhook verification against an existing stored reference without rewriting it", async () => {
+    const legacyReference = "jata_0123456789abcdef";
+    const legacyPayload = { ...payload, data: { ...payload.data, reference: legacyReference } };
+    mocks.paymentFind.mockResolvedValue({ id: "pay-a", reference: legacyReference, userId: "user-a", amount: 14900, currency: "KES", status: "PENDING" });
+    mocks.verify.mockResolvedValue({ id: 56, status: "success", reference: legacyReference, amount: 14900, currency: "KES" });
+
+    const response = await POST(request(legacyPayload));
+    expect(response.status).toBe(200);
+    expect(mocks.paymentFind).toHaveBeenCalledWith({ where: { reference: legacyReference } });
+    expect(mocks.verify).toHaveBeenCalledWith(legacyReference);
+    expect(mocks.activate).toHaveBeenCalledWith("pay-a", "1234", expect.any(Object));
+  });
+
   it("rejects amount/currency mismatches and does not activate", async () => {
     mocks.verify.mockResolvedValue({ id: 56, status: "success", reference: "jata-ref", amount: 100, currency: "KES" });
     expect((await POST(request())).status).toBe(400);

@@ -1,8 +1,9 @@
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
 
-export default async function AdminCustomers({ searchParams }: { searchParams: { q?: string } }) {
-  const q = (searchParams.q || "").trim();
+export default async function AdminCustomers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q: query } = await searchParams;
+  const q = (query || "").trim();
   const where = q
     ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }, { phone: { contains: q } }] }
     : {};
