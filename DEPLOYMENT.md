@@ -150,7 +150,7 @@ curl https://jata-aftercall.vercel.app/robots.txt
 # After checkout, Paystack redirects to /checkout/callback?reference=jata_xxx
 # Server verifies via GET /api/paystack/verify?reference=jata_xxx
 curl "https://jata-aftercall.vercel.app/api/paystack/verify?reference=jata_xxx"
-# Requires auth if session exists; anonymous callback is allowed.
+# Requires the signed-in payment owner (or an authorized admin); anonymous verification is denied.
 ```
 
 ### Webhook idempotency test
@@ -165,11 +165,12 @@ curl -X POST https://jata-aftercall.vercel.app/api/paystack/webhook -H "x-paysta
 # → {"status":"already_processed"}
 ```
 
-Amount mismatch test: send amount that differs from Payment.amount → webhook returns `{"status":"rejected","reason":"amount mismatch"}` and does not activate subscription.
+The webhook verifies the transaction against Paystack and checks reference, amount, currency and status before the atomic payment/subscription transition. Mismatches return a safe error and do not activate.
 
-### Mock mode (when PAYSTACK_SECRET_KEY not set)
-- Checkout returns `{"mock": true, "authorization_url": "/checkout/mock?reference=..."}`
-- Visit mock page and click **Simulate successful payment** → calls `/api/paystack/verify?reference=...&mock=success` → subscription becomes ACTIVE.
+### Local test checkout (when PAYSTACK_SECRET_KEY is not set)
+- In non-production environments only, checkout returns a test-only link at `/checkout/mock?reference=...`.
+- The signed-in payment owner can choose **Simulate test payment**; the server accepts this mock only outside production and never treats a browser redirect as proof.
+- The same mock path is disabled in production; missing live Paystack configuration fails closed with HTTP 503.
 
 ---
 

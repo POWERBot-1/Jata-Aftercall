@@ -1,85 +1,81 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPlanById, getPlanByKey } from "@/lib/pricing";
+import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { initializeTransaction, toKobo } from "@/lib/paystack";
-import crypto from "crypto";
 import { getBaseUrl } from "@/lib/url";
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
+
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid checkout request." }, { status: 400 }); }
+  const businessId = typeof body.businessId === "string" ? body.businessId.trim() : "";
+  const planId = typeof body.planId === "string" ? body.planId.trim() : "";
+  if (!businessId || !planId) return NextResponse.json({ error: "Choose a business and subscription plan before checkout." }, { status: 400 });
 
   try {
-    const body = await req.json();
-    const { businessId, planKey, planId } = body as { businessId?: string; planKey?: string; planId?: string };
+    await assertBusinessOwnership(businessId, session);
+    const [business, plan, user] = await Promise.all([
+      prisma.business.findUnique({ where: { id: businessId }, select: { id: true } }),
+      prisma.planConfig.findUnique({ where: { id: planId } }),
+      prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } }),
+    ]);
+    if (!business) return NextResponse.json({ error: "Business not found." }, { status: 404 });
+    if (!plan) return NextResponse.json({ error: "The selected plan is not available." }, { status: 404 });
+    if (!plan.isActive || !Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || plan.durationDays <= 0) {
+      return NextResponse.json({ error: "The selected plan is not currently available." }, { status: 400 });
+    }
+    if (!user?.email) return NextResponse.json({ error: "Your account needs a valid email before checkout." }, { status: 400 });
 
-    if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
-
-    const business = await prisma.business.findUnique({ where: { id: businessId } });
-    if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
-    if (business.ownerId !== session.userId && session.role !== "ADMIN") {
-      return NextResponse.json({ error: "Tenant isolation: not your business" }, { status: 403 });
+    const recentPending = await prisma.payment.findFirst({
+      where: { businessId, userId: session.userId, planId: plan.id, status: "PENDING", createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) } },
+      select: { reference: true },
+    });
+    if (recentPending) {
+      return NextResponse.json({ error: "A payment for this plan is already in progress. Check its status before starting another." }, { status: 409 });
     }
 
-    // Resolve plan server-side — never trust client amount
-    let plan = null;
-    if (planId) plan = await getPlanById(planId);
-    else if (planKey) plan = await getPlanByKey(planKey);
-    else plan = await prisma.planConfig.findFirst({ where: { isActive: true }, orderBy: { priceKES: "asc" } });
-
-    if (!plan) {
-      // fallback to DB-less pricing if seed missing
-      return NextResponse.json({ error: "No active plan configured — contact admin" }, { status: 400 });
-    }
-
-    const amountKobo = toKobo(plan.priceKES);
-    const reference = `jata_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
-    const base = getBaseUrl();
-
-    // Create PENDING payment
-    const user = await prisma.user.findUnique({ where: { id: session.userId } });
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
+    const reference = `jata_${crypto.randomUUID().replace(/-/g, "")}`;
+    const amount = toKobo(plan.priceKES);
     const payment = await prisma.payment.create({
-      data: {
-        reference,
-        businessId,
-        userId: session.userId,
-        planId: plan.id,
-        amount: amountKobo,
-        currency: "KES",
-        status: "PENDING",
-      },
+      data: { reference, businessId, userId: session.userId, planId: plan.id, amount, currency: "KES", status: "PENDING" },
+      select: { id: true, reference: true, amount: true, currency: true, status: true },
     });
 
-    // If Paystack secret not configured (dev without keys), return mock authorization for testing
     if (!process.env.PAYSTACK_SECRET_KEY) {
+      if (process.env.NODE_ENV === "production") {
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+        return NextResponse.json({ error: "Online payments are temporarily unavailable. Please try again later." }, { status: 503 });
+      }
       return NextResponse.json({
         payment,
-        authorization_url: `${base}/checkout/mock?reference=${reference}&plan=${plan.key}`,
+        authorization_url: `${getBaseUrl()}/checkout/mock?reference=${encodeURIComponent(reference)}`,
         reference,
         mock: true,
-        message: "PAYSTACK_SECRET_KEY not set — mock checkout (use /api/paystack/verify?reference= to simulate success in dev)",
       });
     }
 
-    const init = await initializeTransaction({
-      email: user.email,
-      amount: amountKobo,
-      reference,
-      callbackUrl: `${base}/checkout/callback?reference=${reference}`,
-      metadata: {
-        businessId,
-        userId: session.userId,
-        planId: plan.id,
-        merchant: process.env.PAYSTACK_MERCHANT_ID || "2006074",
-      },
-    });
-
-    return NextResponse.json({ payment, authorization_url: init.authorization_url, reference, access_code: init.access_code });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Checkout failed" }, { status: 500 });
+    try {
+      const initialized = await initializeTransaction({
+        email: user.email,
+        amount,
+        reference,
+        callbackUrl: `${getBaseUrl()}/checkout/callback`,
+        metadata: { businessId, userId: session.userId, planId: plan.id },
+      });
+      return NextResponse.json({ payment, authorization_url: initialized.authorization_url, reference });
+    } catch {
+      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
+      return NextResponse.json({ error: "Paystack could not start this payment. Please try again." }, { status: 502 });
+    }
+  } catch (error) {
+    if (error instanceof TenantError) {
+      return NextResponse.json({ error: error.status === 404 ? "Business not found." : "You are not authorized to pay for this business." }, { status: error.status });
+    }
+    console.error("checkout request failed");
+    return NextResponse.json({ error: "Checkout could not be started. Please try again." }, { status: 500 });
   }
 }

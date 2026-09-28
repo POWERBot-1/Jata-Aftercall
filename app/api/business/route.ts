@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { canSetPublished } from "@/lib/publication";
+import { parseCoordinates } from "@/lib/location";
 
 export async function GET() {
   const session = await getSession();
@@ -27,11 +28,19 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
     const nameRaw = sanitizeText(body.name || "", 80);
     const category = sanitizeText(body.category || "Other", 40);
     const phone = (body.phone || "").trim();
     const whatsapp = (body.whatsapp || body.phone || "").trim();
-    const location = sanitizeText(body.location || "", 120);
+    if (body.location !== undefined && body.location !== null && typeof body.location !== "string") {
+      return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });
+    }
+    const locationValue = typeof body.location === "string" ? body.location.trim() : "";
+    if (locationValue.length > 160) return NextResponse.json({ error: "Location must be 160 characters or fewer." }, { status: 400 });
+    const location = sanitizeText(locationValue, 160);
+    const coordinates = parseCoordinates(body.lat, body.lng);
+    if (coordinates.valid === false) return NextResponse.json({ error: coordinates.error }, { status: 400 });
     const description = sanitizeText(body.description || "", 1000);
     const theme = body.theme || "clean";
     const aftercallMsg = body.aftercallMsg ? sanitizeText(body.aftercallMsg, 120) : null;
@@ -70,6 +79,8 @@ export async function POST(req: Request) {
         phone: phone || null,
         whatsapp: whatsapp || phone || null,
         location: location || null,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
         description: description || null,
         theme: resolvedTheme,
         aftercallMsg,
@@ -100,6 +111,7 @@ export async function PATCH(req: Request) {
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   try {
     const body = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
     const businessId = body.businessId || body.id;
     const guard = await guardTenantMutation(session, businessId);
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
@@ -113,11 +125,28 @@ export async function PATCH(req: Request) {
     if (body.category !== undefined) data.category = sanitizeText(body.category, 40);
     if (body.phone !== undefined) data.phone = (body.phone || "").trim() || null;
     if (body.whatsapp !== undefined) data.whatsapp = (body.whatsapp || "").trim() || null;
-    if (body.location !== undefined) data.location = sanitizeText(body.location, 120) || null;
+    if (body.location !== undefined) {
+      if (body.location !== null && typeof body.location !== "string") {
+        return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });
+      }
+      if (typeof body.location === "string" && body.location.trim().length > 160) {
+        return NextResponse.json({ error: "Location must be 160 characters or fewer." }, { status: 400 });
+      }
+      data.location = typeof body.location === "string" ? sanitizeText(body.location, 160) || null : null;
+    }
+    if (body.lat !== undefined || body.lng !== undefined) {
+      const coordinates = parseCoordinates(body.lat, body.lng);
+      if (coordinates.valid === false) return NextResponse.json({ error: coordinates.error }, { status: 400 });
+      data.lat = coordinates.lat;
+      data.lng = coordinates.lng;
+    }
     if (body.description !== undefined) data.description = sanitizeText(body.description, 1000) || null;
     if (body.theme !== undefined) data.theme = resolveTheme(body.theme).key;
     if (body.aftercallMsg !== undefined) data.aftercallMsg = body.aftercallMsg ? sanitizeText(body.aftercallMsg, 120) : null;
-    if (body.isPublished !== undefined && canSetPublished(!!body.isPublished)) data.isPublished = !!body.isPublished;
+    if (body.isPublished !== undefined) {
+      if (typeof body.isPublished !== "boolean") return NextResponse.json({ error: "Publish status must be true or false." }, { status: 400 });
+      if (canSetPublished(body.isPublished)) data.isPublished = body.isPublished;
+    }
     if (body.openingHours !== undefined) data.openingHours = body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null;
     if (body.socialLinks !== undefined) data.socialLinks = body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null;
 

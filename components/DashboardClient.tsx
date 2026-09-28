@@ -17,6 +17,8 @@ type Biz = {
   phone?: string | null;
   whatsapp?: string | null;
   location?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   description?: string | null;
   aftercallMsg?: string | null;
   publicUrl: string;
@@ -182,6 +184,8 @@ function EditForm({ business, onSave }: { business: Biz; onSave: (patch: Record<
     phone: business.phone || "",
     whatsapp: business.whatsapp || "",
     location: business.location || "",
+    lat: business.lat === null || business.lat === undefined ? "" : String(business.lat),
+    lng: business.lng === null || business.lng === undefined ? "" : String(business.lng),
     description: business.description || "",
     aftercallMsg: business.aftercallMsg || "",
     theme: business.theme,
@@ -200,9 +204,17 @@ function EditForm({ business, onSave }: { business: Biz; onSave: (patch: Record<
       <Field id={`${business.id}-whatsapp`} label="WhatsApp">
         <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
       </Field>
-      <Field id={`${business.id}-location`} label="Location">
-        <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+      <Field id={`${business.id}-location`} label="Location" hint="Saved address or neighborhood used for directions.">
+        <input maxLength={160} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
       </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field id={`${business.id}-lat`} label="Latitude" hint="Optional, -90 to 90">
+          <input inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+        </Field>
+        <Field id={`${business.id}-lng`} label="Longitude" hint="Optional, -180 to 180">
+          <input inputMode="decimal" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+        </Field>
+      </div>
       <Field id={`${business.id}-description`} label="Description">
         <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
       </Field>

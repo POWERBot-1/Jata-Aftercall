@@ -99,6 +99,8 @@ export default async function PublicBusinessPage({ params }: Props) {
           phone: business.phone,
           whatsapp: business.whatsapp,
           location: business.location,
+          lat: business.lat,
+          lng: business.lng,
           description: business.description,
           theme: business.theme,
           aftercallMsg: business.aftercallMsg,
