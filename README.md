@@ -4,13 +4,13 @@ Lightweight Kenyan SME after-interaction conversion pages. A customer scans/find
 
 **V1 is a sellable MVP — create a business page in ~5 minutes, demonstrable in 60 seconds.**
 
-> `https://<provider-domain>/b/marys-beauty` (path-based, zero-cost) — e.g. `https://jata-aftercall.vercel.app/b/marys-beauty`
+> `https://jata-aftercall.vercel.app/b/marys-beauty-studio` (path-based, zero-cost)
 
 ---
 
 ## 60-Second Demo
 
-> "Give me your business name and number." → Create page → Open `marys-beauty.jata.link` (→ `.../b/marys-beauty` on free hosting) → "This is what your customer can see after dealing with you."
+> "Give me your business name and number." → Create page → Open the current zero-cost demo at `https://jata-aftercall.vercel.app/b/marys-beauty-studio` → "This is what your customer can see after dealing with you."
 
 ---
 
@@ -40,7 +40,7 @@ npm install
 cp .env.example .env.local
 # fill DATABASE_URL (Neon free) and AUTH_SECRET (openssl rand -base64 32)
 npx prisma migrate dev
-npm run seed   # plans + themes + admin@jata.link / Admin123! + demo@jata.link / Demo1234! + 4 demo businesses
+npm run seed   # plans + themes + development/demo accounts + 4 demo businesses
 npm run dev    # http://localhost:3000
 ```
 
