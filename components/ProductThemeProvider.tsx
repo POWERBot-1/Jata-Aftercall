@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, type CSSProperties } from "react";
+import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   DEFAULT_PRODUCT_THEME,
@@ -71,6 +71,11 @@ export default function ProductThemeProvider({ children }: { children: React.Rea
     if (preference) setTheme(preference);
   }, []);
 
+  // Keep <html data-jata-theme> (set before first paint by the boot script) in sync with state.
+  useEffect(() => {
+    try { document.documentElement.setAttribute("data-jata-theme", theme); } catch { /* non-browser */ }
+  }, [theme]);
+
   function chooseTheme(nextTheme: ProductThemeKey) {
     if (!isProductThemeKey(nextTheme)) return;
     setTheme(nextTheme);
@@ -82,13 +87,9 @@ export default function ProductThemeProvider({ children }: { children: React.Rea
     return <div className="business-route-root">{children}</div>;
   }
 
-  const activeTheme = PRODUCT_THEMES[theme];
+  // Token values come from productThemeCss() in the root layout, keyed on data-product-theme.
   return (
-    <div
-      className="product-theme-root"
-      data-product-theme={theme}
-      style={activeTheme.tokens as CSSProperties}
-    >
+    <div className="product-theme-root" data-product-theme={theme}>
       <div className="product-theme-toolbar">
         <ProductThemeSelector selected={theme} onSelect={chooseTheme} />
       </div>

@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { activateSubscriptionForPayment, verifyTransaction } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
-import { failedPaymentStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
+import { classifyProviderStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -69,10 +69,15 @@ export async function GET(req: Request) {
       await logAudit({ actorId: payment.userId, action, targetType: "PAYMENT", targetId: payment.id });
       return NextResponse.json({ status: "FAILED", error: "Paystack verification did not match this payment." }, { status: 400 });
     }
-    if (transaction.status !== "success") {
-      const status = failedPaymentStatus(transaction.status);
-      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status } });
-      return NextResponse.json({ status, message: status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed." });
+    const outcome = classifyProviderStatus(transaction.status);
+    if (outcome.kind === "in_progress") {
+      // Still in progress at Paystack: leave the payment PENDING so a later success
+      // (verify retry or charge.success webhook) can still settle it.
+      return NextResponse.json({ status: "PENDING", message: "Paystack is still processing this payment. Your subscription is not active yet." });
+    }
+    if (outcome.kind === "final_failure") {
+      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: outcome.status } });
+      return NextResponse.json({ status: outcome.status, message: outcome.status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed." });
     }
 
     const settled = await activateSubscriptionForPayment(payment.id, undefined, {

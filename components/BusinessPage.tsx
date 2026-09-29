@@ -1,8 +1,9 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
 import { getDirectionsUrl } from "@/lib/location";
+import { formatOpeningHours } from "@/lib/openingHours";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -48,9 +49,25 @@ export default function BusinessPage({
   offer: Offer;
   theme: ThemeTokens;
 }) {
+  const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
     track(business.id, "PAGE_VIEW");
   }, [business.id]);
+
+  async function sharePage() {
+    track(business.id, "SHARE_CLICK");
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: business.name, url }).catch(() => {});
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus("Link copied. Paste it into WhatsApp or SMS to share.");
+    } catch {
+      setShareStatus(`Copy this link to share: ${url}`);
+    }
+  }
 
   // Kenyan normalization: 07XXXXXXXX / 01XXXXXXXX -> 254XXXXXXXXX
   const waInquiryText = `Hi ${business.name}, I found your page and would like to know more.`;
@@ -71,6 +88,8 @@ export default function BusinessPage({
   const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
 
   const t = theme;
+  const hours = formatOpeningHours(business.openingHours);
+  const whatsappCta = "bg-emerald-700 text-white hover:bg-emerald-800";
 
   return (
     <div className={`jata-public min-h-screen ${t.colors.bg} ${t.colors.text}`}>
@@ -93,66 +112,58 @@ export default function BusinessPage({
             </div>
           </div>
 
-          {/* Primary CTAs above the fold */}
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {waLink ? (
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track(business.id, "WHATSAPP_CLICK")}
-                className="jata-cta inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-600"
-              >
-                WhatsApp
-              </a>
-            ) : (
-              <span className={`inline-flex items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-4 text-sm font-semibold opacity-50`}>WhatsApp</span>
-            )}
-            {telLinkNormalized ? (
-              <a
-                href={telLinkNormalized}
-                onClick={() => track(business.id, "CALL_CLICK")}
-                className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
-              >
-                Call
-              </a>
-            ) : (
-              <span className={`inline-flex items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-4 text-sm font-semibold opacity-50`}>Call</span>
-            )}
-          </div>
+          {/* Primary CTAs above the fold. Only real actions are rendered — no disabled look-alikes. */}
+          {waLink || telLinkNormalized ? (
+            <div className={`mt-5 grid gap-3 ${waLink && telLinkNormalized ? "grid-cols-2" : "grid-cols-1"}`}>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track(business.id, "WHATSAPP_CLICK")}
+                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold shadow-sm ${whatsappCta}`}
+                >
+                  WhatsApp
+                </a>
+              )}
+              {telLinkNormalized && (
+                <a
+                  href={telLinkNormalized}
+                  onClick={() => track(business.id, "CALL_CLICK")}
+                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
+                >
+                  Call
+                </a>
+              )}
+            </div>
+          ) : (
+            <p className={`mt-5 text-sm ${t.colors.muted}`}>Contact details for this business are coming soon.</p>
+          )}
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {mapsLink ? (
+          <div className={`mt-3 grid gap-3 ${mapsLink ? "grid-cols-2" : "grid-cols-1"}`}>
+            {mapsLink && (
               <a
                 href={mapsLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => track(business.id, "DIRECTION_CLICK")}
-                className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
+                className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
               >
                 Get Directions
               </a>
-            ) : (
-              <span className={`rounded-2xl border ${t.colors.border} py-3 text-center text-sm opacity-50`}>Directions</span>
             )}
             <button
-              onClick={() => {
-                track(business.id, "SHARE_CLICK");
-                if (navigator.share) {
-                  navigator.share({ title: business.name, url: window.location.href }).catch(() => {});
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert("Link copied!");
-                }
-              }}
+              type="button"
+              onClick={() => void sharePage()}
               className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
             >
               Share
             </button>
           </div>
+          <p role="status" aria-live="polite" className={`text-center text-xs ${t.colors.muted} ${shareStatus ? "mt-2" : ""}`}>{shareStatus}</p>
 
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <a href="#info" className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
+            <a href="#info" className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
               Info
             </a>
             {quoteHref && quoteHref !== "#quote" ? (
@@ -161,19 +172,19 @@ export default function BusinessPage({
                 target={quoteHref.startsWith("http") ? "_blank" : undefined}
                 rel={quoteHref.startsWith("http") ? "noopener noreferrer" : undefined}
                 onClick={() => track(business.id, "WHATSAPP_CLICK")}
-                className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
+                className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
               >
                 Request quote
               </a>
             ) : (
-              <a href="#quote" className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
+              <a href="#quote" className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
                 Request quote
               </a>
             )}
           </div>
 
           <div className="mt-3">
-            <a href="#services" className={`text-xs font-semibold underline ${t.colors.muted}`}>
+            <a href="#services" className={`inline-flex min-h-11 items-center text-sm font-semibold underline ${t.colors.muted}`}>
               View services ↓
             </a>
           </div>
@@ -221,7 +232,7 @@ export default function BusinessPage({
               <h3 className="text-xs font-bold tracking-widest">LOCATION</h3>
               <p className={`mt-1 text-sm ${t.colors.muted}`}>{business.location}</p>
               {mapsLink && (
-                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className="mt-2 inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
+                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`jata-cta mt-2 inline-flex items-center rounded-full border ${t.colors.border} px-4 py-2 text-sm font-semibold`}>
                   Open in Maps
                 </a>
               )}
@@ -259,12 +270,24 @@ export default function BusinessPage({
                     {business.whatsapp}
                   </a>
                 ) : (
-                  <span className="font-semibold">{business.whatsapp} (invalid)</span>
+                  <span className="font-semibold">{business.whatsapp}</span>
                 )}
               </p>
             )}
-            {business.openingHours && <p>Hours: {(() => { try { return JSON.stringify(JSON.parse(business.openingHours)); } catch { return business.openingHours; } })()}</p>}
           </div>
+          {hours.length > 0 && (
+            <div className={`mt-3 text-sm ${t.colors.muted}`}>
+              <h3 className={`text-xs font-bold tracking-widest ${t.colors.text}`}>OPENING HOURS</h3>
+              <dl className="mt-1 space-y-0.5">
+                {hours.map((row, i) => (
+                  <div key={`${row.label}-${i}`} className="flex flex-wrap gap-x-2">
+                    <dt className={row.label ? "font-semibold" : "sr-only"}>{row.label || "Hours"}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           {business.socialLinks && (
             <div className="mt-3 flex gap-2 text-xs">
               {(() => {
@@ -273,7 +296,7 @@ export default function BusinessPage({
                   return Object.entries(links)
                     .filter(([, v]) => !!v)
                     .map(([k, v]) => (
-                      <a key={k} href={String(v)} target="_blank" rel="noopener noreferrer" className="rounded-full border px-3 py-1 font-medium capitalize">
+                      <a key={k} href={String(v)} target="_blank" rel="noopener noreferrer" className={`jata-cta inline-flex items-center rounded-full border ${t.colors.border} px-3 py-1 text-sm font-medium capitalize`}>
                         {k}
                       </a>
                     ));
@@ -292,19 +315,17 @@ export default function BusinessPage({
       <div className={`safe-bottom fixed inset-x-0 bottom-0 border-t ${t.colors.border} ${t.colors.card} shadow-[0_-8px_24px_rgba(0,0,0,0.08)]`}>
         <div className="mx-auto flex max-w-[640px] gap-2 px-3 py-3">
           {waLink ? (
-            <a href={waLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "WHATSAPP_CLICK")} className="flex flex-1 items-center justify-center rounded-full bg-emerald-500 py-3.5 text-sm font-bold text-white">
+            <a href={waLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "WHATSAPP_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${whatsappCta}`}>
               WhatsApp
             </a>
-          ) : (
-            <span className="flex flex-1 items-center justify-center rounded-full border py-3.5 text-sm font-semibold opacity-50">WhatsApp</span>
-          )}
+          ) : null}
           {telLinkNormalized ? (
             <a href={telLinkNormalized} onClick={() => track(business.id, "CALL_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText}`}>
               Call
             </a>
           ) : null}
           {mapsLink && (
-            <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className="flex items-center justify-center rounded-full border px-5 py-3.5 text-sm font-semibold">
+            <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`flex items-center justify-center rounded-full border ${t.colors.border} px-5 py-3.5 text-sm font-semibold`}>
               Directions
             </a>
           )}

@@ -1,10 +1,14 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { LocationFields, locationError } from "@/components/LocationFields";
 import { SAFE_ERRORS } from "@/lib/safeError";
 import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
-import Link from "next/link";
+import { nextActionFor } from "@/lib/nextAction";
+import { businessStatusLabel, subscriptionStatusLabel, toneClass } from "@/lib/statusLabels";
 
 type Biz = {
   id: string;
@@ -28,156 +32,198 @@ type Biz = {
 };
 
 type Metrics = { views: number; whatsapp: number; calls: number; directions: number; shares: number; serviceClicks?: number };
+type Notice = { kind: "success" | "error"; text: string } | null;
+
+function NoticeBar({ notice }: { notice: Notice }) {
+  if (!notice) return <p role="status" aria-live="polite" className="sr-only" />;
+  if (notice.kind === "error") return <FormError>{notice.text}</FormError>;
+  return <p role="status" aria-live="polite" className="jata-status alert-success">{notice.text}</p>;
+}
 
 export default function DashboardClient({ businesses, metricsMap }: { businesses: Biz[]; metricsMap: Record<string, Metrics> }) {
-  const [msg, setMsg] = useState("");
-
-  async function patch(b: Biz, body: Record<string, unknown>, success = "Saved.") {
-    const res = await fetch("/api/business", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId: b.id, ...body }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setMsg(data.error || SAFE_ERRORS.saveFailed);
-      return false;
-    }
-    setMsg(success);
-    setTimeout(() => location.reload(), 400);
-    return true;
-  }
-
   if (businesses.length === 0) {
     return (
       <div className="jata-card mt-6 p-8 text-center">
-        <p className="text-sm font-semibold">No business page yet</p>
-        <p className="mt-1 text-sm text-zinc-600">Create one in three steps. Payment is not required to publish.</p>
-        <Button href="/onboarding" className="mt-4">Start onboarding</Button>
+        <h2 className="text-base font-semibold">No business page yet</h2>
+        <p className="mt-1 text-sm text-zinc-600">Set one up in seven short steps. Payment is not required to publish.</p>
+        <Button href="/onboarding" className="mt-4">Start setup</Button>
       </div>
     );
   }
-
   return (
     <div className="mt-6 space-y-6">
-      <FormError>{msg}</FormError>
-      {businesses.map((b) => {
-        const m = metricsMap[b.id] || { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 };
-        const isActiveSub = b.subscription?.status === "ACTIVE";
-        return (
-          <article key={b.id} className="jata-card p-5">
-            <header className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="jata-section-title">Identity</p>
-                <h2 className="mt-1 text-xl font-bold">{b.name}</h2>
-                <p className="text-sm text-zinc-600">{b.category} · /b/{b.slug} · {b.theme} theme</p>
-                <p className="mt-2">
-                  <span className={b.isPublished ? "jata-live" : "jata-draft"}>{b.isPublished ? "Live" : "Draft"}</span>
-                  <span className="ml-2 text-xs text-zinc-500">{b.status}</span>
-                  {b.subscription ? (
-                    <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${isActiveSub ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                      {b.subscription.status}
-                    </span>
-                  ) : (
-                    <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">No subscription</span>
-                  )}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button href={`/b/${b.slug}`} variant="secondary">View</Button>
-                <Button onClick={() => sharePage(b)}>{b.isPublished ? "Share" : "Copy link"}</Button>
-                <Button variant={b.isPublished ? "secondary" : "primary"} onClick={() => patch(b, { isPublished: !b.isPublished }, b.isPublished ? "Unpublished." : "Published. Payment was not required.")}>
-                  {b.isPublished ? "Unpublish" : "Publish"}
-                </Button>
-              </div>
-            </header>
-
-            {/* Subscription CTA — authorized: Subscribe / View plans and pay */}
-            <div className="mt-4 rounded-xl border border-dashed bg-zinc-50 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Subscription</p>
-                  {b.subscription ? (
-                    <p className="mt-1 text-sm">
-                      {b.subscription.planName} — {b.subscription.status}
-                      {b.subscription.expiresAt ? ` · Expires ${new Date(b.subscription.expiresAt).toLocaleDateString()}` : ""}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-sm text-zinc-600">No active subscription — subscribe to keep your page active beyond trial.</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Link href={getSubscriptionPageUrl(b.id)} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">
-                    {isActiveSub ? "View plans" : "Subscribe"}
-                  </Link>
-                  <Link href={getSubscriptionPageUrl(b.id)} className="rounded-full border bg-white px-4 py-2 text-xs font-semibold hover:bg-zinc-50">
-                    View plans and pay
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            <section className="mt-5">
-              <p className="jata-section-title">Activity</p>
-              <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
-                {[
-                  ["Views", m.views],
-                  ["WhatsApp", m.whatsapp],
-                  ["Calls", m.calls],
-                  ["Directions", m.directions],
-                  ["Shares", m.shares],
-                  ["Services", m.serviceClicks || 0],
-                ].map(([label, val]) => (
-                  <div key={String(label)} className="rounded-xl bg-zinc-50 px-2 py-3">
-                    <p className="text-lg font-bold">{val as number}</p>
-                    <p className="text-zinc-500">{label as string}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <section className="rounded-2xl border border-zinc-200 p-4 lg:col-span-1">
-                <p className="jata-section-title">Profile</p>
-                <EditForm business={b} onSave={(body) => patch(b, body)} />
-              </section>
-              <section className="rounded-2xl border border-zinc-200 p-4">
-                <p className="jata-section-title">Services and products</p>
-                <p className="mt-1 text-xs text-zinc-500">{b.servicesCount} listed</p>
-                <ServiceManager businessId={b.id} onError={setMsg} />
-              </section>
-              <section className="rounded-2xl border border-zinc-200 p-4">
-                <p className="jata-section-title">Offer</p>
-                <p className="mt-1 text-xs text-zinc-500">{b.hasOffer ? "An offer is live." : "No offer yet."}</p>
-                <OfferManager businessId={b.id} onError={setMsg} />
-              </section>
-            </div>
-            {b.subscription ? (
-              <p className="mt-4 text-xs text-zinc-500">Subscription: {b.subscription.status} · {b.subscription.planName}. This does not control whether the page is live.</p>
-            ) : null}
-          </article>
-        );
-      })}
+      {businesses.map((b) => (
+        <BusinessCard key={b.id} b={b} m={metricsMap[b.id] || { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 }} />
+      ))}
     </div>
   );
 }
 
-function sharePage(b: Biz) {
-  const url = b.publicUrl;
-  if (navigator.share) {
-    navigator.share({ title: b.name, url }).catch(() => {});
-  } else {
-    navigator.clipboard.writeText(url);
-    alert("Link copied");
+type Section = "profile" | "services" | "offer" | null;
+
+function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
+  const router = useRouter();
+  const [notice, setNotice] = useState<Notice>(null);
+  const [open, setOpen] = useState<Section>(null);
+  const [busy, setBusy] = useState(false);
+  const sub = subscriptionStatusLabel(b.subscription?.status);
+  const bizStatus = businessStatusLabel(b.status);
+  const action = nextActionFor({
+    isPublished: b.isPublished,
+    hasContact: Boolean(b.phone || b.whatsapp),
+    hasLocation: Boolean(b.location || (typeof b.lat === "number" && typeof b.lng === "number")),
+    servicesCount: b.servicesCount,
+    subscriptionStatus: b.subscription?.status ?? null,
+    expiresAt: b.subscription?.expiresAt ?? null,
+  });
+
+  async function patch(body: Record<string, unknown>, success = "Saved.") {
+    if (busy) return false;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/business", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: b.id, ...body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setNotice({ kind: "error", text: data.error || SAFE_ERRORS.saveFailed }); return false; }
+      setNotice({ kind: "success", text: success });
+      router.refresh();
+      return true;
+    } catch {
+      setNotice({ kind: "error", text: SAFE_ERRORS.saveFailed });
+      return false;
+    } finally {
+      setBusy(false);
+    }
   }
-  fetch("/api/analytics/event", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ businessId: b.id, eventType: "SHARE_CLICK" }),
-  }).catch(() => {});
+
+  async function share() {
+    fetch("/api/analytics/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId: b.id, eventType: "SHARE_CLICK" }),
+    }).catch(() => {});
+    if (navigator.share) { navigator.share({ title: b.name, url: b.publicUrl }).catch(() => {}); return; }
+    try {
+      await navigator.clipboard.writeText(b.publicUrl);
+      setNotice({ kind: "success", text: "Link copied. Paste it into WhatsApp, SMS or social media." });
+    } catch {
+      setNotice({ kind: "success", text: `Copy your link: ${b.publicUrl}` });
+    }
+  }
+
+  function actionControl() {
+    switch (action.key) {
+      case "add-contact":
+      case "add-location":
+        return <Button onClick={() => setOpen("profile")}>{action.key === "add-contact" ? "Add contact details" : "Add location"}</Button>;
+      case "add-services":
+        return <Button onClick={() => setOpen("services")}>Add a service</Button>;
+      case "publish":
+        return <Button disabled={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live — payment was not required.")}>Publish page</Button>;
+      case "renew":
+      case "subscribe":
+        return <Button href={getSubscriptionPageUrl(b.id)}>{action.key === "renew" ? "Renew plan" : "Choose a plan"}</Button>;
+      default:
+        return <Button onClick={() => void share()}>Share page</Button>;
+    }
+  }
+
+  return (
+    <article className="jata-card p-5" aria-labelledby={`biz-${b.id}-name`}>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id={`biz-${b.id}-name`} className="text-xl font-bold [overflow-wrap:anywhere]">{b.name}</h2>
+          <p className="text-sm text-zinc-600 [overflow-wrap:anywhere]">{b.category} · /b/{b.slug}</p>
+          <p className="mt-2 flex flex-wrap gap-2">
+            <span className={b.isPublished ? "jata-live" : "jata-draft"}>{b.isPublished ? "Live" : "Draft"}</span>
+            <span className={`rounded-full px-2 py-0.5 text-sm font-semibold ${toneClass(sub.tone)}`}>Plan: {sub.label}</span>
+            {b.status === "SUSPENDED" && <span className={`rounded-full px-2 py-0.5 text-sm font-semibold ${toneClass(bizStatus.tone)}`}>{bizStatus.label}</span>}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button href={`/b/${b.slug}`} variant="secondary">{b.isPublished ? "View page" : "Preview"}</Button>
+          {action.key !== "share" && <Button variant="secondary" onClick={() => void share()}>{b.isPublished ? "Share" : "Copy link"}</Button>}
+        </div>
+      </header>
+
+      <div className="mt-3"><NoticeBar notice={notice} /></div>
+
+      <section className="mt-4 rounded-xl border border-dashed bg-zinc-50 p-4" aria-label="Next step">
+        <p className="text-sm font-bold uppercase tracking-widest text-zinc-600">Next step</p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold">{action.title}</p>
+            <p className="text-sm text-zinc-600">{action.detail}</p>
+          </div>
+          {actionControl()}
+        </div>
+      </section>
+
+      <section className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm" aria-label="Subscription">
+        <p>
+          <span className="font-semibold">Subscription:</span>{" "}
+          {b.subscription ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${new Date(b.subscription.expiresAt).toLocaleDateString("en-KE")}` : ""}` : "No plan yet. Your page can stay live while you decide."}
+          {sub.help ? ` ${sub.help}` : ""}
+        </p>
+        {action.key !== "renew" && action.key !== "subscribe" && (
+          <Link href={getSubscriptionPageUrl(b.id)} className="jata-btn jata-btn-ghost underline">Manage plan</Link>
+        )}
+      </section>
+
+      <section className="mt-4" aria-labelledby={`biz-${b.id}-activity`}>
+        <h3 id={`biz-${b.id}-activity`} className="jata-section-title">Activity</h3>
+        <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-sm sm:grid-cols-6">
+          {([
+            ["Views", m.views],
+            ["WhatsApp", m.whatsapp],
+            ["Calls", m.calls],
+            ["Directions", m.directions],
+            ["Shares", m.shares],
+            ["Services", m.serviceClicks || 0],
+          ] as const).map(([label, val]) => (
+            <div key={label} className="flex flex-col-reverse rounded-xl bg-zinc-50 px-2 py-3">
+              <dt className="text-zinc-600">{label}</dt>
+              <dd className="text-lg font-bold">{val}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <div className="mt-4 space-y-2">
+        <EditSection title="Edit profile, contact & location" open={open === "profile"} onToggle={(o) => setOpen(o ? "profile" : null)}>
+          <EditForm business={b} busy={busy} onSave={(body) => patch(body, "Profile saved.")} />
+        </EditSection>
+        <EditSection title={`Services (${b.servicesCount} listed)`} open={open === "services"} onToggle={(o) => setOpen(o ? "services" : null)}>
+          <ServiceManager businessId={b.id} onSaved={() => router.refresh()} />
+        </EditSection>
+        <EditSection title={b.hasOffer ? "Offer (live)" : "Offer (none yet)"} open={open === "offer"} onToggle={(o) => setOpen(o ? "offer" : null)}>
+          <OfferManager businessId={b.id} onSaved={() => router.refresh()} />
+        </EditSection>
+      </div>
+
+      {b.isPublished && (
+        <div className="mt-4 border-t pt-3">
+          <button type="button" disabled={busy} className="jata-btn jata-btn-ghost underline" onClick={() => patch({ isPublished: false }, "Unpublished. Your page is now a private draft.")}>Unpublish page</button>
+        </div>
+      )}
+    </article>
+  );
 }
 
-function EditForm({ business, onSave }: { business: Biz; onSave: (patch: Record<string, unknown>) => void }) {
+function EditSection({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: React.ReactNode }) {
+  return (
+    <details className="rounded-2xl border" open={open} onToggle={(e) => { const next = (e.currentTarget as HTMLDetailsElement).open; if (next !== open) onToggle(next); }}>
+      <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">{title}</summary>
+      <div className="border-t px-4 pb-4">{children}</div>
+    </details>
+  );
+}
+
+function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; onSave: (patch: Record<string, unknown>) => Promise<boolean> }) {
   const [form, setForm] = useState({
     name: business.name,
     category: business.category,
@@ -190,6 +236,7 @@ function EditForm({ business, onSave }: { business: Biz; onSave: (patch: Record<
     aftercallMsg: business.aftercallMsg || "",
     theme: business.theme,
   });
+  const [problem, setProblem] = useState("");
   return (
     <div className="mt-3 space-y-2">
       <Field id={`${business.id}-name`} label="Business name">
@@ -204,53 +251,56 @@ function EditForm({ business, onSave }: { business: Biz; onSave: (patch: Record<
       <Field id={`${business.id}-whatsapp`} label="WhatsApp">
         <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
       </Field>
-      <Field id={`${business.id}-location`} label="Location" hint="Saved address or neighborhood used for directions.">
-        <input maxLength={160} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field id={`${business.id}-lat`} label="Latitude" hint="Optional, -90 to 90">
-          <input inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
-        </Field>
-        <Field id={`${business.id}-lng`} label="Longitude" hint="Optional, -180 to 180">
-          <input inputMode="decimal" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
-        </Field>
-      </div>
+      <LocationFields
+        idPrefix={business.id}
+        value={{ location: form.location, lat: form.lat, lng: form.lng }}
+        onChange={(v) => setForm({ ...form, ...v })}
+      />
       <Field id={`${business.id}-description`} label="Description">
         <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
       </Field>
-      <Field id={`${business.id}-theme`} label="Theme" hint="Clean, dark, or warm.">
+      <Field id={`${business.id}-banner`} label="After-call message" hint="Shown at the top of your page.">
+        <input maxLength={120} value={form.aftercallMsg} onChange={(e) => setForm({ ...form, aftercallMsg: e.target.value })} />
+      </Field>
+      <Field id={`${business.id}-theme`} label="Page style" hint="Clean, dark, or warm.">
         <select value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })}>
           <option value="clean">Clean</option>
           <option value="dark">Dark</option>
           <option value="warm">Warm</option>
         </select>
       </Field>
-      <Button onClick={() => onSave(form)}>Save profile</Button>
+      <FormError>{problem}</FormError>
+      <Button disabled={busy} onClick={() => { const p = locationError(form); setProblem(p); if (!p) void onSave({ ...form, whatsapp: form.whatsapp || form.phone }); }}>{busy ? "Saving…" : "Save profile"}</Button>
     </div>
   );
 }
 
-function ServiceManager({ businessId, onError }: { businessId: string; onError: (msg: string) => void }) {
+function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<Notice>(null);
+  const [saving, setSaving] = useState(false);
   async function add() {
-    const res = await fetch("/api/services", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId, title, priceLabel: price || undefined }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = data.error || SAFE_ERRORS.serviceFailed;
-      setMsg(message);
-      onError(message);
-      return;
+    if (saving) return;
+    if (title.trim().length < 2) { setMsg({ kind: "error", text: "Enter a service name (at least 2 characters)." }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, title, priceLabel: price || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ kind: "error", text: data.error || SAFE_ERRORS.serviceFailed }); return; }
+      setMsg({ kind: "success", text: "Service saved." });
+      setTitle("");
+      setPrice("");
+      onSaved();
+    } catch {
+      setMsg({ kind: "error", text: SAFE_ERRORS.serviceFailed });
+    } finally {
+      setSaving(false);
     }
-    setMsg("Service saved.");
-    setTitle("");
-    setPrice("");
-    setTimeout(() => location.reload(), 400);
   }
   return (
     <div className="mt-3 space-y-2">
@@ -260,32 +310,36 @@ function ServiceManager({ businessId, onError }: { businessId: string; onError: 
       <Field id={`${businessId}-service-price`} label="Price label" hint="For example From KES 1,500.">
         <input value={price} onChange={(e) => setPrice(e.target.value)} />
       </Field>
-      <Button onClick={add}>Add service</Button>
-      <FormError>{msg && msg !== "Service saved." ? msg : ""}</FormError>
-      {msg === "Service saved." ? <p className="text-xs text-emerald-700">{msg}</p> : null}
+      <Button disabled={saving} onClick={add}>{saving ? "Saving…" : "Add service"}</Button>
+      <NoticeBar notice={msg} />
     </div>
   );
 }
 
-function OfferManager({ businessId, onError }: { businessId: string; onError: (msg: string) => void }) {
+function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<Notice>(null);
+  const [saving, setSaving] = useState(false);
   async function save() {
-    const res = await fetch("/api/offer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId, title, subtitle }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = data.error || SAFE_ERRORS.offerFailed;
-      setMsg(message);
-      onError(message);
-      return;
+    if (saving) return;
+    if (!title.trim()) { setMsg({ kind: "error", text: "Enter an offer title." }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, title, subtitle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ kind: "error", text: data.error || SAFE_ERRORS.offerFailed }); return; }
+      setMsg({ kind: "success", text: "Offer saved." });
+      onSaved();
+    } catch {
+      setMsg({ kind: "error", text: SAFE_ERRORS.offerFailed });
+    } finally {
+      setSaving(false);
     }
-    setMsg("Offer saved.");
-    setTimeout(() => location.reload(), 400);
   }
   return (
     <div className="mt-3 space-y-2">
@@ -295,9 +349,8 @@ function OfferManager({ businessId, onError }: { businessId: string; onError: (m
       <Field id={`${businessId}-offer-sub`} label="Offer detail">
         <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
       </Field>
-      <Button onClick={save}>Save offer</Button>
-      <FormError>{msg && msg !== "Offer saved." ? msg : ""}</FormError>
-      {msg === "Offer saved." ? <p className="text-xs text-emerald-700">{msg}</p> : null}
+      <Button disabled={saving} onClick={save}>{saving ? "Saving…" : "Save offer"}</Button>
+      <NoticeBar notice={msg} />
     </div>
   );
 }

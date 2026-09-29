@@ -9,6 +9,11 @@ import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { canSetPublished } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
+import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
+
+function prismaErrorCode(error: unknown): string | undefined {
+  return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
+}
 
 export async function GET() {
   const session = await getSession();
@@ -47,6 +52,17 @@ export async function POST(req: Request) {
 
     if (!nameRaw || nameRaw.length < 2) return NextResponse.json({ error: "Business name required (min 2)" }, { status: 400 });
 
+    // Onboarding retries (double taps, refreshes, flaky networks) send the same draft key.
+    // It maps to one deterministic business id, so the same draft can never create two businesses.
+    const draftBusinessId = isValidDraftKey(body.draftKey) ? deriveDraftBusinessId(session.userId, body.draftKey) : null;
+    if (draftBusinessId) {
+      const already = await prisma.business.findUnique({ where: { id: draftBusinessId } });
+      if (already) {
+        if (already.ownerId !== session.userId) return NextResponse.json({ error: "This draft could not be saved. Refresh and try again." }, { status: 409 });
+        return NextResponse.json({ business: already, idempotent: true }, { status: 200 });
+      }
+    }
+
     // Derive slug: explicit slug if provided else from name
     let slug = body.slug ? slugify(body.slug) : slugify(nameRaw);
     const v = validateSlug(slug);
@@ -70,8 +86,11 @@ export async function POST(req: Request) {
 
     if (phone && !validatePhone(phone)) return NextResponse.json({ error: "Valid phone required" }, { status: 400 });
 
-    const business = await prisma.business.create({
+    let business;
+    try {
+      business = await prisma.business.create({
       data: {
+        ...(draftBusinessId ? { id: draftBusinessId } : {}),
         ownerId: session.userId,
         slug,
         name: nameRaw,
@@ -87,7 +106,15 @@ export async function POST(req: Request) {
         openingHours: body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null,
         socialLinks: body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null,
       },
-    });
+      });
+    } catch (error) {
+      // A concurrent request for the same draft won the primary-key race: return that business.
+      if (draftBusinessId && prismaErrorCode(error) === "P2002") {
+        const winner = await prisma.business.findUnique({ where: { id: draftBusinessId } });
+        if (winner && winner.ownerId === session.userId) return NextResponse.json({ business: winner, idempotent: true }, { status: 200 });
+      }
+      throw error;
+    }
 
     await prisma.businessMember.create({
       data: { userId: session.userId, businessId: business.id, role: "OWNER" },

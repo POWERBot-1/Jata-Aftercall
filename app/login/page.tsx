@@ -2,6 +2,9 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import LoginForm from "@/components/LoginForm";
 import { PageShell } from "@/components/ui/PageShell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Log in" };
 
 export default async function LoginPage() {
   const session = await getSession();

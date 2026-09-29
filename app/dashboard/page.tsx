@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth";
 import { getBusinessMetrics } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 
@@ -28,8 +31,8 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">Your business</h1>
-      <p className="text-sm text-zinc-600">Identity, live state, view and share, sectioned editing, and real activity counts. Live means published. Payment is not required.</p>
+      <h1 className="text-xl font-bold">{businesses.length > 1 ? "Your businesses" : "Your business"}</h1>
+      <p className="text-sm text-zinc-600">Your pages, the next thing to do, and how customers are responding. “Live” means customers can see your page.</p>
       <DashboardClient
         businesses={businesses.map((b) => ({
           id: b.id,

@@ -23,7 +23,9 @@ export default async function HomePage() {
 
   return (
     <div className="jata-landing">
+      <a href="#main" className="jata-skip-link">Skip to content</a>
       <Navbar session={session} />
+      <main id="main">
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
@@ -41,7 +43,7 @@ export default async function HomePage() {
               <Link href="/register" className="jata-btn jata-btn-primary">
                 Get my business page →
               </Link>
-              <a href="#demo" className="rounded-full border border-zinc-200 px-7 py-3 text-sm font-semibold hover:bg-zinc-50">
+              <a href="#demo" className="jata-btn jata-btn-secondary">
                 See demo pages
               </a>
             </div>
@@ -55,7 +57,8 @@ export default async function HomePage() {
           </div>
 
           {/* Phone mock */}
-          <div className="relative mx-auto w-full max-w-[360px]">
+          <figure className="mx-auto w-full max-w-[360px]">
+          <div className="jata-light-island relative" aria-label="Example business page" role="img">
             <div className="rounded-[2rem] border border-zinc-200 bg-zinc-900 p-2 shadow-2xl">
               <div className="rounded-[1.6rem] bg-white p-5">
                 <p className="text-center text-xs font-semibold tracking-widest text-zinc-500">THANKS FOR CONTACTING US 👋</p>
@@ -67,7 +70,7 @@ export default async function HomePage() {
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <span className="rounded-xl bg-emerald-500 py-3 text-center text-sm font-bold text-white">WhatsApp</span>
+                  <span className="rounded-xl bg-emerald-700 py-3 text-center text-sm font-bold text-white">WhatsApp</span>
                   <span className="rounded-xl bg-zinc-900 py-3 text-center text-sm font-bold text-white">Call</span>
                 </div>
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -85,8 +88,9 @@ export default async function HomePage() {
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-center text-xs text-zinc-500">AfterCall page — loads fast, one primary action</p>
           </div>
+          <figcaption className="mt-3 text-center text-sm text-zinc-600">Example page — loads fast, one primary action</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -114,8 +118,8 @@ export default async function HomePage() {
 
       {/* Pricing */}
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <h2 className="text-2xl font-bold tracking-tight">Simple pricing — configurable by admin</h2>
-        <p className="mt-1 text-sm text-zinc-600">Payments via Paystack to JATA ATLAS (merchant 2006074). No card data stored.</p>
+        <h2 className="text-2xl font-bold tracking-tight">Simple pricing</h2>
+        <p className="mt-1 text-sm text-zinc-600">Pay securely with Paystack (M-Pesa or card). We never store your card details.</p>
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:max-w-2xl">
           {plans.map((p) => (
             <div key={p.key} className="rounded-2xl border border-zinc-200 p-6">
@@ -123,7 +127,7 @@ export default async function HomePage() {
               <p className="mt-1 text-3xl font-bold">KES {p.priceKES.toLocaleString()}</p>
               <p className="text-xs text-zinc-500">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
               <Link href="/register" className="mt-4 inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">Get my business page</Link>
-              <p className="mt-2 text-center text-xs text-zinc-500">Paystack checkout • server-verified</p>
+              <p className="mt-2 text-center text-xs text-zinc-600">Secure Paystack checkout. Your plan starts once payment is confirmed.</p>
             </div>
           ))}
         </div>
@@ -156,14 +160,16 @@ export default async function HomePage() {
             <Link key={d.slug} href={`/b/${d.slug}`} className="rounded-2xl border border-zinc-200 p-5 hover:bg-zinc-50">
               <p className="text-sm font-bold">{d.name}</p>
               <p className="text-xs text-zinc-500">{d.cat} • {d.theme} theme</p>
-              <p className="mt-2 text-xs font-medium text-emerald-700">/b/{d.slug} →</p>
+              <p className="mt-2 text-sm font-semibold underline">/b/{d.slug} →</p>
             </Link>
           ))}
         </div>
       </section>
 
-      <footer className="border-t border-zinc-100 py-8 text-center text-xs text-zinc-500">
-        <p>JATA AFTERCALL V1 — Zero-cost MVP • Paystack JATA ATLAS 2006074 • No VPS • No custom domain required • <a href="/health" className="underline">health</a></p>
+      </main>
+      <footer className="border-t border-zinc-100 py-8 text-center text-sm text-zinc-600">
+        <p>JATA AFTERCALL — after-call business pages for Kenyan small businesses.</p>
+        <p className="mt-1">Payments are processed securely by Paystack.</p>
       </footer>
     </div>
   );

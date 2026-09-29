@@ -65,9 +65,16 @@ h1, h2, h3 {
   padding: 2rem 1rem 3rem;
 }
 
+.jata-xwide {
+  margin: 0 auto;
+  max-width: 64rem;
+  padding: 2rem 1rem 3rem;
+}
+
 .jata-brand {
   display: inline-flex;
   align-items: center;
+  min-height: 2.75rem;
   gap: 0.5rem;
   color: inherit;
   text-decoration: none;
@@ -111,7 +118,9 @@ h1, h2, h3 {
 
 .jata-back {
   display: inline-flex;
-  margin-top: 1.5rem;
+  align-items: center;
+  min-height: 2.75rem;
+  margin-top: 1rem;
   color: var(--jata-muted);
   font-size: 0.85rem;
   font-weight: 600;
@@ -227,7 +236,7 @@ button:focus-visible {
   border-radius: 999px;
   background: #fafafa;
   padding: 0.25rem 0.7rem;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 650;
   letter-spacing: 0.06em;
 }
@@ -273,6 +282,69 @@ button:focus-visible {
 
 .product-theme-root[data-product-theme="lime-spark"] {
   color-scheme: dark;
+}
+
+/*
+ * Lime Spark contrast fix: the shared layout primitives (.jata-page, .jata-card, .jata-nav,
+ * .jata-landing, .jata-input, …) read the legacy --jata-* palette, which is light. Under the dark
+ * Lime Spark theme the text colour came from the theme (near-white) while those surfaces stayed
+ * white, producing ~1.05:1 text. Every --jata-* variable is re-pointed at the active product-theme
+ * token so text and surfaces always come from the same theme.
+ */
+.product-theme-root {
+  --jata-ink: var(--color-text);
+  --jata-paper: var(--color-background);
+  --jata-card: var(--color-surface);
+  --jata-line: var(--color-border);
+  --jata-muted: var(--color-text-muted);
+  --jata-live: var(--color-success);
+  --jata-danger: var(--color-error);
+  --jata-focus: var(--color-focus);
+}
+.product-theme-root .jata-page { background: var(--color-background); }
+.product-theme-root .jata-landing { background: var(--color-background); color: var(--color-text); }
+.product-theme-root .jata-nav { background: var(--color-surface); }
+.product-theme-root .jata-brand-mark { background: var(--color-primary); color: var(--color-primary-contrast); }
+.product-theme-root .jata-kicker { background: var(--color-surface-muted); }
+.product-theme-root .jata-live { background: var(--color-success-surface); color: var(--color-success); }
+.product-theme-root .jata-draft { background: var(--color-surface-muted); color: var(--color-text); }
+.product-theme-root .jata-input { background: var(--color-surface); color: var(--color-text); }
+.product-theme-root .text-zinc-950 { color: var(--color-text); }
+/* Text inside a filled primary control always uses the primary-contrast colour. */
+.product-theme-root a.bg-zinc-900 [class*="text-"],
+.product-theme-root button.bg-zinc-900 [class*="text-"],
+.product-theme-root .jata-btn-primary [class*="text-"] { color: var(--color-primary-contrast); }
+/* Muted text inside warning/success surfaces uses that surface's own readable colour. */
+.product-theme-root .bg-amber-50 [class*="text-zinc-"],
+.product-theme-root .bg-amber-100 [class*="text-zinc-"] { color: var(--color-warning); }
+.product-theme-root .bg-emerald-50 [class*="text-zinc-"] { color: var(--color-success); }
+
+/*
+ * Light island: previews of customer-facing pages (landing phone mock, onboarding live preview)
+ * show how the public page really looks, so they keep a light palette inside any product theme.
+ */
+.product-theme-root .jata-light-island {
+  --color-background: #fafaf8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f4f4f5;
+  --color-structure: #18181b;
+  --color-on-dark: #ffffff;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-primary: #18181b;
+  --color-primary-hover: #000000;
+  --color-primary-contrast: #ffffff;
+  --color-border: #d4d4d8;
+  --color-success: #047857;
+  --color-success-surface: #ecfdf5;
+  --color-warning: #854d0e;
+  --color-warning-surface: #fef3c7;
+  --jata-ink: #18181b;
+  --jata-card: #ffffff;
+  --jata-line: #e4e4e7;
+  --jata-muted: #52525b;
+  color: #18181b;
+  color-scheme: light;
 }
 
 .product-theme-root .bg-white { background-color: var(--color-surface); }
@@ -370,7 +442,7 @@ button:focus-visible {
 .product-theme-picker { position: relative; color: var(--color-text); font-size: 0.8rem; }
 .product-theme-picker summary {
   display: inline-flex;
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.45rem;
   border: 1px solid var(--color-border);
@@ -417,8 +489,8 @@ button:focus-visible {
 .product-theme-swatches span { flex: 1; }
 .product-theme-option-copy { display: grid; gap: 0.2rem; }
 .product-theme-option-name { font-weight: 750; }
-.product-theme-option-description { color: var(--color-text-muted); font-size: 0.72rem; line-height: 1.4; }
-.product-theme-selection { color: var(--color-primary); font-size: 0.7rem; font-weight: 750; }
+.product-theme-option-description { color: var(--color-text-muted); font-size: 0.75rem; line-height: 1.4; }
+.product-theme-selection { color: var(--color-primary); font-size: 0.75rem; font-weight: 750; }
 
 @media (prefers-reduced-motion: reduce) {
   .product-theme-root,
@@ -475,3 +547,53 @@ button:focus-visible {
 .product-theme-root .hover\:bg-white:hover { background-color: var(--color-surface); }
 .product-theme-root .bg-emerald-500 { background-color: var(--color-success); }
 .product-theme-root .hover\:bg-emerald-600:hover { background-color: var(--color-success); }
+
+/* Navigation links: at least 44px tall touch targets (WCAG 2.5.8 / mobile guidance). */
+.jata-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 0.25rem;
+  white-space: nowrap;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--jata-muted);
+}
+.jata-nav-link[aria-current="page"] { color: var(--jata-ink); text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
+.product-theme-root .jata-nav-link[aria-current="page"] { border: 0; background: transparent; }
+
+.jata-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 60;
+  border-radius: 0.75rem;
+  background: var(--jata-ink);
+  color: var(--jata-card);
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+}
+.jata-skip-link:focus { top: 0.75rem; }
+
+.jata-status {
+  border-radius: 0.85rem;
+  border: 1px solid var(--jata-line);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.875rem;
+}
+
+.jata-stepper-bar {
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--jata-line);
+}
+.jata-stepper-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--jata-ink);
+  transition: width 0.2s ease;
+}
+.product-theme-root .jata-stepper-bar > span { background: var(--color-primary); }
+.product-theme-root .bg-red-50 { background-color: var(--color-error-surface); }
+.product-theme-root .text-red-700 { color: var(--color-error); }
