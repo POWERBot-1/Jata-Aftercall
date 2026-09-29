@@ -27,14 +27,14 @@ export function nextActionFor(b: NextActionInput, now: Date = new Date()): NextA
   if (b.subscriptionStatus === "EXPIRED" || b.subscriptionStatus === "EXPIRING" || b.subscriptionStatus === "SUSPENDED" || expiresSoon) {
     return { key: "renew", title: "Renew your subscription", detail: "Your plan has ended or ends within 7 days." };
   }
+  if (b.subscriptionStatus !== "ACTIVE") {
+    return { key: "subscribe", title: "Choose a plan", detail: "Choose a plan and pay to unlock publishing and keep your page active." };
+  }
   if (!b.isPublished) {
-    return { key: "publish", title: "Publish your page", detail: "Your page is a draft. Publishing is free and makes it visible to customers." };
+    return { key: "publish", title: "Publish your page", detail: "Your page is a draft. Publishing makes it visible to customers." };
   }
   if (b.servicesCount === 0) {
     return { key: "add-services", title: "Add your services", detail: "Pages with services and prices get more enquiries." };
-  }
-  if (b.subscriptionStatus !== "ACTIVE") {
-    return { key: "subscribe", title: "Choose a plan", detail: "Subscribe to keep your page active." };
   }
   if (!b.hasLocation) {
     return { key: "add-location", title: "Add your location", detail: "Let customers find you with one tap on Directions." };

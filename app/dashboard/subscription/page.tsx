@@ -16,9 +16,9 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   if (!session) return null;
   const ownerFilter = session.role === "ADMIN" ? {} : { ownerId: session.userId };
   const paymentFilter = session.role === "ADMIN" ? {} : { userId: session.userId };
-  const [businesses, plans, payments] = await Promise.all([
+  const [businesses, plansResult, payments] = await Promise.all([
     prisma.business.findMany({ where: ownerFilter, select: { id: true, name: true, subscription: { select: { status: true, planId: true, expiresAt: true, plan: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } }),
-    prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }).catch(() => []),
+    prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }).then((list) => ({ ok: true as const, list })).catch(() => ({ ok: false as const, list: [] })),
     prisma.payment.findMany({ where: paymentFilter, orderBy: { createdAt: "desc" }, take: 20, include: { business: { select: { name: true } } } }),
   ]);
   const requestedId = requestedBusinessId || "";
@@ -55,9 +55,10 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           {selected && <div className="rounded-2xl border bg-white p-5">
             <h2 className="text-sm font-bold">Choose a plan</h2>
             <p className="mt-1 text-sm text-zinc-600">Prices are in Kenyan shillings (KES). You’ll review the amount before paying.</p>
-            {plans.length === 0 ? <p className="mt-4 text-sm text-amber-800">No active plans are available right now. Please try again later.</p> :
+            {plansResult.ok === false ? <p className="mt-4 text-sm text-amber-800">Plans are temporarily unavailable. Please try again later.</p> :
+              plansResult.list.length === 0 ? <p className="mt-4 text-sm text-amber-800">No active plans are available right now. Please try again later.</p> :
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {plans.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-sm">
+                {plansResult.list.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-sm">
                   <p className="text-sm font-semibold">{plan.name}</p>
                   <p className="mt-1 text-sm text-zinc-600">KES {plan.priceKES.toLocaleString()} · {plan.durationDays} days</p>
                   <span className="mt-3 inline-flex min-h-11 items-center rounded-full bg-zinc-900 px-4 text-sm font-semibold text-white">Choose this plan</span>

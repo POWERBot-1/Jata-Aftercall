@@ -15,6 +15,7 @@ export const SAFE_ERRORS = {
   serviceFailed: "We couldn't save that service. Please try again.",
   offerFailed: "We couldn't save that offer. Please try again.",
   publishFailed: "We couldn't publish your page. Please try again.",
+  publishPaymentRequired: "Choose a plan and complete payment before publishing your page.",
   businessFailed: "We couldn't create that business. Please try again.",
 } as const;
 

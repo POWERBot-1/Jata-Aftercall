@@ -51,8 +51,17 @@ describe("publication and preview", () => {
   it("does not accept a URL-supplied owner id as ownership", () => {
     const forgedViewer = { userId: "attacker", role: "CUSTOMER" };
     expect(publicPageDecision({ business: unpublished, viewer: forgedViewer })).toBe("not_found");
-    expect(PUBLISH_REQUIRES_PAYMENT).toBe(false);
-    expect(canSetPublished(true)).toBe(true);
+  });
+});
+
+describe("publication requires verified payment", () => {
+  it("pins the payment-before-publication gate", () => {
+    expect(PUBLISH_REQUIRES_PAYMENT).toBe(true);
+    expect(canSetPublished(true)).toBe(false);
+    expect(canSetPublished(true, { verifiedPayment: true })).toBe(true);
+  });
+
+  it("always allows unpublishing", () => {
     expect(canSetPublished(false)).toBe(true);
   });
 });

@@ -7,7 +7,7 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
-import { canSetPublished } from "@/lib/publication";
+import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
 
@@ -193,7 +193,26 @@ export async function PATCH(req: Request) {
     if (body.aftercallMsg !== undefined) data.aftercallMsg = body.aftercallMsg ? sanitizeText(body.aftercallMsg, 120) : null;
     if (body.isPublished !== undefined) {
       if (typeof body.isPublished !== "boolean") return NextResponse.json({ error: "Publish status must be true or false." }, { status: 400 });
-      if (canSetPublished(body.isPublished)) data.isPublished = body.isPublished;
+      if (body.isPublished) {
+        // Payment-before-publication is enforced here, server-side. The UI is not the boundary:
+        // a direct API request while unpaid is rejected the same way.
+        const isAdmin = session.role === "ADMIN";
+        let verifiedPayment = false;
+        if (!isAdmin && PUBLISH_REQUIRES_PAYMENT) {
+          const [paidPayment, subscription] = await Promise.all([
+            prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
+            prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } }),
+          ]);
+          verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription });
+        }
+        if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+          return NextResponse.json({ error: SAFE_ERRORS.publishPaymentRequired }, { status: 403 });
+        }
+        data.isPublished = true;
+      } else {
+        // Unpublishing is always allowed.
+        data.isPublished = false;
+      }
     }
     if (body.openingHours !== undefined) data.openingHours = body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null;
     if (body.socialLinks !== undefined) data.socialLinks = body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null;
