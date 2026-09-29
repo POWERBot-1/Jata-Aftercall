@@ -15,6 +15,24 @@ function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
 }
 
+/**
+ * Makes sure the business owner has the OWNER membership row that the rest of the app expects.
+ * Used when a retry finds a draft business that already exists, so a partial state left by an
+ * earlier failure is completed before success is reported. Throws (-> 500) if it cannot confirm
+ * the membership, so a retry never reports success for a business without its owner membership.
+ */
+async function ensureOwnerMembership(userId: string, businessId: string): Promise<void> {
+  const key = { userId_businessId: { userId, businessId } };
+  try {
+    await prisma.businessMember.upsert({ where: key, create: { userId, businessId, role: "OWNER" }, update: { role: "OWNER" } });
+  } catch (error) {
+    // Two retries raced to create the same membership; the other one won. Confirm it, else fail.
+    if (prismaErrorCode(error) !== "P2002") throw error;
+    const member = await prisma.businessMember.findUnique({ where: key });
+    if (!member || member.role !== "OWNER") throw error;
+  }
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
@@ -59,6 +77,7 @@ export async function POST(req: Request) {
       const already = await prisma.business.findUnique({ where: { id: draftBusinessId } });
       if (already) {
         if (already.ownerId !== session.userId) return NextResponse.json({ error: "This draft could not be saved. Refresh and try again." }, { status: 409 });
+        await ensureOwnerMembership(session.userId, already.id);
         return NextResponse.json({ business: already, idempotent: true }, { status: 200 });
       }
     }
@@ -105,20 +124,22 @@ export async function POST(req: Request) {
         aftercallMsg,
         openingHours: body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null,
         socialLinks: body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null,
+        // Nested write: Prisma creates the business and its OWNER membership in one transaction,
+        // so a failure can never leave a business without its owner membership.
+        members: { create: { userId: session.userId, role: "OWNER" } },
       },
       });
     } catch (error) {
       // A concurrent request for the same draft won the primary-key race: return that business.
       if (draftBusinessId && prismaErrorCode(error) === "P2002") {
         const winner = await prisma.business.findUnique({ where: { id: draftBusinessId } });
-        if (winner && winner.ownerId === session.userId) return NextResponse.json({ business: winner, idempotent: true }, { status: 200 });
+        if (winner && winner.ownerId === session.userId) {
+          await ensureOwnerMembership(session.userId, winner.id);
+          return NextResponse.json({ business: winner, idempotent: true }, { status: 200 });
+        }
       }
       throw error;
     }
-
-    await prisma.businessMember.create({
-      data: { userId: session.userId, businessId: business.id, role: "OWNER" },
-    });
 
     await logAudit({ actorId: session.userId, action: "BUSINESS_CREATED", targetType: "BUSINESS", targetId: business.id, metadata: { slug } });
 
