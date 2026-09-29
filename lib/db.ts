@@ -96,6 +96,14 @@ function createFallbackPrisma(): any {
       upsert: async () => ({ id: "mock" }),
       findMany: async () => [],
     },
+    referral: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      updateMany: async () => ({ count: 0 }),
+      count: async () => 0,
+    },
     $transaction: async () => {
       throw new Error("DB not available (fallback)");
     },

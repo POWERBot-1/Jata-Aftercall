@@ -9,6 +9,7 @@ import { SAFE_ERRORS } from "@/lib/safeError";
 import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
 import { nextActionFor } from "@/lib/nextAction";
 import { businessStatusLabel, subscriptionStatusLabel, toneClass } from "@/lib/statusLabels";
+import ReferralShareCard from "@/components/ReferralShareCard";
 
 type Biz = {
   id: string;
@@ -26,6 +27,8 @@ type Biz = {
   description?: string | null;
   aftercallMsg?: string | null;
   publicUrl: string;
+  /** Stage 2: the owner's own referral link, when the page is eligible to share one. */
+  referralUrl?: string | null;
   subscription: { status: string; expiresAt: string | null; planName: string } | null;
   servicesCount: number;
   hasOffer: boolean;
@@ -173,6 +176,8 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
           <Link href={getSubscriptionPageUrl(b.id)} className="jata-btn jata-btn-ghost underline">Manage plan</Link>
         )}
       </section>
+
+      {b.referralUrl && <ReferralShareCard url={b.referralUrl} />}
 
       <section className="mt-4" aria-labelledby={`biz-${b.id}-activity`}>
         <h3 id={`biz-${b.id}-activity`} className="jata-section-title">Activity</h3>

@@ -54,6 +54,9 @@ model Business {
   status        BusinessStatus @default(PENDING)
   openingHours  String?        @db.Text
   socialLinks   String?        @db.Text
+  // Stage 2: opaque public referral code. Nullable + unique; minted lazily (on first eligible
+  // use) so existing rows need no backfill. Never derived from tenant data.
+  referralCode  String?        @unique
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -219,4 +222,39 @@ model AuditEvent {
 model ProcessedWebhook {
   id        String   @id
   createdAt DateTime @default(now())
+}
+
+// ── Stage 2: self-service referral attribution ──
+// One row per referral touch. PENDING = anonymous attribution created when a recipient opens a
+// referral link; CONVERTED = the recipient registered and created their first business in the
+// same transaction; REJECTED/EXPIRED = the touch was ineligible or lapsed.
+// No foreign keys by design: the migration stays purely additive, no cascade can delete an
+// attribution record, and only opaque ids (never email/phone/IP) are stored.
+
+enum ReferralStatus {
+  PENDING
+  CONVERTED
+  REJECTED
+  EXPIRED
+}
+
+model Referral {
+  id                 String         @id @default(cuid())
+  code               String
+  referrerUserId     String
+  referrerBusinessId String?
+  // Unique: a referred user is only ever attributed once (first-touch wins at the DB level).
+  referredUserId     String?        @unique
+  referredBusinessId String?
+  status             ReferralStatus @default(PENDING)
+  // SHA-256 of the token held in the recipient's httpOnly cookie. The raw token is never stored.
+  tokenHash          String         @unique
+  rejectReason       String?
+  createdAt          DateTime       @default(now())
+  expiresAt          DateTime
+  convertedAt        DateTime?
+
+  @@index([code, status])
+  @@index([referrerUserId, status])
+  @@index([status, createdAt])
 }
