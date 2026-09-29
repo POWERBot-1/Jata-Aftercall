@@ -8,7 +8,7 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
-import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
+import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT, type PublicationPaymentEvidence } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
 
@@ -256,7 +256,10 @@ export async function PATCH(req: Request) {
             readWithDiagnostics("subscription_lookup", () => prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } })),
           ]);
           currentStage = "entitlement_decision";
-          verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription });
+          verifiedPayment = hasVerifiedPublicationRight({
+            paidPayment: paidPayment as PublicationPaymentEvidence["paidPayment"],
+            subscription: subscription as PublicationPaymentEvidence["subscription"],
+          });
           logPatchDiagnostic(requestId, currentStage, verifiedPayment ? "verified" : "not_verified");
         }
         currentStage = "entitlement_decision";
