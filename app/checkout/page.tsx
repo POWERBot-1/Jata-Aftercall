@@ -3,6 +3,9 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import CheckoutForm from "@/components/CheckoutForm";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Checkout" };
 
 export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<{ businessId?: string; planId?: string }> };

@@ -22,8 +22,34 @@ export function subscriptionWindow(
   return { startAt, expiresAt: new Date(base.getTime() + durationDays * 86400000) };
 }
 
+/**
+ * Paystack statuses that mean the transaction is still in progress, not final.
+ * See https://paystack.com/docs/payments/verify-payments/ — "ongoing", "pending",
+ * "processing" and "queued" can still become "success", so they must never be
+ * recorded as a failure in our database.
+ */
+export const PAYSTACK_IN_PROGRESS_STATUSES = ["ongoing", "pending", "processing", "queued"] as const;
+export type PaystackInProgressStatus = (typeof PAYSTACK_IN_PROGRESS_STATUSES)[number];
+
+export function isInProgressPaymentStatus(providerStatus: unknown): providerStatus is PaystackInProgressStatus {
+  return typeof providerStatus === "string" && (PAYSTACK_IN_PROGRESS_STATUSES as readonly string[]).includes(providerStatus);
+}
+
+/** Final, non-successful outcome for a provider status. Only call this for statuses that are neither success nor in progress. */
 export function failedPaymentStatus(providerStatus: unknown): "CANCELLED" | "EXPIRED" | "FAILED" {
   if (providerStatus === "abandoned") return "CANCELLED";
   if (providerStatus === "expired") return "EXPIRED";
   return "FAILED";
+}
+
+export type ProviderOutcome =
+  | { kind: "success" }
+  | { kind: "in_progress"; providerStatus: PaystackInProgressStatus }
+  | { kind: "final_failure"; status: "CANCELLED" | "EXPIRED" | "FAILED" };
+
+/** Single place that decides what a verified Paystack status means for our payment record. */
+export function classifyProviderStatus(providerStatus: unknown): ProviderOutcome {
+  if (providerStatus === "success") return { kind: "success" };
+  if (isInProgressPaymentStatus(providerStatus)) return { kind: "in_progress", providerStatus };
+  return { kind: "final_failure", status: failedPaymentStatus(providerStatus) };
 }

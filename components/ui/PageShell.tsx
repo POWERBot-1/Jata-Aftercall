@@ -14,11 +14,12 @@ export function PageShell({
   children: ReactNode;
   backHref?: string;
   backLabel?: string;
-  width?: "narrow" | "wide";
+  width?: "narrow" | "wide" | "xwide";
 }) {
   return (
     <div className="jata-page">
-      <div className={width === "wide" ? "jata-wide" : "jata-narrow"}>
+      <a href="#main" className="jata-skip-link">Skip to content</a>
+      <main id="main" className={width === "xwide" ? "jata-xwide" : width === "wide" ? "jata-wide" : "jata-narrow"}>
         <BrandMark compact />
         <a href={backHref} className="jata-back">
           ← {backLabel}
@@ -26,7 +27,7 @@ export function PageShell({
         <h1 className="jata-title">{title}</h1>
         {subtitle ? <p className="jata-subtitle">{subtitle}</p> : null}
         {children}
-      </div>
+      </main>
     </div>
   );
 }

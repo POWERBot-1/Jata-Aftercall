@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { getBaseUrl } from "@/lib/url";
 import ProductThemeProvider from "@/components/ProductThemeProvider";
+import { productThemeBootScript, productThemeCss } from "@/lib/productThemes";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseUrl()),
@@ -20,7 +21,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <style id="jata-product-theme-tokens" dangerouslySetInnerHTML={{ __html: productThemeCss() }} />
+        <script id="jata-product-theme-boot" dangerouslySetInnerHTML={{ __html: productThemeBootScript() }} />
+      </head>
       <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
         <ProductThemeProvider>{children}</ProductThemeProvider>
       </body>

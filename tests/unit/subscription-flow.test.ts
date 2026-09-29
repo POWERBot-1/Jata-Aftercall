@@ -205,8 +205,13 @@ describe("onboarding page and new-business subscription journey", () => {
   });
 
   it("collects and submits location coordinates while keeping publishing separate", () => {
-    expect(form).toContain('id="onboard-lat"');
-    expect(form).toContain('id="onboard-lng"');
+    // The coordinate inputs now live in the shared LocationFields component (geolocation,
+    // manual fallback, validation, map preview); onboarding still wires the same input ids.
+    const locationFields = readFileSync(path.resolve(__dirname, "../../components/LocationFields.tsx"), "utf8");
+    expect(form).toContain('lat: "onboard-lat"');
+    expect(form).toContain('lng: "onboard-lng"');
+    expect(locationFields).toContain("<Field id={latId}");
+    expect(locationFields).toContain("<Field id={lngId}");
     expect(form).toContain("isPublished: true");
   });
 });

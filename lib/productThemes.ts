@@ -102,3 +102,26 @@ export function saveProductThemePreference(
     return false;
   }
 }
+
+function declarations(theme: ProductTheme): string {
+  return Object.entries(theme.tokens).map(([name, value]) => `${name}:${value}`).join(";");
+}
+
+/**
+ * Theme tokens as CSS, rendered once in the document <head>. Tokens are keyed both on the
+ * provider's data attribute and on <html data-jata-theme>, which the boot script sets from the
+ * saved preference before first paint — so a saved Emerald Ink choice no longer flashes Lime Spark.
+ */
+export function productThemeCss(): string {
+  const base = `.product-theme-root{${declarations(PRODUCT_THEMES[DEFAULT_PRODUCT_THEME])}}`;
+  const rules = Object.values(PRODUCT_THEMES).map((theme) =>
+    `.product-theme-root[data-product-theme="${theme.key}"],html[data-jata-theme="${theme.key}"] .product-theme-root{${declarations(theme)}}`,
+  );
+  return [base, ...rules].join("\n");
+}
+
+/** Tiny inline script: applies a valid saved product theme to <html> before hydration. */
+export function productThemeBootScript(): string {
+  const allowed = JSON.stringify(Object.keys(PRODUCT_THEMES));
+  return `(function(){try{var t=window.localStorage.getItem(${JSON.stringify(PRODUCT_THEME_STORAGE_KEY)});if(${allowed}.indexOf(t)>-1){document.documentElement.setAttribute("data-jata-theme",t);}}catch(e){}})();`;
+}

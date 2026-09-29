@@ -18,7 +18,7 @@ export function Navbar({ session }: { session?: { email: string; role: string } 
             </>
           ) : (
             <>
-              <Link href="/login" className="text-sm font-semibold text-zinc-700">Login</Link>
+              <Link href="/login" className="jata-nav-link text-sm">Log in</Link>
               <Button href="/register">Get my business page</Button>
             </>
           )}
