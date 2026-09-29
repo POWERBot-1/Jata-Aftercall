@@ -63,10 +63,20 @@ describe("runtime and schema guards", () => {
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
     const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
-    expect(migrations).toEqual(["20250915000000_init"]);
-    const sql = readFileSync(path.join(root, "prisma/migrations/20250915000000_init/migration.sql"), "utf8");
-    expect(sql.toUpperCase()).not.toContain("DROP TABLE");
-    expect(sql.toUpperCase()).not.toContain("TRUNCATE");
+    // Stage 2 authorises exactly one additional migration: the additive referral attribution
+    // schema. Any other new migration directory stays a build failure.
+    expect(migrations).toEqual(["20250915000000_init", "20260929000000_referral_stage2"]);
+    for (const migration of migrations) {
+      const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
+      expect(sql.toUpperCase()).not.toContain("DROP TABLE");
+      expect(sql.toUpperCase()).not.toContain("TRUNCATE");
+    }
+    const stage2 = readFileSync(path.join(root, "prisma/migrations/20260929000000_referral_stage2/migration.sql"), "utf8").toUpperCase();
+    expect(stage2).not.toContain("DROP ");
+    expect(stage2).not.toContain("ALTER COLUMN");
+    expect(stage2).not.toContain("DELETE ");
+    expect(stage2).not.toContain("UPDATE ");
+    expect(stage2).toContain('ALTER TABLE "BUSINESS" ADD COLUMN');
   });
 
   it("strips technical details from unexpected errors", () => {

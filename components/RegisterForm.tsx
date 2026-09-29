@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
-export default function RegisterForm() {
+export default function RegisterForm({ refCode = null }: { refCode?: string | null }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", businessName: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,8 @@ export default function RegisterForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        // Stage 2: `ref` is a hint only. Attribution is resolved and validated server-side.
+        body: JSON.stringify(refCode ? { ...form, ref: refCode } : form),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

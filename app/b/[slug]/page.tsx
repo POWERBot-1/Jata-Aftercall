@@ -6,6 +6,7 @@ import { resolveTheme } from "@/lib/themes";
 import BusinessPage from "@/components/BusinessPage";
 import { getSession } from "@/lib/auth";
 import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from "@/lib/publication";
+import { ensureReferralCode, referralPath } from "@/lib/referral";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,15 @@ export default async function PublicBusinessPage({ params }: Props) {
 
   const theme = resolveTheme(business.theme);
 
+  // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
+  // suspended) page. The code is minted lazily on first eligible use, so no backfill is needed
+  // and nothing is written for unpublished pages. A minting failure simply hides the CTA.
+  let referralHref: string | null = null;
+  if (decision === "public") {
+    const code = await ensureReferralCode(business.id);
+    if (code) referralHref = referralPath(code);
+  }
+
   return (
     <>
       {decision === "preview" && (
@@ -126,6 +136,7 @@ export default async function PublicBusinessPage({ params }: Props) {
         services={business.services}
         offer={business.offer}
         theme={theme}
+        referralHref={referralHref}
       />
     </>
   );

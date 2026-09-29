@@ -43,11 +43,14 @@ export default function BusinessPage({
   services,
   offer,
   theme,
+  referralHref = null,
 }: {
   business: Business;
   services: Service[];
   offer: Offer;
   theme: ThemeTokens;
+  /** Stage 2: owner referral CTA. Path only — never a code, id, or other tenant data. */
+  referralHref?: string | null;
 }) {
   const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
@@ -307,6 +310,23 @@ export default function BusinessPage({
             </div>
           )}
         </section>
+
+        {/* Stage 2: referral CTA for business owners visiting this public page. Self-service:
+            the recipient registers themselves; no admin assistance and no extra cost. */}
+        {referralHref && (
+          <section className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5 text-center`}>
+            <h2 className="text-sm font-bold">Own a business like {business.name}?</h2>
+            <p className={`mt-1 text-sm leading-6 ${t.colors.muted}`}>
+              Create your own page in a few minutes, then share it with your customers. You choose your own plan — nothing is shared between pages.
+            </p>
+            <Link
+              href={referralHref}
+              className={`jata-cta mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-bold sm:w-auto ${t.colors.primary} ${t.colors.primaryText}`}
+            >
+              Create my page
+            </Link>
+          </section>
+        )}
 
         <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <Link href="/" className="underline">Create your page</Link></p>
       </main>

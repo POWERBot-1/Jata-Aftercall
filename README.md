@@ -23,6 +23,7 @@ Lightweight Kenyan SME after-interaction conversion pages. A customer scans/find
 - **Customer dashboard** `/dashboard` — business live status, metrics (views/WA/calls/directions/shares), edit page/offer/services, publish/unpublish, subscription & payment history, share CTA
 - **Admin panel** `/admin` — customers, businesses, payments, subscriptions, plan config (pricing admin-editable), aggregate metrics, health
 - **Analytics** — privacy-preserving `page_view`, `whatsapp_click`, `call_click`, `direction_click`, `share_click`, `service_click` per business
+- **Self-service referrals (Stage 2)** — every published page carries an opaque `/r/<code>` link; a recipient opens it without an account, registers themselves, and the referral is recorded in the same database transaction that creates their first business
 - **Zero-cost infra** — serverless Next.js on Vercel/Pages (`*.vercel.app` / `*.pages.dev`), Neon Postgres free tier, no VPS/domain/paid SSL required; `PUBLIC_BASE_URL` abstraction for future `jata.link`
 
 ---
@@ -81,12 +82,44 @@ All subscription payments route to **Paystack merchant 2006074 (JATA ATLAS)**. S
 ## Routes
 
 - `/` sales landing, `/health`, `/sitemap.xml`, `/robots.txt`
+- `/r/[code]` referral entry (unauthenticated; persists attribution, redirects to `/register`)
 - `/register` `/login` `/onboarding`
 - `/b/[slug]` public page (canonical)
 - `/checkout` `/checkout/callback` `/checkout/mock` (dev)
 - `/dashboard` `/dashboard/subscription`
 - `/admin` `/admin/customers` `/admin/businesses` `/admin/payments` `/admin/subscriptions` `/admin/plans`
 - `POST /api/checkout` `GET /api/paystack/verify` `POST /api/paystack/webhook` `POST /api/analytics/event` `GET /api/analytics` `POST/PATCH /api/business` `POST /api/services` `POST /api/offer`
+
+---
+
+## Referrals (Stage 2)
+
+An existing owner shares `{PUBLIC_BASE_URL}/r/<code>` from their public page (or the dashboard card).
+
+- **Self-service and unauthenticated**: the recipient needs no account and no admin assistance.
+- **Server-side, first-touch attribution**: opening the link writes a `Referral` row (`PENDING`) and
+  returns only an opaque token in an httpOnly `jata_referral` cookie (the token is stored as a
+  SHA-256 hash). A later link never overwrites an existing unconverted attribution.
+- **Atomic with the first business**: registration converts the row (`CONVERTED` + `referredUserId`
+  + `referredBusinessId`) inside the same transaction that creates the user, the business and its
+  OWNER membership — all or nothing.
+- **Validated server-side on every touch**: unknown/tampered code, unpublished referrer, suspended
+  referrer, missing referrer, self-referral, repeated attempts and cross-tenant attribution are all
+  rejected. Rejections never block a signup and never explain themselves to the browser.
+- **No publication or payment effect**: referral state is never an input to
+  `canSetPublished()`/`hasVerifiedPublicationRight()`. A referred page stays unpublished until a
+  verified subscription payment exists, exactly like any other page.
+- **No private data exposed**: the code is an opaque random string, only the public business name is
+  rendered to a recipient, and no email, phone, id or reject reason leaves the server.
+- **Migration**: `prisma/migrations/20260929000000_referral_stage2/migration.sql` is additive only
+  (one new table, one new enum, one new nullable unique column). Applying it to production is an
+  operator-authorised action performed by the existing deployment build gate
+  (`scripts/build.sh` → `scripts/migrate.sh`); this repository change does not run it.
+
+Regression/security tests: `tests/unit/referral-code.test.ts`,
+`tests/unit/referral-eligibility.test.ts`, `tests/integration/referral-link-route.test.ts`,
+`tests/integration/referral-registration.test.ts`, `tests/security/referral-security.test.ts`,
+`tests/security/referral-payment-boundary.test.ts`.
 
 ---
 

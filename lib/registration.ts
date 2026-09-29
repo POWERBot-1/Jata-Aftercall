@@ -4,6 +4,14 @@ import { logAudit } from "./audit";
 import { sanitizeText, validateEmail, validatePhone } from "./validation";
 import { slugify, validateSlug } from "./slug";
 import { SAFE_ERRORS } from "./safeError";
+import {
+  claimReferralInTransaction,
+  isSelfReferral,
+  rejectReferralInTransaction,
+  resolveReferralForRegistration,
+  type ReferralResolution,
+  type ReferrerSnapshot,
+} from "./referral";
 
 export type RegisterInput = {
   name?: string;
@@ -11,12 +19,20 @@ export type RegisterInput = {
   phone?: string;
   password?: string;
   businessName?: string;
+  /**
+   * Stage 2: referral context for a self-service referral. Both values are hints only — the
+   * referrer is always resolved server-side from the persisted attribution before anything is
+   * recorded. Never trust them as an attribution record on their own.
+   */
+  referral?: { code?: unknown; token?: unknown };
 };
 
 export type RegisterSuccess = {
   ok: true;
   user: { id: string; email: string };
   business: { id: string; slug: string };
+  /** Present only when a referral link was involved. Contains no other tenant's data. */
+  referral?: { recorded: boolean; reason?: string };
 };
 
 export type RegisterFailure = {
@@ -41,6 +57,13 @@ type Tx = {
   businessMember: {
     create: (args: { data: { userId: string; businessId: string; role: "OWNER" } }) => Promise<{ id: string }>;
   };
+  /**
+   * Stage 2: optional so the referral claim can join the same transaction as the business
+   * creation. Absent on older/dependency-free callers, in which case no referral is recorded.
+   */
+  referral?: {
+    updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => Promise<{ count: number }>;
+  };
 };
 
 export type RegisterDeps = {
@@ -49,6 +72,12 @@ export type RegisterDeps = {
   logAudit: (params: { actorId?: string | null; action: string; targetType?: string; targetId?: string; metadata?: Record<string, unknown> }) => Promise<void>;
   issueSession: (payload: SessionPayload) => Promise<void>;
   adminEmails: string[];
+  /** Stage 2: injected so registration stays testable without touching referral storage. */
+  referral?: {
+    resolve: (input: { code?: unknown; token?: unknown }) => Promise<ReferralResolution>;
+    claim: (tx: Tx, params: { attributionId: string; referredUserId: string; referredBusinessId: string; now?: Date }) => Promise<{ recorded: boolean; reason?: string }>;
+    reject: (tx: Tx, params: { attributionId: string; reason: string }) => Promise<void>;
+  };
 };
 
 class DuplicateEmail extends Error {
@@ -111,12 +140,32 @@ export async function registerOwner(input: RegisterInput, deps?: Partial<Registe
     adminEmails: adminEmailList(process.env.ADMIN_EMAILS),
     ...deps,
   };
+  if (!resolved.referral) {
+    resolved.referral = {
+      resolve: (input) => resolveReferralForRegistration(input),
+      claim: (tx, params) => claimReferralInTransaction(tx, params),
+      reject: (tx, params) => rejectReferralInTransaction(tx, { attributionId: params.attributionId, reason: params.reason as never }),
+    };
+  }
 
   const { name, email, phone, password, businessName } = validated.value;
   const passwordHash = await resolved.hashPassword(password);
   const role = resolved.adminEmails.includes(email) ? "ADMIN" : "CUSTOMER";
 
-  let created: { user: { id: string; email: string; role: string; name: string | null }; business: { id: string; slug: string } };
+  // Stage 2: resolve the referral (server-side) before the transaction. A resolution failure
+  // must never block a signup — it simply means no referral is recorded.
+  let referralResolution: ReferralResolution | null = null;
+  const referralHint = input.referral;
+  if (referralHint && (referralHint.code || referralHint.token) && resolved.referral) {
+    try {
+      referralResolution = await resolved.referral.resolve({ code: referralHint.code, token: referralHint.token });
+    } catch {
+      console.error("referral resolution failed before registration");
+      referralResolution = null;
+    }
+  }
+
+  let created: { user: { id: string; email: string; role: string; name: string | null }; business: { id: string; slug: string }; referral?: { recorded: boolean; reason?: string } };
   try {
     created = await resolved.transaction(async (tx) => {
       const existing = await tx.user.findUnique({ where: { email } });
@@ -143,7 +192,31 @@ export async function registerOwner(input: RegisterInput, deps?: Partial<Registe
       await tx.businessMember.create({
         data: { userId: user.id, businessId: business.id, role: "OWNER" },
       });
-      return { user, business };
+
+      // Stage 2: the referral is recorded in the SAME transaction as the recipient's first
+      // business, so attribution and business creation commit or roll back together.
+      let referral: { recorded: boolean; reason?: string } | undefined;
+      if (referralResolution?.decision === "convert" && resolved.referral) {
+        const referrer: ReferrerSnapshot = referralResolution.referrer;
+        if (isSelfReferral(referrer, { email, phone })) {
+          await resolved.referral.reject(tx, { attributionId: referralResolution.attributionId, reason: "self_referral" });
+          referral = { recorded: false, reason: "self_referral" };
+        } else {
+          referral = await resolved.referral.claim(tx, {
+            attributionId: referralResolution.attributionId,
+            referredUserId: user.id,
+            referredBusinessId: business.id,
+          });
+        }
+      } else if (referralResolution?.decision === "reject") {
+        if (referralResolution.attributionId && resolved.referral) {
+          await resolved.referral.reject(tx, { attributionId: referralResolution.attributionId, reason: referralResolution.reason });
+        }
+        referral = { recorded: false, reason: referralResolution.reason };
+      } else if (referralResolution?.decision === "skip") {
+        referral = { recorded: false, reason: referralResolution.reason };
+      }
+      return { user, business, referral };
     });
   } catch (error) {
     if (error instanceof DuplicateEmail) {
@@ -163,10 +236,31 @@ export async function registerOwner(input: RegisterInput, deps?: Partial<Registe
       action: "USER_REGISTERED",
       targetType: "USER",
       targetId: created.user.id,
-      metadata: { businessId: created.business.id },
+      metadata: created.referral?.recorded
+        ? { businessId: created.business.id, referralRecorded: true }
+        : { businessId: created.business.id },
     });
   } catch {
     console.error("audit write failed after registration");
+  }
+
+  // Stage 2: a separate audit trail for attribution. Never contains recipient contact details.
+  if (created.referral?.recorded && referralResolution?.decision === "convert") {
+    try {
+      await resolved.logAudit({
+        actorId: created.user.id,
+        action: "REFERRAL_RECORDED",
+        targetType: "REFERRAL",
+        targetId: referralResolution.attributionId,
+        metadata: {
+          referrerUserId: referralResolution.referrer.ownerId,
+          referrerBusinessId: referralResolution.referrer.businessId,
+          referredBusinessId: created.business.id,
+        },
+      });
+    } catch {
+      console.error("referral audit write failed after registration");
+    }
   }
 
   try {
@@ -185,5 +279,6 @@ export async function registerOwner(input: RegisterInput, deps?: Partial<Registe
     ok: true,
     user: { id: created.user.id, email: created.user.email },
     business: { id: created.business.id, slug: created.business.slug },
+    ...(created.referral ? { referral: created.referral } : {}),
   };
 }

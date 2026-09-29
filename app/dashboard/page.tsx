@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { getBusinessMetrics } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
+import { ensureReferralCode, referralLink } from "@/lib/referral";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -29,6 +30,20 @@ export default async function DashboardPage() {
     }
   }
 
+  // Stage 2: resolve the owner's own referral link per business. Only eligible (published, not
+  // suspended) pages get a code; a failure simply hides the referral card.
+  const referralUrls: Record<string, string> = {};
+  for (const b of businesses) {
+    try {
+      if (b.isPublished && b.status !== "SUSPENDED") {
+        const code = await ensureReferralCode(b.id);
+        if (code) referralUrls[b.id] = referralLink(code);
+      }
+    } catch {
+      // ignore — referral sharing is optional
+    }
+  }
+
   return (
     <div>
       <h1 className="text-xl font-bold">{businesses.length > 1 ? "Your businesses" : "Your business"}</h1>
@@ -50,6 +65,7 @@ export default async function DashboardPage() {
           description: b.description,
           aftercallMsg: b.aftercallMsg,
           publicUrl: getBusinessUrl(b.slug),
+          referralUrl: referralUrls[b.id] || null,
           subscription: b.subscription ? { status: b.subscription.status, expiresAt: b.subscription.expiresAt?.toISOString() || null, planName: b.subscription.plan.name } : null,
           servicesCount: b.services.length,
           hasOffer: !!b.offer,
