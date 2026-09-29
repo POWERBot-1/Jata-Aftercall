@@ -42,3 +42,5 @@ Thumbs.db
 # secrets audit
 *.pem
 *.key
+.env*
+!.env.example
