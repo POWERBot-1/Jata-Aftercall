@@ -148,7 +148,9 @@ mutation itself.
 
 New suites: `tests/unit/referral-code.test.ts`, `tests/unit/referral-eligibility.test.ts`,
 `tests/integration/referral-link-route.test.ts`, `tests/integration/referral-registration.test.ts`,
-`tests/security/referral-security.test.ts`, `tests/security/referral-payment-boundary.test.ts`.
+`tests/integration/referral-end-to-end.test.ts` (real handlers + real referral storage + real
+tenant guard, Prisma stubbed), `tests/security/referral-security.test.ts`,
+`tests/security/referral-payment-boundary.test.ts`.
 Plus the full existing suite and the required gates: `npm test`, `npm run lint`,
 `npx tsc --noEmit`, `npm run build`, `git diff --check`, `npm audit`.
 

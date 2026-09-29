@@ -118,8 +118,8 @@ An existing owner shares `{PUBLIC_BASE_URL}/r/<code>` from their public page (or
 
 Regression/security tests: `tests/unit/referral-code.test.ts`,
 `tests/unit/referral-eligibility.test.ts`, `tests/integration/referral-link-route.test.ts`,
-`tests/integration/referral-registration.test.ts`, `tests/security/referral-security.test.ts`,
-`tests/security/referral-payment-boundary.test.ts`.
+`tests/integration/referral-registration.test.ts`, `tests/integration/referral-end-to-end.test.ts`,
+`tests/security/referral-security.test.ts`, `tests/security/referral-payment-boundary.test.ts`.
 
 ---
 
