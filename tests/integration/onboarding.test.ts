@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { slugify } from "@/lib/slug";
+import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
 
 // Integration-style flow tests without DB — they validate the state machine transitions
 // Full DB integration is tested via E2E against preview deployment.
@@ -31,11 +32,19 @@ describe("onboarding state machine (§33–§45)", () => {
     // Business remains not published
   });
 
-  it("publish does not require payment or an active subscription", () => {
-    const sub = { status: "PENDING" as const };
-    const canPublish = true;
-    expect(canPublish).toBe(true);
-    expect(sub.status).not.toBe("ACTIVE");
+  it("publish requires a verified payment before it is allowed", () => {
+    expect(PUBLISH_REQUIRES_PAYMENT).toBe(true);
+    // Unpaid owner → cannot publish (also enforced server-side on PATCH /api/business).
+    expect(canSetPublished(true, { verifiedPayment: false })).toBe(false);
+    expect(hasVerifiedPublicationRight({ paidPayment: { status: "PENDING" }, subscription: null })).toBe(false);
+    // Verified payment → can publish.
+    expect(hasVerifiedPublicationRight({
+      paidPayment: { status: "PAID" },
+      subscription: { status: "ACTIVE", expiresAt: new Date(Date.now() + 86400000), graceUntil: new Date(Date.now() + 4 * 86400000) },
+    })).toBe(true);
+    expect(canSetPublished(true, { verifiedPayment: true })).toBe(true);
+    // Unpublishing stays available without payment.
+    expect(canSetPublished(false)).toBe(true);
   });
 
   it("abandoned onboarding preserves data and allows resume", () => {

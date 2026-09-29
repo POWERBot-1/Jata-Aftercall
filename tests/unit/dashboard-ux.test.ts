@@ -16,6 +16,13 @@ describe("dashboard next action", () => {
     expect(nextActionFor({ ...base, hasLocation: false }).key).toBe("add-location");
     expect(nextActionFor(base).key).toBe("share");
   });
+
+  it("steers an unpaid owner to payment before publishing", () => {
+    // Payment-before-publication: without a valid subscription the next step is never "publish".
+    expect(nextActionFor({ ...base, subscriptionStatus: null, isPublished: false }).key).toBe("subscribe");
+    expect(nextActionFor({ ...base, subscriptionStatus: "PENDING", isPublished: false }).key).toBe("subscribe");
+    expect(nextActionFor({ ...base, subscriptionStatus: "ACTIVE", isPublished: false }).key).toBe("publish");
+  });
 });
 
 describe("human-readable status labels (no raw status codes)", () => {

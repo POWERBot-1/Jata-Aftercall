@@ -45,7 +45,7 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
     return (
       <div className="jata-card mt-6 p-8 text-center">
         <h2 className="text-base font-semibold">No business page yet</h2>
-        <p className="mt-1 text-sm text-zinc-600">Set one up in seven short steps. Payment is not required to publish.</p>
+        <p className="mt-1 text-sm text-zinc-600">Set one up in seven short steps. Your page goes live once your subscription payment is confirmed.</p>
         <Button href="/onboarding" className="mt-4">Start setup</Button>
       </div>
     );
@@ -123,7 +123,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
       case "add-services":
         return <Button onClick={() => setOpen("services")}>Add a service</Button>;
       case "publish":
-        return <Button disabled={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live — payment was not required.")}>Publish page</Button>;
+        return <Button disabled={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live.")}>Publish page</Button>;
       case "renew":
       case "subscribe":
         return <Button href={getSubscriptionPageUrl(b.id)}>{action.key === "renew" ? "Renew plan" : "Choose a plan"}</Button>;
@@ -166,7 +166,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
       <section className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm" aria-label="Subscription">
         <p>
           <span className="font-semibold">Subscription:</span>{" "}
-          {b.subscription ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${new Date(b.subscription.expiresAt).toLocaleDateString("en-KE")}` : ""}` : "No plan yet. Your page can stay live while you decide."}
+          {b.subscription ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${new Date(b.subscription.expiresAt).toLocaleDateString("en-KE")}` : ""}` : "No plan yet. Choose a plan to unlock publishing."}
           {sub.help ? ` ${sub.help}` : ""}
         </p>
         {action.key !== "renew" && action.key !== "subscribe" && (

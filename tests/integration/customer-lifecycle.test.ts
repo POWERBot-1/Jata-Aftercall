@@ -52,7 +52,12 @@ vi.mock("@/lib/db", () => {
   db.planConfig = { findUnique: vi.fn(async ({ where }: any) => where.id === state.plan.id ? state.plan : null) };
   db.user = { findUnique: vi.fn(async () => ({ email: "owner@example.test" })) };
   db.payment = {
-    findFirst: vi.fn(async () => null),
+    findFirst: vi.fn(async ({ where }: any) => {
+      if (!state.payment) return null;
+      if (where?.status && state.payment.status !== where.status) return null;
+      if (where?.businessId && state.payment.businessId !== where.businessId) return null;
+      return state.payment;
+    }),
     create: vi.fn(async ({ data }: any) => { state.payment = { id: "payment-a", ...data }; return { ...state.payment }; }),
     findUnique: vi.fn(async ({ where }: any) => state.payment && (where.id === state.payment.id || where.reference === state.payment.reference) ? state.payment : null),
     update: vi.fn(async ({ data }: any) => { state.payment = { ...state.payment, ...data }; return state.payment; }),
@@ -74,6 +79,7 @@ import { POST as startCheckout } from "@/app/api/checkout/route";
 import { GET as verifyPayment } from "@/app/api/paystack/verify/route";
 import { getDirectionsUrl } from "@/lib/location";
 import { publicPageDecision } from "@/lib/publication";
+import { SAFE_ERRORS } from "@/lib/safeError";
 
 function jsonRequest(url: string, method: string, body: unknown) {
   return new Request(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -115,5 +121,51 @@ describe("deterministic customer lifecycle (database and payment provider mocked
     expect(published.status).toBe(200);
     expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("public");
     expect(getDirectionsUrl(state.business.location, state.business.lat, state.business.lng)).toContain("-1.286389%2C36.817223");
+  });
+
+  it("rejects direct API publish attempts while unpaid and allows publish after verified payment", async () => {
+    const created = await createBusiness(jsonRequest("https://app.test/api/business", "POST", { name: "Sample Cafe", category: "Restaurant" }));
+    expect(created.status).toBe(201);
+
+    // Direct API attempt with no payment at all → rejected server-side, stays a private draft.
+    const unpaid = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    expect(unpaid.status).toBe(403);
+    expect((await unpaid.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
+    expect(state.business.isPublished).toBe(false);
+    expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("not_found");
+
+    // Payment started but not verified (PENDING) → still cannot publish.
+    const checkout = await startCheckout(jsonRequest("https://app.test/api/checkout", "POST", { businessId: "biz-a", planId: "plan-month" }));
+    expect(checkout.status).toBe(200);
+    expect(state.payment.status).toBe("PENDING");
+    const stillPending = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    expect(stillPending.status).toBe(403);
+    expect((await stillPending.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
+    expect(state.business.isPublished).toBe(false);
+
+    // Verified payment (PAID + ACTIVE subscription) → publish succeeds.
+    const verified = await verifyPayment(new Request(`https://app.test/api/paystack/verify?reference=${state.payment.reference}&mock=success`));
+    expect(verified.status).toBe(200);
+    const published = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    expect(published.status).toBe(200);
+    expect(state.business.isPublished).toBe(true);
+    expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("public");
+
+    // Unpublishing stays available without payment checks.
+    const unpublished = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: false }));
+    expect(unpublished.status).toBe(200);
+    expect(state.business.isPublished).toBe(false);
+  });
+
+  it("keeps publication blocked when the payment record is not PAID even if a subscription row exists", async () => {
+    const created = await createBusiness(jsonRequest("https://app.test/api/business", "POST", { name: "Sample Cafe", category: "Restaurant" }));
+    expect(created.status).toBe(201);
+    // Simulate an inconsistent state: subscription-looking row without a verified PAID payment.
+    state.payment = { id: "payment-x", businessId: "biz-a", userId: "user-a", planId: "plan-month", status: "FAILED", reference: "ref-x", amount: 14900, currency: "KES" };
+    state.subscription = { id: "sub-x", businessId: "biz-a", userId: "user-a", planId: "plan-month", status: "ACTIVE", startAt: new Date(), expiresAt: new Date(Date.now() + 30 * 86400000), graceUntil: new Date(Date.now() + 33 * 86400000) };
+    const attempt = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    expect(attempt.status).toBe(403);
+    expect((await attempt.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
+    expect(state.business.isPublished).toBe(false);
   });
 });

@@ -80,10 +80,14 @@ describe("runtime and schema guards", () => {
     expect(health).toContain('export const dynamic = "force-dynamic"');
   });
 
-  it("onboarding does not require checkout before publish", () => {
+  it("onboarding routes to publish only after verified payment", () => {
     const form = readFileSync(path.join(root, "components/OnboardingForm.tsx"), "utf8");
     expect(form).not.toContain("/api/checkout");
     expect(form).toContain("isPublished: true");
     expect(form).toContain("Services & offer");
+    // The publish-without-payment escape hatch is gone; the wizard checks payment state first.
+    expect(form).not.toContain("Continue without payment");
+    expect(form).toContain("Continue to publish");
+    expect(form).toContain("subscription payment is confirmed");
   });
 });

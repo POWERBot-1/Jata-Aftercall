@@ -36,7 +36,7 @@ const STEPS: { title: string; phase: (typeof PHASES)[number]; intro: string }[] 
   { title: "Location", phase: "Business & location", intro: "Help customers find you. Everything here is optional." },
   { title: "Services", phase: "Services & offer", intro: "Add what you sell. You can skip and add these later." },
   { title: "Look & message", phase: "Services & offer", intro: "Describe your business and pick a style." },
-  { title: "Choose plan", phase: "Choose plan", intro: "Pick a plan now, or publish first and pay later." },
+  { title: "Choose plan", phase: "Choose plan", intro: "Pick a plan and pay securely. Publishing opens after payment is confirmed." },
   { title: "Publish", phase: "Publish", intro: "Your page stays a private draft until you publish it." },
 ];
 
@@ -206,6 +206,45 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
     router.push("/dashboard");
   }
 
+  /**
+   * Payment before publish: only move to the Publish step once the server reports a
+   * verified, currently-valid subscription for this business. The server enforces the
+   * same rule on the publish request itself — this check only keeps the wizard honest.
+   */
+  async function continueToPublish() {
+    if (!draft?.business || inFlight.current) return;
+    const businessId = draft.business.id;
+    inFlight.current = true;
+    setErr("");
+    setLoading(true);
+    try {
+      const res = await send("/api/business", "GET");
+      if (res.status === 401) {
+        setErr(SAFE_ERRORS.signIn);
+        return;
+      }
+      const businesses = Array.isArray(res.data.businesses) ? (res.data.businesses as Array<{ id?: string; subscription?: { status?: string; expiresAt?: string | null; graceUntil?: string | null } | null }>) : [];
+      const mine = businesses.find((b) => b.id === businessId);
+      const subscription = mine?.subscription || null;
+      const now = Date.now();
+      const validUntilRaw = subscription?.graceUntil || subscription?.expiresAt || null;
+      const validUntil = validUntilRaw ? new Date(validUntilRaw).getTime() : 0;
+      const paid = Boolean(subscription)
+        && (subscription.status === "ACTIVE" || subscription.status === "EXPIRING")
+        && (!validUntil || now <= validUntil);
+      if (!paid) {
+        setErr("Publishing opens after your subscription payment is confirmed. Choose a plan above and complete payment, then come back here.");
+        return;
+      }
+      goTo(7);
+    } catch {
+      setErr("We couldn’t check your payment status — check your connection and try again.");
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
+  }
+
   if (!draft) {
     return <div className="jata-card mt-6 p-5" aria-busy="true"><p role="status" className="text-sm">Loading your setup…</p></div>;
   }
@@ -356,7 +395,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
                 <p className="mt-1 text-sm text-zinc-600">KES {plan.priceKES.toLocaleString()} · {plan.durationDays} days</p>
                 <span className="mt-3 inline-flex rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Continue to secure checkout</span>
               </a>
-            ))}</div> : <p className="rounded-lg bg-amber-50 p-3 text-sm">No active plans are available right now. You can publish now and choose a plan later.</p>}
+            ))}</div> : <p className="rounded-lg bg-amber-50 p-3 text-sm">No active plans are available right now. Please try again later.</p>}
             <p className="text-sm text-zinc-600">Your setup is saved. After paying you can come back here to publish.</p>
           </div>
         )}
@@ -366,7 +405,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
             <div className="rounded-xl bg-zinc-50 p-4 text-sm">
               <p className="font-bold">{business.name}</p>
               <p className="text-sm text-zinc-600">/b/{business.slug}</p>
-              <p className="mt-2 text-sm">Publishing is optional and does not require payment. Your page stays a draft until you publish it.</p>
+              <p className="mt-2 text-sm">Your page stays a private draft until you publish it. Publishing opens once your subscription payment is confirmed.</p>
             </div>
             <a href={`/b/${business.slug}`} target="_blank" rel="noopener noreferrer" className="jata-btn jata-btn-secondary w-full">Preview draft (opens in a new tab)</a>
             <Button disabled={loading} onClick={publish} className="w-full">{loading ? "Publishing…" : "Publish page"}</Button>
@@ -382,7 +421,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
               {loading ? "Saving…" : step === 1 && !business ? "Save and continue" : "Continue"}
             </Button>
           )}
-          {step === 6 && <Button className="flex-1" variant="secondary" onClick={() => goTo(7)}>Continue without payment</Button>}
+          {step === 6 && <Button className="flex-1" disabled={loading} onClick={() => void continueToPublish()}>{loading ? "Checking payment…" : "Continue to publish"}</Button>}
         </div>
         <p role="status" aria-live="polite" className="mt-2 min-h-5 text-sm text-zinc-600">{statusText}</p>
       </div>

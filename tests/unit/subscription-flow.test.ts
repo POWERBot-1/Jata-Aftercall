@@ -200,7 +200,10 @@ describe("onboarding page and new-business subscription journey", () => {
     expect(form).toContain('fetch("/api/business"');
     expect(form).toContain("getCheckoutUrl(business.id, plan.id)");
     expect(form).toContain("Choose a subscription plan");
-    expect(form).toContain("Continue without payment");
+    // Payment-before-publication: the wizard has no publish-without-payment escape hatch;
+    // the only forward path from plan selection is checkout, then payment-gated publishing.
+    expect(form).not.toContain("Continue without payment");
+    expect(form).toContain("Continue to publish");
     expect(form).toContain("Business & location");
   });
 
