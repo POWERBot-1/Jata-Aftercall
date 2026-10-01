@@ -11,6 +11,8 @@ async function main() {
   const plans = [
     { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365 },
     { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30 },
+    // AI Business Front Desk package (§49 — KES 499 / 30 days monthly)
+    { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });

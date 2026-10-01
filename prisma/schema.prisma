@@ -258,3 +258,355 @@ model Referral {
   @@index([referrerUserId, status])
   @@index([status, createdAt])
 }
+
+// ── AI Business Front Desk (§3, §6, §7, §9, §49) ──
+// Multi-tenant AI package: isolated business brain, AI config, products with inventory,
+// merchant payment credentials (encrypted refs only), and package entitlement.
+
+model AIConfiguration {
+  id                 String     @id @default(cuid())
+  businessId         String     @unique
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tone               String     @default("friendly") // professional | friendly | casual | premium | local | formal
+  language           String     @default("en") // en | sw | sheng | mixed
+  salesBehavior      String     @default("informational") // informational | recommend | upsell | cross_sell | promotions
+  orderingAllowed    Boolean    @default(true)
+  preordersAllowed   Boolean    @default(false)
+  humanEscalation    String     @default("uncertain") // always | business_hours | specified_topics | uncertain
+  welcomeMessage     String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model Product {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?    @db.Text
+  sku                String?
+  category           String?
+  basePriceKES       Int?
+  variantPriceKES    Int?
+  currency           String     @default("KES")
+  stockStatus        StockStatus @default(IN_STOCK)
+  quantity           Int?
+  minOrder           Int       @default(1)
+  maxOrder           Int?
+  preOrderAllowed    Boolean    @default(false)
+  deliveryEligible   Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, category])
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  PRE_ORDER
+  DISCONTINUED
+  AVAILABLE_ON_REQUEST
+}
+
+model KnowledgeDocument {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title              String
+  content            String     @db.Text
+  sourceType         String     // manual | csv_import | document_upload | website_import
+  isApproved         Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+model FAQ {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  question           String
+  approvedAnswer     String     @db.Text
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+// Package entitlement: explicit link between a business and the AI Front Desk package.
+// Not a replacement for Subscription; a business must have both an ACTIVE subscription
+// to the package key AND a verified PAID payment before the AI package is live.
+model AIPackageEntitlement {
+  id                 String     @id @default(cuid())
+  businessId         String     @unique
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey         String     @default("AI_BUSINESS_FRONT_DESK")
+  status             String     @default("PENDING") // PENDING | ACTIVE | SUSPENDED | EXPIRED
+  activatedAt        DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+// ── Phase 3 Commerce (§12–§15, §30–§34, §51, §67, §76–§77, §89–§90) ──
+// Multi-tenant commerce: cart, orders, inventory reservation, pricing engine,
+// merchant payment configuration (business's own destination, never substituted),
+// pre-orders, and deterministic server-side calculation.
+
+model Cart {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId String?  // Optional; can be anonymous session reference
+  items      CartItem[]
+  status     String   @default("ACTIVE") // ACTIVE | CONVERTED | ABANDONED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([customerId])
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  cartId     String
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId  String?
+  serviceId  String?
+  variantDesc String? // Size, colour, etc.
+  quantity   Int      @default(1)
+  unitPriceKES Int?   // Authoritative price at time of cart creation (§11, §33)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([cartId])
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  orderReference  String         @unique // Example: JATA-ORD-20261001-...
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  deliveryLocation String?
+  deliveryInstructions String?
+  status          OrderStatus    @default(DRAFT)
+  subtotalKES     Int            @default(0)
+  deliveryFeeKES  Int            @default(0)
+  discountKES     Int            @default(0)
+  totalKES        Int            @default(0)
+  currency        String         @default("KES")
+  preOrder        Boolean        @default(false)
+  items           OrderItem[]
+  payments        Payment[]     // Related to this order; server-side verified only (§14, §35)
+  preOrders       PreOrder[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  completedAt     DateTime?
+
+  @@index([businessId])
+  @@index([status])
+  @@index([customerId])
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_CUSTOMER_CONFIRMATION
+  PENDING_PAYMENT
+  PAYMENT_PROCESSING
+  PAYMENT_VERIFIED
+  CONFIRMED
+  PROCESSING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String?
+  serviceId  String?
+  name       String   // Authoritative name at order time
+  variantDesc String?
+  quantity   Int      @default(1)
+  unitPriceKES Int    // Authoritative price (§11, §33)
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// Pre-order support (§15) — separate from immediate orders.
+model PreOrder {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId     String?
+  customerName   String?
+  customerPhone  String?
+  productId      String
+  productName    String
+  variantDesc    String?
+  quantity       Int      @default(1)
+  depositRequiredKES Int?  // Configured deposit (§15)
+  fullPriceKES   Int?
+  status         PreOrderStatus @default(PENDING)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([status])
+}
+
+enum PreOrderStatus {
+  PENDING
+  DEPOSIT_PAID
+  FULL_PAYMENT_PAID
+  READY_TO_FULFILL
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+// Merchant payment configuration (§6, §49) — the business's own payment destination.
+// Never substitutes JATA's destination. Never stores secret API keys in plaintext.
+model MerchantPaymentConfig {
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Public payment information (displayed to customers, safe for AI prompts)
+  publicInfo      String   @db.Text // Example: "M-Pesa: Buy Goods 12345678"
+  // Private API credentials are encrypted at rest and never exposed to AI or browser (§6, §43)
+  encryptedCredentials String? @db.Text // Encrypted payload (gateway OAuth tokens, etc.)
+  credentialRotationNote String? // Audit note without recording secrets (§47)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+// ── Phase 4 Notifications (§17, §18, §37, §63) ──
+// Multi-tenant notification system with nominated business number,
+// transaction notification, reliability tracking, and audit events.
+
+model Notification {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  eventType       String     // NEW_ORDER | PREORDER | BOOKING | HUMAN_HANDOFF | PAYMENT_VERIFIED | LOW_STOCK | OUT_OF_STOCK | FAILED_NOTIFICATION
+  title           String
+  message         String     @db.Text
+  channel         String     @default("WHATSAPP") // WHATSAPP | SMS | EMAIL | IN_APP
+  recipientNumber String?
+  recipientEmail  String?
+  status          NotificationStatus @default(PENDING)
+  deliveryAttempted Boolean  @default(false)
+  deliveryFailed  Boolean    @default(false)
+  retryCount      Int        @default(0)
+  maxRetries      Int        @default(3)
+  referenceId     String?    // Links to Order, PreOrder, or other entity
+  createdAt       DateTime   @default(now())
+  deliveredAt     DateTime?
+
+  @@index([businessId])
+  @@index([status])
+  @@index([businessId, eventType])
+}
+
+enum NotificationStatus {
+  PENDING
+  QUEUED
+  DELIVERED
+  FAILED
+  RETRY_QUEUED
+  SKIPPED
+}
+
+model NotificationRecipient {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  label           String     // PRIMARY | SECONDARY | STAFF | OWNER
+  phone           String?
+  email           String?
+  whatsappEnabled Boolean    @default(true)
+  smsEnabled      Boolean    @default(true)
+  emailEnabled    Boolean    @default(true)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@unique([businessId, label])
+}
+
+// ── Phase 5 Intelligence (§28, §29, §30, §54, §64, §65) ──
+// Intelligence panel: unanswered questions, missed-demand tracking,
+// AI quality tracking (source, confidence, escalation), and readiness enhancement.
+
+model UnansweredQuestion {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  question        String     @db.Text
+  askedCount      Int        @default(1) // How many times asked
+  firstAskedAt    DateTime   @default(now())
+  lastAskedAt     DateTime   @updatedAt
+  approvedAnswer  String?    @db.Text // Once owner approves an answer (§29)
+  isResolved      Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([isResolved])
+  @@index([question])
+}
+
+model DemandInsight {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  insightType     String     // MISSED_DEMAND | UNAVAILABLE_PRODUCT | OUT_OF_ZONE | SERVICE_NOT_OFFERED | PRICE_INQUIRY
+  subject         String     // What was requested (e.g., product name, service, delivery zone)
+  count           Int        @default(1)
+  firstRecorded   DateTime   @default(now())
+  lastRecorded    DateTime   @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([insightType])
+}
+
+model AIQualityEvent {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId  String?
+  sourceUsed      String     // structured_data | faq | knowledge_document | unknown
+  confidence      String?    // high | low | uncertain
+  escalatedToHuman Boolean  @default(false)
+  customerCorrectedAI Boolean @default(false)
+  missingBusinessInfo Boolean @default(false)
+  eventType       String?    // QUESTION | ORDER | BOOKING | HANDOFF
+  timestamp       DateTime   @default(now())
+  metadata        String?    @db.Text // Safe JSON, no secrets (§30, §43)
+
+  @@index([businessId])
+  @@index([eventType])
+  @@index([sourceUsed])
+}

@@ -29,6 +29,11 @@ export async function POST(req: Request) {
     if (!plan.isActive || !Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || plan.durationDays <= 0) {
       return NextResponse.json({ error: "The selected plan is not currently available." }, { status: 400 });
     }
+    // §49 — AI Business Front Desk package must resolve to KES 499 / 30 days server-side.
+    // The server never trusts a client-supplied amount. This guard ensures the package price is authoritative.
+    if (plan.key === "AI_BUSINESS_FRONT_DESK" && (plan.priceKES !== 499 || plan.durationDays !== 30)) {
+      return NextResponse.json({ error: "AI Business Front Desk pricing configuration is invalid." }, { status: 500 });
+    }
     if (!user?.email) return NextResponse.json({ error: "Your account needs a valid email before checkout." }, { status: 400 });
 
     const recentPending = await prisma.payment.findFirst({
