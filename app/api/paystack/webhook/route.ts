@@ -37,8 +37,20 @@ export async function POST(req: Request) {
       // ledger. Acknowledge and audit them without marking the payment fully refunded.
       if (data.currency === refundPayment.currency && typeof data.amount === "number" &&
           Number.isSafeInteger(data.amount) && data.amount > 0 && data.amount < refundPayment.amount) {
-        await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
-        await logAudit({ actorId: refundPayment.userId, action: "WEBHOOK_PARTIAL_REFUND_REVIEW_REQUIRED", targetType: "PAYMENT", targetId: refundPayment.id, metadata: { amount: data.amount, currency: data.currency } });
+        // The event key and review audit are one atomic unit: never acknowledge a
+        // partial refund unless its manual-review record is durably written.
+        await prisma.$transaction(async (tx) => {
+          await tx.processedWebhook.create({ data: { id: eventId } });
+          await tx.auditEvent.create({
+            data: {
+              actorId: refundPayment.userId,
+              action: "WEBHOOK_PARTIAL_REFUND_REVIEW_REQUIRED",
+              targetType: "PAYMENT",
+              targetId: refundPayment.id,
+              metadata: JSON.stringify({ amount: data.amount, currency: data.currency }),
+            },
+          });
+        });
         return NextResponse.json({ status: "partial_refund_requires_review" });
       }
       if (data.amount !== refundPayment.amount || data.currency !== refundPayment.currency) return NextResponse.json({ error: "Refund evidence did not match this payment." }, { status: 400 });
