@@ -54,6 +54,16 @@ describe("Paystack webhook", () => {
     expect((await POST(request())).status).toBe(400);
     expect(mocks.activate).not.toHaveBeenCalled();
   });
+  it("acknowledges and audits a partial subscription refund without marking it fully refunded", async () => {
+    mocks.paymentFind.mockResolvedValue({ id: "pay-a", reference: "jata-ref", userId: "user-a", businessId: "business-a", purpose: "SUBSCRIPTION", amount: 99900, currency: "KES", status: "PAID" });
+    const refund = { id: 1234, event: "refund.processed", data: { id: 902, transaction_reference: "jata-ref", amount: 1, currency: "KES" } };
+    const response = await POST(request(refund));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "partial_refund_requires_review" });
+    expect(mocks.webhookUpsert).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "1234" } }));
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "WEBHOOK_PARTIAL_REFUND_REVIEW_REQUIRED", targetId: "pay-a", metadata: { amount: 1, currency: "KES" } }));
+    expect(mocks.paymentFind).toHaveBeenCalledWith({ where: { reference: "jata-ref" } });
+  });
   it("acknowledges duplicate events idempotently", async () => {
     mocks.alreadyProcessed = true;
     expect(await (await POST(request())).json()).toEqual({ status: "already_processed" });
