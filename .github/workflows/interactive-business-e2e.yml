@@ -1,0 +1,63 @@
+name: Interactive Business E2E
+
+# Runs the §66 end-to-end journey (tests/e2e/interactive-business-journey.test.ts) against a
+# real PostgreSQL database. The sandbox that built this package has no outbound access to the
+# Prisma binary hosts and no local database, so the gate executes here instead.
+#
+# No Paystack secret is configured: the journey settles payments through the application's own
+# test-settlement branch (NODE_ENV !== "production" && !PAYSTACK_SECRET_KEY), which is the same
+# code path the Paystack webhook calls.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: Journey against a real database
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed plans
+        run: npm run seed
+
+      - name: Run the §66 journey
+        run: npm run test:e2e
