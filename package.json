@@ -10,7 +10,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
+    "test:e2e": "vitest run tests/e2e/",
     "reconcile:plans": "tsx scripts/reconcile-plans.ts",
     "seed": "tsx prisma/seed.ts",
     "migrate": "bash scripts/migrate.sh",
