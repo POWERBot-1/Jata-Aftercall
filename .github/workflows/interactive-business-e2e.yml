@@ -86,8 +86,8 @@ jobs:
 
       # Diagnostics: runner logs are not readable from the sandbox that authored this
       # workflow, so a failing step posts its tail to the pull request instead.
-      - name: Report failing output to the pull request
-        if: failure()
+      - name: Report output to the pull request
+        if: always()
         uses: actions/github-script@v7
         with:
           script: |
@@ -111,5 +111,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue,
-              body: `Interactive Business E2E failed on \`${context.sha}\` — captured output:\n\n${body}`.slice(0, 60000),
+              body: `Interactive Business E2E on \`${context.sha}\` (${context.runId}) — captured output:\n\n${body}`.slice(0, 60000),
             });
