@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
+    "reconcile:plans": "tsx scripts/reconcile-plans.ts",
     "seed": "tsx prisma/seed.ts",
     "migrate": "bash scripts/migrate.sh",
     "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'"

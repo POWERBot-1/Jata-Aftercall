@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { FALLBACK_PLANS } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,16 @@ export default async function HomePage() {
   } catch {
     plans = [];
   }
-  // Fallback if DB not seeded
+  // Fallback only when the database is unreachable or the catalogue is empty. It is the shared
+  // canonical catalogue — never a hand-written list — so this page can never advertise a partial
+  // offering set (it previously hardcoded only Annual + Monthly, hiding two products).
   if (plans.length === 0) {
-    plans = [
-      { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365 },
-      { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30 },
-    ];
+    plans = FALLBACK_PLANS.map((plan) => ({
+      key: plan.key,
+      name: plan.name,
+      priceKES: plan.priceKES,
+      durationDays: plan.durationDays,
+    }));
   }
 
   return (
@@ -120,7 +125,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <h2 className="text-2xl font-bold tracking-tight">Simple pricing</h2>
         <p className="mt-1 text-sm text-zinc-600">Pay securely with Paystack (M-Pesa or card). We never store your card details.</p>
-        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:max-w-2xl">
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {plans.map((p) => (
             <div key={p.key} className="rounded-2xl border border-zinc-200 p-6">
               <p className="text-sm font-semibold">{p.name}</p>

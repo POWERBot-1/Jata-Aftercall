@@ -1,0 +1,85 @@
+name: Reconcile plan catalogue
+
+# Manual, narrowly-scoped production PlanConfig reconciliation for the four canonical
+# offerings (Monthly KES 149/30, Annual KES 999/365, AI Business Front Desk KES 499/30,
+# Interactive Business KES 999/30).
+#
+# Safety rails:
+#   - workflow_dispatch only: it never runs on push, pull_request or a schedule;
+#   - a typed confirmation input must match exactly;
+#   - the script writes ONLY to `PlanConfig` (upsert by key — existing ids and subscriptions
+#     are preserved, nothing is deleted), is dry-run unless --apply is passed, and verifies
+#     its own result;
+#   - the connection string comes from a repository secret and is never printed (only a
+#     redacted host/database fingerprint and row-level results are logged);
+#   - no seed, no migration, no deployment is triggered by this workflow.
+#
+# This is the operator path for production evidence. It can also be run locally:
+#   DATABASE_URL=<production url> npm run reconcile:plans            # dry run
+#   DATABASE_URL=<production url> npm run reconcile:plans -- --apply # apply + verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run reports the intended changes; apply writes them"
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      confirmation:
+        description: 'Type RECONCILE-PLAN-CATALOGUE to confirm'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: PlanConfig reconciliation (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check confirmation phrase
+        run: |
+          if [ "${{ inputs.confirmation }}" != "RECONCILE-PLAN-CATALOGUE" ]; then
+            echo "::error::Confirmation phrase did not match — refusing to touch the catalogue."
+            exit 1
+          fi
+
+      - name: Check database secret is available
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::No DATABASE_URL secret is configured for this repository. Set the target database URL as the DATABASE_URL repository secret, or run the script locally instead. Nothing was written."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Dry run (always reported)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run reconcile:plans
+
+      - name: Apply and verify
+        if: inputs.mode == 'apply'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run reconcile:plans -- --apply
