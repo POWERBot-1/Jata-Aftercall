@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
 import { sanitizeText } from "@/lib/validation";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { safeUrl } from "@/lib/experience/document";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -14,12 +15,23 @@ export async function POST(req: Request) {
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const title = sanitizeText(body.title || "", 120);
     if (!title) return NextResponse.json({ error: "Offer title required" }, { status: 400 });
-    const subtitle = body.subtitle ? sanitizeText(body.subtitle, 120) : null;
+    const subtitle = body.subtitle ? sanitizeText(body.subtitle, 240) : null;
+    // Interactive Business presentation fields (§7, §8) — optional, validated, never trusted raw.
+    const imageUrl = safeUrl(body.imageUrl) || null;
+    const ctaLabel = body.ctaLabel ? sanitizeText(body.ctaLabel, 40) : null;
+    const badge = body.badge ? sanitizeText(body.badge, 30) : null;
 
     const offer = await prisma.offer.upsert({
       where: { businessId },
-      update: { title, subtitle, isActive: body.isActive !== undefined ? !!body.isActive : true },
-      create: { businessId, title, subtitle, isActive: true },
+      update: {
+        title,
+        subtitle,
+        isActive: body.isActive !== undefined ? !!body.isActive : true,
+        ...(body.imageUrl !== undefined ? { imageUrl } : {}),
+        ...(body.ctaLabel !== undefined ? { ctaLabel } : {}),
+        ...(body.badge !== undefined ? { badge } : {}),
+      },
+      create: { businessId, title, subtitle, isActive: true, imageUrl, ctaLabel, badge },
     });
     return NextResponse.json({ offer });
   } catch (e: unknown) {

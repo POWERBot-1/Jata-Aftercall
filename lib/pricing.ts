@@ -42,8 +42,23 @@ export function assertAIFrontDeskPricing(plan: Plan | null): asserts plan is Pla
   }
 }
 
+/**
+ * Interactive Business package (§59) — authoritative server-derived price.
+ * Checkout resolves the amount from this plan config, never from the browser (§26).
+ */
+export async function getInteractiveBusinessPlan(): Promise<Plan | null> {
+  return getPlanByKey("INTERACTIVE_BUSINESS");
+}
+
+export function assertInteractiveBusinessPricing(plan: Plan | null): asserts plan is Plan {
+  if (!plan || plan.priceKES !== 999 || plan.durationDays !== 30) {
+    throw new Error(`Interactive Business pricing must resolve to KES 999 / 30 days (got ${plan?.priceKES ?? "null"}/${plan?.durationDays ?? "null"})`);
+  }
+}
+
 export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
   { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
   { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
+  { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
 ];

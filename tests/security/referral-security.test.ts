@@ -48,6 +48,7 @@ vi.mock("@/lib/analytics", () => ({
     store.events.push(params);
     return { id: "event" };
   },
+  hashSession: () => "session-hash-for-tests",
 }));
 
 vi.mock("@/lib/registration", () => ({
@@ -252,7 +253,10 @@ describe("client-submitted analytics events cannot create a referral", () => {
 
     expect(response.status).toBe(200);
     expect(store.events).toHaveLength(1);
-    expect(Object.keys(store.events[0]).sort()).toEqual(["businessId", "eventType", "ip", "source", "userAgent"]);
+    // Only whitelisted, server-derived fields are written: the browser cannot inject a
+    // referral code, a referrer user id, an arbitrary subject or a raw session value.
+    expect(Object.keys(store.events[0]).sort()).toEqual(["businessId", "eventType", "ip", "sessionHash", "source", "subjectId", "userAgent"]);
+    expect(store.events[0].sessionHash).toBe("session-hash-for-tests");
     expect(JSON.stringify(store.events[0])).not.toContain("FORGED123456");
     expect(store.referralCreates).toBe(0);
     expect(store.referrals).toHaveLength(0);

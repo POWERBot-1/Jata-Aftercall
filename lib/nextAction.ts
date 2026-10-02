@@ -9,10 +9,26 @@ export type NextActionInput = {
   servicesCount: number;
   subscriptionStatus: string | null;
   expiresAt?: string | null;
+  /** Interactive Business state (§15, §23). Optional — every existing caller keeps working. */
+  hasExperience?: boolean;
+  catalogueCount?: number;
+  hasUnpublishedChanges?: boolean;
+  entitlementStatus?: string | null;
 };
 
 export type NextAction = {
-  key: "add-contact" | "renew" | "publish" | "add-services" | "subscribe" | "add-location" | "share";
+  key:
+    | "add-contact"
+    | "renew"
+    | "publish"
+    | "add-services"
+    | "subscribe"
+    | "add-location"
+    | "share"
+    /** Interactive Business steps (§15): set up, fill, preview, publish. */
+    | "start-experience"
+    | "add-items"
+    | "publish-changes";
   title: string;
   detail: string;
 };
@@ -29,6 +45,23 @@ export function nextActionFor(b: NextActionInput, now: Date = new Date()): NextA
   }
   if (b.subscriptionStatus !== "ACTIVE") {
     return { key: "subscribe", title: "Choose a plan", detail: "Choose a plan and pay to unlock publishing and keep your page active." };
+  }
+  // Interactive Business: guide the owner through set up → content → publish (§15).
+  if (b.hasExperience === false) {
+    return {
+      key: "start-experience",
+      title: "Start your interactive website",
+      detail: "Choose what kind of business this is and we set up the right sections, fields and wording.",
+    };
+  }
+  if (b.entitlementStatus && b.entitlementStatus !== "ACTIVE" && b.entitlementStatus !== "NONE") {
+    return { key: "renew", title: "Activate Interactive Business", detail: "Your premium website needs an active plan before customers can use it." };
+  }
+  if (typeof b.catalogueCount === "number" && b.catalogueCount === 0 && b.hasExperience) {
+    return { key: "add-items", title: "Add what you sell", detail: "Customers cannot order or book what they cannot see." };
+  }
+  if (b.hasUnpublishedChanges) {
+    return { key: "publish-changes", title: "Publish your latest changes", detail: "You have saved changes that customers cannot see yet." };
   }
   if (!b.isPublished) {
     return { key: "publish", title: "Publish your page", detail: "Your page is a draft. Publishing makes it visible to customers." };

@@ -1,6 +1,6 @@
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getBusinessMetrics } from "@/lib/analytics";
+import { getBusinessMetrics, EMPTY_METRICS } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
 import { ensureReferralCode, referralLink } from "@/lib/referral";
@@ -26,8 +26,37 @@ export default async function DashboardPage() {
     try {
       metricsMap[b.id] = await getBusinessMetrics(b.id);
     } catch {
-      metricsMap[b.id] = { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0, total: 0 };
+      metricsMap[b.id] = { ...EMPTY_METRICS };
     }
+  }
+
+  // Interactive Business state per business (§15): is there a website, does it have content,
+  // and are there unpublished changes waiting?
+  const interactive: Record<string, { hasExperience: boolean; catalogueCount: number; hasUnpublishedChanges: boolean; entitlementStatus: string | null }> = {};
+  try {
+    const experiences = await prisma.businessExperience.findMany({
+      where: { businessId: { in: businesses.map((entry) => entry.id) } },
+      select: { businessId: true, draftJson: true, publishedJson: true },
+    });
+    const [productCounts, serviceCounts, entitlements] = await Promise.all([
+      prisma.product.groupBy({ by: ["businessId"], where: { businessId: { in: businesses.map((entry) => entry.id) }, isActive: true }, _count: { _all: true } }),
+      prisma.service.groupBy({ by: ["businessId"], where: { businessId: { in: businesses.map((entry) => entry.id) }, isActive: true }, _count: { _all: true } }),
+      prisma.interactiveBusinessEntitlement.findMany({ where: { businessId: { in: businesses.map((entry) => entry.id) } }, select: { businessId: true, status: true } }),
+    ]);
+    const products = new Map<string, number>((productCounts as Array<{ businessId: string; _count: { _all: number } }>).map((row) => [row.businessId, row._count._all]));
+    const services = new Map<string, number>((serviceCounts as Array<{ businessId: string; _count: { _all: number } }>).map((row) => [row.businessId, row._count._all]));
+    const entitlementRows = new Map<string, string>((entitlements as Array<{ businessId: string; status: string }>).map((row) => [row.businessId, String(row.status)]));
+    for (const business of businesses) {
+      const experience = experiences.find((entry) => entry.businessId === business.id) || null;
+      interactive[business.id] = {
+        hasExperience: Boolean(experience),
+        catalogueCount: (products.get(business.id) || 0) + (services.get(business.id) || 0),
+        hasUnpublishedChanges: Boolean(experience?.draftJson) && experience?.draftJson !== experience?.publishedJson,
+        entitlementStatus: entitlementRows.get(business.id) || null,
+      };
+    }
+  } catch {
+    // Interactive data is additive: if it cannot be read, the dashboard behaves as before.
   }
 
   // Stage 2: resolve the owner's own referral link per business. Only eligible (published, not
@@ -69,6 +98,10 @@ export default async function DashboardPage() {
           subscription: b.subscription ? { status: b.subscription.status, expiresAt: b.subscription.expiresAt?.toISOString() || null, planName: b.subscription.plan.name } : null,
           servicesCount: b.services.length,
           hasOffer: !!b.offer,
+          hasExperience: interactive[b.id]?.hasExperience ?? false,
+          catalogueCount: interactive[b.id]?.catalogueCount ?? 0,
+          hasUnpublishedChanges: interactive[b.id]?.hasUnpublishedChanges ?? false,
+          entitlementStatus: interactive[b.id]?.entitlementStatus ?? null,
         }))}
         metricsMap={metricsMap}
       />

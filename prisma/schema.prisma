@@ -66,6 +66,27 @@ model Business {
   subscription  Subscription?
   payments      Payment[]
   members       BusinessMember[]
+  // ── JATA Interactive Business (category-aware experience platform) ──
+  experience          BusinessExperience?
+  experienceVersions  ExperienceVersion[]
+  bookings            Booking[]
+  media               MediaAsset[]
+  interactiveEntitlement InteractiveBusinessEntitlement?
+  aiConfiguration AIConfiguration?
+  products Product[]
+  productVariants ProductVariant[]
+  knowledgeDocuments KnowledgeDocument[]
+  faqs FAQ[]
+  aiPackageEntitlement AIPackageEntitlement?
+  carts Cart[]
+  orders Order[]
+  preOrders PreOrder[]
+  merchantPaymentConfig MerchantPaymentConfig?
+  notifications Notification[]
+  notificationRecipients NotificationRecipient[]
+  unansweredQuestions UnansweredQuestion[]
+  demandInsights DemandInsight[]
+  aiQualityEvents AIQualityEvent[]
 
   @@index([ownerId])
   @@index([slug])
@@ -101,7 +122,52 @@ model Service {
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
 
+  // ── Interactive Business service fields (§9, §12, §18) ──
+  updatedAt       DateTime  @updatedAt
+  imageUrl        String?   @db.Text
+  category        String?
+  pricingType     String    @default("FIXED")   // FIXED | QUOTE
+  priceToKES      Int?                          // "from … to …" range
+  durationMinutes Int?                          // Salon / automotive / consulting
+  depositKES      Int?                          // Optional booking deposit
+  staffName       String?                       // Where applicable
+  availability    String?   @db.Text            // JSON: { days: [1..7], slots: ["09:00"] }
+  bookingEnabled  Boolean   @default(true)
+  isFeatured      Boolean   @default(false)
+  isActive        Boolean   @default(true)
+
   @@index([businessId])
+}
+
+//
+// Booking (§9, §29) — service businesses are never forced into a cart model.
+// A booking is tenant-scoped; every read and write is filtered by businessId.
+//
+model Booking {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  serviceId     String?
+  serviceName   String
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  staffName     String?
+  startAt       DateTime
+  endAt         DateTime?
+  notes         String?  @db.Text
+  // PENDING | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | NO_SHOW
+  status        String   @default("PENDING")
+  depositKES    Int      @default(0)
+  // UNPAID | PAID (§27) — fulfilment never assumes payment.
+  paymentStatus String   @default("UNPAID")
+  paymentId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, startAt])
+  @@index([businessId, status])
 }
 
 model Offer {
@@ -112,6 +178,10 @@ model Offer {
   subtitle   String?
   validUntil DateTime?
   isActive   Boolean   @default(true)
+  // Interactive Business additions (§7, §8) — offer presentation inside a section.
+  imageUrl   String?   @db.Text
+  ctaLabel   String?
+  badge      String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
@@ -132,9 +202,14 @@ model AnalyticsEvent {
   ipHash     String?
   userAgent  String?
   createdAt  DateTime @default(now())
+  // Interactive Business analytics (§31, §32): subject = product/service id; sessionHash
+  // lets a conversion funnel be counted without storing personal data (§57).
+  subjectId  String?
+  sessionHash String?
 
   @@index([businessId, eventType])
   @@index([businessId, createdAt])
+  @@index([businessId, eventType, createdAt])
 }
 
 model PlanConfig {
@@ -191,9 +266,17 @@ model Payment {
   raw        String?       @db.Text
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
+  // Interactive Business: one payment stack, many purposes (§25 reuses Paystack).
+  // SUBSCRIPTION | ORDER | BOOKING_DEPOSIT
+  purpose    String        @default("SUBSCRIPTION")
+  orderId    String?
+  order      Order?        @relation(fields: [orderId], references: [id])
+  bookingId  String?
+  customerEmail String?    // Guest checkout payer — never a secret (§47)
 
   @@index([userId])
   @@index([businessId])
+  @@index([orderId])
 }
 
 enum PaymentStatus {
@@ -295,11 +378,52 @@ model Product {
   maxOrder           Int?
   preOrderAllowed    Boolean    @default(false)
   deliveryEligible   Boolean    @default(true)
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // ── Interactive Business catalogue fields (§7–§10, §17) ──
+  // Category-shaped, all optional: the experience profile decides which are shown.
+  salePriceKES       Int?       // Display/strike-through price; `basePriceKES` stays authoritative.
+  imageUrl           String?    @db.Text
+  images             String?    @db.Text   // JSON array of media urls (gallery)
+  brand              String?
+  portionSize        String?    // Food: "Full plate", Cosmetics: "50ml"
+  ingredients        String?    @db.Text
+  prepMinutes        Int?       // Food: preparation time
+  tags               String?    // JSON array of strings
+  addOns             String?    @db.Text   // JSON [{ id, name, priceKES }]
+  variantOptions     String?    @db.Text   // JSON { "Size": ["S","M"], "Colour": ["Red"] }
+  isFeatured         Boolean    @default(false)
+  isActive           Boolean    @default(true)
+  sortOrder          Int        @default(0)
+  variants           ProductVariant[]
 
   @@index([businessId])
   @@index([businessId, category])
+}
+
+//
+// A sellable variant of a product (e.g. "Red / M"). Pricing stays server-authoritative:
+// the checkout engine loads the variant by id inside the tenant and uses its price
+// override (falling back to the product price). Never trust a client price. (§26)
+//
+model ProductVariant {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label      String                        // "Red / M"
+  options    String?    @db.Text           // JSON { "Colour": "Red", "Size": "M" }
+  priceKES   Int?                          // Override; null = use product price
+  sku        String?
+  stockStatus StockStatus @default(IN_STOCK)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([productId])
 }
 
 enum StockStatus {
@@ -414,9 +538,17 @@ model Order {
   updatedAt       DateTime       @updatedAt
   completedAt     DateTime?
 
+  // ── Interactive Business checkout (§25, §27) ──
+  fulfilmentType  String?       // PICKUP | DELIVERY
+  notes           String?       @db.Text
+  source          String?       @default("STOREFRONT")
+  // UNPAID | PAID — an unpaid order is never treated as a sale (§27).
+  paymentStatus   String        @default("UNPAID")
+
   @@index([businessId])
   @@index([status])
   @@index([customerId])
+  @@index([businessId, createdAt])
 }
 
 enum OrderStatus {
@@ -445,6 +577,10 @@ model OrderItem {
   quantity   Int      @default(1)
   unitPriceKES Int    // Authoritative price (§11, §33)
   createdAt  DateTime @default(now())
+  // Interactive Business: chosen variant + add-ons, captured for fulfilment clarity.
+  variantId  String?
+  addOns     String?  @db.Text   // JSON [{ id, name, priceKES }]
+  imageUrl   String?  @db.Text
 
   @@index([orderId])
 }
@@ -466,6 +602,7 @@ model PreOrder {
   status         PreOrderStatus @default(PENDING)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  orders Order[]
 
   @@index([businessId])
   @@index([status])
@@ -609,4 +746,99 @@ model AIQualityEvent {
   @@index([businessId])
   @@index([eventType])
   @@index([sourceUsed])
+}
+
+// ── JATA Interactive Business (§6, §14–§16, §38, §51, §58, §59) ──
+// Category-aware, multi-tenant business experience platform.
+//
+// Architecture (§51): Business + Category + ExperienceProfile + Theme + Sections + Data
+// + enabled features. There are no per-category applications and no template lock-in:
+// one renderer consumes one normalized experience document.
+
+//
+// The versioned website document for one tenant.
+//
+// DRAFT and PUBLISHED are strictly separated (§15): the owner edits `draftJson`, customers
+// only ever read `publishedJson`. Publishing copies the draft into `publishedJson`, bumps
+// `publishedVersion` and snapshots it in ExperienceVersion so a future rollback is possible.
+//
+model BusinessExperience {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryKey      String   @default("other")
+  themeKey         String   @default("core-minimal")
+  status           String   @default("DRAFT")      // DRAFT | PUBLISHED | UNPUBLISHED
+  draftJson        String   @db.Text
+  publishedJson    String?  @db.Text
+  draftVersion     Int      @default(1)
+  publishedVersion Int      @default(0)
+  publishedAt      DateTime?
+  publishedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, status])
+}
+
+// Immutable publication snapshot — enables rollback and an audit trail (§15, §46).
+model ExperienceVersion {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  version     Int
+  themeKey    String
+  categoryKey String
+  snapshotJson String  @db.Text
+  publishedAt DateTime @default(now())
+  publishedById String?
+  note        String?
+
+  @@unique([businessId, version])
+  @@index([businessId, publishedAt])
+}
+
+//
+// Entitlement for the Interactive Business package (§59).
+// Deliberately separate from Subscription: a business needs BOTH a valid subscription
+// to the INTERACTIVE_BUSINESS plan AND a verified PAID payment, exactly like the
+// existing publish gate (§3). Expiry never deletes content (§59).
+//
+model InteractiveBusinessEntitlement {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String   @default("INTERACTIVE_BUSINESS")
+  status      String   @default("PENDING")   // PENDING | ACTIVE | PAST_DUE | EXPIRED | CANCELLED
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([status])
+}
+
+//
+// Tenant media library (§19). `hash` deduplicates identical uploads so the same asset is
+// never stored twice for one business. Alt text is stored with the asset so accessibility
+// travels with the image (§48).
+//
+model MediaAsset {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  url        String   @db.Text
+  kind       String   @default("IMAGE")   // IMAGE | LOGO | HERO | OTHER
+  alt        String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  hash       String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([businessId, hash])
+  @@index([businessId, createdAt])
 }

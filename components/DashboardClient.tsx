@@ -32,6 +32,11 @@ type Biz = {
   subscription: { status: string; expiresAt: string | null; planName: string } | null;
   servicesCount: number;
   hasOffer: boolean;
+  /** Interactive Business state (§15) — optional so every business card keeps working. */
+  hasExperience?: boolean;
+  catalogueCount?: number;
+  hasUnpublishedChanges?: boolean;
+  entitlementStatus?: string | null;
 };
 
 type Metrics = { views: number; whatsapp: number; calls: number; directions: number; shares: number; serviceClicks?: number };
@@ -78,6 +83,10 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     servicesCount: b.servicesCount,
     subscriptionStatus: b.subscription?.status ?? null,
     expiresAt: b.subscription?.expiresAt ?? null,
+    hasExperience: b.hasExperience,
+    catalogueCount: b.catalogueCount,
+    hasUnpublishedChanges: b.hasUnpublishedChanges,
+    entitlementStatus: b.entitlementStatus ?? null,
   });
 
   async function patch(body: Record<string, unknown>, success = "Saved.") {
@@ -125,6 +134,12 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
         return <Button onClick={() => setOpen("profile")}>{action.key === "add-contact" ? "Add contact details" : "Add location"}</Button>;
       case "add-services":
         return <Button onClick={() => setOpen("services")}>Add a service</Button>;
+      case "start-experience":
+        return <Button href={`/dashboard/businesses/${b.id}`}>Start my website</Button>;
+      case "add-items":
+        return <Button href={`/dashboard/businesses/${b.id}/items`}>Add what I sell</Button>;
+      case "publish-changes":
+        return <Button href={`/dashboard/businesses/${b.id}/preview`}>Review & publish</Button>;
       case "publish":
         return <Button disabled={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live.")}>Publish page</Button>;
       case "renew":
@@ -148,6 +163,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button href={`/dashboard/businesses/${b.id}`} variant="secondary">Website studio</Button>
           <Button href={`/b/${b.slug}`} variant="secondary">{b.isPublished ? "View page" : "Preview"}</Button>
           {action.key !== "share" && <Button variant="secondary" onClick={() => void share()}>{b.isPublished ? "Share" : "Copy link"}</Button>}
         </div>
