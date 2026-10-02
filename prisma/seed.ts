@@ -13,6 +13,8 @@ async function main() {
     { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30 },
     // AI Business Front Desk package (§49 — KES 499 / 30 days monthly)
     { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30 },
+    // Interactive Business — premium category-aware website package (KES 999 / 30 days monthly)
+    { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });

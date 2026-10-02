@@ -26,7 +26,8 @@ import {
 } from "@/lib/onboardingDraft";
 
 type Plan = { id: string; name: string; priceKES: number; durationDays: number };
-const CATEGORIES = ["Restaurant", "Salon", "Barber", "Mechanic", "Real Estate", "Professional Services", "Retail", "Home Services", "Beauty", "Food", "Events", "Other"];
+// The sixteen Interactive Business categories (§5) — one shared list for the whole app.
+import { CATEGORIES } from "@/lib/validation";
 
 /** Seven short steps, grouped into the four phases owners already know. */
 const PHASES = ["Business & location", "Services & offer", "Choose plan", "Publish"] as const;

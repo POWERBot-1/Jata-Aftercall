@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recordEvent, EVENT_TYPES } from "@/lib/analytics";
+import { recordEvent, EVENT_TYPES, hashSession } from "@/lib/analytics";
 
 // Rate limit in-memory (zero-cost)
 const hits = new Map<string, { count: number; reset: number }>();
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { businessId, eventType, source } = body as { businessId?: string; eventType?: string; source?: string };
+    const { businessId, eventType, source, subjectId } = body as { businessId?: string; eventType?: string; source?: string; subjectId?: string };
     if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
     if (!eventType || !(EVENT_TYPES as readonly string[]).includes(eventType)) {
       return NextResponse.json({ error: "Invalid eventType" }, { status: 400 });
@@ -32,6 +32,9 @@ export async function POST(req: Request) {
       ip,
       userAgent: req.headers.get("user-agent"),
       source,
+      // Optional subject (product/service id) for per-item analytics (§31, §32).
+      subjectId: typeof subjectId === "string" ? subjectId.slice(0, 64) : null,
+      sessionHash: hashSession({ ip, userAgent: req.headers.get("user-agent") }),
     });
     return NextResponse.json({ ok: true });
   } catch (e) {

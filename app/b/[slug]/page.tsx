@@ -1,19 +1,21 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import prisma from "@/lib/db";
-import { getBusinessUrl } from "@/lib/url";
+import { getSession } from "@/lib/auth";
 import { resolveTheme } from "@/lib/themes";
 import BusinessPage from "@/components/BusinessPage";
-import { getSession } from "@/lib/auth";
 import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from "@/lib/publication";
 import { ensureReferralCode, referralPath } from "@/lib/referral";
+import { loadStorefront } from "@/lib/experience/storefront";
+import { seoMetadataFor } from "@/lib/experience/structuredData";
+import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ preview?: string }> };
 
 async function getBusiness(slug: string) {
-  const business = await prisma.business.findUnique({
+  return prisma.business.findUnique({
     where: { slug },
     include: {
       services: { orderBy: { sortOrder: "asc" } },
@@ -22,7 +24,6 @@ async function getBusiness(slug: string) {
       members: { select: { userId: true, role: true } },
     },
   });
-  return business;
 }
 
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
@@ -39,54 +40,85 @@ async function viewerFromSession(): Promise<PublicViewer> {
   return { userId: session.userId, role: session.role };
 }
 
+function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
+  if (!viewer) return false;
+  if (viewer.role === "ADMIN") return true;
+  if (viewer.userId === business.ownerId) return true;
+  return (business.members || []).some((member) => member.userId === viewer.userId);
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusiness(slug);
   if (!business) return { title: "Page not found", robots: { index: false, follow: false } };
-  const decision = publicPageDecision({ business: accessOf(business), viewer: await viewerFromSession() });
+  const viewer = await viewerFromSession();
+  const decision = publicPageDecision({ business: accessOf(business), viewer });
   if (decision === "missing" || decision === "not_found") {
     return { title: "Page not found", robots: { index: false, follow: false } };
   }
+
+  // Interactive Business websites own their metadata (§33).
+  const experience = await loadStorefront(slug, { allowDraft: canPreviewDraft(business, viewer) });
+  if (experience) {
+    return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
+  }
+
   const title = `${business.name} | ${business.location || business.category}`;
-  const description = business.description || `${business.name} — ${business.category} in ${business.location || "Kenya"}. WhatsApp, call, directions, services & offers.`;
-  const url = getBusinessUrl(business.slug);
+  const description =
+    business.description ||
+    `${business.name} — ${business.category} in ${business.location || "Kenya"}. WhatsApp, call, directions, services & offers.`;
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      url,
+      url: `/b/${business.slug}`,
       type: "website",
       siteName: "JATA AFTERCALL",
-      images: [
-        {
-          url: "/og.jpg",
-          width: 1200,
-          height: 630,
-          alt: `${business.name} — JATA AFTERCALL`,
-        },
-      ],
+      images: [{ url: "/og.jpg", width: 1200, height: 630, alt: `${business.name} — JATA AFTERCALL` }],
     },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: ["/og.jpg"],
-    },
-    alternates: { canonical: url },
+    twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
+    alternates: { canonical: `/b/${business.slug}` },
     robots: decision === "preview" ? { index: false, follow: false } : undefined,
   };
 }
 
-export default async function PublicBusinessPage({ params }: Props) {
+export default async function PublicBusinessPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const business = await getBusiness(slug);
-  const decision = publicPageDecision({
-    business: business ? accessOf(business) : null,
-    viewer: await viewerFromSession(),
-  });
+  const viewer = await viewerFromSession();
+  const decision = publicPageDecision({ business: business ? accessOf(business) : null, viewer });
   if (!business || decision === "missing" || decision === "not_found") notFound();
+
+  // ── Interactive Business: category-aware experience (§4, §39) ──
+  // The existing /b/<slug> route is preserved; a business with a published experience is
+  // rendered by the experience engine, everyone else keeps the classic AFTERCALL page.
+  const draftAllowed = canPreviewDraft(business, viewer);
+  // Owners (and only owners) can ask to see their unpublished draft next to the live site.
+  const previewParam = (await searchParams)?.preview;
+  const preferDraft = draftAllowed && previewParam === "draft";
+  let experience = null;
+  try {
+    experience = await loadStorefront(slug, { allowDraft: draftAllowed, preferDraft });
+  } catch {
+    experience = null;
+  }
+
+  if (experience) {
+    return (
+      <ExperienceSite
+        data={experience}
+        previewNotice={
+          experience.isPreview
+            ? "Draft preview — only you can see these unpublished changes."
+            : decision === "preview"
+              ? "Draft preview. Only you can see this unpublished page."
+              : null
+        }
+      />
+    );
+  }
 
   // Graceful expiry check — lazy evaluation (§40)
   let showExpiredBanner = false;
@@ -100,8 +132,7 @@ export default async function PublicBusinessPage({ params }: Props) {
   const theme = resolveTheme(business.theme);
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
-  // suspended) page. The code is minted lazily on first eligible use, so no backfill is needed
-  // and nothing is written for unpublished pages. A minting failure simply hides the CTA.
+  // suspended) page. The code is minted lazily on first eligible use.
   let referralHref: string | null = null;
   if (decision === "public") {
     const code = await ensureReferralCode(business.id);
@@ -114,7 +145,9 @@ export default async function PublicBusinessPage({ params }: Props) {
         <div className="bg-zinc-900 py-2 text-center text-xs font-semibold text-white">Draft preview. Only you can see this unpublished page.</div>
       )}
       {showExpiredBanner && business.isPublished && (
-        <div className="bg-amber-100 py-2 text-center text-xs font-semibold text-amber-900">This page&apos;s subscription has expired — contact the owner to renew.</div>
+        <div className="bg-amber-100 py-2 text-center text-xs font-semibold text-amber-900">
+          This page&apos;s subscription has expired — contact the owner to renew.
+        </div>
       )}
       <BusinessPage
         business={{

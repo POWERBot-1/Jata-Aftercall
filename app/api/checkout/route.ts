@@ -6,6 +6,7 @@ import { initializeTransaction, toKobo } from "@/lib/paystack";
 import { getBaseUrl } from "@/lib/url";
 import { generatePaymentReference } from "@/lib/paymentReference";
 import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
+import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experience/entitlement";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -33,6 +34,11 @@ export async function POST(req: Request) {
     // The server never trusts a client-supplied amount. This guard ensures the package price is authoritative.
     if (plan.key === "AI_BUSINESS_FRONT_DESK" && (plan.priceKES !== 499 || plan.durationDays !== 30)) {
       return NextResponse.json({ error: "AI Business Front Desk pricing configuration is invalid." }, { status: 500 });
+    }
+    // §26, §59 — the Interactive Business package resolves to KES 999 / 30 days server-side.
+    // A client-supplied amount is never used; only the stored plan configures the charge.
+    if (plan.key === INTERACTIVE_PLAN_KEY && !assertInteractivePlanPricing(plan)) {
+      return NextResponse.json({ error: "Interactive Business pricing configuration is invalid." }, { status: 500 });
     }
     if (!user?.email) return NextResponse.json({ error: "Your account needs a valid email before checkout." }, { status: 400 });
 

@@ -14,6 +14,16 @@ const nextConfig = {
           { key: "X-XSS-Protection", value: "0" },
         ],
       },
+      {
+        // Public business pages are framed by the owner's own preview panel (§16), so they
+        // allow same-origin framing only. Every other route stays DENY, and no page may be
+        // framed by another site.
+        source: "/b/:slug*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
     ];
   },
   images: {

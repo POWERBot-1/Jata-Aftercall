@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { activateSubscriptionForPayment, isWebhookProcessed, verifyTransaction, verifyWebhookSignature } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
 import { validatePaymentEvidence } from "@/lib/paymentVerification";
+import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -87,12 +88,31 @@ export async function POST(req: Request) {
         await logAudit({ actorId: payment.userId, action: "WEBHOOK_TRANSACTION_MISMATCH", targetType: "PAYMENT", targetId: payment.id });
         return NextResponse.json({ error: "Webhook transaction did not match the pending payment." }, { status: 400 });
       }
-      const settled = await activateSubscriptionForPayment(payment.id, eventId, {
-        paystackId: String(transaction.id),
-        raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+      // One payment stack, two purposes (§25). Subscriptions activate the plan; orders and
+      // deposits settle the order/booking. Both paths are idempotent (§27).
+      // Anything that is not explicitly an order/booking payment settles the subscription, so
+      // older subscription payments written before `purpose` existed keep working.
+      const isOrderPayment =
+        Boolean(payment.orderId || payment.bookingId) ||
+        (typeof payment.purpose === "string" && payment.purpose !== "SUBSCRIPTION");
+      if (!isOrderPayment) {
+        const settled = await activateSubscriptionForPayment(payment.id, eventId, {
+          paystackId: String(transaction.id),
+          raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+        });
+        await logAudit({ actorId: payment.userId, action: "WEBHOOK_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id });
+        return NextResponse.json({ status: settled.alreadySettled ? "already_paid" : "processed" });
+      }
+
+      const settled = await settleOrderPayment(payment.id, {
+        eventId,
+        verification: {
+          paystackId: String(transaction.id),
+          raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+        },
       });
-      await logAudit({ actorId: payment.userId, action: "WEBHOOK_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id });
-      return NextResponse.json({ status: settled.alreadySettled ? "already_paid" : "processed" });
+      await logAudit({ actorId: payment.userId, action: "WEBHOOK_ORDER_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id });
+      return NextResponse.json({ status: settled.alreadySettled ? "already_paid" : "processed", orderId: settled.orderId, bookingId: settled.bookingId });
     } catch {
       console.error("payment webhook settlement failed");
       return NextResponse.json({ error: "Webhook could not be processed; Paystack may retry." }, { status: 503 });
@@ -104,6 +124,7 @@ export async function POST(req: Request) {
       await prisma.$transaction(async (tx) => {
         await tx.processedWebhook.create({ data: { id: eventId } });
         await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
+        // An order stays UNPAID and visible to the owner; only the payment is marked failed (§27).
       });
       return NextResponse.json({ status: "marked_failed" });
     } catch {
