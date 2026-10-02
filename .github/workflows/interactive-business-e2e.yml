@@ -1,8 +1,10 @@
 name: Interactive Business E2E
 
 # Runs the §66 end-to-end journey (tests/e2e/interactive-business-journey.test.ts) against a
-# real PostgreSQL database. The sandbox that built this package has no outbound access to the
-# Prisma binary hosts and no local database, so the gate executes here instead.
+# real PostgreSQL database provisioned exactly the way production is: prisma migrate deploy.
+#
+# The sandbox that built this package has no outbound access to the Prisma binary hosts and no
+# local database, so the gate executes here instead.
 #
 # No Paystack secret is configured: the journey settles payments through the application's own
 # test-settlement branch (NODE_ENV !== "production" && !PAYSTACK_SECRET_KEY), which is the same
@@ -61,19 +63,10 @@ jobs:
           set -o pipefail
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
 
-      # Diagnostic for now: the checked-in migrations predate the commerce tables, so
-      # migrate deploy still fails. It becomes the real provisioning step once the
-      # baseline migration below lands.
       - name: Apply migrations
-        continue-on-error: true
         run: |
           set -o pipefail
           npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate.log
-
-      - name: Sync the schema to the disposable database
-        run: |
-          set -o pipefail
-          npx prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/step-push.log
 
       - name: Seed plans
         run: |
@@ -85,21 +78,10 @@ jobs:
           set -o pipefail
           npm run test:e2e 2>&1 | tee /tmp/step-journey.log
 
-      # Diagnostics: the checked-in migrations lag behind the schema, so report what a
-      # deployment still needs. Never affects the journey above.
-      - name: Capture pending schema DDL
-        continue-on-error: true
-        run: |
-          PGPASSWORD=jata psql -h localhost -U jata -d postgres -c 'CREATE DATABASE jata_shadow;' || true
-          mv prisma/migrations/20261002000000_interactive_business /tmp/interactive_migration
-          set -o pipefail
-          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://jata:jata@localhost:5432/jata_shadow?schema=public" --script 2>&1 | tee /tmp/step-diff.log
-          mv /tmp/interactive_migration prisma/migrations/20261002000000_interactive_business
-
-      # Runner logs are not readable from the sandbox that authored this workflow, so the
-      # captured output is posted to the pull request instead.
-      - name: Report output to the pull request
-        if: always()
+      # Failing output is posted to the pull request so a broken journey can be triaged
+      # without digging through runner logs.
+      - name: Report failing output to the pull request
+        if: failure()
         uses: actions/github-script@v7
         with:
           script: |
@@ -107,21 +89,20 @@ jobs:
             const read = (file, limit) => {
               try { return fs.readFileSync(file, 'utf8').slice(-limit); } catch (e) { return '(no output captured)'; }
             };
-            const journey = `### npm run test:e2e\n\n\`\`\`\n${read('/tmp/step-journey.log', 6000)}\n\`\`\``;
-            const setup = [
-              ['prisma generate', '/tmp/step-generate.log', 2000],
+            const body = [
+              ['npm run test:e2e', '/tmp/step-journey.log', 8000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 4000],
-              ['prisma db push', '/tmp/step-push.log', 2000],
+              ['prisma generate', '/tmp/step-generate.log', 2000],
               ['npm run seed', '/tmp/step-seed.log', 2000],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
-            const ddl = `### pending schema DDL\n\n\`\`\`\n${read('/tmp/step-diff.log', 25000)}\n\`\`\``;
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
-            const post = async (body) => {
-              try {
-                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, body });
-              } catch (e) {
-                console.log('comment failed:', String(e).slice(0, 300));
-              }
-            };
-            await post(`Interactive Business E2E on \`${context.sha}\` (${context.runId}):\n\n${journey}\n\n${setup}`);
-            await post(`Interactive Business E2E pending DDL on \`${context.sha}\` (${context.runId}):\n\n${ddl}`);
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue,
+                body: `Interactive Business E2E failed on \`${context.sha}\` (${context.runId}):\n\n${body}`.slice(0, 40000),
+              });
+            } catch (e) {
+              console.log('comment failed:', String(e).slice(0, 300));
+            }

@@ -6,64 +6,64 @@
 -- ── Extend existing tenant data (§38: extend, never duplicate) ──
 
 -- AlterTable: Offer presentation inside experience sections
-ALTER TABLE "Offer" ADD COLUMN     "imageUrl" TEXT,
-ADD COLUMN     "ctaLabel" TEXT,
-ADD COLUMN     "badge" TEXT;
+ALTER TABLE "Offer" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT,
+ADD COLUMN IF NOT EXISTS "ctaLabel" TEXT,
+ADD COLUMN IF NOT EXISTS "badge" TEXT;
 
 -- AlterTable: Product gains the category-shaped catalogue fields (§17)
-ALTER TABLE "Product" ADD COLUMN     "salePriceKES" INTEGER,
-ADD COLUMN     "imageUrl" TEXT,
-ADD COLUMN     "images" TEXT,
-ADD COLUMN     "brand" TEXT,
-ADD COLUMN     "portionSize" TEXT,
-ADD COLUMN     "ingredients" TEXT,
-ADD COLUMN     "prepMinutes" INTEGER,
-ADD COLUMN     "tags" TEXT,
-ADD COLUMN     "addOns" TEXT,
-ADD COLUMN     "variantOptions" TEXT,
-ADD COLUMN     "isFeatured" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
-ADD COLUMN     "sortOrder" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "salePriceKES" INTEGER,
+ADD COLUMN IF NOT EXISTS "imageUrl" TEXT,
+ADD COLUMN IF NOT EXISTS "images" TEXT,
+ADD COLUMN IF NOT EXISTS "brand" TEXT,
+ADD COLUMN IF NOT EXISTS "portionSize" TEXT,
+ADD COLUMN IF NOT EXISTS "ingredients" TEXT,
+ADD COLUMN IF NOT EXISTS "prepMinutes" INTEGER,
+ADD COLUMN IF NOT EXISTS "tags" TEXT,
+ADD COLUMN IF NOT EXISTS "addOns" TEXT,
+ADD COLUMN IF NOT EXISTS "variantOptions" TEXT,
+ADD COLUMN IF NOT EXISTS "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
 
 -- AlterTable: Service gains booking-shaped fields (§9, §18)
-ALTER TABLE "Service" ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "imageUrl" TEXT,
-ADD COLUMN     "category" TEXT,
-ADD COLUMN     "pricingType" TEXT NOT NULL DEFAULT 'FIXED',
-ADD COLUMN     "priceToKES" INTEGER,
-ADD COLUMN     "durationMinutes" INTEGER,
-ADD COLUMN     "depositKES" INTEGER,
-ADD COLUMN     "staffName" TEXT,
-ADD COLUMN     "availability" TEXT,
-ADD COLUMN     "bookingEnabled" BOOLEAN NOT NULL DEFAULT true,
-ADD COLUMN     "isFeatured" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Service" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS "imageUrl" TEXT,
+ADD COLUMN IF NOT EXISTS "category" TEXT,
+ADD COLUMN IF NOT EXISTS "pricingType" TEXT NOT NULL DEFAULT 'FIXED',
+ADD COLUMN IF NOT EXISTS "priceToKES" INTEGER,
+ADD COLUMN IF NOT EXISTS "durationMinutes" INTEGER,
+ADD COLUMN IF NOT EXISTS "depositKES" INTEGER,
+ADD COLUMN IF NOT EXISTS "staffName" TEXT,
+ADD COLUMN IF NOT EXISTS "availability" TEXT,
+ADD COLUMN IF NOT EXISTS "bookingEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 
 -- AlterTable: Order checkout shape (§25, §27)
-ALTER TABLE "Order" ADD COLUMN     "fulfilmentType" TEXT,
-ADD COLUMN     "notes" TEXT,
-ADD COLUMN     "source" TEXT DEFAULT 'STOREFRONT',
-ADD COLUMN     "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID';
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "fulfilmentType" TEXT,
+ADD COLUMN IF NOT EXISTS "notes" TEXT,
+ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'STOREFRONT',
+ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'UNPAID';
 
 -- AlterTable: OrderItem captures the exact customer configuration
-ALTER TABLE "OrderItem" ADD COLUMN     "variantId" TEXT,
-ADD COLUMN     "addOns" TEXT,
-ADD COLUMN     "imageUrl" TEXT;
+ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "variantId" TEXT,
+ADD COLUMN IF NOT EXISTS "addOns" TEXT,
+ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
 
 -- AlterTable: Payment serves subscriptions, orders and deposits through one stack (§25)
-ALTER TABLE "Payment" ADD COLUMN     "purpose" TEXT NOT NULL DEFAULT 'SUBSCRIPTION',
-ADD COLUMN     "orderId" TEXT,
-ADD COLUMN     "bookingId" TEXT,
-ADD COLUMN     "customerEmail" TEXT;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "purpose" TEXT NOT NULL DEFAULT 'SUBSCRIPTION',
+ADD COLUMN IF NOT EXISTS "orderId" TEXT,
+ADD COLUMN IF NOT EXISTS "bookingId" TEXT,
+ADD COLUMN IF NOT EXISTS "customerEmail" TEXT;
 
 -- AlterTable: Analytics carries the subject and a privacy-safe session key (§32, §57)
-ALTER TABLE "AnalyticsEvent" ADD COLUMN     "subjectId" TEXT,
-ADD COLUMN     "sessionHash" TEXT;
+ALTER TABLE "AnalyticsEvent" ADD COLUMN IF NOT EXISTS "subjectId" TEXT,
+ADD COLUMN IF NOT EXISTS "sessionHash" TEXT;
 
 -- ── New tables ──
 
 -- CreateTable: the versioned website document (§14–§16)
-CREATE TABLE "BusinessExperience" (
+CREATE TABLE IF NOT EXISTS "BusinessExperience" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "categoryKey" TEXT NOT NULL DEFAULT 'other',
@@ -82,7 +82,7 @@ CREATE TABLE "BusinessExperience" (
 );
 
 -- CreateTable: publication snapshots for rollback and audit (§15, §46)
-CREATE TABLE "ExperienceVersion" (
+CREATE TABLE IF NOT EXISTS "ExperienceVersion" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "version" INTEGER NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE "ExperienceVersion" (
 );
 
 -- CreateTable: package entitlement (§59)
-CREATE TABLE "InteractiveBusinessEntitlement" (
+CREATE TABLE IF NOT EXISTS "InteractiveBusinessEntitlement" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "packageKey" TEXT NOT NULL DEFAULT 'INTERACTIVE_BUSINESS',
@@ -111,7 +111,7 @@ CREATE TABLE "InteractiveBusinessEntitlement" (
 );
 
 -- CreateTable: service bookings (§9, §29)
-CREATE TABLE "Booking" (
+CREATE TABLE IF NOT EXISTS "Booking" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "serviceId" TEXT,
@@ -134,7 +134,7 @@ CREATE TABLE "Booking" (
 );
 
 -- CreateTable: product variants (§8, §10, §17)
-CREATE TABLE "ProductVariant" (
+CREATE TABLE IF NOT EXISTS "ProductVariant" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
@@ -151,7 +151,7 @@ CREATE TABLE "ProductVariant" (
 );
 
 -- CreateTable: tenant media library (§19)
-CREATE TABLE "MediaAsset" (
+CREATE TABLE IF NOT EXISTS "MediaAsset" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -166,38 +166,86 @@ CREATE TABLE "MediaAsset" (
     CONSTRAINT "MediaAsset_pkey" PRIMARY KEY ("id")
 );
 
--- ── Constraints ──
+DO $$ BEGIN
+    -- ── Constraints ──
+    
+    ALTER TABLE "BusinessExperience" ADD CONSTRAINT "BusinessExperience_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "BusinessExperience" ADD CONSTRAINT "BusinessExperience_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ExperienceVersion" ADD CONSTRAINT "ExperienceVersion_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "InteractiveBusinessEntitlement" ADD CONSTRAINT "InteractiveBusinessEntitlement_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Booking" ADD CONSTRAINT "Booking_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "MediaAsset" ADD CONSTRAINT "MediaAsset_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ExperienceVersion" ADD CONSTRAINT "ExperienceVersion_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "InteractiveBusinessEntitlement" ADD CONSTRAINT "InteractiveBusinessEntitlement_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "Booking" ADD CONSTRAINT "Booking_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "MediaAsset" ADD CONSTRAINT "MediaAsset_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "Payment" ADD CONSTRAINT "Payment_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ── Unique constraints ──
 
 ALTER TABLE "BusinessExperience" ADD CONSTRAINT "BusinessExperience_businessId_key" UNIQUE ("businessId");
+
 ALTER TABLE "InteractiveBusinessEntitlement" ADD CONSTRAINT "InteractiveBusinessEntitlement_businessId_key" UNIQUE ("businessId");
+
 ALTER TABLE "ExperienceVersion" ADD CONSTRAINT "ExperienceVersion_businessId_version_key" UNIQUE ("businessId","version");
 
 -- ── Indexes ──
 
-CREATE INDEX "BusinessExperience_businessId_idx" ON "BusinessExperience"("businessId");
-CREATE INDEX "BusinessExperience_businessId_status_idx" ON "BusinessExperience"("businessId", "status");
-CREATE INDEX "ExperienceVersion_businessId_publishedAt_idx" ON "ExperienceVersion"("businessId", "publishedAt");
-CREATE INDEX "InteractiveBusinessEntitlement_businessId_idx" ON "InteractiveBusinessEntitlement"("businessId");
-CREATE INDEX "InteractiveBusinessEntitlement_status_idx" ON "InteractiveBusinessEntitlement"("status");
-CREATE INDEX "Booking_businessId_idx" ON "Booking"("businessId");
-CREATE INDEX "Booking_businessId_startAt_idx" ON "Booking"("businessId", "startAt");
-CREATE INDEX "Booking_businessId_status_idx" ON "Booking"("businessId", "status");
-CREATE INDEX "ProductVariant_businessId_idx" ON "ProductVariant"("businessId");
-CREATE INDEX "ProductVariant_productId_idx" ON "ProductVariant"("productId");
-CREATE INDEX "MediaAsset_businessId_idx" ON "MediaAsset"("businessId");
-CREATE INDEX "MediaAsset_businessId_hash_idx" ON "MediaAsset"("businessId", "hash");
-CREATE INDEX "MediaAsset_businessId_createdAt_idx" ON "MediaAsset"("businessId", "createdAt");
-CREATE INDEX "Payment_orderId_idx" ON "Payment"("orderId");
-CREATE INDEX "Order_businessId_createdAt_idx" ON "Order"("businessId", "createdAt");
-CREATE INDEX "AnalyticsEvent_businessId_eventType_createdAt_idx" ON "AnalyticsEvent"("businessId", "eventType", "createdAt");
+CREATE INDEX IF NOT EXISTS "BusinessExperience_businessId_idx" ON "BusinessExperience"("businessId");
+
+CREATE INDEX IF NOT EXISTS "BusinessExperience_businessId_status_idx" ON "BusinessExperience"("businessId", "status");
+
+CREATE INDEX IF NOT EXISTS "ExperienceVersion_businessId_publishedAt_idx" ON "ExperienceVersion"("businessId", "publishedAt");
+
+CREATE INDEX IF NOT EXISTS "InteractiveBusinessEntitlement_businessId_idx" ON "InteractiveBusinessEntitlement"("businessId");
+
+CREATE INDEX IF NOT EXISTS "InteractiveBusinessEntitlement_status_idx" ON "InteractiveBusinessEntitlement"("status");
+
+CREATE INDEX IF NOT EXISTS "Booking_businessId_idx" ON "Booking"("businessId");
+
+CREATE INDEX IF NOT EXISTS "Booking_businessId_startAt_idx" ON "Booking"("businessId", "startAt");
+
+CREATE INDEX IF NOT EXISTS "Booking_businessId_status_idx" ON "Booking"("businessId", "status");
+
+CREATE INDEX IF NOT EXISTS "ProductVariant_businessId_idx" ON "ProductVariant"("businessId");
+
+CREATE INDEX IF NOT EXISTS "ProductVariant_productId_idx" ON "ProductVariant"("productId");
+
+CREATE INDEX IF NOT EXISTS "MediaAsset_businessId_idx" ON "MediaAsset"("businessId");
+
+CREATE INDEX IF NOT EXISTS "MediaAsset_businessId_hash_idx" ON "MediaAsset"("businessId", "hash");
+
+CREATE INDEX IF NOT EXISTS "MediaAsset_businessId_createdAt_idx" ON "MediaAsset"("businessId", "createdAt");
+
+CREATE INDEX IF NOT EXISTS "Payment_orderId_idx" ON "Payment"("orderId");
+
+CREATE INDEX IF NOT EXISTS "Order_businessId_createdAt_idx" ON "Order"("businessId", "createdAt");
+
+CREATE INDEX IF NOT EXISTS "AnalyticsEvent_businessId_eventType_createdAt_idx" ON "AnalyticsEvent"("businessId", "eventType", "createdAt");
