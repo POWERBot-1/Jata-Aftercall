@@ -45,6 +45,7 @@ import { PATCH as businessPatch } from "@/app/api/business/route";
 import { GET as servicesGet, POST as servicePost } from "@/app/api/services/route";
 import { POST as checkoutPost } from "@/app/api/checkout/route";
 import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
+import { POST as experiencePost } from "@/app/api/experience/route";
 import { POST as publishPost } from "@/app/api/experience/publish/route";
 import PublicBusinessPage from "@/app/b/[slug]/page";
 import { CANONICAL_PLANS, planMatchesCanonical } from "@/lib/canonicalPlans";
@@ -301,6 +302,14 @@ describe.skipIf(!enabled)("canonical JATA AFTERCALL journey (real database)", ()
     expect(direct.status).toBe(403);
     // The refusal is the documented safe message — no internals, no tenant detail.
     expect(direct.body?.error).toBe(SAFE_ERRORS.publishPaymentRequired);
+
+    // The premium studio endpoint shares the same gate. Give it something to publish first, so
+    // the refusal provably comes from the payment gate and not from an empty draft.
+    const draft = await call(experiencePost, "https://jata.test/api/experience", {
+      method: "POST",
+      body: { businessId: ctx.owner.businessId, categoryKey: "salon" },
+    });
+    expect(draft.status, JSON.stringify(draft.body)).toBe(201);
 
     const studio = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
