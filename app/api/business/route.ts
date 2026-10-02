@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { slugify, validateSlug } from "@/lib/slug";
@@ -7,12 +8,39 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
-import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
+import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT, type PublicationPaymentEvidence } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
 
 function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
+}
+
+function safeDiagnosticMessage(error: unknown): string | undefined {
+  if (!(error instanceof Error) || !error.message) return undefined;
+  return error.message
+    .replace(/(?:postgres|postgresql|mysql|mongodb(?:\+srv)?):\/\/[^\s]+/gi, "[redacted connection string]")
+    .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
+    .replace(/(DATABASE_URL|AUTH_SECRET|NEXTAUTH_SECRET|PAYSTACK_[A-Z_]+|password|passwd|cookie|authorization|token|secret)\s*[=:]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted token]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted email]")
+    .replace(/(?:\+?\d[\d .()/-]{7,}\d)/g, "[redacted phone]")
+    .slice(0, 240);
+}
+
+function logPatchDiagnostic(requestId: string, stage: string, outcome: string, error?: unknown) {
+  try {
+    const record: Record<string, string> = { event: "business_patch_diagnostic", requestId, stage, outcome };
+    if (error !== undefined) {
+      record.errorClass = error instanceof Error ? error.name.slice(0, 80) : typeof error;
+      const code = prismaErrorCode(error);
+      if (code && /^[A-Z0-9]{3,12}$/.test(code)) record.prismaCode = code;
+      const message = safeDiagnosticMessage(error);
+      if (message) record.errorMessage = message;
+    }
+    if (outcome === "error" || stage === "outer_exception") console.error(JSON.stringify(record));
+    else console.info(JSON.stringify(record));
+  } catch { /* diagnostics must never change request behavior */ }
 }
 
 /**
@@ -155,14 +183,26 @@ export async function POST(req: Request) {
 
 // PATCH for updating business (dashboard edit)
 export async function PATCH(req: Request) {
+  const requestId = randomUUID();
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
+  if (!session) {
+    logPatchDiagnostic(requestId, "authentication", "unauthenticated");
+    return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
+  }
+  let currentStage = "request_body";
   try {
+    logPatchDiagnostic(requestId, "authentication", "authenticated");
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
     const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    currentStage = "tenant_authorization";
+    logPatchDiagnostic(requestId, currentStage, "started");
+    const guard = await guardTenantMutation(session, businessId, (error) => logPatchDiagnostic(requestId, currentStage, "error", error));
+    if (!guard.ok) {
+      logPatchDiagnostic(requestId, currentStage, `rejected_${guard.status}`);
+      return NextResponse.json({ error: guard.error }, { status: guard.status });
+    }
+    logPatchDiagnostic(requestId, currentStage, "completed");
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) {
@@ -199,13 +239,33 @@ export async function PATCH(req: Request) {
         const isAdmin = session.role === "ADMIN";
         let verifiedPayment = false;
         if (!isAdmin && PUBLISH_REQUIRES_PAYMENT) {
+          currentStage = "entitlement_lookups";
+          const readWithDiagnostics = async <T>(stage: string, read: () => Promise<T>): Promise<T> => {
+            logPatchDiagnostic(requestId, stage, "started");
+            try {
+              const result = await read();
+              logPatchDiagnostic(requestId, stage, "completed");
+              return result;
+            } catch (error) {
+              logPatchDiagnostic(requestId, stage, "error", error);
+              throw error;
+            }
+          };
           const [paidPayment, subscription] = await Promise.all([
-            prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
-            prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } }),
+            readWithDiagnostics("payment_lookup", () => prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } })),
+            readWithDiagnostics("subscription_lookup", () => prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } })),
           ]);
-          verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription });
+          currentStage = "entitlement_decision";
+          verifiedPayment = hasVerifiedPublicationRight({
+            paidPayment: paidPayment as PublicationPaymentEvidence["paidPayment"],
+            subscription: subscription as PublicationPaymentEvidence["subscription"],
+          });
+          logPatchDiagnostic(requestId, currentStage, verifiedPayment ? "verified" : "not_verified");
         }
-        if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+        currentStage = "entitlement_decision";
+        const publicationAllowed = canSetPublished(true, { isAdmin, verifiedPayment });
+        logPatchDiagnostic(requestId, currentStage, publicationAllowed ? "allowed" : "payment_required");
+        if (!publicationAllowed) {
           return NextResponse.json({ error: SAFE_ERRORS.publishPaymentRequired }, { status: 403 });
         }
         data.isPublished = true;
@@ -217,10 +277,17 @@ export async function PATCH(req: Request) {
     if (body.openingHours !== undefined) data.openingHours = body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null;
     if (body.socialLinks !== undefined) data.socialLinks = body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null;
 
+    currentStage = "business_update";
+    logPatchDiagnostic(requestId, currentStage, "started");
     const updated = await prisma.business.update({ where: { id: businessId }, data: data as any });
+    logPatchDiagnostic(requestId, currentStage, "completed");
+    currentStage = "audit_write";
+    logPatchDiagnostic(requestId, currentStage, "started");
     await logAudit({ actorId: session.userId, action: "BUSINESS_UPDATED", targetType: "BUSINESS", targetId: businessId });
+    logPatchDiagnostic(requestId, currentStage, "completed");
     return NextResponse.json({ business: updated });
   } catch (e: unknown) {
+    logPatchDiagnostic(requestId, "outer_exception", `while_${currentStage}`, e);
     const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
     if (mapped.status === 500) console.error("business update failed");
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });

@@ -64,13 +64,18 @@ export async function assertSlugOwnershipByBusinessId(businessId: string, sessio
 /**
  * Session-derived authorization for mutations. Never reads a URL owner id.
  */
-export async function guardTenantMutation(session: SessionPayload | null, businessId?: string | null) {
+export async function guardTenantMutation(
+  session: SessionPayload | null,
+  businessId?: string | null,
+  onError?: (error: unknown) => void,
+) {
   if (!session) return { ok: false as const, status: 401, error: SAFE_ERRORS.signIn };
   if (!businessId) return { ok: false as const, status: 400, error: SAFE_ERRORS.chooseBusiness };
   try {
     await assertBusinessOwnership(businessId, session);
     return { ok: true as const };
   } catch (error) {
+    try { onError?.(error); } catch { /* diagnostics must never affect authorization */ }
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);
     return { ok: false as const, status: mapped.status, error: mapped.message };
   }
