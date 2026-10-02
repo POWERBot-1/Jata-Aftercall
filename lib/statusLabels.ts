@@ -26,6 +26,46 @@ const BUSINESS: Record<string, StatusLabel> = {
   SUSPENDED: { label: "Suspended", tone: "error", help: "Contact support." },
 };
 
+/**
+ * Interactive Business operational states (§27, §28, §29).
+ *
+ * These live here rather than in a new module so every status in the product is rendered
+ * through the same label/toning rules the dashboard already uses.
+ */
+const ORDER: Record<string, StatusLabel> = {
+  NEW: { label: "New", tone: "warning", help: "Accept it to let the customer know you are on it." },
+  ACCEPTED: { label: "Accepted", tone: "success" },
+  PROCESSING: { label: "Processing", tone: "warning" },
+  READY: { label: "Ready", tone: "success", help: "Ready for pickup or delivery." },
+  COMPLETED: { label: "Completed", tone: "neutral" },
+  CANCELLED: { label: "Cancelled", tone: "neutral" },
+  REFUNDED: { label: "Refunded", tone: "neutral" },
+};
+
+const BOOKING: Record<string, StatusLabel> = {
+  PENDING: { label: "Pending", tone: "warning", help: "Confirm or decline this request." },
+  CONFIRMED: { label: "Confirmed", tone: "success" },
+  IN_PROGRESS: { label: "In progress", tone: "warning" },
+  COMPLETED: { label: "Completed", tone: "neutral" },
+  CANCELLED: { label: "Cancelled", tone: "neutral" },
+  NO_SHOW: { label: "No show", tone: "error" },
+};
+
+const ENTITLEMENT: Record<string, StatusLabel> = {
+  NONE: { label: "No package", tone: "warning", help: "Choose Interactive Business to unlock your premium website." },
+  PENDING: { label: "Awaiting payment", tone: "warning" },
+  ACTIVE: { label: "Active", tone: "success" },
+  PAST_DUE: { label: "Past due", tone: "warning", help: "Renew now to avoid interruption." },
+  EXPIRED: { label: "Expired", tone: "error", help: "Renew to put your website back online." },
+  CANCELLED: { label: "Cancelled", tone: "neutral" },
+};
+
+const EXPERIENCE: Record<string, StatusLabel> = {
+  DRAFT: { label: "Draft", tone: "warning", help: "Only you can see this until you publish." },
+  PUBLISHED: { label: "Live", tone: "success" },
+  UNPUBLISHED: { label: "Hidden", tone: "neutral", help: "Customers cannot see your website right now." },
+};
+
 const UNKNOWN: StatusLabel = { label: "Unknown", tone: "neutral" };
 
 export function subscriptionStatusLabel(status: string | null | undefined): StatusLabel {
@@ -48,4 +88,22 @@ export function toneClass(tone: Tone): string {
     case "error": return "bg-red-50 text-red-700";
     default: return "bg-zinc-100 text-zinc-700";
   }
+}
+
+export function orderStatusLabel(status: string | null | undefined): StatusLabel {
+  return (status && ORDER[status]) || UNKNOWN;
+}
+
+export function bookingStatusLabel(status: string | null | undefined): StatusLabel {
+  return (status && BOOKING[status]) || UNKNOWN;
+}
+
+export function entitlementStatusLabel(status: string | null | undefined): StatusLabel {
+  if (!status) return ENTITLEMENT.NONE;
+  return ENTITLEMENT[status] || UNKNOWN;
+}
+
+export function experienceStatusLabel(status: string | null | undefined): StatusLabel {
+  if (!status) return EXPERIENCE.DRAFT;
+  return EXPERIENCE[status] || UNKNOWN;
 }
