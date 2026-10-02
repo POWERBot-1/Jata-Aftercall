@@ -262,6 +262,9 @@ describe.skipIf(!enabled)("canonical JATA AFTERCALL journey (real database)", ()
     expect(payment?.userId).toBe(ctx.owner.userId);
 
     // Every canonical offering flows through the same checkout architecture, priced server-side.
+    // The disposable second owner pays for their own business; the amounts still come from the
+    // stored PlanConfig rows, never from the request body.
+    h.session.current = { userId: stranger.userId, role: "OWNER" };
     const expectedAmounts: Record<string, number> = {
       ANNUAL: 99900,
       MONTHLY: 14900,
