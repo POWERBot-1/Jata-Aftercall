@@ -198,6 +198,22 @@ npx tsc --noEmit    # typecheck
 npm run build       # must pass before deploy
 ```
 
+### End-to-end journey (§66)
+
+`tests/e2e/interactive-business-journey.test.ts` walks the whole Interactive journey against a **real**
+database: register → business → package → category → configure → product + price + image → preview →
+pay KES 999 → verify → activate → publish → public URL → customer order/pay → owner processes → booking →
+tenant isolation → lapsed entitlement. It drives the app's own route handlers with the real Prisma client
+and is skipped unless `DATABASE_URL` is set.
+
+```bash
+export DATABASE_URL="postgresql://user:pass@host:5432/jata_e2e"   # disposable database
+npx prisma migrate deploy && npm run seed
+npm run test:e2e
+```
+
+See `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for what each step asserts and how to read a failure.
+
 ---
 
 ## Audit
