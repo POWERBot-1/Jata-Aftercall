@@ -43,6 +43,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      AUTH_SECRET: interactive-business-e2e-test-secret
 
     steps:
       - uses: actions/checkout@v4

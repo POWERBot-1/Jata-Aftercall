@@ -24,6 +24,12 @@ const h = vi.hoisted(() => ({
   session: { current: null as null | { userId: string; role: string } },
 }));
 
+// Route handlers that issue a session call next/headers; the store is inert here because the
+// journey authenticates by swapping the mocked session payload instead of reading a cookie.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {} }),
+}));
+
 vi.mock("@/lib/auth", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, getSession: async () => h.session.current };
