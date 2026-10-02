@@ -4,7 +4,7 @@
 **Artefact that runs the journey:** `tests/e2e/interactive-business-journey.test.ts`
 **Status:** ✅ **EXECUTED AND PASSING — 17/17 steps, run `36982597396`, 2026-10-02 08:0x UTC, PostgreSQL 16 on GitHub Actions.**
 
-Run it again from any machine:
+Run it again from any machine (section 4 covers what to check on an existing database first):
 
 ```bash
 export DATABASE_URL="postgresql://user:pass@host:5432/jata_e2e"   # disposable database
@@ -78,7 +78,31 @@ npx prisma migrate resolve --applied 20261002000000_interactive_business
 Both new migrations are written with `IF NOT EXISTS` / `duplicate_object` guards, so they are safe to apply
 to a database that already has the objects they create.
 
-## 4. Sandbox limitation (why CI executes the gate)
+## 4. Verifying an existing database before merging
+
+The operator confirmed the live database is provisioned with `prisma migrate deploy`. Run these two
+read-only queries against it first — the checked-in history only ever created 13 tables, so if the
+platform has been serving commerce features the database was provisioned some other way:
+
+```sql
+-- Which migrations this database has actually applied
+SELECT migration_name, finished_at, rolled_back_at
+FROM "_prisma_migrations"
+ORDER BY migration_name;
+
+-- Which tables exist today
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public' ORDER BY 1;
+```
+
+| What you see | What it means | Action before merging |
+|---|---|---|
+| `_prisma_migrations` is missing or empty | The database was not provisioned by migrations (or `DATABASE_URL` has been unset, in which case `scripts/migrate.sh` skips migrations and the app has been running on the offline fallback) | Either provision a fresh database from the chain, or baseline the four migrations with `prisma migrate resolve --applied <name>` |
+| Rows up to `20260929000000_referral_stage2` only | Normal. `20260930000000_commerce_baseline` and `20261002000000_interactive_business` will apply on the next deploy | None — both are guarded, so they are safe either way |
+| `"Product"`, `"Order"` etc. already exist in the table list | The schema was applied outside the migration history | None strictly required — the guarded migrations skip existing objects — but baseline them so future migrations track cleanly |
+| A row named `20261002000000_interactive_business` | The Interactive migration was applied before the baseline existed (impossible from a clean chain) | Baseline `20260930000000_commerce_baseline` as applied and confirm the commerce tables are present |
+
+## 5. Sandbox limitation (why CI executes the gate)
 
 The workspace that built the package has no database and no route to the Prisma binary hosts, so the gate
 cannot be executed there:
