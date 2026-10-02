@@ -16,8 +16,6 @@ export function ItemPrice({ item, showWas = true }: { item: StorefrontItem; show
   if (item.pricingType === "QUOTE" || item.price === null) {
     return <span className="eb-price">{item.priceLabel || "Request a quote"}</span>;
   }
-  const to = item.kind === "service" ? null : null;
-  void to;
   return (
     <span className="eb-price">
       {item.kind === "service" && item.priceLabel && !item.priceLabel.startsWith("KES") ? `${item.priceLabel}` : formatKES(item.price)}

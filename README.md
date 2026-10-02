@@ -84,9 +84,9 @@ All subscription payments route to **Paystack merchant 2006074 (JATA ATLAS)**. S
 - `/` sales landing, `/health`, `/sitemap.xml`, `/robots.txt`
 - `/r/[code]` referral entry (unauthenticated; persists attribution, redirects to `/register`)
 - `/register` `/login` `/onboarding`
-- `/b/[slug]` public page (canonical)
+- `/b/[slug]` public page (canonical) + `/b/[slug]/shop` `/b/[slug]/item/[id]` `/b/[slug]/checkout` `/b/[slug]/order/[reference]` `/b/[slug]/book` `/b/[slug]/booking/[id]`
 - `/checkout` `/checkout/callback` `/checkout/mock` (dev)
-- `/dashboard` `/dashboard/subscription`
+- `/dashboard` `/dashboard/subscription` `/dashboard/businesses/[id]` (website studio: sections, catalogue, theme, preview, orders, bookings, insights)
 - `/admin` `/admin/customers` `/admin/businesses` `/admin/payments` `/admin/subscriptions` `/admin/plans`
 - `POST /api/checkout` `GET /api/paystack/verify` `POST /api/paystack/webhook` `POST /api/analytics/event` `GET /api/analytics` `POST/PATCH /api/business` `POST /api/services` `POST /api/offer`
 
@@ -123,6 +123,57 @@ Regression/security tests: `tests/unit/referral-code.test.ts`,
 
 ---
 
+## JATA AFTERCALL — Interactive Business (KES 999 / month)
+
+A premium, category-aware website for a real business — not a generic page builder, and not a
+second application. It reuses JATA's existing auth, tenancy, database, subscription, Paystack,
+publishing and deployment stacks, and it keeps the public route pattern `/b/<slug>`.
+
+**Sixteen categories, one engine.** A business picks what it is (restaurant, salon, real estate,
+garage, …). That choice configures homepage sections, product/service fields, customer actions,
+CTA wording, checkout vs booking vs enquiry, theme defaults, filters, card types and analytics
+events — through an Experience Profile. No category has its own app, and no theme is a template
+lock-in: `Business + Category + Experience Profile + Theme + Sections + Data + Enabled Features`.
+
+**Lifecycle.** `CHOOSE → EDIT → PREVIEW → PAY → VERIFY → PUBLISH → LIVE`. An unpaid premium site
+never goes live: the publish route re-checks payment, entitlement and the readiness checklist
+server-side, so a direct API call is rejected exactly like a button click.
+
+**Drafts and versions.** Owners edit a draft; customers see the published snapshot. The studio
+previews draft and live side by side on mobile, tablet and desktop, and every publish writes an
+`ExperienceVersion` snapshot that can be restored in one click.
+
+**Money.** Prices are always re-derived server-side from the tenant's own catalogue rows
+(`subtotal + delivery − discount = total`); a client-sent price is never used. Payments move through
+the existing Paystack stack with an explicit state machine
+(`NOT_STARTED → INITIATED → PENDING → SUCCESS | FAILED | CANCELLED | EXPIRED`), idempotent webhook
+settling, and UNPAID vs PAID fulfilment: an order whose payment never starts still reaches the
+owner's board.
+
+**Ops.** Order stages (`NEW → ACCEPTED → PROCESSING → READY → COMPLETED`, plus `CANCELLED`/
+`REFUNDED`) and booking states (`PENDING → CONFIRMED → IN_PROGRESS → COMPLETED`, plus
+`CANCELLED`/`NO_SHOW`) are chosen per category and validated server-side. Insights cover today,
+the last 7 days, best-performing items and stock that needs attention.
+
+**Design and safety.** Mobile-first and accessible: theme palettes are derived, never hand-tuned,
+and any colour that would fall below WCAG AA is corrected before it reaches the browser — including
+owner-supplied brand colours. JATA stays invisible infrastructure on public sites, and AI assistance
+only ever suggests wording: it can never change a price, stock level or availability.
+
+**Migration.** `prisma/migrations/20261002000000_interactive_business/migration.sql` is additive
+only (new columns, tables, foreign keys and indexes — no `DROP`, no `ALTER COLUMN`, no data
+rewrites). As with every migration, applying it to production is an operator-authorised action
+performed by the existing deployment gate (`scripts/build.sh` → `scripts/migrate.sh`); this
+repository change does not run it.
+
+**Tests.** `tests/unit/experience-categories.test.ts`, `tests/unit/experience-themes.test.ts`,
+`tests/unit/experience-document.test.ts`, `tests/unit/experience-pricing.test.ts`,
+`tests/unit/experience-operations.test.ts`, `tests/unit/experience-publish.test.ts`,
+`tests/integration/storefront-checkout.test.ts`, `tests/integration/storefront-booking.test.ts`,
+`tests/integration/experience-publish.test.ts`, `tests/security/experience-tenant-isolation.test.ts`.
+
+---
+
 ## Tenancy & Security
 
 - Every business-owned row has `businessId` FK; `lib/tenant.ts:assertBusinessOwnership` checks `ownerId`/`BusinessMember` against `session.userId` on every API boundary — never trust client-supplied tenant IDs.
@@ -135,7 +186,7 @@ Regression/security tests: `tests/unit/referral-code.test.ts`,
 
 ## Pricing
 
-DB-driven `PlanConfig` — admin configures without code changes. Seed: `ANNUAL KES 999/year`, `MONTHLY KES 149/month`. Payment flow always derives `amount` from `PlanConfig`.
+DB-driven `PlanConfig` — admin configures without code changes. Seed: `ANNUAL KES 999/year`, `MONTHLY KES 149/month`, and `INTERACTIVE_BUSINESS KES 999/month`. Payment flow always derives `amount` from `PlanConfig` (the Interactive amount is asserted server-side in both checkout and pricing, never read from the browser).
 
 ---
 
