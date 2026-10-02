@@ -68,6 +68,9 @@ jobs:
 
       # Diagnostics only: the checked-in migrations lag behind the schema, so capture the
       # DDL that a real deployment would still need.
+      - name: Create the shadow database
+        run: PGPASSWORD=jata psql -h localhost -U jata -d postgres -c 'CREATE DATABASE jata_shadow;'
+
       - name: Capture pending schema DDL
         continue-on-error: true
         run: |
