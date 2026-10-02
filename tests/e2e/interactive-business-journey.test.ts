@@ -123,7 +123,7 @@ async function cleanup(ids: { userId: string; businessId: string }[]) {
       await prisma.experienceVersion.deleteMany({ where: { businessId } });
       await prisma.interactiveBusinessEntitlement.deleteMany({ where: { businessId } });
       await prisma.businessExperience.deleteMany({ where: { businessId } });
-      await prisma.cartItem.deleteMany({ where: { businessId } });
+      await prisma.cartItem.deleteMany({ where: { cart: { businessId } } });
       await prisma.cart.deleteMany({ where: { businessId } });
       await prisma.subscription.deleteMany({ where: { businessId } });
       await prisma.businessMember.deleteMany({ where: { businessId } });
