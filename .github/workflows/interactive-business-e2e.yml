@@ -61,21 +61,19 @@ jobs:
           set -o pipefail
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
 
+      # Diagnostic for now: the checked-in migrations predate the commerce tables, so
+      # migrate deploy still fails. It becomes the real provisioning step once the
+      # baseline migration below lands.
+      - name: Apply migrations
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate.log
+
       - name: Sync the schema to the disposable database
         run: |
           set -o pipefail
           npx prisma db push --skip-generate --accept-data-loss 2>&1 | tee /tmp/step-push.log
-
-      # Diagnostics only: the checked-in migrations lag behind the schema, so capture the
-      # DDL that a real deployment would still need.
-      - name: Create the shadow database
-        run: PGPASSWORD=jata psql -h localhost -U jata -d postgres -c 'CREATE DATABASE jata_shadow;'
-
-      - name: Capture pending schema DDL
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://jata:jata@localhost:5432/jata_shadow?schema=public" --script 2>&1 | tee /tmp/step-diff.log
 
       - name: Seed plans
         run: |
@@ -87,8 +85,19 @@ jobs:
           set -o pipefail
           npm run test:e2e 2>&1 | tee /tmp/step-journey.log
 
-      # Diagnostics: runner logs are not readable from the sandbox that authored this
-      # workflow, so a failing step posts its tail to the pull request instead.
+      # Diagnostics: the checked-in migrations lag behind the schema, so report what a
+      # deployment still needs. Never affects the journey above.
+      - name: Capture pending schema DDL
+        continue-on-error: true
+        run: |
+          PGPASSWORD=jata psql -h localhost -U jata -d postgres -c 'CREATE DATABASE jata_shadow;' || true
+          mv prisma/migrations/20261002000000_interactive_business /tmp/interactive_migration
+          set -o pipefail
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://jata:jata@localhost:5432/jata_shadow?schema=public" --script 2>&1 | tee /tmp/step-diff.log
+          mv /tmp/interactive_migration prisma/migrations/20261002000000_interactive_business
+
+      # Runner logs are not readable from the sandbox that authored this workflow, so the
+      # captured output is posted to the pull request instead.
       - name: Report output to the pull request
         if: always()
         uses: actions/github-script@v7
@@ -96,23 +105,24 @@ jobs:
           script: |
             const fs = require('fs');
             const steps = [
-              ['prisma generate', '/tmp/step-generate.log'],
-              ['prisma db push', '/tmp/step-push.log'],
-              ['pending schema DDL', '/tmp/step-diff.log'],
-              ['npm run seed', '/tmp/step-seed.log'],
-              ['npm run test:e2e', '/tmp/step-journey.log'],
+              ['prisma generate', '/tmp/step-generate.log', 4000],
+              ['prisma migrate deploy', '/tmp/step-migrate.log', 8000],
+              ['prisma db push', '/tmp/step-push.log', 4000],
+              ['npm run seed', '/tmp/step-seed.log', 3000],
+              ['npm run test:e2e', '/tmp/step-journey.log', 8000],
+              ['pending schema DDL', '/tmp/step-diff.log', 30000],
             ];
             const body = steps
-              .map(([label, file]) => {
+              .map(([label, file, limit]) => {
                 let text = '(no output captured)';
-                try { text = fs.readFileSync(file, 'utf8').slice(-6000); } catch (e) {}
-                return `### ${label}\n\n\`\`\`\n${text}\n\`\`\``;
+                try { text = fs.readFileSync(file, 'utf8').slice(-limit); } catch (e) {}
+                return `### ${label}\\n\\n\\`\\`\\`\\n${text}\\n\\`\\`\\``;
               })
-              .join('\n\n');
+              .join('\\n\\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue,
-              body: `Interactive Business E2E on \`${context.sha}\` (${context.runId}) — captured output:\n\n${body}`.slice(0, 60000),
+              body: `Interactive Business E2E on \\`${context.sha}\\` (${context.runId}) — captured output:\\n\\n${body}`.slice(0, 64000),
             });
