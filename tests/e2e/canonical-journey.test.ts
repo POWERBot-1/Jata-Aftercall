@@ -48,6 +48,7 @@ import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { POST as publishPost } from "@/app/api/experience/publish/route";
 import PublicBusinessPage from "@/app/b/[slug]/page";
 import { CANONICAL_PLANS, planMatchesCanonical } from "@/lib/canonicalPlans";
+import { SAFE_ERRORS } from "@/lib/safeError";
 import { publicPageDecision, type PublicViewer } from "@/lib/publication";
 import { getBusinessUrl } from "@/lib/url";
 
@@ -105,13 +106,16 @@ async function renderPublicPage(slug: string): Promise<unknown> {
 
 /** Shallow element-tree search — enough to prove the business data reached the page props. */
 function treeContains(node: unknown, needle: string, depth = 0): boolean {
-  if (depth > 12 || node == null) return false;
+  if (depth > 16 || node == null) return false;
   if (typeof node === "string" || typeof node === "number") return String(node).includes(needle);
   if (Array.isArray(node)) return node.some((child) => treeContains(child, needle, depth + 1));
   if (typeof node === "object") {
-    const props = (node as { props?: unknown }).props;
-    if (!props || typeof props !== "object") return false;
-    return Object.values(props as Record<string, unknown>).some((value) => treeContains(value, needle, depth + 1));
+    const record = node as Record<string, unknown>;
+    // A React element carries its data in `props`; the data objects it renders (the business
+    // record, its services) are walked value-by-value so the assertion sees what the page
+    // actually received, not what a screenshot would show after client hydration.
+    const values = record.props && typeof record.props === "object" ? Object.values(record.props as Record<string, unknown>) : Object.values(record);
+    return values.some((value) => treeContains(value, needle, depth + 1));
   }
   return false;
 }
@@ -211,9 +215,12 @@ describe.skipIf(!enabled)("canonical JATA AFTERCALL journey (real database)", ()
     const ownerRender = await renderPublicPage(ctx.owner.slug);
     expect(treeContains(ownerRender, `E2E Canonical ${runId} Studio`)).toBe(true);
 
-    // A signed-out visitor and a different owner both get nothing.
+    // A signed-out visitor gets nothing (and the page component itself refuses, not just the
+    // pure decision helper).
     expect(publicPageDecision({ business: access, viewer: null })).toBe("not_found");
+    h.session.current = null;
     await expect(renderPublicPage(ctx.owner.slug)).rejects.toThrow();
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
   }, 120_000);
 
   it("5 — the database catalogue exposes the four canonical offerings, both new plans active", async () => {
@@ -261,15 +268,16 @@ describe.skipIf(!enabled)("canonical JATA AFTERCALL journey (real database)", ()
       AI_BUSINESS_FRONT_DESK: 49900,
       INTERACTIVE_BUSINESS: 99900,
     };
-    const plans = await prisma.planConfig.findMany({ orderBy: { priceKES: "asc" } });
-    for (const plan of plans) {
+    for (const canonical of CANONICAL_PLANS) {
+      const plan = await prisma.planConfig.findUnique({ where: { key: canonical.key } });
+      expect(plan, canonical.key).toBeTruthy();
       const attempt = await call(checkoutPost, "https://jata.test/api/checkout", {
         method: "POST",
-        body: { businessId: stranger.businessId, planId: plan.id, amount: 7 },
+        body: { businessId: stranger.businessId, planId: plan!.id, amount: 7 },
       });
-      expect(attempt.status, `${plan.key}: ${JSON.stringify(attempt.body)}`).toBe(200);
+      expect(attempt.status, `${canonical.key}: ${JSON.stringify(attempt.body)}`).toBe(200);
       const attemptPayment = await prisma.payment.findUnique({ where: { reference: attempt.body?.reference } });
-      expect(attemptPayment?.amount, plan.key).toBe(expectedAmounts[plan.key]);
+      expect(attemptPayment?.amount, canonical.key).toBe(expectedAmounts[canonical.key]);
     }
 
     // Cross-tenant checkout is rejected: a user may only pay for their own business.
@@ -288,7 +296,8 @@ describe.skipIf(!enabled)("canonical JATA AFTERCALL journey (real database)", ()
       body: { businessId: ctx.owner.businessId, isPublished: true },
     });
     expect(direct.status).toBe(403);
-    expect(String(direct.body?.error || "")).not.toMatch(/pay|subscribe|plan/i); // safe message, no internals
+    // The refusal is the documented safe message — no internals, no tenant detail.
+    expect(direct.body?.error).toBe(SAFE_ERRORS.publishPaymentRequired);
 
     const studio = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
