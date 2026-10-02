@@ -1,4 +1,5 @@
 import prisma from "./db";
+import { CANONICAL_FALLBACK_PLANS } from "./canonicalPlans";
 
 // Pricing is DB-driven (§16, §32, §39) — never scattered hardcodes.
 // This helper centralizes plan retrieval so payable amount is always server-derived.
@@ -56,9 +57,7 @@ export function assertInteractiveBusinessPricing(plan: Plan | null): asserts pla
   }
 }
 
-export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
-  { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
-  { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
-  { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
-  { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
-];
+// The offline fallback is the canonical catalogue itself (lib/canonicalPlans.ts), so a page or
+// helper can never drift into a partial, hand-written plan list. The database remains the only
+// source used for real charging — checkout re-reads the stored PlanConfig row server-side.
+export const FALLBACK_PLANS: Omit<Plan, "id">[] = CANONICAL_FALLBACK_PLANS.map((plan) => ({ ...plan }));

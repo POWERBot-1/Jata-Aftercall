@@ -85,12 +85,38 @@ describe("runtime and schema guards", () => {
     ]) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
       // Additive only: new columns, tables, foreign keys and indexes — never data loss.
-      expect(sql).not.toContain("DROP ");
-      expect(sql).not.toContain("ALTER COLUMN");
-      expect(sql).not.toContain("DELETE FROM");
-      expect(sql).not.toContain("UPDATE \"");
+      // One sanctioned exception: a new NOT NULL column on a table that may already hold rows
+      // must be added nullable, backfilled for NULLs only, and then constrained. Adding
+      // `TIMESTAMP NOT NULL` directly fails on a non-empty table (production deploy a8c7eff
+      // failed exactly there), so the backfill + SET NOT NULL pair is the safe form. Both
+      // statements are stripped before the destructive-operation checks so nothing else can
+      // hide behind the exception.
+      const sanctionedBackfill = /UPDATE "SERVICE" SET "UPDATEDAT" = "CREATEDAT" WHERE "UPDATEDAT" IS NULL;/g;
+      const sanctionedNotNull = /ALTER TABLE "SERVICE" ALTER COLUMN "UPDATEDAT" SET NOT NULL;/g;
+      const remainder = sql.replace(sanctionedBackfill, "").replace(sanctionedNotNull, "");
+      expect(remainder).not.toContain("DROP ");
+      expect(remainder).not.toContain("ALTER COLUMN");
+      expect(remainder).not.toContain("DELETE FROM");
+      expect(remainder).not.toContain("UPDATE \"");
+      expect(remainder).not.toContain("TRUNCATE");
       expect(sql).toContain("ADD COLUMN");
     }
+  });
+
+  it("backs a new NOT NULL column with a NULL-only backfill, never a rewrite of real values", () => {
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20260930000000_commerce_baseline/migration.sql"),
+      "utf8",
+    ).toUpperCase();
+    // The sanctioned exception must stay narrow: fill only rows that have no value yet …
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "UPDATEDAT" TIMESTAMP(3);');
+    expect(sql).toContain('UPDATE "SERVICE" SET "UPDATEDAT" = "CREATEDAT" WHERE "UPDATEDAT" IS NULL;');
+    // … and only then enforce NOT NULL, so the constraint can never fail a deploy.
+    expect(sql).toContain('ALTER TABLE "SERVICE" ALTER COLUMN "UPDATEDAT" SET NOT NULL;');
+    const backfillIndex = sql.indexOf('UPDATE "SERVICE" SET "UPDATEDAT" = "CREATEDAT" WHERE "UPDATEDAT" IS NULL;');
+    const notNullIndex = sql.indexOf('ALTER TABLE "SERVICE" ALTER COLUMN "UPDATEDAT" SET NOT NULL;');
+    expect(backfillIndex).toBeGreaterThan(-1);
+    expect(notNullIndex).toBeGreaterThan(backfillIndex);
   });
 
   it("extends the schema additively for the Interactive Business package", () => {

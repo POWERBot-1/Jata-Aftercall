@@ -73,7 +73,15 @@ jobs:
           set -o pipefail
           npm run seed 2>&1 | tee /tmp/step-seed.log
 
-      - name: Run the §66 journey
+      # The PlanConfig reconciliation that production runs against its own catalogue is
+      # exercised here against the disposable CI database first: dry run, apply, verify.
+      - name: Reconcile the plan catalogue (dry run, apply, verify)
+        run: |
+          set -o pipefail
+          npm run reconcile:plans 2>&1 | tee /tmp/step-plans-dry.log
+          npm run reconcile:plans -- --apply 2>&1 | tee /tmp/step-plans-apply.log
+
+      - name: Run the journey suites (§66 + canonical)
         run: |
           set -o pipefail
           npm run test:e2e 2>&1 | tee /tmp/step-journey.log
@@ -92,6 +100,7 @@ jobs:
             const body = [
               ['npm run test:e2e', '/tmp/step-journey.log', 8000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 4000],
+              ['npm run reconcile:plans -- --apply', '/tmp/step-plans-apply.log', 2000],
               ['prisma generate', '/tmp/step-generate.log', 2000],
               ['npm run seed', '/tmp/step-seed.log', 2000],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');

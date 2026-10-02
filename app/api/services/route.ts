@@ -126,13 +126,29 @@ export async function GET(req: Request) {
   const businessId = searchParams.get("businessId");
   if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
 
-  // Public reads are limited to services of a published business; the dashboard caller is
-  // additionally authenticated by the page that renders it (§37).
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { category: true, isPublished: true, status: true },
+  });
+  if (!business) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Public reads are limited to a published, non-suspended business. The owner/admin session —
+  // never a query parameter — is the only thing that unlocks an unpublished business, so
+  // "publishing is what makes content public" holds for the API as well as for /b/[slug].
+  if (!business.isPublished || business.status === "SUSPENDED") {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (session.role !== "ADMIN") {
+      const guard = await guardTenantMutation(session, businessId);
+      // 404 (not 403) so the endpoint does not confirm that a draft business exists.
+      if (!guard.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  }
+
   const services = await prisma.service.findMany({
     where: { businessId },
     orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
   });
-  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true, isPublished: true } });
-  const profile = getExperienceProfile(business?.category);
+  const profile = getExperienceProfile(business.category);
   return NextResponse.json({ services, fields: profile.serviceFields, itemNoun: profile.itemNoun });
 }
