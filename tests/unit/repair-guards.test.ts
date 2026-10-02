@@ -63,12 +63,14 @@ describe("runtime and schema guards", () => {
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
     const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
-    // Two additional migrations are authorised, both purely additive: the Stage 2 referral
-    // attribution schema and the Interactive Business package schema. Anything else stays a
-    // build failure, and no migration may destroy or rewrite existing data.
+    // Three additional migrations are authorised, all purely additive: the Stage 2 referral
+    // attribution schema, the commerce baseline the platform always needed, and the
+    // Interactive Business package schema. Anything else stays a build failure, and no
+    // migration may destroy or rewrite existing data.
     expect(migrations).toEqual([
       "20250915000000_init",
       "20260929000000_referral_stage2",
+      "20260930000000_commerce_baseline",
       "20261002000000_interactive_business",
     ]);
     for (const migration of migrations) {
@@ -76,7 +78,11 @@ describe("runtime and schema guards", () => {
       expect(sql.toUpperCase()).not.toContain("DROP TABLE");
       expect(sql.toUpperCase()).not.toContain("TRUNCATE");
     }
-    for (const migration of ["20260929000000_referral_stage2", "20261002000000_interactive_business"]) {
+    for (const migration of [
+      "20260929000000_referral_stage2",
+      "20260930000000_commerce_baseline",
+      "20261002000000_interactive_business",
+    ]) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
       // Additive only: new columns, tables, foreign keys and indexes — never data loss.
       expect(sql).not.toContain("DROP ");
@@ -97,8 +103,10 @@ describe("runtime and schema guards", () => {
       path.join(root, "prisma/migrations/20261002000000_interactive_business/migration.sql"),
       "utf8",
     ).toUpperCase();
-    expect(sql).toContain('CREATE TABLE "BOOKING"');
-    expect(sql).toContain('CREATE TABLE "EXPERIENCEVERSION"');
+    // Guarded with IF NOT EXISTS so the migration is safe on a database provisioned
+    // outside the migration history.
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "BOOKING"');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "EXPERIENCEVERSION"');
   });
 
   it("strips technical details from unexpected errors", () => {

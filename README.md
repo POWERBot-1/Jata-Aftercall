@@ -212,7 +212,11 @@ npx prisma migrate deploy && npm run seed
 npm run test:e2e
 ```
 
-See `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for what each step asserts and how to read a failure.
+It runs in CI on every push and pull request
+(`.github/workflows/interactive-business-e2e.yml`, PostgreSQL 16 provisioned with
+`prisma migrate deploy`) and last completed **17/17 steps**.
+See `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for what each step asserts, the schema and
+migration defects the first real run exposed, and how to baseline an existing database.
 
 ---
 
