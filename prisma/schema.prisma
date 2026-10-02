@@ -72,6 +72,21 @@ model Business {
   bookings            Booking[]
   media               MediaAsset[]
   interactiveEntitlement InteractiveBusinessEntitlement?
+  aiConfiguration AIConfiguration?
+  products Product[]
+  productVariants ProductVariant[]
+  knowledgeDocuments KnowledgeDocument[]
+  faqs FAQ[]
+  aiPackageEntitlement AIPackageEntitlement?
+  carts Cart[]
+  orders Order[]
+  preOrders PreOrder[]
+  merchantPaymentConfig MerchantPaymentConfig?
+  notifications Notification[]
+  notificationRecipients NotificationRecipient[]
+  unansweredQuestions UnansweredQuestion[]
+  demandInsights DemandInsight[]
+  aiQualityEvents AIQualityEvent[]
 
   @@index([ownerId])
   @@index([slug])
@@ -124,10 +139,10 @@ model Service {
   @@index([businessId])
 }
 
-/**
- * Booking (§9, §29) — service businesses are never forced into a cart model.
- * A booking is tenant-scoped; every read and write is filtered by businessId.
- */
+//
+// Booking (§9, §29) — service businesses are never forced into a cart model.
+// A booking is tenant-scoped; every read and write is filtered by businessId.
+//
 model Booking {
   id            String   @id @default(cuid())
   businessId    String
@@ -387,11 +402,11 @@ model Product {
   @@index([businessId, category])
 }
 
-/**
- * A sellable variant of a product (e.g. "Red / M"). Pricing stays server-authoritative:
- * the checkout engine loads the variant by id inside the tenant and uses its price
- * override (falling back to the product price). Never trust a client price. (§26)
- */
+//
+// A sellable variant of a product (e.g. "Red / M"). Pricing stays server-authoritative:
+// the checkout engine loads the variant by id inside the tenant and uses its price
+// override (falling back to the product price). Never trust a client price. (§26)
+//
 model ProductVariant {
   id         String     @id @default(cuid())
   businessId String
@@ -587,6 +602,7 @@ model PreOrder {
   status         PreOrderStatus @default(PENDING)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  orders Order[]
 
   @@index([businessId])
   @@index([status])
@@ -739,13 +755,13 @@ model AIQualityEvent {
 // + enabled features. There are no per-category applications and no template lock-in:
 // one renderer consumes one normalized experience document.
 
-/**
- * The versioned website document for one tenant.
- *
- * DRAFT and PUBLISHED are strictly separated (§15): the owner edits `draftJson`, customers
- * only ever read `publishedJson`. Publishing copies the draft into `publishedJson`, bumps
- * `publishedVersion` and snapshots it in ExperienceVersion so a future rollback is possible.
- */
+//
+// The versioned website document for one tenant.
+//
+// DRAFT and PUBLISHED are strictly separated (§15): the owner edits `draftJson`, customers
+// only ever read `publishedJson`. Publishing copies the draft into `publishedJson`, bumps
+// `publishedVersion` and snapshots it in ExperienceVersion so a future rollback is possible.
+//
 model BusinessExperience {
   id               String   @id @default(cuid())
   businessId       String   @unique
@@ -766,7 +782,7 @@ model BusinessExperience {
   @@index([businessId, status])
 }
 
-/** Immutable publication snapshot — enables rollback and an audit trail (§15, §46). */
+// Immutable publication snapshot — enables rollback and an audit trail (§15, §46).
 model ExperienceVersion {
   id          String   @id @default(cuid())
   businessId  String
@@ -783,12 +799,12 @@ model ExperienceVersion {
   @@index([businessId, publishedAt])
 }
 
-/**
- * Entitlement for the Interactive Business package (§59).
- * Deliberately separate from Subscription: a business needs BOTH a valid subscription
- * to the INTERACTIVE_BUSINESS plan AND a verified PAID payment, exactly like the
- * existing publish gate (§3). Expiry never deletes content (§59).
- */
+//
+// Entitlement for the Interactive Business package (§59).
+// Deliberately separate from Subscription: a business needs BOTH a valid subscription
+// to the INTERACTIVE_BUSINESS plan AND a verified PAID payment, exactly like the
+// existing publish gate (§3). Expiry never deletes content (§59).
+//
 model InteractiveBusinessEntitlement {
   id          String   @id @default(cuid())
   businessId  String   @unique
@@ -804,11 +820,11 @@ model InteractiveBusinessEntitlement {
   @@index([status])
 }
 
-/**
- * Tenant media library (§19). `hash` deduplicates identical uploads so the same asset is
- * never stored twice for one business. Alt text is stored with the asset so accessibility
- * travels with the image (§48).
- */
+//
+// Tenant media library (§19). `hash` deduplicates identical uploads so the same asset is
+// never stored twice for one business. Alt text is stored with the asset so accessibility
+// travels with the image (§48).
+//
 model MediaAsset {
   id         String   @id @default(cuid())
   businessId String
