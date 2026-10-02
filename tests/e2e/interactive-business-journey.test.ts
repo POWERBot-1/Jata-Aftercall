@@ -267,7 +267,10 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
   it("9 — draft edits stay off the live site until published", async () => {
     const response = await call(experiencePatch, "https://jata.test/api/experience", {
       method: "PATCH",
-      body: { businessId: ctx.owner.businessId, brand: { tagline: "Coastal flavour, every day" } },
+      body: {
+        businessId: ctx.owner.businessId,
+        brand: { tagline: "Coastal flavour, every day", heroImageUrl: ctx.imageUrl },
+      },
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
 
