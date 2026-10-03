@@ -20,7 +20,7 @@
  * `settlePosPayment` are the real ones. Nothing here fakes an entitlement.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const DATABASE_URL = (process.env.DATABASE_URL || process.env.E2E_DATABASE_URL || "").trim();
 const enabled = DATABASE_URL.length > 0;
@@ -223,6 +223,13 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       create: { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS", priceKES: 499, durationDays: 30, isActive: true },
     });
   }, 120_000);
+
+  // Every step starts as the owner. Two steps act as somebody else (13 as a cashier, 21 as another
+  // tenant) and say so explicitly; without this reset, a failure part-way through one of them would
+  // leak that session into every later step and turn one defect into nineteen.
+  beforeEach(() => {
+    if (ctx.owner) h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+  });
 
   afterAll(async () => {
     await cleanup(created);

@@ -93,15 +93,22 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            // Vitest prints each failure where it happens and the runner's ::error annotations at
+            // the end, so a long log needs both ends to be diagnosable from the comment alone.
             const read = (file, limit) => {
-              try { return fs.readFileSync(file, 'utf8').slice(-limit); } catch (e) { return '(no output captured)'; }
+              try {
+                const text = fs.readFileSync(file, 'utf8');
+                if (text.length <= limit) return text;
+                const half = Math.floor(limit / 2);
+                return `${text.slice(0, half)}\n\n…[${text.length - limit} characters truncated]…\n\n${text.slice(-half)}`;
+              } catch (e) { return '(no output captured)'; }
             };
             const body = [
-              ['npm run test:e2e', '/tmp/step-journey.log', 8000],
-              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 8000],
-              ['prisma migrate deploy', '/tmp/step-migrate.log', 4000],
-              ['prisma generate', '/tmp/step-generate.log', 2000],
-              ['npm run seed', '/tmp/step-seed.log', 2000],
+              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 20000],
+              ['npm run test:e2e', '/tmp/step-journey.log', 4000],
+              ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
+              ['prisma generate', '/tmp/step-generate.log', 1500],
+              ['npm run seed', '/tmp/step-seed.log', 1500],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
             try {
@@ -109,7 +116,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue,
-                body: `Interactive Business E2E failed on \`${context.sha}\` (${context.runId}):\n\n${body}`.slice(0, 40000),
+                body: `Database journeys failed on \`${context.sha}\` (${context.runId}):\n\n${body}`.slice(0, 40000),
               });
             } catch (e) {
               console.log('comment failed:', String(e).slice(0, 300));
