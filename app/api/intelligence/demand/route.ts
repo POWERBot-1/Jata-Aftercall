@@ -22,11 +22,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
 
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    // Tenant data is never served to an anonymous caller: the session is mandatory here.
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const insights = await getDemandInsights(businessId);
@@ -53,11 +55,13 @@ export async function POST(req: Request) {
       );
     }
 
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    // Tenant data is never served to an anonymous caller: the session is mandatory here.
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const recorded = await recordDemandInsight(businessId, insightType, subject);

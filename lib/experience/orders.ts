@@ -102,17 +102,25 @@ export function deriveOrderStage(order: { status?: string | null; paymentStatus?
   return orderStatusToStage(order.status || "CONFIRMED");
 }
 
+export type OrderStageTransitionResult =
+  | { ok: true; stage: OrderStage }
+  | { ok: false; error: string; reason: "UNKNOWN_STAGE" | "INVALID_TRANSITION" };
+
 export function assertOrderStageTransition(
   currentStage: OrderStage,
   nextStageRaw: string,
-): { ok: true; stage: OrderStage } | { ok: false; error: string } {
+): OrderStageTransitionResult {
   if (!isOrderStage(nextStageRaw)) {
-    return { ok: false, error: `Unknown order stage: ${nextStageRaw}` };
+    // The caller asked for a stage that does not exist: a malformed request (400).
+    return { ok: false, error: `Unknown order stage: ${nextStageRaw}`, reason: "UNKNOWN_STAGE" };
   }
   if (!isValidStageTransition(currentStage, nextStageRaw)) {
+    // A well-formed stage that conflicts with where the order is now (409), matching the
+    // pre-existing owner order-board contract exercised by the §66 end-to-end journey.
     return {
       ok: false,
       error: `Invalid order stage transition from ${currentStage} to ${nextStageRaw}`,
+      reason: "INVALID_TRANSITION",
     };
   }
   return { ok: true, stage: nextStageRaw };

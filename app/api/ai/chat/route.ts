@@ -70,7 +70,11 @@ export async function POST(req: Request) {
       }
 
       const entitlement = await getAIPackageStatus(resolvedBusinessId).catch(() => null);
-      if (entitlement && (entitlement.status === "SUSPENDED" || entitlement.status === "EXPIRED")) {
+      // Live AI Front Desk is the KES 499 / 30-day package: only a business with a
+      // server-verified, currently entitled subscription may serve real customers. This blocks
+      // NONE / PENDING / CANCELLED / SUSPENDED / EXPIRED and fails closed if the check cannot
+      // run. Owner Preview and "Ask My Bot" stay available to the tenant itself (§2, §3, §49).
+      if (!entitlement || entitlement.entitled !== true) {
         return NextResponse.json(
           {
             error: "AI Business Front Desk is currently unavailable for this business.",

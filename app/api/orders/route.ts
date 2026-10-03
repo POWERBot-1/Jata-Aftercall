@@ -117,7 +117,10 @@ export async function POST(req: Request) {
         customerEmail: sanitizeText(body.customerEmail, 120) || null,
         items: Array.isArray(body.items) ? body.items : [],
         deliveryFeeKES: Number(body.deliveryFeeKES) || 0,
-        discountKES: Number(body.discountKES) || 0,
+        // §32: a discount is only ever granted by an explicitly configured promotion, so the
+        // authoritative engine derives it server-side. A client-supplied amount is discarded
+        // instead of being allowed to reduce (or zero) the payable total.
+        discountKES: 0,
         fulfilmentType: body.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
         deliveryLocation: sanitizeText(body.deliveryLocation, 200) || null,
         deliveryInstructions: sanitizeText(body.deliveryInstructions, 500) || null,
@@ -204,7 +207,13 @@ export async function PATCH(req: Request) {
       const currentStage = deriveOrderStage(existing);
       const transition = assertOrderStageTransition(currentStage, requestedStage);
       if (transition.ok === false) {
-        return NextResponse.json({ error: (transition as { error: string }).error }, { status: 409 });
+        const failed = transition as { error: string; reason: "UNKNOWN_STAGE" | "INVALID_TRANSITION" };
+        // An unknown stage is a malformed request (400); a known stage that the order cannot
+        // move to from its current stage is a state conflict (409).
+        return NextResponse.json(
+          { error: failed.error, reason: failed.reason },
+          { status: failed.reason === "UNKNOWN_STAGE" ? 400 : 409 },
+        );
       }
       nextPersisted = stageToPersistedStatus(
         (transition as { stage: any }).stage,

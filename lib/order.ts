@@ -314,8 +314,10 @@ export async function createAuthoritativeOrder(input: {
     : "PENDING_CUSTOMER_CONFIRMATION";
 
   let orderId = `ord_${Date.now()}`;
-  try {
-    if (prisma.order?.create) {
+  if (prisma.order?.create) {
+    // A failed order write must be reported as a failure: returning an invented order id would
+    // tell the customer (and the owner) that an order exists when nothing was persisted (§28).
+    try {
       const created = await prisma.order.create({
         data: {
           orderReference,
@@ -351,9 +353,9 @@ export async function createAuthoritativeOrder(input: {
         },
       });
       if (created?.id) orderId = created.id;
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("ORDER_PERSISTENCE_FAILED");
     }
-  } catch {
-    // Fallback ID when running without DB in unit tests
   }
 
   await logAudit({

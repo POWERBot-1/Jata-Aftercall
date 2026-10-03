@@ -353,6 +353,32 @@ describe("AI Business Front Desk Lifecycle Integration Suite (§3, §4, §16–�
     expect(secondAttempt.ok).toBe(false);
   });
 
+  it("honours the emergency pause: a paused Front Desk stops serving customers but stays previewable (§45)", async () => {
+    state.products.set(bizId, [
+      { id: "prod_cake", businessId: bizId, name: "Black Forest Cake 1kg", basePriceKES: 2500, stockStatus: "IN_STOCK", quantity: 5, isActive: true },
+    ]);
+    await saveExtendedAIConfig(bizId, { operationalStatus: "LIVE" });
+
+    const live = await handleAIFrontDeskTurn({ businessId: bizId, message: "How much is the Black Forest Cake 1kg?" });
+    expect(live.responseType).toBe("KNOWN");
+
+    await saveExtendedAIConfig(bizId, { operationalStatus: "PAUSED" });
+
+    const paused = await handleAIFrontDeskTurn({ businessId: bizId, message: "How much is the Black Forest Cake 1kg?" });
+    expect(paused.responseType).toBe("ACTION_REQUIRED");
+    expect(paused.reply).toContain("paused");
+    expect(paused.escalatedToHuman).toBe(true);
+
+    // The owner can still exercise the same configuration in Preview Mode.
+    const previewTurn = await handleAIFrontDeskTurn({
+      businessId: bizId,
+      message: "How much is the Black Forest Cake 1kg?",
+      preview: true,
+    });
+    expect(previewTurn.preview).toBe(true);
+    expect(previewTurn.responseType).toBe("KNOWN");
+  });
+
   it("promotes owner-approved unanswered questions directly into authoritative Business Brain knowledge (§35)", async () => {
     const uq = await recordUnansweredQuestion(bizId, "Do you bake eggless cakes?");
     await approveAnswer(

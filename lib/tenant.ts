@@ -93,16 +93,10 @@ export async function canAccessBusiness(
   if (userRole === "ADMIN") return true;
 
   try {
-    if (prisma.business?.findUnique) {
-      const biz = await prisma.business
-        .findUnique({ where: { id: businessId } })
-        .catch(() => null);
-      if (biz && ((biz as any).ownerId === userId || (biz as any).userId === userId)) {
-        return true;
-      }
-    }
-
     if (prisma.business?.findFirst) {
+      // `Business` is owned through `ownerId` (there is no `userId` column on the model).
+      // Never filter on a field the schema does not define: an invalid Prisma `where` throws
+      // for every tenant check instead of answering it.
       const directByOwner = await prisma.business
         .findFirst({
           where: { id: businessId, ownerId: userId },
@@ -110,6 +104,15 @@ export async function canAccessBusiness(
         })
         .catch(() => null);
       if (directByOwner?.id) return true;
+    }
+
+    if (prisma.business?.findUnique) {
+      const biz = await prisma.business
+        .findUnique({ where: { id: businessId } })
+        .catch(() => null);
+      if (biz && ((biz as any).ownerId === userId || (biz as any).userId === userId)) {
+        return true;
+      }
     }
 
     if (prisma.businessMember?.findMany) {

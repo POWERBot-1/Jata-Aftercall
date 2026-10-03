@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
+import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { DEFAULT_SUGGESTED_ACTIONS } from "@/lib/ai-front-desk";
 import { generateAILinkQRCodeSvg, getShareableAILink } from "@/lib/qr";
 import AIFrontDeskCustomerClient from "@/components/AIFrontDeskCustomerClient";
@@ -77,6 +78,14 @@ export default async function PublicAIFrontDeskPage({
     }
   } else if (!business.isPublished) {
     notFound();
+  } else {
+    // A live AI Front Desk is the KES 499 / 30-day package: an unpublished/unpaid business
+    // never gets a customer-facing AI, even though the wider business page may be published
+    // under a different package (§2, §3, §49). The check is server-side and fails closed.
+    const entitlement = await getAIPackageStatus(business.id).catch(() => null);
+    if (!entitlement || entitlement.entitled !== true) {
+      notFound();
+    }
   }
 
   const brain = await getBusinessBrain(business.id);
