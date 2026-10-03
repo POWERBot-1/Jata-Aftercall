@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { publiclyListedPlans } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,8 @@ export default async function HomePage() {
   const session = await getSession();
   let plans: { key: string; name: string; priceKES: number; durationDays: number }[] = [];
   try {
-    plans = await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } });
+    // The Business POS is a private, owner-only product (POS spec §67): never advertise it here.
+    plans = publiclyListedPlans(await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }));
   } catch {
     plans = [];
   }

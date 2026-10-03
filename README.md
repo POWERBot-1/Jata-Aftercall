@@ -174,6 +174,75 @@ repository change does not run it.
 
 ---
 
+## JATA AFTERCALL — Configurable Business POS (KES 499 / month)
+
+The till, stock book, customer accounts and reports a Kenyan SME actually runs on — configured for
+*that* business by a short questionnaire instead of bought as one of fifty vertical apps. It is an
+additive capability inside the existing platform: same auth, same tenancy, same `PlanConfig` +
+Paystack stack, same dashboard shell. Nothing customer-facing changes: the POS is a **private**
+business operating system, so it never appears on a public business page, in a call instruction or
+in an AFTERCALL redirect message, and it can only be chosen from inside the authenticated platform.
+
+**One engine + configuration + templates.** `lib/pos/` is a pure configuration engine — business
+types, capabilities, units, terminology, order workflows, permissions, questionnaire, presentation,
+money, inventory, credit, receipts, reports. A business's answers become a machine-readable
+`PosConfiguration`, and navigation, screens, forms, dashboard cards, order states, payment methods,
+receipt layout, the report catalogue and role permissions are all *generated* from it. There is no
+`if (businessType === "restaurant")` anywhere in the app — a vertical is data, never a code branch.
+Two businesses answering differently get two substantially different POS systems from the same code,
+which `tests/integration/pos-api-routes.test.ts` proves over HTTP.
+
+**The journey.** Create/select business → adaptive questionnaire (only the questions that matter,
+progressive disclosure, "Something else" always available) → *"We've configured your POS"* in plain
+language → edit the configuration → interactive preview sandbox on sample data → choose the
+KES 499 plan → pay → **server-verified** payment → provisioned → LIVE. The lifecycle is explicit and
+enforced server-side — `DRAFT → CONFIGURED → PREVIEW → AWAITING_PAYMENT → PAYMENT_CONFIRMED →
+PROVISIONING → LIVE`, plus `SUSPENDED` / `CANCELLED`: a preview is never production, payment
+initiation is never success, and nothing trades before the settlement path confirms the money.
+
+**Universal fallback.** Before a business answers anything it already gets a working baseline POS —
+New Sale, Products/Services, Customers, Payments, Receipts, Sales History, Basic Reports, Settings —
+so an unknown trade is never stuck, and setup may stay partial while trading starts.
+
+**Money and stock are server-authoritative.** Prices are re-derived from the tenant's own catalogue
+rows; a browser-sent price is honoured only for a role holding `EDIT_PRICE` and is written to the
+audit log. Payments carry method, reference, timestamp, user and status; a short payment leaves a
+balance only when the configuration allows part payments, and credit over the configured limit is
+refused rather than asked about client-side. Customer credit and supplier credit are separate
+ledgers with their own statements. Stock never moves without a `PosInventoryMovement` row carrying
+a reason, a signed delta and the actor — sales, refunds, adjustments, transfers, counts, purchases,
+production and wastage all leave a trail. Corrections are returns, refunds, adjustments and
+reversals: historical transactions are never rewritten.
+
+**Copyable, versioned configuration.** A setup can be copied to another business the same person
+owns — by granular scope (capabilities, workflows, terminology, payments, categories, permissions,
+dashboard, receipt, rules) or saved as the owner's own template — and 22 built-in templates ship in
+`lib/pos/templates.ts` (`RETAIL_BASIC`, `WHOLESALE`, `RESTAURANT`, `SALON`, `HARDWARE`, `GARAGE`,
+`FARM`, `MANUFACTURING`, `PRINTING`, …). Transactions, balances, receipt numbers, tenant ids and
+credentials are never copied, and a scope that would carry them is **refused by name** rather than
+quietly dropped. Every publish appends an immutable `PosConfigurationVersion` that can be rolled
+back to by adding a new one.
+
+**Words change, records do not.** Terminology ("Bills" / "Orders" / "Jobs" / "Appointments" /
+"Produce" / "Projects", "Guests" / "Clients" / "Vehicle Owners") is presentation only — the entity
+structure, the API and the reports are identical across trades.
+
+**Migration.** `prisma/migrations/20261003000000_business_pos/migration.sql` adds 24 `Pos*` tables,
+additive only (`CREATE TABLE IF NOT EXISTS`, new foreign keys and indexes, every table keyed and
+indexed by `businessId`; no `DROP`, no `ALTER COLUMN`, no data rewrites). As with every migration,
+applying it to production is an operator-authorised action performed by the existing deployment gate
+(`scripts/build.sh` → `scripts/migrate.sh`); this repository change does not run it.
+
+**Tests.** `tests/unit/pos-engine.test.ts`, `tests/unit/pos-money.test.ts`,
+`tests/unit/pos-entitlement.test.ts`, `tests/unit/pos-schema.test.ts`,
+`tests/security/pos-tenant-isolation.test.ts`, `tests/security/pos-permissions.test.ts`,
+`tests/integration/pos-journey.test.ts`, `tests/integration/pos-api-routes.test.ts`,
+`tests/integration/pos-payment-confirmation.test.ts`.
+`BUSINESS_POS_IMPLEMENTATION.md` documents the architecture, the request pipeline, the per-route
+permission map and what each suite proves.
+
+---
+
 ## Tenancy & Security
 
 - Every business-owned row has `businessId` FK; `lib/tenant.ts:assertBusinessOwnership` checks `ownerId`/`BusinessMember` against `session.userId` on every API boundary — never trust client-supplied tenant IDs.
@@ -186,17 +255,26 @@ repository change does not run it.
 
 ## Pricing
 
-DB-driven `PlanConfig` — admin configures without code changes. Seed: `ANNUAL KES 999/year`, `MONTHLY KES 149/month`, and `INTERACTIVE_BUSINESS KES 999/month`. Payment flow always derives `amount` from `PlanConfig` (the Interactive amount is asserted server-side in both checkout and pricing, never read from the browser).
+DB-driven `PlanConfig` — admin configures without code changes. Seed: `ANNUAL KES 999/year`, `MONTHLY KES 149/month`, `INTERACTIVE_BUSINESS KES 999/month`, and `BUSINESS_POS KES 499/month` (30 days). Payment flow always derives `amount` from `PlanConfig` (the Interactive and POS amounts are asserted server-side in both checkout and pricing, never read from the browser).
+
+`BUSINESS_POS` and `INTERACTIVE_BUSINESS` are **private** plans: `lib/pricing.ts:publiclyListedPlans()` filters them out of the public landing page, the onboarding plan picker and the customer-facing subscription copy, so they are selectable only from inside the authenticated dashboard. A POS payment settles a `PosSubscription` (not an AFTERCALL `Subscription`), and `GET /api/paystack/verify` answers a POS payment with the `posBusinessId` the callback page uses to return the owner to their own POS — never to a public or AFTERCALL page.
 
 ---
 
 ## Testing
 
 ```bash
-npm test            # vitest unit + isolation + paystack + validation
+npm test            # vitest unit + isolation + paystack + validation + POS suites
 npx tsc --noEmit    # typecheck
 npm run build       # must pass before deploy
 ```
+
+The POS suites run against an in-memory Prisma double (`tests/helpers/posFakeDb.ts`) and drive the
+real route handlers, so no database or `prisma generate` is needed:
+`npx vitest run tests/unit/pos-engine.test.ts tests/integration/pos-api-routes.test.ts`.
+`tests/unit/repair-guards.test.ts` reads the raw migration SQL and fails the build if a POS table
+loses its `businessId`, if a migration stops being `IF NOT EXISTS`, or if any non-`Pos` table is
+altered.
 
 ### End-to-end journey (§66)
 

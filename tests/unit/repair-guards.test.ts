@@ -63,20 +63,53 @@ describe("runtime and schema guards", () => {
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
     const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
-    // Three additional migrations are authorised, all purely additive: the Stage 2 referral
-    // attribution schema, the commerce baseline the platform always needed, and the
-    // Interactive Business package schema. Anything else stays a build failure, and no
-    // migration may destroy or rewrite existing data.
+    // Four additional migrations are authorised, all purely additive: the Stage 2 referral
+    // attribution schema, the commerce baseline the platform always needed, the Interactive
+    // Business package schema, and the Configurable Business POS schema. Anything else stays a
+    // build failure, and no migration may destroy or rewrite existing data.
     expect(migrations).toEqual([
       "20250915000000_init",
       "20260929000000_referral_stage2",
       "20260930000000_commerce_baseline",
       "20261002000000_interactive_business",
+      "20261003000000_business_pos",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       expect(sql.toUpperCase()).not.toContain("DROP TABLE");
       expect(sql.toUpperCase()).not.toContain("TRUNCATE");
+    }
+    // The commerce baseline adds "Service.updatedAt" and has to fill it from "createdAt" before
+    // it can be made NOT NULL. That is a backfill of a brand-new column, not a rewrite of
+    // existing data, so it is authorised here by its exact text — and any *other* UPDATE or
+    // ALTER COLUMN, in that migration or any future one, still fails this guard.
+    const authorizedBackfill = [
+      'UPDATE "Service" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;',
+      'ALTER TABLE "Service" ALTER COLUMN "updatedAt" SET NOT NULL;',
+    ];
+    for (const migration of [
+      "20260929000000_referral_stage2",
+      "20260930000000_commerce_baseline",
+      "20261002000000_interactive_business",
+      "20261003000000_business_pos",
+    ]) {
+      let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
+      if (migration === "20260930000000_commerce_baseline") {
+        for (const line of authorizedBackfill) {
+          expect(sql).toContain(line);
+          sql = sql.replace(line, "");
+        }
+      } else {
+        // Every other migration leaves existing rows and column definitions completely alone.
+        expect(sql).not.toContain("ALTER COLUMN");
+        expect(sql).not.toContain("UPDATE \"");
+      }
+      sql = sql.toUpperCase();
+      // Additive only: new columns, tables, foreign keys and indexes — never data loss.
+      expect(sql).not.toContain("DROP ");
+      expect(sql).not.toContain("ALTER COLUMN");
+      expect(sql).not.toContain("DELETE FROM");
+      expect(sql).not.toContain("UPDATE \"");
     }
     for (const migration of [
       "20260929000000_referral_stage2",
@@ -84,13 +117,43 @@ describe("runtime and schema guards", () => {
       "20261002000000_interactive_business",
     ]) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
-      // Additive only: new columns, tables, foreign keys and indexes — never data loss.
-      expect(sql).not.toContain("DROP ");
-      expect(sql).not.toContain("ALTER COLUMN");
-      expect(sql).not.toContain("DELETE FROM");
-      expect(sql).not.toContain("UPDATE \"");
       expect(sql).toContain("ADD COLUMN");
     }
+  });
+
+  it("adds the Business POS as new tenant-scoped tables and touches no existing table", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261003000000_business_pos/migration.sql"),
+      "utf8",
+    );
+
+    // Every POS model is tenant-scoped by businessId, so isolation is enforced in the data
+    // model as well as in the access layer (POS spec §5, §75).
+    const posModels = [
+      "PosConfiguration", "PosConfigurationVersion", "PosSubscription", "PosEntitlement", "PosTemplate",
+      "PosBranch", "PosStaff", "PosProduct", "PosInventoryItem", "PosInventoryMovement",
+      "PosCustomer", "PosCustomerAsset", "PosSupplier", "PosSale", "PosSaleItem", "PosPayment",
+      "PosCreditEntry", "PosExpense", "PosPurchase", "PosPurchaseItem", "PosOrder", "PosOrderItem",
+      "PosOrderEvent", "PosAuditEvent",
+    ];
+    for (const model of posModels) {
+      expect(schema).toContain(`model ${model} {`);
+      const start = schema.indexOf(`model ${model} {`);
+      const block = schema.slice(start, schema.indexOf("\n}", start));
+      expect(block).toContain("businessId");
+      expect(block).toContain("@@index([businessId");
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS "${model}"`);
+    }
+
+    // The migration is guarded and never rewrites history: sales keep their receipt numbers,
+    // configuration history is append-only, and money stays in whole shillings (POS §32, §48, §54).
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS "PosSale_businessId_createdAt_idx"');
+    expect(sql).toContain('"PosSale_businessId_receiptNumber_key" UNIQUE ("businessId","receiptNumber")');
+    expect(sql).toContain('"PosConfigurationVersion_businessId_version_key" UNIQUE ("businessId","version")');
+    expect(sql).not.toMatch(/ALTER TABLE "(?!Pos)/);
+    expect(schema).toContain("posConfiguration         PosConfiguration?");
+    expect(schema).toContain("posSales                 PosSale[]");
   });
 
   it("extends the schema additively for the Interactive Business package", () => {

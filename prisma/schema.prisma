@@ -87,6 +87,31 @@ model Business {
   unansweredQuestions UnansweredQuestion[]
   demandInsights DemandInsight[]
   aiQualityEvents AIQualityEvent[]
+  // ── JATA AFTERCALL Business POS (spec §80: additive back-relations only) ──
+  posConfiguration         PosConfiguration?
+  posConfigurationVersions PosConfigurationVersion[]
+  posSubscription          PosSubscription?
+  posEntitlement           PosEntitlement?
+  posTemplates             PosTemplate[]
+  posBranches              PosBranch[]
+  posStaff                 PosStaff[]
+  posProducts              PosProduct[]
+  posInventoryItems        PosInventoryItem[]
+  posInventoryMovements    PosInventoryMovement[]
+  posCustomers             PosCustomer[]
+  posCustomerAssets        PosCustomerAsset[]
+  posSuppliers             PosSupplier[]
+  posSales                 PosSale[]
+  posSaleItems             PosSaleItem[]
+  posPayments              PosPayment[]
+  posCreditEntries         PosCreditEntry[]
+  posExpenses              PosExpense[]
+  posPurchases             PosPurchase[]
+  posPurchaseItems         PosPurchaseItem[]
+  posOrders                PosOrder[]
+  posOrderItems            PosOrderItem[]
+  posOrderEvents           PosOrderEvent[]
+  posAuditEvents           PosAuditEvent[]
 
   @@index([ownerId])
   @@index([slug])
@@ -841,4 +866,602 @@ model MediaAsset {
   @@index([businessId])
   @@index([businessId, hash])
   @@index([businessId, createdAt])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// JATA AFTERCALL — Configurable Business POS (spec §1–§81)
+//
+// ONE engine, many operating models (§76). Every model below is tenant-scoped by
+// `businessId` and indexed on it, so isolation is enforced in the data model as well as in
+// the access layer (§5). There is no per-industry table: a garage's vehicle, an estate
+// agent's unit and a school's locker are all `PosCustomerAsset`, and a restaurant's order,
+// a laundry's load and a courier's shipment are all `PosOrder` in a configured workflow
+// (§29, §52). What differs between businesses is configuration, not schema.
+//
+// Money is stored as whole Kenyan shillings (§31, §54). Transactions are never rewritten:
+// corrections are returns, refunds, adjustments or reversals with their own rows (§54).
+// ══════════════════════════════════════════════════════════════════════════════
+
+//
+// The Business Operating Profile (§7, §20). `draftJson` is what the owner is editing;
+// `publishedJson` is what the live POS executes. Publishing snapshots the draft into
+// PosConfigurationVersion so history stays interpretable when the business changes (§48).
+//
+model PosConfiguration {
+  id                  String    @id @default(cuid())
+  businessId          String    @unique
+  business            Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // DRAFT | CONFIGURED | PREVIEW | AWAITING_PAYMENT | PAYMENT_CONFIRMED | PROVISIONING |
+  // LIVE | SUSPENDED | CANCELLED (§44)
+  status              String    @default("DRAFT")
+  // INCOMPLETE | READY | PUBLISHED — the configuration's own completeness (§42)
+  configurationStatus String    @default("INCOMPLETE")
+  businessTypeKey     String    @default("other")
+  answersJson         String    @db.Text
+  draftJson           String    @db.Text
+  publishedJson       String?   @db.Text
+  draftVersion        Int       @default(1)
+  publishedVersion    Int       @default(0)
+  // Stable hash of the material configuration, used to decide when a version is deserved (§48)
+  fingerprint         String?
+  publishedAt         DateTime?
+  publishedById       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  versions            PosConfigurationVersion[]
+
+  @@index([businessId, status])
+}
+
+// Immutable configuration snapshots (§48). Rollback writes a new version; it never edits one.
+model PosConfigurationVersion {
+  id           String           @id @default(cuid())
+  businessId   String
+  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  configuration PosConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  configurationId String
+  version      Int
+  snapshotJson String           @db.Text
+  answersJson  String           @db.Text
+  fingerprint  String?
+  note         String?
+  createdById  String?
+  publishedAt  DateTime         @default(now())
+
+  @@unique([businessId, version])
+  @@index([businessId, publishedAt])
+}
+
+//
+// The Business POS subscription (§45). Deliberately separate from `Subscription`: a business
+// may hold its AFTERCALL plan and the POS product at the same time, and paying for one must
+// never disturb the other (§4, §80).
+//
+model PosSubscription {
+  id               String    @id @default(cuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String    @default("BUSINESS_POS")
+  // PENDING | ACTIVE | EXPIRING | PAST_DUE | EXPIRED | SUSPENDED | CANCELLED
+  status           String    @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([userId])
+}
+
+// Persisted entitlement so admin views and lifecycle jobs can query state directly (§44).
+model PosEntitlement {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String    @default("BUSINESS_POS")
+  status      String    @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+// Saved configurations — "my business template" (§26) and the source of a clone (§25, §50).
+// Structure only: no balances, transactions or credentials are ever stored here.
+model PosTemplate {
+  id                String    @id @default(cuid())
+  ownerId           String
+  businessId        String?
+  business          Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  key               String
+  name              String
+  description       String?
+  businessTypeKey   String    @default("other")
+  configurationJson String    @db.Text
+  answersJson       String    @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([businessId])
+}
+
+// Locations (§16). One branch row exists even for a single-location business so stock and
+// sales always have a home.
+model PosBranch {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  code       String?
+  location   String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+//
+// People who operate the POS (§15, §36). A staff record may exist before it has a platform
+// login, so `userId` is nullable and intentionally not a foreign key: staff are business
+// records first, platform users only once invited.
+//
+model PosStaff {
+  id                String    @id @default(cuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId            String?
+  name              String
+  phone             String?
+  email             String?
+  roleKey           String    @default("CASHIER")
+  branchId          String?
+  commissionPercent Int       @default(0)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([businessId, roleKey])
+  @@index([businessId, userId])
+}
+
+// Products and services (§8, §13). One table, configured fields: a restaurant dish, a
+// hardware item and a salon treatment differ by `kind`, unit and which columns the
+// configuration exposes (§24 — forms only ask for relevant fields).
+model PosProduct {
+  id                String    @id @default(cuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name              String
+  kind              String    @default("PRODUCT")   // PRODUCT | SERVICE
+  category          String?
+  description       String?   @db.Text
+  unitKey           String    @default("piece")
+  priceKES          Int       @default(0)
+  wholesalePriceKES Int?
+  costKES           Int?
+  sku               String?
+  barcode           String?
+  trackInventory    Boolean   @default(true)
+  reorderLevel      Int       @default(0)
+  taxable           Boolean   @default(false)
+  durationMinutes   Int?
+  variantOptions    String?   @db.Text   // JSON: { "Size": ["S","M"], "Colour": ["Red"] }
+  imageUrl          String?   @db.Text
+  isActive          Boolean   @default(true)
+  sortOrder         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  inventory         PosInventoryItem[]
+  movements         PosInventoryMovement[]
+
+  @@index([businessId, kind])
+  @@index([businessId, name])
+  @@index([businessId, barcode])
+}
+
+// Stock on hand per product and location (§16, §33). Never edited directly: the number is
+// the sum of PosInventoryMovement rows.
+model PosInventoryItem {
+  id           String     @id @default(cuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId    String
+  product      PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Empty string means "the business's own stock room". A nullable column would make the
+  // unique pair below meaningless in Postgres, where NULLs never collide (§16, §33).
+  branchId     String     @default("")
+  quantity     Int        @default(0)
+  reorderLevel Int        @default(0)
+  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime   @default(now())
+
+  @@unique([productId, branchId])
+  @@index([businessId])
+  @@index([businessId, branchId])
+}
+
+// The stock ledger (§33): every change has a reason, an actor and a reference.
+model PosInventoryMovement {
+  id          String     @id @default(cuid())
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId   String
+  product     PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId    String?
+  reason      String     // SALE | RETURN | PURCHASE | ADJUSTMENT | DAMAGE | COUNT | TRANSFER_IN …
+  delta       Int        // signed change in base units
+  quantity    Int        @default(0)
+  unitKey     String?
+  refType     String?    // SALE | PURCHASE | ADJUSTMENT | TRANSFER
+  refId       String?
+  note        String?    @db.Text
+  createdById String?
+  createdAt   DateTime   @default(now())
+
+  @@index([businessId, productId, createdAt])
+  @@index([businessId, reason])
+  @@index([businessId, branchId])
+}
+
+// Customers (§14, §46). The structure is identical for every trade; only the label changes.
+model PosCustomer {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  email          String?
+  location       String?
+  customerNumber String?
+  segment        String?
+  notes          String?  @db.Text
+  creditEnabled  Boolean  @default(false)
+  creditLimitKES Int      @default(0)
+  // Denormalized running balance, always written together with a PosCreditEntry (§30).
+  balanceKES     Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assets         PosCustomerAsset[]
+
+  @@index([businessId, name])
+  @@index([businessId, phone])
+  @@index([businessId, creditEnabled])
+}
+
+//
+// Something a customer owns or occupies: a vehicle and registration number for a garage, a
+// property unit for an agent, a pet for a vet (§18). One generic model instead of a table
+// per trade (§52).
+//
+model PosCustomerAsset {
+  id          String      @id @default(cuid())
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    PosCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label       String      // "Vehicle", "Unit", "Pet" — set from terminology
+  name        String
+  identifier  String?     // registration number, unit number, tag
+  detailsJson String?     @db.Text
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([businessId, customerId])
+  @@index([businessId, identifier])
+}
+
+// Suppliers (§12, §30). Supplier credit is a separate ledger from customer credit.
+model PosSupplier {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String?
+  email        String?
+  location     String?
+  termsDays    Int      @default(0)
+  creditEnabled Boolean @default(false)
+  balanceKES   Int      @default(0)
+  notes        String?  @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([businessId, name])
+}
+
+// Sales (§27, §31, §54). Immutable once completed: corrections create new rows.
+model PosSale {
+  id                     String    @id @default(cuid())
+  businessId             String
+  business               Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId               String?
+  receiptNumber          String
+  sequence               Int       @default(1)
+  customerId             String?
+  customerName           String?
+  staffId                String?
+  staffName              String?
+  // Attribution source (§28, §70), stored with the engine's ChannelKey spelling:
+  // walk_in | phone | whatsapp | business_page | online | staff | delivery | other
+  channel                String    @default("walk_in")
+  // COMPLETED | PARTIALLY_PAID | REFUNDED | PARTIALLY_REFUNDED | VOIDED
+  status                 String    @default("COMPLETED")
+  kind                   String    @default("SALE")   // SALE | QUOTATION | INVOICE
+  subtotalKES            Int       @default(0)
+  discountKES            Int       @default(0)
+  taxKES                 Int        @default(0)
+  feeKES                 Int       @default(0)
+  totalKES               Int       @default(0)
+  paidKES                Int       @default(0)
+  balanceKES             Int       @default(0)
+  refundedKES            Int       @default(0)
+  costKES                Int?
+  notes                  String?   @db.Text
+  // Which configuration produced this transaction, so it stays interpretable later (§48)
+  configurationVersion   Int       @default(1)
+  configurationFingerprint String?
+  createdAt              DateTime  @default(now())
+  completedAt            DateTime?
+  items                  PosSaleItem[]
+  payments               PosPayment[]
+
+  @@unique([businessId, receiptNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, customerId])
+  @@index([businessId, branchId, createdAt])
+}
+
+model PosSaleItem {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  saleId       String
+  sale         PosSale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId    String?
+  // Authoritative name, unit and price at the moment of sale (§54)
+  name         String
+  kind         String   @default("PRODUCT")
+  unitKey      String?
+  quantity     Int      @default(1)
+  unitPriceKES Int      @default(0)
+  discountKES  Int      @default(0)
+  taxKES       Int      @default(0)
+  totalKES     Int      @default(0)
+  costKES      Int?
+  variantDesc  String?
+  createdAt    DateTime @default(now())
+
+  @@index([saleId])
+  @@index([businessId, productId])
+}
+
+//
+// Money movement inside the POS (§31). Separate from the platform `Payment` model, which
+// records what customers pay *JATA*; this records what customers pay *the business*.
+//
+model PosPayment {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  saleId      String?
+  sale        PosSale?  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customerId  String?
+  supplierId  String?
+  branchId    String?
+  // IN | OUT
+  direction   String    @default("IN")
+  // SALE | CREDIT_REPAYMENT | SUPPLIER_PAYMENT | EXPENSE | DEPOSIT | REFUND
+  purpose     String    @default("SALE")
+  method      String    @default("cash")
+  amountKES   Int       @default(0)
+  reference   String?
+  // SETTLED | PENDING | REVERSED | FAILED
+  status      String    @default("SETTLED")
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, purpose])
+  @@index([saleId])
+  @@index([businessId, customerId])
+  @@index([businessId, supplierId])
+}
+
+// Credit ledger (§30). `partyType` keeps receivables and payables permanently separate.
+model PosCreditEntry {
+  id              String    @id @default(cuid())
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  partyType       String    @default("CUSTOMER")   // CUSTOMER | SUPPLIER
+  partyId         String
+  partyName       String?
+  direction       String    @default("DEBIT")      // DEBIT (owed) | CREDIT (paid)
+  amountKES       Int       @default(0)
+  balanceAfterKES Int       @default(0)
+  dueAt           DateTime?
+  saleId          String?
+  paymentId       String?
+  note            String?   @db.Text
+  createdById     String?
+  createdAt       DateTime  @default(now())
+
+  @@index([businessId, partyType, partyId])
+  @@index([businessId, dueAt])
+  @@index([businessId, createdAt])
+}
+
+// Expenses (§17). Categories come from the configuration, including custom ones.
+model PosExpense {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId    String?
+  categoryKey String
+  label       String?
+  amountKES   Int       @default(0)
+  method      String    @default("cash")
+  reference   String?
+  occurredAt  DateTime  @default(now())
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([businessId, occurredAt])
+  @@index([businessId, categoryKey])
+}
+
+// Purchases and purchase orders (§12, §33). Receiving writes stock movements.
+model PosPurchase {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplierId  String?
+  branchId    String?
+  reference   String
+  // DRAFT | ORDERED | PARTIAL | RECEIVED | CANCELLED
+  status      String    @default("ORDERED")
+  subtotalKES Int       @default(0)
+  totalKES    Int       @default(0)
+  paidKES     Int       @default(0)
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  items       PosPurchaseItem[]
+
+  @@unique([businessId, reference])
+  @@index([businessId, status])
+  @@index([businessId, supplierId])
+}
+
+model PosPurchaseItem {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseId   String
+  purchase     PosPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId    String?
+  name         String
+  unitKey      String?
+  quantity     Int       @default(1)
+  receivedQty  Int       @default(0)
+  unitCostKES  Int       @default(0)
+  totalKES     Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([purchaseId])
+  @@index([businessId, productId])
+}
+
+//
+// Orders (§28, §29). One table, configurable states: a restaurant ticket, a laundry load, a
+// courier shipment and a garage job all live here and move through the workflow their
+// configuration chose. Channel metadata is recorded for attribution reporting (§70).
+//
+model PosOrder {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId     String?
+  reference    String
+  customerId   String?
+  customerName String?
+  customerPhone String?
+  staffId      String?
+  assignedToId String?
+  channel      String    @default("walk_in")   // see PosSale.channel (§70)
+  workflowKey  String    @default("generic")
+  stateKey     String    @default("NEW")
+  fulfilment   String?   // DELIVERY | PICKUP | DINE_IN
+  address      String?
+  subtotalKES  Int       @default(0)
+  totalKES     Int       @default(0)
+  depositKES   Int       @default(0)
+  expectedAt   DateTime?
+  saleId       String?
+  notes        String?   @db.Text
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  items        PosOrderItem[]
+  events       PosOrderEvent[]
+
+  @@unique([businessId, reference])
+  @@index([businessId, stateKey])
+  @@index([businessId, createdAt])
+  @@index([businessId, channel])
+}
+
+model PosOrderItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  name        String
+  quantity    Int      @default(1)
+  unitKey     String?
+  unitPriceKES Int     @default(0)
+  totalKES    Int      @default(0)
+  modifiers   String?  @db.Text   // JSON: extras, notes to the kitchen
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([businessId])
+}
+
+// Order state history — the workflow engine's audit trail (§29).
+model PosOrderEvent {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromState   String?
+  toState     String
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([businessId, createdAt])
+}
+
+// POS audit log (§37). Tenant-scoped, unlike the platform-wide AuditEvent.
+model PosAuditEvent {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actorName  String?
+  action     String
+  targetType String?
+  targetId   String?
+  branchId   String?
+  metadata   String?   @db.Text
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
 }

@@ -6,12 +6,26 @@ import { CHECKOUT_POLL_INTERVALS_MS, interpretVerifyResponse, type CheckoutView 
 
 const LOADING: CheckoutView = { state: "error", title: "Checking payment", message: "Verifying payment with the server…", poll: false };
 
+/**
+ * Where to send somebody who just paid for the Business POS (§4, §43, §67).
+ *
+ * The id is resolved by the server from the plan the payment actually settled — it is never taken
+ * from the URL — and it is shape-checked here before it becomes a link, so this cannot be aimed at
+ * another business or turned into an open redirect.
+ */
+const POS_BUSINESS_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+function posReturnHref(value: unknown): string | null {
+  return typeof value === "string" && POS_BUSINESS_ID.test(value) ? `/dashboard/pos/${encodeURIComponent(value)}` : null;
+}
+
 function CallbackInner() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference") || searchParams.get("trxref") || "";
   const testMock = searchParams.get("mock") === "success";
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<CheckoutView>(LOADING);
+  const [posHref, setPosHref] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,6 +42,7 @@ function CallbackInner() {
       if (testMock) query.set("mock", "success");
       const response = await fetch(`/api/paystack/verify?${query.toString()}`, { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
+      setPosHref(posReturnHref((data as { posBusinessId?: unknown } | null)?.posBusinessId));
       setView(interpretVerifyResponse(response.status, data));
     } catch {
       setView({ state: "error", title: "Payment status unavailable", message: "We couldn’t reach payment verification. Check your connection — we’ll keep trying.", poll: true });
@@ -64,19 +79,25 @@ function CallbackInner() {
       )}
     </div>
     {view.state === "paid" ? (
-      <Link href="/dashboard" className="jata-btn jata-btn-primary mt-6">Go to dashboard</Link>
+      // Somebody who paid for the Business POS lands in the POS they just bought, not in a
+      // dashboard that has never mentioned it (§4 ends at "LIVE", §67 keeps the products apart).
+      <Link href={posHref ?? "/dashboard"} className="jata-btn jata-btn-primary mt-6">{posHref ? "Go to my POS" : "Go to dashboard"}</Link>
     ) : view !== LOADING && (
       <>
         {view.state === "signin" ? (
           <Link href="/login" className="jata-btn jata-btn-primary mt-5">Sign in</Link>
         ) : view.state === "cancelled" || view.state === "expired" || view.state === "failed" ? (
-          <Link href="/dashboard/subscription" className="jata-btn jata-btn-primary mt-5">Try again</Link>
+          <Link href={posHref ? `${posHref}/plan` : "/dashboard/subscription"} className="jata-btn jata-btn-primary mt-5">Try again</Link>
         ) : (
           <button type="button" onClick={() => { setAttempt(0); void verify(); }} disabled={loading} className="jata-btn jata-btn-primary mt-5">
             {loading ? "Checking…" : "Check payment status"}
           </button>
         )}
-        <div><Link href="/dashboard/subscription" className="jata-btn jata-btn-ghost mt-3 underline">Back to subscription</Link></div>
+        <div>
+          <Link href={posHref ? `${posHref}/plan` : "/dashboard/subscription"} className="jata-btn jata-btn-ghost mt-3 underline">
+            {posHref ? "Back to my POS plan" : "Back to subscription"}
+          </Link>
+        </div>
       </>
     )}
   </main>;

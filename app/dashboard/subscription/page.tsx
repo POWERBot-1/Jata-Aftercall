@@ -2,6 +2,7 @@ import Link from "next/link";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getCheckoutUrl } from "@/lib/subscriptionFlow";
+import { publiclyListedPlans } from "@/lib/pricing";
 import { paymentStatusLabel, subscriptionStatusLabel, toneClass } from "@/lib/statusLabels";
 import type { Metadata } from "next";
 
@@ -18,7 +19,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   const paymentFilter = session.role === "ADMIN" ? {} : { userId: session.userId };
   const [businesses, plansResult, payments] = await Promise.all([
     prisma.business.findMany({ where: ownerFilter, select: { id: true, name: true, subscription: { select: { status: true, planId: true, expiresAt: true, plan: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } }),
-    prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }).then((list) => ({ ok: true as const, list })).catch(() => ({ ok: false as const, list: [] })),
+    prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }).then((list) => ({ ok: true as const, list: publiclyListedPlans(list) })).catch(() => ({ ok: false as const, list: [] })),
     prisma.payment.findMany({ where: paymentFilter, orderBy: { createdAt: "desc" }, take: 20, include: { business: { select: { name: true } } } }),
   ]);
   const requestedId = requestedBusinessId || "";

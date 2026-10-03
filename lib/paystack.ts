@@ -3,6 +3,8 @@ import crypto from "crypto";
 import prisma from "./db";
 import { subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
+import { POS_PLAN_KEY } from "./pos/entitlement";
+import { settlePosPayment } from "./pos/settlement";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -119,6 +121,14 @@ export async function activateSubscriptionForPayment(
 
     const plan = await tx.planConfig.findUnique({ where: { id: payment.planId } });
     if (!plan) throw new Error("PLAN_NOT_FOUND");
+
+    // JATA AFTERCALL Business POS (spec §4, §43–§45): an additive product with its own
+    // subscription row, settled from the same verified payment and the same idempotency
+    // guards. Every other plan key keeps exactly the behaviour it had before (§80).
+    if (plan.key === POS_PLAN_KEY) {
+      return settlePosPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
+    }
+
     const now = new Date();
     const { startAt, expiresAt } = subscriptionWindow(now, plan.durationDays, current);
 

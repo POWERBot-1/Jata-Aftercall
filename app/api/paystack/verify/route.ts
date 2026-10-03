@@ -5,6 +5,7 @@ import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { activateSubscriptionForPayment, verifyTransaction } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
 import { classifyProviderStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
+import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -13,8 +14,16 @@ export async function GET(req: Request) {
   const reference = searchParams.get("reference")?.trim() || "";
   if (!reference || reference.length > 100) return NextResponse.json({ error: "A valid payment reference is required." }, { status: 400 });
 
-  const payment = await prisma.payment.findUnique({ where: { reference } });
+  const payment = await prisma.payment.findUnique({ where: { reference }, include: { plan: { select: { key: true } } } });
   if (!payment) return NextResponse.json({ error: "Payment not found." }, { status: 404 });
+  // A Business POS payment settles the POS subscription, not the AFTERCALL one (§4, §45, §80).
+  // Reading the right row keeps the confirmation honest, and telling the browser which workspace
+  // to return to sends the owner back to the POS they just paid for instead of a page that does
+  // not mention it (§43, §67). Both are derived server-side from the stored plan — never from a
+  // query string, so there is nothing a caller can aim at another business.
+  const isPosPayment = (payment as { plan?: { key?: string | null } | null }).plan?.key === POS_PLAN_KEY;
+  const posBusinessId = isPosPayment ? payment.businessId ?? null : null;
+  const posReturn = posBusinessId ? { posBusinessId } : {};
   if (payment.userId !== session.userId && session.role !== "ADMIN") {
     return NextResponse.json({ error: "You are not authorized to view this payment." }, { status: 403 });
   }
@@ -27,7 +36,11 @@ export async function GET(req: Request) {
   }
 
   if (payment.status === "PAID") {
-    const subscription = payment.businessId ? await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } }) : null;
+    const subscription = payment.businessId
+      ? posBusinessId
+        ? await prisma.posSubscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
+        : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
+      : null;
     if (payment.businessId && !subscription) {
       try {
         const transaction = await verifyTransaction(reference);
@@ -38,21 +51,21 @@ export async function GET(req: Request) {
         const repaired = await activateSubscriptionForPayment(payment.id, undefined, {
           paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
         });
-        return NextResponse.json({ status: "PAID", subscriptionStatus: (repaired.subscription as { status?: string } | null)?.status ?? null, idempotent: true });
+        return NextResponse.json({ status: "PAID", subscriptionStatus: (repaired.subscription as { status?: string } | null)?.status ?? null, idempotent: true, ...posReturn });
       } catch {
         return NextResponse.json({ error: "Payment is recorded but subscription status needs attention. Please try again or contact support." }, { status: 503 });
       }
     }
-    return NextResponse.json({ status: "PAID", subscriptionStatus: subscription?.status ?? null, idempotent: true });
+    return NextResponse.json({ status: "PAID", subscriptionStatus: subscription?.status ?? null, idempotent: true, ...posReturn });
   }
-  if (payment.status !== "PENDING") return NextResponse.json({ status: payment.status });
+  if (payment.status !== "PENDING") return NextResponse.json({ status: payment.status, ...posReturn });
 
   const mockRequested = searchParams.get("mock") === "success";
   if (mockRequested && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
     try {
       const result = await activateSubscriptionForPayment(payment.id, undefined, { raw: { testMock: true }, paystackId: `mock_${payment.reference}` });
       await logAudit({ actorId: payment.userId, action: "PAYMENT_TEST_MOCK_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
-      return NextResponse.json({ status: "PAID", subscriptionStatus: (result.subscription as { status?: string } | null)?.status ?? "ACTIVE", testMode: true });
+      return NextResponse.json({ status: "PAID", subscriptionStatus: (result.subscription as { status?: string } | null)?.status ?? "ACTIVE", testMode: true, ...posReturn });
     } catch {
       return NextResponse.json({ error: "This test payment could not be completed." }, { status: 409 });
     }
@@ -67,24 +80,24 @@ export async function GET(req: Request) {
       }
       const action = evidence.reason === "AMOUNT_MISMATCH" ? "PAYMENT_AMOUNT_MISMATCH" : evidence.reason === "CURRENCY_MISMATCH" ? "PAYMENT_CURRENCY_MISMATCH" : "PAYMENT_REFERENCE_MISMATCH";
       await logAudit({ actorId: payment.userId, action, targetType: "PAYMENT", targetId: payment.id });
-      return NextResponse.json({ status: "FAILED", error: "Paystack verification did not match this payment." }, { status: 400 });
+      return NextResponse.json({ status: "FAILED", error: "Paystack verification did not match this payment.", ...posReturn }, { status: 400 });
     }
     const outcome = classifyProviderStatus(transaction.status);
     if (outcome.kind === "in_progress") {
       // Still in progress at Paystack: leave the payment PENDING so a later success
       // (verify retry or charge.success webhook) can still settle it.
-      return NextResponse.json({ status: "PENDING", message: "Paystack is still processing this payment. Your subscription is not active yet." });
+      return NextResponse.json({ status: "PENDING", message: "Paystack is still processing this payment. Your subscription is not active yet.", ...posReturn });
     }
     if (outcome.kind === "final_failure") {
       await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: outcome.status } });
-      return NextResponse.json({ status: outcome.status, message: outcome.status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed." });
+      return NextResponse.json({ status: outcome.status, message: outcome.status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed.", ...posReturn });
     }
 
     const settled = await activateSubscriptionForPayment(payment.id, undefined, {
       paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
     });
     await logAudit({ actorId: payment.userId, action: "PAYMENT_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
-    return NextResponse.json({ status: "PAID", subscriptionStatus: (settled.subscription as { status?: string } | null)?.status ?? "ACTIVE", idempotent: settled.alreadySettled });
+    return NextResponse.json({ status: "PAID", subscriptionStatus: (settled.subscription as { status?: string } | null)?.status ?? "ACTIVE", idempotent: settled.alreadySettled, ...posReturn });
   } catch {
     console.error("payment verification failed");
     return NextResponse.json({ error: "Payment verification is temporarily unavailable. Refresh this page to check again." }, { status: 502 });

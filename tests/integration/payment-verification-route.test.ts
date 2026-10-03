@@ -51,7 +51,12 @@ describe("server payment verification route", () => {
 
     const response = await GET(request(legacyReference));
     expect(response.status).toBe(200);
-    expect(mocks.findPayment).toHaveBeenCalledWith({ where: { reference: legacyReference } });
+    // Still one exact lookup by reference; the plan key rides along so a Business POS buyer is
+    // sent back to their POS rather than to an AFTERCALL plan page (§4, §67, §80).
+    expect(mocks.findPayment).toHaveBeenCalledWith({
+      where: { reference: legacyReference },
+      include: { plan: { select: { key: true } } },
+    });
     expect(mocks.verify).toHaveBeenCalledWith(legacyReference);
     expect(mocks.activate).toHaveBeenCalledWith("pay-a", undefined, expect.any(Object));
   });
