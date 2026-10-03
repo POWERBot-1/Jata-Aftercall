@@ -84,6 +84,17 @@ jobs:
         run: |
           set -o pipefail
           npm run test:e2e:pos 2>&1 | tee /tmp/step-pos-journey.log
+          # A skipped journey is not a passed journey. Every step needs DATABASE_URL and the suite
+          # skips itself without it, so a green check here has to mean the steps actually ran.
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-pos-journey.log)
+          if printf '%s' "$plain" | grep -q "skipped"; then
+            echo "The Business POS journey skipped — DATABASE_URL did not reach vitest." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE "[0-9]+ passed"; then
+            echo "The Business POS journey reported no passing steps." >&2
+            exit 1
+          fi
 
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.

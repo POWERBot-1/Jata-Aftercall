@@ -46,7 +46,7 @@ new infrastructure, no unrelated Commerce work.
 | Screens | `app/dashboard/pos/**` | 28 pages |
 | Client components | `components/pos/*.tsx` | 17 |
 | Data model | `prisma/schema.prisma` + `prisma/migrations/20261003000000_business_pos/migration.sql` | 24 `Pos*` tables |
-| Tests | `tests/{unit,security,integration}/pos-*.test.ts` + `tests/helpers/posFakeDb.ts` | 10 suites |
+| Tests | `tests/{unit,security,integration}/pos-*.test.ts`, `tests/e2e/business-pos-journey.test.ts` + `tests/helpers/posFakeDb.ts` | 11 suites |
 
 Content the engine carries:
 
@@ -266,26 +266,31 @@ remains an operator-authorised step through the existing deployment gate (`scrip
 | `tests/unit/pos-schema.test.ts` | Schema/migration invariants without a database (Prisma CLI is unavailable offline) |
 | `tests/unit/pos-prisma-contract.test.ts` | Parses `prisma/schema.prisma` and checks every POS query against it: an `include` or a `where` filter through a relation the model does not have fails the build. Written after CI proved this repository's offline tooling cannot see that mistake |
 | `tests/security/pos-tenant-isolation.test.ts` | Cross-tenant customer/sale/inventory/configuration access, forged tenant ids, foreign record ids |
-| `tests/security/pos-permissions.test.ts` | Unauthorized refunds, discounts, credit approval, configuration changes, branch and staff access; unknown role fails closed |
+| `tests/security/pos-permissions.test.ts` | Unauthorized refunds, discounts, credit approval, configuration changes, branch and staff access; unknown role fails closed. Also walks the baseline and all 56 business types and fails if the navigation offers a screen that screen's own route would refuse for its owner (§36, §47, §60) |
 | `tests/integration/pos-journey.test.ts` | The whole §4 journey at domain level, including the two-business §81 proof and clone safety |
 | `tests/integration/pos-api-routes.test.ts` | **66 tests over HTTP**: the real route handlers against an in-memory Prisma double — workspace generation, configuration, preview, plan/payment/provisioning, sales and refunds, every operating screen, reports, audit, cloning, versions and the security matrix |
 | `tests/integration/pos-payment-confirmation.test.ts` | The verification route for a POS payment (POS subscription read, `posBusinessId` on every outcome, refusals) and proof that every other plan is untouched (§80) |
 | `tests/helpers/posFakeDb.ts` | In-memory Prisma double: `findMany/findFirst/findUnique/create/update/updateMany/delete/count/aggregate`, `$transaction`, relation `include`s, and a seeded two-tenant fixture |
+| `tests/e2e/business-pos-journey.test.ts` | **22 steps against a real PostgreSQL database**, through the app's own route handlers: register → fallback POS (§47) → refused trading before payment (§44) → questionnaire configuration in plain language (§3, §52) → preview sandbox that writes nothing (§23) → refused publish (§44) → plan quoted from `PlanConfig` and kept off public surfaces (§45, §67) → server-priced checkout → server-confirmed payment provisioning to LIVE without writing an AFTERCALL subscription (§43, §80) → first sale with receipt and audited stock movement (§31–§33) → itemised refund that never rewrites the sale (§54) → server-decided credit (§30) → cashier refusals with attribution (§36, §75) → configured order workflow (§29) → expense, purchase and supplier ledgers (§12, §17) → labelled reports (§35) → audit entries (§37) → clone with scope and tenant refusals (§25, §50, §75) → versioning and rollback with history intact (§48, §49) → cross-tenant isolation including a body-supplied tenant id (§5) → lapsed plan (§44). Skipped without `DATABASE_URL`; CI runs it as its own step |
+| `tests/e2e/interactive-business-journey.test.ts` | The pre-existing §66 platform journey. It shares the CI database job, which is how the POS payment path is proven not to have disturbed AFTERCALL (§80) |
 
 Run them:
 
 ```bash
 npx vitest run                                   # whole suite
 npx vitest run tests/integration/pos-api-routes.test.ts
+npm run test:e2e:pos                             # POS journey — needs DATABASE_URL
 npx tsc --noEmit                                 # typecheck
 npm run build                                    # must pass before deploy
 ```
 
-Status at the time of writing: **800 passed / 5 failed / 17 skipped**. `tsc --noEmit` is clean and
-`npm run build` succeeds. The 5 failures are pre-existing and unrelated: the storefront booking-slot
-tests assert fixed 10:00/11:00 availability that this sandbox's clock does not produce. They fail
-identically at the branch point `8c81bb9` (verified with a `git worktree` checkout), and the POS work
-neither touches nor fixes them.
+Status at the time of writing: **803 passed / 5 failed / 39 skipped** offline, where the 39 skipped
+are the two database journeys (17 §66 steps + 22 POS steps) that need `DATABASE_URL`. `tsc --noEmit`
+is clean and `npm run build` succeeds. The 5 failures are pre-existing and unrelated: the storefront
+booking-slot tests assert fixed 10:00/11:00 availability that this sandbox's clock does not produce.
+They fail identically at the branch point `8c81bb9` (verified with a `git worktree` checkout), and the
+POS work neither touches nor fixes them. In CI, against PostgreSQL 16, both journeys run: the §66
+journey **17/17** and the POS journey **22/22**.
 
 ---
 
@@ -322,13 +327,41 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
   production while looking correct offline, where `prisma` is `any` and the in-memory double ignores
   relation filters. Both are fixed — the plan key is resolved by `planId` — and
   `tests/unit/pos-prisma-contract.test.ts` now fails the build if any POS query does it again.
-- **Still pending: a database-backed POS journey.** The Interactive Business suite has
-  `tests/e2e/interactive-business-journey.test.ts`; the POS equivalent is the natural next step, now
-  that CI has proven the migration and seed apply cleanly (see
-  `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for how that gate is run).
-- **No POS e2e suite against a real database yet.** The Interactive journey has
-  `tests/e2e/interactive-business-journey.test.ts`; the POS equivalent is the natural next step once
-  `DATABASE_URL` is available.
+- **The database-backed POS journey now runs in CI, and it found a third defect.**
+  `tests/e2e/business-pos-journey.test.ts` is the POS equivalent of the §66 journey: 22 steps over
+  the app's own route handlers against PostgreSQL 16, as its own CI step (`npm run test:e2e:pos`,
+  which fails if the suite skips instead of runs). Its third step failed on the first run — an owner
+  who had not answered the questionnaire yet was shown the fallback **Products** screen and an
+  "+ Add product" action (§47, §60), then refused with "Owner cannot add and edit products", because
+  `EDIT_INVENTORY` was gated on the `products` capability while the fallback baseline carries
+  `catalogue`. Checking every navigation item against the permission its own route requires, for the
+  baseline and all 56 business types, found **23 refused screens across 13 configurations**: Services
+  for every service trade (laundry, car wash, cleaning, dental, transport, courier, consultancy,
+  agency, professional services, membership), Products and Services for real estate and education,
+  and Appointments/Jobs/Projects for barber, spa, clinic, dental, veterinary, car wash, construction
+  and education — `VIEW_ORDERS` was gated on `orders` alone, while those trades reach the same board
+  through `appointments`, `job_cards`, `projects` or `contracts`. A §81 business (a barber, a laundry)
+  was being handed a POS whose own screens refused it. Fixed: a gate is now satisfied by any
+  capability that makes the module real, with those sets defined once in `lib/pos/capabilities.ts`
+  (`CATALOGUE_CAPABILITIES`, `STOCK_CAPABILITIES`, `ORDER_BOARD_CAPABILITIES`). Stock control did not
+  move — `ADJUST_STOCK` still needs `stock_adjustments`, so a laundry can list services and still
+  cannot adjust stock it does not keep. `tests/security/pos-permissions.test.ts` now fails if any
+  configuration advertises a screen its owner is refused, or if a new screen appears without
+  declaring which permission guards it.
+- **Server-rendered POS pages authorize the business, not the module read.** The API routes check a
+  module permission for every read and write, and the pages use `workspace.permissions` to hide
+  *actions* (add, adjust, refund, manage). But 17 pages also read the store directly behind
+  `loadPosWorkspaceCached`, which checks tenant membership and lifecycle only — so a cashier who
+  navigates straight to `/credit`, `/expenses` or `/staff` can see data the equivalent API call
+  refuses. It is a within-tenant role leak, not a cross-tenant one: every write, and every
+  cross-tenant read, is refused and audited (§5, §36, §75 — see step 13 and step 21 of the journey).
+  Recorded rather than fixed here, because closing it means threading a permission through the page
+  layer and adding a "not for you" state to those screens — a UI change beyond this verification
+  pass, and one that deserves its own decision.
+- **The journey is sequential, so one failed step used to look like nine.** Steps share a registered
+  owner, a configured business and a running stock tally. Each step now starts as the owner and the
+  two steps that act as somebody else (13 as a cashier, 21 as another tenant) say so explicitly,
+  because a failure part-way through one of them otherwise leaked that session into every later step.
 - Barcode scanning (§59) is supported as keyboard-wedge input on the till and as a product field,
   with no camera-based scanning.
 - Receipts are text/HTML; there is no ESC/POS printer driver.
@@ -357,3 +390,10 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
 7. **Defaults are applied at the route boundary only.** Engine-level callers (`buildConfiguration`,
    `saveDraft`) still see an unanswered question as unanswered, which keeps the engine honest and
    the HTTP contract friendly.
+8. **A screen in the navigation is a promise the API must keep.** `availableModules` decides what a
+   business is shown from one set of capabilities and the permission gates decide what its API
+   answers from another; when the two disagree the owner gets a dead end that reads as a bug in their
+   own product, and no test that exercises one configured business can see it. The sets now live
+   together in `lib/pos/capabilities.ts` (`CATALOGUE_CAPABILITIES`, `STOCK_CAPABILITIES`,
+   `ORDER_BOARD_CAPABILITIES`) and `tests/security/pos-permissions.test.ts` walks the baseline plus
+   all 56 business types to keep them agreeing.

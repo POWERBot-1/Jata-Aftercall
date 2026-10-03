@@ -238,7 +238,8 @@ applying it to production is an operator-authorised action performed by the exis
 `tests/unit/pos-prisma-contract.test.ts`,
 `tests/security/pos-tenant-isolation.test.ts`, `tests/security/pos-permissions.test.ts`,
 `tests/integration/pos-journey.test.ts`, `tests/integration/pos-api-routes.test.ts`,
-`tests/integration/pos-payment-confirmation.test.ts`.
+`tests/integration/pos-payment-confirmation.test.ts`, and — against a real database in CI —
+`tests/e2e/business-pos-journey.test.ts`.
 `BUSINESS_POS_IMPLEMENTATION.md` documents the architecture, the request pipeline, the per-route
 permission map and what each suite proves.
 
@@ -290,14 +291,34 @@ and is skipped unless `DATABASE_URL` is set.
 ```bash
 export DATABASE_URL="postgresql://user:pass@host:5432/jata_e2e"   # disposable database
 npx prisma migrate deploy && npm run seed
-npm run test:e2e
+npm run test:e2e          # the §66 Interactive Business journey
+npm run test:e2e:pos      # the Business POS journey
 ```
 
-It runs in CI on every push and pull request
+Both journeys run in CI on every push and pull request
 (`.github/workflows/interactive-business-e2e.yml`, PostgreSQL 16 provisioned with
-`prisma migrate deploy`) and last completed **17/17 steps**.
-See `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for what each step asserts, the schema and
+`prisma migrate deploy`) as separate steps, and last completed **17/17** and **22/22** steps. A
+journey that skips is not a journey that passed, so the POS step fails if its suite did not run.
+See `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for what each §66 step asserts, the schema and
 migration defects the first real run exposed, and how to baseline an existing database.
+
+### End-to-end journey — Business POS
+
+`tests/e2e/business-pos-journey.test.ts` walks the whole §4/§43 POS journey against the same **real**
+database, through the application's own route handlers: register → fallback POS → refused trading
+before payment → adaptive questionnaire → preview sandbox → refused publish → plan quoted from
+`PlanConfig` at KES 499 → server-priced checkout → server-confirmed payment → LIVE → first sale with
+receipt and audited stock movement → itemised refund → credit within and over its limit → cashier
+permission refusals with attribution → configured order workflow → expenses, purchases and supplier
+debt → labelled reports → audit log → configuration clone with scope and tenant refusals → versioning
+and rollback → cross-tenant isolation → lapsed plan. It settles payment through the same
+test-settlement branch the §66 journey uses, so nothing fakes an entitlement, and it is skipped
+unless `DATABASE_URL` is set.
+
+It is the gate that found the POS permission-gate defect: an unconfigured business was shown the
+fallback Products screen and then refused by its own API, and the same gate mistake closed 23 screens
+across 13 configurations (Services for every service trade, Appointments/Jobs/Projects for salons,
+garages, clinics and builders). `BUSINESS_POS_IMPLEMENTATION.md` §11 records it.
 
 ---
 
