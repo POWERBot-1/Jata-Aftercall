@@ -7,6 +7,7 @@ import { getBaseUrl } from "@/lib/url";
 import { generatePaymentReference } from "@/lib/paymentReference";
 import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
 import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experience/entitlement";
+import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -39,6 +40,12 @@ export async function POST(req: Request) {
     // A client-supplied amount is never used; only the stored plan configures the charge.
     if (plan.key === INTERACTIVE_PLAN_KEY && !assertInteractivePlanPricing(plan)) {
       return NextResponse.json({ error: "Interactive Business pricing configuration is invalid." }, { status: 500 });
+    }
+    // POS spec §45 — the Business POS package must resolve to KES 499 / 30 days server-side.
+    // As with the packages above, a client-supplied amount is never used: only the stored plan
+    // configures the charge, and a misconfigured plan fails closed instead of undercharging.
+    if (plan.key === POS_PLAN_KEY && !assertPosPlanPricing(plan)) {
+      return NextResponse.json({ error: "Business POS pricing configuration is invalid." }, { status: 500 });
     }
     if (!user?.email) return NextResponse.json({ error: "Your account needs a valid email before checkout." }, { status: 400 });
 

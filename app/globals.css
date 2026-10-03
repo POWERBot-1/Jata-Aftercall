@@ -1231,3 +1231,232 @@ button:focus-visible {
   padding: 2.5rem 1.5rem;
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   JATA AFTERCALL — Business POS (§58 mobile-first, §59 keyboard & tablet)
+
+   One visual language for every trade. Nothing here is business-specific:
+   the configuration decides which components a screen uses.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.pos-shell { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.pos-header {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem;
+}
+.pos-title { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.pos-subtitle { font-size: 0.8rem; color: var(--jata-muted); margin: 0.15rem 0 0; }
+.pos-header-side { display: flex; align-items: center; gap: 0.5rem; }
+
+.pos-nav {
+  display: flex; gap: 0.35rem; overflow-x: auto; padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--jata-line); scrollbar-width: thin;
+}
+.pos-nav-link {
+  display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;
+  padding: 0.5rem 0.7rem; border-radius: 0.7rem; font-size: 0.85rem; font-weight: 600;
+  color: var(--jata-muted); border: 1px solid transparent;
+}
+.pos-nav-link:hover { color: var(--jata-ink); background: rgba(0, 0, 0, 0.04); }
+.pos-nav-link[data-active="true"] {
+  color: var(--jata-ink); background: var(--jata-card); border-color: var(--jata-line);
+}
+
+.pos-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem;
+  border-radius: 1rem; border: 1px solid var(--jata-line); padding: 0.75rem 0.9rem; background: var(--jata-card);
+}
+.pos-banner[data-tone="warn"] { border-color: #f0c36d; background: #fffaf0; }
+.pos-banner[data-tone="danger"] { border-color: #e6a3a3; background: #fff6f6; }
+.pos-banner[data-tone="success"] { border-color: #9fd3b0; background: #f4fbf6; }
+.pos-banner-label {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--jata-muted); margin: 0;
+}
+.pos-banner-text { font-size: 0.9rem; margin: 0.15rem 0 0; }
+
+.pos-body { display: flex; flex-direction: column; gap: 1rem; }
+
+.pos-quick { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pos-action { min-height: 2.9rem; font-weight: 700; }
+.pos-action-primary { font-size: 1rem; padding-inline: 1.1rem; }
+
+.pos-cards {
+  display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0;
+}
+@media (min-width: 720px) { .pos-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pos-card {
+  border: 1px solid var(--jata-line); border-radius: 1rem; background: var(--jata-card);
+  padding: 0.8rem 0.9rem; display: block;
+}
+.pos-card:hover { border-color: var(--jata-ink); }
+.pos-card dt {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--jata-muted);
+}
+.pos-card-value { font-size: 1.3rem; font-weight: 800; margin: 0.15rem 0 0; }
+.pos-card-hint { font-size: 0.75rem; color: var(--jata-muted); margin: 0.1rem 0 0; }
+.pos-card[data-tone="warn"] .pos-card-value { color: #8a5b00; }
+.pos-card[data-tone="success"] .pos-card-value { color: #166534; }
+
+.pos-step {
+  display: flex; gap: 0.6rem; align-items: flex-start; border: 1px solid var(--jata-line);
+  border-radius: 0.9rem; padding: 0.65rem 0.75rem; background: var(--jata-card);
+}
+.pos-step span:first-child { font-size: 1rem; line-height: 1.3; }
+.pos-step strong { display: block; font-size: 0.9rem; }
+.pos-step small { display: block; font-size: 0.78rem; color: var(--jata-muted); }
+.pos-step[data-done="true"] { opacity: 0.65; }
+
+/* ── Questionnaire and configuration (§41, §42) ─────────────────────────── */
+
+.pos-ask { display: flex; flex-direction: column; gap: 0.8rem; }
+.pos-question { font-size: 1.15rem; font-weight: 800; margin: 0; }
+.pos-help { font-size: 0.85rem; color: var(--jata-muted); margin: 0; }
+.pos-options { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
+.pos-option {
+  border: 1px solid var(--jata-line); border-radius: 0.9rem; padding: 0.7rem 0.8rem;
+  background: var(--jata-card); text-align: left; cursor: pointer; min-height: 3.4rem;
+}
+.pos-option:hover { border-color: var(--jata-ink); }
+.pos-option[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
+.pos-option strong { display: block; font-size: 0.92rem; }
+.pos-option small { display: block; font-size: 0.75rem; color: var(--jata-muted); margin-top: 0.15rem; }
+.pos-progress { height: 0.4rem; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+.pos-progress span { display: block; height: 100%; background: var(--jata-ink); transition: width 0.2s ease; }
+
+.pos-summary { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.pos-summary-group { border: 1px solid var(--jata-line); border-radius: 1rem; padding: 0.85rem 0.95rem; background: var(--jata-card); }
+.pos-summary-group h3 {
+  font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--jata-muted); margin: 0 0 0.4rem;
+}
+.pos-summary-group dl { margin: 0; display: grid; gap: 0.25rem; }
+.pos-summary-group dt { font-size: 0.78rem; color: var(--jata-muted); }
+.pos-summary-group dd { margin: 0 0 0.35rem; font-size: 0.9rem; font-weight: 600; }
+
+/* ── Records (§13, §14, §24) ─────────────────────────────────────────────── */
+
+.pos-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
+.pos-search { flex: 1 1 12rem; }
+.pos-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.pos-row {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: center; justify-content: space-between;
+  border: 1px solid var(--jata-line); border-radius: 0.9rem; padding: 0.7rem 0.85rem; background: var(--jata-card);
+}
+.pos-row-main { display: flex; flex-direction: column; min-width: 0; }
+.pos-row-main strong { font-size: 0.95rem; }
+.pos-row-main small { font-size: 0.78rem; color: var(--jata-muted); }
+.pos-row-values { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: center; font-size: 0.85rem; }
+.pos-row-actions { display: flex; gap: 0.4rem; }
+
+.pos-form { display: grid; gap: 0.75rem; }
+.pos-form-group { display: grid; gap: 0.6rem; }
+.pos-form-group > h3 {
+  font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--jata-muted); margin: 0;
+}
+.pos-form-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.pos-grid-2 { display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+
+.pos-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--jata-line);
+  border-radius: 999px; padding: 0.25rem 0.6rem; font-size: 0.75rem; background: var(--jata-card);
+}
+.pos-chip[data-on="true"] { border-color: var(--jata-ink); font-weight: 700; }
+.pos-pill {
+  display: inline-flex; align-items: center; border-radius: 999px; padding: 0.2rem 0.55rem;
+  font-size: 0.72rem; font-weight: 700; border: 1px solid var(--jata-line); background: rgba(0, 0, 0, 0.03);
+}
+.pos-pill[data-tone="success"] { background: #f0faf3; border-color: #9fd3b0; color: #166534; }
+.pos-pill[data-tone="warn"] { background: #fffaf0; border-color: #f0c36d; color: #8a5b00; }
+.pos-pill[data-tone="danger"] { background: #fff6f6; border-color: #e6a3a3; color: #991b1b; }
+.pos-pill[data-tone="info"] { background: #f4f8ff; border-color: #a9c4ef; color: #1e3a8a; }
+
+/* ── The till (§62 dead-simple first sale) ───────────────────────────────── */
+
+.pos-till { display: grid; gap: 0.9rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 940px) { .pos-till { grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 1fr); align-items: start; } }
+.pos-catalogue { display: grid; gap: 0.45rem; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
+.pos-item {
+  border: 1px solid var(--jata-line); border-radius: 0.9rem; background: var(--jata-card);
+  padding: 0.65rem 0.7rem; text-align: left; cursor: pointer; min-height: 4.2rem;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 0.3rem;
+}
+.pos-item:hover { border-color: var(--jata-ink); }
+.pos-item strong { font-size: 0.88rem; line-height: 1.25; }
+.pos-item span { font-size: 0.82rem; font-weight: 700; }
+.pos-item small { font-size: 0.72rem; color: var(--jata-muted); }
+.pos-item[data-out="true"] { opacity: 0.55; }
+
+.pos-cart { border: 1px solid var(--jata-line); border-radius: 1rem; background: var(--jata-card); padding: 0.85rem; display: grid; gap: 0.7rem; }
+.pos-line { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; border-bottom: 1px dashed var(--jata-line); padding-bottom: 0.5rem; }
+.pos-line-main { min-width: 0; }
+.pos-line-main strong { display: block; font-size: 0.9rem; }
+.pos-line-main small { display: block; font-size: 0.75rem; color: var(--jata-muted); }
+.pos-qty { display: flex; align-items: center; gap: 0.25rem; }
+.pos-qty button { min-width: 2rem; min-height: 2rem; border-radius: 0.6rem; border: 1px solid var(--jata-line); background: #fff; font-weight: 800; }
+.pos-qty input { width: 3.4rem; text-align: center; }
+.pos-totals { display: grid; gap: 0.25rem; font-size: 0.9rem; }
+.pos-totals div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.pos-total-line { font-size: 1.15rem; font-weight: 800; border-top: 1px solid var(--jata-line); padding-top: 0.4rem; }
+.pos-pay { display: grid; gap: 0.5rem; }
+.pos-methods { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pos-method {
+  border: 1px solid var(--jata-line); border-radius: 0.8rem; padding: 0.55rem 0.8rem; background: #fff;
+  font-weight: 700; font-size: 0.88rem; min-height: 2.8rem; cursor: pointer;
+}
+.pos-method[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
+
+/* ── Receipts (§32) ──────────────────────────────────────────────────────── */
+
+.pos-receipt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45;
+  background: #fff; border: 1px dashed var(--jata-line); border-radius: 0.6rem; padding: 0.9rem; white-space: pre-wrap;
+}
+
+/* ── Boards (§29) ────────────────────────────────────────────────────────── */
+
+.pos-board { display: grid; gap: 0.6rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .pos-board { grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); align-items: start; } }
+.pos-column { border: 1px solid var(--jata-line); border-radius: 1rem; background: rgba(0, 0, 0, 0.02); padding: 0.6rem; display: grid; gap: 0.5rem; }
+.pos-column-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; font-size: 0.8rem; font-weight: 800; }
+.pos-order-card { border: 1px solid var(--jata-line); border-radius: 0.85rem; background: var(--jata-card); padding: 0.65rem 0.75rem; display: grid; gap: 0.35rem; }
+.pos-order-card strong { font-size: 0.9rem; }
+.pos-order-card small { font-size: 0.76rem; color: var(--jata-muted); }
+
+/* ── Preview sandbox (§23, §42) ──────────────────────────────────────────── */
+
+.pos-preview { border: 1px solid var(--jata-line); border-radius: 1rem; overflow: hidden; background: var(--jata-card); }
+.pos-preview-head {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between;
+  padding: 0.7rem 0.9rem; background: rgba(0, 0, 0, 0.03); border-bottom: 1px solid var(--jata-line);
+}
+.pos-preview-body { padding: 0.9rem; display: grid; gap: 0.8rem; }
+.pos-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.pos-tab {
+  border: 1px solid var(--jata-line); border-radius: 999px; padding: 0.35rem 0.75rem; background: #fff;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+.pos-tab[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
+
+/* ── Tables and lists used by reports, stock and history (§35) ───────────── */
+
+.pos-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.pos-table th {
+  text-align: left; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--jata-muted); border-bottom: 1px solid var(--jata-line); padding: 0.4rem 0.5rem;
+}
+.pos-table td { border-bottom: 1px solid rgba(0, 0, 0, 0.06); padding: 0.45rem 0.5rem; }
+.pos-table tr:last-child td { border-bottom: none; }
+.pos-scroll { overflow-x: auto; }
+.pos-bars { display: grid; gap: 0.35rem; }
+.pos-bar { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 5rem; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+.pos-bar span:nth-child(2) { height: 0.55rem; border-radius: 999px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+.pos-bar span:nth-child(2) i { display: block; height: 100%; background: var(--jata-ink); }
+.pos-note { font-size: 0.82rem; color: var(--jata-muted); }
+.pos-empty { border: 1px dashed var(--jata-line); border-radius: 1rem; padding: 1.4rem; text-align: center; background: var(--jata-card); }
+.pos-empty strong { display: block; font-size: 1rem; }
+.pos-empty p { margin: 0.3rem 0 0.8rem; font-size: 0.86rem; color: var(--jata-muted); }
+
+@media print {
+  .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions { display: none !important; }
+  .pos-receipt { border: none; }
+}

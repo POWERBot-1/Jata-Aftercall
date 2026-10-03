@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/subscription", label: "Subscription" },
   { href: "/dashboard/studio", label: "Website studio" },
+  { href: "/dashboard/pos", label: "Business POS" },
   { href: "/onboarding", label: "Add a business" },
 ] as const;
 
