@@ -156,8 +156,9 @@ POS payment reads
 buyer-facing answer — paid, pending, repaired, failed and mismatched alike. `app/checkout/callback`
 turns that id into `/dashboard/pos/<id>` (shape-checked against `^[A-Za-z0-9_-]{1,64}$`, never taken
 from a query string), so a POS buyer lands in their POS and an AFTERCALL buyer lands exactly where
-they always did. `lib/pricing.ts:publiclyListedPlans()` keeps `BUSINESS_POS` off the landing page,
-the onboarding picker and customer-facing subscription copy.
+they always did. `lib/pricing.ts:publiclyListedPlans()` keeps `BUSINESS_POS` out of the landing
+page's plan cards, the onboarding picker and customer-facing subscription copy. (The landing page
+gained one dedicated POS entry of its own on 2026-10-03 — an entry point only; see §7.)
 
 ---
 
@@ -233,6 +234,14 @@ the onboarding picker and customer-facing subscription copy.
   management are refused by permission, and the refusal is audited.
 - POS is **private** (§67): no POS plan, price or wording reaches the public business page, the
   customer-facing AFTERCALL copy, call instructions or phone redirection messages.
+  - **Documented exception (product decision, 2026-10-03).** The public landing page (`app/page.tsx`)
+    carries one dedicated **Business POS** entry: the product name, `KES 499/month` read from
+    `POS_PLAN_PRICE_KES` (never a number written into the page), a plain-language line that the POS
+    switches on only once Paystack confirms the payment, and a link into the existing
+    `/dashboard/pos` flow. It is an entry point only — no second flow, no activation claim.
+    `publiclyListedPlans()` and `PRIVATE_PLAN_KEYS` are unchanged, so the plan cards, onboarding
+    picker and AFTERCALL subscription screens still exclude the private POS plan, and the business
+    page and referral copy still never mention it.
 - No secret is ever returned by a POS route; `PosConfiguration` stores no credentials.
 
 ---
