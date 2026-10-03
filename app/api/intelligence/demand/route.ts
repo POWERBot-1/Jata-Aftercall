@@ -1,46 +1,73 @@
-/**
- * Intelligence Route — Demand Insights (§28, §54, §64, §65)
- * Tracks missed-demand (what customers wanted but couldn't buy) to help
- * business decisions (
-§65).
- */
-
 import { NextResponse } from "next/server";
-import prisma from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
-import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
-import { logAudit } from "@/lib/audit";
-import { recordDemandInsight, getDemandInsights } from "@/lib/intelligence";
+import { getCurrentUser } from "@/lib/auth";
+import { canAccessBusiness } from "@/lib/tenant";
+import { getDemandInsights, recordDemandInsight } from "@/lib/intelligence";
+
+const VALID_TYPES = [
+  "DEMAND_INSIGHT",
+  "MISSED_DEMAND",
+  "UNAVAILABLE_PRODUCT",
+  "UNAVAILABLE_SIZE",
+  "OUT_OF_ZONE",
+  "SERVICE_NOT_OFFERED",
+  "PRICE_INQUIRY",
+] as const;
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-  const url = new URL(req.url);
-  const businessId = url.searchParams.get("businessId");
-  const guard = await guardTenantMutation(session, businessId);
-  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
-  const insights = await getDemandInsights(businessId!);
-  return NextResponse.json({ demandInsights: insights });
+  try {
+    const user = await getCurrentUser().catch(() => null);
+    const { searchParams } = new URL(req.url);
+    const businessId = searchParams.get("businessId");
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
+    }
+
+    // Tenant data is never served to an anonymous caller: the session is mandatory here.
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+    }
+
+    const insights = await getDemandInsights(businessId);
+    return NextResponse.json({ insights });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch demand insights.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   try {
+    const user = await getCurrentUser().catch(() => null);
     const body = await req.json();
-    const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
-    const insightType = typeof body.insightType === "string" ? body.insightType.trim() : "MISSED_DEMAND";
-    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
-    if (!businessId) return NextResponse.json({ error: "Business required." }, { status: 400 });
-    if (!subject || subject.length < 2) return NextResponse.json({ error: "Subject required." }, { status: 400 });
-    const result = await recordDemandInsight(businessId!, insightType, subject);
-    await logAudit({ actorId: session.userId, action: "DEMAND_INSIGHT_RECORDED", targetType: "DEMAND_INSIGHT", targetId: result.id, metadata: { type: insightType, subject } });
-    return NextResponse.json({ demandInsight: result }, { status: 201 });
-  } catch (e: unknown) {
-    const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    const { businessId, insightType, subject } = body || {};
+
+    if (!businessId || !insightType || !subject) {
+      return NextResponse.json({ error: "businessId, insightType, and subject required." }, { status: 400 });
+    }
+    if (!VALID_TYPES.includes(insightType)) {
+      return NextResponse.json(
+        { error: `Invalid insightType. Must be one of: ${VALID_TYPES.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
+    // Tenant data is never served to an anonymous caller: the session is mandatory here.
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+    }
+
+    const recorded = await recordDemandInsight(businessId, insightType, subject);
+    return NextResponse.json({ insight: recorded });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to record demand insight.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

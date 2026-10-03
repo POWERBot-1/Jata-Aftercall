@@ -67,6 +67,19 @@ export async function getSession(): Promise<SessionPayload | null> {
   return verifySession(token);
 }
 
+export async function getCurrentUser(): Promise<(SessionPayload & { id: string }) | null> {
+  try {
+    const session = await getSession();
+    if (!session) return null;
+    return {
+      ...session,
+      id: session.userId,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function requireSession(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) throw new Error("UNAUTHENTICATED");

@@ -1,65 +1,182 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
-import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { getCurrentUser } from "@/lib/auth";
+import { assertBusinessRole, canAccessBusiness } from "@/lib/tenant";
+import { getExtendedAIConfig, saveExtendedAIConfig } from "@/lib/ai-config";
+import { AI_BUSINESS_TEMPLATES } from "@/lib/ai-templates";
 import { logAudit } from "@/lib/audit";
 
-/**
- * AI Configuration (§29) — business-controlled rules for the AI package.
- * Every mutation is tenant-scoped; secrets are never stored here.
- */
-
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
 
-  const url = new URL(req.url);
-  const businessId = url.searchParams.get("businessId");
-  const guard = await guardTenantMutation(session, businessId);
-  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    const { searchParams } = new URL(req.url);
+    const businessId = searchParams.get("businessId");
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
+    }
 
-  const config = await prisma.aIConfiguration.findUnique({ where: { businessId: businessId! } });
-  return NextResponse.json({ config: config || null });
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+    }
+
+    const [config, business] = await Promise.all([
+      prisma.aIConfiguration.findUnique({ where: { businessId } }),
+      prisma.business?.findUnique?.({ where: { id: businessId }, select: { category: true } }).catch(() => null),
+    ]);
+
+    const extendedConfig = await getExtendedAIConfig(businessId, config, business?.category);
+
+    return NextResponse.json({
+      config: config || {},
+      extendedConfig,
+      templates: AI_BUSINESS_TEMPLATES,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch AI configuration.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-
   try {
-    const body = await req.json();
-    const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
-
-    const existing = await prisma.aIConfiguration.findUnique({ where: { businessId: businessId! } });
-
-    // Only configure basic fields; never store secrets or credentials (§6, §43).
-    const tone = typeof body.tone === "string" && ["professional", "friendly", "casual", "premium", "local", "formal"].includes(body.tone) ? body.tone : "friendly";
-    const language = typeof body.language === "string" ? body.language : "en";
-    const salesBehavior = typeof body.salesBehavior === "string" && ["informational", "recommend", "upsell", "cross_sell", "promotions"].includes(body.salesBehavior) ? body.salesBehavior : "informational";
-    const orderingAllowed = typeof body.orderingAllowed === "boolean" ? body.orderingAllowed : true;
-    const preordersAllowed = typeof body.preordersAllowed === "boolean" ? body.preordersAllowed : false;
-    const humanEscalation = typeof body.humanEscalation === "string" && ["always", "business_hours", "specified_topics", "uncertain"].includes(body.humanEscalation) ? body.humanEscalation : "uncertain";
-    const welcomeMessage = typeof body.welcomeMessage === "string" ? body.welcomeMessage.trim() || null : null;
-
-    if (existing) {
-      const updated = await prisma.aIConfiguration.update({
-        where: { businessId: businessId! },
-        data: { tone, language, salesBehavior, orderingAllowed, preordersAllowed, humanEscalation, welcomeMessage },
-      });
-      await logAudit({ actorId: session.userId, action: "AI_CONFIGURATION_UPDATED", targetType: "AI_CONFIGURATION", targetId: updated.id });
-      return NextResponse.json({ config: updated });
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const created = await prisma.aIConfiguration.create({
-      data: { businessId: businessId!, tone, language, salesBehavior, orderingAllowed, preordersAllowed, humanEscalation, welcomeMessage },
+    const body = await req.json();
+    const {
+      businessId,
+      toneOfVoice,
+      greetingMessage,
+      fallbackMessage,
+      languageBehavior,
+      afterHoursMessage,
+      escalationRules,
+      autoReplyEnabled,
+      orderingAllowed,
+      bookingsAllowed,
+      preordersAllowed,
+      delivery,
+      policies,
+      operationalStatus,
+      pauseAllOrdering,
+      templateCategory,
+      bookingRules,
+      orderRules,
+      escalationThreshold,
+    } = body || {};
+
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
+    }
+
+    const roleCheck = await assertBusinessRole({
+      userId: user.id,
+      businessId,
+      userRole: user.role,
+      action: "edit_knowledge",
     });
-    await logAudit({ actorId: session.userId, action: "AI_CONFIGURATION_CREATED", targetType: "AI_CONFIGURATION", targetId: created.id });
-    return NextResponse.json({ config: created }, { status: 201 });
-  } catch (e: unknown) {
-    const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    if (!roleCheck.allowed) {
+      return NextResponse.json({ error: "Forbidden — insufficient permissions for this business." }, { status: 403 });
+    }
+
+    const previousConfig = await prisma.aIConfiguration.findUnique({ where: { businessId } }).catch(() => null);
+
+    const resolvedToneOfVoice = toneOfVoice || body?.tone || "Friendly";
+    const resolvedGreeting = greetingMessage ?? body?.welcomeMessage ?? null;
+    const resolvedFallback =
+      fallbackMessage || "I don't have that information yet. Let me connect you with the business.";
+    const resolvedLanguage = languageBehavior || body?.language || "English + Swahili";
+    const resolvedAfterHours = afterHoursMessage ?? null;
+    const resolvedEscalation = escalationRules ?? body?.humanEscalation ?? null;
+    const resolvedAutoReply = autoReplyEnabled !== undefined ? Boolean(autoReplyEnabled) : true;
+    const resolvedOrdering = orderingAllowed !== undefined ? Boolean(orderingAllowed) : true;
+    const resolvedBookings = bookingsAllowed !== undefined ? Boolean(bookingsAllowed) : true;
+    const resolvedPreorders = preordersAllowed !== undefined ? Boolean(preordersAllowed) : false;
+
+    const dbConfig = await prisma.aIConfiguration.upsert({
+      where: { businessId },
+      update: {
+        tone: resolvedToneOfVoice.toLowerCase(),
+        language: resolvedLanguage,
+        salesBehavior: body?.salesBehavior || "recommend",
+        orderingAllowed: resolvedOrdering,
+        preordersAllowed: resolvedPreorders,
+        humanEscalation: resolvedEscalation || "uncertain",
+        welcomeMessage: resolvedGreeting,
+      },
+      create: {
+        businessId,
+        tone: resolvedToneOfVoice.toLowerCase(),
+        language: resolvedLanguage,
+        salesBehavior: body?.salesBehavior || "recommend",
+        orderingAllowed: resolvedOrdering,
+        preordersAllowed: resolvedPreorders,
+        humanEscalation: resolvedEscalation || "uncertain",
+        welcomeMessage: resolvedGreeting,
+      },
+    });
+
+    const extendedConfig = await saveExtendedAIConfig(businessId, {
+      toneOfVoice: resolvedToneOfVoice,
+      greetingMessage: resolvedGreeting,
+      fallbackMessage: resolvedFallback,
+      languageBehavior: resolvedLanguage,
+      afterHoursMessage: resolvedAfterHours,
+      escalationRules: resolvedEscalation,
+      autoReplyEnabled: resolvedAutoReply,
+      orderingAllowed: resolvedOrdering,
+      bookingsAllowed: resolvedBookings,
+      preordersAllowed: resolvedPreorders,
+      ...(delivery ? { delivery } : {}),
+      ...(policies ? { policies } : {}),
+      ...(operationalStatus ? { operationalStatus } : {}),
+      ...(pauseAllOrdering !== undefined ? { pauseAllOrdering: Boolean(pauseAllOrdering) } : {}),
+      ...(templateCategory ? { templateCategory } : {}),
+      ...(bookingRules !== undefined ? { bookingRules } : {}),
+      ...(orderRules !== undefined ? { orderRules } : {}),
+      ...(escalationThreshold !== undefined ? { escalationThreshold } : {}),
+    });
+
+    const config = {
+      ...dbConfig,
+      toneOfVoice: extendedConfig.toneOfVoice,
+      greetingMessage: extendedConfig.greetingMessage,
+      fallbackMessage: extendedConfig.fallbackMessage,
+      languageBehavior: extendedConfig.languageBehavior,
+      afterHoursMessage: extendedConfig.afterHoursMessage,
+      escalationRules: extendedConfig.escalationRules,
+      autoReplyEnabled: extendedConfig.autoReplyEnabled,
+      orderingAllowed: extendedConfig.orderingAllowed,
+      bookingsAllowed: extendedConfig.bookingsAllowed,
+      preordersAllowed: extendedConfig.preordersAllowed,
+    };
+
+    await logAudit({
+      actorId: user.id,
+      action: "AI_CONFIGURATION_UPDATED",
+      targetType: "AI_CONFIGURATION",
+      targetId: dbConfig.id || businessId,
+      previousValue: previousConfig ? { toneOfVoice: (previousConfig as any).toneOfVoice || previousConfig.tone, orderingAllowed: previousConfig.orderingAllowed } : null,
+      newValue: {
+        toneOfVoice: config.toneOfVoice,
+        orderingAllowed: config.orderingAllowed,
+        operationalStatus: extendedConfig.operationalStatus,
+        pauseAllOrdering: extendedConfig.pauseAllOrdering,
+        draftVersion: extendedConfig.draftVersion,
+      },
+      metadata: { businessId, role: roleCheck.role },
+    });
+
+    return NextResponse.json({ config, extendedConfig });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to save AI configuration.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
