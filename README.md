@@ -235,6 +235,7 @@ applying it to production is an operator-authorised action performed by the exis
 
 **Tests.** `tests/unit/pos-engine.test.ts`, `tests/unit/pos-money.test.ts`,
 `tests/unit/pos-entitlement.test.ts`, `tests/unit/pos-schema.test.ts`,
+`tests/unit/pos-prisma-contract.test.ts`,
 `tests/security/pos-tenant-isolation.test.ts`, `tests/security/pos-permissions.test.ts`,
 `tests/integration/pos-journey.test.ts`, `tests/integration/pos-api-routes.test.ts`,
 `tests/integration/pos-payment-confirmation.test.ts`.
@@ -274,7 +275,9 @@ real route handlers, so no database or `prisma generate` is needed:
 `npx vitest run tests/unit/pos-engine.test.ts tests/integration/pos-api-routes.test.ts`.
 `tests/unit/repair-guards.test.ts` reads the raw migration SQL and fails the build if a POS table
 loses its `businessId`, if a migration stops being `IF NOT EXISTS`, or if any non-`Pos` table is
-altered.
+altered. `tests/unit/pos-prisma-contract.test.ts` parses `prisma/schema.prisma` and fails the build
+if any POS query includes or filters through a relation the model does not have — the one mistake
+this repository's offline tooling cannot otherwise see.
 
 ### End-to-end journey (§66)
 

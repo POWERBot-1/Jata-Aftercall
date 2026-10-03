@@ -11,6 +11,7 @@
  */
 
 import prisma from "../db";
+import { getBusinessPosPlan } from "../pricing";
 import type { PosEntitlementStatus, PosLifecycleStatus } from "./types";
 
 export const POS_PLAN_KEY = "BUSINESS_POS";
@@ -200,20 +201,53 @@ export const POS_LIFECYCLE_LABELS: Record<PosLifecycleStatus, { label: string; t
 
 // ── Server reads and writes ───────────────────────────────────────────────────
 
+/**
+ * The id of the Business POS plan row, resolved once per process.
+ *
+ * `Payment` keeps `planId` as a plain column — it has **no** Prisma relation to `PlanConfig` — so
+ * POS payment evidence is matched by id. Matching "any paid payment for this business" instead
+ * would count an AFTERCALL payment as POS evidence and switch the POS on for free (§45, §75).
+ * A miss is never cached, so a plan seeded after boot is still picked up.
+ */
+let posPlanIdPromise: Promise<string | null> | null = null;
+
+function posPlanId(): Promise<string | null> {
+  if (!posPlanIdPromise) {
+    posPlanIdPromise = (async () => {
+      try {
+        const plan = await getBusinessPosPlan();
+        if (!plan?.id) {
+          posPlanIdPromise = null;
+          return null;
+        }
+        return plan.id;
+      } catch {
+        posPlanIdPromise = null;
+        return null;
+      }
+    })();
+  }
+  return posPlanIdPromise;
+}
+
 /** Always scoped to one business id, resolved from authenticated membership (§5). */
 export async function getPosEntitlement(businessId: string): Promise<PosEntitlementState> {
+  const planId = await posPlanId();
   const [subscription, entitlement, paidPayment, configuration] = await Promise.all([
     prisma.posSubscription?.findUnique?.({
       where: { businessId },
       select: { status: true, planKey: true, startAt: true, expiresAt: true, graceUntil: true },
     }) ?? null,
     prisma.posEntitlement?.findUnique?.({ where: { businessId }, select: { status: true } }) ?? null,
-    // Payment evidence comes from the existing Payment ledger — one payment stack (§80).
-    prisma.payment?.findFirst?.({
-      where: { businessId, status: "PAID", plan: { key: POS_PLAN_KEY } },
-      select: { status: true },
-      orderBy: { createdAt: "desc" },
-    }) ?? null,
+    // Payment evidence comes from the existing Payment ledger — one payment stack (§80) — and is
+    // matched on the plan id, because that ledger has no relation to filter through.
+    planId
+      ? prisma.payment?.findFirst?.({
+          where: { businessId, status: "PAID", planId },
+          select: { status: true },
+          orderBy: { createdAt: "desc" },
+        }) ?? null
+      : null,
     prisma.posConfiguration?.findUnique?.({ where: { businessId }, select: { status: true } }) ?? null,
   ]);
 

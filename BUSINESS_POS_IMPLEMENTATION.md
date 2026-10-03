@@ -46,7 +46,7 @@ new infrastructure, no unrelated Commerce work.
 | Screens | `app/dashboard/pos/**` | 28 pages |
 | Client components | `components/pos/*.tsx` | 17 |
 | Data model | `prisma/schema.prisma` + `prisma/migrations/20261003000000_business_pos/migration.sql` | 24 `Pos*` tables |
-| Tests | `tests/{unit,security,integration}/pos-*.test.ts` + `tests/helpers/posFakeDb.ts` | 9 suites |
+| Tests | `tests/{unit,security,integration}/pos-*.test.ts` + `tests/helpers/posFakeDb.ts` | 10 suites |
 
 Content the engine carries:
 
@@ -148,8 +148,10 @@ closed**.
   real settlement path without credentials.
 
 **Checkout & callback (§4, §67, §80).** `app/api/checkout/route.ts` asserts the POS amount and
-duration from `PlanConfig` (`assertPosPlanPricing`). `GET /api/paystack/verify` now reads the plan
-key with the payment (`include: { plan: { select: { key: true } } }`), and for a POS payment reads
+duration from `PlanConfig` (`assertPosPlanPricing`). `GET /api/paystack/verify` resolves the plan key
+from the payment's own `planId` column — `Payment` has no Prisma relation to `PlanConfig`, so there
+is nothing to `include` and a failed lookup degrades to the ordinary AFTERCALL answer — and for a
+POS payment reads
 `posSubscription` instead of the AFTERCALL `subscription` and returns `posBusinessId` on **every**
 buyer-facing answer — paid, pending, repaired, failed and mismatched alike. `app/checkout/callback`
 turns that id into `/dashboard/pos/<id>` (shape-checked against `^[A-Za-z0-9_-]{1,64}$`, never taken
@@ -262,6 +264,7 @@ remains an operator-authorised step through the existing deployment gate (`scrip
 | `tests/unit/pos-money.test.ts` | `calculateSale`, `validatePayments` (empty sale, disallowed method, credit not configured, short payment), `decideCredit` limits and approvals, statements, credit-word detection |
 | `tests/unit/pos-entitlement.test.ts` | `derivePosEntitlement` across every lifecycle state, expiry → `SUSPENDED`, `CANCELLED` precedence, idempotent settlement |
 | `tests/unit/pos-schema.test.ts` | Schema/migration invariants without a database (Prisma CLI is unavailable offline) |
+| `tests/unit/pos-prisma-contract.test.ts` | Parses `prisma/schema.prisma` and checks every POS query against it: an `include` or a `where` filter through a relation the model does not have fails the build. Written after CI proved this repository's offline tooling cannot see that mistake |
 | `tests/security/pos-tenant-isolation.test.ts` | Cross-tenant customer/sale/inventory/configuration access, forged tenant ids, foreign record ids |
 | `tests/security/pos-permissions.test.ts` | Unauthorized refunds, discounts, credit approval, configuration changes, branch and staff access; unknown role fails closed |
 | `tests/integration/pos-journey.test.ts` | The whole §4 journey at domain level, including the two-business §81 proof and clone safety |
@@ -278,7 +281,7 @@ npx tsc --noEmit                                 # typecheck
 npm run build                                    # must pass before deploy
 ```
 
-Status at the time of writing: **794 passed / 5 failed / 17 skipped**. `tsc --noEmit` is clean and
+Status at the time of writing: **800 passed / 5 failed / 17 skipped**. `tsc --noEmit` is clean and
 `npm run build` succeeds. The 5 failures are pre-existing and unrelated: the storefront booking-slot
 tests assert fixed 10:00/11:00 availability that this sandbox's clock does not produce. They fail
 identically at the branch point `8c81bb9` (verified with a `git worktree` checkout), and the POS work
@@ -304,12 +307,25 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
 
 ## 11. Known limitations
 
-- **No database in this environment.** `prisma generate` cannot reach `binaries.prisma.sh`, so the
-  migration has not been applied and no DB-backed integration test has run. Substitutes used:
-  `npx tsc --noEmit`, `npm run build`, `tests/unit/pos-schema.test.ts`, `tests/unit/repair-guards.test.ts`
-  and the in-memory double. **The migration must be applied to a disposable database and the POS
-  journey re-run before production** (the same gate the Interactive Business work used — see
-  `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md`).
+- **No database in this development environment.** `prisma generate` cannot reach
+  `binaries.prisma.sh` here, so nothing was run against a real database locally. Substitutes used:
+  `npx tsc --noEmit`, `npm run build`, `tests/unit/pos-schema.test.ts`,
+  `tests/unit/repair-guards.test.ts`, `tests/unit/pos-prisma-contract.test.ts` and the in-memory
+  double.
+- **CI has since run the real thing, and it found two defects.** The `Journey against a real
+  database` workflow provisions PostgreSQL 16 and ran, on this branch: `prisma generate` (client
+  generated), `prisma migrate deploy` — **all five migrations applied successfully, including
+  `20261003000000_business_pos`** — and `npm run seed` (the `BUSINESS_POS` plan seeded). Against
+  that real client, two POS queries were invalid because they asked `Payment` for a relation it does
+  not have (`include: { plan: … }` in the verify route and `where: { plan: { key: … } }` in
+  `getPosEntitlement`, the path every POS request takes). Both were `PrismaClientValidationError`s in
+  production while looking correct offline, where `prisma` is `any` and the in-memory double ignores
+  relation filters. Both are fixed — the plan key is resolved by `planId` — and
+  `tests/unit/pos-prisma-contract.test.ts` now fails the build if any POS query does it again.
+- **Still pending: a database-backed POS journey.** The Interactive Business suite has
+  `tests/e2e/interactive-business-journey.test.ts`; the POS equivalent is the natural next step, now
+  that CI has proven the migration and seed apply cleanly (see
+  `INTERACTIVE_BUSINESS_E2E_RUNBOOK_2026-10-02.md` for how that gate is run).
 - **No POS e2e suite against a real database yet.** The Interactive journey has
   `tests/e2e/interactive-business-journey.test.ts`; the POS equivalent is the natural next step once
   `DATABASE_URL` is available.
@@ -333,6 +349,11 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
    stringifies and strips forbidden keys; `listPosAudit` re-parses). There is no `metadataJson`.
 5. **Domain results carry their own `code`.** `fromOutcome` maps only `NOT_ALLOWED` to 403, so a
    refusal that must be 403 has to say so itself.
-6. **Defaults are applied at the route boundary only.** Engine-level callers (`buildConfiguration`,
+6. **The schema is a contract, and offline tooling cannot enforce it.** `prisma` types as `any` here
+   and the in-memory double ignores relation filters, so a query can be wrong in a way no local gate
+   catches. `tests/unit/pos-prisma-contract.test.ts` parses `prisma/schema.prisma` and validates
+   every POS `include`/`where` against it — including a synthetic self-check, because a scanner that
+   matches nothing also reports nothing.
+7. **Defaults are applied at the route boundary only.** Engine-level callers (`buildConfiguration`,
    `saveDraft`) still see an unanswered question as unanswered, which keeps the engine honest and
    the HTTP contract friendly.

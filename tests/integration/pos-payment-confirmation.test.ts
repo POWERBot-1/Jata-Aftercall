@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   findPayment: vi.fn(),
   findSubscription: vi.fn(),
   findPosSubscription: vi.fn(),
+  findPlan: vi.fn(),
   updateMany: vi.fn(),
   ownership: vi.fn(),
   verify: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("@/lib/db", () => ({
     payment: { findUnique: mocks.findPayment, updateMany: mocks.updateMany },
     subscription: { findUnique: mocks.findSubscription },
     posSubscription: { findUnique: mocks.findPosSubscription },
+    planConfig: { findUnique: mocks.findPlan },
   },
 }));
 vi.mock("@/lib/paystack", () => ({ verifyTransaction: mocks.verify, activateSubscriptionForPayment: mocks.activate }));
@@ -51,7 +53,12 @@ const posPayment = {
   amount: 49900,
   currency: "KES",
   status: "PENDING",
-  plan: { key: "BUSINESS_POS" },
+};
+
+/** `Payment` stores `planId` with no relation to `PlanConfig`, so the key is read by id. */
+const PLANS: Record<string, { id: string; key: string }> = {
+  "plan-pos": { id: "plan-pos", key: "BUSINESS_POS" },
+  "plan-month": { id: "plan-month", key: "MONTHLY" },
 };
 
 const aftercallPayment = {
@@ -60,7 +67,6 @@ const aftercallPayment = {
   reference: "jata-month-ref",
   planId: "plan-month",
   amount: 14900,
-  plan: { key: "MONTHLY" },
 };
 
 function request(reference = "jata-pos-ref") {
@@ -74,6 +80,7 @@ beforeEach(() => {
   mocks.findPayment.mockImplementation(async () => mocks.payment);
   mocks.findSubscription.mockResolvedValue(null);
   mocks.findPosSubscription.mockResolvedValue({ status: "ACTIVE" });
+  mocks.findPlan.mockImplementation(async ({ where }: any) => PLANS[where?.id] ?? null);
   mocks.ownership.mockResolvedValue(undefined);
   mocks.updateMany.mockResolvedValue({ count: 1 });
   mocks.verify.mockResolvedValue({ id: 55, status: "success", reference: "jata-pos-ref", amount: 49900, currency: "KES" });

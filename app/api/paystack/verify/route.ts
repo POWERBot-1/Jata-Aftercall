@@ -5,6 +5,7 @@ import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { activateSubscriptionForPayment, verifyTransaction } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
 import { classifyProviderStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
+import { getPlanById } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 
 export async function GET(req: Request) {
@@ -14,14 +15,14 @@ export async function GET(req: Request) {
   const reference = searchParams.get("reference")?.trim() || "";
   if (!reference || reference.length > 100) return NextResponse.json({ error: "A valid payment reference is required." }, { status: 400 });
 
-  const payment = await prisma.payment.findUnique({ where: { reference }, include: { plan: { select: { key: true } } } });
+  const payment = await prisma.payment.findUnique({ where: { reference } });
   if (!payment) return NextResponse.json({ error: "Payment not found." }, { status: 404 });
   // A Business POS payment settles the POS subscription, not the AFTERCALL one (§4, §45, §80).
   // Reading the right row keeps the confirmation honest, and telling the browser which workspace
   // to return to sends the owner back to the POS they just paid for instead of a page that does
   // not mention it (§43, §67). Both are derived server-side from the stored plan — never from a
   // query string, so there is nothing a caller can aim at another business.
-  const isPosPayment = (payment as { plan?: { key?: string | null } | null }).plan?.key === POS_PLAN_KEY;
+  const isPosPayment = (await planKeyOf(payment.planId)) === POS_PLAN_KEY;
   const posBusinessId = isPosPayment ? payment.businessId ?? null : null;
   const posReturn = posBusinessId ? { posBusinessId } : {};
   if (payment.userId !== session.userId && session.role !== "ADMIN") {
@@ -105,3 +106,20 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) { return GET(req); }
+
+/**
+ * The plan key behind a payment, or null.
+ *
+ * `Payment` stores `planId` as a plain column — it has no Prisma relation to `PlanConfig`, so
+ * there is nothing to `include`. A lookup that fails degrades to the ordinary AFTERCALL answer
+ * rather than breaking somebody's payment check (§80).
+ */
+async function planKeyOf(planId: string | null | undefined): Promise<string | null> {
+  if (!planId) return null;
+  try {
+    return (await getPlanById(planId))?.key ?? null;
+  } catch (error) {
+    console.error("plan lookup failed during payment verification", error);
+    return null;
+  }
+}
