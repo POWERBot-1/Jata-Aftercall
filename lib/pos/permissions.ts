@@ -6,7 +6,7 @@
  * configuration changes) are never allowed by default.
  */
 
-import { hasCapability } from "./capabilities";
+import { CATALOGUE_CAPABILITIES, ORDER_BOARD_CAPABILITIES, STOCK_CAPABILITIES, hasCapability } from "./capabilities";
 import type { CapabilityKey, PosConfiguration, PosRoleConfig } from "./types";
 
 export const PERMISSIONS = [
@@ -168,11 +168,17 @@ export function effectivePermissions(config: PosConfiguration, roleKey: string):
   const granted = new Set<string>(role?.permissions ?? []);
   // A permission for a module the business does not have is meaningless (§24, §52):
   // a service-only consultancy has no stock to adjust, so nobody holds ADJUST_STOCK.
-  const capabilityGates: Partial<Record<PermissionKey, CapabilityKey>> = {
+  //
+  // A gate is satisfied by *any* capability that makes the module real, because one screen serves
+  // many configurations (§52). The Products screen is a till's catalogue, a hardware store's stock
+  // room and a salon's services list; the order board is called "Orders", "Appointments", "Jobs" or
+  // "Projects" depending on the trade. Gating those on one capability key left the screen in the
+  // navigation while the API refused it — a dead end an owner cannot understand (§47, §60).
+  const capabilityGates: Partial<Record<PermissionKey, CapabilityKey | CapabilityKey[]>> = {
     ADJUST_STOCK: "stock_adjustments",
     TRANSFER_STOCK: "stock_transfers",
-    VIEW_INVENTORY: "stock_levels",
-    EDIT_INVENTORY: "products",
+    VIEW_INVENTORY: [...CATALOGUE_CAPABILITIES, ...STOCK_CAPABILITIES],
+    EDIT_INVENTORY: CATALOGUE_CAPABILITIES,
     VIEW_CREDIT: "customer_credit",
     APPROVE_CREDIT: "customer_credit",
     RECORD_REPAYMENT: "customer_credit",
@@ -185,8 +191,8 @@ export function effectivePermissions(config: PosConfiguration, roleKey: string):
     CREATE_EXPENSE: "expenses",
     APPLY_DISCOUNT: "discounts",
     REFUND_SALE: "refunds",
-    VIEW_ORDERS: "orders",
-    MANAGE_ORDERS: "orders",
+    VIEW_ORDERS: ORDER_BOARD_CAPABILITIES,
+    MANAGE_ORDERS: ORDER_BOARD_CAPABILITIES,
     CANCEL_ORDER: "cancellation",
     VIEW_STAFF: "employee_profiles",
     MANAGE_USERS: "employee_profiles",
@@ -195,7 +201,7 @@ export function effectivePermissions(config: PosConfiguration, roleKey: string):
     if (!granted.has(key)) return false;
     const gate = capabilityGates[key];
     if (!gate) return true;
-    return hasCapability(config, gate);
+    return Array.isArray(gate) ? gate.some((capability) => hasCapability(config, capability)) : hasCapability(config, gate);
   });
 }
 

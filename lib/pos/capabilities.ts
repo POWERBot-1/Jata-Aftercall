@@ -288,6 +288,37 @@ export function capabilitiesByGroup(group: CapabilityGroup): CapabilityDefinitio
 }
 
 /**
+ * Which capabilities make one screen real (§52: one engine, many trades).
+ *
+ * The navigation and the permission gates have to answer this the same way. When they did not, a
+ * business was shown a screen its own API then refused: a laundry could not open Services, a barber
+ * could not open Appointments, and a business that had not answered the questionnaire yet could not
+ * open the Products screen the fallback POS advertises (§47, §60). These sets mirror
+ * `MODULE_REQUIREMENTS`/`availableModules` in `presentation.ts`.
+ */
+
+/** The catalogue screen — Products, Services, Menu, Properties or Courses (§13, §18). */
+export const CATALOGUE_CAPABILITIES: CapabilityKey[] = ["catalogue", "products", "services", "menu", "properties", "courses"];
+
+/** The stock room (§11). Deliberately separate: a salon has a catalogue and no stock. */
+export const STOCK_CAPABILITIES: CapabilityKey[] = ["stock_levels"];
+
+/** The order board, whatever the trade calls it: Orders, Appointments, Jobs or Projects (§18, §29). */
+export const ORDER_BOARD_CAPABILITIES: CapabilityKey[] = [
+  "orders",
+  "order_status",
+  "appointments",
+  "bookings",
+  "reservations",
+  "job_cards",
+  "work_orders",
+  "production_status",
+  "projects",
+  "events",
+  "contracts",
+];
+
+/**
  * Expand a capability set through its implications and drop anything whose requirements are
  * unmet. Deterministic and idempotent, so the same answers always produce the same POS (§20).
  */

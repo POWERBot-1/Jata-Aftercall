@@ -15,9 +15,10 @@ vi.mock("@/lib/db", async () => {
   return { default: fake.db };
 });
 
-import { buildConfiguration, finalize } from "@/lib/pos/configuration";
+import { baselineConfiguration, buildConfiguration, finalize } from "@/lib/pos/configuration";
 import { pruneAnswers } from "@/lib/pos/questionnaire";
-import { effectivePermissions } from "@/lib/pos/permissions";
+import { BUSINESS_TYPES } from "@/lib/pos/businessTypes";
+import { checkPermission, effectivePermissions, type PermissionKey } from "@/lib/pos/permissions";
 import { requirePosAccess, PosAccessError } from "@/lib/pos/guard";
 import { createSale, recordRepayment, refundSale, type PosActor } from "@/lib/pos/sales";
 import { adjustStock, moveOrder, paySupplier, recordExpense, recordStockCount, transferStock } from "@/lib/pos/operations";
@@ -552,5 +553,100 @@ describe("the configuration and publishing are owner-only and payment-gated (§4
     expect(outcome.ok).toBe(false);
     expect(fake().rows("posConfiguration")).toHaveLength(1);
     expect(fake().rows("posConfiguration")[0].businessId).toBe("bizA");
+  });
+});
+
+// ── Authorization coherence ───────────────────────────────────────────────────
+//
+// A screen in the navigation that the API refuses is a dead end an owner cannot understand
+// (§47, §60), and it is invisible to a test that only ever exercises one configured business.
+// Found by the database-backed POS journey: an unconfigured business was shown the fallback
+// Products screen and an "+ Add product" action, then told "Owner cannot add and edit products",
+// because EDIT_INVENTORY was gated on `products` while the fallback only carries `catalogue`.
+// The same gate mistake closed Services for every service trade and Appointments/Jobs/Projects
+// for salons, garages, clinics and builders — 23 refused screens across 13 configurations.
+
+describe("the navigation and the permission gates answer the same way (§36, §47, §60)", () => {
+  /**
+   * Which permission each screen's own API route requires — read from the route files under
+   * `app/api/pos/[businessId]/`. A `null` means the screen is server-rendered from the store
+   * behind workspace access, with no module-level permission of its own.
+   */
+  const SCREEN_PERMISSION: Record<string, PermissionKey | null> = {
+    dashboard: null,
+    sell: "CREATE_SALE",
+    history: "VIEW_SALES",
+    products: "VIEW_INVENTORY",
+    services: "VIEW_INVENTORY",
+    menu: "VIEW_INVENTORY",
+    inventory: "VIEW_INVENTORY",
+    customers: "VIEW_CUSTOMERS",
+    credit: null,
+    suppliers: "VIEW_SUPPLIERS",
+    purchases: "VIEW_SUPPLIERS",
+    expenses: "VIEW_EXPENSES",
+    orders: "VIEW_ORDERS",
+    appointments: "VIEW_ORDERS",
+    jobs: "VIEW_ORDERS",
+    projects: "VIEW_ORDERS",
+    produce: "VIEW_SALES",
+    staff: "VIEW_STAFF",
+    branches: null,
+    reports: "VIEW_REPORTS",
+    settings: "EDIT_CONFIGURATION",
+  };
+
+  const configurations: [string, PosConfiguration][] = [
+    ["an unconfigured business (the fallback POS, §47)", baselineConfiguration()],
+    ...BUSINESS_TYPES.map((type) => [type.key, buildConfiguration({ business_type: type.key })] as [string, PosConfiguration]),
+  ];
+
+  it("refuses the owner nothing the owner was just shown", () => {
+    const deadEnds: string[] = [];
+    const unmapped = new Set<string>();
+    for (const [name, config] of configurations) {
+      for (const item of (config.navigation ?? []) as unknown as (string | { key: string })[]) {
+        const key = typeof item === "string" ? item : item.key;
+        if (!(key in SCREEN_PERMISSION)) {
+          // A new screen must say which permission guards it, or this guard silently rots.
+          unmapped.add(key);
+          continue;
+        }
+        const permission = SCREEN_PERMISSION[key];
+        if (!permission) continue;
+        if (!checkPermission(config, "OWNER", permission).allowed) deadEnds.push(`${name}: ${key} needs ${permission}`);
+      }
+    }
+    expect([...unmapped]).toEqual([]);
+    expect(deadEnds).toEqual([]);
+  });
+
+  it("still keeps stock control, refunds and discounts behind the questionnaire (§36, §47)", () => {
+    const baseline = baselineConfiguration();
+    const keys = (baseline.navigation ?? []).map((item: any) => (typeof item === "string" ? item : item.key));
+    // The fallback POS keeps a catalogue the owner can fill in before paying (§61)…
+    expect(checkPermission(baseline, "OWNER", "EDIT_INVENTORY").allowed).toBe(true);
+    // …and no stock room, no refunds and no discounts: those are answers, not defaults.
+    expect(keys).not.toContain("inventory");
+    expect(checkPermission(baseline, "OWNER", "ADJUST_STOCK").allowed).toBe(false);
+    expect(checkPermission(baseline, "OWNER", "TRANSFER_STOCK").allowed).toBe(false);
+    expect(checkPermission(baseline, "OWNER", "REFUND_SALE").allowed).toBe(false);
+    expect(checkPermission(baseline, "OWNER", "APPLY_DISCOUNT").allowed).toBe(false);
+    expect(checkPermission(baseline, "OWNER", "APPROVE_CREDIT").allowed).toBe(false);
+  });
+
+  it("opens the catalogue for a service trade and the board for an appointment trade", () => {
+    const laundry = buildConfiguration({ business_type: "laundry" });
+    expect(checkPermission(laundry, "OWNER", "VIEW_INVENTORY").allowed).toBe(true);
+    expect(checkPermission(laundry, "OWNER", "EDIT_INVENTORY").allowed).toBe(true);
+    // A laundry has services, not a stock room: adjusting stock is still refused (§36).
+    expect(checkPermission(laundry, "OWNER", "ADJUST_STOCK").allowed).toBe(false);
+
+    const barber = buildConfiguration({ business_type: "barber" });
+    expect(checkPermission(barber, "OWNER", "VIEW_ORDERS").allowed).toBe(true);
+    expect(checkPermission(barber, "OWNER", "MANAGE_ORDERS").allowed).toBe(true);
+
+    const construction = buildConfiguration({ business_type: "construction" });
+    expect(checkPermission(construction, "OWNER", "VIEW_ORDERS").allowed).toBe(true);
   });
 });
