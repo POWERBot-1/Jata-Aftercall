@@ -11,7 +11,8 @@ import * as React from "react";
 import { getBusinessPosPlan } from "@/lib/pricing";
 import { getSession } from "@/lib/auth";
 import type { SessionPayload } from "@/lib/auth";
-import { requirePosAccess, requirePosAccessFromRequest, type PosAccessOptions, type PosContext } from "./guard";
+import { PosAccessError, requirePosAccess, requirePosAccessFromRequest, type PosAccessOptions, type PosContext } from "./guard";
+import type { PermissionKey } from "./permissions";
 import { POS_PLAN_DURATION_DAYS, POS_PLAN_KEY, POS_PLAN_NAME, POS_PLAN_PRICE_KES, POS_LIFECYCLE_LABELS } from "./entitlement";
 import {
   buildNavigation,
@@ -82,8 +83,8 @@ export async function loadPosWorkspace(businessId: string, options: PosAccessOpt
   return loadPosWorkspaceForSession(businessId, session, options);
 }
 
-function loadWorkspaceFast(businessId: string): Promise<PosWorkspace> {
-  return loadPosWorkspace(businessId, { fast: true });
+function loadWorkspaceFast(businessId: string, options: PosAccessOptions = {}): Promise<PosWorkspace> {
+  return loadPosWorkspace(businessId, { fast: true, ...options });
 }
 
 /**
@@ -103,9 +104,52 @@ const requestCache = typeof (React as { cache?: unknown }).cache === "function"
   ? ((React as unknown as { cache: <T extends (...args: any[]) => any>(fn: T) => T }).cache)
   : null;
 
-export const loadPosWorkspaceCached: (businessId: string) => Promise<PosWorkspace> = requestCache
+export const loadPosWorkspaceCached: (businessId: string, options?: PosAccessOptions) => Promise<PosWorkspace> = requestCache
   ? requestCache(loadWorkspaceFast)
   : loadWorkspaceFast;
+
+/**
+ * The answer a server-rendered POS page gets (§11, §36, §56).
+ *
+ * Flat, like every other POS result, because `strictNullChecks` is off: exactly one of
+ * `workspace` and `refusal` is present.
+ */
+export type PosPageGate = {
+  businessId: string;
+  basePath: string;
+  /** The module-read permission this page required — the same one its API read requires. */
+  permission: PermissionKey;
+  workspace?: PosWorkspace;
+  /** Plain-language sentence, safe to show the person who was refused (§38). */
+  refusal?: string;
+};
+
+/** Refusals that mean "this screen is not for you", as opposed to "this tenant is not yours". */
+const PAGE_REFUSAL_CODES = new Set(["PERMISSION", "STAFF_INACTIVE"]);
+
+/**
+ * Load a POS page's workspace and enforce the module's read permission in one step (§11).
+ *
+ * The screen-level APIs already refuse a read the actor's role does not hold. A page that reads
+ * the store behind the workspace loader must answer the same way, or a cashier who types the URL
+ * sees data the equivalent API call refuses. The check runs inside `requirePosAccess` — the same
+ * permission engine and the same audit entry — *before* any store read, so a refused page loads
+ * nothing and renders the "not for you" state instead.
+ *
+ * Anything that is not a role refusal (a signed-out session, another tenant, an unexpected
+ * failure) is re-thrown so the POS shell keeps explaining it exactly as it does today.
+ */
+export async function loadPosPageWorkspace(businessId: string, permission: PermissionKey): Promise<PosPageGate> {
+  const gate: PosPageGate = { businessId, basePath: posBasePath(businessId), permission };
+  try {
+    return { ...gate, workspace: await loadPosWorkspaceCached(businessId, { permission, fast: true }) };
+  } catch (error) {
+    if (error instanceof PosAccessError && PAGE_REFUSAL_CODES.has(error.code)) {
+      return { ...gate, refusal: error.message };
+    }
+    throw error;
+  }
+}
 
 export async function loadPosWorkspaceForSession(
   businessId: string,

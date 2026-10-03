@@ -2,7 +2,8 @@ import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { ageingBucket, creditExposure, daysOverdue, supplierSummary } from "@/lib/pos/credit";
 import { partiesWithBalances } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Credit (§30).
@@ -10,6 +11,10 @@ import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
  * Two ledgers, deliberately never merged: what customers owe the business and what the business
  * owes its suppliers. Ageing is calculated from the oldest open entry and the configured terms,
  * and a figure that depends on missing data is labelled rather than presented as fact (§35).
+ *
+ * Credit balances are somebody else's money, so the page asks for the same permission its data
+ * requires — `VIEW_CREDIT` — before it reads anything (§11, §36). A role without it gets the
+ * refusal, not the ledger.
  */
 
 export const dynamic = "force-dynamic";
@@ -20,7 +25,9 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosCreditPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_CREDIT");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
   const [debtors, creditors] = await Promise.all([

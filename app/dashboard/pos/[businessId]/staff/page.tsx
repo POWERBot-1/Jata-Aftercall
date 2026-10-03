@@ -2,14 +2,18 @@ import { emptyStateFor } from "@/lib/pos/presentation";
 import { formSpec } from "@/lib/pos/forms";
 import { permissionLabel, resolveRoles } from "@/lib/pos/permissions";
 import { listBranches, listStaff } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Staff and what each person may do (§15, §36).
  *
  * A role is a named set of permissions. The roles offered here are the ones this configuration
  * defines, so a salon offers Stylist and a garage offers Technician — one permission engine.
+ *
+ * Who works here, and what they may do, is itself protected: the page asks for `VIEW_STAFF`
+ * — the permission the staff API enforces — before it reads the team or the role map (§11, §36).
  */
 
 export const dynamic = "force-dynamic";
@@ -19,7 +23,9 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosStaffPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_STAFF");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "staff");
 

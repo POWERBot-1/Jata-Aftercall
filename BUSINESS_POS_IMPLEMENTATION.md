@@ -267,6 +267,7 @@ remains an operator-authorised step through the existing deployment gate (`scrip
 | `tests/unit/pos-prisma-contract.test.ts` | Parses `prisma/schema.prisma` and checks every POS query against it: an `include` or a `where` filter through a relation the model does not have fails the build. Written after CI proved this repository's offline tooling cannot see that mistake |
 | `tests/security/pos-tenant-isolation.test.ts` | Cross-tenant customer/sale/inventory/configuration access, forged tenant ids, foreign record ids |
 | `tests/security/pos-permissions.test.ts` | Unauthorized refunds, discounts, credit approval, configuration changes, branch and staff access; unknown role fails closed. Also walks the baseline and all 56 business types and fails if the navigation offers a screen that screen's own route would refuse for its owner (§36, §47, §60) |
+| `tests/security/pos-page-authorization.test.ts` | **21 tests**: the server-rendered POS pages (`/credit`, `/expenses`, `/staff`) are rendered against the in-memory database and must answer exactly like the module's API — an owner and any role holding the permission keep the screen; a cashier is refused with the read abandoned before a single row is loaded and the refusal audited as `POS_ACCESS_DENIED`; page and API agree actor for actor; cross-tenant, signed-out and unknown-business access still fail before rendering; lifecycle/payment gates unchanged (§11, §36, §44, §56, §75) |
 | `tests/integration/pos-journey.test.ts` | The whole §4 journey at domain level, including the two-business §81 proof and clone safety |
 | `tests/integration/pos-api-routes.test.ts` | **66 tests over HTTP**: the real route handlers against an in-memory Prisma double — workspace generation, configuration, preview, plan/payment/provisioning, sales and refunds, every operating screen, reports, audit, cloning, versions and the security matrix |
 | `tests/integration/pos-payment-confirmation.test.ts` | The verification route for a POS payment (POS subscription read, `posBusinessId` on every outcome, refusals) and proof that every other plan is untouched (§80) |
@@ -284,9 +285,10 @@ npx tsc --noEmit                                 # typecheck
 npm run build                                    # must pass before deploy
 ```
 
-Status at the time of writing: **803 passed / 5 failed / 39 skipped** offline, where the 39 skipped
-are the two database journeys (17 §66 steps + 22 POS steps) that need `DATABASE_URL`. `tsc --noEmit`
-is clean and `npm run build` succeeds. The 5 failures are pre-existing and unrelated: the storefront
+Status at the time of writing: **824 passed / 5 failed / 39 skipped** offline (the 21 new
+page-authorization tests included), where the 39 skipped are the two database journeys (17 §66 steps
++ 22 POS steps) that need `DATABASE_URL`. `tsc --noEmit` is clean and `npm run build` succeeds. The 5
+failures are pre-existing and unrelated: the storefront
 booking-slot tests assert fixed 10:00/11:00 availability that this sandbox's clock does not produce.
 They fail identically at the branch point `8c81bb9` (verified with a `git worktree` checkout), and the
 POS work neither touches nor fixes them. In CI, against PostgreSQL 16, both journeys run: the §66
@@ -315,8 +317,13 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
 - **No database in this development environment.** `prisma generate` cannot reach
   `binaries.prisma.sh` here, so nothing was run against a real database locally. Substitutes used:
   `npx tsc --noEmit`, `npm run build`, `tests/unit/pos-schema.test.ts`,
-  `tests/unit/repair-guards.test.ts`, `tests/unit/pos-prisma-contract.test.ts` and the in-memory
-  double.
+  `tests/unit/repair-guards.test.ts`, `tests/unit/pos-prisma-contract.test.ts`, the in-memory
+  double and, for the page-layer authorization fix, `tests/security/pos-page-authorization.test.ts`.
+  The engine binaries are unavailable for a second reason in this sandbox: every Prisma CDN host
+  (`binaries.prisma.sh`) and every GitHub release-asset host resolve to a blocked TLS handshake, so
+  only `registry.npmjs.org`, `github.com`, `api.github.com` and `codeload.github.com` are reachable;
+  the local machine has no PostgreSQL and no package mirror to install one from. The database
+  journeys therefore run in CI, as they always have.
 - **CI has since run the real thing, and it found two defects.** The `Journey against a real
   database` workflow provisions PostgreSQL 16 and ran, on this branch: `prisma generate` (client
   generated), `prisma migrate deploy` — **all five migrations applied successfully, including
@@ -348,16 +355,39 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
   cannot adjust stock it does not keep. `tests/security/pos-permissions.test.ts` now fails if any
   configuration advertises a screen its owner is refused, or if a new screen appears without
   declaring which permission guards it.
-- **Server-rendered POS pages authorize the business, not the module read.** The API routes check a
-  module permission for every read and write, and the pages use `workspace.permissions` to hide
-  *actions* (add, adjust, refund, manage). But 17 pages also read the store directly behind
+- **Server-rendered POS pages authorize the business *and* the module read — the gap is closed.**
+  The API routes
+  check a module permission for every read and write, and the pages use `workspace.permissions` to
+  hide *actions* (add, adjust, refund, manage). But 17 pages also read the store directly behind
   `loadPosWorkspaceCached`, which checks tenant membership and lifecycle only — so a cashier who
-  navigates straight to `/credit`, `/expenses` or `/staff` can see data the equivalent API call
-  refuses. It is a within-tenant role leak, not a cross-tenant one: every write, and every
-  cross-tenant read, is refused and audited (§5, §36, §75 — see step 13 and step 21 of the journey).
-  Recorded rather than fixed here, because closing it means threading a permission through the page
-  layer and adding a "not for you" state to those screens — a UI change beyond this verification
-  pass, and one that deserves its own decision.
+  navigated straight to `/credit`, `/expenses` or `/staff` could see data the equivalent API call
+  refused. It was a within-tenant role leak, never a cross-tenant one: every write, and every
+  cross-tenant read, was already refused and audited (§5, §36, §75).
+  The page layer now enforces the same permissions its APIs do:
+  `loadPosPageWorkspace(businessId, permission)` (`lib/pos/workspace.ts`) calls the existing
+  `requirePosAccess` with `{ permission, fast: true }` — the same engine, the same audit entry and
+  the same entitlement resolution the routes use — *before* any store read. A `PERMISSION` or
+  `STAFF_INACTIVE` refusal is returned to the page, which renders `components/pos/PosRefusal.tsx`
+  ("this screen is not for your role") instead of data; anything else (another tenant, a signed-out
+  session, an unexpected failure) is re-thrown so the POS shell keeps explaining it exactly as it
+  did. `/credit` now requires `VIEW_CREDIT` (the credit module's declared read permission — it has no
+  API route of its own), `/expenses` requires `VIEW_EXPENSES` and `/staff` requires `VIEW_STAFF`,
+  matching the routes exactly. `tests/security/pos-page-authorization.test.ts` renders the real page
+  components against the in-memory database and proves: a cashier is refused on all three and the
+  page's data loaders are never called (nothing protected is read, let alone rendered); an owner —
+  and a salesperson, accountant or manager whose role holds the permission — keeps every screen that
+  role is entitled to and is refused only the others; page and API answer identically actor for
+  actor; the refusal is audited as `POS_ACCESS_DENIED` with `targetType: PERMISSION`; cross-tenant,
+  signed-out and unknown-business access still fail before anything renders; and the
+  lifecycle/payment gates are unchanged (reads work in every lifecycle state, writes still answer
+  402 for an unpaid POS). `tests/security/pos-permissions.test.ts` now declares
+  `credit: "VIEW_CREDIT"` in its screen map so the navigation/route coherence guard describes the
+  page gate too. No other page was changed, no permission was added or re-pointed, and the API
+  layers were not touched. Verified on the follow-up branch: `tsc --noEmit` clean, `npm run build`
+  succeeds, **824 passed / 5 failed / 39 skipped** offline (the same five pre-existing
+  booking-slot failures), **135/135** security tests, and the CI job on the pull request ran the
+  real PostgreSQL §66 (17/17) and Business POS (22/22) journeys — the same job that fails a skipped
+  POS journey — with both steps green.
 - **The journey is sequential, so one failed step used to look like nine.** Steps share a registered
   owner, a configured business and a running stock tally. Each step now starts as the owner and the
   two steps that act as somebody else (13 as a cashier, 21 as another tenant) say so explicitly,

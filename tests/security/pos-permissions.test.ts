@@ -568,9 +568,14 @@ describe("the configuration and publishing are owner-only and payment-gated (§4
 
 describe("the navigation and the permission gates answer the same way (§36, §47, §60)", () => {
   /**
-   * Which permission each screen's own API route requires — read from the route files under
-   * `app/api/pos/[businessId]/`. A `null` means the screen is server-rendered from the store
-   * behind workspace access, with no module-level permission of its own.
+   * Which permission each screen requires — the read permission of the screen's own API route,
+   * read from the route files under `app/api/pos/[businessId]/`, or the module-read permission its
+   * server-rendered page enforces (§11). A `null` means the screen is server-rendered from the
+   * store behind workspace access, with no module-level permission of its own.
+   *
+   * `/credit`, `/expenses` and `/staff` used to be `null`-permission pages that read the store
+   * directly, which let a cashier open them and see data the equivalent API read refuses. The
+   * pages now gate on the same permission (VIEW_CREDIT / VIEW_EXPENSES / VIEW_STAFF).
    */
   const SCREEN_PERMISSION: Record<string, PermissionKey | null> = {
     dashboard: null,
@@ -581,7 +586,7 @@ describe("the navigation and the permission gates answer the same way (§36, §4
     menu: "VIEW_INVENTORY",
     inventory: "VIEW_INVENTORY",
     customers: "VIEW_CUSTOMERS",
-    credit: null,
+    credit: "VIEW_CREDIT",
     suppliers: "VIEW_SUPPLIERS",
     purchases: "VIEW_SUPPLIERS",
     expenses: "VIEW_EXPENSES",
