@@ -1,7 +1,8 @@
 name: Interactive Business E2E
 
-# Runs the §66 end-to-end journey (tests/e2e/interactive-business-journey.test.ts) against a
-# real PostgreSQL database provisioned exactly the way production is: prisma migrate deploy.
+# Runs the §66 end-to-end journey (tests/e2e/interactive-business-journey.test.ts) and the
+# Business POS journey (tests/e2e/business-pos-journey.test.ts) against a real PostgreSQL database
+# provisioned exactly the way production is: prisma migrate deploy.
 #
 # The sandbox that built this package has no outbound access to the Prisma binary hosts and no
 # local database, so the gate executes here instead.
@@ -78,6 +79,12 @@ jobs:
           set -o pipefail
           npm run test:e2e 2>&1 | tee /tmp/step-journey.log
 
+      # The Business POS journey (§4, §43, §75) runs against the same migrated, seeded database.
+      - name: Run the Business POS journey
+        run: |
+          set -o pipefail
+          npm run test:e2e:pos 2>&1 | tee /tmp/step-pos-journey.log
+
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.
       - name: Report failing output to the pull request
@@ -91,6 +98,7 @@ jobs:
             };
             const body = [
               ['npm run test:e2e', '/tmp/step-journey.log', 8000],
+              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 8000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 4000],
               ['prisma generate', '/tmp/step-generate.log', 2000],
               ['npm run seed', '/tmp/step-seed.log', 2000],
