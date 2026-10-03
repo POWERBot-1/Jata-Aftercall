@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/subscription", label: "Subscription" },
+  { href: "/dashboard/ai", label: "AI Front Desk" },
   { href: "/dashboard/studio", label: "Website studio" },
   { href: "/dashboard/pos", label: "Business POS" },
   { href: "/onboarding", label: "Add a business" },
@@ -23,3 +24,5 @@ export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
     </div>
   );
 }
+
+export default DashboardNav;

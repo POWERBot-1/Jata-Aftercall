@@ -1,67 +1,113 @@
-/**
- * Notification Recipient Configuration (§63) — nominated business number.
- * Every business configures primary/secondary/staff recipients.
- */
-
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
-import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { getCurrentUser } from "@/lib/auth";
+import { assertBusinessRole, canAccessBusiness } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 
+const RECIPIENT_LABELS = ["primary", "secondary", "owner", "staff", "general", "PRIMARY", "SECONDARY", "OWNER", "STAFF", "GENERAL"] as const;
+
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
 
-  const url = new URL(req.url);
-  const businessId = url.searchParams.get("businessId");
-  const guard = await guardTenantMutation(session, businessId);
-  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    const { searchParams } = new URL(req.url);
+    const businessId = searchParams.get("businessId");
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
+    }
 
-  const recipients = await prisma.notificationRecipient.findMany({
-    where: { businessId: businessId! },
-    orderBy: { createdAt: "asc" },
-  });
-  return NextResponse.json({ recipients });
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+    }
+
+    const recipients = await prisma.notificationRecipient.findMany({
+      where: { businessId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return NextResponse.json({ recipients });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch recipients.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-
   try {
-    const body = await req.json();
-    const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
-
-    const label = typeof body.label === "string" ? body.label.trim() : "PRIMARY";
-    const phone = typeof body.phone === "string" ? body.phone.trim() || null : null;
-    const email = typeof body.email === "string" ? body.email.trim() || null : null;
-    const whatsappEnabled = typeof body.whatsappEnabled === "boolean" ? body.whatsappEnabled : true;
-    const smsEnabled = typeof body.smsEnabled === "boolean" ? body.smsEnabled : true;
-    const emailEnabled = typeof body.emailEnabled === "boolean" ? body.emailEnabled : true;
-
-    if (!businessId) return NextResponse.json({ error: "Business required." }, { status: 400 });
-
-    const existing = await prisma.notificationRecipient.findFirst({ where: { businessId: businessId!, label } });
-    if (existing) {
-      const updated = await prisma.notificationRecipient.update({
-        where: { id: existing.id },
-        data: { phone, email, whatsappEnabled, smsEnabled, emailEnabled, isActive: true },
-      });
-      await logAudit({ actorId: session.userId, action: "NOTIFICATION_RECIPIENT_UPDATED", targetType: "NOTIFICATION_RECIPIENT", targetId: updated.id });
-      return NextResponse.json({ recipient: updated });
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const created = await prisma.notificationRecipient.create({
-      data: { businessId: businessId!, label, phone, email, whatsappEnabled, smsEnabled, emailEnabled, isActive: true },
+    const body = await req.json();
+    const { businessId, label, phone, email, whatsappEnabled, smsEnabled, emailEnabled } = body || {};
+
+    if (!businessId || (!phone && !email)) {
+      return NextResponse.json(
+        { error: "businessId and at least one contact (phone or email) required." },
+        { status: 400 },
+      );
+    }
+
+    const roleCheck = await assertBusinessRole({
+      userId: user.id,
+      businessId,
+      userRole: user.role,
+      action: "manage_settings",
     });
-    await logAudit({ actorId: session.userId, action: "NOTIFICATION_RECIPIENT_CREATED", targetType: "NOTIFICATION_RECIPIENT", targetId: created.id });
-    return NextResponse.json({ recipient: created }, { status: 201 });
-  } catch (e: unknown) {
-    const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    if (!roleCheck.allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+    }
+
+    const normalizedLabel =
+      typeof label === "string" && (RECIPIENT_LABELS as readonly string[]).includes(label.toUpperCase())
+        ? label.toUpperCase()
+        : "PRIMARY";
+
+    const existing = await prisma.notificationRecipient
+      ?.findFirst?.({ where: { businessId, label: normalizedLabel } })
+      .catch(() => null);
+
+    const recipient = existing
+      ? await prisma.notificationRecipient.update({
+          where: { id: existing.id },
+          data: {
+            phone: phone || null,
+            email: email || null,
+            whatsappEnabled: whatsappEnabled !== undefined ? Boolean(whatsappEnabled) : true,
+            smsEnabled: smsEnabled !== undefined ? Boolean(smsEnabled) : false,
+            emailEnabled: emailEnabled !== undefined ? Boolean(emailEnabled) : false,
+            isActive: true,
+          },
+        })
+      : await prisma.notificationRecipient.create({
+          data: {
+            businessId,
+            label: normalizedLabel,
+            phone: phone || null,
+            email: email || null,
+            whatsappEnabled: whatsappEnabled !== undefined ? Boolean(whatsappEnabled) : true,
+            smsEnabled: smsEnabled !== undefined ? Boolean(smsEnabled) : false,
+            emailEnabled: emailEnabled !== undefined ? Boolean(emailEnabled) : false,
+            isActive: true,
+          },
+        });
+
+    await logAudit({
+      actorId: user.id,
+      action: "NOTIFICATION_RECIPIENT_UPDATED",
+      targetType: "NOTIFICATION_RECIPIENT",
+      targetId: recipient.id,
+      metadata: { businessId, label: recipient.label, phone: recipient.phone, email: recipient.email },
+    });
+
+    return NextResponse.json({ recipient });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to add recipient.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

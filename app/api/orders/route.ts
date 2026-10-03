@@ -1,178 +1,262 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
-import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
-import { isValidStateTransition, type OrderState } from "@/lib/order";
-import { formatOrderReference } from "@/lib/order";
+import * as authLib from "@/lib/auth";
+import * as tenantLib from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import {
-  isValidStageTransition,
-  orderStatusToStage,
-  stageToOrderStatus,
-  type OrderStage,
+  assertOrderStageTransition,
+  deriveOrderStage,
+  ORDER_STAGES,
+  stageToPersistedStatus,
 } from "@/lib/experience/orders";
-import { paymentStateOf } from "@/lib/experience/payments";
+import {
+  createAuthoritativeOrder,
+  formatOrderReference,
+  isValidStateTransition,
+  type OrderState,
+} from "@/lib/order";
+import { getExtendedAIConfig } from "@/lib/ai-config";
 
-/**
- * Order Route (§12, §28, §34) — server-side order creation with explicit state machine.
- * Preview mode creates orders in DRAFT only; does not trigger notifications (§52).
- *
- * Owner reads and updates are scoped by businessId *and* ownership (§37).
- */
+function sanitizeText(value: unknown, max = 300) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+async function authorizeBusiness(businessId: string) {
+  const session =
+    (await authLib.getSession?.().catch(() => null)) ||
+    (await authLib.getCurrentUser?.().catch(() => null));
+  if (!session) return { ok: false as const, status: 401, error: "Authentication required" };
+  const userId = (session as any).userId || (session as any).id;
+
+  if (typeof tenantLib.guardTenantMutation === "function") {
+    const guarded = await tenantLib.guardTenantMutation(
+      { userId, email: session.email || "", role: session.role },
+      businessId,
+    );
+    if (!guarded.ok) {
+      return { ok: false as const, status: guarded.status, error: guarded.error };
+    }
+    return { ok: true as const, user: { id: userId, email: session.email, role: session.role } };
+  }
+
+  if (typeof tenantLib.canAccessBusiness === "function") {
+    const allowed = await tenantLib.canAccessBusiness(userId, businessId, session.role);
+    if (!allowed) return { ok: false as const, status: 403, error: "Forbidden" };
+  }
+  return { ok: true as const, user: { id: userId, email: session.email, role: session.role } };
+}
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const businessId = sanitizeText(searchParams.get("businessId"), 80);
+    const stageFilter = sanitizeText(searchParams.get("stage"), 40);
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId is required" }, { status: 400 });
+    }
+    const auth = await authorizeBusiness(businessId);
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+    const orders = await prisma.order.findMany({
+      where: { businessId },
+      include: { items: true },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const enriched = orders.map((order) => ({
+      ...order,
+      stage: deriveOrderStage(order),
+    }));
+    const filtered = stageFilter ? enriched.filter((order) => order.stage === stageFilter) : enriched;
+    return NextResponse.json({
+      orders: filtered,
+      stages: ORDER_STAGES,
+    });
+  } catch (error) {
+    console.error("Failed to list orders:", error);
+    return NextResponse.json({ error: "Failed to list orders" }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-
   try {
     const body = await req.json();
-    const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    const businessId = sanitizeText(body.businessId, 80);
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId is required" }, { status: 400 });
+    }
+    const auth = await authorizeBusiness(businessId);
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-    // Basic validation — full commerce engine builds out in future authorization.
-    const customerName = typeof body.customerName === "string" ? body.customerName.trim() : "";
-    const customerPhone = typeof body.customerPhone === "string" ? body.customerPhone.trim() : "";
+    const customerName = sanitizeText(body.customerName, 80);
+    const customerPhone = sanitizeText(body.customerPhone, 30);
+    if (!customerName) {
+      return NextResponse.json({ error: "customerName is required" }, { status: 400 });
+    }
 
-    if (!businessId) return NextResponse.json({ error: "Business required." }, { status: 400 });
-    if (!customerName || customerName.length < 2) return NextResponse.json({ error: "Customer name required." }, { status: 400 });
+    const preview = Boolean(body.preview);
 
-    // Preview mode: orders only reach DRAFT state; never proceed to PENDING_PAYMENT
-    // without verified server-side entitlement (§52).
-    const previewMode = Boolean(body.preview || false);
-    const initialState = previewMode ? "DRAFT" : "PENDING_CUSTOMER_CONFIRMATION";
+    // Enforce emergency pause controls on live order creation (§45)
+    if (!preview) {
+      const aiConfig = await prisma.aIConfiguration?.findUnique?.({ where: { businessId } }).catch(() => null);
+      const ext = await getExtendedAIConfig(businessId, aiConfig);
+      if (ext.pauseAllOrdering || ext.operationalStatus === "PAUSED" || ext.operationalStatus === "MAINTENANCE") {
+        return NextResponse.json(
+          { error: "Ordering is currently paused for this business." },
+          { status: 423 },
+        );
+      }
+    }
 
-    return NextResponse.json({
-      orderReference: formatOrderReference(new Date().toISOString().slice(0, 10).replace(/-/g, ""), Math.floor(Math.random() * 999999)),
-      businessId,
-      status: initialState as any,
-      preview: previewMode,
-      message: previewMode ? "Preview order created in DRAFT state. No notifications sent (§52)." : "Order created. Proceed to customer confirmation and payment.",
-    }, { status: 201 });
-  } catch (e: unknown) {
-    const mapped = publicErrorMessage(e, SAFE_ERRORS.saveFailed);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
-  }
-}
+    // If structured items, idempotencyKey, or preview mode are provided, use the authoritative AI Front Desk order engine (§16, §17, §28)
+    if (Array.isArray(body.items) || body.idempotencyKey || preview) {
+      const created = await createAuthoritativeOrder({
+        businessId,
+        customerName,
+        customerPhone: customerPhone || null,
+        customerEmail: sanitizeText(body.customerEmail, 120) || null,
+        items: Array.isArray(body.items) ? body.items : [],
+        deliveryFeeKES: Number(body.deliveryFeeKES) || 0,
+        // §32: a discount is only ever granted by an explicitly configured promotion, so the
+        // authoritative engine derives it server-side. A client-supplied amount is discarded
+        // instead of being allowed to reduce (or zero) the payable total.
+        discountKES: 0,
+        fulfilmentType: body.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
+        deliveryLocation: sanitizeText(body.deliveryLocation, 200) || null,
+        deliveryInstructions: sanitizeText(body.deliveryInstructions, 500) || null,
+        idempotencyKey: sanitizeText(body.idempotencyKey, 120) || null,
+        preview,
+        confirmedByCustomer: Boolean(body.confirmedByCustomer),
+        actorId: auth.user.id,
+      });
 
-/** Owner order board (§28). Never returns another tenant's orders (§37). */
-export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-  const { searchParams } = new URL(req.url);
-  const businessId = searchParams.get("businessId")?.trim() || "";
-  if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
-  try {
-    await assertBusinessOwnership(businessId, session);
+      return NextResponse.json(
+        {
+          order: {
+            ...created,
+            stage: deriveOrderStage({ status: created.status, paymentStatus: created.paymentStatus }),
+          },
+          preview: created.preview,
+          idempotent: created.idempotent,
+        },
+        { status: 201 },
+      );
+    }
+
+    const totalKES = Math.max(0, Math.round(Number(body.totalKES) || 0));
+    const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const orderReference = formatOrderReference(datePrefix, Math.floor(100000 + Math.random() * 899999));
+
+    const order = await prisma.order.create({
+      data: {
+        orderReference,
+        businessId,
+        customerName,
+        customerPhone: customerPhone || null,
+        customerEmail: sanitizeText(body.customerEmail, 120) || null,
+        status: "PENDING_PAYMENT",
+        paymentStatus: "UNPAID",
+        subtotalKES: totalKES,
+        totalKES,
+        fulfilmentType: body.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
+        deliveryLocation: sanitizeText(body.deliveryLocation, 200) || null,
+        deliveryInstructions: sanitizeText(body.deliveryInstructions, 500) || null,
+      },
+      include: { items: true },
+    });
+
+    await logAudit({
+      actorId: auth.user.id,
+      action: "ORDER_CREATED",
+      targetType: "ORDER",
+      targetId: order.id,
+      metadata: { businessId, orderReference, totalKES },
+    });
+
+    return NextResponse.json(
+      { order: { ...order, stage: deriveOrderStage(order) } },
+      { status: 201 },
+    );
   } catch (error) {
-    const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
-  }
-
-  try {
-    const stage = searchParams.get("stage")?.trim() || "";
-    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
-    const where: Record<string, unknown> = { businessId };
-    if (stage && stage !== "ALL") {
-      const target = stageToOrderStatus(stage);
-      if (target) where.status = target;
-    }
-    const orders = await prisma.order.findMany({
-      where,
-      include: { items: true, payments: { select: { id: true, status: true, reference: true, purpose: true } } },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-    });
-
-    return NextResponse.json({
-      orders: orders.map((order) => ({
-        id: order.id,
-        orderReference: order.orderReference,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerEmail: order.customerEmail,
-        status: order.status,
-        stage: orderStatusToStage(order.status),
-        paymentStatus: order.paymentStatus,
-        paymentState: paymentStateOf(order.payments?.[0] || null),
-        subtotalKES: order.subtotalKES,
-        deliveryFeeKES: order.deliveryFeeKES,
-        discountKES: order.discountKES,
-        totalKES: order.totalKES,
-        currency: order.currency,
-        fulfilmentType: order.fulfilmentType,
-        deliveryLocation: order.deliveryLocation,
-        deliveryInstructions: order.deliveryInstructions,
-        notes: order.notes,
-        createdAt: order.createdAt,
-        items: order.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          quantity: item.quantity,
-          unitPriceKES: item.unitPriceKES,
-          variantDesc: item.variantDesc,
-          imageUrl: item.imageUrl,
-        })),
-      })),
-    });
-  } catch {
-    console.error("order list failed");
-    return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+    console.error("Failed to create order:", error);
+    const message = error instanceof Error ? error.message : "Failed to create order";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-/**
- * Move an order to the next stage (§28). Only valid transitions are accepted, and the
- * mapping from the owner-facing stage to the internal state machine happens server-side.
- */
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
-
   try {
-    const body = (await req.json()) as Record<string, unknown>;
-    const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : "";
-    const stage = typeof body?.stage === "string" ? (body.stage as OrderStage) : "";
-    if (!orderId || !stage) return NextResponse.json({ error: "Choose an order and a status." }, { status: 400 });
-
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { id: true, businessId: true, status: true, orderReference: true },
-    });
-    if (!order) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, order.businessId);
-    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
-
-    const currentStage = orderStatusToStage(order.status);
-    if (!isValidStageTransition(currentStage, stage)) {
-      return NextResponse.json({ error: `An order cannot go from ${currentStage} to ${stage}.` }, { status: 409 });
+    const body = await req.json();
+    const orderId = sanitizeText(body.orderId || body.id, 80);
+    const requestedStage = sanitizeText(body.stage, 40);
+    const requestedStatus = sanitizeText(body.status, 40) as OrderState | "";
+    if (!orderId) {
+      return NextResponse.json({ error: "orderId is required" }, { status: 400 });
     }
-    const nextStatus = stageToOrderStatus(stage);
-    if (!nextStatus) return NextResponse.json({ error: "That status is not recognised." }, { status: 400 });
-    if (!isValidStateTransition(order.status as OrderState, nextStatus) && currentStage !== stage) {
-      return NextResponse.json({ error: `An order cannot go from ${currentStage} to ${stage}.` }, { status: 409 });
+
+    const existing = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    const auth = await authorizeBusiness(existing.businessId);
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+    let nextPersisted: { status: OrderState; paymentStatus?: string };
+
+    if (requestedStage) {
+      const currentStage = deriveOrderStage(existing);
+      const transition = assertOrderStageTransition(currentStage, requestedStage);
+      if (transition.ok === false) {
+        const failed = transition as { error: string; reason: "UNKNOWN_STAGE" | "INVALID_TRANSITION" };
+        // An unknown stage is a malformed request (400); a known stage that the order cannot
+        // move to from its current stage is a state conflict (409).
+        return NextResponse.json(
+          { error: failed.error, reason: failed.reason },
+          { status: failed.reason === "UNKNOWN_STAGE" ? 400 : 409 },
+        );
+      }
+      nextPersisted = stageToPersistedStatus(
+        (transition as { stage: any }).stage,
+        existing.paymentStatus,
+      );
+    } else if (requestedStatus) {
+      if (!isValidStateTransition(existing.status as OrderState, requestedStatus)) {
+        return NextResponse.json(
+          { error: `Invalid order state transition from ${existing.status} to ${requestedStatus}` },
+          { status: 409 },
+        );
+      }
+      nextPersisted = { status: requestedStatus };
+    } else {
+      return NextResponse.json({ error: "stage or status is required" }, { status: 400 });
     }
 
     const updated = await prisma.order.update({
-      where: { id: orderId },
+      where: { id: existing.id },
       data: {
-        status: nextStatus,
-        ...(stage === "COMPLETED" ? { completedAt: new Date() } : {}),
+        status: nextPersisted.status,
+        ...(nextPersisted.paymentStatus ? { paymentStatus: nextPersisted.paymentStatus } : {}),
+        ...(nextPersisted.status === "COMPLETED" ? { completedAt: new Date() } : {}),
       },
-      select: { id: true, status: true, orderReference: true },
-    });
-    await logAudit({
-      actorId: session.userId,
-      action: "ORDER_STAGE_CHANGED",
-      targetType: "ORDER",
-      targetId: orderId,
-      metadata: { from: order.status, to: updated.status, stage },
+      include: { items: true },
     });
 
-    return NextResponse.json({ order: { ...updated, stage } });
-  } catch {
-    console.error("order update failed");
-    return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+    await logAudit({
+      actorId: auth.user.id,
+      action: "ORDER_STAGE_CHANGED",
+      targetType: "ORDER",
+      targetId: updated.id,
+      metadata: {
+        businessId: updated.businessId,
+        fromStatus: existing.status,
+        toStatus: updated.status,
+        stage: deriveOrderStage(updated),
+      },
+    });
+
+    return NextResponse.json({ order: { ...updated, stage: deriveOrderStage(updated) } });
+  } catch (error) {
+    console.error("Failed to update order:", error);
+    return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
   }
 }

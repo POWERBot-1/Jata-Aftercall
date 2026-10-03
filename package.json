@@ -8,6 +8,7 @@
     "build": "bash scripts/build.sh",
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
