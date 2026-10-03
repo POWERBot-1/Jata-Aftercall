@@ -118,32 +118,6 @@ jobs:
             exit 1
           fi
 
-      - name: Post the suite summary to the pull request
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const tail = (file, label) => {
-              try {
-                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                const lines = text.split('\n').filter((l) => /Test Files|Tests  |Duration/.test(l)).slice(-3);
-                return `### ${label}\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``;
-              } catch (e) { return `### ${label}\n\n(no output captured)`; }
-            };
-            const body = [
-              tail('/tmp/step-full-suite.log', 'npx vitest run --exclude tests/e2e (real PostgreSQL)'),
-              tail('/tmp/step-journey.log', 'npm run test:e2e'),
-              tail('/tmp/step-pos-journey.log', 'npm run test:e2e:pos'),
-            ].join('\n\n');
-            const number = context.payload.pull_request ? context.payload.pull_request.number : 19;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: number,
-              body: `Suite summary for \`${context.sha}\`:\n\n${body}`.slice(0, 20000),
-            });
-
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.
       - name: Report failing output to the pull request
