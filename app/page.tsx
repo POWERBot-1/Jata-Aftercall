@@ -2,7 +2,10 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { formatKES } from "@/lib/format";
 import { publiclyListedPlans } from "@/lib/pricing";
+// The Business POS price is a server-side constant, never a number written into this page (§45).
+import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +13,10 @@ export default async function HomePage() {
   const session = await getSession();
   let plans: { key: string; name: string; priceKES: number; durationDays: number }[] = [];
   try {
-    // The Business POS is a private, owner-only product (POS spec §67): never advertise it here.
+    // The AFTERCALL plan cards never include the Business POS: `publiclyListedPlans()` keeps the
+    // private plan out of them (POS spec §67). The POS has one dedicated entry of its own further
+    // down this page — a product decision recorded in BUSINESS_POS_IMPLEMENTATION.md §7 on
+    // 2026-10-03 — and its price is read from the server constant, so this page can never set it.
     plans = publiclyListedPlans(await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }));
   } catch {
     plans = [];
@@ -132,6 +138,55 @@ export default async function HomePage() {
               <p className="mt-2 text-center text-xs text-zinc-600">Secure Paystack checkout. Your plan starts once payment is confirmed.</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/*
+        Business POS — the owner's operating system, sold separately from the AFTERCALL page plans.
+        This is an entry point only: it links into the existing POS flow (/dashboard/pos), where the
+        business is chosen, configured, previewed and paid for. Nothing here activates or claims to
+        activate a POS, and the existing plan cards above are untouched (§67 exception, 2026-10-03).
+      */}
+      <section aria-labelledby="business-pos-heading" className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:flex sm:items-center sm:gap-5">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              focusable="false"
+            >
+              <rect x="3" y="3.5" width="18" height="12" rx="2.5" />
+              <path d="M7.5 11.5V8.5" />
+              <path d="M11.5 11.5V6.5" />
+              <path d="M15.5 11.5V9.5" />
+              <path d="M6 19.5h12" />
+            </svg>
+          </span>
+          <div className="mt-3 min-w-0 sm:mt-0 sm:flex-1">
+            <h3 id="business-pos-heading" className="text-sm font-semibold">Business POS</h3>
+            {/* One text node, so the price and its period read as a single string (§45). */}
+            <p className="mt-1 text-2xl font-bold">{`${formatKES(POS_PLAN_PRICE_KES)}/month`}</p>
+            <p className="mt-2 text-sm text-zinc-600">
+              A point-of-sale for your counter, configured around how your business works — sales,
+              stock, credit and reports. Per business. This is separate from your JATA AFTERCALL page plan.
+            </p>
+          </div>
+          <div className="mt-4 sm:mt-0 sm:w-60 sm:shrink-0">
+            <Link href="/dashboard/pos" className="inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">
+              Open Business POS
+            </Link>
+            <p className="mt-2 text-center text-xs text-zinc-600">
+              Sign in, answer a few questions and see your POS. It switches on only once Paystack confirms the payment.
+            </p>
+          </div>
         </div>
       </section>
 
