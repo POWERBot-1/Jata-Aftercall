@@ -160,7 +160,7 @@ export async function publishAIBusinessFrontDesk(params: {
   actorId?: string | null;
 }): Promise<
   | { ok: true; readiness: AIReadinessReport; publishedVersion: number; sharePath: string }
-  | { ok: false; code: "READINESS_FAILED" | "SUBSCRIPTION_REQUIRED"; error: string; readiness: AIReadinessReport }
+  | { ok: false; code: "READINESS_FAILED" | "SUBSCRIPTION_REQUIRED" | "PUBLISH_FAILED"; error: string; readiness: AIReadinessReport }
 > {
   const readiness = await evaluateAIReadiness(params.businessId);
 
@@ -183,22 +183,61 @@ export async function publishAIBusinessFrontDesk(params: {
     };
   }
 
-  // Atomic publish snapshot + ensure business page is published (§31, §48)
-  const publishedConfig = await publishAIConfigSnapshot(params.businessId);
+  // Publication is all-or-nothing (§31): the business flag is written first and the draft
+  // configuration is promoted only afterwards, with a compensating rollback if the snapshot
+  // write fails. A failed publish therefore never leaves a half-live AI Front Desk — never a
+  // LIVE configuration on an unpublished business, nor a published business serving a
+  // configuration that was never promoted.
   let slug = params.businessId;
+  let previousPublication: { isPublished: boolean; status: string } | null = null;
+
   try {
+    if (prisma.business?.findUnique) {
+      const before = await prisma.business
+        .findUnique({
+          where: { id: params.businessId },
+          select: { slug: true, isPublished: true, status: true },
+        })
+        .catch(() => null);
+      if (before) {
+        previousPublication = { isPublished: Boolean(before.isPublished), status: String(before.status) };
+        if (before.slug) slug = before.slug;
+      }
+    }
     if (prisma.business?.update) {
       const updatedBiz = await prisma.business.update({
         where: { id: params.businessId },
         data: { isPublished: true, status: "ACTIVE" },
       });
       if (updatedBiz?.slug) slug = updatedBiz.slug;
-    } else if (prisma.business?.findUnique) {
-      const biz = await prisma.business.findUnique({ where: { id: params.businessId } });
-      if (biz?.slug) slug = biz.slug;
     }
   } catch {
-    // Keep slug fallback
+    return {
+      ok: false,
+      code: "PUBLISH_FAILED",
+      error: "The business could not be marked published. Nothing was changed — please try again.",
+      readiness,
+    };
+  }
+
+  let publishedConfig: Awaited<ReturnType<typeof publishAIConfigSnapshot>>;
+  try {
+    publishedConfig = await publishAIConfigSnapshot(params.businessId);
+  } catch (error) {
+    if (previousPublication && prisma.business?.update) {
+      await prisma.business
+        .update({ where: { id: params.businessId }, data: previousPublication })
+        .catch(() => null);
+    }
+    return {
+      ok: false,
+      code: "PUBLISH_FAILED",
+      error:
+        error instanceof Error
+          ? `The AI configuration could not be published: ${error.message}`
+          : "The AI configuration could not be published. Nothing was changed — please try again.",
+      readiness,
+    };
   }
 
   await logAudit({

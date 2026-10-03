@@ -14,11 +14,13 @@ export async function GET(req: Request) {
     }
 
     const user = await getCurrentUser().catch(() => null);
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    // Tenant data is never served to an anonymous caller: the session is mandatory here.
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const config = await prisma.merchantPaymentConfig.findUnique({

@@ -282,10 +282,13 @@ export async function reserveInventoryForOrder(params: {
       const nextStatus: InventoryStatus =
         remaining === 0 ? "OUT_OF_STOCK" : remaining <= 3 ? "LOW_STOCK" : (product.stockStatus as InventoryStatus);
 
-      // Compare-and-set update via updateMany if available, falling back to update
+      // Compare-and-set update via updateMany if available, falling back to update.
+      // A failed reservation must never be reported as a successful one: if the write cannot be
+      // confirmed, stock was not reserved and the order must not proceed (§18).
       if (prisma.product?.updateMany) {
-        const updated = await prisma.product
-          .updateMany({
+        let updated: { count: number };
+        try {
+          updated = await prisma.product.updateMany({
             where: {
               id: product.id,
               businessId: params.businessId,
@@ -295,9 +298,15 @@ export async function reserveInventoryForOrder(params: {
               quantity: remaining,
               stockStatus: nextStatus,
             },
-          })
-          .catch(() => ({ count: 1 }));
-        if (updated && typeof updated.count === "number" && updated.count === 0) {
+          });
+        } catch {
+          return {
+            ok: false,
+            error: `${product.name} could not be reserved — stock was not confirmed. Please try again.`,
+            productId,
+          };
+        }
+        if (typeof updated.count === "number" && updated.count === 0) {
           return {
             ok: false,
             error: `${product.name} was just sold out by another customer. Prevented overselling.`,
@@ -305,12 +314,18 @@ export async function reserveInventoryForOrder(params: {
           };
         }
       } else if (prisma.product?.update) {
-        await prisma.product
-          .update({
+        try {
+          await prisma.product.update({
             where: { id: product.id },
             data: { quantity: remaining, stockStatus: nextStatus },
-          })
-          .catch(() => null);
+          });
+        } catch {
+          return {
+            ok: false,
+            error: `${product.name} could not be reserved — stock was not confirmed. Please try again.`,
+            productId,
+          };
+        }
       }
       reserved.push({ productId: product.id, quantity: qty, remainingQuantity: remaining });
     } else {

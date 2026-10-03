@@ -26,8 +26,25 @@ export type MerchantPublicPaymentInfo = {
   instructions?: string | null;
 };
 
+// Development-only key material. Merchant credentials must never be protected by a key that is
+// published in the repository: in production a missing MERCHANT_CREDENTIAL_KEY fails closed
+// instead of silently encrypting with this well-known value (§10, §14).
+const DEV_ONLY_KEY_MATERIAL = "jata-merchant-credential-key-v1";
+
 function getEncryptionKey(): Buffer {
-  const raw = process.env.MERCHANT_CREDENTIAL_KEY || process.env.NEXTAUTH_SECRET || "jata-merchant-credential-key-v1";
+  const raw =
+    process.env.MERCHANT_CREDENTIAL_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    process.env.AUTH_SECRET ||
+    "";
+  if (!raw) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "MERCHANT_CREDENTIAL_KEY is not configured — refusing to store merchant credentials under a shared default key.",
+      );
+    }
+    return crypto.createHash("sha256").update(DEV_ONLY_KEY_MATERIAL).digest();
+  }
   return crypto.createHash("sha256").update(raw).digest();
 }
 

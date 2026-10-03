@@ -481,6 +481,7 @@ export async function saveExtendedAIConfig(
     delivery?: Partial<DeliveryConfiguration>;
     policies?: Partial<BusinessPoliciesConfig>;
   },
+  options?: { requirePersistence?: boolean },
 ): Promise<ExtendedAIConfig> {
   const current = await getExtendedAIConfig(businessId);
   const next: ExtendedAIConfig = {
@@ -523,7 +524,14 @@ export async function saveExtendedAIConfig(
         });
       }
     }
-  } catch {
+  } catch (error) {
+    if (options?.requirePersistence) {
+      // Publishing must not claim success when the snapshot was never durably written
+      // (§31): restore the in-memory mirror to the pre-publish configuration and surface the
+      // failure so the caller can roll the publication back.
+      tenantConfigStore.set(businessId, current);
+      throw error instanceof Error ? error : new Error("AI_CONFIG_PERSISTENCE_FAILED");
+    }
     // Kept in tenantConfigStore when DB is mocked/offline
   }
 
@@ -532,11 +540,15 @@ export async function saveExtendedAIConfig(
 
 export async function publishAIConfigSnapshot(businessId: string): Promise<ExtendedAIConfig> {
   const current = await getExtendedAIConfig(businessId);
-  return saveExtendedAIConfig(businessId, {
-    operationalStatus: current.operationalStatus === "PAUSED" ? "PAUSED" : "LIVE",
-    publishedVersion: current.draftVersion || 1,
-    publishedAt: new Date().toISOString(),
-  });
+  return saveExtendedAIConfig(
+    businessId,
+    {
+      operationalStatus: current.operationalStatus === "PAUSED" ? "PAUSED" : "LIVE",
+      publishedVersion: current.draftVersion || 1,
+      publishedAt: new Date().toISOString(),
+    },
+    { requirePersistence: true },
+  );
 }
 
 export function resetInMemoryAIConfigForTests() {

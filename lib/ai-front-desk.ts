@@ -232,12 +232,18 @@ export async function handleAIFrontDeskTurn(params: {
   const lower = rawMessage.toLowerCase();
 
   // 0. Check operational status (PAUSED / MAINTENANCE — §45)
-  if (brain.extendedConfig.operationalStatus === "MAINTENANCE" && !preview) {
-    const maintenanceReply = `Our AI Front Desk for ${brain.business.name} is temporarily in maintenance mode. ${HUMAN_HANDOFF_MESSAGE}`;
+  // A paused or in-maintenance Front Desk must not keep serving customers: the owner expects an
+  // emergency pause to take effect immediately, while the owner's own Preview stays available.
+  const operationalStatus = brain.extendedConfig.operationalStatus;
+  if ((operationalStatus === "MAINTENANCE" || operationalStatus === "PAUSED") && !preview) {
+    const statusReply =
+      operationalStatus === "PAUSED"
+        ? `Our AI Front Desk for ${brain.business.name} is temporarily paused. ${HUMAN_HANDOFF_MESSAGE}`
+        : `Our AI Front Desk for ${brain.business.name} is temporarily in maintenance mode. ${HUMAN_HANDOFF_MESSAGE}`;
     return finalizeTurn({
       conv,
       rawMessage,
-      reply: maintenanceReply,
+      reply: statusReply,
       responseType: "ACTION_REQUIRED",
       source: "structured_data",
       confidence: "high",
@@ -245,7 +251,7 @@ export async function handleAIFrontDeskTurn(params: {
       preview,
       brain,
       toolsInvoked,
-      informationFound: ["Operational status: MAINTENANCE"],
+      informationFound: [`Operational status: ${operationalStatus}`],
       informationNotFound,
       missingInformation,
       configurationImprovement,

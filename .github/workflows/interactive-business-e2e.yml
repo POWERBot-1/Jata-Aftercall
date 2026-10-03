@@ -74,6 +74,28 @@ jobs:
           set -o pipefail
           npm run seed 2>&1 | tee /tmp/step-seed.log
 
+      # The unit, integration and security suites must run against the same real database too.
+      # They are the only coverage for the AI Business Front Desk entitlement gate, tenant
+      # isolation, the publication lifecycle and the order-transition contract, and a mocked Prisma
+      # client cannot catch a schema mismatch — exactly the class of bug that broke an earlier head
+      # of this work. The two journey files are excluded here because they get their own dedicated
+      # steps below, which mutate the same database.
+      - name: Run the unit, integration and security suites against the database
+        run: |
+          set -o pipefail
+          npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-full-suite.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-full-suite.log)
+          # The database-backed suites self-skip without DATABASE_URL, and a skipped test is not a
+          # passed test, so a green check here has to mean nothing was skipped.
+          if printf '%s' "$plain" | grep -qE "[1-9][0-9]* skipped"; then
+            echo "Database suites skipped — DATABASE_URL did not reach vitest." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE "[0-9]+ passed"; then
+            echo "The full suite reported no passing tests." >&2
+            exit 1
+          fi
+
       - name: Run the §66 journey
         run: |
           set -o pipefail
@@ -96,6 +118,32 @@ jobs:
             exit 1
           fi
 
+      - name: Post the suite summary to the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const tail = (file, label) => {
+              try {
+                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+                const lines = text.split('\n').filter((l) => /Test Files|Tests  |Duration/.test(l)).slice(-3);
+                return `### ${label}\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``;
+              } catch (e) { return `### ${label}\n\n(no output captured)`; }
+            };
+            const body = [
+              tail('/tmp/step-full-suite.log', 'npx vitest run --exclude tests/e2e (real PostgreSQL)'),
+              tail('/tmp/step-journey.log', 'npm run test:e2e'),
+              tail('/tmp/step-pos-journey.log', 'npm run test:e2e:pos'),
+            ].join('\n\n');
+            const number = context.payload.pull_request ? context.payload.pull_request.number : 19;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              body: `Suite summary for \`${context.sha}\`:\n\n${body}`.slice(0, 20000),
+            });
+
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.
       - name: Report failing output to the pull request
@@ -115,6 +163,7 @@ jobs:
               } catch (e) { return '(no output captured)'; }
             };
             const body = [
+              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 20000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 20000],
               ['npm run test:e2e', '/tmp/step-journey.log', 4000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],

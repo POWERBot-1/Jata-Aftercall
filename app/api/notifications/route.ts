@@ -25,17 +25,24 @@ export async function POST(req: Request) {
       notificationId,
     } = body || {};
 
+    // Every notification operation is tenant-scoped business activity: an anonymous caller
+    // may neither read the business notification log nor trigger deliveries/retries (§22, §54).
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
     if (action === "retry") {
       if (!notificationId) {
         return NextResponse.json({ error: "notificationId required for retry." }, { status: 400 });
       }
-      if (user && businessId) {
-        const allowed = await canAccessBusiness(user.id, businessId, user.role);
-        if (!allowed) {
-          return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-        }
+      if (!businessId) {
+        return NextResponse.json({ error: "businessId is required to retry a notification." }, { status: 400 });
       }
-      const result = await retryFailedNotification(notificationId, businessId || undefined);
+      const allowedRetry = await canAccessBusiness(user.id, businessId, user.role);
+      if (!allowedRetry) {
+        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+      }
+      const result = await retryFailedNotification(notificationId, businessId);
       return NextResponse.json(result);
     }
 
@@ -46,11 +53,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const result = await createNotification({
@@ -78,11 +83,17 @@ export async function GET(req: Request) {
     const notificationId = searchParams.get("notificationId");
     const businessId = searchParams.get("businessId");
 
-    if (businessId && user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    // Every read is scoped to one tenant: a bare notificationId is never enough, otherwise an
+    // authenticated member of one business could read another business's notification (§54).
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId is required." }, { status: 400 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     if (notificationId) {

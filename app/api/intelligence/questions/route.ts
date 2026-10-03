@@ -18,11 +18,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
 
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    // Unanswered customer questions are owner intelligence: never readable anonymously (§5, §54).
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const [questions, topQuestions] = await Promise.all([
@@ -55,22 +57,25 @@ export async function POST(req: Request) {
         );
       }
 
-      if (user) {
-        const roleCheck = await assertBusinessRole({
-          userId: user.id,
-          businessId,
-          userRole: user.role,
-          action: "edit_knowledge",
-        });
-        if (!roleCheck.allowed) {
-          return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-        }
+      // Approving an answer writes the business's authoritative knowledge, so the caller must
+      // be authenticated and hold edit_knowledge rights on that tenant (§5, §35, §46).
+      if (!user) {
+        return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+      }
+      const roleCheck = await assertBusinessRole({
+        userId: user.id,
+        businessId,
+        userRole: user.role,
+        action: "edit_knowledge",
+      });
+      if (!roleCheck.allowed) {
+        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
       }
 
       const updated = await approveAnswer(businessId, questionId, approvedAnswer);
 
       await logAudit({
-        actorId: user?.id || null,
+        actorId: user?.id ?? null,
         action: "FAQ_APPROVED",
         targetType: "UNANSWERED_QUESTION",
         targetId: questionId,

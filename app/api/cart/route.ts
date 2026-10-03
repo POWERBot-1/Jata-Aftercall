@@ -16,7 +16,6 @@ export async function POST(req: Request) {
       customerName,
       deliveryZone,
       deliveryFeeKES,
-      discountKES,
       preview,
     } = body || {};
 
@@ -88,7 +87,8 @@ export async function POST(req: Request) {
 
     const calculation = buildCartFromLines(resolvedLines, {
       deliveryFeeKES: resolvedDeliveryFee,
-      discountKES: typeof discountKES === "number" ? Math.max(0, Math.round(discountKES)) : 0,
+      // §32: discounts come from configured promotions only — never from the browser.
+      discountKES: 0,
     });
 
     if (preview) {
