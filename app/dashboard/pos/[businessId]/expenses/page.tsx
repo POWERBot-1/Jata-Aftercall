@@ -1,14 +1,18 @@
 import { emptyStateFor } from "@/lib/pos/presentation";
 import { formSpec } from "@/lib/pos/forms";
 import { expenseTotals, listExpenses } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { formatKES } from "@/lib/format";
 
 /**
  * Expenses (§17). Categories come from the setup, including the ones the owner named themselves.
  * An expense can be added but never edited: the ledger stays a record of what actually happened
  * (§54).
+ *
+ * What the business spends is not every role's business, so the page asks for `VIEW_EXPENSES` —
+ * the same read permission the expenses API enforces — before it reads a row (§11, §36).
  */
 
 export const dynamic = "force-dynamic";
@@ -18,7 +22,9 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosExpensesPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_EXPENSES");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "expense");
 
