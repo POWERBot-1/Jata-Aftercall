@@ -64,6 +64,9 @@ function get(url: string) {
 function futureDate(offsetDays: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
+  if (offsetDays > 0 && date.getDay() === 0) {
+    date.setDate(date.getDate() + 1);
+  }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 

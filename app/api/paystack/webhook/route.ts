@@ -60,6 +60,7 @@ export async function POST(req: Request) {
         const changed = await tx.payment.updateMany({ where: { id: refundPayment.id, status: "PAID" }, data: { status: "REFUNDED" } });
         if (changed.count && refundPayment.businessId) {
           await tx.subscription.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
+          await tx.aIPackageEntitlement?.updateMany?.({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
         }
       });
       await logAudit({ actorId: refundPayment.userId, action: "WEBHOOK_REFUND_PROCESSED", targetType: "PAYMENT", targetId: refundPayment.id });

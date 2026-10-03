@@ -163,6 +163,24 @@ export async function activateSubscriptionForPayment(
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });
+    if (plan.key === "AI_BUSINESS_FRONT_DESK") {
+      await tx.aIPackageEntitlement?.upsert?.({
+        where: { businessId: payment.businessId },
+        update: {
+          packageKey: "AI_BUSINESS_FRONT_DESK",
+          status: "ACTIVE",
+          activatedAt: startAt,
+          expiresAt,
+        },
+        create: {
+          businessId: payment.businessId,
+          packageKey: "AI_BUSINESS_FRONT_DESK",
+          status: "ACTIVE",
+          activatedAt: startAt,
+          expiresAt,
+        },
+      });
+    }
     if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
     await tx.auditEvent.create({
       data: {

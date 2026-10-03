@@ -186,9 +186,15 @@ export default function BusinessPage({
             )}
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <a href="#services" className={`inline-flex min-h-11 items-center text-sm font-semibold underline ${t.colors.muted}`}>
               View services ↓
+            </a>
+            <a
+              href={`/b/${business.slug}/ai`}
+              className={`jata-cta inline-flex min-h-11 items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-2 text-xs font-semibold`}
+            >
+              Ask AI Front Desk →
             </a>
           </div>
         </div>

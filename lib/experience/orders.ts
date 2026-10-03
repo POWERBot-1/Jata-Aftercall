@@ -97,3 +97,34 @@ export type OrderPaymentState = (typeof ORDER_PAYMENT_STATES)[number];
 export function isOrderPaymentState(value: unknown): value is OrderPaymentState {
   return typeof value === "string" && (ORDER_PAYMENT_STATES as readonly string[]).includes(value);
 }
+
+export function deriveOrderStage(order: { status?: string | null; paymentStatus?: string | null }): OrderStage {
+  return orderStatusToStage(order.status || "CONFIRMED");
+}
+
+export function assertOrderStageTransition(
+  currentStage: OrderStage,
+  nextStageRaw: string,
+): { ok: true; stage: OrderStage } | { ok: false; error: string } {
+  if (!isOrderStage(nextStageRaw)) {
+    return { ok: false, error: `Unknown order stage: ${nextStageRaw}` };
+  }
+  if (!isValidStageTransition(currentStage, nextStageRaw)) {
+    return {
+      ok: false,
+      error: `Invalid order stage transition from ${currentStage} to ${nextStageRaw}`,
+    };
+  }
+  return { ok: true, stage: nextStageRaw };
+}
+
+export function stageToPersistedStatus(
+  stage: OrderStage,
+  currentPaymentStatus?: string | null,
+): { status: OrderState; paymentStatus?: string } {
+  const status = stageToOrderStatus(stage) || "CONFIRMED";
+  return {
+    status,
+    ...(currentPaymentStatus ? { paymentStatus: currentPaymentStatus } : {}),
+  };
+}

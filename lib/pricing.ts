@@ -39,11 +39,34 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
 }
 
 export async function getPlanByKey(key: string): Promise<Plan | null> {
-  return prisma.planConfig.findUnique({ where: { key } });
+  return (await prisma.planConfig?.findUnique?.({ where: { key } })) ?? null;
+}
+
+export async function getPlanConfig(
+  key: string,
+): Promise<(Plan & { priceKes: number; label: string }) | null> {
+  const fromDb = await prisma.planConfig?.findUnique?.({ where: { key } }).catch(() => null);
+  const base =
+    fromDb ||
+    FALLBACK_PLANS.find((p) => p.key === key) ||
+    null;
+  if (!base) return null;
+  const priceKES = Number((base as any).priceKES ?? (base as any).priceKes ?? 0);
+  const name = String((base as any).name ?? (base as any).label ?? key);
+  return {
+    id: String((base as any).id || key),
+    key: base.key,
+    name,
+    label: name,
+    priceKES,
+    priceKes: priceKES,
+    durationDays: Number(base.durationDays || 30),
+    isActive: base.isActive !== false,
+  };
 }
 
 export async function getPlanById(id: string): Promise<Plan | null> {
-  return prisma.planConfig.findUnique({ where: { id } });
+  return (await prisma.planConfig?.findUnique?.({ where: { id } })) ?? null;
 }
 
 // Fallback constants used only if DB has not been seeded yet (e.g. during tests without DB)
