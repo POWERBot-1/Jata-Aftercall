@@ -88,48 +88,52 @@ export async function POST(req: Request) {
 
     const previousConfig = await prisma.aIConfiguration.findUnique({ where: { businessId } }).catch(() => null);
 
-    const config = await prisma.aIConfiguration.upsert({
+    const resolvedToneOfVoice = toneOfVoice || body?.tone || "Friendly";
+    const resolvedGreeting = greetingMessage ?? body?.welcomeMessage ?? null;
+    const resolvedFallback =
+      fallbackMessage || "I don't have that information yet. Let me connect you with the business.";
+    const resolvedLanguage = languageBehavior || body?.language || "English + Swahili";
+    const resolvedAfterHours = afterHoursMessage ?? null;
+    const resolvedEscalation = escalationRules ?? body?.humanEscalation ?? null;
+    const resolvedAutoReply = autoReplyEnabled !== undefined ? Boolean(autoReplyEnabled) : true;
+    const resolvedOrdering = orderingAllowed !== undefined ? Boolean(orderingAllowed) : true;
+    const resolvedBookings = bookingsAllowed !== undefined ? Boolean(bookingsAllowed) : true;
+    const resolvedPreorders = preordersAllowed !== undefined ? Boolean(preordersAllowed) : false;
+
+    const dbConfig = await prisma.aIConfiguration.upsert({
       where: { businessId },
       update: {
-        toneOfVoice: toneOfVoice || "Friendly",
-        greetingMessage: greetingMessage ?? null,
-        fallbackMessage:
-          fallbackMessage || "I don't have that information yet. Let me connect you with the business.",
-        languageBehavior: languageBehavior || "English + Swahili",
-        afterHoursMessage: afterHoursMessage ?? null,
-        escalationRules: escalationRules ?? null,
-        autoReplyEnabled: autoReplyEnabled !== undefined ? Boolean(autoReplyEnabled) : true,
-        orderingAllowed: orderingAllowed !== undefined ? Boolean(orderingAllowed) : true,
-        bookingsAllowed: bookingsAllowed !== undefined ? Boolean(bookingsAllowed) : true,
-        preordersAllowed: preordersAllowed !== undefined ? Boolean(preordersAllowed) : false,
+        tone: resolvedToneOfVoice.toLowerCase(),
+        language: resolvedLanguage,
+        salesBehavior: body?.salesBehavior || "recommend",
+        orderingAllowed: resolvedOrdering,
+        preordersAllowed: resolvedPreorders,
+        humanEscalation: resolvedEscalation || "uncertain",
+        welcomeMessage: resolvedGreeting,
       },
       create: {
         businessId,
-        toneOfVoice: toneOfVoice || "Friendly",
-        greetingMessage: greetingMessage ?? null,
-        fallbackMessage:
-          fallbackMessage || "I don't have that information yet. Let me connect you with the business.",
-        languageBehavior: languageBehavior || "English + Swahili",
-        afterHoursMessage: afterHoursMessage ?? null,
-        escalationRules: escalationRules ?? null,
-        autoReplyEnabled: autoReplyEnabled !== undefined ? Boolean(autoReplyEnabled) : true,
-        orderingAllowed: orderingAllowed !== undefined ? Boolean(orderingAllowed) : true,
-        bookingsAllowed: bookingsAllowed !== undefined ? Boolean(bookingsAllowed) : true,
-        preordersAllowed: preordersAllowed !== undefined ? Boolean(preordersAllowed) : false,
+        tone: resolvedToneOfVoice.toLowerCase(),
+        language: resolvedLanguage,
+        salesBehavior: body?.salesBehavior || "recommend",
+        orderingAllowed: resolvedOrdering,
+        preordersAllowed: resolvedPreorders,
+        humanEscalation: resolvedEscalation || "uncertain",
+        welcomeMessage: resolvedGreeting,
       },
     });
 
     const extendedConfig = await saveExtendedAIConfig(businessId, {
-      toneOfVoice: config.toneOfVoice,
-      greetingMessage: config.greetingMessage,
-      fallbackMessage: config.fallbackMessage,
-      languageBehavior: config.languageBehavior,
-      afterHoursMessage: config.afterHoursMessage,
-      escalationRules: config.escalationRules,
-      autoReplyEnabled: config.autoReplyEnabled,
-      orderingAllowed: config.orderingAllowed,
-      bookingsAllowed: config.bookingsAllowed,
-      preordersAllowed: config.preordersAllowed,
+      toneOfVoice: resolvedToneOfVoice,
+      greetingMessage: resolvedGreeting,
+      fallbackMessage: resolvedFallback,
+      languageBehavior: resolvedLanguage,
+      afterHoursMessage: resolvedAfterHours,
+      escalationRules: resolvedEscalation,
+      autoReplyEnabled: resolvedAutoReply,
+      orderingAllowed: resolvedOrdering,
+      bookingsAllowed: resolvedBookings,
+      preordersAllowed: resolvedPreorders,
       ...(delivery ? { delivery } : {}),
       ...(policies ? { policies } : {}),
       ...(operationalStatus ? { operationalStatus } : {}),
@@ -140,12 +144,26 @@ export async function POST(req: Request) {
       ...(escalationThreshold !== undefined ? { escalationThreshold } : {}),
     });
 
+    const config = {
+      ...dbConfig,
+      toneOfVoice: extendedConfig.toneOfVoice,
+      greetingMessage: extendedConfig.greetingMessage,
+      fallbackMessage: extendedConfig.fallbackMessage,
+      languageBehavior: extendedConfig.languageBehavior,
+      afterHoursMessage: extendedConfig.afterHoursMessage,
+      escalationRules: extendedConfig.escalationRules,
+      autoReplyEnabled: extendedConfig.autoReplyEnabled,
+      orderingAllowed: extendedConfig.orderingAllowed,
+      bookingsAllowed: extendedConfig.bookingsAllowed,
+      preordersAllowed: extendedConfig.preordersAllowed,
+    };
+
     await logAudit({
       actorId: user.id,
       action: "AI_CONFIGURATION_UPDATED",
       targetType: "AI_CONFIGURATION",
-      targetId: config.id || businessId,
-      previousValue: previousConfig ? { toneOfVoice: previousConfig.toneOfVoice, orderingAllowed: previousConfig.orderingAllowed } : null,
+      targetId: dbConfig.id || businessId,
+      previousValue: previousConfig ? { toneOfVoice: (previousConfig as any).toneOfVoice || previousConfig.tone, orderingAllowed: previousConfig.orderingAllowed } : null,
       newValue: {
         toneOfVoice: config.toneOfVoice,
         orderingAllowed: config.orderingAllowed,

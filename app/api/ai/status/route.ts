@@ -84,12 +84,10 @@ export async function POST(req: Request) {
     await prisma.aIConfiguration.upsert({
       where: { businessId },
       update: {
-        autoReplyEnabled: updatedExtended.operationalStatus === "LIVE",
         orderingAllowed: !updatedExtended.pauseAllOrdering && updatedExtended.operationalStatus === "LIVE",
       },
       create: {
         businessId,
-        autoReplyEnabled: updatedExtended.operationalStatus === "LIVE",
         orderingAllowed: !updatedExtended.pauseAllOrdering && updatedExtended.operationalStatus === "LIVE",
       },
     });

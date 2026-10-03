@@ -204,7 +204,7 @@ export async function PATCH(req: Request) {
       const currentStage = deriveOrderStage(existing);
       const transition = assertOrderStageTransition(currentStage, requestedStage);
       if (transition.ok === false) {
-        return NextResponse.json({ error: (transition as { error: string }).error }, { status: 422 });
+        return NextResponse.json({ error: (transition as { error: string }).error }, { status: 409 });
       }
       nextPersisted = stageToPersistedStatus(
         (transition as { stage: any }).stage,
@@ -214,7 +214,7 @@ export async function PATCH(req: Request) {
       if (!isValidStateTransition(existing.status as OrderState, requestedStatus)) {
         return NextResponse.json(
           { error: `Invalid order state transition from ${existing.status} to ${requestedStatus}` },
-          { status: 422 },
+          { status: 409 },
         );
       }
       nextPersisted = { status: requestedStatus };

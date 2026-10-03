@@ -35,7 +35,7 @@ export default async function AIOnboardingPage({
   if (user) {
     const biz = await prisma.business
       .findFirst({
-        where: businessId ? { id: businessId, userId: user.id } : { userId: user.id },
+        where: businessId ? { id: businessId, ownerId: user.id } : { ownerId: user.id },
         select: { id: true, slug: true },
       })
       .catch(() => null);

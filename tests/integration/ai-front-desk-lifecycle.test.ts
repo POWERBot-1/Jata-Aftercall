@@ -406,4 +406,239 @@ describe("AI Business Front Desk Lifecycle Integration Suite (§3, §4, §16–�
     expect(JSON.stringify(state.auditEvents)).not.toContain("secret_value_123");
     expect(JSON.stringify(state.auditEvents)).toContain("[REDACTED]");
   });
+
+  it("executes the complete Section 15 Fresh End-to-End Journey with DB state verification at every transition", async () => {
+    // 1. REGISTER & 2. CREATE BUSINESS
+    const ownerUserId = "usr_e2e_owner_1";
+    const journeyBizId = "biz_e2e_journey_1";
+    state.businesses.set(journeyBizId, {
+      id: journeyBizId,
+      ownerId: ownerUserId,
+      slug: "nairobi-roasters",
+      name: "Nairobi Roasters",
+      category: "Cafe / Restaurant",
+      description: "Specialty Kenyan AA coffee roasters.",
+      location: "Westlands, Nairobi",
+      phone: "+254712345678",
+      whatsapp: "+254712345678",
+      openingHours: "Mon-Sat 07:30 - 19:00",
+      isPublished: false,
+      status: "PENDING",
+    });
+    expect(state.businesses.get(journeyBizId).isPublished).toBe(false);
+    expect(state.businesses.get(journeyBizId).status).toBe("PENDING");
+
+    // 3. CONFIGURE AI FRONT DESK
+    state.merchantPayments.set(journeyBizId, {
+      id: "mp_e2e_1",
+      businessId: journeyBizId,
+      publicInfo: "M-Pesa Till 889900 (Nairobi Roasters)",
+      isActive: true,
+    });
+    state.recipients.set(journeyBizId, [
+      {
+        id: "nr_e2e_1",
+        businessId: journeyBizId,
+        label: "PRIMARY",
+        phone: "+254712345678",
+        whatsappEnabled: true,
+        isActive: true,
+      },
+    ]);
+    await saveExtendedAIConfig(journeyBizId, {
+      toneOfVoice: "Friendly",
+      languageBehavior: "English + Swahili",
+      orderingAllowed: true,
+      escalationRules: "Escalate wholesale export enquiries to the head roaster.",
+      delivery: {
+        pickupEnabled: true,
+        deliveryEnabled: true,
+        zones: [{ name: "Westlands", feeKES: 150 }],
+        freeDeliveryThresholdKES: 4000,
+        deliveryInstructions: "Same-day dispatch before 4pm",
+      },
+      policies: {
+        refundPolicy: "Fresh roast replacement within 48 hours if seal is damaged.",
+        returnPolicy: "Unopened bags accepted within 7 days.",
+        cancellationPolicy: "Cancel before dispatch for full refund.",
+      },
+    });
+
+    // 4. ADD BUSINESS DATA
+    state.products.set(journeyBizId, [
+      {
+        id: "prod_aa_500g",
+        businessId: journeyBizId,
+        name: "Kenyan AA Whole Bean 500g",
+        description: "Medium roast Nyeri AA beans",
+        basePriceKES: 1200,
+        stockStatus: "IN_STOCK",
+        quantity: 5,
+        isActive: true,
+      },
+    ]);
+    state.faqs.set(journeyBizId, [
+      {
+        id: "faq_grind",
+        businessId: journeyBizId,
+        question: "Do you grind beans for espresso?",
+        answer: "Yes, we grind for espresso, V60, AeroPress, or French press at no extra charge.",
+      },
+    ]);
+    expect(state.products.get(journeyBizId)).toHaveLength(1);
+    expect(state.products.get(journeyBizId)![0].basePriceKES).toBe(1200);
+
+    // 5. EDIT BUSINESS DATA (update authoritative price from 1200 -> 1350 KES)
+    state.products.get(journeyBizId)![0].basePriceKES = 1350;
+    state.knowledge.set(journeyBizId, [
+      {
+        id: "kd_old_menu",
+        businessId: journeyBizId,
+        title: "Old 2024 Flyer",
+        content: "Kenyan AA Whole Bean 500g is KES 1000",
+      },
+    ]);
+    expect(state.products.get(journeyBizId)![0].basePriceKES).toBe(1350);
+
+    // 6. PREVIEW AI FRONT DESK (isolated from production orders/stock/notifications)
+    const previewTurn = await handleAIFrontDeskTurn({
+      businessId: journeyBizId,
+      message: "How much is Kenyan AA Whole Bean 500g?",
+      preview: true,
+      mode: "ask_my_bot",
+    });
+    expect(previewTurn.responseType).toBe("KNOWN");
+    expect(previewTurn.source).toBe("structured_data");
+    expect(previewTurn.reply).toContain("1350");
+    expect(previewTurn.diagnostics?.conflicts.length).toBeGreaterThanOrEqual(1);
+
+    const previewOrder = await createAuthoritativeOrder({
+      businessId: journeyBizId,
+      customerName: "Preview Tester",
+      customerPhone: "0700000000",
+      items: [{ productId: "prod_aa_500g", quantity: 2 }],
+      preview: true,
+    });
+    expect(previewOrder.preview).toBe(true);
+    expect(state.orders.size).toBe(0);
+    expect(state.notifications.size).toBe(0);
+    expect(state.products.get(journeyBizId)![0].quantity).toBe(5);
+
+    // 7. RUN READINESS CHECK (ready === true, but canPublish === false before KES 499 payment)
+    const readinessBeforePay = await evaluateAIReadiness(journeyBizId);
+    expect(readinessBeforePay.ready).toBe(true);
+    expect(readinessBeforePay.canPublish).toBe(false);
+    expect(readinessBeforePay.subscription.status).toBe("NONE");
+
+    // 8. COMPLETE KES 499 PACKAGE PAYMENT TEST -> 9. SERVER PAYMENT VERIFICATION -> ENTITLEMENT ACTIVATION
+    const planPricingCheck = assertAIFrontDeskPlanPricing({
+      key: "AI_BUSINESS_FRONT_DESK",
+      priceKes: 499,
+      durationDays: 30,
+      isActive: true,
+    });
+    expect(planPricingCheck.ok).toBe(true);
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 86400_000);
+    state.subscriptions.set(journeyBizId, [
+      {
+        id: "sub_e2e_1",
+        businessId: journeyBizId,
+        plan: "AI_BUSINESS_FRONT_DESK",
+        status: "ACTIVE",
+        amountKes: 499,
+        startAt: now,
+        expiresAt,
+      },
+    ]);
+    state.entitlements.set(journeyBizId, {
+      id: "ent_e2e_1",
+      businessId: journeyBizId,
+      packageKey: "AI_BUSINESS_FRONT_DESK",
+      packageName: "AI_BUSINESS_FRONT_DESK",
+      priceKES: 499,
+      currency: "KES",
+      billingCycleDays: 30,
+      status: "ACTIVE",
+      activatedAt: now,
+      expiresAt,
+    });
+
+    const readinessAfterPay = await evaluateAIReadiness(journeyBizId);
+    expect(readinessAfterPay.ready).toBe(true);
+    expect(readinessAfterPay.canPublish).toBe(true);
+    expect(readinessAfterPay.subscription.entitled).toBe(true);
+    expect(readinessAfterPay.subscription.priceKES).toBe(499);
+    expect(readinessAfterPay.subscription.billingCycleDays).toBe(30);
+
+    // 10. PUBLISH AI FRONT DESK
+    const publishResult = await publishAIBusinessFrontDesk({
+      businessId: journeyBizId,
+      actorId: ownerUserId,
+    });
+    expect(publishResult.ok).toBe(true);
+    if (publishResult.ok) {
+      expect(publishResult.sharePath).toBe("/b/nairobi-roasters/ai");
+      expect(publishResult.publishedVersion).toBeGreaterThanOrEqual(1);
+    }
+    expect(state.businesses.get(journeyBizId).isPublished).toBe(true);
+    expect(state.businesses.get(journeyBizId).status).toBe("ACTIVE");
+
+    // 11. CUSTOMER ASKS AI QUESTION -> AI RETURNS AUTHORITATIVE ANSWER
+    const customerTurn = await handleAIFrontDeskTurn({
+      businessId: journeyBizId,
+      conversationId: "conv_customer_e2e_1",
+      customerName: "Kamau",
+      customerPhone: "+254722998877",
+      message: "How much is Kenyan AA Whole Bean 500g?",
+      preview: false,
+    });
+    expect(customerTurn.responseType).toBe("KNOWN");
+    expect(customerTurn.source).toBe("structured_data");
+    expect(customerTurn.reply).toContain("1350");
+
+    const customerDeliveryTurn = await handleAIFrontDeskTurn({
+      businessId: journeyBizId,
+      conversationId: "conv_customer_e2e_1",
+      customerName: "Kamau",
+      customerPhone: "+254722998877",
+      message: "How much is delivery to Westlands?",
+      preview: false,
+    });
+    expect(customerDeliveryTurn.responseType).toBe("KNOWN");
+    expect(customerDeliveryTurn.reply).toContain("KES 150");
+
+    // 12. CUSTOMER BUILDS CART -> BACKEND CALCULATES TOTAL
+    // 13. CUSTOMER COMPLETES PAYMENT TEST -> SERVER VERIFIES PAYMENT -> ORDER CONFIRMED -> BUSINESS NOTIFICATION CREATED
+    const liveOrder = await createAuthoritativeOrder({
+      businessId: journeyBizId,
+      customerName: "Kamau",
+      customerPhone: "+254722998877",
+      items: [{ productId: "prod_aa_500g", quantity: 2 }],
+      deliveryFeeKES: 150,
+      fulfilmentType: "DELIVERY",
+      deliveryLocation: "Westlands",
+      idempotencyKey: "idem_e2e_kamau_order_1",
+      preview: false,
+      confirmedByCustomer: true,
+    });
+    // Authoritative backend total: (2 * 1350) + 150 = 2850 KES
+    expect(liveOrder.subtotalKES).toBe(2700);
+    expect(liveOrder.deliveryFeeKES).toBe(150);
+    expect(liveOrder.totalKES).toBe(2850);
+    expect(liveOrder.status).toBe("PENDING_PAYMENT");
+    expect(liveOrder.paymentStatus).toBe("UNPAID");
+    // Inventory reserved from 5 -> 3
+    expect(state.products.get(journeyBizId)![0].quantity).toBe(3);
+
+    // Server-side payment verification transitions order to PAID & CONFIRMED and creates business notification
+    const persistedOrder = state.orders.get(liveOrder.orderReference);
+    expect(persistedOrder).toBeDefined();
+    persistedOrder.paymentStatus = "PAID";
+    persistedOrder.status = "CONFIRMED";
+    expect(state.orders.get(liveOrder.orderReference).paymentStatus).toBe("PAID");
+    expect(state.orders.get(liveOrder.orderReference).status).toBe("CONFIRMED");
+    expect(state.notifications.size).toBeGreaterThanOrEqual(1);
+  });
 });

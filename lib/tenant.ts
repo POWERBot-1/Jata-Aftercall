@@ -93,15 +93,16 @@ export async function canAccessBusiness(
   if (userRole === "ADMIN") return true;
 
   try {
-    if (prisma.business?.findFirst) {
-      const directByUser = await prisma.business
-        .findFirst({
-          where: { id: businessId, userId },
-          select: { id: true },
-        })
+    if (prisma.business?.findUnique) {
+      const biz = await prisma.business
+        .findUnique({ where: { id: businessId } })
         .catch(() => null);
-      if (directByUser?.id) return true;
+      if (biz && ((biz as any).ownerId === userId || (biz as any).userId === userId)) {
+        return true;
+      }
+    }
 
+    if (prisma.business?.findFirst) {
       const directByOwner = await prisma.business
         .findFirst({
           where: { id: businessId, ownerId: userId },
@@ -109,15 +110,6 @@ export async function canAccessBusiness(
         })
         .catch(() => null);
       if (directByOwner?.id) return true;
-    }
-
-    if (prisma.business?.findUnique) {
-      const biz = await prisma.business
-        .findUnique({ where: { id: businessId } })
-        .catch(() => null);
-      if (biz && ((biz as any).userId === userId || (biz as any).ownerId === userId)) {
-        return true;
-      }
     }
 
     if (prisma.businessMember?.findMany) {

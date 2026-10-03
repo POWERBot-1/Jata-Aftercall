@@ -25,8 +25,8 @@ export default async function AIDashboardPage({
   const business = await prisma.business
     .findFirst({
       where: sp?.businessId
-        ? { id: sp.businessId, ...(user.role === "ADMIN" ? {} : { userId: user.id }) }
-        : { userId: user.id },
+        ? { id: sp.businessId, ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) }
+        : { ownerId: user.id },
       select: { id: true, name: true, slug: true },
     })
     .catch(() => null);

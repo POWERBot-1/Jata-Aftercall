@@ -170,6 +170,7 @@ export async function handleAIFrontDeskTurn(params: {
   conversationId?: string | null;
   channel?: ChannelType;
   preview?: boolean;
+  mode?: "customer" | "ask_my_bot";
   customerName?: string | null;
   customerPhone?: string | null;
   orderId?: string | null;

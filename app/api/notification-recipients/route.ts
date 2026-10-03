@@ -68,18 +68,34 @@ export async function POST(req: Request) {
         ? label.toUpperCase()
         : "PRIMARY";
 
-    const recipient = await prisma.notificationRecipient.create({
-      data: {
-        businessId,
-        label: normalizedLabel,
-        phone: phone || null,
-        email: email || null,
-        whatsappEnabled: whatsappEnabled !== undefined ? Boolean(whatsappEnabled) : true,
-        smsEnabled: smsEnabled !== undefined ? Boolean(smsEnabled) : false,
-        emailEnabled: emailEnabled !== undefined ? Boolean(emailEnabled) : false,
-        isActive: true,
-      },
-    });
+    const existing = await prisma.notificationRecipient
+      ?.findFirst?.({ where: { businessId, label: normalizedLabel } })
+      .catch(() => null);
+
+    const recipient = existing
+      ? await prisma.notificationRecipient.update({
+          where: { id: existing.id },
+          data: {
+            phone: phone || null,
+            email: email || null,
+            whatsappEnabled: whatsappEnabled !== undefined ? Boolean(whatsappEnabled) : true,
+            smsEnabled: smsEnabled !== undefined ? Boolean(smsEnabled) : false,
+            emailEnabled: emailEnabled !== undefined ? Boolean(emailEnabled) : false,
+            isActive: true,
+          },
+        })
+      : await prisma.notificationRecipient.create({
+          data: {
+            businessId,
+            label: normalizedLabel,
+            phone: phone || null,
+            email: email || null,
+            whatsappEnabled: whatsappEnabled !== undefined ? Boolean(whatsappEnabled) : true,
+            smsEnabled: smsEnabled !== undefined ? Boolean(smsEnabled) : false,
+            emailEnabled: emailEnabled !== undefined ? Boolean(emailEnabled) : false,
+            isActive: true,
+          },
+        });
 
     await logAudit({
       actorId: user.id,

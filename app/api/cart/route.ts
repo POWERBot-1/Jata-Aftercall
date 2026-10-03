@@ -106,17 +106,15 @@ export async function POST(req: Request) {
       });
     }
 
-    const cart = await prisma.cart.create({
+    const dbCart = await prisma.cart.create({
       data: {
         businessId,
-        customerPhone: customerPhone || null,
-        customerName: customerName || null,
+        customerId: customerPhone || customerName || null,
         status: "ACTIVE",
         items: {
           create: calculation.lineItems.map((line) => ({
             productId: line.productId || null,
             serviceId: line.serviceId || null,
-            name: line.name,
             variantDesc: line.variantDesc || null,
             quantity: line.quantity,
             unitPriceKES: line.unitPriceKES,
@@ -126,7 +124,22 @@ export async function POST(req: Request) {
       include: { items: true },
     });
 
-    return NextResponse.json({ cart, calculation, preview: false });
+    const cart = {
+      ...dbCart,
+      customerPhone: customerPhone || null,
+      customerName: customerName || null,
+      items: (dbCart.items || []).map((item: any, idx: number) => ({
+        ...item,
+        name: item.name || calculation.lineItems[idx]?.name || "Item",
+      })),
+    };
+
+    return NextResponse.json({
+      cart,
+      cartSummary: calculation,
+      calculation,
+      preview: false,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create cart.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -151,17 +164,17 @@ export async function GET(req: Request) {
     }
 
     const calculation = buildCartFromLines(
-      cart.items.map((item) => ({
+      cart.items.map((item: any) => ({
         productId: item.productId || undefined,
         serviceId: item.serviceId || undefined,
-        name: item.name,
+        name: item.name || "Item",
         variantDesc: item.variantDesc || undefined,
         quantity: item.quantity,
         unitPriceKES: item.unitPriceKES,
       })),
     );
 
-    return NextResponse.json({ cart, calculation });
+    return NextResponse.json({ cart, cartSummary: calculation, calculation });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to retrieve cart.";
     return NextResponse.json({ error: message }, { status: 500 });

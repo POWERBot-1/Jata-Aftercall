@@ -73,24 +73,28 @@ export async function POST(req: Request) {
     const count = await prisma.preOrder.count({ where: { businessId } }).catch(() => 0);
     const preOrderRef = `JATA-PRE-${datePrefix}-${String(count + 1).padStart(6, "0")}`;
 
-    const preOrder = await prisma.preOrder.create({
+    const dbPreOrder = await prisma.preOrder.create({
       data: {
-        preOrderRef,
         businessId,
         customerPhone: customerPhone || null,
         customerName: customerName || null,
-        productId: productId || null,
+        productId: typeof productId === "string" && productId.trim() ? productId.trim() : "unlisted",
         productName,
         variantDesc: variantDesc || null,
         quantity: summary.quantity,
         depositRequiredKES: summary.depositRequiredKES,
         fullPriceKES: summary.fullPriceKES,
-        totalKES: summary.totalKES,
-        expectedDate: summary.expectedDate || null,
-        fulfilmentNotes: summary.fulfilmentNotes || null,
-        status: "PENDING_DEPOSIT",
+        status: "PENDING",
       },
     });
+
+    const preOrder = {
+      ...dbPreOrder,
+      preOrderRef,
+      totalKES: summary.totalKES,
+      expectedDate: summary.expectedDate || null,
+      fulfilmentNotes: summary.fulfilmentNotes || null,
+    };
 
     // Separate notification delivery from pre-order persistence (§22)
     await createNotification({
@@ -101,7 +105,15 @@ export async function POST(req: Request) {
       referenceId: preOrder.id,
     }).catch(() => {});
 
-    return NextResponse.json({ preOrder, summary, preview: false });
+    return NextResponse.json({
+      preOrder,
+      preOrderSummary: summary,
+      label: summary.label,
+      totalKES: summary.totalKES,
+      depositKES: summary.depositKES,
+      summary,
+      preview: false,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to create pre-order.";
     return NextResponse.json({ error: message }, { status: 500 });

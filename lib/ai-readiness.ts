@@ -190,7 +190,7 @@ export async function publishAIBusinessFrontDesk(params: {
     if (prisma.business?.update) {
       const updatedBiz = await prisma.business.update({
         where: { id: params.businessId },
-        data: { isPublished: true, status: "PUBLISHED" },
+        data: { isPublished: true, status: "ACTIVE" },
       });
       if (updatedBiz?.slug) slug = updatedBiz.slug;
     } else if (prisma.business?.findUnique) {
