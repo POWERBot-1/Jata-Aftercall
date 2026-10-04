@@ -19,6 +19,11 @@ export const PERMISSIONS = [
   { key: "EDIT_PRICE", label: "Change a price", risk: "high" },
   { key: "APPLY_DISCOUNT", label: "Give a discount", risk: "medium" },
   { key: "VIEW_RECEIPTS", label: "See receipts", risk: "low" },
+  // Payments — the JATA Payment Wallet (§61, §62, §112 of the payment specification)
+  { key: "VIEW_PAYMENTS", label: "See payments", risk: "low" },
+  { key: "MANAGE_PAYMENT_DESTINATIONS", label: "Change where you get paid", risk: "high" },
+  { key: "REFUND_PAYMENT", label: "Refund a payment", risk: "high" },
+  { key: "MANAGE_RECONCILIATION", label: "Reconcile payments", risk: "medium" },
   // Customers & credit
   { key: "VIEW_CUSTOMERS", label: "See customers", risk: "low" },
   { key: "MANAGE_CUSTOMERS", label: "Add and edit customers", risk: "low" },
@@ -72,17 +77,23 @@ export function highRiskPermissions(): PermissionKey[] {
 /** Every permission — owners and admins hold the full set. */
 export const ALL_PERMISSIONS: PermissionKey[] = PERMISSIONS.map((permission) => permission.key);
 
+// A cashier takes money and sees that it arrived (§61); they can never change where it goes,
+// refund it, or touch reconciliation.
 const CASHIER_DEFAULTS: PermissionKey[] = [
   "VIEW_SALES", "CREATE_SALE", "VIEW_RECEIPTS", "VIEW_CUSTOMERS", "MANAGE_CUSTOMERS",
-  "VIEW_INVENTORY", "VIEW_ORDERS", "MANAGE_ORDERS",
+  "VIEW_INVENTORY", "VIEW_ORDERS", "MANAGE_ORDERS", "VIEW_PAYMENTS",
 ];
 
 const SALESPERSON_DEFAULTS: PermissionKey[] = [
   ...CASHIER_DEFAULTS, "APPLY_DISCOUNT", "RECORD_REPAYMENT", "VIEW_CREDIT",
 ];
 
+// A manager may refund and reconcile, but changing where the business gets paid stays with the
+// owner (it is the single highest-risk change in the POS, §62), and so does adding staff.
 const MANAGER_DEFAULTS: PermissionKey[] = [
-  ...ALL_PERMISSIONS.filter((key) => !["MANAGE_USERS", "EDIT_CONFIGURATION", "APPROVE_CREDIT", "VOID_SALE"].includes(key)),
+  ...ALL_PERMISSIONS.filter((key) =>
+    !["MANAGE_USERS", "EDIT_CONFIGURATION", "APPROVE_CREDIT", "VOID_SALE", "MANAGE_PAYMENT_DESTINATIONS"].includes(key),
+  ),
 ];
 
 const INVENTORY_DEFAULTS: PermissionKey[] = [
@@ -94,6 +105,7 @@ const ACCOUNTANT_DEFAULTS: PermissionKey[] = [
   "VIEW_SALES", "VIEW_CUSTOMERS", "VIEW_CREDIT", "RECORD_REPAYMENT", "VIEW_INVENTORY",
   "VIEW_SUPPLIERS", "RECORD_SUPPLIER_PAYMENT", "VIEW_EXPENSES", "CREATE_EXPENSE",
   "VIEW_REPORTS", "CLOSE_DAY", "VIEW_AUDIT",
+  "VIEW_PAYMENTS", "MANAGE_RECONCILIATION",
 ];
 
 const TECHNICIAN_DEFAULTS: PermissionKey[] = [
@@ -258,4 +270,9 @@ export const ACTION_PERMISSIONS = {
   manageStaff: "MANAGE_USERS",
   viewAudit: "VIEW_AUDIT",
   editConfiguration: "EDIT_CONFIGURATION",
+  viewPayments: "VIEW_PAYMENTS",
+  requestPayment: "CREATE_SALE",
+  managePaymentDestinations: "MANAGE_PAYMENT_DESTINATIONS",
+  refundPayment: "REFUND_PAYMENT",
+  reconcilePayments: "MANAGE_RECONCILIATION",
 } as const satisfies Record<string, PermissionKey>;

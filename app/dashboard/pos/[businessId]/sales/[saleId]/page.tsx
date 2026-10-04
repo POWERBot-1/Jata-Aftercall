@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import prisma from "@/lib/db";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { buildReceipt, channelLabel, receiptToText } from "@/lib/pos/receipt";
 import { findSale } from "@/lib/pos/store";
@@ -61,6 +63,13 @@ export default async function PosSaleDetailPage({ params }: Props) {
   });
 
   const refundable = Math.max(0, Number(sale.paidKES ?? 0) - Number(sale.refundedKES ?? 0));
+
+  // The wallet keeps an unguessable receipt link for any payment that settled this sale (§38, §83):
+  // a customer can verify the receipt without an account, and it shows nothing else.
+  const walletPayment = await prisma.paymentTransaction
+    .findFirst({ where: { businessId, posSaleId: saleId, receiptToken: { not: null } }, select: { receiptToken: true, jataPaymentId: true } })
+    .catch(() => null);
+  const receiptLink = walletPayment?.receiptToken ? `/receipt/${walletPayment.receiptToken}` : null;
 
   return (
     <div className="space-y-4">
@@ -129,6 +138,19 @@ export default async function PosSaleDetailPage({ params }: Props) {
           <button className="jata-btn jata-btn-ghost" onClick={() => window.print()} type="button">Print</button>
         </div>
         <pre className="pos-receipt mt-2">{receiptToText(receipt)}</pre>
+        {receiptLink ? (
+          <div className="mt-3 space-y-1">
+            <p className="jata-kicker">Verified copy for the customer</p>
+            <p className="pos-note">
+              Send this link to the customer. It shows this receipt and nothing else, and anyone can open it without
+              signing in.
+            </p>
+            <p className="pos-note">
+              <Link href={receiptLink}>{receiptLink}</Link>
+              {walletPayment?.jataPaymentId ? ` · ${walletPayment.jataPaymentId}` : ""}
+            </p>
+          </div>
+        ) : null}
       </section>
 
       {workspace.permissions.includes("REFUND_SALE") || workspace.permissions.includes("VOID_SALE") ? (

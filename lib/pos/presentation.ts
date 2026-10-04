@@ -30,6 +30,8 @@ const MODULE_REQUIREMENTS: Record<PosModuleKey, CapabilityKey | null> = {
   dashboard: null,
   sell: "pos_sale",
   history: "pos_sale",
+  // Every business that can take a payment gets the JATA Payment Wallet, whatever it sells (§10).
+  payments: null,
   orders: "orders",
   products: "catalogue",
   services: "services",
@@ -54,6 +56,8 @@ const MODULE_META: Record<PosModuleKey, { icon: string; order: number }> = {
   dashboard: { icon: "🏠", order: 0 },
   sell: { icon: "➕", order: 1 },
   history: { icon: "📜", order: 2 },
+  // The JATA Payment Wallet sits beside the till: it is where the merchant sees money arriving.
+  payments: { icon: "💳", order: 2.5 },
   orders: { icon: "🧾", order: 3 },
   appointments: { icon: "📅", order: 4 },
   jobs: { icon: "🔧", order: 5 },
@@ -117,6 +121,7 @@ export function moduleLabel(config: PosConfiguration, key: PosModuleKey): string
     case "dashboard": return "Home";
     case "sell": return `New ${terminology.sale}`;
     case "history": return `${terminology.sales} history`;
+    case "payments": return "Payments";
     case "orders": return terminology.orders;
     case "products": return config.business?.typeKey === "real_estate" ? terminology.products : terminology.products;
     case "services": return terminology.services;

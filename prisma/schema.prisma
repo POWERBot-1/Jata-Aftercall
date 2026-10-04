@@ -115,6 +115,15 @@ model Business {
   posOrderEvents           PosOrderEvent[]
   posAuditEvents           PosAuditEvent[]
 
+  // ── JATA Payment Wallet + Payment Orchestration (additive back-relations) ──
+  paymentDestinations      PaymentDestination[]
+  paymentConnections       PaymentProviderConnection[]
+  paymentTransactions      PaymentTransaction[]
+  paymentNotifications     PaymentNotification[]
+  paymentReconciliations   PaymentReconciliation[]
+  paymentRefunds           Refund[]
+  paymentAuditEvents       PaymentAuditEvent[]
+
   @@index([ownerId])
   @@index([slug])
 }
@@ -1301,6 +1310,7 @@ model PosSale {
   @@index([businessId, status])
   @@index([businessId, customerId])
   @@index([businessId, branchId, createdAt])
+  paymentTransactions PaymentTransaction[]
 }
 
 model PosSaleItem {
@@ -1539,4 +1549,395 @@ model PosAuditEvent {
 
   @@index([businessId, createdAt])
   @@index([businessId, action])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// JATA PAYMENT WALLET + JATA PAYMENT ORCHESTRATION (§4, §6, §75)
+//
+// The merchant's payment destination, the provider connection JATA operates on the
+// merchant's behalf, the payment transaction and its full evidentiary trail: attempts,
+// provider events, notifications, refunds, reconciliation and audit.
+//
+// Every row is tenant-owned (businessId), money is stored in integer minor units (§77)
+// and financial rows are never rewritten — corrections are new rows (§114).
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Which provider the destination (and every payment routed to it) belongs to.
+enum PaymentProviderKey {
+  MPESA
+  PAYSTACK
+  BANK
+  AIRTEL_MONEY
+}
+
+/// What the merchant entered — the only thing JATA asks them for (§9, §10).
+enum PaymentDestinationKind {
+  MPESA_TILL
+  MPESA_PAYBILL
+  MPESA_POCHI
+  BANK_ACCOUNT
+  PAYSTACK
+}
+
+/// How far the destination has actually been verified (§52). Never call a destination
+/// "connected" because its number has the right length.
+enum PaymentDestinationStatus {
+  UNVERIFIED
+  FORMAT_VERIFIED
+  PROVIDER_VERIFIED
+  CONNECTED
+  ACTION_REQUIRED
+  UNAVAILABLE
+  DISCONNECTED
+}
+
+/// The financial lifecycle (§31). Never collapsed into a boolean.
+enum PaymentTransactionStatus {
+  CREATED
+  PAYMENT_REQUESTED
+  PENDING
+  PROCESSING
+  CONFIRMED
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  REVERSED
+  PARTIALLY_PAID
+  PARTIALLY_REFUNDED
+  FULLY_REFUNDED
+}
+
+enum PaymentEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  REJECTED
+  FAILED
+}
+
+enum PaymentAttemptStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  FAILED
+  TIMEOUT
+}
+
+enum PaymentNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum PaymentNotificationAudience {
+  MERCHANT
+  CUSTOMER
+}
+
+enum PaymentReconciliationResult {
+  MATCHED
+  AMOUNT_MISMATCH
+  UNKNOWN_PAYMENT
+  DUPLICATE
+  UNCONFIRMED
+  MANUAL_MATCHED
+}
+
+enum RefundStatus {
+  REQUESTED
+  PENDING_PROVIDER
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
+/// Who caused the audited event. JATA_SYSTEM = the orchestrator itself; JATA_OPERATOR =
+/// internal administration, which never appears in the merchant POS (§73).
+enum PaymentActorKind {
+  MERCHANT_STAFF
+  CUSTOMER
+  JATA_SYSTEM
+  JATA_OPERATOR
+}
+
+/// Where the business gets paid (§9). Belongs to exactly one tenant.
+model PaymentDestination {
+  id                     String                    @id @default(cuid())
+  businessId             String
+  business               Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind                   PaymentDestinationKind
+  provider               PaymentProviderKey
+  /// Masked label for display, e.g. "M-PESA Till •••4567".
+  label                  String?
+  /// The number the merchant entered: till, paybill, pochi, bank account or Paystack reference.
+  providerDestinationId  String
+  /// PayBill business/account reference ("" when not applicable — keeps the unique key usable).
+  providerAccountRef     String                    @default("")
+  bankName               String?
+  accountName            String?
+  currency               String                    @default("KES")
+  /// Capabilities actually available for this destination (§8, §88). Never invented.
+  capabilities           String[]
+  status                 PaymentDestinationStatus @default(UNVERIFIED)
+  /// How the status was earned: FORMAT | PROVIDER | LIVE (§52).
+  verificationSource     String?
+  isPrimary              Boolean                   @default(false)
+  isActive               Boolean                   @default(true)
+  verifiedAt             DateTime?
+  connectedAt            DateTime?
+  disconnectedAt         DateTime?
+  lastEventAt            DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  transactions           PaymentTransaction[]
+  auditEvents            PaymentAuditEvent[]
+
+  @@unique([businessId, provider, providerDestinationId, providerAccountRef])
+  @@index([businessId, isActive])
+  @@index([businessId, isPrimary])
+}
+
+/// JATA's own connection to a provider for one tenant (§2, §12). The merchant never sees
+/// credentials, callback URLs or keys: this row records only status and what JATA may do.
+model PaymentProviderConnection {
+  id                 String                    @id @default(cuid())
+  businessId         String
+  business           Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  provider           PaymentProviderKey
+  status             PaymentDestinationStatus @default(UNVERIFIED)
+  /// Provider-side identifier JATA holds for this tenant (subaccount code, shortcode, …).
+  /// Never a secret: secrets stay in JATA's server environment (§58).
+  providerConnectionId String?
+  displayName        String?
+  capabilities       String[]
+  healthy            Boolean                   @default(false)
+  /// Plain-language state for the merchant, never a technical error (§53, §86).
+  detail             String?
+  lastEventAt        DateTime?
+  lastHealthyAt      DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@unique([businessId, provider])
+  @@index([businessId, status])
+}
+
+/// One payment: JATA's request, the provider's answer and JATA's verification (§32, §101).
+model PaymentTransaction {
+  id                    String                   @id @default(cuid())
+  /// The merchant-visible JATA payment id, e.g. JTP-20261004-1048-X8K2 (§32).
+  jataPaymentId         String                   @unique
+  businessId            String
+  business              Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  destinationId         String?
+  destination           PaymentDestination?      @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  provider              PaymentProviderKey
+  status                PaymentTransactionStatus @default(CREATED)
+  /// JATA's reference handed to the provider (§64).
+  providerReference     String?
+  /// The provider's own transaction id — the authoritative external identity (§32, §33).
+  providerTransactionId String?
+  idempotencyKey        String                   @unique
+  /// How the payment was made: MPESA_STK | MPESA_PAYBILL | MPESA_QR | CARD | BANK_TRANSFER …
+  method                String?
+  amountMinor           Int
+  amountPaidMinor       Int                      @default(0)
+  amountRefundedMinor   Int                      @default(0)
+  currency              String                   @default("KES")
+  customerName          String?
+  customerPhoneMasked   String?
+  posCustomerId         String?
+  /// The POS sale this payment settled, once it is confirmed (§25). Unique: one payment can
+  /// never settle two sales, and a retry can never settle the same sale twice (§33, §98).
+  posSaleId             String?                  @unique
+  posSale               PosSale?                 @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
+  /// The service/order this payment is for, when it is not a counter sale.
+  orderId               String?
+  /// Server-priced settlement context (cart lines, actor, channel). Never trusted from the browser.
+  paymentContext        Json?
+  receiptNumber         String?
+  /// Unguessable token for the public receipt verification page (§38, §83).
+  receiptToken          String?                  @unique
+  receiptGeneratedAt    DateTime?
+  failureCode           String?
+  /// Plain-language failure shown to the merchant (§86).
+  failureReason         String?
+  /// When JATA stops waiting for a confirmation that never came (§68).
+  expiresAt             DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  requestedAt           DateTime?
+  providerAcceptedAt    DateTime?
+  providerConfirmedAt   DateTime?
+  jataVerifiedAt        DateTime?
+  paidAt                DateTime?
+  merchantNotifiedAt    DateTime?
+  customerNotifiedAt    DateTime?
+  reconciledAt          DateTime?
+
+  attempts        PaymentAttempt[]
+  events          PaymentEvent[]
+  notifications   PaymentNotification[]
+  refunds         Refund[]
+  reconciliations PaymentReconciliation[]
+  auditEvents     PaymentAuditEvent[]
+
+  @@unique([provider, providerReference])
+  @@unique([provider, providerTransactionId])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([status, expiresAt])
+  @@index([businessId, posSaleId])
+}
+
+/// Every call JATA made to a provider for this payment (§101). Attempts are evidence, not state.
+model PaymentAttempt {
+  id               String               @id @default(cuid())
+  businessId       String
+  transactionId    String
+  transaction      PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider         PaymentProviderKey
+  attemptNumber    Int                  @default(1)
+  status           PaymentAttemptStatus @default(REQUESTED)
+  requestReference String?
+  providerReference String?
+  errorCode        String?
+  errorMessage     String?
+  latencyMs        Int?
+  createdAt        DateTime             @default(now())
+
+  @@unique([transactionId, attemptNumber])
+  @@index([businessId, createdAt])
+}
+
+/// A provider event as JATA received it (§24, §34, §35). `(provider, providerEventId)` is the
+/// database-level replay guard: one provider event can never be processed twice (§33).
+model PaymentEvent {
+  id                String             @id @default(cuid())
+  provider          PaymentProviderKey
+  providerEventId   String
+  eventType         String
+  businessId        String?
+  transactionId     String?
+  transaction       PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  signatureVerified Boolean            @default(false)
+  status            PaymentEventStatus @default(RECEIVED)
+  /// Sanitised provider payload: enough to audit, never credentials, PINs or full personal data (§116).
+  payload           Json?
+  providerReference String?
+  errorCode         String?
+  receivedAt        DateTime           @default(now())
+  processedAt       DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([provider, status, receivedAt])
+  @@index([businessId, receivedAt])
+}
+
+/// Merchant and customer notifications for a payment (§26, §27, §100). Notification failure
+/// never changes a payment's status (§66).
+model PaymentNotification {
+  id             String                        @id @default(cuid())
+  businessId     String
+  business       Business                      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId  String?
+  transaction    PaymentTransaction?           @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  audience       PaymentNotificationAudience
+  channel        String                        @default("POS")
+  recipientMasked String?
+  title          String
+  message        String
+  status         PaymentNotificationStatus     @default(PENDING)
+  attempts       Int                           @default(0)
+  maxAttempts    Int                           @default(3)
+  lastError      String?
+  /// Stable per event so a retry can never send the same message twice (§66).
+  idempotencyKey String                        @unique
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([status, scheduledAt])
+  @@index([transactionId])
+}
+
+/// JATA's reconciliation of a payment against the provider's own record (§29, §42, §43).
+model PaymentReconciliation {
+  id                   String                       @id @default(cuid())
+  businessId           String
+  business             Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId        String?
+  transaction          PaymentTransaction?          @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  provider             PaymentProviderKey
+  providerReference    String?
+  result               PaymentReconciliationResult
+  expectedAmountMinor  Int?
+  receivedAmountMinor  Int?
+  differenceMinor      Int                          @default(0)
+  currency             String                       @default("KES")
+  notes                String?                      @db.Text
+  /// Manual matching is a named, reasoned, audited act — never a silent attach (§44).
+  matchedByActorId     String?
+  matchedByActorName   String?
+  matchedReason        String?
+  resolvedAt           DateTime?
+  createdAt            DateTime                     @default(now())
+
+  @@index([businessId, result, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/// Refunds (§47). The original payment is never overwritten: every refund is its own row
+/// and moves the running refunded total forward (§114).
+model Refund {
+  id                String            @id @default(cuid())
+  businessId        String
+  business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId     String
+  transaction       PaymentTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider          PaymentProviderKey
+  amountMinor       Int
+  currency          String            @default("KES")
+  status            RefundStatus      @default(REQUESTED)
+  reason            String
+  initiatedById     String?
+  initiatedByName   String?
+  providerReference String?
+  failureReason     String?
+  requestedAt       DateTime          @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([transactionId])
+}
+
+/// Payment audit trail (§60, §98). Immutable through normal interfaces — a database trigger
+/// blocks updates, so a merchant UI or API bug cannot rewrite the history of money.
+model PaymentAuditEvent {
+  id            String            @id @default(cuid())
+  businessId    String
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  destinationId String?
+  destination   PaymentDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  actorKind     PaymentActorKind
+  actorId       String?
+  actorName     String?
+  action        String
+  summary       String
+  beforeState   Json?
+  afterState    Json?
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
+  @@index([transactionId, createdAt])
 }
