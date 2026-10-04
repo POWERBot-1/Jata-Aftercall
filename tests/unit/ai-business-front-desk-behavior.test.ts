@@ -77,6 +77,7 @@ import { resetConversationsForTests } from "@/lib/ai-conversation";
 import { evaluateAIReadiness } from "@/lib/ai-readiness";
 import { createAuthoritativeOrder } from "@/lib/order";
 import { executeBusinessTool } from "@/lib/ai-tools";
+import { getDemandInsights, resetIntelligenceForTests } from "@/lib/intelligence";
 
 describe("AI Business Front Desk — business-anchored behavior", () => {
   const hardware = "biz_hardware";
@@ -921,5 +922,261 @@ describe("AI Business Front Desk — business-anchored behavior", () => {
     expect(kitchenTurn.reply).not.toContain("KES 500");
     expect(kitchenTurn.reply).not.toContain("556677");
     expect(kitchenTurn.reply).not.toContain("I don't have that product listed");
+  });
+});
+
+
+describe("AI Business Front Desk — unlisted-product guard (PR #34 DEFECT-1 remediation)", () => {
+  const hardware = "biz_unlisted_guard";
+  const cement = "biz_unlisted_guard_cement";
+
+  beforeEach(async () => {
+    mockState.businesses.clear();
+    mockState.products.clear();
+    mockState.services.clear();
+    mockState.faqs.clear();
+    mockState.knowledge.clear();
+    mockState.aiConfigs.clear();
+    mockState.merchantPayments.clear();
+    mockState.recipients.clear();
+    mockState.orders.length = 0;
+    mockState.notifications.length = 0;
+    resetExtendedAIConfigForTests();
+    resetConversationsForTests();
+    resetIntelligenceForTests();
+
+    mockState.businesses.set(hardware, {
+      id: hardware,
+      slug: "guard-hardware",
+      name: "Guard Hardware",
+      category: "Hardware",
+      location: "Mlolongo",
+      phone: "+254711222333",
+      openingHours: "Mon-Sat 08:00 - 18:00",
+      isPublished: true,
+      status: "ACTIVE",
+    });
+    mockState.products.set(hardware, [
+      { id: "p32", businessId: hardware, name: "Bamburi 32.5", category: "Cement", portionSize: "bag", basePriceKES: 750, stockStatus: "IN_STOCK", quantity: 200, isActive: true },
+      { id: "p42", businessId: hardware, name: "Bamburi 42.5", category: "Cement", portionSize: "bag", basePriceKES: 850, stockStatus: "IN_STOCK", quantity: 80, isActive: true },
+    ]);
+    mockState.merchantPayments.set(hardware, { id: "mp", businessId: hardware, publicInfo: "M-Pesa Till: 556677", isActive: true });
+    mockState.recipients.set(hardware, [{ id: "nr", businessId: hardware, label: "PRIMARY", phone: "+254711222333", isActive: true }]);
+    await saveExtendedAIConfig(hardware, {
+      orderingAllowed: true,
+      delivery: { pickupEnabled: true, deliveryEnabled: true, zones: [{ name: "Syokimau", feeKES: 500, estimatedTime: "2–3 hours" }] },
+    });
+
+    // A second catalogue used for the legitimate third-party-brand matching checks.
+    mockState.businesses.set(cement, {
+      id: cement,
+      slug: "guard-cement",
+      name: "Guard Cement",
+      category: "Hardware",
+      location: "Mlolongo",
+      phone: "+254711222444",
+      openingHours: "Mon-Sat 08:00 - 18:00",
+      isPublished: true,
+      status: "ACTIVE",
+    });
+    mockState.products.set(cement, [
+      { id: "b32", businessId: cement, name: "Bamburi Cement 32.5", category: "Cement", portionSize: "bag", basePriceKES: 750, stockStatus: "IN_STOCK", quantity: 200, isActive: true },
+      { id: "b42", businessId: cement, name: "Bamburi Cement 42.5", category: "Cement", portionSize: "bag", basePriceKES: 850, stockStatus: "IN_STOCK", quantity: 80, isActive: true },
+      { id: "simba", businessId: cement, name: "Simba Cement 50kg", category: "Cement", portionSize: "bag", basePriceKES: 700, stockStatus: "IN_STOCK", quantity: 40, isActive: true },
+    ]);
+    mockState.merchantPayments.set(cement, { id: "mpc", businessId: cement, publicInfo: "M-Pesa Till: 556677", isActive: true });
+    await saveExtendedAIConfig(cement, {
+      orderingAllowed: true,
+      delivery: { pickupEnabled: true, deliveryEnabled: true, zones: [{ name: "Syokimau", feeKES: 500, estimatedTime: "2–3 hours" }] },
+    });
+  });
+
+  it("answers ordinary conversation neutrally instead of treating it as an unlisted product", async () => {
+    const ordinary = ["hello", "hi", "hey", "asante", "thank you", "thanks", "good morning", "good evening", "my name is Kamau", "Kamau 0712345678", "0712345678"];
+    for (const message of ordinary) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message });
+      expect(turn.reply, message).not.toContain("I don't have that product listed");
+      expect(turn.reply, message).not.toContain("is not a configured product");
+      expect(turn.reply, message).not.toMatch(/KES\s?750|KES\s?850/);
+      expect(turn.cartSummary, message).toBeFalsy();
+    }
+  });
+
+  it("does not record UNAVAILABLE_PRODUCT demand insights for ordinary conversation", async () => {
+    const ordinary = ["hello", "asante", "thank you", "my name is Kamau", "0712345678", "Syokimau", "Nairobi", "I want lunch", "I need a table for two at 7pm"];
+    for (const message of ordinary) {
+      await handleAIFrontDeskTurn({ businessId: hardware, message });
+    }
+    const insights = await getDemandInsights(hardware);
+    const unavailable = insights.filter((insight) => insight.insightType === "UNAVAILABLE_PRODUCT");
+    expect(unavailable).toEqual([]);
+  });
+
+  it("treats bare place names as places, not products, and never invents a zone", async () => {
+    for (const message of ["Syokimau", "Nairobi", "Karen", "Athi River"]) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message });
+      expect(turn.reply, message).not.toContain("I don't have that product listed");
+      expect(turn.reply, message).not.toContain("is not a configured product");
+      expect(turn.cartSummary, message).toBeFalsy();
+    }
+    // Without an established delivery context no fee may be quoted for a bare place name.
+    const bare = await handleAIFrontDeskTurn({ businessId: hardware, message: "Syokimau" });
+    expect(bare.reply).not.toContain("KES 500");
+    expect(bare.reply.toLowerCase()).not.toContain("delivery to syokimau");
+  });
+
+  it("resolves a bare configured zone answer inside an established delivery conversation", async () => {
+    const conv = "guard-zone-answer";
+    const asked = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "Do you deliver to Syokimau?" });
+    expect(asked.reply).toContain("KES 500");
+    const answer = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "Syokimau" });
+    expect(answer.reply.toLowerCase()).toContain("syokimau");
+    expect(answer.reply).toContain("KES 500");
+    expect(answer.reply).toContain("2–3 hours");
+    expect(answer.reply).not.toContain("I don't have that product listed");
+
+    const unconfigured = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "Karen" });
+    expect(unconfigured.reply.toLowerCase()).not.toContain("kes 500");
+    expect(unconfigured.reply).not.toContain("I don't have that product listed");
+  });
+
+  it("keeps generic non-catalogue requests out of the unlisted-product branch", async () => {
+    for (const message of ["I want lunch", "I need a table for two at 7pm", "I need help", "I want information", "Can you help me?"]) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message });
+      expect(turn.reply, message).not.toContain("I don't have that product listed");
+      expect(turn.reply, message).not.toContain("is not a configured product");
+      expect(turn.cartSummary, message).toBeFalsy();
+    }
+  });
+
+  it("still recognises genuine unlisted products and records the missed demand", async () => {
+    const phrases = [
+      "50kg Savannah cement",
+      "How much is Savannah cement?",
+      "Do you have Savannah cement?",
+      "I want 10 bags of Savannah cement.",
+      "How much is Savannah 32.5?",
+      "Savannah 42.5",
+      "Dangote 32.5",
+      "bamboo 32.5",
+    ];
+    for (const message of phrases) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message });
+      expect(turn.cartSummary, message).toBeFalsy();
+      expect(turn.reply, message).toContain("I don't have that product listed");
+      expect(turn.reply.toLowerCase(), message).toMatch(/savannah|dangote|bamboo/);
+      expect(turn.reply, message).not.toMatch(/(?:savannah|dangote|bamboo)[^.\n]{0,40}?is\s+kes/i);
+      expect(turn.reply, message).not.toContain("750 per bag");
+    }
+    const insights = await getDemandInsights(hardware);
+    const unavailable = insights.filter((insight) => insight.insightType === "UNAVAILABLE_PRODUCT");
+    expect(unavailable.length).toBeGreaterThan(0);
+    expect(unavailable.map((insight) => insight.subject.toLowerCase()).join(" ")).toMatch(/savannah|dangote|bamboo/);
+  });
+
+  it("keeps legitimate catalogue matching intact for configured cement products", async () => {
+    const bamburi = await handleAIFrontDeskTurn({ businessId: cement, message: "Bamburi Cement 32.5" });
+    expect(bamburi.reply).toContain("Bamburi Cement 32.5");
+    expect(bamburi.reply).toContain("KES 750");
+
+    const simba = await handleAIFrontDeskTurn({ businessId: cement, message: "Simba Cement 50kg" });
+    expect(simba.reply).toContain("Simba Cement 50kg");
+    expect(simba.reply).toContain("KES 700");
+    expect(simba.reply).not.toContain("I don't have that product listed");
+
+    const family = await handleAIFrontDeskTurn({ businessId: cement, message: "How much is Bamburi cement?" });
+    expect(family.reply).toContain("Bamburi Cement 32.5");
+    expect(family.reply).toContain("Bamburi Cement 42.5");
+    expect(family.reply).not.toContain("I don't have that product listed");
+  });
+
+  it("keeps an unlisted item visible inside an otherwise valid mixed order", async () => {
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      message: "I need 5 bags of Bamburi 32.5 and 2 bags of Savannah cement.",
+    });
+    expect(order.cartSummary?.lineItems).toEqual([
+      expect.objectContaining({ name: "Bamburi 32.5", quantity: 5, unitPriceKES: 750 }),
+    ]);
+    expect(order.reply).toContain("5 × Bamburi 32.5");
+    expect(order.reply.toLowerCase()).toContain("savannah cement");
+    expect(order.reply).toMatch(/not included in this cart|don't have/i);
+    expect(order.reply).not.toMatch(/2 × Bamburi|10 × Bamburi/);
+    expect(order.cartSummary?.lineItems).toHaveLength(1);
+  });
+
+  it("does not add the unlisted note to a clean order", async () => {
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      message: "I need 5 bags of Bamburi 32.5.",
+    });
+    expect(order.reply).not.toMatch(/not included in this cart/i);
+    expect(order.reply).toContain("5 × Bamburi 32.5");
+
+    const withProse = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      message: "I need 5 bags of Bamburi 32.5 for my site in Mlolongo.",
+    });
+    expect(withProse.reply).not.toMatch(/not included in this cart/i);
+    expect(withProse.cartSummary?.lineItems).toEqual([
+      expect.objectContaining({ name: "Bamburi 32.5", quantity: 5 }),
+    ]);
+  });
+
+  it("answers product questions that merely start with a greeting", async () => {
+    const price = await handleAIFrontDeskTurn({ businessId: hardware, message: "hello, how much is Bamburi 32.5?" });
+    expect(price.reply).toContain("KES 750");
+    expect(price.reply).not.toContain("I don't have that product listed");
+
+    const order = await handleAIFrontDeskTurn({ businessId: hardware, message: "thanks, I need 2 bags of Bamburi 32.5." });
+    expect(order.cartSummary?.lineItems).toEqual([
+      expect.objectContaining({ name: "Bamburi 32.5", quantity: 2, unitPriceKES: 750 }),
+    ]);
+  });
+
+  it("retains the primary active-product, ambiguity, delivery and cart behaviours", async () => {
+    // 1. Re-pinning: the latest explicit mention is the referent.
+    const pinned = "guard-pinned";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: pinned, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: pinned, message: "How much is Bamburi 42.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: pinned, message: "How much is Bamburi 32.5?" });
+    const chosen = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: pinned, message: "Give me that one." });
+    expect(chosen.cartSummary?.lineItems).toEqual([expect.objectContaining({ name: "Bamburi 32.5", quantity: 1 })]);
+    expect(chosen.reply.toLowerCase()).not.toContain("which item");
+
+    // 2. Genuine ambiguity is still preserved.
+    const ambiguous = "guard-ambiguous";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: ambiguous, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: ambiguous, message: "How much is Bamburi 42.5?" });
+    const ask = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: ambiguous, message: "Give me that one." });
+    expect(ask.cartSummary).toBeFalsy();
+    expect(ask.reply.toLowerCase()).toMatch(/which item|which grade/);
+
+    // 3. Delivery continuation.
+    const delivery = "guard-delivery";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: delivery, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: delivery, message: "How much is Bamburi 42.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: delivery, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: delivery, message: "Do you deliver to Syokimau?" });
+    const cart = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: delivery, message: "I need 20 bags delivered there." });
+    expect(cart.cartSummary?.lineItems).toEqual([expect.objectContaining({ name: "Bamburi 32.5", quantity: 20 })]);
+    expect(cart.cartSummary?.deliveryFeeKES).toBe(500);
+    expect(cart.cartSummary?.totalKES).toBe(15500);
+    expect(cart.reply).toContain("KES 500");
+    expect(cart.reply).toContain("2–3 hours");
+    expect(cart.reply).not.toContain("Bamburi 42.5");
+
+    // 4. Bare delivery references.
+    for (const phrase of ["same place", "same area", "that place", "that area", "there", "delivered there", "huko", "pale"]) {
+      const conv = `guard-bare-${phrase.replace(/\s+/g, "-")}`;
+      await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "Do you deliver to Syokimau?" });
+      const bare = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: phrase });
+      expect(bare.reply.toLowerCase(), phrase).toContain("syokimau");
+      expect(bare.reply, phrase).toContain("KES 500");
+      expect(bare.reply, phrase).toContain("2–3 hours");
+      expect(bare.reply, phrase).not.toContain("I don't have that product listed");
+      expect(bare.reply, phrase).not.toMatch(/bamburi[^.\n]{0,40}?is\s+kes/i);
+      expect(bare.cartSummary, phrase).toBeFalsy();
+    }
   });
 });

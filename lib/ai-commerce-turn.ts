@@ -29,9 +29,11 @@ import {
   isPreorderIntent,
   isBareDeliveryFollowUp,
   matchCatalogue,
+  matchConfiguredZoneName,
   refersToPreviousProduct,
   stockIsConfirmed,
-  unrecognizedProductTokens,
+  detectUnlistedProductRequest,
+  unlistedOrderItems,
   type CatalogueProduct,
 } from "./ai-grounding";
 const FALLBACK_UNKNOWN_MESSAGE = "I don't have that information yet. Let me connect you with the business.";
@@ -169,6 +171,15 @@ export async function resolveCommerceTurn(params: {
 
   if (!ordering && isBareDeliveryFollowUp(message)) {
     return answerBareDeliveryFollowUp({ brain, conv });
+  }
+
+  // A bare place answer inside a delivery conversation ("Syokimau", "Athi River") is a delivery
+  // destination, never an unlisted product. Only configured zones qualify, so no zone is invented.
+  if (!ordering && deliveryContext(conv)) {
+    const zoneName = matchConfiguredZoneName(message, brain.delivery?.zones || []);
+    if (zoneName && matchCatalogue(message, brain.products).length === 0) {
+      return establishedZoneAnswer({ brain, conv, zoneName });
+    }
   }
 
   if (isBookingIntent(message) && !ordering) {
@@ -392,24 +403,39 @@ function mergeCartLines(existing: CartLine[], updates: CartLine[]): CartLine[] {
   return merged;
 }
 
+function deliveryContext(conv: ConversationContext): boolean {
+  return conv.pendingFulfilment === "DELIVERY" || Boolean(conv.pendingDeliveryZone);
+}
+
+function establishedZoneAnswer(params: { brain: Brain; conv: ConversationContext; zoneName: string }): CommerceTurn {
+  const zone = (params.brain.delivery?.zones || []).find(
+    (item) => item.name.toLowerCase() === params.zoneName.toLowerCase(),
+  );
+  const feeLine = zone ? formatDeliveryAnswer(zone) : `The established delivery area is ${params.zoneName}.`;
+  const pending = params.conv.pendingCartLines || [];
+  const pendingSummary = pending.map((line) => `${line.quantity} × ${line.name}`).join(", ");
+  // Only ask for the item and quantity when the conversation does not already have them.
+  const reply = pendingSummary
+    ? `${feeLine} Your cart already has ${pendingSummary}. Should I add delivery to ${zone?.name || params.zoneName}?`
+    : `${feeLine} What item and quantity would you like?`;
+  return {
+    reply,
+    responseType: "KNOWN",
+    source: "structured_data",
+    confidence: "high",
+    escalatedToHuman: false,
+    toolsInvoked: ["get_delivery_fee"],
+    informationFound: zone ? [`Delivery zone ${zone.name}: ${formatKes(zone.feeKES)}`] : [params.zoneName],
+    informationNotFound: [],
+    conv: { ...params.conv, pendingDeliveryZone: zone.name, pendingFulfilment: "DELIVERY" },
+  };
+}
+
 function answerBareDeliveryFollowUp(params: { brain: Brain; conv: ConversationContext }): CommerceTurn {
   const established = establishedDeliveryZones(params.conv, params.brain);
   if (established.length > 1) return clarifyDeliveryArea(established, params.conv);
   if (established.length === 1) {
-    const zoneName = established[0];
-    const zone = (params.brain.delivery?.zones || []).find((item) => item.name.toLowerCase() === zoneName.toLowerCase());
-    const feeLine = zone ? formatDeliveryAnswer(zone) : `The established delivery area is ${zoneName}.`;
-    return {
-      reply: `${feeLine} What item and quantity would you like?`,
-      responseType: "KNOWN",
-      source: "structured_data",
-      confidence: "high",
-      escalatedToHuman: false,
-      toolsInvoked: ["get_delivery_fee"],
-      informationFound: zone ? [`Delivery zone ${zone.name}: ${formatKes(zone.feeKES)}`] : [zoneName],
-      informationNotFound: [],
-      conv: { ...params.conv, pendingDeliveryZone: zoneName, pendingFulfilment: "DELIVERY" },
-    };
+    return establishedZoneAnswer({ brain: params.brain, conv: params.conv, zoneName: established[0] });
   }
   return {
     reply: "I still need the delivery area before I can confirm a fee.",
@@ -485,13 +511,20 @@ async function progressOrder(params: {
   const parsed = parseConversationalOrder(message, products);
   let focusId: string | null = null;
   let productFocusPinned = Boolean(params.conv.productFocusPinned);
-  if (
-    parsed.matchedLines.length === 0 &&
-    parsed.outOfStockItems.length === 0 &&
-    unrecognizedProductTokens(message, products, (brain.delivery?.zones || []).map((zone) => zone.name)).length > 0
-  ) {
-    // Unknown brand/model belongs to the unlisted-product reply, not a catalogue guess.
-    return null;
+  const zoneNames = [
+    ...(brain.delivery?.zones || []).map((zone) => zone.name),
+    ...(brain.business.location ? [brain.business.location] : []),
+  ];
+  if (parsed.matchedLines.length === 0 && parsed.outOfStockItems.length === 0) {
+    const unlistedRequest = detectUnlistedProductRequest({
+      message,
+      candidate: message,
+      frame: "order",
+      products,
+      extraKnownPhrases: zoneNames,
+    });
+    // A plausible unlisted product belongs to the front-desk unlisted-product reply, not a catalogue guess.
+    if (unlistedRequest.plausible) return null;
   }
   if (parsed.outOfStockItems.length > 0 && parsed.matchedLines.length === 0) {
     // Existing front-desk handler owns the out-of-stock / PRE-ORDER wording and null cart.
@@ -780,6 +813,12 @@ async function progressOrder(params: {
     parsed.outOfStockItems.length > 0
       ? ` Note: ${parsed.outOfStockItems.map((item) => `${item.name} is currently ${item.stockStatus}`).join("; ")}.`
       : "";
+  // A listed line must never cause a requested unlisted item in the same message to disappear silently.
+  const unlistedItems = unlistedOrderItems(message, products, zoneNames);
+  const unlistedWarning =
+    unlistedItems.length > 0
+      ? ` Note: I don't have ${unlistedItems.join(", ")} listed, so it is not included in this cart.`
+      : "";
   const missing = missingOrderDetails(nextConv, brain, params.deliveryMention || referring);
   const tomorrow = isPreorderIntent(message)
     ? brain.extendedConfig.preordersAllowed
@@ -788,7 +827,7 @@ async function progressOrder(params: {
     : "";
 
   return {
-    reply: `I have prepared your cart: ${lineSummary}. Subtotal: ${formatKes(cart.subtotalKES)}. Total: ${formatKes(cart.totalKES)}.${deliveryNote}${oosWarning}${
+    reply: `I have prepared your cart: ${lineSummary}. Subtotal: ${formatKes(cart.subtotalKES)}. Total: ${formatKes(cart.totalKES)}.${deliveryNote}${oosWarning}${unlistedWarning}${
       stockNotes.length ? ` ${stockNotes.join(". ")}.` : ""
     }${tomorrow}${missing ? ` ${missing}` : " Please confirm if you would like to proceed, and share your name and phone number."}`,
     responseType: "ACTION_REQUIRED",

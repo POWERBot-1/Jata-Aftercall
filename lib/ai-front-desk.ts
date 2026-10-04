@@ -16,7 +16,17 @@
 import { getBusinessBrain, type KnowledgeConflict } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
 import { resolveCommerceTurn } from "./ai-commerce-turn";
-import { formatProductPriceLine, interpretOpeningStatus, isBareDeliveryFollowUp, isOpenQuestion, matchCatalogue, openingHoursSummary, stockIsConfirmed } from "./ai-grounding";
+import {
+  detectUnlistedProductRequest,
+  formatProductPriceLine,
+  interpretOpeningStatus,
+  isBareDeliveryFollowUp,
+  isOpenQuestion,
+  matchCatalogue,
+  openingHoursSummary,
+  stockIsConfirmed,
+  type ProductRequestFrame,
+} from "./ai-grounding";
 import {
   getOrCreateConversationContext,
   productFocusPinnedAfterMention,
@@ -117,25 +127,42 @@ export function detectPromptInjection(message: string): { isInjection: boolean; 
   return { isInjection: false };
 }
 
-function extractRequestedProductCandidate(message: string): string | null {
+function extractRequestedProductCandidate(
+  message: string,
+): { candidate: string; frame: ProductRequestFrame } | null {
   const m = message.trim();
   if (isBareDeliveryFollowUp(m)) return null;
-  const patterns = [
-    /(?:how\s+much\s+(?:is|are|for)\s+(?:the\s+|a\s+|an\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:do\s+you\s+(?:have|sell|stock)\s+(?:any\s+|the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:price\s+of\s+(?:the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:bei\s+ya\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:mnauza\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:(?:i\s+need|i\s+want|order|buy|get\s+me|give\s+me|can\s+i\s+get|let\s+me\s+have)\s+)(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|\!)/i,
-    /^(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s-]{1,40}?)$/i,
+  const patterns: Array<{ pattern: RegExp; frame: ProductRequestFrame }> = [
+    {
+      pattern: /(?:how\s+much\s+(?:is|are|for)\s+(?:the\s+|a\s+|an\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i,
+      frame: "price",
+    },
+    {
+      pattern: /(?:do\s+you\s+(?:have|sell|stock)\s+(?:any\s+|the\s+|a\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i,
+      frame: "price",
+    },
+    { pattern: /(?:price\s+of\s+(?:the\s+|a\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
+    { pattern: /(?:bei\s+ya\s+)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
+    { pattern: /(?:mnauza\s+)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
+    {
+      pattern: /(?:(?:i\s+need|i\s+want|order|buy|get\s+me|give\s+me|can\s+i\s+get|let\s+me\s+have)\s+)(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$|\.|\!)/i,
+      frame: "order",
+    },
+    {
+      // A bare whole-message line ("50kg Savannah cement", "Savannah 42.5"). Anchored so that a
+      // trailing word inside a longer sentence is never mistaken for a product name.
+      pattern: /^(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s.-]{1,40}?)$/i,
+      frame: "bare",
+    },
   ];
-  for (const pat of patterns) {
-    const match = pat.exec(m);
+  for (const { pattern, frame } of patterns) {
+    const match = pattern.exec(m);
     if (match?.[1]) {
-      const candidate = match[1].trim().toLowerCase();
+      const candidate = match[1].trim().toLowerCase().replace(/[.\s]+$/, "");
+      if (!candidate) continue;
+      if (isBareDeliveryFollowUp(candidate)) continue;
       if (
-        !isBareDeliveryFollowUp(candidate) &&
-        ![
+        [
           "it",
           "this",
           "that",
@@ -157,8 +184,9 @@ function extractRequestedProductCandidate(message: string): string | null {
           "services",
         ].includes(candidate)
       ) {
-        return candidate;
+        continue;
       }
+      return { candidate, frame };
     }
   }
   return null;
@@ -825,7 +853,8 @@ export async function handleAIFrontDeskTurn(params: {
 
   // Check if the customer is referring to the active product in conversation memory (§24)
   // e.g., "How much is it?", "Do you have medium?", "Is size 42 available?"
-  const contextCandidate = extractRequestedProductCandidate(rawMessage);
+  const contextExtract = extractRequestedProductCandidate(rawMessage);
+  const contextCandidate = contextExtract?.candidate ?? null;
   const candidateIsDifferentProduct = Boolean(
     contextCandidate &&
       !/\b(size|small|medium|large|xl|xxl|it|that|this)\b/i.test(contextCandidate) &&
@@ -1123,7 +1152,24 @@ export async function handleAIFrontDeskTurn(params: {
   }
 
   // 13. Specific Unlisted Product Check (§8, §36, §55 Scenario 1: "How much is the pizza?")
-  const requestedCandidate = extractRequestedProductCandidate(rawMessage);
+  // A message only reaches this branch when it plausibly names a product this business does not
+  // carry. Greetings, contact details, place names and generic service words fall through to the
+  // neutral fallback instead of being answered — and recorded — as unlisted products.
+  const requestedExtract = extractRequestedProductCandidate(rawMessage);
+  const requestedCandidate =
+    requestedExtract &&
+    detectUnlistedProductRequest({
+      message: rawMessage,
+      candidate: requestedExtract.candidate,
+      frame: requestedExtract.frame,
+      products: brain.products,
+      extraKnownPhrases: [
+        ...(brain.delivery?.zones || []).map((zone) => zone.name),
+        ...(brain.business.location ? [brain.business.location] : []),
+      ],
+    }).plausible
+      ? requestedExtract.candidate
+      : null;
   if (requestedCandidate) {
     const serviceMatch = brain.services.find(
       (s) =>

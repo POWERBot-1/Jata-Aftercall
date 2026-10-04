@@ -143,6 +143,183 @@ export function unrecognizedProductTokens(
   return identityTokens(message, generic).filter((token) => !known.has(token));
 }
 
+/**
+ * Conversational, contact, scheduling and generic service vocabulary. None of these words
+ * establish product identity on their own, so a message made only of them is ordinary
+ * conversation rather than an unlisted product request (PR #34 DEFECT-1 remediation).
+ */
+const NON_PRODUCT_WORDS = new Set<string>([
+  // greetings, thanks, acknowledgements, pleasantries
+  "hello", "hallo", "hey", "hie", "habari", "jambo", "mambo", "niaje", "asante", "shukran",
+  "thank", "thankyou", "karibu", "welcome", "sorry", "pole", "kindly", "okay", "sawa", "ndio",
+  "ndiyo", "hapana", "sure", "great", "cool", "bye", "kwaheri", "cheers", "greeting", "greetings",
+  "morning", "evening", "afternoon", "night", "good", "day",
+  // help / information requests
+  "help", "helping", "assist", "assistance", "information", "info", "detail", "question", "enquiry",
+  "inquiry", "support", "advice", "guidance", "explain", "explanation", "understand", "understanding",
+  "clarify", "clarification", "talk", "chat", "speak", "discuss", "discussion",
+  // conversational verbs, modals and function words
+  "will", "shall", "should", "must", "might", "would", "could", "cannot", "cant", "dont", "doesnt",
+  "didnt", "wont", "wouldnt", "couldnt", "shouldnt", "been", "being", "having", "let", "make",
+  "makes", "made", "tell", "tells", "told", "say", "says", "said", "know", "knows", "knew", "think",
+  "thinks", "thought", "feel", "feels", "felt", "saw", "seen", "look", "looking", "looks", "find",
+  "finding", "found", "come", "comes", "came", "coming", "goes", "went", "going", "gets", "got",
+  "getting", "meet", "meeting", "wait", "waiting", "sends", "sent", "sending", "gives", "given",
+  "giving", "takes", "taken", "taking", "wants", "wanted", "wishing", "needs", "needed", "likes",
+  "liked", "prefer", "prefers", "ask", "asks", "asked", "asking", "reply", "replied", "respond",
+  "answer", "answers", "answered", "something", "anything", "nothing", "everything", "somebody",
+  "someone", "anybody", "anyone", "everybody", "everyone",
+  // identity, contact and people
+  "name", "names", "number", "numbers", "phone", "phones", "mobile", "contact", "contacts", "person",
+  "persons", "people", "whose", "customer", "client", "clients", "team", "staff", "manager", "owner",
+  "boss", "agent", "human", "friend", "guys", "sir", "madam", "mama", "baba",
+  // scheduling and time
+  "today", "tomorrow", "yesterday", "tonight", "later", "soon", "already", "still", "again", "time",
+  "hour", "hours", "minute", "minutes", "week", "weeks", "month", "months", "days", "date", "dates",
+  "booking", "bookings", "appointment", "appointments", "schedule", "reservation", "reservations",
+  "slot", "slots",
+  // generic service, venue and meal words
+  "table", "tables", "seat", "seats", "chair", "chairs", "room", "rooms", "lunch", "dinner",
+  "breakfast", "supper", "brunch", "snack", "snacks", "meal", "meals", "food", "foods", "drink",
+  "drinks", "beverage", "beverages", "service", "services", "request", "requests", "offer", "offers",
+  "deal", "deals", "discount", "discounts", "promo", "promotion", "promotions", "voucher", "vouchers",
+  "coupon", "coupons", "punguzo", "receipt", "receipts", "invoice", "invoices", "statement", "balance",
+  "account", "accounts", "payment", "payments", "paying", "refund", "refunds", "complaint",
+  "complaints", "problem", "problems", "issue", "issues", "feedback", "review", "reviews",
+  // place/venue context nouns — they describe where an item is used, not what it is
+  "site", "sites", "project", "projects", "building", "buildings", "construction", "mjengo",
+  "home", "house", "office", "shop", "store", "farm", "school", "church", "hospital", "hotel",
+  "plot", "land", "yard", "compound", "warehouse", "factory", "apartment", "estate",
+]);
+
+const PHONE_LIKE_PATTERN = /\b\d{9,}\b/;
+
+/** Pack sizes, quantities, clock times and ordinals: never product identity on their own. */
+function isUnitOrNumericToken(token: string): boolean {
+  if (UNIT_OR_PACK_TOKENS.has(token)) return true;
+  if (/^\d+$/.test(token)) return true;
+  return /^\d+(?:[.,]\d+)?(?:kg|kgs|g|gm|gms|ml|l|bag|bags|piece|pieces|pcs|pc|plate|plates|portion|portions|pack|packs|packet|packets|am|pm|hr|hrs|hour|hours|min|mins|minute|minutes|week|weeks|day|days|st|nd|rd|th)$/.test(
+    token,
+  );
+}
+
+function hintTokens(extraKnownPhrases: string[]): Set<string> {
+  return new Set((extraKnownPhrases || []).flatMap((phrase) => contentTokens(phrase)));
+}
+
+/**
+ * Unknown brand/model tokens in `candidate` that belong to no configured product, category,
+ * unit, place reference or conversational word. A non-empty result means the message named
+ * something this catalogue does not carry; an empty result means ordinary conversation.
+ */
+export function unlistedProductTokens(
+  candidate: string,
+  products: CatalogueProduct[],
+  extraKnownPhrases: string[] = [],
+): string[] {
+  const active = products.filter((product) => product.isActive !== false);
+  const generic = genericCatalogueTokens(active);
+  const catalogueIdentity = new Set(active.flatMap((product) => identityTokens(product.name, generic)));
+  const hints = hintTokens(extraKnownPhrases);
+  return contentTokens(candidate).filter(
+    (token) =>
+      !generic.has(token) &&
+      !catalogueIdentity.has(token) &&
+      !hints.has(token) &&
+      !NON_IDENTITY_TOKENS.has(token) &&
+      !NON_PRODUCT_WORDS.has(token) &&
+      !isUnitOrNumericToken(token),
+  );
+}
+
+/** How a candidate was captured: an explicit price/availability question, an order phrase, or a bare line. */
+export type ProductRequestFrame = "price" | "order" | "bare";
+
+const QUANTITY_UNIT_PATTERN =
+  /\b\d{1,4}\s*(?:x\s*|×\s*)?(?:kg|kgs|g|gm|gms|bags?|pieces?|pcs?|pc|plates?|portions?|packs?|packets?)\b/i;
+const MODEL_GRADE_PATTERN = /\d+[.,]\d+/;
+
+/**
+ * Deterministic plausibility test for an unlisted-product determination.
+ *
+ * A message only names a product the business does not carry when it carries product evidence
+ * beyond a bare noun: an explicit price/availability question, a quantity with packaging, a
+ * model/grade number, a catalogue category noun, or a multi-token item phrase. Greetings,
+ * contact details, place names and generic service words never qualify
+ * (PR #34 DEFECT-1 remediation).
+ */
+export function detectUnlistedProductRequest(input: {
+  message: string;
+  candidate: string;
+  frame: ProductRequestFrame;
+  products: CatalogueProduct[];
+  extraKnownPhrases?: string[];
+}): { plausible: boolean; tokens: string[] } {
+  const tokens = unlistedProductTokens(input.candidate, input.products, input.extraKnownPhrases || []);
+  if (tokens.length === 0) return { plausible: false, tokens };
+  if (PHONE_LIKE_PATTERN.test(input.candidate)) return { plausible: false, tokens };
+  if (input.frame === "price") return { plausible: true, tokens };
+  const active = input.products.filter((product) => product.isActive !== false);
+  const categoryTokens = new Set(active.flatMap((product) => contentTokens(product.category || "")));
+  const hasCategoryNoun = contentTokens(input.candidate).some((token) => categoryTokens.has(token));
+  const plausible =
+    QUANTITY_UNIT_PATTERN.test(input.message) ||
+    MODEL_GRADE_PATTERN.test(input.message) ||
+    hasCategoryNoun ||
+    (input.frame === "order" && tokens.length >= 2);
+  return { plausible, tokens };
+}
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Unlisted item phrases that sit in a product-request position: right after a quantity +
+ * packaging ("2 bags of Savannah") or right before a catalogue category noun ("Savannah
+ * cement"). Used to name an unlisted item inside an otherwise valid mixed order instead of
+ * silently dropping it (PR #34 DEFECT-2).
+ */
+export function unlistedOrderItems(
+  message: string,
+  products: CatalogueProduct[],
+  extraKnownPhrases: string[] = [],
+): string[] {
+  const text = (message || "").toLowerCase();
+  const tokens = unlistedProductTokens(message, products, extraKnownPhrases);
+  if (tokens.length === 0) return [];
+  const active = products.filter((product) => product.isActive !== false);
+  const categoryTokens = [...new Set(active.flatMap((product) => contentTokens(product.category || "")))];
+  const found: string[] = [];
+  for (const token of tokens) {
+    const escaped = escapeForRegex(token);
+    const afterQuantity = new RegExp(
+      `\\b\\d{1,4}\\s*(?:x\\s*|×\\s*)?(?:kg|kgs|g|gm|gms|bags?|pieces?|pcs?|pc|plates?|portions?|packs?|packets?)\\s*(?:of\\s+)?${escaped}\\b`,
+      "i",
+    ).test(text);
+    const category = categoryTokens.find((item) =>
+      new RegExp(`\\b${escaped}\\s+${escapeForRegex(item)}\\b`, "i").test(text),
+    );
+    if (category) found.push(`${token} ${category}`);
+    else if (afterQuantity) found.push(token);
+  }
+  return [...new Set(found)];
+}
+
+/**
+ * Exact configured-zone answer such as "Syokimau" or "Athi River" — a place, never a product.
+ * Returns the canonical zone name only when the whole message is that zone name.
+ */
+export function matchConfiguredZoneName(message: string, zones: Array<{ name: string }>): string | null {
+  const text = normalizeDeliveryText(message).toLowerCase();
+  if (!text) return null;
+  const match = (zones || []).find((zone) => {
+    const name = normalizeDeliveryText(zone?.name || "").toLowerCase();
+    return name.length >= 3 && name === text;
+  });
+  return match ? match.name : null;
+}
+
 export function matchCatalogue(message: string, products: CatalogueProduct[]): CatalogueProduct[] {
   const raw = (message || "").toLowerCase();
   const msgTokens = contentTokens(message);
