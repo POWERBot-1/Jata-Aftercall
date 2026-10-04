@@ -333,6 +333,63 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
       );
     }
 
+    case "steps": {
+      const steps = (section.items || []).filter((item) => item.title);
+      if (steps.length === 0) return null;
+      return (
+        <SectionShell id={section.id} title={section.title || "How it works"} tone="muted">
+          <ol className="eb-grid eb-grid--3" style={{ listStyle: "none", counterReset: "jata-step", padding: 0 }}>
+            {steps.slice(0, 6).map((step, index) => (
+              <li key={index} className="eb-card" style={{ padding: "1.5rem" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "2.25rem",
+                    height: "2.25rem",
+                    borderRadius: "999px",
+                    background: "var(--eb-accent-soft, rgba(0,0,0,0.06))",
+                    fontWeight: 700,
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <p style={{ margin: "0.75rem 0 0.25rem", fontWeight: 700 }}>{step.title}</p>
+                {step.body ? (
+                  <p className="eb-muted" style={{ margin: 0, fontSize: "0.95rem" }}>
+                    {step.body}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </SectionShell>
+      );
+    }
+
+    case "why": {
+      const reasons = (section.items || []).filter((item) => item.title);
+      if (reasons.length === 0) return null;
+      return (
+        <SectionShell id={section.id} title={section.title || "Why customers choose us"}>
+          <div className="eb-grid eb-grid--3">
+            {reasons.slice(0, 6).map((reason, index) => (
+              <div key={index} className="eb-card" style={{ padding: "1.5rem" }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{reason.title}</p>
+                {reason.body ? (
+                  <p className="eb-muted" style={{ marginTop: "0.5rem", fontSize: "0.95rem" }}>
+                    {reason.body}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </SectionShell>
+      );
+    }
+
     case "faq": {
       const entries = (section.items || []).filter((item) => item.question && item.answer);
       if (entries.length === 0) return null;

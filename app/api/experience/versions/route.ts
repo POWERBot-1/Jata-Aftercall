@@ -12,6 +12,7 @@ import { assertBusinessOwnership } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { recordDraftRevision } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
 
@@ -62,17 +63,32 @@ export async function POST(req: Request) {
       where: { businessId_version: { businessId, version } },
     });
     if (!snapshot) return NextResponse.json({ error: "That version is no longer available." }, { status: 404 });
+    const existing = await prisma.businessExperience.findUnique({
+      where: { businessId },
+      select: { draftVersion: true },
+    });
+    if (!existing) return NextResponse.json({ error: "Create your website before restoring a version." }, { status: 409 });
 
     const document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), snapshot.categoryKey);
+    const nextVersion = Math.max(1, existing.draftVersion) + 1;
     const experience = await prisma.businessExperience.update({
       where: { businessId },
       data: {
         draftJson: JSON.stringify(document),
-        draftVersion: { increment: 1 },
+        draftVersion: nextVersion,
+        historyCursor: nextVersion,
         categoryKey: snapshot.categoryKey,
         themeKey: snapshot.themeKey,
       },
       select: { id: true, draftVersion: true },
+    });
+    await recordDraftRevision(prisma, {
+      businessId,
+      draftVersion: nextVersion,
+      document,
+      label: `Restored your published version ${version}`,
+      source: "RESTORE",
+      createdById: session.userId,
     });
     await logAudit({
       actorId: session.userId,

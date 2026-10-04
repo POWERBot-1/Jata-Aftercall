@@ -69,8 +69,10 @@ model Business {
   // ── JATA Interactive Business (category-aware experience platform) ──
   experience          BusinessExperience?
   experienceVersions  ExperienceVersion[]
+  draftRevisions      ExperienceDraftRevision[]
   bookings            Booking[]
   media               MediaAsset[]
+  aiGenerations       AiGeneration[]
   interactiveEntitlement InteractiveBusinessEntitlement?
   aiConfiguration AIConfiguration?
   products Product[]
@@ -797,6 +799,10 @@ model BusinessExperience {
   draftJson        String   @db.Text
   publishedJson    String?  @db.Text
   draftVersion     Int      @default(1)
+  // Which draft revision the current draft equals, so Undo/Redo can move one step at a time (§45).
+  // 0 means "not tracked yet" (legacy rows and freshly created sites); it is then treated as the
+  // newest revision, which is exactly what an owner who has never pressed Undo expects.
+  historyCursor    Int      @default(0)
   publishedVersion Int      @default(0)
   publishedAt      DateTime?
   publishedById    String?
@@ -822,6 +828,30 @@ model ExperienceVersion {
 
   @@unique([businessId, version])
   @@index([businessId, publishedAt])
+}
+
+// Draft revision history — Undo, Redo and recovery for everything the owner changes (§15, §45).
+//
+// Every write to the draft — a section, a design change, a photo swap, a product edit, AI copy —
+// goes through the one Studio write path, which records the document it produced here. Undo and
+// Redo therefore work for every kind of change with one mechanism, and no owner work is ever
+// unrecoverable. Rows are bounded: the write path prunes to the newest DRAFT_HISTORY_LIMIT
+// revisions, so storage stays small and predictable.
+model ExperienceDraftRevision {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Mirrors BusinessExperience.draftVersion, so a revision and a draft number never disagree.
+  draftVersion Int
+  label        String?
+  // EDIT | AI | RESTORE | SYSTEM
+  source       String   @default("EDIT")
+  snapshotJson String   @db.Text
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([businessId, draftVersion])
+  @@index([businessId, createdAt])
 }
 
 //
@@ -861,11 +891,56 @@ model MediaAsset {
   height     Int?
   bytes      Int?
   hash       String?
+  mime       String?
+  // Where the pixels came from (§18, §43). Provenance travels with the asset so the Studio can
+  // always answer "did the owner photograph this, or did JATA make it?".
+  source     String   @default("UPLOAD")  // UPLOAD | AI_GENERATED | AI_ENHANCED | ENHANCED
+  // What the image may claim to be (§15): ACTUAL = the real product, REPRESENTATIVE = designed
+  // artwork standing in for a photo the business does not have, AI_GENERATED = vendor photo.
+  label      String?
+  aiGenerationId String?
+  parentAssetId  String?
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([businessId])
   @@index([businessId, hash])
   @@index([businessId, createdAt])
+  @@index([businessId, source])
+  @@index([businessId, kind])
+}
+
+// AI generation history and usage meter (§17, §43, §51).
+//
+// One row per request, whatever the outcome: what was asked, for whom, which provider and
+// model, how long it took and which media assets it produced. The image allowance is counted
+// from these rows, so the meter and the audit trail can never disagree, and deleting a
+// generation removes exactly the assets it created.
+model AiGeneration {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId         String?
+  kind           String                        // IMAGE | ENHANCE | COPY | ALT_TEXT
+  capability     String?                       // preset key, e.g. "product-photo"
+  subjectType    String?                       // PRODUCT | SERVICE | SECTION | BUSINESS
+  subjectId      String?
+  prompt         String?  @db.Text
+  promptHash     String?
+  providerKey    String   @default("jata-local")
+  modelKey       String?
+  status         String   @default("PENDING")  // PENDING | SUCCEEDED | FAILED | BLOCKED
+  errorCode      String?
+  assetIds       String?  @db.Text
+  selectedAssetId String?
+  durationMs     Int?
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, promptHash])
+  @@index([businessId, kind, status])
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

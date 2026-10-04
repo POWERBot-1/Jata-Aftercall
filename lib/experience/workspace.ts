@@ -30,6 +30,8 @@ export type Workspace = {
     location: string | null;
     logoUrl: string | null;
     description: string | null;
+    /** Business facts the health check reasons about — never invented by AI (§36, §55). */
+    openingHours: string | null;
     isPublished: boolean;
     status: string;
   };
@@ -90,7 +92,7 @@ export async function loadWorkspace(businessId: string): Promise<Workspace | nul
       where: { id: businessId },
       select: {
         id: true, name: true, slug: true, category: true, phone: true, whatsapp: true,
-        location: true, logoUrl: true, description: true, isPublished: true, status: true,
+        location: true, logoUrl: true, description: true, openingHours: true, isPublished: true, status: true,
       },
     }),
     prisma.businessExperience.findUnique({ where: { businessId } }),

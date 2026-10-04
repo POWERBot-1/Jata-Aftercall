@@ -7,6 +7,7 @@ import { StudioTabs } from "@/components/dashboard/StudioTabs";
 import { PublishPanel } from "@/components/dashboard/PublishPanel";
 import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
 import { CreateExperienceForm } from "@/components/dashboard/CreateExperienceForm";
+import { WebsiteHealth } from "@/components/dashboard/WebsiteHealth";
 
 export const metadata: Metadata = { title: "Website studio" };
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export default async function StudioHomePage({ params }: Props) {
         <CreateExperienceForm businessId={business.id} currentCategory={business.category} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <div id="publish">
           <PublishPanel
             businessId={business.id}
             ready={validation.ready}
@@ -53,6 +55,7 @@ export default async function StudioHomePage({ params }: Props) {
             entitled={entitlement.entitled}
             publicUrl={publicUrl}
           />
+          </div>
 
           <section className="jata-card">
             <h2 className="text-sm font-bold">Your website at a glance</h2>
@@ -77,12 +80,16 @@ export default async function StudioHomePage({ params }: Props) {
             <div className="jata-quick-actions mt-4">
               <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/sections`}>Edit sections</Link>
               <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/items`}>Manage {profile.catalogueLabel.toLowerCase()}</Link>
-              <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/theme`}>Theme & brand</Link>
+              <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/photos`}>Photos</Link>
+              <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/design`}>Design</Link>
+              <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/theme`}>Brand & settings</Link>
               <Link className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${business.id}/preview`}>Preview</Link>
             </div>
           </section>
         </div>
       )}
+
+      {experience ? <WebsiteHealth businessId={business.id} /> : null}
 
       {experience ? (
         <section className="jata-card">

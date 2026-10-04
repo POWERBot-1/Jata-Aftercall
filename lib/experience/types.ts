@@ -10,6 +10,21 @@
  * consumes one normalized experience document, and a single editor edits it.
  */
 
+/** Photography languages a website can use (§8, §30, §44). Shared so the document, the AI
+ *  design context and the Studio picker cannot drift apart. */
+export const PHOTOGRAPHY_STYLE_KEYS = [
+  "clean-studio",
+  "premium",
+  "natural",
+  "warm",
+  "luxury",
+  "modern",
+  "rustic",
+  "minimal",
+] as const;
+
+export type PhotographyStyleKey = (typeof PHOTOGRAPHY_STYLE_KEYS)[number];
+
 export type CategoryKey =
   | "food"
   | "beauty"
@@ -58,6 +73,8 @@ export type SectionType =
   | "location"
   | "testimonials"
   | "faq"
+  | "steps"
+  | "why"
   | "contact"
   | "cta";
 
@@ -205,6 +222,10 @@ export type ExperienceDocument = {
     description?: string;
     imageUrl?: string;
   };
+  /** The photography language JATA uses when it creates or improves images for this website. */
+  photographyStyle?: PhotographyStyleKey | string;
+  /** The design direction the owner chose, kept for the Studio's "current direction" state. */
+  designDirectionKey?: string;
   updatedAt?: string;
 };
 

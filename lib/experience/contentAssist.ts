@@ -18,8 +18,14 @@ export type AssistKind =
   | "SERVICE_DESCRIPTION"
   | "TAGLINE"
   | "SEO_DESCRIPTION"
+  | "SEO_TITLE"
   | "OFFER_COPY"
-  | "IMAGE_ALT";
+  | "IMAGE_ALT"
+  | "HERO_HEADLINE"
+  | "HERO_SUBTITLE"
+  | "ABOUT"
+  | "FAQ_ANSWER"
+  | "CTA_LABEL";
 
 export type AssistRequest = {
   kind: AssistKind;
@@ -32,6 +38,10 @@ export type AssistRequest = {
   durationMinutes?: number | null;
   location?: string | null;
   businessName?: string | null;
+  /** A customer question, for FAQ_ANSWER. Owner-supplied. */
+  question?: string | null;
+  /** Opening hours the owner configured, used only so AI never guesses them. */
+  openingHours?: string | null;
 };
 
 export type AssistSuggestion = {
@@ -46,9 +56,18 @@ export const ASSIST_LABELS: Record<AssistKind, string> = {
   SERVICE_DESCRIPTION: "Service description",
   TAGLINE: "Tagline",
   SEO_DESCRIPTION: "SEO description",
+  SEO_TITLE: "Search title",
   OFFER_COPY: "Offer copy",
   IMAGE_ALT: "Image description",
+  HERO_HEADLINE: "Homepage headline",
+  HERO_SUBTITLE: "Homepage supporting line",
+  ABOUT: "About section",
+  FAQ_ANSWER: "Answer to a customer question",
+  CTA_LABEL: "Button label",
 };
+
+/** Kinds that are copy for a *field*, i.e. safe for the assistant to propose (§44). */
+export const ASSIST_KINDS = Object.keys(ASSIST_LABELS) as AssistKind[];
 
 /** Fields AI is never allowed to write. Enforced by never generating them (§44, §45). */
 export const ASSIST_FORBIDDEN_FIELDS = ["price", "basePriceKES", "salePriceKES", "stockStatus", "quantity", "isActive", "availability", "depositKES"] as const;
@@ -247,6 +266,43 @@ export function suggestContent(request: AssistRequest): AssistSuggestion[] {
       ];
     case "IMAGE_ALT":
       return [suggestion(0, `${name}${facts ? ` — ${facts}` : ""}${location ? ` at ${location}` : ""}`)];
+    case "SEO_TITLE": {
+      const business = clean(request.businessName || "", 40) || name;
+      const where = location ? ` in ${location}` : "";
+      return [
+        suggestion(0, `${business} — ${profile.label}${where}`.slice(0, 70)),
+        suggestion(1, `${business}${where} | ${profile.catalogueLabel}`.slice(0, 70)),
+      ];
+    }
+    case "HERO_HEADLINE": {
+      const business = clean(request.businessName || "", 40) || name;
+      return [
+        suggestion(0, `${business}${location ? `, ${location}` : ""}`.slice(0, 80)),
+        suggestion(1, copy.taglines[0] || `${business}`),
+        suggestion(2, facts ? `${name} — ${facts}`.slice(0, 80) : `${business}: ${copy.benefit}`.slice(0, 80)),
+      ];
+    }
+    case "HERO_SUBTITLE":
+      return [
+        suggestion(0, `${copy.benefit.charAt(0).toUpperCase()}${copy.benefit.slice(1)} ${profile.itemNounPlural.toLowerCase()}${location ? ` in ${location}` : ""}. Order or book directly — no middleman.`),
+        suggestion(1, `Browse what we have, see the prices and reach us on WhatsApp in one tap.`),
+      ];
+    case "ABOUT": {
+      const business = clean(request.businessName || "", 60) || "We";
+      return [
+        suggestion(0, `${business} is a ${profile.label.toLowerCase()} business${location ? ` in ${location}` : ""}. ${facts ? `${facts}. ` : ""}We serve customers directly, and you can see what we offer on this page.`),
+        suggestion(1, `We run ${business}${location ? ` in ${location}` : ""}. ${facts ? `${facts}. ` : ""}Tell us what you need and we will take it from there.`),
+      ];
+    }
+    case "FAQ_ANSWER": {
+      const question = clean(request.question, 140);
+      if (!question) return [];
+      return [
+        suggestion(0, `Thanks for asking. ${facts ? `${facts}. ` : ""}For anything specific, message us on WhatsApp and we will confirm right away.`),
+      ];
+    }
+    case "CTA_LABEL":
+      return [suggestion(0, profile.cta.primary), suggestion(1, profile.cta.add), suggestion(2, profile.cta.enquire)];
     default:
       return [];
   }

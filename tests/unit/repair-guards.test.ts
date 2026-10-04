@@ -63,16 +63,21 @@ describe("runtime and schema guards", () => {
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
     const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
-    // Four additional migrations are authorised, all purely additive: the Stage 2 referral
+    // Five additional migrations are authorised, all purely additive: the Stage 2 referral
     // attribution schema, the commerce baseline the platform always needed, the Interactive
-    // Business package schema, and the Configurable Business POS schema. Anything else stays a
-    // build failure, and no migration may destroy or rewrite existing data.
+    // Business package schema, the Configurable Business POS schema, the Website Studio AI
+    // schema (image provenance on MediaAsset plus the AiGeneration audit table), and the Website
+    // Studio draft history (a bounded revision stack that powers Undo/Redo, plus one defaulted
+    // cursor column on BusinessExperience). Anything else stays a build failure, and no migration
+    // may destroy or rewrite existing data.
     expect(migrations).toEqual([
       "20250915000000_init",
       "20260929000000_referral_stage2",
       "20260930000000_commerce_baseline",
       "20261002000000_interactive_business",
       "20261003000000_business_pos",
+      "20261004000000_website_studio_ai",
+      "20261004010000_studio_draft_history",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -92,6 +97,8 @@ describe("runtime and schema guards", () => {
       "20260930000000_commerce_baseline",
       "20261002000000_interactive_business",
       "20261003000000_business_pos",
+      "20261004000000_website_studio_ai",
+      "20261004010000_studio_draft_history",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

@@ -1460,3 +1460,137 @@ button:focus-visible {
   .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions { display: none !important; }
   .pos-receipt { border: none; }
 }
+
+/* ── Website Studio copilot & photo lab (§5, §11–§18, §38) ─────────────────
+   Mobile-first: the assistant is a full-width sheet on a phone and a docked card
+   on a laptop, with touch-sized controls in both. */
+
+.jata-copilot-fab {
+  position: fixed;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 40;
+  min-height: 2.9rem;
+  border-radius: 999px;
+  padding: 0.6rem 1.1rem;
+  background: var(--jata-ink);
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.jata-copilot {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-top-left-radius: 1.25rem;
+  border-top-right-radius: 1.25rem;
+  border: 1px solid var(--jata-line);
+  background: var(--jata-card);
+  padding: 0.9rem;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.16);
+}
+
+@media (min-width: 900px) {
+  .jata-copilot {
+    left: auto;
+    bottom: 4.4rem;
+    right: 0.9rem;
+    width: 24rem;
+    border-radius: 1.25rem;
+    max-height: 70vh;
+  }
+  .jata-copilot-fab { bottom: 0.9rem; }
+}
+
+.jata-empty {
+  border: 1px dashed var(--jata-line);
+  border-radius: 1.25rem;
+  background: var(--jata-card);
+  padding: 1.4rem;
+  text-align: center;
+}
+
+.jata-workspace-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--jata-card) 92%, transparent);
+  backdrop-filter: blur(6px);
+  padding-bottom: 0.35rem;
+}
+/* ── Studio history: Undo / Redo / recovery (§45) ─────────────────────────── */
+.jata-history-bar {
+  position: fixed;
+  left: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-width: calc(100vw - 8.5rem);
+}
+
+.jata-history-bar .jata-btn {
+  min-height: 2.75rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.jata-history-note {
+  position: fixed;
+  left: 0.9rem;
+  bottom: 4.4rem;
+  z-index: 41;
+  max-width: min(22rem, calc(100vw - 1.8rem));
+  border: 1px solid var(--jata-line);
+  border-radius: 0.9rem;
+  background: var(--jata-card);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--jata-ink);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+}
+
+.jata-history-note-error {
+  border-color: #b42318;
+  color: #b42318;
+}
+
+.jata-history-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 46;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-top-left-radius: 1.25rem;
+  border-top-right-radius: 1.25rem;
+  border: 1px solid var(--jata-line);
+  background: var(--jata-card);
+  padding: 1rem;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.16);
+}
+
+.jata-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .jata-history-sheet {
+    left: auto;
+    right: 0.9rem;
+    bottom: 4.4rem;
+    width: 26rem;
+    border-radius: 1.25rem;
+  }
+}
