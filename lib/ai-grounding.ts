@@ -98,32 +98,79 @@ export function contentTokens(text: string): string[] {
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
 }
 
+const UNIT_OR_PACK_TOKENS = new Set([
+  "50kg", "25kg", "20kg", "10kg", "5kg", "1kg", "kg", "kgs",
+  "bag", "bags", "piece", "pieces", "plate", "plates", "portion", "portions", "pcs", "pc",
+]);
+
+/** Category nouns and pack sizes are not a brand or model. */
+function genericCatalogueTokens(products: CatalogueProduct[]): Set<string> {
+  const generic = new Set<string>(["cement", "cements", ...UNIT_OR_PACK_TOKENS]);
+  for (const product of products) {
+    for (const token of contentTokens(product.category || "")) generic.add(token);
+  }
+  return generic;
+}
+
+const NON_IDENTITY_TOKENS = new Set([
+  "place", "places", "area", "areas", "address", "addresses", "same", "here", "huko", "pale",
+  "one", "item", "items", "product", "products", "grade", "grades", "confirm", "please", "yes",
+  ...Object.keys(WORD_NUMBERS),
+]);
+
+function identityTokens(text: string, generic: Set<string>): string[] {
+  return contentTokens(text).filter(
+    (token) =>
+      !generic.has(token) &&
+      !UNIT_OR_PACK_TOKENS.has(token) &&
+      !NON_IDENTITY_TOKENS.has(token) &&
+      !/^\d+$/.test(token),
+  );
+}
+
+/** Brand/model tokens in the message that do not belong to any configured product name. */
+export function unrecognizedProductTokens(
+  message: string,
+  products: CatalogueProduct[],
+  extraKnownPhrases: string[] = [],
+): string[] {
+  const active = products.filter((product) => product.isActive !== false);
+  const generic = genericCatalogueTokens(active);
+  const known = new Set([
+    ...active.flatMap((product) => identityTokens(product.name, generic)),
+    ...extraKnownPhrases.flatMap((phrase) => identityTokens(phrase, generic)),
+  ]);
+  return identityTokens(message, generic).filter((token) => !known.has(token));
+}
+
 export function matchCatalogue(message: string, products: CatalogueProduct[]): CatalogueProduct[] {
   const raw = (message || "").toLowerCase();
   const msgTokens = contentTokens(message);
   if (msgTokens.length === 0) return [];
+  const active = products.filter((product) => product.isActive !== false);
+  const generic = genericCatalogueTokens(active);
+  const messageIdentity = identityTokens(message, generic);
+  const unknownIdentity = unrecognizedProductTokens(message, active);
   const msgTokenSet = new Set(msgTokens);
-  const scored = products
-    .filter((product) => product.isActive !== false)
+  const scored = active
     .map((product) => {
       const name = product.name.toLowerCase();
       const nameTokens = contentTokens(product.name);
       const categoryTokens = contentTokens(product.category || "");
+      const fullName = name.length >= 3 && (raw.includes(name) || raw.includes(singularize(name)));
       let score = 0;
-      if (name.length >= 3 && (raw.includes(name) || raw.includes(singularize(name)))) score += 100;
+      if (fullName) score += 100;
       const overlap = nameTokens.filter((token) => msgTokenSet.has(token) || raw.includes(token));
       score += overlap.length * 10;
       if (nameTokens.length > 0 && overlap.length === nameTokens.length) score += 15;
       if (categoryTokens.some((token) => msgTokenSet.has(token)) && (overlap.length > 0 || score >= 100)) score += 4;
       else if (overlap.length === 0 && categoryTokens.some((token) => msgTokenSet.has(token))) {
-        const allKnownTokens = new Set([
-          ...products.flatMap((p) => [...contentTokens(p.name), ...contentTokens(p.category || "")]),
-          "50kg", "25kg", "10kg", "5kg", "1kg", "bag", "bags", "kg", "kgs", "piece", "pieces", "plate", "plates",
-        ]);
-        const unknownTokens = msgTokens.filter((t) => !allKnownTokens.has(t));
-        if (unknownTokens.length === 0) {
-          score += 4;
-        }
+        if (unknownIdentity.length === 0) score += 4;
+      }
+      // An unrecognized brand/model must not inherit a match from a shared category noun such as "cement".
+      if (unknownIdentity.length > 0 && !fullName) {
+        const knownOverlap = identityTokens(product.name, generic).filter((token) => messageIdentity.includes(token));
+        if (knownOverlap.length === 0) score = 0;
       }
       return { product, score };
     })
@@ -212,6 +259,22 @@ export function refersToPreviousPlace(message: string): boolean {
     /\b(?:there|huko|pale)$/i.test(text) &&
     /\b(?:need|want|order|buy|get|give|send|deliver|peleka|nataka|naomba|nipe|bags?)\b/i.test(text)
   );
+}
+
+/**
+ * A whole-message delivery follow-up such as "same place", "there", or "to that area".
+ * Not an order, and not an existential "there is".
+ */
+export function isBareDeliveryFollowUp(message: string): boolean {
+  const text = normalizeDeliveryText(message);
+  if (!text) return false;
+  if (/\b(?:is|are|was|were|isn't|aren't)\s+(?:there|huko|pale)\b/i.test(text)) return false;
+  if (/\bthere\s+(?:is|are|was|were)\b/i.test(text)) return false;
+  if (/\bplace\s+an\s+order\b/i.test(text)) return false;
+  if (/^(?:to\s+)?(?:the\s+)?(?:same|that)\s+(?:delivery\s+)?(?:place|area|address)$/i.test(text)) return true;
+  if (/^(?:delivered|deliver(?:y|ing)?|send|peleka)\s+(?:to\s+)?(?:the\s+)?(?:there|huko|pale)$/i.test(text)) return true;
+  if (/^(?:there|huko|pale)$/i.test(text)) return true;
+  return false;
 }
 
 function isBarePlaceReference(value: string): boolean {

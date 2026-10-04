@@ -5,7 +5,7 @@
 
 import type { getBusinessBrain } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
-import type { ConversationContext } from "./ai-conversation";
+import { productFocusPinnedAfterMention, type ConversationContext } from "./ai-conversation";
 import { executeBusinessTool, type AIToolName } from "./ai-tools";
 import { buildCartFromLines, parseConversationalOrder, type CartLine } from "./cart";
 import { recordDemandInsight } from "./intelligence";
@@ -27,9 +27,11 @@ import {
   isHumanHandoff,
   isOrderingIntent,
   isPreorderIntent,
+  isBareDeliveryFollowUp,
   matchCatalogue,
   refersToPreviousProduct,
   stockIsConfirmed,
+  unrecognizedProductTokens,
   type CatalogueProduct,
 } from "./ai-grounding";
 const FALLBACK_UNKNOWN_MESSAGE = "I don't have that information yet. Let me connect you with the business.";
@@ -163,6 +165,10 @@ export async function resolveCommerceTurn(params: {
   if (ordering && brain.products.length > 0) {
     const orderTurn = await progressOrder({ businessId, message, brain, conv, preview, deliveryMention });
     if (orderTurn) return orderTurn;
+  }
+
+  if (!ordering && isBareDeliveryFollowUp(message)) {
+    return answerBareDeliveryFollowUp({ brain, conv });
   }
 
   if (isBookingIntent(message) && !ordering) {
@@ -386,15 +392,49 @@ function mergeCartLines(existing: CartLine[], updates: CartLine[]): CartLine[] {
   return merged;
 }
 
+function answerBareDeliveryFollowUp(params: { brain: Brain; conv: ConversationContext }): CommerceTurn {
+  const established = establishedDeliveryZones(params.conv, params.brain);
+  if (established.length > 1) return clarifyDeliveryArea(established, params.conv);
+  if (established.length === 1) {
+    const zoneName = established[0];
+    const zone = (params.brain.delivery?.zones || []).find((item) => item.name.toLowerCase() === zoneName.toLowerCase());
+    const feeLine = zone ? formatDeliveryAnswer(zone) : `The established delivery area is ${zoneName}.`;
+    return {
+      reply: `${feeLine} What item and quantity would you like?`,
+      responseType: "KNOWN",
+      source: "structured_data",
+      confidence: "high",
+      escalatedToHuman: false,
+      toolsInvoked: ["get_delivery_fee"],
+      informationFound: zone ? [`Delivery zone ${zone.name}: ${formatKes(zone.feeKES)}`] : [zoneName],
+      informationNotFound: [],
+      conv: { ...params.conv, pendingDeliveryZone: zoneName, pendingFulfilment: "DELIVERY" },
+    };
+  }
+  return {
+    reply: "I still need the delivery area before I can confirm a fee.",
+    responseType: "ACTION_REQUIRED",
+    source: "structured_data",
+    confidence: "high",
+    escalatedToHuman: false,
+    toolsInvoked: ["get_delivery_fee"],
+    informationFound: [],
+    informationNotFound: ["Delivery destination"],
+    conv: params.conv,
+  };
+}
+
 function resolveReferencedProduct(input: {
   active?: CatalogueProduct;
   discussed: CatalogueProduct[];
   pending: CartLine[];
   demonstrative: boolean;
   namedCount: number;
+  pinned?: boolean;
 }): CatalogueProduct | "ask" | null {
   if (input.namedCount > 0) return null;
   if (input.demonstrative) {
+    if (input.pinned && input.active) return input.active;
     if (input.discussed.length > 1) return "ask";
     if (input.active) return input.active;
     if (input.discussed.length === 1) return input.discussed[0];
@@ -411,6 +451,7 @@ function resolveReferencedProduct(input: {
     const singleProduct = input.discussed.find((p) => p.id === singlePendingId);
     return singleProduct || input.active || input.discussed[0] || null;
   }
+  if (input.pinned && input.active) return input.active;
   if (input.discussed.length > 1) return null;
   if (input.active && input.discussed.length <= 1) return input.active;
   if (input.discussed.length === 1) return input.discussed[0];
@@ -443,6 +484,15 @@ async function progressOrder(params: {
   const products = brain.products.filter((product) => product.isActive !== false) as CatalogueProduct[];
   const parsed = parseConversationalOrder(message, products);
   let focusId: string | null = null;
+  let productFocusPinned = Boolean(params.conv.productFocusPinned);
+  if (
+    parsed.matchedLines.length === 0 &&
+    parsed.outOfStockItems.length === 0 &&
+    unrecognizedProductTokens(message, products, (brain.delivery?.zones || []).map((zone) => zone.name)).length > 0
+  ) {
+    // Unknown brand/model belongs to the unlisted-product reply, not a catalogue guess.
+    return null;
+  }
   if (parsed.outOfStockItems.length > 0 && parsed.matchedLines.length === 0) {
     // Existing front-desk handler owns the out-of-stock / PRE-ORDER wording and null cart.
     return null;
@@ -485,11 +535,12 @@ async function progressOrder(params: {
       pending,
       demonstrative,
       namedCount: namedElsewhere.length,
+      pinned: params.conv.productFocusPinned && Boolean(active),
     });
     if (referenced === "ask") {
       const choices = (discussed.length > 1 ? discussed : products).slice(0, 6);
       return {
-        reply: `Which item should I use? ${choices.map((product) => product.name).join(", ")}.`,
+        reply: `Which item or grade should I use? ${choices.map((product) => product.name).join(", ")}.`,
         responseType: "ACTION_REQUIRED",
         source: "structured_data",
         confidence: "high",
@@ -557,14 +608,15 @@ async function progressOrder(params: {
         informationNotFound: [],
         conv: {
           ...params.conv,
-          discussedProductIds: namedElsewhere.map((product) => product.id),
+          discussedProductIds: Array.from(new Set([...params.conv.discussedProductIds, ...namedElsewhere.map((product) => product.id)])),
           activeProductId: null,
           activeProductName: null,
+          productFocusPinned: false,
           pendingDeliveryZone: destination || params.conv.pendingDeliveryZone,
           pendingFulfilment: destination ? "DELIVERY" : params.conv.pendingFulfilment,
         },
       };
-    } else if (quantity && params.conv.discussedProductIds.length > 1) {
+    } else if (quantity && params.conv.discussedProductIds.length > 1 && !(params.conv.productFocusPinned && active)) {
       const discussed = products.filter((product) => params.conv.discussedProductIds.includes(product.id));
       const area = extractDeliveryArea(message);
       const uniqueZone = establishedDeliveryZones(params.conv, brain);
@@ -632,6 +684,16 @@ async function progressOrder(params: {
     : referring && established.length === 1
       ? established[0]
       : null;
+  if (focusId && parsed.matchedLines.some((line) => line.productId === focusId)) {
+    productFocusPinned =
+      parsed.matchedLines.length === 1
+        ? productFocusPinnedAfterMention(params.conv.discussedProductIds || [], focusId)
+        : true;
+  } else if (focusId) {
+    productFocusPinned = true;
+  } else if (parsed.matchedLines.length > 1) {
+    productFocusPinned = false;
+  }
   const resolvedActiveId = focusId || (lines.length === 1 ? lines[0]?.productId : null) || null;
   const resolvedActiveName =
     products.find((product) => product.id === resolvedActiveId)?.name ||
@@ -651,6 +713,7 @@ async function progressOrder(params: {
       activeProductId: resolvedActiveId,
       activeProductName: resolvedActiveName,
       discussedProductIds: nextDiscussedIds,
+      productFocusPinned,
     });
   }
   const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPriceKES, 0);
@@ -662,6 +725,7 @@ async function progressOrder(params: {
     activeProductId: resolvedActiveId,
     activeProductName: resolvedActiveName,
     discussedProductIds: nextDiscussedIds,
+    productFocusPinned,
   };
   if (zoneName) {
     const zoneResult = resolveDeliveryZoneFee(brain.delivery, zoneName, subtotal);

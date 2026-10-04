@@ -16,9 +16,10 @@
 import { getBusinessBrain, type KnowledgeConflict } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
 import { resolveCommerceTurn } from "./ai-commerce-turn";
-import { formatProductPriceLine, interpretOpeningStatus, isOpenQuestion, matchCatalogue, openingHoursSummary, stockIsConfirmed } from "./ai-grounding";
+import { formatProductPriceLine, interpretOpeningStatus, isBareDeliveryFollowUp, isOpenQuestion, matchCatalogue, openingHoursSummary, stockIsConfirmed } from "./ai-grounding";
 import {
   getOrCreateConversationContext,
+  productFocusPinnedAfterMention,
   updateConversationContext,
   type ChannelType,
   type ConversationContext,
@@ -118,6 +119,7 @@ export function detectPromptInjection(message: string): { isInjection: boolean; 
 
 function extractRequestedProductCandidate(message: string): string | null {
   const m = message.trim();
+  if (isBareDeliveryFollowUp(m)) return null;
   const patterns = [
     /(?:how\s+much\s+(?:is|are|for)\s+(?:the\s+|a\s+|an\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
     /(?:do\s+you\s+(?:have|sell|stock)\s+(?:any\s+|the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
@@ -132,11 +134,21 @@ function extractRequestedProductCandidate(message: string): string | null {
     if (match?.[1]) {
       const candidate = match[1].trim().toLowerCase();
       if (
+        !isBareDeliveryFollowUp(candidate) &&
         ![
           "it",
           "this",
           "that",
           "them",
+          "there",
+          "huko",
+          "pale",
+          "same place",
+          "same area",
+          "that place",
+          "that area",
+          "same address",
+          "that address",
           "delivery",
           "shipping",
           "everything",
@@ -166,6 +178,16 @@ function extractDeliveryAreaCandidate(message: string): string | null {
     }
   }
   return null;
+}
+
+
+function explicitProductContext(conv: ConversationContext, product: { id: string; name: string }, pin: boolean) {
+  return {
+    activeProductId: product.id,
+    activeProductName: product.name,
+    discussedProductIds: Array.from(new Set([...(conv.discussedProductIds || []), product.id])),
+    productFocusPinned: pin,
+  };
 }
 
 export async function handleAIFrontDeskTurn(params: {
@@ -824,6 +846,7 @@ export async function handleAIFrontDeskTurn(params: {
           ...conv,
           activeProductId: null,
           activeProductName: null,
+          productFocusPinned: false,
           discussedProductIds: Array.from(new Set([...conv.discussedProductIds, ...priced.map((product) => product.id)])),
         },
         rawMessage,
@@ -851,6 +874,9 @@ export async function handleAIFrontDeskTurn(params: {
         : null;
 
   if (targetProduct) {
+    const productFocusPinned = matchedProducts.length === 1
+      ? productFocusPinnedAfterMention(conv.discussedProductIds || [], targetProduct.id)
+      : conv.productFocusPinned;
     toolsInvoked.push("get_product", "check_inventory");
     const authoritativePrice = targetProduct.basePriceKES ?? targetProduct.variantPriceKES ?? null;
     const availability = evaluateProductAvailability({ product: targetProduct, requestedQuantity: 1 });
@@ -880,8 +906,7 @@ export async function handleAIFrontDeskTurn(params: {
         return finalizeTurn({
           conv: {
             ...conv,
-            activeProductId: targetProduct.id,
-            activeProductName: targetProduct.name,
+            ...explicitProductContext(conv, targetProduct, productFocusPinned),
           },
           rawMessage,
           reply: `We don't have "${requestedVariantTerm}" listed as an available option for ${targetProduct.name}. ${
@@ -910,9 +935,7 @@ export async function handleAIFrontDeskTurn(params: {
       return finalizeTurn({
         conv: {
           ...conv,
-          activeProductId: targetProduct.id,
-          activeProductName: targetProduct.name,
-          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
+          ...explicitProductContext(conv, targetProduct, productFocusPinned),
         },
         rawMessage,
         reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0}.${
@@ -943,9 +966,7 @@ export async function handleAIFrontDeskTurn(params: {
       return finalizeTurn({
         conv: {
           ...conv,
-          activeProductId: targetProduct.id,
-          activeProductName: targetProduct.name,
-          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
+          ...explicitProductContext(conv, targetProduct, productFocusPinned),
         },
         rawMessage,
         reply: `${targetProduct.name} is priced at KES ${authoritativePrice ?? 0}, and is currently ${availability.stockStatus} (not available for immediate fulfilment).${preOrderText}`,
@@ -966,9 +987,7 @@ export async function handleAIFrontDeskTurn(params: {
     return finalizeTurn({
       conv: {
         ...conv,
-        activeProductId: targetProduct.id,
-        activeProductName: targetProduct.name,
-        discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
+        ...explicitProductContext(conv, targetProduct, productFocusPinned),
       },
       rawMessage,
       reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0} (${availability.stockStatus}).${
@@ -1140,14 +1159,21 @@ export async function handleAIFrontDeskTurn(params: {
       await recordUnansweredQuestion(businessId, rawMessage);
     }
     informationNotFound.push(`Product: ${requestedCandidate}`);
+    const candidateTokens = requestedCandidate.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
+    const categoryAlternatives = brain.products.filter((product) => {
+      const category = (product.category || "").toLowerCase();
+      return candidateTokens.some((token) => category.includes(token));
+    });
+    const alternatives = categoryAlternatives.length > 0 ? categoryAlternatives : brain.products;
+    const alternativeLabel = categoryAlternatives.length > 0 ? "Configured alternatives" : "We currently have";
     const availableSummary =
-      brain.products.length > 0
-        ? ` We currently have: ${brain.products.map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`).join(", ")}.`
+      alternatives.length > 0
+        ? ` ${alternativeLabel}: ${alternatives.map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`).join(", ")}.`
         : "";
     return finalizeTurn({
       conv,
       rawMessage,
-      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE}${availableSummary}`,
+      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE} ${requestedCandidate} is not a configured product.${availableSummary}`,
       responseType: "UNKNOWN",
       source: "structured_data",
       confidence: "high",
@@ -1225,6 +1251,7 @@ async function finalizeTurn(params: {
     collectedCustomerName: params.conv.collectedCustomerName,
     collectedCustomerPhone: params.conv.collectedCustomerPhone,
     discussedProductIds: params.conv.discussedProductIds,
+    productFocusPinned: params.conv.productFocusPinned,
     turns: nextTurns,
   });
 

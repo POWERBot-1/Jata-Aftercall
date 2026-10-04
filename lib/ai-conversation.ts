@@ -52,6 +52,12 @@ export type ConversationContext = {
   collectedCustomerName: string | null;
   collectedCustomerPhone: string | null;
   discussedProductIds: string[];
+  /**
+   * True when activeProductId was explicitly established as the follow-up referent.
+   * Historical discussedProductIds are kept. Opening a comparison (a second distinct
+   * product) clears the pin; a later explicit mention pins that product again.
+   */
+  productFocusPinned: boolean;
   turns: ConversationTurn[];
   preview: boolean;
   createdAt: string;
@@ -62,6 +68,20 @@ export type ConversationContext = {
 const conversationStore = new Map<string, ConversationContext>();
 // Map tracking which businessId owns a conversationId to detect cross-tenant probing.
 const conversationOwnerMap = new Map<string, string>();
+
+/**
+ * Whether an explicit catalogue mention should pin follow-ups to that product.
+ * The first product pins. Introducing a second distinct product opens a comparison
+ * and does not pin. Any later explicit mention re-establishes the named product
+ * without deleting the discussed history.
+ */
+export function productFocusPinnedAfterMention(priorDiscussedIds: string[], productId: string): boolean {
+  const prior = (priorDiscussedIds || []).filter(Boolean);
+  if (!productId) return false;
+  if (prior.length === 0) return true;
+  if (prior.length === 1 && prior[0] !== productId) return false;
+  return true;
+}
 
 export function getOrCreateConversationContext(params: {
   businessId: string;
@@ -109,6 +129,7 @@ export function getOrCreateConversationContext(params: {
     collectedCustomerName: null,
     collectedCustomerPhone: null,
     discussedProductIds: [],
+    productFocusPinned: false,
     turns: [],
     preview: Boolean(params.preview),
     createdAt: now,
