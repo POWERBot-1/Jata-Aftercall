@@ -326,7 +326,7 @@ describe("improving a real photo", () => {
 describe("a created image can actually be used on the website", () => {
   it("produces an asset the document will accept as a product, hero or section image", async () => {
     const { safeUrl } = await import("@/lib/experience/document");
-    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", placement: "hero", count: 1 });
+    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", preset: "hero", placement: "hero", count: 1 });
     expect(outcome.status).toBe("ok");
     if (outcome.status !== "ok") return;
     const asset = outcome.assets[0];
@@ -344,7 +344,7 @@ describe("a created image can actually be used on the website", () => {
 
   it("keeps everything it creates inside the one storage ceiling the document enforces", async () => {
     const { MAX_STORED_CHARS } = await import("@/lib/media/imageFormat");
-    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", placement: "product", count: 2, refresh: true });
+    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", preset: "product-photo", placement: "product", count: 2, refresh: true });
     expect(outcome.status).toBe("ok");
     if (outcome.status !== "ok") return;
     for (const asset of outcome.assets) expect(asset.url.length).toBeLessThanOrEqual(MAX_STORED_CHARS);
