@@ -6,6 +6,7 @@ import { resolveTheme } from "@/lib/themes";
 import BusinessPage from "@/components/BusinessPage";
 import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from "@/lib/publication";
 import { ensureReferralCode, referralPath } from "@/lib/referral";
+import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
@@ -139,6 +140,17 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     if (code) referralHref = referralPath(code);
   }
 
+  // The "Ask AI Front Desk" entry is offered only when the paid AI package is live for this
+  // business — the AI page itself answers 404 otherwise. Same server-side check, fails closed.
+  let aiFrontDeskLive = false;
+  if (decision === "public") {
+    try {
+      aiFrontDeskLive = (await getAIPackageStatus(business.id)).entitled === true;
+    } catch {
+      aiFrontDeskLive = false;
+    }
+  }
+
   return (
     <>
       {decision === "preview" && (
@@ -170,6 +182,7 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
         offer={business.offer}
         theme={theme}
         referralHref={referralHref}
+        aiFrontDeskLive={aiFrontDeskLive}
       />
     </>
   );

@@ -1,9 +1,11 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 import PlansClient from "@/components/PlansClient";
 export const dynamic = "force-dynamic";
 
 
 export default async function AdminPlansPage() {
+  await requireAdminPage();
   const plans = await prisma.planConfig.findMany({ orderBy: { priceKES: "asc" } });
   return (
     <div>

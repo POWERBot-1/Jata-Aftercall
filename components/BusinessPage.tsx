@@ -44,6 +44,7 @@ export default function BusinessPage({
   offer,
   theme,
   referralHref = null,
+  aiFrontDeskLive = false,
 }: {
   business: Business;
   services: Service[];
@@ -51,6 +52,12 @@ export default function BusinessPage({
   theme: ThemeTokens;
   /** Stage 2: owner referral CTA. Path only — never a code, id, or other tenant data. */
   referralHref?: string | null;
+  /**
+   * True only when this business has a live, entitled AI Business Front Desk. The link is never
+   * offered otherwise: /b/<slug>/ai answers 404 for a business without the paid package, so a
+   * customer tapping it would land on "Page not found".
+   */
+  aiFrontDeskLive?: boolean;
 }) {
   const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
@@ -190,12 +197,14 @@ export default function BusinessPage({
             <a href="#services" className={`inline-flex min-h-11 items-center text-sm font-semibold underline ${t.colors.muted}`}>
               View services ↓
             </a>
-            <a
-              href={`/b/${business.slug}/ai`}
-              className={`jata-cta inline-flex min-h-11 items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-2 text-xs font-semibold`}
-            >
-              Ask AI Front Desk →
-            </a>
+            {aiFrontDeskLive && (
+              <a
+                href={`/b/${business.slug}/ai`}
+                className={`jata-cta inline-flex min-h-11 items-center justify-center rounded-2xl border ${t.colors.border} px-4 py-2 text-xs font-semibold`}
+              >
+                Ask AI Front Desk →
+              </a>
+            )}
           </div>
         </div>
 

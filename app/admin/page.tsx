@@ -1,7 +1,9 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AdminOverview() {
+  await requireAdminPage();
   const [users, businesses, published, payments, subsActive, subsExpired, analytics] = await Promise.all([
     prisma.user.count(),
     prisma.business.count(),

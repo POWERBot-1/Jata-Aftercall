@@ -3,7 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { formatKES } from "@/lib/format";
-import { publiclyListedPlans } from "@/lib/pricing";
+import { FALLBACK_PLANS, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
 // The Business POS price is a server-side constant, never a number written into this page (§45).
 import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
 
@@ -23,10 +23,9 @@ export default async function HomePage() {
   }
   // Fallback if DB not seeded
   if (plans.length === 0) {
-    plans = [
-      { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365 },
-      { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30 },
-    ];
+    // Every advertised AFTERCALL product, not just the original two: a database blip must not make
+    // the AI Business Front Desk and Interactive Business cards disappear from the public page.
+    plans = publiclyListedPlans([...FALLBACK_PLANS]).sort((a, b) => a.priceKES - b.priceKES);
   }
 
   return (
@@ -131,7 +130,7 @@ export default async function HomePage() {
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:max-w-2xl">
           {plans.map((p) => (
             <div key={p.key} className="rounded-2xl border border-zinc-200 p-6">
-              <p className="text-sm font-semibold">{p.name}</p>
+              <p className="text-sm font-semibold">{planDisplayName(p)}</p>
               <p className="mt-1 text-3xl font-bold">KES {p.priceKES.toLocaleString()}</p>
               <p className="text-xs text-zinc-500">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
               <Link href="/register" className="mt-4 inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">Get my business page</Link>

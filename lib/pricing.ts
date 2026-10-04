@@ -38,6 +38,23 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
   return plans.filter((plan) => isPubliclyListedPlan(plan.key));
 }
 
+/**
+ * The name a customer-facing surface shows for a plan.
+ *
+ * The stored `PlanConfig.name` is operator-editable text. If it was ever written through a
+ * client with the wrong encoding it holds U+FFFD ("�") — which is what the public
+ * homepage was observed rendering for the AI Business Front Desk and Interactive Business cards.
+ * A known plan then shows its canonical name instead of a corrupted or blank one; any other
+ * stored name is shown exactly as the operator wrote it.
+ */
+export function planDisplayName(plan: { key: string; name?: string | null }): string {
+  const stored = typeof plan.name === "string" ? plan.name.trim() : "";
+  if (stored && !stored.includes("\uFFFD")) return stored;
+  const canonical = FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)?.name;
+  if (canonical) return canonical;
+  return stored.replace(/\uFFFD/g, "-") || plan.key;
+}
+
 export async function getPlanByKey(key: string): Promise<Plan | null> {
   return (await prisma.planConfig?.findUnique?.({ where: { key } })) ?? null;
 }

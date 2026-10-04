@@ -100,11 +100,21 @@ export function deriveAIEntitlement(input: {
     };
   }
 
+  // A business holds ONE subscription row. When that row belongs to another product, the AI
+  // package is not what is currently paid for — whatever a leftover AI entitlement row still
+  // says. Without this, buying AI once and then a cheaper plan would keep live AI on for the
+  // cheaper plan's whole window (stale-entitlement / plan-substitution bypass).
+  const subscriptionPlanKey = input.planKey || subscription?.plan?.key || null;
+  const subscriptionIsOtherProduct = Boolean(
+    subscription && subscriptionPlanKey && subscriptionPlanKey !== AI_FRONT_DESK_PLAN_KEY,
+  );
+
   if (
-    resolvedPlanKey &&
-    resolvedPlanKey !== AI_FRONT_DESK_PLAN_KEY &&
-    entitlement?.packageKey !== AI_FRONT_DESK_PLAN_KEY &&
-    entitlement?.packageName !== AI_FRONT_DESK_PLAN_KEY
+    subscriptionIsOtherProduct ||
+    (resolvedPlanKey &&
+      resolvedPlanKey !== AI_FRONT_DESK_PLAN_KEY &&
+      entitlement?.packageKey !== AI_FRONT_DESK_PLAN_KEY &&
+      entitlement?.packageName !== AI_FRONT_DESK_PLAN_KEY)
   ) {
     return {
       ...baseFields,
