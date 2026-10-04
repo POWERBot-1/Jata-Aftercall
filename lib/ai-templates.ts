@@ -84,8 +84,8 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
       { id: "human", label: "💬 Talk to a Person", prompt: "I would like to talk to a person" },
     ],
     sampleFAQs: [
-      { question: "How long does delivery take?", answer: "Delivery typically takes 30–45 minutes within our configured zones." },
-      { question: "How do I pay?", answer: "We accept M-Pesa and configured payment methods upon order confirmation." },
+      { question: "How long does delivery take?", answer: "" },
+      { question: "How do I pay?", answer: "" },
     ],
   },
   retail: {
@@ -109,9 +109,7 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
       { id: "order", label: "🛒 Order Now", prompt: "I want to order" },
       { id: "human", label: "💬 Talk to a Person", prompt: "Talk to a person" },
     ],
-    sampleFAQs: [
-      { question: "Can I preorder out-of-stock items?", answer: "Yes, eligible items can be preordered with a clear delivery estimate." },
-    ],
+    sampleFAQs: [{ question: "Can I preorder out-of-stock items?", answer: "" }],
   },
   salon: {
     key: "salon",
@@ -133,9 +131,7 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
       { id: "location", label: "📍 Location", prompt: "Where are you located and what time do you open?" },
       { id: "human", label: "💬 Talk to a Person", prompt: "Talk to a person" },
     ],
-    sampleFAQs: [
-      { question: "Do I need a deposit to book?", answer: "Deposits are only required for services where configured." },
-    ],
+    sampleFAQs: [{ question: "Do I need a deposit to book?", answer: "" }],
   },
   auto: {
     key: "auto",
@@ -157,9 +153,7 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
       { id: "location", label: "📍 Location", prompt: "Where is your workshop located?" },
       { id: "human", label: "💬 Talk to a Person", prompt: "Speak to a mechanic" },
     ],
-    sampleFAQs: [
-      { question: "Do you inspect before quoting?", answer: "Fixed services have standard rates; complex repairs are quoted after inspection." },
-    ],
+    sampleFAQs: [{ question: "Do you inspect before quoting?", answer: "" }],
   },
   real_estate: {
     key: "real_estate",
@@ -181,9 +175,7 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
       { id: "book", label: "📅 Book Viewing", prompt: "I want to schedule a viewing" },
       { id: "human", label: "💬 Talk to a Person", prompt: "Talk to an agent" },
     ],
-    sampleFAQs: [
-      { question: "How do I schedule a viewing?", answer: "Share your preferred date and contact details and our team will confirm your viewing." },
-    ],
+    sampleFAQs: [{ question: "How do I schedule a viewing?", answer: "" }],
   },
   professional_services: {
     key: "professional_services",
@@ -297,6 +289,39 @@ export const AI_BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     sampleFAQs: [],
   },
 };
+
+export type TemplateStarter = {
+  walkInsAccepted: boolean;
+  ordersAccepted: boolean;
+  bookingsAccepted: boolean;
+  preordersAccepted: boolean;
+  requiredCustomerFields: Array<"name" | "phone" | "delivery_location" | "notes">;
+  suggestedCatalogueFields: string[];
+  fulfilmentHint: string;
+  escalationHint: string;
+  questionPrompts: string[];
+};
+
+/** Suggested questionnaire structure only. Never includes prices, zones, or customer-facing facts. */
+export function starterForTemplate(template: BusinessTemplate): TemplateStarter {
+  const bookings = template.offerType === "BOOKINGS" || template.offerType === "APPOINTMENTS" || template.offerType === "SERVICES";
+  return {
+    walkInsAccepted: template.deliveryMode !== "DELIVERY",
+    ordersAccepted: template.orderingAllowed,
+    bookingsAccepted: bookings,
+    preordersAccepted: template.preordersAllowed,
+    requiredCustomerFields: template.deliveryMode === "PICKUP" ? ["name", "phone"] : ["name", "phone", "delivery_location"],
+    suggestedCatalogueFields: bookings
+      ? ["Service name", "Price", "Duration", "Deposit if you require one"]
+      : ["Name", "Category", "Price", "Unit", "Stock", "Variations"],
+    fulfilmentHint:
+      template.deliveryMode === "PICKUP"
+        ? "Customers collect unless you later add your own service areas."
+        : "Add your own zones, fees, and expected times. Nothing is pre-filled.",
+    escalationHint: "Call a person for complaints, refunds, missing information, and anything that needs approval.",
+    questionPrompts: template.sampleFAQs.map((item) => item.question).filter(Boolean),
+  };
+}
 
 export function resolveTemplateForCategory(categoryOrKey?: string | null): BusinessTemplate {
   const raw = (categoryOrKey || "").trim().toLowerCase();

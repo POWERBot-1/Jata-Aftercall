@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { formatOpeningHours } from "@/lib/openingHours";
 
 type ProductSummary = {
   id: string;
@@ -189,11 +190,12 @@ export default function AIFrontDeskCustomerClient({
           customerPhone,
         }),
       });
-      await res.json();
+      const data = await res.json();
       setOrderNotice(
-        previewMode
-          ? "Preview Mode: Order simulated safely (no live order or payment created)."
-          : "Order request recorded. Complete payment verification to confirm your order.",
+        data.reply ||
+          (previewMode
+            ? "Preview Mode: Order simulated safely (no live order or payment created)."
+            : "Order request recorded. Complete payment verification to confirm your order."),
       );
     } catch {
       setOrderNotice("Could not submit order right now. Please try again or contact the business directly.");
@@ -223,7 +225,9 @@ export default function AIFrontDeskCustomerClient({
             <h1 className="mt-1 text-xl font-bold text-white">{business.name}</h1>
             <p className="text-xs text-slate-300">
               {business.location ? `${business.location} • ` : ""}
-              {business.openingHours ? `Hours: ${business.openingHours}` : "Ask about products, prices, delivery & orders"}
+              {business.openingHours
+                ? `Hours: ${formatOpeningHours(business.openingHours).map((row) => (row.label ? `${row.label} ${row.value}` : row.value)).join(" · ") || "Ask about products, prices, delivery & orders"}`
+                : "Ask about products, prices, delivery & orders"}
             </p>
           </div>
 

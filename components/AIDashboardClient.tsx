@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNav from "@/components/DashboardNav";
+import { PREVIEW_TEST_QUESTIONS } from "@/lib/ai-grounding";
 
 type SectionTab =
   | "overview"
@@ -37,6 +38,7 @@ export default function AIDashboardClient({
 
   // Owner "Ask My Bot" testing console state (§29)
   const [botQuestion, setBotQuestion] = useState("");
+  const [botConversationId, setBotConversationId] = useState<string | null>(null);
   const [botTesting, setBotTesting] = useState(false);
   const [botResult, setBotResult] = useState<{
     reply: string;
@@ -143,11 +145,13 @@ export default function AIDashboardClient({
         body: JSON.stringify({
           businessId,
           message: q,
+          conversationId: botConversationId,
           preview: true,
           mode: "ask_my_bot",
         }),
       });
       const data = await res.json();
+      if (data.conversationId) setBotConversationId(data.conversationId);
       setBotResult(data);
     } catch {
       setBotResult(null);
@@ -613,12 +617,30 @@ export default function AIDashboardClient({
               </p>
             </div>
 
+            <div className="flex flex-wrap gap-2">
+              {PREVIEW_TEST_QUESTIONS.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() => {
+                    setBotQuestion(question);
+                  }}
+                  className="rounded-full border border-emerald-500/40 px-3 py-1 text-xs text-emerald-200"
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400">
+              Answers come from this business&apos;s saved products, prices, zones, payment instructions and rules. Follow-up questions stay in the same preview conversation.
+            </p>
+
             <form onSubmit={handleAskMyBot} className="flex gap-2">
               <input
                 type="text"
                 value={botQuestion}
                 onChange={(e) => setBotQuestion(e.target.value)}
-                placeholder="Ask a customer question (e.g., How much is delivery to Westlands?)"
+                placeholder="Ask a customer question using this business's configured products and zones"
                 className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white"
               />
               <button

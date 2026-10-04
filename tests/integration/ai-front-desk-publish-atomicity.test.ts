@@ -55,7 +55,13 @@ Object.assign(hoisted.dbMock, {
       return { id: "kd_1" };
     }),
   },
-  aIConfiguration: { findUnique: vi.fn(async () => null) },
+  aIConfiguration: {
+    findUnique: vi.fn(async () => ({
+      escalationRules: "Escalate complaints, refunds, and anything not in the Business Brain to the owner.",
+      orderingAllowed: true,
+      fallbackMessage: "I don't have that information yet. Let me connect you with the business.",
+    })),
+  },
   offer: { findUnique: vi.fn(async () => null) },
   merchantPaymentConfig: {
     findUnique: vi.fn(async () => ({ id: "mp_1", publicInfo: "Paybill 247247 Acc SHOP", isActive: true })),
@@ -104,6 +110,7 @@ describe("AI Front Desk publish atomicity (§31)", () => {
       category: "Bakery",
       phone: "0700000000",
       whatsapp: "0700000000",
+      openingHours: "Mon-Sat 08:00 - 18:00",
       isPublished: false,
       status: "DRAFT",
     });

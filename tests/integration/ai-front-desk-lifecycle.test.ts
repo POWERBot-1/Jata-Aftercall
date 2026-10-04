@@ -258,7 +258,7 @@ describe("AI Business Front Desk Lifecycle Integration Suite (§3, §4, §16–�
       delivery: {
         pickupEnabled: true,
         deliveryEnabled: true,
-        zones: [{ name: "Kilimani", feeKES: 200 }],
+        zones: [{ name: "Kilimani", feeKES: 200, estimatedTime: "1–2 hours" }],
         freeDeliveryThresholdKES: 5000,
         deliveryInstructions: null,
       },
@@ -479,7 +479,7 @@ describe("AI Business Front Desk Lifecycle Integration Suite (§3, §4, §16–�
       delivery: {
         pickupEnabled: true,
         deliveryEnabled: true,
-        zones: [{ name: "Westlands", feeKES: 150 }],
+        zones: [{ name: "Westlands", feeKES: 150, estimatedTime: "45–60 mins" }],
         freeDeliveryThresholdKES: 4000,
         deliveryInstructions: "Same-day dispatch before 4pm",
       },

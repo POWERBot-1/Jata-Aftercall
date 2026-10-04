@@ -414,9 +414,11 @@ export async function executeBusinessTool(
         customerPhone,
         items,
         deliveryFeeKES: typeof args.deliveryFeeKES === "number" ? args.deliveryFeeKES : 0,
+        discountKES: typeof args.discountKES === "number" ? args.discountKES : 0,
         fulfilmentType: args.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
         deliveryLocation: typeof args.deliveryLocation === "string" ? args.deliveryLocation : null,
         idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey : undefined,
+        confirmedByCustomer: args.confirmedByCustomer === true,
         preview,
       });
       return {
