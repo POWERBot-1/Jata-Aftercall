@@ -18,6 +18,7 @@ import { resolveDeliveryZoneFee } from "./ai-config";
 import { resolveCommerceTurn } from "./ai-commerce-turn";
 import {
   detectUnlistedProductRequest,
+  productLabel,
   formatProductPriceLine,
   interpretOpeningStatus,
   isBareDeliveryFollowUp,
@@ -1199,13 +1200,14 @@ export async function handleAIFrontDeskTurn(params: {
     }
 
     // Not in structured products or services! Record missed demand & unanswered question.
+    const requestedLabel = productLabel(requestedCandidate, brain.products);
     toolsInvoked.push("search_products");
     if (!preview) {
-      await recordDemandInsight(businessId, "UNAVAILABLE_PRODUCT", requestedCandidate);
+      await recordDemandInsight(businessId, "UNAVAILABLE_PRODUCT", requestedLabel);
       await recordUnansweredQuestion(businessId, rawMessage);
     }
-    informationNotFound.push(`Product: ${requestedCandidate}`);
-    const candidateTokens = requestedCandidate.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
+    informationNotFound.push(`Product: ${requestedLabel}`);
+    const candidateTokens = requestedLabel.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
     const categoryAlternatives = brain.products.filter((product) => {
       const category = (product.category || "").toLowerCase();
       return candidateTokens.some((token) => category.includes(token));
@@ -1219,7 +1221,7 @@ export async function handleAIFrontDeskTurn(params: {
     return finalizeTurn({
       conv,
       rawMessage,
-      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE} ${requestedCandidate} is not a configured product.${availableSummary}`,
+      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE} ${requestedLabel} is not a configured product.${availableSummary}`,
       responseType: "UNKNOWN",
       source: "structured_data",
       confidence: "high",

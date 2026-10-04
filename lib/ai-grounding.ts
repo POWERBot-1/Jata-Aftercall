@@ -140,7 +140,11 @@ export function unrecognizedProductTokens(
     ...active.flatMap((product) => identityTokens(product.name, generic)),
     ...extraKnownPhrases.flatMap((phrase) => identityTokens(phrase, generic)),
   ]);
-  return identityTokens(message, generic).filter((token) => !known.has(token));
+  // Conversational/venue words are not brand evidence: "cement for construction" is a
+  // category-level request, so it must not block a catalogue answer as if it named a product.
+  return identityTokens(message, generic).filter(
+    (token) => !known.has(token) && !NON_PRODUCT_WORDS.has(token),
+  );
 }
 
 /**
@@ -268,6 +272,45 @@ export function detectUnlistedProductRequest(input: {
     hasCategoryNoun ||
     (input.frame === "order" && tokens.length >= 2);
   return { plausible, tokens };
+}
+
+const CONNECTOR_WORDS = new Set([
+  "for", "my", "our", "your", "their", "his", "her", "its", "in", "at", "on", "to", "the", "a", "an",
+  "of", "with", "from", "and", "near", "around", "within", "about", "by", "into", "onto", "per", "up",
+]);
+
+/**
+ * Trim trailing conversational, venue and connector words from a reported item so the customer
+ * sees the item itself ("savannah cement") instead of the whole sentence fragment
+ * ("savannah cement for my site"). Words that belong to a configured product name or category
+ * are never trimmed.
+ */
+export function productLabel(candidate: string, products: CatalogueProduct[] = []): string {
+  const parts = (candidate || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts.join(" ");
+  const catalogueWords = new Set(
+    products.flatMap((product) => [
+      ...contentTokens(product.name || ""),
+      ...contentTokens(product.category || ""),
+    ]),
+  );
+  const trimmable = (token: string): boolean => {
+    const clean = token.toLowerCase().replace(/[^a-z0-9.]/g, "");
+    if (!clean) return true;
+    if (catalogueWords.has(clean) || catalogueWords.has(singularize(clean))) return false;
+    const singular = singularize(clean);
+    return (
+      CONNECTOR_WORDS.has(clean) ||
+      CONNECTOR_WORDS.has(singular) ||
+      STOPWORDS.has(clean) ||
+      STOPWORDS.has(singular) ||
+      NON_PRODUCT_WORDS.has(clean) ||
+      NON_PRODUCT_WORDS.has(singular)
+    );
+  };
+  let end = parts.length;
+  while (end > 1 && trimmable(parts[end - 1])) end -= 1;
+  return parts.slice(0, end).join(" ");
 }
 
 function escapeForRegex(value: string): string {

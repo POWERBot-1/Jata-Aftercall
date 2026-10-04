@@ -1049,6 +1049,23 @@ describe("AI Business Front Desk — unlisted-product guard (PR #34 DEFECT-1 rem
     }
   });
 
+  it("answers a category-level request with venue context from the catalogue, not as unlisted", async () => {
+    for (const message of ["Do you have cement for construction?", "How much is cement for a building project?"]) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message });
+      expect(turn.reply, message).not.toContain("I don't have that product listed");
+      expect(turn.reply, message).toMatch(/Bamburi 32\.5 is KES 750/);
+      expect(turn.reply, message).toContain("Bamburi 42.5 is KES 850");
+    }
+    // The venue/context noun must not become an unlisted product when it trails a real brand either.
+    const brand = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      message: "How much is Savannah cement for my site?",
+    });
+    expect(brand.reply).toContain("I don't have that product listed");
+    expect(brand.reply.toLowerCase()).toContain("savannah cement");
+    expect(brand.reply).not.toContain("site");
+  });
+
   it("still recognises genuine unlisted products and records the missed demand", async () => {
     const phrases = [
       "50kg Savannah cement",
