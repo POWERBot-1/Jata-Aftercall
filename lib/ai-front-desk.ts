@@ -124,6 +124,8 @@ function extractRequestedProductCandidate(message: string): string | null {
     /(?:price\s+of\s+(?:the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
     /(?:bei\s+ya\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
     /(?:mnauza\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
+    /(?:(?:i\s+need|i\s+want|order|buy|get\s+me|give\s+me|can\s+i\s+get|let\s+me\s+have)\s+)(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|\!)/i,
+    /^(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s-]{1,40}?)$/i,
   ];
   for (const pat of patterns) {
     const match = pat.exec(m);
@@ -659,7 +661,11 @@ export async function handleAIFrontDeskTurn(params: {
   }
 
   // 7. Payment Methods Inquiry ("Do you accept M-Pesa?", "How do I pay?" — §14, §34)
-  if (/\b(m-?pesa|paybill|till\s+number|pochi|how\s+(?:do|can)\s+i\s+pay|payment\s+method|mnakubali\s+m-?pesa)\b/i.test(lower)) {
+  if (
+    /\b(m-?pesa|paybill|till\b|pochi|(?:how|where)\s+(?:do|can|should|to)?\s*(?:i|we)?\s*pay|how\s+to\s+pay|where\s+to\s+pay|pay\s+(?:by|via|with)\s+m-?pesa|can\s+i\s+pay|payment\s+(?:method|instruction|detail|info|option)s?|mnakubali\s+m-?pesa|nalipa\s+aje|nilipe\s+wapi|lipa\s+wapi)\b/i.test(
+      lower,
+    )
+  ) {
     toolsInvoked.push("get_payment_methods");
     if (brain.paymentMethods.isConfigured && brain.paymentMethods.publicInfo) {
       informationFound.push("Public merchant payment instructions");
@@ -818,7 +824,7 @@ export async function handleAIFrontDeskTurn(params: {
           ...conv,
           activeProductId: null,
           activeProductName: null,
-          discussedProductIds: priced.map((product) => product.id),
+          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, ...priced.map((product) => product.id)])),
         },
         rawMessage,
         reply: priced.map((product) => formatProductPriceLine(product, 1, brain.extendedConfig.bulkPricing)).join(". ") + ".",
@@ -906,7 +912,7 @@ export async function handleAIFrontDeskTurn(params: {
           ...conv,
           activeProductId: targetProduct.id,
           activeProductName: targetProduct.name,
-          discussedProductIds: [targetProduct.id],
+          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
         },
         rawMessage,
         reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0}.${
@@ -939,6 +945,7 @@ export async function handleAIFrontDeskTurn(params: {
           ...conv,
           activeProductId: targetProduct.id,
           activeProductName: targetProduct.name,
+          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
         },
         rawMessage,
         reply: `${targetProduct.name} is priced at KES ${authoritativePrice ?? 0}, and is currently ${availability.stockStatus} (not available for immediate fulfilment).${preOrderText}`,
@@ -961,7 +968,7 @@ export async function handleAIFrontDeskTurn(params: {
         ...conv,
         activeProductId: targetProduct.id,
         activeProductName: targetProduct.name,
-        discussedProductIds: [targetProduct.id],
+        discussedProductIds: Array.from(new Set([...conv.discussedProductIds, targetProduct.id])),
       },
       rawMessage,
       reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0} (${availability.stockStatus}).${

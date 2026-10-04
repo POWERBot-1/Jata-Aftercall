@@ -14,6 +14,8 @@ export type CartLine = {
   variantDesc?: string; // Size, colour, etc.
   quantity: number;
   unitPriceKES: number;
+  explicitQuantity?: boolean;
+  matchIndex?: number;
 };
 
 export function buildCartFromLines(
@@ -96,8 +98,13 @@ export function parseConversationalOrder(
 
     if (!fullMatch && !partialMatch) continue;
 
+    const matchIdx = fullMatch
+      ? (text.indexOf(productNameLower) >= 0 ? text.indexOf(productNameLower) : text.indexOf(singularize(productNameLower)))
+      : (tokenRegex.exec(text)?.index ?? 0);
+
     // Extract quantity immediately preceding or following the matched product token
     let quantity = 1;
+    let explicitQuantity = false;
     const escapedTarget = fullMatch ? productNameLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : `${headToken}s?`;
     const beforePattern = new RegExp(`\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|moja|mbili|tatu|nne|tano)\\s+(?:x\\s*|×\\s*)?(?:[a-z]+\\s+)?${escapedTarget}`, "i");
     const afterPattern = new RegExp(`${escapedTarget}\\s+(\\d+|moja|mbili|tatu|nne|tano)\\b`, "i");
@@ -109,8 +116,10 @@ export function parseConversationalOrder(
       const asNum = Number(rawQty);
       if (Number.isFinite(asNum) && asNum > 0) {
         quantity = Math.min(99, Math.round(asNum));
+        explicitQuantity = true;
       } else if (WORD_NUMBERS[rawQty.toLowerCase()]) {
         quantity = WORD_NUMBERS[rawQty.toLowerCase()];
+        explicitQuantity = true;
       }
     }
 
@@ -136,9 +145,12 @@ export function parseConversationalOrder(
         name: product.name,
         quantity,
         unitPriceKES: authoritativePrice,
+        explicitQuantity,
+        matchIndex: matchIdx,
       });
     }
   }
 
+  matchedLines.sort((a, b) => (a.matchIndex ?? 0) - (b.matchIndex ?? 0));
   return { matchedLines, outOfStockItems };
 }

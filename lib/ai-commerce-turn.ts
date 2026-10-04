@@ -395,20 +395,25 @@ function resolveReferencedProduct(input: {
 }): CatalogueProduct | "ask" | null {
   if (input.namedCount > 0) return null;
   if (input.demonstrative) {
+    if (input.discussed.length > 1) return "ask";
     if (input.active) return input.active;
     if (input.discussed.length === 1) return input.discussed[0];
     return "ask";
   }
   if (input.pending.length > 1) {
-    const firstId = input.pending[0]?.productId;
-    if (input.active && input.active.id !== firstId) return input.active;
-    if (input.discussed.length === 1) return input.discussed[0];
+    if (input.active && input.pending.some((line) => line.productId === input.active!.id)) {
+      return input.active;
+    }
     return "ask";
   }
-  if (input.pending.length === 1) return input.active || input.discussed[0] || null;
-  if (input.active) return input.active;
+  if (input.pending.length === 1) {
+    const singlePendingId = input.pending[0]?.productId;
+    const singleProduct = input.discussed.find((p) => p.id === singlePendingId);
+    return singleProduct || input.active || input.discussed[0] || null;
+  }
+  if (input.discussed.length > 1) return null;
+  if (input.active && input.discussed.length <= 1) return input.active;
   if (input.discussed.length === 1) return input.discussed[0];
-  if (input.discussed.length > 1) return "ask";
   return null;
 }
 
@@ -450,6 +455,18 @@ async function progressOrder(params: {
     const priced = applyBulkUnitPrice(line.name, base, quantity, brain.extendedConfig.bulkPricing);
     return { ...line, quantity, unitPriceKES: priced.unitPriceKES };
   });
+
+  if (lines.length === 1) {
+    focusId = lines[0].productId || null;
+  } else if (lines.length > 1) {
+    const unquantified = lines.filter((l) => l.explicitQuantity === false);
+    if (unquantified.length === 1) {
+      focusId = unquantified[0].productId || null;
+    } else {
+      focusId = null;
+    }
+  }
+
   // A follow-up names only the changed item. Keep the rest of this conversation's cart.
   if (lines.length > 0 && params.conv.pendingCartLines.length > 0) {
     lines = mergeCartLines(params.conv.pendingCartLines, lines);
@@ -615,15 +632,25 @@ async function progressOrder(params: {
     : referring && established.length === 1
       ? established[0]
       : null;
+  const resolvedActiveId = focusId || (lines.length === 1 ? lines[0]?.productId : null) || null;
+  const resolvedActiveName =
+    products.find((product) => product.id === resolvedActiveId)?.name ||
+    (lines.length === 1 ? lines[0]?.name : null) ||
+    null;
+  const nextDiscussedIds = Array.from(
+    new Set([
+      ...params.conv.discussedProductIds,
+      ...lines.map((line) => line.productId).filter((id): id is string => Boolean(id)),
+    ]),
+  );
+
   if (referring && established.length > 1) {
     return clarifyDeliveryArea(established, {
       ...params.conv,
       pendingCartLines: lines,
-      activeProductId: focusId || lines[0]?.productId || params.conv.activeProductId,
-      activeProductName:
-        products.find((product) => product.id === (focusId || lines[0]?.productId))?.name ||
-        lines[0]?.name ||
-        params.conv.activeProductName,
+      activeProductId: resolvedActiveId,
+      activeProductName: resolvedActiveName,
+      discussedProductIds: nextDiscussedIds,
     });
   }
   const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPriceKES, 0);
@@ -632,12 +659,9 @@ async function progressOrder(params: {
   let nextConv = {
     ...params.conv,
     pendingCartLines: lines,
-    activeProductId: focusId || lines[0]?.productId || params.conv.activeProductId,
-    activeProductName:
-      products.find((product) => product.id === (focusId || lines[0]?.productId))?.name ||
-      lines[0]?.name ||
-      params.conv.activeProductName,
-    discussedProductIds: lines.map((line) => line.productId).filter((id): id is string => Boolean(id)),
+    activeProductId: resolvedActiveId,
+    activeProductName: resolvedActiveName,
+    discussedProductIds: nextDiscussedIds,
   };
   if (zoneName) {
     const zoneResult = resolveDeliveryZoneFee(brain.delivery, zoneName, subtotal);

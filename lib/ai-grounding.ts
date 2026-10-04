@@ -115,7 +115,16 @@ export function matchCatalogue(message: string, products: CatalogueProduct[]): C
       score += overlap.length * 10;
       if (nameTokens.length > 0 && overlap.length === nameTokens.length) score += 15;
       if (categoryTokens.some((token) => msgTokenSet.has(token)) && (overlap.length > 0 || score >= 100)) score += 4;
-      else if (overlap.length === 0 && categoryTokens.some((token) => msgTokenSet.has(token))) score += 4;
+      else if (overlap.length === 0 && categoryTokens.some((token) => msgTokenSet.has(token))) {
+        const allKnownTokens = new Set([
+          ...products.flatMap((p) => [...contentTokens(p.name), ...contentTokens(p.category || "")]),
+          "50kg", "25kg", "10kg", "5kg", "1kg", "bag", "bags", "kg", "kgs", "piece", "pieces", "plate", "plates",
+        ]);
+        const unknownTokens = msgTokens.filter((t) => !allKnownTokens.has(t));
+        if (unknownTokens.length === 0) {
+          score += 4;
+        }
+      }
       return { product, score };
     })
     .filter((item) => item.score > 0);

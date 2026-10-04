@@ -576,4 +576,187 @@ describe("AI Business Front Desk — business-anchored behavior", () => {
     expect(status.summary).toContain("Mon-Sat 08:00 - 18:00");
     expect(status.openNow).toBe(false);
   });
+
+  it("resolves multi-item order and immediate quantity follow-up safely", async () => {
+    const conv = "multi-item-immediate";
+    const order = await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv,
+      message: "I want 5 chapatis and beef.",
+    });
+    expect(order.cartSummary?.lineItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Chapati", quantity: 5, unitPriceKES: 30 }),
+        expect.objectContaining({ name: "Beef", quantity: 1, unitPriceKES: 250 }),
+      ]),
+    );
+    expect(order.cartSummary?.subtotalKES).toBe(5 * 30 + 250);
+
+    const followUp = await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv,
+      message: "Give me two.",
+    });
+    expect(followUp.cartSummary?.lineItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Chapati", quantity: 5, unitPriceKES: 30 }),
+        expect.objectContaining({ name: "Beef", quantity: 2, unitPriceKES: 250 }),
+      ]),
+    );
+    expect(followUp.cartSummary?.lineItems).toHaveLength(2);
+    expect(followUp.cartSummary?.subtotalKES).toBe(5 * 30 + 2 * 250);
+    expect(followUp.reply).not.toMatch(/which item/i);
+  });
+
+  it("asks which item on ambiguous quantity follow-up instead of guessing", async () => {
+    mockState.products.set(kitchen, [
+      { id: "chapati", businessId: kitchen, name: "Chapati", portionSize: "piece", basePriceKES: 30, stockStatus: "IN_STOCK", quantity: 40, isActive: true },
+      { id: "samosa", businessId: kitchen, name: "Samosa", portionSize: "piece", basePriceKES: 50, stockStatus: "IN_STOCK", quantity: 30, isActive: true },
+      { id: "beef", businessId: kitchen, name: "Beef", portionSize: "plate", basePriceKES: 250, stockStatus: "IN_STOCK", quantity: 15, isActive: true },
+    ]);
+    const conv = "both-explicit";
+    await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv,
+      message: "I want 5 chapatis and 2 samosas.",
+    });
+    const ambiguous = await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv,
+      message: "Give me three.",
+    });
+    expect(ambiguous.reply.toLowerCase()).toContain("which item");
+    expect(ambiguous.reply).toContain("Chapati");
+    expect(ambiguous.reply).toContain("Samosa");
+    expect(ambiguous.cartSummary?.lineItems).toBeUndefined();
+
+    const conv2 = "both-default";
+    await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv2,
+      message: "I want chapati and beef.",
+    });
+    const ambiguous2 = await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: conv2,
+      message: "Give me two.",
+    });
+    expect(ambiguous2.reply.toLowerCase()).toContain("which item");
+  });
+
+  it("asks which Bamburi grade when multiple grades were discussed, blocking arbitrary order creation", async () => {
+    const conv = "bamburi-ambiguous-order";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv, message: "How much is Bamburi 42.5?" });
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: conv,
+      message: "I need 20 bags delivered there.",
+    });
+    expect(order.cartSummary).toBeFalsy();
+    expect(order.reply).toContain("Bamburi 32.5");
+    expect(order.reply).toContain("Bamburi 42.5");
+    expect(order.reply).not.toContain("20 ×");
+    expect(order.reply).not.toContain("KES 15000");
+    expect(order.reply).not.toContain("KES 17000");
+
+    const conv2 = "bamburi-ambiguous-same-place";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv2, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: conv2, message: "How much is Bamburi 42.5?" });
+    const order2 = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: conv2,
+      message: "I need 20 bags to the same place.",
+    });
+    expect(order2.cartSummary).toBeFalsy();
+    expect(order2.reply).toContain("Bamburi 32.5");
+    expect(order2.reply).toContain("Bamburi 42.5");
+    expect(order2.reply).not.toContain("20 ×");
+  });
+
+  it("distinguishes one unambiguous active product, multiple plausible products, and no product context", async () => {
+    // 1. One unambiguous active product
+    const convSingle = "single-prod";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convSingle, message: "How much is Bamburi 32.5?" });
+    const singleOrder = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convSingle, message: "Give me that one." });
+    expect(singleOrder.cartSummary?.lineItems).toEqual([
+      expect.objectContaining({ name: "Bamburi 32.5", quantity: 1, unitPriceKES: 750 }),
+    ]);
+
+    // 2. Multiple plausible products: "that one" after discussing two grades asks for clarification
+    const convMulti = "multi-prod";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convMulti, message: "How much is Bamburi 32.5?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convMulti, message: "How much is Bamburi 42.5?" });
+    const multiOrder = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convMulti, message: "Give me that one." });
+    expect(multiOrder.cartSummary).toBeFalsy();
+    expect(multiOrder.reply.toLowerCase()).toContain("which item");
+
+    // 3. No product context: "Give me two" at the beginning asks what to order
+    const convNone = "no-prod";
+    const noneOrder = await handleAIFrontDeskTurn({ businessId: hardware, conversationId: convNone, message: "Give me two." });
+    expect(noneOrder.cartSummary).toBeFalsy();
+    expect(noneOrder.reply.toLowerCase()).toMatch(/catalogue|which item|what/);
+  });
+
+  it("consistently returns configured payment instructions for various payment questions", async () => {
+    const questions = ["Where do I pay?", "How do I pay?", "Can I pay by M-Pesa?", "Where to pay?", "Payment instructions?"];
+    for (const q of questions) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardware, message: q });
+      expect(turn.reply, q).toContain("M-Pesa Till: 556677");
+      expect(turn.reply, q).not.toContain("I don't have that information yet");
+    }
+  });
+
+  it("distinguishes unstocked product/brand from configured products in same category without inventing price", async () => {
+    const unstocked = await handleAIFrontDeskTurn({ businessId: hardware, message: "50kg Savannah cement" });
+    expect(unstocked.cartSummary).toBeFalsy();
+    expect(unstocked.reply).not.toMatch(/savannah\s+(?:cement\s+)?is\s+kes/i);
+    expect(unstocked.reply.toLowerCase()).toContain("don't have that product listed");
+    expect(unstocked.reply).toContain("Bamburi 32.5");
+    expect(unstocked.reply).toContain("Bamburi 42.5");
+  });
+
+  it("verifies shared storefront order path with configured delivery zone, pickup, and financial authority", async () => {
+    const order = await createAuthoritativeOrder({
+      businessId: hardware,
+      customerName: "Kamau",
+      customerPhone: "0712345678",
+      items: [{ productId: "p32", quantity: 2 }],
+      fulfilmentType: "DELIVERY",
+      deliveryLocation: "Syokimau",
+    });
+    expect(order.subtotalKES).toBe(1500);
+    expect(order.deliveryFeeKES).toBe(500);
+    expect(order.discountKES).toBe(0);
+    expect(order.totalKES).toBe(2000);
+    expect(order.paymentStatus).toBe("UNPAID");
+
+    const pickupOrder = await createAuthoritativeOrder({
+      businessId: hardware,
+      customerName: "Kamau",
+      customerPhone: "0712345678",
+      items: [{ productId: "p32", quantity: 3 }],
+      fulfilmentType: "PICKUP",
+    });
+    expect(pickupOrder.subtotalKES).toBe(2250);
+    expect(pickupOrder.deliveryFeeKES).toBe(0);
+    expect(pickupOrder.totalKES).toBe(2250);
+    expect(pickupOrder.paymentStatus).toBe("UNPAID");
+
+    const spoofedOrder = await createAuthoritativeOrder({
+      businessId: hardware,
+      customerName: "Kamau",
+      customerPhone: "0712345678",
+      items: [{ productId: "p32", quantity: 1, unitPriceKES: 10 }],
+      discountKES: 500,
+      deliveryFeeKES: 1,
+      fulfilmentType: "DELIVERY",
+      deliveryLocation: "Syokimau",
+    });
+    expect(spoofedOrder.subtotalKES).toBe(750);
+    expect(spoofedOrder.discountKES).toBe(0);
+    expect(spoofedOrder.deliveryFeeKES).toBe(500);
+    expect(spoofedOrder.totalKES).toBe(1250);
+    expect(spoofedOrder.paymentStatus).toBe("UNPAID");
+  });
 });
