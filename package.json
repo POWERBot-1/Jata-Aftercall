@@ -14,6 +14,7 @@
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
     "test:e2e:pos": "vitest run tests/e2e/business-pos-journey.test.ts",
     "seed": "tsx prisma/seed.ts",
+    "demo:restore": "tsx scripts/restore-demo-businesses.ts",
     "migrate": "bash scripts/migrate.sh",
     "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'"
   },
