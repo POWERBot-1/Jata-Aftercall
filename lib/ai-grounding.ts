@@ -116,6 +116,24 @@ function genericCatalogueTokens(products: CatalogueProduct[]): Set<string> {
   return generic;
 }
 
+/**
+ * Category-level nouns the catalogue recognises: the built-in commodity nouns plus every configured
+ * category, minus pack sizes and quantities. A phrase that pairs an unrecognised brand or model with
+ * one of these nouns ("Savannah cement", "Rhino cement") names a *kind* of item, which is product
+ * evidence in the same class as a grade/model number or a quantity with packaging.
+ *
+ * Derived from the same vocabulary `genericCatalogueTokens` already uses to decide what is not a
+ * brand, so the evidence never depends on the optional `category` field being populated: a catalogue
+ * item whose `category` is null must not make a genuine product phrase undetectable
+ * (nullable-category remediation). Pack sizes are excluded because "Savannah bags" is a quantity,
+ * not a kind of item.
+ */
+function catalogueCategoryVocabulary(products: CatalogueProduct[]): Set<string> {
+  const vocabulary = genericCatalogueTokens(products);
+  for (const token of UNIT_OR_PACK_TOKENS) vocabulary.delete(token);
+  return vocabulary;
+}
+
 const NON_IDENTITY_TOKENS = new Set([
   "place", "places", "area", "areas", "address", "addresses", "same", "here", "huko", "pale",
   "one", "item", "items", "product", "products", "grade", "grades", "confirm", "please", "yes",
@@ -349,11 +367,13 @@ export function productPhrase(candidate: string): string {
  * Deterministic plausibility test for an unlisted-product determination.
  *
  * A message only names a product the business does not carry when its item phrase carries credible
- * product evidence: a grade/model number, a quantity with packaging, a catalogue category noun, or
- * (in an availability/order phrase) a multi-token item name. The evidence must sit inside the item
- * phrase itself — a number or grade elsewhere in the sentence is never product evidence, so
- * "Actually 20 bags." stays a conversation rather than becoming an unavailable product
- * (PR #34 remediation regression).
+ * product evidence: a grade/model number, a quantity with packaging, a category-level noun the
+ * catalogue recognises, or (in an availability/order phrase) a multi-token item name. The evidence
+ * must sit inside the item phrase itself — a number or grade elsewhere in the sentence is never
+ * product evidence, so "Actually 20 bags." stays a conversation rather than becoming an unavailable
+ * product (PR #34 remediation regression). The category-level evidence is read from the catalogue's
+ * category vocabulary, so it does not depend on the optional product `category` field being set
+ * (nullable-category remediation).
  */
 export function detectUnlistedProductRequest(input: {
   message: string;
@@ -376,7 +396,10 @@ export function detectUnlistedProductRequest(input: {
   // order phrases must show one of the product evidence kinds above.
   if (input.frame === "price") return { plausible: true, tokens };
   const active = input.products.filter((product) => product.isActive !== false);
-  const categoryTokens = new Set(active.flatMap((product) => contentTokens(product.category || "")));
+  // Category nouns come from the catalogue's own category vocabulary, not from the optional
+  // `category` field alone, so "Do you have Savannah cement?" is evidence whether or not the
+  // configured products carry category metadata (nullable-category remediation).
+  const categoryTokens = catalogueCategoryVocabulary(active);
   const phraseTokens = contentTokens(phrase);
   const evidence =
     QUANTITY_UNIT_PATTERN.test(phrase) ||
@@ -447,7 +470,9 @@ export function unlistedOrderItems(
   const tokens = unlistedProductTokens(message, products, extraKnownPhrases);
   if (tokens.length === 0) return [];
   const active = products.filter((product) => product.isActive !== false);
-  const categoryTokens = [...new Set(active.flatMap((product) => contentTokens(product.category || "")))];
+  // Same category vocabulary the plausibility test uses, so an unlisted item inside a mixed order is
+  // reported as "savannah cement" whether or not the catalogue carries category metadata.
+  const categoryTokens = [...catalogueCategoryVocabulary(active)];
   const found: string[] = [];
   for (const token of tokens) {
     const escaped = escapeForRegex(token);

@@ -85,6 +85,8 @@ import { getDemandInsights, resetIntelligenceForTests } from "@/lib/intelligence
 
 const hardware = "biz_filler_hardware";
 const cement = "biz_filler_cement";
+/** Same catalogue as `hardware` with the optional `category` field left unset (nullable-category remediation). */
+const hardwareNull = "biz_filler_hardware_null";
 
 /** The filler prefixes named by the audit. */
 const FILLER_PREFIXES = [
@@ -146,6 +148,37 @@ describe("AI Front Desk — filler + quantity/grade must not become an unlisted 
     mockState.merchantPayments.set(hardware, { id: "mp", businessId: hardware, publicInfo: "M-Pesa Till: 556677", isActive: true });
     mockState.recipients.set(hardware, [{ id: "nr", businessId: hardware, label: "PRIMARY", phone: "+254711222333", isActive: true }]);
     await saveExtendedAIConfig(hardware, {
+      orderingAllowed: true,
+      escalationRules: "Escalate complaints, refunds, and missing information to the owner.",
+      delivery: {
+        pickupEnabled: true,
+        deliveryEnabled: true,
+        zones: [{ name: "Syokimau", feeKES: 500, estimatedTime: "2–3 hours" }],
+      },
+    });
+
+    // The same catalogue content with the optional `category` field unset. A genuine product phrase
+    // must be detected here exactly as it is when category metadata is present (nullable-category
+    // remediation), and the filler corpus must stay conversational in both states.
+    mockState.businesses.set(hardwareNull, {
+      id: hardwareNull,
+      slug: "filler-hardware-null",
+      name: "Filler Hardware (no category metadata)",
+      category: "Hardware",
+      location: "Mlolongo",
+      phone: "+254711222333",
+      whatsapp: "+254711222333",
+      openingHours: "Mon-Sat 08:00 - 18:00",
+      isPublished: true,
+      status: "ACTIVE",
+    });
+    mockState.products.set(hardwareNull, [
+      { id: "p32", businessId: hardwareNull, name: "Bamburi 32.5", category: null, portionSize: "bag", basePriceKES: 750, stockStatus: "IN_STOCK", quantity: 200, isActive: true },
+      { id: "p42", businessId: hardwareNull, name: "Bamburi 42.5", category: null, portionSize: "bag", basePriceKES: 850, stockStatus: "IN_STOCK", quantity: 80, isActive: true },
+    ]);
+    mockState.merchantPayments.set(hardwareNull, { id: "mpn", businessId: hardwareNull, publicInfo: "M-Pesa Till: 556677", isActive: true });
+    mockState.recipients.set(hardwareNull, [{ id: "nrn", businessId: hardwareNull, label: "PRIMARY", phone: "+254711222333", isActive: true }]);
+    await saveExtendedAIConfig(hardwareNull, {
       orderingAllowed: true,
       escalationRules: "Escalate complaints, refunds, and missing information to the owner.",
       delivery: {
@@ -458,6 +491,70 @@ describe("AI Front Desk — filler + quantity/grade must not become an unlisted 
     }
     const insights = await unavailableInsights(hardware);
     expect(insights.map((insight) => insight.subject.toLowerCase()).join(" ")).toContain("savannah");
+  });
+
+  it("never classifies the full filler corpus as an unlisted product when category metadata is null (no cart)", async () => {
+    for (const prefix of FILLER_PREFIXES) {
+      for (const tail of FILLER_TAILS) {
+        const message = `${prefix} ${tail}.`;
+        const turn = await handleAIFrontDeskTurn({
+          businessId: hardwareNull,
+          conversationId: `null-no-cart-${prefix}-${tail}`,
+          message,
+        });
+        expect(isUnlistedReply(turn.reply), `${message} -> ${turn.reply}`).toBe(false);
+        expect(turn.reply, message).not.toMatch(/is not a configured product/i);
+        expect(turn.cartSummary, message).toBeFalsy();
+      }
+    }
+    expect(await unavailableInsights(hardwareNull)).toEqual([]);
+  });
+
+  it("never classifies the full filler corpus as an unlisted product when category metadata is null (live cart)", async () => {
+    for (const prefix of FILLER_PREFIXES) {
+      for (const tail of FILLER_TAILS) {
+        const message = `${prefix} ${tail}.`;
+        const conversationId = `null-live-cart-${prefix}-${tail}`;
+        await handleAIFrontDeskTurn({
+          businessId: hardwareNull,
+          conversationId,
+          message: "I need 5 bags of Bamburi 32.5.",
+        });
+        const turn = await handleAIFrontDeskTurn({ businessId: hardwareNull, conversationId, message });
+        expect(isUnlistedReply(turn.reply), `${message} -> ${turn.reply}`).toBe(false);
+        for (const line of turn.cartSummary?.lineItems || []) {
+          expect(line.name, message).toBe("Bamburi 32.5");
+        }
+      }
+    }
+    const subjects = (await unavailableInsights(hardwareNull)).map((insight) => insight.subject.toLowerCase()).join(" | ");
+    expect(subjects).not.toMatch(/\b(actually|maybe|instead|exactly|please|yes|just|again)\b/);
+  });
+
+  it("still rejects every genuine unlisted brand when category metadata is null", async () => {
+    const phrases = [
+      "50kg Savannah cement",
+      "How much is Savannah cement?",
+      "Do you have Savannah cement?",
+      "I want 10 bags of Savannah cement.",
+      "How much is Savannah 32.5?",
+      "Savannah 42.5",
+      "Dangote 32.5",
+      "bamboo 32.5",
+      "Rhino cement",
+      "Mombasa Cement",
+      "Ndovu cement",
+      "Twiga cement",
+    ];
+    for (const message of phrases) {
+      const turn = await handleAIFrontDeskTurn({ businessId: hardwareNull, conversationId: `null-unlisted-${message}`, message });
+      expect(turn.cartSummary, message).toBeFalsy();
+      expect(isUnlistedReply(turn.reply), `${message} -> ${turn.reply}`).toBe(true);
+      expect(turn.reply, message).not.toMatch(/(?:savannah|dangote|bamboo|rhino|mombasa|ndovu|twiga)[^.\n]{0,40}?is\s+kes/i);
+      expect(turn.reply, message).not.toContain("Bamburi 32.5 is KES 750");
+    }
+    const subjects = (await unavailableInsights(hardwareNull)).map((insight) => insight.subject.toLowerCase()).join(" ");
+    expect(subjects).toMatch(/savannah|dangote|bamboo|rhino|mombasa|ndovu|twiga/);
   });
 });
 
