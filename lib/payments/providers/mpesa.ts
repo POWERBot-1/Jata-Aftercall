@@ -20,6 +20,7 @@
 
 import { readMpesaConfig, readTestMode, publicBaseUrl, type MpesaConfig } from "../config";
 import { decimalStringToMinor, formatMinor, maskPhone, normalizePhoneKE } from "../money";
+import { normalizeMpesaReceipt } from "./mpesa-receipt";
 import { identifyDestination, type DestinationDraft, type DestinationInput, type IdentificationResult } from "../destinations";
 import type {
   CustomerInstructions,
@@ -130,6 +131,10 @@ export function mpesaFailureMessage(code: string, description: string): string {
     default:
       return description || "We couldn't confirm this payment yet. It may still be processing.";
   }
+}
+
+function mpesaReversalFailureMessage(): string {
+  return "M-PESA did not complete the reversal. The provider result has been recorded for review.";
 }
 
 /** The M-PESA till/PayBill that a callback's shortcode refers to (§56). */
@@ -359,21 +364,26 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       const isValidation = path.endsWith("/validation");
 
       const body = request.payload;
+      const resultBody = body.Result && typeof body.Result === "object" && !Array.isArray(body.Result)
+        ? body.Result as Record<string, unknown>
+        : body;
       const stkCallback = (body.Body as Record<string, unknown> | undefined)?.stkCallback as Record<string, unknown> | undefined;
       const checkoutId = stkCallback ? stringField(stkCallback, "CheckoutRequestID") : "";
-      const resultCode = stkCallback ? stringField(stkCallback, "ResultCode") : "";
-      const transId = stringField(body, "TransID");
-      const conversationId = stringField(body, "ConversationID") || stringField(body, "OriginatorConversationID");
+      const resultCode = stkCallback ? stringField(stkCallback, "ResultCode") : stringField(resultBody, "ResultCode");
+      const transId = stringField(body, "TransID") || stringField(resultBody, "TransID");
+      const conversationId = stringField(resultBody, "ConversationID") || stringField(resultBody, "OriginatorConversationID");
 
       const eventId = isStk
         ? `stk:${checkoutId}:${resultCode}`
         : isValidation
           ? `c2b-validation:${transId || conversationId}`
-          : transId
-            ? `c2b:${transId}`
-            : conversationId
-              ? `result:${conversationId}:${stringField(body, "ResultCode")}`
-              : "";
+          : path.endsWith("/result") && conversationId
+            ? `result:${conversationId}:${resultCode}`
+            : transId
+              ? `c2b:${transId}`
+              : conversationId
+                ? `result:${conversationId}:${resultCode}`
+                : "";
 
       if (!eventId || eventId.length > 200) {
         return { ok: false, code: "INVALID_EVENT", message: "Unrecognised provider payload.", eventId: null, eventType: null };
@@ -400,7 +410,11 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         }
       }
 
-      return { ok: true, eventId, eventType: isStk ? "STK_CALLBACK" : isValidation ? "C2B_VALIDATION" : "C2B_CONFIRMATION" };
+      return {
+        ok: true,
+        eventId,
+        eventType: isStk ? "STK_CALLBACK" : isValidation ? "C2B_VALIDATION" : path.endsWith("/result") ? "REVERSAL_RESULT" : "C2B_CONFIRMATION",
+      };
     },
 
     parseEvent: async (request: ProviderEventRequest, ctx: AdapterContext): Promise<ProviderEventOutcome> => {
@@ -428,9 +442,9 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         const items = Array.isArray(metadata) ? (metadata as Record<string, unknown>[]) : [];
         const valueOf = (name: string) => items.find((item) => stringField(item, "Name") === name)?.Value;
         const amountMinor = decimalStringToMinor(valueOf("Amount"));
-        const receipt = typeof valueOf("MpesaReceiptNumber") === "string" ? String(valueOf("MpesaReceiptNumber")).trim() : "";
+        const providerReceipt = normalizeMpesaReceipt(valueOf("MpesaReceiptNumber"));
         const phone = valueOf("PhoneNumber");
-        if (amountMinor === null || amountMinor <= 0 || !receipt) {
+        if (amountMinor === null || amountMinor <= 0) {
           return {
             kind: "failure",
             providerReference: null,
@@ -443,7 +457,9 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         return {
           kind: "confirmation",
           providerReference: "", // correlated by CheckoutRequestID (§64)
-          providerTransactionId: checkoutId || receipt,
+          // Never fall back to MpesaReceiptNumber: this remains the CheckoutRequestID correlation.
+          providerTransactionId: checkoutId || null,
+          providerReceipt,
           amountMinor,
           currency: "KES",
           destination: { kind: null, providerDestinationId: null, providerAccountRef: null },
@@ -451,7 +467,11 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
           customerName: null,
           customerPhoneMasked: maskPhone(phone),
           occurredAt: ctx.now,
-          sanitized: { ...sanitized, receipt, amountMinor },
+          sanitized: {
+            ...sanitized,
+            ...(providerReceipt ? { receipt: providerReceipt } : { receiptStatus: "MISSING_OR_INVALID" }),
+            amountMinor,
+          },
         };
       }
 
@@ -491,24 +511,37 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       }
 
       // ── Asynchronous result (for example a reversal) ─────────────────────────
-      const resultCode = stringField(body, "ResultCode");
-      const conversationId = stringField(body, "ConversationID") || stringField(body, "OriginatorConversationID");
+      const resultBody = body.Result && typeof body.Result === "object" && !Array.isArray(body.Result)
+        ? body.Result as Record<string, unknown>
+        : body;
+      const resultCode = stringField(resultBody, "ResultCode");
+      const conversationId = stringField(resultBody, "ConversationID") || stringField(resultBody, "OriginatorConversationID");
+      const refundReference = stringField(resultBody, "OriginatorConversationID") || conversationId;
+      const resultParameters = resultBody.ResultParameters as Record<string, unknown> | undefined;
+      const resultItems = Array.isArray(resultParameters?.ResultParameter)
+        ? resultParameters.ResultParameter as Record<string, unknown>[]
+        : [];
+      const resultAmount = resultItems.find((item) => stringField(item, "Key") === "Amount")?.Value;
+      const reversalAmountMinor = amountMinor ?? decimalStringToMinor(resultAmount);
+      const resultDescription = stringField(resultBody, "ResultDesc");
       if (conversationId && resultCode) {
         const success = resultCode === "0";
         return {
           kind: success ? "reversal" : "failure",
           ...(success
             ? {
-                providerReference: "",
+                // Daraja's OriginatorConversationID is persisted on the Refund reservation.
+                providerReference: refundReference,
                 providerTransactionId: conversationId,
-                amountMinor: amountMinor ?? 0,
-                reason: stringField(body, "ResultDesc") || "Provider reversal",
-                sanitized: { type: "RESULT", resultCode, conversationId, resultDesc: stringField(body, "ResultDesc") },
+                amountMinor: reversalAmountMinor ?? 0,
+                reason: resultDescription || "Provider reversal",
+                sanitized: { type: "RESULT", resultCode, conversationId, resultDesc: resultDescription || null, amountMinor: reversalAmountMinor },
               }
             : {
-                providerReference: "",
+                providerReference: refundReference,
+                providerTransactionId: conversationId,
                 code: `MPESA_${resultCode}`,
-                message: mpesaFailureMessage(resultCode, stringField(body, "ResultDesc")),
+                message: mpesaReversalFailureMessage(),
                 sanitized: { type: "RESULT", resultCode, conversationId },
               }),
         } as ProviderEventOutcome;
@@ -524,6 +557,23 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
 
     /** §48: a provider-issued reversal, requested through Daraja's reversal API. */
     reverse: async (input: ReversalInput, ctx: AdapterContext): Promise<ProviderReversalResult> => {
+      const isStk = String(input.transaction.method ?? "").startsWith("MPESA_STK") ||
+        /^ws_CO_/i.test(String(input.transaction.providerTransactionId ?? ""));
+      // STK's providerTransactionId is a CheckoutRequestID, not a TransactionID accepted by
+      // Daraja's reversal API. Only the authenticated callback's persisted receipt is valid here.
+      const providerTransactionId = isStk
+        ? normalizeMpesaReceipt(input.transaction.providerReceipt)
+        : input.transaction.providerTransactionId;
+      if (!providerTransactionId) {
+        return {
+          ok: false,
+          code: isStk ? "MISSING_MPESA_RECEIPT" : "MISSING_PROVIDER_ID",
+          message: isStk
+            ? "This STK payment has no valid M-PESA receipt to reverse. JATA has recorded it for review."
+            : "This payment has no M-PESA transaction reference to reverse.",
+          retryable: false,
+        };
+      }
       const config = readMpesaConfig();
       if (!config.ready) {
         return {
@@ -533,16 +583,12 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
           retryable: false,
         };
       }
-      const receipt = input.transaction.providerTransactionId ?? "";
-      if (!receipt) {
-        return { ok: false, code: "MISSING_PROVIDER_ID", message: "This payment has no M-PESA receipt to reverse.", retryable: false };
-      }
       const amount = Math.max(1, Math.round(input.amountMinor / 100));
       const response = await darajaPost(config, ctx, "/mpesa/reversal/v1/request", {
         Initiator: process.env.MPESA_INITIATOR_NAME || "JATA",
         SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL || "",
         CommandID: "TransactionReversal",
-        TransactionID: receipt,
+        TransactionID: providerTransactionId,
         Amount: amount,
         ReceiverParty: config.shortcode,
         RecieverIdentifierType: "4",
@@ -559,9 +605,14 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
           code: errorCode || "MPESA_REVERSAL_FAILED",
           message: errorCode ? `M-PESA refused the reversal: ${stringField(body, "errorMessage")}` : "M-PESA could not be reached for this reversal.",
           retryable: true,
+          outcomeUnknown: !errorCode && response.status >= 500,
         };
       }
-      return { ok: true, providerReference: stringField(body, "OriginatorConversationID") || null, message: "M-PESA accepted the reversal; it will confirm shortly." };
+      return {
+        ok: true,
+        providerReference: stringField(body, "OriginatorConversationID") || stringField(body, "ConversationID") || null,
+        message: "M-PESA accepted the reversal; it will confirm shortly.",
+      };
     },
 
     reconcile: async (transaction, destination, ctx) => createMpesaAdapter().getPaymentStatus(transaction, destination, ctx),

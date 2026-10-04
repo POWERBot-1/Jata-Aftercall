@@ -403,6 +403,9 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
             code: "PAYSTACK_REFUND_FAILED",
             message: typeof result?.message === "string" ? `Paystack refused the refund: ${result.message}` : "Paystack could not be reached for this refund.",
             retryable: true,
+            // A connection/server failure without an explicit refusal may have happened after the
+            // provider accepted the request. Keep the reservation until reconciliation resolves it.
+            outcomeUnknown: !result || response.status >= 500,
           };
         }
         return {
@@ -411,7 +414,7 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
           message: "Paystack accepted the refund and will confirm when it completes.",
         };
       } catch {
-        return { ok: false, code: "PAYSTACK_UNREACHABLE", message: "Paystack could not be reached for this refund.", retryable: true };
+        return { ok: false, code: "PAYSTACK_UNREACHABLE", message: "Paystack could not be reached for this refund.", retryable: true, outcomeUnknown: true };
       }
     },
 

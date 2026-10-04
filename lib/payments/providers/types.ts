@@ -67,7 +67,7 @@ export type ReversalInput = {
 
 export type ProviderReversalResult =
   | { ok: true; providerReference: string | null; message: string }
-  | { ok: false; code: string; message: string; retryable: boolean };
+  | { ok: false; code: string; message: string; retryable: boolean; outcomeUnknown?: boolean };
 
 export type ProviderEventRequest = {
   rawBody: string;

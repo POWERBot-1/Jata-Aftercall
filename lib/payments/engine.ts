@@ -29,6 +29,8 @@ import { receiptToken } from "./ids";
 import { canTransition, type PaymentStatus } from "./states";
 import type { ProviderEventOutcome, ProviderKey, TransactionRecord } from "./types";
 import { getAdapter } from "./providers/registry";
+import { normalizeMpesaReceipt } from "./providers/mpesa-receipt";
+import { resolvePendingProviderRefund } from "./refunds";
 
 export type ConfirmationEvent = Extract<ProviderEventOutcome, { kind: "confirmation" }>;
 export type ReversalEvent = Extract<ProviderEventOutcome, { kind: "reversal" }>;
@@ -230,6 +232,34 @@ export async function applyConfirmation(params: {
       return { kind: "exception" as const, reason: `LATE_CONFIRMATION_${currentStatus}`, transactionId: transaction.id };
     }
 
+    const isStkPayment = provider === "MPESA" && (
+      String(transaction.method ?? "").startsWith("MPESA_STK") || String(event.method ?? "").startsWith("MPESA_STK")
+    );
+    const providerReceipt = isStkPayment ? normalizeMpesaReceipt(event.providerReceipt) : null;
+    if (isStkPayment && !providerReceipt) {
+      const notes = "An authenticated M-PESA STK confirmation matched this payment but did not include a valid M-PESA receipt; it was not marked paid.";
+      await recordReconciliationException({
+        businessId,
+        transactionId: transaction.id,
+        provider,
+        providerReference: event.providerReference || transaction.providerReference,
+        result: "UNCONFIRMED",
+        expectedAmountMinor: transaction.amountMinor,
+        receivedAmountMinor: event.amountMinor,
+        notes,
+      }, tx);
+      await logPaymentAudit({
+        businessId,
+        transactionId: transaction.id,
+        actorKind: "JATA_SYSTEM",
+        action: "PAYMENT_NEEDS_REVIEW",
+        summary: notes,
+        beforeState: { status: currentStatus },
+        afterState: { status: currentStatus, receiptPersisted: false },
+      }, tx);
+      return { kind: "exception" as const, reason: "MISSING_MPESA_RECEIPT", transactionId: transaction.id };
+    }
+
     const claimed = await tx.paymentTransaction.updateMany({
       where: {
         id: transaction.id,
@@ -240,6 +270,7 @@ export async function applyConfirmation(params: {
         status: "CONFIRMED",
         providerTransactionId: event.providerTransactionId ?? transaction.providerTransactionId ?? null,
         providerReference: transaction.providerReference ?? event.providerReference ?? null,
+        ...(isStkPayment ? { providerReceipt } : {}),
         providerConfirmedAt: event.occurredAt ?? new Date(),
         jataVerifiedAt: new Date(),
         amountPaidMinor: event.amountMinor,
@@ -517,6 +548,39 @@ export async function applyReversal(params: {
 }): Promise<ApplyResult> {
   const { provider, event } = params;
   const outcome = await inTransaction(params.client, async (tx: PaymentClient) => {
+    if (event.providerReference) {
+      const refundResult = await resolvePendingProviderRefund({
+        provider,
+        providerReference: event.providerReference,
+        succeeded: true,
+        amountMinor: event.amountMinor,
+        client: tx,
+      });
+      if (refundResult.matched) {
+        if (refundResult.kind === "settled" && refundResult.transactionId && refundResult.businessId && refundResult.status) {
+          const transaction = await tx.paymentTransaction.findFirst({
+            where: { id: refundResult.transactionId, businessId: refundResult.businessId },
+          });
+          return {
+            kind: "settled" as const,
+            transactionId: refundResult.transactionId,
+            businessId: refundResult.businessId,
+            saleId: transaction?.posSaleId ?? null,
+            status: refundResult.status,
+            duplicate: false,
+          };
+        }
+        if (refundResult.kind === "duplicate" && refundResult.transactionId) {
+          return { kind: "duplicate" as const, transactionId: refundResult.transactionId };
+        }
+        return {
+          kind: "exception" as const,
+          reason: refundResult.reason ?? "REFUND_PROVIDER_RESULT_UNRESOLVED",
+          ...(refundResult.transactionId ? { transactionId: refundResult.transactionId } : {}),
+        };
+      }
+    }
+
     const transaction = event.providerReference
       ? await tx.paymentTransaction.findFirst({ where: { provider, OR: [{ providerReference: event.providerReference }, { providerTransactionId: event.providerReference }] } })
       : event.providerTransactionId
@@ -614,6 +678,26 @@ export async function applyFailure(params: {
 }): Promise<ApplyResult> {
   const { provider, event } = params;
   return inTransaction(params.client, async (tx: PaymentClient) => {
+    if (event.providerReference) {
+      const refundResult = await resolvePendingProviderRefund({
+        provider,
+        providerReference: event.providerReference,
+        succeeded: false,
+        failureReason: event.message,
+        client: tx,
+      });
+      if (refundResult.matched) {
+        if (refundResult.kind === "duplicate" && refundResult.transactionId) {
+          return { kind: "duplicate" as const, transactionId: refundResult.transactionId };
+        }
+        return {
+          kind: "exception" as const,
+          reason: refundResult.reason ?? "REFUND_PROVIDER_FAILED",
+          ...(refundResult.transactionId ? { transactionId: refundResult.transactionId } : {}),
+        };
+      }
+    }
+
     // An STK failure quotes the CheckoutRequestID rather than JATA's reference, so the provider's
     // own handle is the second, equally authoritative way to find the attempt it belongs to (§64).
     const transaction =
