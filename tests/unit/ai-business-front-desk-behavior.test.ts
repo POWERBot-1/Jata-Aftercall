@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { composePublicPaymentText, interpretOpeningStatus, matchCatalogue, redactSecretsFromPublicText } from "@/lib/ai-grounding";
+import { composePublicPaymentText, extractDeliveryArea, interpretOpeningStatus, matchCatalogue, redactSecretsFromPublicText, refersToPreviousPlace } from "@/lib/ai-grounding";
 import { starterForTemplate, AI_BUSINESS_TEMPLATES } from "@/lib/ai-templates";
 
 const mockState = vi.hoisted(() => ({
@@ -416,6 +416,143 @@ describe("AI Business Front Desk — business-anchored behavior", () => {
     expect(direct.deliveryFeeKES).toBe(0);
     expect(direct.totalKES).toBe(1500);
     expect(direct.paymentStatus).toBe("UNPAID");
+  });
+
+  it("reuses one established delivery zone for natural place references, including punctuation", async () => {
+    const phrases = [
+      "I need 2 bags of Bamburi 32.5 to the same place.",
+      "I need 2 bags of Bamburi 32.5 to the same place",
+      "I need 2 bags of Bamburi 32.5 to the same area.",
+      "I need 2 bags of Bamburi 32.5 to that place.",
+      "I need 2 bags of Bamburi 32.5 to that area.",
+      "I need 2 bags of Bamburi 32.5 there.",
+      "I need 2 bags of Bamburi 32.5 delivered there.",
+      "I need 2 bags of Bamburi 32.5 delivered huko.",
+      "I need 2 bags of Bamburi 32.5 delivered pale.",
+      "I need 2 bags of Bamburi 32.5 to the same delivery address.",
+    ];
+    for (const message of phrases) {
+      const conversationId = `zone-${message}`;
+      await handleAIFrontDeskTurn({ businessId: hardware, conversationId, message: "Do you deliver to Syokimau?" });
+      const order = await handleAIFrontDeskTurn({ businessId: hardware, conversationId, message });
+      expect(order.reply.toLowerCase(), message).toContain("syokimau");
+      expect(order.reply, message).toContain("KES 500");
+      expect(order.reply, message).toContain("2–3 hours");
+      expect(order.cartSummary?.lineItems, message).toEqual([
+        expect.objectContaining({ name: "Bamburi 32.5", quantity: 2, unitPriceKES: 750 }),
+      ]);
+      expect(order.cartSummary?.deliveryFeeKES, message).toBe(500);
+      expect(order.cartSummary?.discountKES, message).toBe(0);
+      expect(order.cartSummary?.totalKES, message).toBe(2000);
+      expect(order.reply, message).not.toContain("Bamburi 42.5");
+    }
+  });
+
+  it("does not invent a delivery location or fee when none was established", async () => {
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: "no-prior-zone",
+      message: "I need 2 bags of Bamburi 32.5 to the same place.",
+    });
+    expect(order.reply.toLowerCase()).not.toContain("syokimau");
+    expect(order.reply).not.toContain("KES 500");
+    expect(order.reply.toLowerCase()).toContain("delivery area");
+    expect(order.cartSummary?.lineItems).toEqual([
+      expect.objectContaining({ name: "Bamburi 32.5", quantity: 2, unitPriceKES: 750 }),
+    ]);
+    expect(order.cartSummary?.deliveryFeeKES).toBe(0);
+    expect(order.cartSummary?.totalKES).toBe(1500);
+  });
+
+  it("does not let another business inherit an established delivery zone", async () => {
+    await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: "shared-zone",
+      message: "Do you deliver to Syokimau?",
+    });
+    const kitchenOrder = await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: "shared-zone",
+      message: "I need 2 chapatis to the same place.",
+    });
+    expect(kitchenOrder.reply.toLowerCase()).not.toContain("syokimau");
+    expect(kitchenOrder.reply).not.toContain("KES 500");
+    expect(kitchenOrder.cartSummary?.deliveryFeeKES ?? 0).toBe(0);
+
+    await handleAIFrontDeskTurn({
+      businessId: kitchen,
+      conversationId: "shared-zone-reverse",
+      message: "Do you deliver to South B?",
+    });
+    const hardwareOrder = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: "shared-zone-reverse",
+      message: "I need 2 bags of Bamburi 32.5 to the same place.",
+    });
+    expect(hardwareOrder.reply.toLowerCase()).not.toContain("south b");
+    expect(hardwareOrder.reply).not.toContain("KES 100");
+    expect(hardwareOrder.reply.toLowerCase()).not.toContain("syokimau");
+    expect(hardwareOrder.cartSummary?.deliveryFeeKES ?? 0).toBe(0);
+  });
+
+  it("asks which delivery area when more than one is plausible", async () => {
+    await saveExtendedAIConfig(hardware, {
+      orderingAllowed: true,
+      delivery: {
+        pickupEnabled: true,
+        deliveryEnabled: true,
+        zones: [
+          { name: "Syokimau", feeKES: 500, estimatedTime: "2–3 hours" },
+          { name: "Athi River", feeKES: 400, estimatedTime: "3–4 hours" },
+        ],
+      },
+    });
+    const conversationId = "two-zones";
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId, message: "Do you deliver to Syokimau?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId, message: "Do you deliver to Athi River?" });
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId,
+      message: "I need 2 bags of Bamburi 32.5 to the same place.",
+    });
+    expect(order.cartSummary).toBeFalsy();
+    expect(order.reply).toContain("Syokimau");
+    expect(order.reply).toContain("Athi River");
+    expect(order.reply.toLowerCase()).toContain("which delivery area");
+    expect(order.reply).not.toContain("KES 500");
+    expect(order.reply).not.toContain("KES 400");
+    expect(order.reply).not.toContain("2 ×");
+  });
+
+  it("still asks which product when the delivery reference is unambiguous", async () => {
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: "grade-place", message: "How much is Bamburi cement?" });
+    await handleAIFrontDeskTurn({ businessId: hardware, conversationId: "grade-place", message: "Do you deliver to Syokimau?" });
+    const order = await handleAIFrontDeskTurn({
+      businessId: hardware,
+      conversationId: "grade-place",
+      message: "I need 20 bags to the same place.",
+    });
+    expect(order.cartSummary).toBeFalsy();
+    expect(order.reply).toContain("Bamburi 32.5");
+    expect(order.reply).toContain("Bamburi 42.5");
+    expect(order.reply).not.toContain("20 ×");
+  });
+
+  it("recognises punctuated place references without treating bare words as locations", () => {
+    expect(extractDeliveryArea("I need 2 bags of Bamburi 32.5 to the same place.").refersToPrevious).toBe(true);
+    expect(extractDeliveryArea("I need 2 bags of Bamburi 32.5 to the same place.").zone).toBeNull();
+    expect(extractDeliveryArea("to the same place").refersToPrevious).toBe(true);
+    expect(extractDeliveryArea("to that area!").refersToPrevious).toBe(true);
+    expect(extractDeliveryArea("Do you deliver to Syokimau?").zone).toBe("Syokimau");
+    expect(extractDeliveryArea("Do you deliver to Syokimau?").refersToPrevious).toBe(false);
+    expect(refersToPreviousPlace("there is cement")).toBe(false);
+    expect(refersToPreviousPlace("Is there delivery?")).toBe(false);
+    expect(refersToPreviousPlace("place an order")).toBe(false);
+    expect(refersToPreviousPlace("that one")).toBe(false);
+    expect(refersToPreviousPlace("the same")).toBe(false);
+    expect(refersToPreviousPlace("I need 2 bags there.")).toBe(true);
+    expect(refersToPreviousPlace("delivered huko.")).toBe(true);
+    expect(refersToPreviousPlace("delivered pale")).toBe(true);
   });
 
   it("strips secrets from public payment text and matches catalogue families", () => {

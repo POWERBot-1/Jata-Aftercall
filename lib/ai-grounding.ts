@@ -175,9 +175,41 @@ export function isConfirmation(message: string): boolean {
   );
 }
 
+function normalizeDeliveryText(message: string): string {
+  return (message || "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/(\d)\.(\d)/g, "$1<$2")
+    .replace(/[.!?,;:]+/g, " ")
+    .replace(/(\d)<(\d)/g, "$1.$2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Bounded previous-place reference. Bare "place", "area", "that", or "same"
+ * do not match, and existential "there is" / "is there" is not a destination.
+ */
 export function refersToPreviousPlace(message: string): boolean {
-  return /\b(there|that\s+place|same\s+place|same\s+area|that\s+area|same\s+(?:delivery\s+)?address|that\s+(?:delivery\s+)?address|huko|pale)\b/i.test(
-    message || "",
+  const text = normalizeDeliveryText(message);
+  if (!text) return false;
+  if (/\b(?:same|that)\s+(?:delivery\s+)?(?:place|area|address)\b/i.test(text)) return true;
+  if (/\b(?:delivered|deliver(?:y|ing)?|send|peleka|shipping|dispatch|to|at)\s+(?:the\s+)?(?:there|huko|pale)\b/i.test(text)) {
+    return true;
+  }
+  if (/\b(?:is|are|was|were|isn't|aren't)\s+(?:there|huko|pale)\b/i.test(text)) return false;
+  if (/\bthere\s+(?:is|are|was|were)\b/i.test(text)) return false;
+  return (
+    /\b(?:there|huko|pale)$/i.test(text) &&
+    /\b(?:need|want|order|buy|get|give|send|deliver|peleka|nataka|naomba|nipe|bags?)\b/i.test(text)
+  );
+}
+
+function isBarePlaceReference(value: string): boolean {
+  const text = normalizeDeliveryText(value);
+  return (
+    /^(?:the\s+)?(?:same|that)\s+(?:delivery\s+)?(?:place|area|address)$/i.test(text) ||
+    /^(?:there|huko|pale|here|it)$/i.test(text)
   );
 }
 
@@ -188,27 +220,31 @@ export function refersToPreviousProduct(message: string): boolean {
   );
 }
 
-export function extractDeliveryArea(message: string): { zone: string | null; refersToPrevious: boolean } {
-  const text = message || "";
-  if (refersToPreviousPlace(text) && /\b(deliver|delivery|send|peleka|delivered)\b/i.test(text)) {
-    return { zone: null, refersToPrevious: true };
-  }
+function captureExplicitDeliveryZone(text: string): string | null {
   const patterns = [
     /deliver(?:ed|y)?\s+(?:to|in|for)\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|,|!)/i,
     /delivery\s+(?:to|in|for)\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|,|!)/i,
     /mnafanya\s+delivery\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|,)/i,
     /mnadeliver\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.|,)/i,
-    /\bto\s+([a-z][a-z\s-]{1,40})$/i,
+    /\bto\s+([a-z][a-z\s-]{1,40}?)(?:[.!?,;:]|$)/i,
   ];
   for (const pattern of patterns) {
-    const match = pattern.exec(text);
-    const zone = match?.[1]?.trim();
-    if (!zone) continue;
-    if (/^(there|here|me|them|us|it)$/i.test(zone) || refersToPreviousPlace(zone)) {
-      return { zone: null, refersToPrevious: true };
-    }
-    return { zone, refersToPrevious: false };
+    const zone = pattern.exec(text)?.[1]?.trim().replace(/[.!?,;:]+$/g, "");
+    if (!zone || isBarePlaceReference(zone) || refersToPreviousPlace(zone)) continue;
+    return zone;
   }
+  return null;
+}
+
+export function extractDeliveryArea(message: string): { zone: string | null; refersToPrevious: boolean } {
+  const text = message || "";
+  const explicit = captureExplicitDeliveryZone(text) || captureExplicitDeliveryZone(normalizeDeliveryText(text));
+  if (refersToPreviousPlace(text)) {
+    // "deliver to Syokimau there" names a place; "to the same place." does not.
+    if (explicit) return { zone: explicit, refersToPrevious: false };
+    return { zone: null, refersToPrevious: true };
+  }
+  if (explicit) return { zone: explicit, refersToPrevious: false };
   return { zone: null, refersToPrevious: false };
 }
 

@@ -216,6 +216,48 @@ function policyAnswer(brain: Brain, key: NonNullable<ReturnType<typeof detectPol
   }
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Configured zones already named in this tenant's conversation. Other tenants' zones are ignored. */
+function establishedDeliveryZones(conv: ConversationContext, brain: Brain): string[] {
+  const zones = brain.delivery?.zones || [];
+  const found: string[] = [];
+  const add = (name: string | null | undefined) => {
+    const cleaned = (name || "").trim();
+    if (cleaned.length < 3) return;
+    const canonical = zones.find((zone) => zone.name.toLowerCase() === cleaned.toLowerCase());
+    if (!canonical || found.some((item) => item.toLowerCase() === canonical.name.toLowerCase())) return;
+    found.push(canonical.name);
+  };
+  for (const turn of conv.turns) {
+    if (turn.role !== "customer") continue;
+    const area = extractDeliveryArea(turn.text);
+    if (area.zone) add(area.zone);
+    for (const zone of zones) {
+      if (zone.name.trim().length < 3) continue;
+      if (new RegExp(`\\b${escapeRegExp(zone.name)}\\b`, "i").test(turn.text)) add(zone.name);
+    }
+  }
+  add(conv.pendingDeliveryZone);
+  return found;
+}
+
+function clarifyDeliveryArea(zones: string[], conv: ConversationContext): CommerceTurn {
+  return {
+    reply: `Which delivery area should I use? ${zones.join(", ")}.`,
+    responseType: "ACTION_REQUIRED",
+    source: "structured_data",
+    confidence: "high",
+    escalatedToHuman: false,
+    toolsInvoked: ["get_delivery_fee"],
+    informationFound: zones,
+    informationNotFound: ["Exact delivery area"],
+    conv: { ...conv, pendingDeliveryZone: null, pendingFulfilment: "DELIVERY" },
+  };
+}
+
 async function progressDelivery(params: {
   businessId: string;
   message: string;
@@ -226,7 +268,11 @@ async function progressDelivery(params: {
   const { brain, preview, businessId } = params;
   const toolsInvoked: AIToolName[] = ["get_delivery_fee"];
   const area = extractDeliveryArea(params.message);
-  const zoneName = area.zone || (area.refersToPrevious ? params.conv.pendingDeliveryZone : null);
+  const established = establishedDeliveryZones(params.conv, brain);
+  if (area.refersToPrevious && !area.zone && established.length > 1) {
+    return clarifyDeliveryArea(established, params.conv);
+  }
+  const zoneName = area.zone || (area.refersToPrevious && established.length === 1 ? established[0] : null);
 
   if (!brain.delivery.deliveryEnabled && brain.delivery.pickupEnabled) {
     return {
@@ -474,7 +520,15 @@ async function progressOrder(params: {
       const choices = namedElsewhere
         .map((product) => formatProductPriceLine(product, quantity, brain.extendedConfig.bulkPricing))
         .join(" ");
-      const destination = params.deliveryMention ? extractDeliveryArea(message).zone || params.conv.pendingDeliveryZone : null;
+      const area = extractDeliveryArea(message);
+      const uniqueZone = establishedDeliveryZones(params.conv, brain);
+      const destination = area.refersToPrevious
+        ? uniqueZone.length === 1
+          ? uniqueZone[0]
+          : null
+        : params.deliveryMention
+          ? area.zone || params.conv.pendingDeliveryZone
+          : null;
       return {
         reply: `I can take ${quantity}${destination ? ` for delivery to ${destination}` : ""}, but I need the exact item. ${choices}`,
         responseType: "ACTION_REQUIRED",
@@ -495,7 +549,15 @@ async function progressOrder(params: {
       };
     } else if (quantity && params.conv.discussedProductIds.length > 1) {
       const discussed = products.filter((product) => params.conv.discussedProductIds.includes(product.id));
-      const destination = params.deliveryMention ? extractDeliveryArea(message).zone || params.conv.pendingDeliveryZone : params.conv.pendingDeliveryZone;
+      const area = extractDeliveryArea(message);
+      const uniqueZone = establishedDeliveryZones(params.conv, brain);
+      const destination = area.refersToPrevious
+        ? uniqueZone.length === 1
+          ? uniqueZone[0]
+          : null
+        : params.deliveryMention
+          ? area.zone || params.conv.pendingDeliveryZone
+          : params.conv.pendingDeliveryZone;
       return {
         reply: `I have the quantity (${quantity})${destination ? ` and delivery to ${destination}` : ""}, but not which item. ${discussed
           .map((product) => formatProductPriceLine(product, quantity, brain.extendedConfig.bulkPricing))
@@ -544,7 +606,26 @@ async function progressOrder(params: {
   }
 
   const area = extractDeliveryArea(message);
-  const zoneName = params.deliveryMention ? area.zone || (area.refersToPrevious ? params.conv.pendingDeliveryZone : null) : null;
+  const established = establishedDeliveryZones(params.conv, brain);
+  // Place references such as "to the same place." are delivery destinations only
+  // when this conversation already has one unambiguous configured zone.
+  const referring = area.refersToPrevious;
+  const zoneName = params.deliveryMention && area.zone
+    ? area.zone
+    : referring && established.length === 1
+      ? established[0]
+      : null;
+  if (referring && established.length > 1) {
+    return clarifyDeliveryArea(established, {
+      ...params.conv,
+      pendingCartLines: lines,
+      activeProductId: focusId || lines[0]?.productId || params.conv.activeProductId,
+      activeProductName:
+        products.find((product) => product.id === (focusId || lines[0]?.productId))?.name ||
+        lines[0]?.name ||
+        params.conv.activeProductName,
+    });
+  }
   const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPriceKES, 0);
   let deliveryFee = 0;
   let deliveryNote = "";
@@ -581,8 +662,9 @@ async function progressOrder(params: {
     deliveryNote = ` Delivery to ${zoneResult.matchedZone.name} is ${formatKes(deliveryFee)}${
       zoneResult.matchedZone.estimatedTime ? ` and normally takes ${zoneResult.matchedZone.estimatedTime}` : ""
     }.`;
-  } else if (params.deliveryMention && area.refersToPrevious) {
+  } else if (referring || (params.deliveryMention && area.refersToPrevious)) {
     deliveryNote = " I still need the delivery area before I can add a delivery fee.";
+    nextConv = { ...nextConv, pendingFulfilment: "DELIVERY", pendingDeliveryZone: null };
   }
 
   const minimum = brain.policies.minimumOrderKES;
@@ -610,7 +692,7 @@ async function progressOrder(params: {
     parsed.outOfStockItems.length > 0
       ? ` Note: ${parsed.outOfStockItems.map((item) => `${item.name} is currently ${item.stockStatus}`).join("; ")}.`
       : "";
-  const missing = missingOrderDetails(nextConv, brain, params.deliveryMention);
+  const missing = missingOrderDetails(nextConv, brain, params.deliveryMention || referring);
   const tomorrow = isPreorderIntent(message)
     ? brain.extendedConfig.preordersAllowed
       ? " This is a request for tomorrow. I will not promise a time that is not configured."
@@ -677,7 +759,14 @@ async function placeConfiguredOrder(params: {
     collectedCustomerPhone: contact.phone || params.conv.collectedCustomerPhone,
   };
   const area = extractDeliveryArea(params.message);
-  if (area.zone) {
+  if (area.refersToPrevious) {
+    const established = establishedDeliveryZones(conv, params.brain);
+    if (established.length > 1) return clarifyDeliveryArea(established, conv);
+    if (established.length === 1) {
+      conv.pendingDeliveryZone = established[0];
+      conv.pendingFulfilment = "DELIVERY";
+    }
+  } else if (area.zone) {
     conv.pendingDeliveryZone = area.zone;
     conv.pendingFulfilment = "DELIVERY";
   }
