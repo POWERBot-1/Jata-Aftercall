@@ -263,6 +263,19 @@ if a POS table loses `businessId`, or if an index is missing. Applying the migra
 remains an operator-authorised step through the existing deployment gate (`scripts/build.sh` →
 `scripts/migrate.sh`); nothing in this change runs it.
 
+### 8.1 The JATA Payment Wallet (added 2026-10-04)
+
+The payment layer the POS sells against: nine more additive tables
+(`PaymentDestination`, `PaymentProviderConnection`, `PaymentTransaction`, `PaymentAttempt`,
+`PaymentEvent`, `PaymentNotification`, `PaymentReconciliation`, `Refund`, `PaymentAuditEvent`) in
+`prisma/migrations/20261005000000_payment_wallet/migration.sql`, with a BEFORE UPDATE trigger that
+makes the payment audit trail append-only. Its defining rule is **zero merchant-side integration**:
+the merchant says *where* they get paid and JATA owns the provider, the credentials, the callbacks,
+the verification, the receipts and the reconciliation.
+
+Full architecture, provider prerequisites and the verified/unverified boundary:
+**[`PAYMENT_WALLET_IMPLEMENTATION.md`](./PAYMENT_WALLET_IMPLEMENTATION.md)**.
+
 ---
 
 ## 9. Tests — what each suite proves
@@ -279,6 +292,10 @@ remains an operator-authorised step through the existing deployment gate (`scrip
 | `tests/security/pos-page-authorization.test.ts` | **21 tests**: the server-rendered POS pages (`/credit`, `/expenses`, `/staff`) are rendered against the in-memory database and must answer exactly like the module's API — an owner and any role holding the permission keep the screen; a cashier is refused with the read abandoned before a single row is loaded and the refusal audited as `POS_ACCESS_DENIED`; page and API agree actor for actor; cross-tenant, signed-out and unknown-business access still fail before rendering; lifecycle/payment gates unchanged (§11, §36, §44, §56, §75) |
 | `tests/integration/pos-journey.test.ts` | The whole §4 journey at domain level, including the two-business §81 proof and clone safety |
 | `tests/integration/pos-api-routes.test.ts` | **66 tests over HTTP**: the real route handlers against an in-memory Prisma double — workspace generation, configuration, preview, plan/payment/provisioning, sales and refunds, every operating screen, reports, audit, cloning, versions and the security matrix |
+| `tests/unit/payments-core.test.ts` | **16 tests**: money as integer minor units (never a float), masking of customer-typed numbers, the full payment state machine (no boolean), payment ids / idempotency keys / receipt tokens, destination identification for tills, PayBills, Pochi, bank accounts and Paystack, and the capability-honesty rules — no "real-time confirmation" claim without a provider-verified destination and a configured JATA connector (§8, §23, §24, §33, §52, §88) |
+| `tests/integration/payments-journey.test.ts` | **9 tests**: the wallet journey — server-priced request with honest instructions, a double tap returning the *same* payment, no destination refused, a provider confirmation settling the sale with stock, receipt and reconciliation in one transaction, the same confirmation twice changing nothing, an amount the provider reports differently refused and recorded, an `EXPIRED` payment still settling on a late confirmation, two sales getting two distinct payments, and a reversal recorded additively (§21, §25, §33, §43, §47, §68, §98) |
+| `tests/integration/payments-webhooks.test.ts` | **11 tests**: M-PESA STK confirmation applied once, with a byte-identical retry changing nothing (and the M-PESA receipt retained in the event payload), a wrong callback token refused, no token registered → refused rather than trusting who found the URL, a failure callback becoming `FAILED` (plain-language reason, no raw Daraja code), money that cannot be attributed recorded as `UNKNOWN_PAYMENT` against the destination's business, Paystack `charge.success` re-verified with the provider before applying, a forged signature refused, a charge Paystack itself calls unsuccessful never applied, and the JATA operator re-check asking the provider rather than replaying stored data — changing nothing where JATA has no connection to ask (§30, §35, §41, §44, §64, §90, §102, §111, §120) |
+| `tests/security/payments-isolation.test.ts` | **11 tests**: tenant scoping of every payment read, a foreign destination id refused, a confirmation settling only its own tenant's payment, no client-supplied status accepted, a signed-out event refused with records untouched, no credential reachable from anything a merchant sees, no whole phone number stored, a cashier blocked from changing where money lands, refunds needing the permission *and* an explicit confirmation, refunds capped at what was actually paid (§5, §36, §41, §56, §57, §58, §62, §75, §112, §120) |
 | `tests/integration/pos-payment-confirmation.test.ts` | The verification route for a POS payment (POS subscription read, `posBusinessId` on every outcome, refusals) and proof that every other plan is untouched (§80) |
 | `tests/helpers/posFakeDb.ts` | In-memory Prisma double: `findMany/findFirst/findUnique/create/update/updateMany/delete/count/aggregate`, `$transaction`, relation `include`s, and a seeded two-tenant fixture |
 | `tests/e2e/business-pos-journey.test.ts` | **22 steps against a real PostgreSQL database**, through the app's own route handlers: register → fallback POS (§47) → refused trading before payment (§44) → questionnaire configuration in plain language (§3, §52) → preview sandbox that writes nothing (§23) → refused publish (§44) → plan quoted from `PlanConfig` and kept off public surfaces (§45, §67) → server-priced checkout → server-confirmed payment provisioning to LIVE without writing an AFTERCALL subscription (§43, §80) → first sale with receipt and audited stock movement (§31–§33) → itemised refund that never rewrites the sale (§54) → server-decided credit (§30) → cashier refusals with attribution (§36, §75) → configured order workflow (§29) → expense, purchase and supplier ledgers (§12, §17) → labelled reports (§35) → audit entries (§37) → clone with scope and tenant refusals (§25, §50, §75) → versioning and rollback with history intact (§48, §49) → cross-tenant isolation including a body-supplied tenant id (§5) → lapsed plan (§44). Skipped without `DATABASE_URL`; CI runs it as its own step |
@@ -404,6 +421,13 @@ Named in the spec as *future-permitted*, and intentionally absent so nothing shi
 - Barcode scanning (§59) is supported as keyboard-wedge input on the till and as a product field,
   with no camera-based scanning.
 - Receipts are text/HTML; there is no ESC/POS printer driver.
+- **The JATA Payment Wallet is not PRODUCTION READY in this environment.** No Daraja app,
+  shortcode, passkey or callback token exists here and no bank connector is configured, so no live
+  provider confirmation has been observed end to end. The engine, the state machine, idempotency,
+  tenant isolation and the webhook pipeline are verified by the suites above; the live provider
+  journey is an operator step with real credentials. The wallet states this honestly in the product
+  too — a destination JATA cannot watch keeps only payment instructions. See
+  `PAYMENT_WALLET_IMPLEMENTATION.md` §5.
 
 ---
 

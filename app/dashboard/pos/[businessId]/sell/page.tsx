@@ -2,7 +2,9 @@ import { paymentMethodOptions } from "@/lib/pos/money";
 import { formatReceiptNumber, receiptPrefixFromBusinessName } from "@/lib/pos/receipt";
 import { listCustomers, listProducts, nextSaleSequence, stockLevels } from "@/lib/pos/store";
 import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadWallet, type WalletView } from "@/lib/payments/wallet";
 import { TillClient } from "@/components/pos/TillClient";
+import type { WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 
 /**
  * New sale (§4 quick action, §62).
@@ -23,11 +25,16 @@ export default async function PosSellPage({ params }: Props) {
   const workspace = await loadPosWorkspaceCached(businessId);
   const configuration = workspace.configuration;
 
-  const [products, customers, sequence, stock] = await Promise.all([
+  const [products, customers, sequence, stock, wallet] = await Promise.all([
     listProducts(businessId, { take: 300 }),
     configuration.customers.enabled ? listCustomers(businessId, { take: 200 }) : Promise.resolve([]),
     nextSaleSequence(businessId),
     configuration.inventory.enabled ? stockLevels(businessId) : Promise.resolve([]),
+    // Who may take a wallet payment: the till shows the wallet to somebody who can see payments,
+    // and never to a role that cannot (§11, §36).
+    workspace.permissions.includes("VIEW_PAYMENTS")
+      ? loadWallet(businessId)
+      : Promise.resolve<WalletView>({ destinations: [], primary: null, providers: [], tiles: [], headline: "", ready: false }),
   ]);
 
   const stockByProduct = new Map<string, number>();
@@ -94,6 +101,22 @@ export default async function PosSellPage({ params }: Props) {
         entitled={workspace.entitlement.entitled}
         entitlementReason={workspace.entitlement.reason}
         nextReceiptNumber={formatReceiptNumber(prefix, sequence)}
+        wallet={{
+          // Only destinations JATA can still route to are offered to the till (§9); a deactivated
+          // or disconnected one keeps its history but is never shown as somewhere to send money.
+          destinations: wallet.destinations
+            .filter((destination) => destination.isActive && destination.status !== "DISCONNECTED")
+            .map<WalletDestinationTile>((destination) => ({
+              id: destination.id,
+              label: destination.label,
+              kindLabel: destination.kindLabel,
+              statusLabel: destination.statusLabel,
+              tone: destination.statusTone,
+              available: true,
+              automatic: destination.automaticConfirmation,
+              detail: destination.statusDetail,
+            })),
+        }}
       />
     </div>
   );

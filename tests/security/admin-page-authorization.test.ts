@@ -39,6 +39,9 @@ const pages: Array<[string, () => Promise<{ default: (props: any) => Promise<unk
   ["/admin/payments", () => import("@/app/admin/payments/page")],
   ["/admin/plans", () => import("@/app/admin/plans/page")],
   ["/admin/subscriptions", () => import("@/app/admin/subscriptions/page")],
+  // The JATA view of the payment wallet: cross-tenant by design, so it is admin-only for the same
+  // reason as the rest of this list — and it must never read before it has authorized (§102).
+  ["/admin/payments/wallet", () => import("@/app/admin/payments/wallet/page")],
 ];
 
 describe("every admin page enforces ADMIN itself, before reading data", () => {

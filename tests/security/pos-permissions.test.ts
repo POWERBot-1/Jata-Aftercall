@@ -581,6 +581,8 @@ describe("the navigation and the permission gates answer the same way (§36, §4
     dashboard: null,
     sell: "CREATE_SALE",
     history: "VIEW_SALES",
+    // The JATA Payment Wallet: money arriving, not money spent (§40, §41 of the payment spec).
+    payments: "VIEW_PAYMENTS",
     products: "VIEW_INVENTORY",
     services: "VIEW_INVENTORY",
     menu: "VIEW_INVENTORY",

@@ -29,6 +29,7 @@ export type PosModuleKey =
   | "dashboard"
   | "sell"
   | "history"
+  | "payments"
   | "orders"
   | "products"
   | "services"

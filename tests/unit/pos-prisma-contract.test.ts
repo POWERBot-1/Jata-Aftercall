@@ -126,6 +126,14 @@ export function sourceFiles(): string[] {
   };
   walk(join(ROOT, "lib/pos"));
   walk(join(ROOT, "app/api/pos"));
+  // …and the payment wallet, which talks to the same client and the same schema: an `include` or a
+  // `where` through a relation a payment model does not have must fail here, not in production
+  // (§76, §80 of the payment specification).
+  walk(join(ROOT, "lib/payments"));
+  walk(join(ROOT, "app/api/payments"));
+  walk(join(ROOT, "app/api/admin/payments"));
+  walk(join(ROOT, "app/admin/payments"));
+  walk(join(ROOT, "app/receipt"));
   wanted.push(join(ROOT, "app/api/paystack/verify/route.ts"));
   return wanted;
 }
@@ -181,7 +189,9 @@ describe("POS queries match the Prisma schema", () => {
     expect(MODELS.get("Payment")?.fields.has("planId")).toBe(true);
     expect(MODELS.get("Payment")?.relations.has("plan")).toBe(false);
     expect(MODELS.get("Subscription")?.relations.has("plan")).toBe(true);
-    expect(MODELS.get("PosSale")?.relations).toEqual(new Set(["business", "items", "payments"]));
+    // …and the JATA Payment Wallet relation the payment spec adds: a payment settles one sale,
+    // and a sale can only ever be settled by one confirmed payment (§25, §33, §98).
+    expect(MODELS.get("PosSale")?.relations).toEqual(new Set(["business", "items", "payments", "paymentTransactions"]));
   });
 
   it("scans the POS layer", () => {
@@ -189,6 +199,8 @@ describe("POS queries match the Prisma schema", () => {
     expect(files.some((file) => file.endsWith("lib/pos/store.ts"))).toBe(true);
     expect(files.some((file) => file.endsWith("lib/pos/entitlement.ts"))).toBe(true);
     expect(files.some((file) => file.endsWith("app/api/paystack/verify/route.ts"))).toBe(true);
+    expect(files.some((file) => file.endsWith("lib/payments/engine.ts"))).toBe(true);
+    expect(files.some((file) => file.endsWith("app/api/payments/webhooks/mpesa/route.ts"))).toBe(true);
   });
 
   it("never includes or filters through a relation the model does not have", () => {

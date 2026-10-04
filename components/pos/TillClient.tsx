@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { MethodOption } from "@/lib/pos/money";
+import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 import type { ReceiptDocument } from "@/lib/pos/types";
 
 /**
@@ -66,6 +67,7 @@ export function TillClient({
   entitled,
   entitlementReason,
   nextReceiptNumber,
+  wallet,
 }: {
   businessId: string;
   basePath: string;
@@ -89,6 +91,8 @@ export function TillClient({
   entitled: boolean;
   entitlementReason: string;
   nextReceiptNumber: string;
+  /** Where this business gets paid through JATA (§10, §21). Empty until a destination is added. */
+  wallet: { destinations: WalletDestinationTile[] };
 }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payments, setPayments] = useState<PaymentLine[]>([]);
@@ -104,6 +108,7 @@ export function TillClient({
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<SaleResponse | null>(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [walletPaid, setWalletPaid] = useState<{ jataPaymentId: string; saleId: string | null; receiptNumber: string | null; amountKES: number } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const subtotal = cart.reduce((total, line) => total + line.unitPriceKES * line.quantity, 0);
@@ -184,6 +189,24 @@ export function TillClient({
     setPayments((current) => current.map((payment, position) => (position === index ? { ...payment, ...patch } : payment)));
   }
 
+  /** The cart as the server expects it — the same body the till sends when it records the sale. */
+  function payload() {
+    return {
+      items: cart.map((line) => ({
+        productId: line.productId,
+        name: line.name,
+        quantity: line.quantity,
+        unitPriceKES: line.unitPriceKES,
+        discountKES: line.discountKES,
+      })),
+      customerId: customerId || null,
+      channel,
+      notes: notes || null,
+      discountKES: discountKES || null,
+      feeKES: feeKES || null,
+    };
+  }
+
   async function complete() {
     setBusy(true);
     setError(null);
@@ -193,19 +216,8 @@ export function TillClient({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          items: cart.map((line) => ({
-            productId: line.productId,
-            name: line.name,
-            quantity: line.quantity,
-            unitPriceKES: line.unitPriceKES,
-            discountKES: line.discountKES,
-          })),
+          ...payload(),
           payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
-          customerId: customerId || null,
-          channel,
-          notes: notes || null,
-          discountKES: discountKES || null,
-          feeKES: feeKES || null,
         }),
       });
       const data: SaleResponse = await response.json();
@@ -251,6 +263,31 @@ export function TillClient({
     // Only react to the total, not to the payments array itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total]);
+
+  if (walletPaid) {
+    return (
+      <div className="space-y-4">
+        <div className="jata-card p-5" data-pos-wallet="paid">
+          <p className="jata-kicker">Paid</p>
+          <h2 className="text-lg font-bold">
+            KES {walletPaid.amountKES.toLocaleString("en-KE")} received
+          </h2>
+          <p className="pos-note">
+            {walletPaid.receiptNumber ? `Receipt ${walletPaid.receiptNumber}. ` : ""}
+            The provider confirmed this payment and JATA recorded the {words.sale.toLowerCase()}. {walletPaid.jataPaymentId}
+          </p>
+          <div className="pos-form-actions mt-4">
+            <button type="button" className="jata-btn jata-btn-primary" onClick={() => { setWalletPaid(null); reset(); }}>New {words.sale.toLowerCase()}</button>
+            {walletPaid.saleId ? (
+              <Link className="jata-btn jata-btn-secondary" href={`${basePath}/sales/${walletPaid.saleId}`}>Open {words.sale.toLowerCase()}</Link>
+            ) : (
+              <Link className="jata-btn jata-btn-secondary" href={`${basePath}/payments`}>Open payments</Link>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (result?.receipt || result?.receiptText) {
     return (
@@ -420,6 +457,27 @@ export function TillClient({
               </select>
             </div>
           ) : null}
+
+          <WalletPaymentPanel
+            businessId={businessId}
+            basePath={basePath}
+            totalKES={total}
+            destinations={wallet.destinations}
+            buildRequest={payload}
+            disabled={busy || !entitled || !cart.length}
+            onSettled={(settled) => {
+              setWalletPaid({
+                jataPaymentId: settled.jataPaymentId,
+                saleId: settled.saleId,
+                receiptNumber: settled.receiptNumber,
+                amountKES: settled.amountKES || total,
+              });
+              setCart([]);
+              setPayments([]);
+              setError(null);
+              setWarnings([]);
+            }}
+          />
 
           <div className="pos-pay">
             <p className="jata-kicker">How are they paying?</p>

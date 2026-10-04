@@ -242,21 +242,51 @@ async function stockMap(businessId: string, productIds: string[], branchId: stri
 }
 
 /**
- * Records a sale (§27, §62). Returns the receipt document and text so the till can print or
- * share it immediately, and so the same code path serves the web, tablet and barcode flows.
+ * Prices a sale request without writing anything (§20, §33, §56, §98).
+ *
+ * The JATA Payment Orchestrator uses this to work out what to charge the customer: the browser's
+ * arithmetic is never trusted, so the amount that goes to a provider is the amount the server
+ * priced from its own product and configuration records. `createSale` calls the same function,
+ * which is what makes "the amount requested" and "the amount recorded" identical by construction.
  */
-export async function createSale(params: {
+export type PricedSale = {
+  ok: true;
+  warnings: string[];
+  lines: SaleLineInput[];
+  variants: Record<string, string | null>;
+  costKES: number;
+  saleDiscount: number;
+  feeKES: number;
+  channel: ChannelKey;
+  payments: SalePaymentRequest[];
+  calculation: ReturnType<typeof calculateSale>;
+  paymentCheck: ReturnType<typeof validatePayments>;
+};
+
+/**
+ * `strict: false` in this repository means `ok: true` does not narrow the union returned by
+ * `priceSaleRequest`. This guard keeps the pricing result precise for both callers — the till's
+ * own sale route and the JATA Payment Orchestrator (§20: one pricing engine).
+ */
+export function isPricedSale(value: SaleOutcome | PricedSale): value is PricedSale {
+  return Boolean(value) && value.ok === true && Array.isArray((value as PricedSale).lines);
+}
+
+export async function priceSaleRequest(params: {
   businessId: string;
-  business: ReceiptBusiness;
   configuration: PosConfiguration;
   actor: PosActor;
   request: SaleRequest;
-  /** Which published configuration produced this sale, so it stays interpretable later (§48). */
-  configurationVersion?: number;
-  configurationFingerprint?: string | null;
   client?: PosClient;
-}): Promise<SaleOutcome> {
-  const { businessId, business, configuration, actor, request } = params;
+  /**
+   * Price a cart whose electronic payment has not been confirmed yet. The total is priced exactly
+   * as it will be at settlement; only the "the sale is short" rule is relaxed, because the money
+   * is being collected by the JATA Payment Orchestrator and will be confirmed by the provider
+   * before the sale is recorded (§30: nothing is settled on a promise).
+   */
+  options?: { unpaid?: boolean };
+}): Promise<PricedSale | SaleOutcome> {
+  const { businessId, configuration, actor, request } = params;
   const client: PosClient = params.client ?? prisma;
   const warnings: string[] = [];
 
@@ -306,8 +336,39 @@ export async function createSale(params: {
   });
 
   const paymentCheck = validatePayments(configuration, calculation);
-  if (!paymentCheck.ok) return problem(paymentCheck.code ?? "PAYMENT_INVALID", paymentCheck.message ?? "That payment could not be accepted.", warnings);
+  if (!paymentCheck.ok) {
+    const deferredElectronicPayment = params.options?.unpaid === true && paymentCheck.code === "SHORT_PAYMENT";
+    if (!deferredElectronicPayment) {
+      return problem(paymentCheck.code ?? "PAYMENT_INVALID", paymentCheck.message ?? "That payment could not be accepted.", warnings);
+    }
+  }
 
+  return { ok: true, warnings, lines, variants, costKES, saleDiscount, feeKES, channel, payments, calculation, paymentCheck };
+}
+
+/**
+ * Records a sale (§27, §62). Returns the receipt document and text so the till can print or
+ * share it immediately, and so the same code path serves the web, tablet and barcode flows.
+ */
+export async function createSale(params: {
+  businessId: string;
+  business: ReceiptBusiness;
+  configuration: PosConfiguration;
+  actor: PosActor;
+  request: SaleRequest;
+  /** Which published configuration produced this sale, so it stays interpretable later (§48). */
+  configurationVersion?: number;
+  configurationFingerprint?: string | null;
+  client?: PosClient;
+}): Promise<SaleOutcome> {
+  const { businessId, business, configuration, actor, request } = params;
+  const client: PosClient = params.client ?? prisma;
+
+  // Pricing is one engine call, so a payment requested over the JATA Payment Orchestrator is
+  // priced by exactly the same code that records the sale when the money arrives (§20, §56).
+  const priced = await priceSaleRequest(params);
+  if (!isPricedSale(priced)) return priced;
+  const { warnings, lines, variants, costKES, saleDiscount, feeKES, channel, payments, calculation, paymentCheck } = priced;
   const { totals } = calculation;
   const creditKES = paymentCheck.creditKES ?? 0;
 
