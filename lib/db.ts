@@ -256,7 +256,18 @@ function createFallbackPrisma(): any {
     },
     experienceVersion: {
       findMany: async () => [],
+      findUnique: async () => null,
       create: async () => { throw new Error("DB not available"); },
+    },
+    // Draft history (Undo/Redo): reads return empty, writes refuse — the same offline contract as
+    // every other model, so `next build` still completes without a database.
+    experienceDraftRevision: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      findUnique: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+      deleteMany: async () => ({ count: 0 }),
+      count: async () => 0,
     },
     interactiveBusinessEntitlement: {
       findUnique: async () => null,
@@ -266,8 +277,22 @@ function createFallbackPrisma(): any {
     mediaAsset: {
       findMany: async () => [],
       findFirst: async () => null,
+      findUnique: async () => null,
       create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
       delete: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    // ── Website Studio AI (additive): generation history + usage meter. Reads return empty,
+    // writes refuse, so an offline `next build` behaves exactly like the other models. ──
+    aiGeneration: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      findUnique: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      delete: async () => { throw new Error("DB not available"); },
+      deleteMany: async () => ({ count: 0 }),
       count: async () => 0,
     },
     // ── Business POS (additive product). Same offline contract as the models above: reads

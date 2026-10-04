@@ -301,6 +301,52 @@ export const SECTION_DEFINITIONS: SectionDefinition[] = [
     }),
   },
   {
+    type: "steps",
+    label: "How it works",
+    description: "Three or four steps from first contact to delivery.",
+    source: "content",
+    removable: true,
+    fields: [
+      { key: "title", label: "Heading", type: "text", maxLength: 60 },
+      {
+        key: "items", label: "Steps", type: "items", itemLabel: "Step",
+        itemFields: [
+          { key: "title", label: "Step name", type: "text", maxLength: 60 },
+          { key: "body", label: "What happens", type: "textarea", maxLength: 200 },
+        ],
+      },
+    ],
+    defaults: () => ({
+      type: "steps",
+      visible: true,
+      title: "How it works",
+      items: [],
+    }),
+  },
+  {
+    type: "why",
+    label: "Why choose you",
+    description: "The honest reasons customers pick you.",
+    source: "content",
+    removable: true,
+    fields: [
+      { key: "title", label: "Heading", type: "text", maxLength: 60 },
+      {
+        key: "items", label: "Reasons", type: "items", itemLabel: "Reason",
+        itemFields: [
+          { key: "title", label: "Reason", type: "text", maxLength: 60 },
+          { key: "body", label: "Detail", type: "textarea", maxLength: 200 },
+        ],
+      },
+    ],
+    defaults: () => ({
+      type: "why",
+      visible: true,
+      title: "Why customers choose us",
+      items: [],
+    }),
+  },
+  {
     type: "hours",
     label: "Opening hours",
     description: "When you are open, pulled from your settings.",
