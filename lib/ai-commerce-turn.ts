@@ -28,6 +28,7 @@ import {
   isOrderingIntent,
   isPreorderIntent,
   matchCatalogue,
+  refersToPreviousProduct,
   stockIsConfirmed,
   type CatalogueProduct,
 } from "./ai-grounding";
@@ -329,6 +330,42 @@ async function progressDelivery(params: {
   };
 }
 
+function mergeCartLines(existing: CartLine[], updates: CartLine[]): CartLine[] {
+  const merged = existing.map((line) => ({ ...line }));
+  for (const update of updates) {
+    const index = merged.findIndex((line) => line.productId && line.productId === update.productId);
+    if (index >= 0) merged[index] = { ...merged[index], ...update };
+    else merged.push(update);
+  }
+  return merged;
+}
+
+function resolveReferencedProduct(input: {
+  active?: CatalogueProduct;
+  discussed: CatalogueProduct[];
+  pending: CartLine[];
+  demonstrative: boolean;
+  namedCount: number;
+}): CatalogueProduct | "ask" | null {
+  if (input.namedCount > 0) return null;
+  if (input.demonstrative) {
+    if (input.active) return input.active;
+    if (input.discussed.length === 1) return input.discussed[0];
+    return "ask";
+  }
+  if (input.pending.length > 1) {
+    const firstId = input.pending[0]?.productId;
+    if (input.active && input.active.id !== firstId) return input.active;
+    if (input.discussed.length === 1) return input.discussed[0];
+    return "ask";
+  }
+  if (input.pending.length === 1) return input.active || input.discussed[0] || null;
+  if (input.active) return input.active;
+  if (input.discussed.length === 1) return input.discussed[0];
+  if (input.discussed.length > 1) return "ask";
+  return null;
+}
+
 async function progressOrder(params: {
   businessId: string;
   message: string;
@@ -354,6 +391,7 @@ async function progressOrder(params: {
 
   const products = brain.products.filter((product) => product.isActive !== false) as CatalogueProduct[];
   const parsed = parseConversationalOrder(message, products);
+  let focusId: string | null = null;
   if (parsed.outOfStockItems.length > 0 && parsed.matchedLines.length === 0) {
     // Existing front-desk handler owns the out-of-stock / PRE-ORDER wording and null cart.
     return null;
@@ -366,28 +404,56 @@ async function progressOrder(params: {
     const priced = applyBulkUnitPrice(line.name, base, quantity, brain.extendedConfig.bulkPricing);
     return { ...line, quantity, unitPriceKES: priced.unitPriceKES };
   });
+  // A follow-up names only the changed item. Keep the rest of this conversation's cart.
+  if (lines.length > 0 && params.conv.pendingCartLines.length > 0) {
+    lines = mergeCartLines(params.conv.pendingCartLines, lines);
+  }
 
   if (lines.length === 0) {
-    const quantity = extractStandaloneQuantity(message);
-    const active = products.find((product) => product.id === params.conv.activeProductId);
     const namedElsewhere = matchCatalogue(message, products);
-    if (active && quantity && namedElsewhere.length === 0) {
-      if (!stockIsConfirmed(active) || active.stockStatus === "OUT_OF_STOCK" || active.stockStatus === "DISCONTINUED") {
-        if (active.stockStatus === "OUT_OF_STOCK" || active.stockStatus === "DISCONTINUED") {
+    const demonstrative = refersToPreviousProduct(message);
+    const quantity = extractStandaloneQuantity(message) ?? (demonstrative ? 1 : null);
+    const active = products.find((product) => product.id === params.conv.activeProductId);
+    const discussed = products.filter((product) => params.conv.discussedProductIds.includes(product.id));
+    const pending = params.conv.pendingCartLines || [];
+    const referenced = resolveReferencedProduct({
+      active,
+      discussed,
+      pending,
+      demonstrative,
+      namedCount: namedElsewhere.length,
+    });
+    if (referenced === "ask") {
+      const choices = (discussed.length > 1 ? discussed : products).slice(0, 6);
+      return {
+        reply: `Which item should I use? ${choices.map((product) => product.name).join(", ")}.`,
+        responseType: "ACTION_REQUIRED",
+        source: "structured_data",
+        confidence: "high",
+        escalatedToHuman: false,
+        toolsInvoked: ["search_products"],
+        informationFound: choices.map((product) => product.name),
+        informationNotFound: ["Exact product"],
+        conv: params.conv,
+      };
+    }
+    if (referenced && quantity && namedElsewhere.length === 0) {
+      if (!stockIsConfirmed(referenced) || referenced.stockStatus === "OUT_OF_STOCK" || referenced.stockStatus === "DISCONTINUED") {
+        if (referenced.stockStatus === "OUT_OF_STOCK" || referenced.stockStatus === "DISCONTINUED") {
           return {
-            reply: `${active.name} is currently ${active.stockStatus}. I cannot add it as available stock.`,
+            reply: `${referenced.name} is currently ${referenced.stockStatus}. I cannot add it as available stock.`,
             responseType: "ACTION_REQUIRED",
             source: "structured_data",
             confidence: "high",
             escalatedToHuman: false,
             toolsInvoked: ["check_inventory"],
-            informationFound: [`Stock status for ${active.name}: ${active.stockStatus}`],
+            informationFound: [`Stock status for ${referenced.name}: ${referenced.stockStatus}`],
             informationNotFound: [],
             conv: params.conv,
           };
         }
       }
-      const base = authoritativeUnitPrice(active);
+      const base = authoritativeUnitPrice(referenced);
       if (base === null) {
         return {
           reply: brain.extendedConfig.fallbackMessage || FALLBACK_UNKNOWN_MESSAGE,
@@ -397,12 +463,13 @@ async function progressOrder(params: {
           escalatedToHuman: true,
           toolsInvoked: [],
           informationFound: [],
-          informationNotFound: [`Price for ${active.name}`],
+          informationNotFound: [`Price for ${referenced.name}`],
           conv: params.conv,
         };
       }
-      const priced = applyBulkUnitPrice(active.name, base, quantity, brain.extendedConfig.bulkPricing);
-      lines = [{ productId: active.id, name: active.name, quantity, unitPriceKES: priced.unitPriceKES }];
+      const priced = applyBulkUnitPrice(referenced.name, base, quantity, brain.extendedConfig.bulkPricing);
+      lines = mergeCartLines(pending, [{ productId: referenced.id, name: referenced.name, quantity, unitPriceKES: priced.unitPriceKES }]);
+      focusId = referenced.id;
     } else if (namedElsewhere.length > 1 && quantity) {
       const choices = namedElsewhere
         .map((product) => formatProductPriceLine(product, quantity, brain.extendedConfig.bulkPricing))
@@ -484,8 +551,11 @@ async function progressOrder(params: {
   let nextConv = {
     ...params.conv,
     pendingCartLines: lines,
-    activeProductId: lines[0]?.productId || params.conv.activeProductId,
-    activeProductName: lines[0]?.name || params.conv.activeProductName,
+    activeProductId: focusId || lines[0]?.productId || params.conv.activeProductId,
+    activeProductName:
+      products.find((product) => product.id === (focusId || lines[0]?.productId))?.name ||
+      lines[0]?.name ||
+      params.conv.activeProductName,
     discussedProductIds: lines.map((line) => line.productId).filter((id): id is string => Boolean(id)),
   };
   if (zoneName) {

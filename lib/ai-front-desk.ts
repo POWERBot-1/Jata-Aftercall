@@ -961,6 +961,7 @@ export async function handleAIFrontDeskTurn(params: {
         ...conv,
         activeProductId: targetProduct.id,
         activeProductName: targetProduct.name,
+        discussedProductIds: [targetProduct.id],
       },
       rawMessage,
       reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0} (${availability.stockStatus}).${

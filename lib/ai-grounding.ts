@@ -176,7 +176,16 @@ export function isConfirmation(message: string): boolean {
 }
 
 export function refersToPreviousPlace(message: string): boolean {
-  return /\b(there|that\s+place|same\s+place|that\s+area|huko|pale)\b/i.test(message || "");
+  return /\b(there|that\s+place|same\s+place|same\s+area|that\s+area|same\s+(?:delivery\s+)?address|that\s+(?:delivery\s+)?address|huko|pale)\b/i.test(
+    message || "",
+  );
+}
+
+/** Demonstrative product reference. Does not match a bare product family such as "the cement". */
+export function refersToPreviousProduct(message: string): boolean {
+  return /\b(that\s+one|this\s+one|that\s+product|this\s+product|that\s+item|this\s+item|the\s+one\s+you\s+mentioned|the\s+same\s+one)\b/i.test(
+    message || "",
+  );
 }
 
 export function extractDeliveryArea(message: string): { zone: string | null; refersToPrevious: boolean } {
@@ -195,7 +204,9 @@ export function extractDeliveryArea(message: string): { zone: string | null; ref
     const match = pattern.exec(text);
     const zone = match?.[1]?.trim();
     if (!zone) continue;
-    if (/^(there|here|me|them|us|it)$/i.test(zone)) return { zone: null, refersToPrevious: true };
+    if (/^(there|here|me|them|us|it)$/i.test(zone) || refersToPreviousPlace(zone)) {
+      return { zone: null, refersToPrevious: true };
+    }
     return { zone, refersToPrevious: false };
   }
   return { zone: null, refersToPrevious: false };
