@@ -16,9 +16,21 @@
 import { getBusinessBrain, type KnowledgeConflict } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
 import { resolveCommerceTurn } from "./ai-commerce-turn";
-import { formatProductPriceLine, interpretOpeningStatus, isOpenQuestion, matchCatalogue, openingHoursSummary, stockIsConfirmed } from "./ai-grounding";
+import {
+  detectUnlistedProductRequest,
+  productLabel,
+  formatProductPriceLine,
+  interpretOpeningStatus,
+  isBareDeliveryFollowUp,
+  isOpenQuestion,
+  matchCatalogue,
+  openingHoursSummary,
+  stockIsConfirmed,
+  type ProductRequestFrame,
+} from "./ai-grounding";
 import {
   getOrCreateConversationContext,
+  productFocusPinnedAfterMention,
   updateConversationContext,
   type ChannelType,
   type ConversationContext,
@@ -116,25 +128,81 @@ export function detectPromptInjection(message: string): { isInjection: boolean; 
   return { isInjection: false };
 }
 
-function extractRequestedProductCandidate(message: string): string | null {
+/**
+ * An item phrase inside a request. Letters, digits, spaces and hyphens only: a dot is accepted
+ * solely as the decimal point of a grade ("32.5", "42.5N"), so a sentence can never be swallowed
+ * whole into the candidate just because it contains a number.
+ */
+const ITEM_PHRASE_CAPTURE = "([a-z0-9][a-z0-9\\s-]{1,40}?(?:[.,]\\d{1,3}[a-z]{0,2})?)";
+const QUANTITY_CAPTURE =
+  "(?:(?:\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\\s*(?:of\\s+)?|\\d{1,3}[.,]\\d{1,3}\\s+)?";
+/** Sentence-final punctuation the phrase may end with. */
+const PHRASE_END = "(?:\\?|[.!]|$)";
+
+function extractRequestedProductCandidate(
+  message: string,
+): { candidate: string; frame: ProductRequestFrame } | null {
   const m = message.trim();
-  const patterns = [
-    /(?:how\s+much\s+(?:is|are|for)\s+(?:the\s+|a\s+|an\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:do\s+you\s+(?:have|sell|stock)\s+(?:any\s+|the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:price\s+of\s+(?:the\s+|a\s+)?)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:bei\s+ya\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
-    /(?:mnauza\s+)([a-z0-9][a-z0-9\s-]{1,40}?)(?:\?|$|\.)/i,
+  if (isBareDeliveryFollowUp(m)) return null;
+  const patterns: Array<{ pattern: RegExp; frame: ProductRequestFrame }> = [
+    {
+      pattern: new RegExp(
+        `(?:how\\s+much\\s+(?:is|are|for)\\s+(?:the\\s+|a\\s+|an\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
+      frame: "price",
+    },
+    {
+      pattern: new RegExp(
+        `(?:do\\s+you\\s+(?:have|sell|stock)\\s+(?:any\\s+|the\\s+|a\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
+      frame: "availability",
+    },
+    {
+      pattern: new RegExp(`(?:price\\s+of\\s+(?:the\\s+|a\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"),
+      frame: "price",
+    },
+    { pattern: new RegExp(`(?:bei\\s+ya\\s+)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"), frame: "price" },
+    {
+      pattern: new RegExp(`(?:mnauza\\s+)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"),
+      frame: "availability",
+    },
+    {
+      pattern: new RegExp(
+        `(?:(?:i\\s+need|i\\s+want|order|buy|get\\s+me|give\\s+me|can\\s+i\\s+get|let\\s+me\\s+have)\\s+)${QUANTITY_CAPTURE}${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
+      frame: "order",
+    },
+    {
+      // A bare whole-message line ("50kg Savannah cement", "Savannah 42.5"). Anchored so that a
+      // trailing word inside a longer sentence is never mistaken for a product name.
+      pattern: new RegExp(`^${QUANTITY_CAPTURE}${ITEM_PHRASE_CAPTURE}[.!]?$`, "i"),
+      frame: "bare",
+    },
   ];
-  for (const pat of patterns) {
-    const match = pat.exec(m);
+  for (const { pattern, frame } of patterns) {
+    const match = pattern.exec(m);
     if (match?.[1]) {
-      const candidate = match[1].trim().toLowerCase();
+      const candidate = match[1].trim().toLowerCase().replace(/[.\s]+$/, "");
+      if (!candidate) continue;
+      if (isBareDeliveryFollowUp(candidate)) continue;
       if (
-        ![
+        [
           "it",
           "this",
           "that",
           "them",
+          "there",
+          "huko",
+          "pale",
+          "same place",
+          "same area",
+          "that place",
+          "that area",
+          "same address",
+          "that address",
           "delivery",
           "shipping",
           "everything",
@@ -143,8 +211,9 @@ function extractRequestedProductCandidate(message: string): string | null {
           "services",
         ].includes(candidate)
       ) {
-        return candidate;
+        continue;
       }
+      return { candidate, frame };
     }
   }
   return null;
@@ -164,6 +233,16 @@ function extractDeliveryAreaCandidate(message: string): string | null {
     }
   }
   return null;
+}
+
+
+function explicitProductContext(conv: ConversationContext, product: { id: string; name: string }, pin: boolean) {
+  return {
+    activeProductId: product.id,
+    activeProductName: product.name,
+    discussedProductIds: Array.from(new Set([...(conv.discussedProductIds || []), product.id])),
+    productFocusPinned: pin,
+  };
 }
 
 export async function handleAIFrontDeskTurn(params: {
@@ -659,7 +738,11 @@ export async function handleAIFrontDeskTurn(params: {
   }
 
   // 7. Payment Methods Inquiry ("Do you accept M-Pesa?", "How do I pay?" — §14, §34)
-  if (/\b(m-?pesa|paybill|till\s+number|pochi|how\s+(?:do|can)\s+i\s+pay|payment\s+method|mnakubali\s+m-?pesa)\b/i.test(lower)) {
+  if (
+    /\b(m-?pesa|paybill|till\b|pochi|(?:how|where)\s+(?:do|can|should|to)?\s*(?:i|we)?\s*pay|how\s+to\s+pay|where\s+to\s+pay|pay\s+(?:by|via|with)\s+m-?pesa|can\s+i\s+pay|payment\s+(?:method|instruction|detail|info|option)s?|mnakubali\s+m-?pesa|nalipa\s+aje|nilipe\s+wapi|lipa\s+wapi)\b/i.test(
+      lower,
+    )
+  ) {
     toolsInvoked.push("get_payment_methods");
     if (brain.paymentMethods.isConfigured && brain.paymentMethods.publicInfo) {
       informationFound.push("Public merchant payment instructions");
@@ -797,7 +880,8 @@ export async function handleAIFrontDeskTurn(params: {
 
   // Check if the customer is referring to the active product in conversation memory (§24)
   // e.g., "How much is it?", "Do you have medium?", "Is size 42 available?"
-  const contextCandidate = extractRequestedProductCandidate(rawMessage);
+  const contextExtract = extractRequestedProductCandidate(rawMessage);
+  const contextCandidate = contextExtract?.candidate ?? null;
   const candidateIsDifferentProduct = Boolean(
     contextCandidate &&
       !/\b(size|small|medium|large|xl|xxl|it|that|this)\b/i.test(contextCandidate) &&
@@ -818,7 +902,8 @@ export async function handleAIFrontDeskTurn(params: {
           ...conv,
           activeProductId: null,
           activeProductName: null,
-          discussedProductIds: priced.map((product) => product.id),
+          productFocusPinned: false,
+          discussedProductIds: Array.from(new Set([...conv.discussedProductIds, ...priced.map((product) => product.id)])),
         },
         rawMessage,
         reply: priced.map((product) => formatProductPriceLine(product, 1, brain.extendedConfig.bulkPricing)).join(". ") + ".",
@@ -845,6 +930,9 @@ export async function handleAIFrontDeskTurn(params: {
         : null;
 
   if (targetProduct) {
+    const productFocusPinned = matchedProducts.length === 1
+      ? productFocusPinnedAfterMention(conv.discussedProductIds || [], targetProduct.id)
+      : conv.productFocusPinned;
     toolsInvoked.push("get_product", "check_inventory");
     const authoritativePrice = targetProduct.basePriceKES ?? targetProduct.variantPriceKES ?? null;
     const availability = evaluateProductAvailability({ product: targetProduct, requestedQuantity: 1 });
@@ -874,8 +962,7 @@ export async function handleAIFrontDeskTurn(params: {
         return finalizeTurn({
           conv: {
             ...conv,
-            activeProductId: targetProduct.id,
-            activeProductName: targetProduct.name,
+            ...explicitProductContext(conv, targetProduct, productFocusPinned),
           },
           rawMessage,
           reply: `We don't have "${requestedVariantTerm}" listed as an available option for ${targetProduct.name}. ${
@@ -904,9 +991,7 @@ export async function handleAIFrontDeskTurn(params: {
       return finalizeTurn({
         conv: {
           ...conv,
-          activeProductId: targetProduct.id,
-          activeProductName: targetProduct.name,
-          discussedProductIds: [targetProduct.id],
+          ...explicitProductContext(conv, targetProduct, productFocusPinned),
         },
         rawMessage,
         reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0}.${
@@ -937,8 +1022,7 @@ export async function handleAIFrontDeskTurn(params: {
       return finalizeTurn({
         conv: {
           ...conv,
-          activeProductId: targetProduct.id,
-          activeProductName: targetProduct.name,
+          ...explicitProductContext(conv, targetProduct, productFocusPinned),
         },
         rawMessage,
         reply: `${targetProduct.name} is priced at KES ${authoritativePrice ?? 0}, and is currently ${availability.stockStatus} (not available for immediate fulfilment).${preOrderText}`,
@@ -959,9 +1043,7 @@ export async function handleAIFrontDeskTurn(params: {
     return finalizeTurn({
       conv: {
         ...conv,
-        activeProductId: targetProduct.id,
-        activeProductName: targetProduct.name,
-        discussedProductIds: [targetProduct.id],
+        ...explicitProductContext(conv, targetProduct, productFocusPinned),
       },
       rawMessage,
       reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0} (${availability.stockStatus}).${
@@ -1097,7 +1179,24 @@ export async function handleAIFrontDeskTurn(params: {
   }
 
   // 13. Specific Unlisted Product Check (§8, §36, §55 Scenario 1: "How much is the pizza?")
-  const requestedCandidate = extractRequestedProductCandidate(rawMessage);
+  // A message only reaches this branch when it plausibly names a product this business does not
+  // carry. Greetings, contact details, place names and generic service words fall through to the
+  // neutral fallback instead of being answered — and recorded — as unlisted products.
+  const requestedExtract = extractRequestedProductCandidate(rawMessage);
+  const requestedCandidate =
+    requestedExtract &&
+    detectUnlistedProductRequest({
+      message: rawMessage,
+      candidate: requestedExtract.candidate,
+      frame: requestedExtract.frame,
+      products: brain.products,
+      extraKnownPhrases: [
+        ...(brain.delivery?.zones || []).map((zone) => zone.name),
+        ...(brain.business.location ? [brain.business.location] : []),
+      ],
+    }).plausible
+      ? requestedExtract.candidate
+      : null;
   if (requestedCandidate) {
     const serviceMatch = brain.services.find(
       (s) =>
@@ -1127,20 +1226,28 @@ export async function handleAIFrontDeskTurn(params: {
     }
 
     // Not in structured products or services! Record missed demand & unanswered question.
+    const requestedLabel = productLabel(requestedCandidate, brain.products);
     toolsInvoked.push("search_products");
     if (!preview) {
-      await recordDemandInsight(businessId, "UNAVAILABLE_PRODUCT", requestedCandidate);
+      await recordDemandInsight(businessId, "UNAVAILABLE_PRODUCT", requestedLabel);
       await recordUnansweredQuestion(businessId, rawMessage);
     }
-    informationNotFound.push(`Product: ${requestedCandidate}`);
+    informationNotFound.push(`Product: ${requestedLabel}`);
+    const candidateTokens = requestedLabel.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
+    const categoryAlternatives = brain.products.filter((product) => {
+      const category = (product.category || "").toLowerCase();
+      return candidateTokens.some((token) => category.includes(token));
+    });
+    const alternatives = categoryAlternatives.length > 0 ? categoryAlternatives : brain.products;
+    const alternativeLabel = categoryAlternatives.length > 0 ? "Configured alternatives" : "We currently have";
     const availableSummary =
-      brain.products.length > 0
-        ? ` We currently have: ${brain.products.map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`).join(", ")}.`
+      alternatives.length > 0
+        ? ` ${alternativeLabel}: ${alternatives.map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`).join(", ")}.`
         : "";
     return finalizeTurn({
       conv,
       rawMessage,
-      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE}${availableSummary}`,
+      reply: `${FALLBACK_UNLISTED_PRODUCT_MESSAGE} ${requestedLabel} is not a configured product.${availableSummary}`,
       responseType: "UNKNOWN",
       source: "structured_data",
       confidence: "high",
@@ -1218,6 +1325,7 @@ async function finalizeTurn(params: {
     collectedCustomerName: params.conv.collectedCustomerName,
     collectedCustomerPhone: params.conv.collectedCustomerPhone,
     discussedProductIds: params.conv.discussedProductIds,
+    productFocusPinned: params.conv.productFocusPinned,
     turns: nextTurns,
   });
 
