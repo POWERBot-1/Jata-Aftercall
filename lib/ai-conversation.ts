@@ -48,6 +48,10 @@ export type ConversationContext = {
     unitPriceKES: number;
   }>;
   pendingDeliveryZone: string | null;
+  pendingFulfilment: "PICKUP" | "DELIVERY" | null;
+  collectedCustomerName: string | null;
+  collectedCustomerPhone: string | null;
+  discussedProductIds: string[];
   turns: ConversationTurn[];
   preview: boolean;
   createdAt: string;
@@ -101,6 +105,10 @@ export function getOrCreateConversationContext(params: {
     verifiedCustomerPhone: false,
     pendingCartLines: [],
     pendingDeliveryZone: null,
+    pendingFulfilment: null,
+    collectedCustomerName: null,
+    collectedCustomerPhone: null,
+    discussedProductIds: [],
     turns: [],
     preview: Boolean(params.preview),
     createdAt: now,

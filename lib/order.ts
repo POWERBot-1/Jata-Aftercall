@@ -9,6 +9,8 @@
 import crypto from "crypto";
 import prisma from "./db";
 import { calculateCommerceTotal } from "./commerce-pricing";
+import { applyBulkUnitPrice } from "./ai-grounding";
+import { getExtendedAIConfig, resolveDeliveryZoneFee } from "./ai-config";
 import { evaluateProductAvailability, reserveInventoryForOrder } from "./inventory";
 import { createNotification } from "./notification";
 import { logAudit } from "./audit";
@@ -168,6 +170,9 @@ export async function createAuthoritativeOrder(input: {
   }
 
   const rawItems = Array.isArray(input.items) ? input.items : [];
+  const bulkRules = await getExtendedAIConfig(businessId)
+    .then((config) => config.bulkPricing)
+    .catch(() => []);
   const resolvedLines: Array<{
     productId?: string;
     serviceId?: string;
@@ -194,26 +199,37 @@ export async function createAuthoritativeOrder(input: {
           variantDesc: raw.variantDesc,
           quantity,
           // Always use the authoritative database price, never the client-supplied price (§16)
-          unitPriceKES: Math.max(0, Math.round(Number(dbProduct.basePriceKES ?? dbProduct.variantPriceKES ?? 0))),
+          unitPriceKES: applyBulkUnitPrice(
+            dbProduct.name,
+            Math.max(0, Math.round(Number(dbProduct.basePriceKES ?? dbProduct.variantPriceKES ?? 0))),
+            quantity,
+            bulkRules,
+          ).unitPriceKES,
         });
         continue;
       }
     }
 
-    resolvedLines.push({
-      productId: raw.productId,
-      serviceId: raw.serviceId,
-      name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Item",
-      variantDesc: raw.variantDesc,
-      quantity,
-      unitPriceKES: Math.max(0, Math.round(Number(raw.unitPriceKES) || 0)),
-    });
+    // A line that is not in this business catalogue cannot carry a caller-supplied price.
+    throw new Error("Item is not in this business catalogue.");
+  }
+
+  const subtotalKES = resolvedLines.reduce((sum, line) => sum + line.quantity * line.unitPriceKES, 0);
+  let deliveryFeeKES = 0;
+  if (input.fulfilmentType === "DELIVERY") {
+    const config = await getExtendedAIConfig(businessId).catch(() => null);
+    const zoneResult = config ? resolveDeliveryZoneFee(config.delivery, input.deliveryLocation, subtotalKES) : null;
+    if (!zoneResult?.allowed || !zoneResult.matchedZone) {
+      throw new Error(`Delivery is not configured for ${input.deliveryLocation || "that area"}.`);
+    }
+    deliveryFeeKES = zoneResult.feeKES;
   }
 
   const calculation = calculateCommerceTotal({
     lineItems: resolvedLines,
-    deliveryFeeKES: input.deliveryFeeKES,
-    discountKES: input.discountKES,
+    deliveryFeeKES,
+    // Caller-supplied discounts are not authoritative. There is no customer-controlled discount source.
+    discountKES: 0,
     taxRate: input.taxRate,
   });
 

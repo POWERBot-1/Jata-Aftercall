@@ -408,15 +408,33 @@ export async function executeBusinessTool(
       const customerName = typeof args.customerName === "string" ? args.customerName.trim() : "Customer";
       const customerPhone = typeof args.customerPhone === "string" ? args.customerPhone.trim() : null;
       const items = Array.isArray(args.items) ? (args.items as any[]) : [];
+      const fulfilmentType = args.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP";
+      const deliveryLocation = typeof args.deliveryLocation === "string" ? args.deliveryLocation : null;
+      if (fulfilmentType === "DELIVERY") {
+        const zoneResult = resolveDeliveryZoneFee(brain.delivery, deliveryLocation);
+        if (!zoneResult.allowed || !zoneResult.matchedZone) {
+          return {
+            ok: false,
+            tool,
+            category: "WRITE",
+            status: "UNKNOWN",
+            error: `Delivery is not configured for ${deliveryLocation || "that area"}.`,
+            preview,
+          };
+        }
+      }
       const order = await createAuthoritativeOrder({
         businessId: context.businessId,
         customerName,
         customerPhone,
         items,
-        deliveryFeeKES: typeof args.deliveryFeeKES === "number" ? args.deliveryFeeKES : 0,
-        fulfilmentType: args.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
-        deliveryLocation: typeof args.deliveryLocation === "string" ? args.deliveryLocation : null,
+        // Customer tool arguments cannot set the fee, discount, or unit price.
+        deliveryFeeKES: 0,
+        discountKES: 0,
+        fulfilmentType,
+        deliveryLocation,
         idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey : undefined,
+        confirmedByCustomer: args.confirmedByCustomer === true,
         preview,
       });
       return {

@@ -17,16 +17,23 @@ import prisma from "./db";
 import { getBusinessBrain } from "./ai-business-brain";
 import { getAIPackageStatus, type AIPackageEntitlementSummary } from "./ai-entitlement";
 import { publishAIConfigSnapshot } from "./ai-config";
+import { authoritativeUnitPrice, matchCatalogue } from "./ai-grounding";
 import { logAudit } from "./audit";
 
 export type ReadinessCheckItem = {
   id:
     | "business_profile"
     | "catalogue_or_faq"
+    | "pricing"
+    | "operating_status"
+    | "operating_hours"
     | "notification_destination"
     | "payment_configuration"
     | "delivery_configuration"
-    | "human_handoff";
+    | "business_rules"
+    | "fallback_behavior"
+    | "human_handoff"
+    | "representative_answers";
   label: string;
   passed: boolean;
   detail: string;
@@ -61,25 +68,58 @@ export async function evaluateAIReadiness(businessId: string): Promise<AIReadine
   const hasCatalogueOrFaq =
     brain.products.length > 0 || brain.services.length > 0 || brain.faqs.length > 0;
 
-  const hasNotificationDestination =
-    brain.notificationRecipients.length > 0 ||
-    Boolean(brain.business.whatsapp || brain.business.phone);
+  const hasNotificationDestination = brain.notificationRecipients.some(
+    (recipient) => recipient.isActive !== false && Boolean(recipient.phone || recipient.email),
+  );
 
   const orderingEnabled =
     brain.extendedConfig.orderingAllowed !== false && !brain.extendedConfig.pauseAllOrdering;
 
-  const hasPaymentIfOrdering =
-    !orderingEnabled || brain.paymentMethods.isConfigured;
-
-  const hasDeliveryIfEnabled =
-    !brain.delivery.deliveryEnabled || brain.delivery.zones.length > 0;
-
-  const hasHumanHandoff = Boolean(
-    (brain.extendedConfig.escalationRules && brain.extendedConfig.escalationRules.trim().length > 0) ||
-      brain.business.whatsapp ||
-      brain.business.phone ||
-      brain.notificationRecipients.length > 0,
+  const sellableProducts = brain.products.filter((product) => product.isActive !== false);
+  const pricedProducts = sellableProducts.filter((product) => authoritativeUnitPrice(product) !== null);
+  const pricedServices = brain.services.filter(
+    (service) => service.isActive !== false && typeof service.priceFrom === "number",
   );
+  const hasPricing = !orderingEnabled || pricedProducts.length > 0 || pricedServices.length > 0;
+  const unpriced = sellableProducts.filter((product) => authoritativeUnitPrice(product) === null);
+
+  const hasOperatingHours = Boolean(brain.business.openingHours && brain.business.openingHours.trim());
+  const hasOperatingStatus = ["DRAFT", "CONFIGURED", "PREVIEW", "LIVE", "PAUSED", "MAINTENANCE"].includes(
+    brain.extendedConfig.operationalStatus,
+  );
+
+  const hasPaymentIfOrdering = !orderingEnabled || brain.paymentMethods.isConfigured;
+
+  const deliveryZonesReady =
+    !brain.delivery.deliveryEnabled ||
+    (brain.delivery.zones.length > 0 &&
+      brain.delivery.zones.every(
+        (zone) => typeof zone.feeKES === "number" && Boolean(zone.estimatedTime && zone.estimatedTime.trim()),
+      ));
+
+  const hasBusinessRules = Boolean(
+    brain.extendedConfig.escalationRules?.trim() ||
+      brain.extendedConfig.orderRules?.trim() ||
+      brain.policies.orderRules?.trim() ||
+      brain.policies.refundPolicy?.trim(),
+  );
+
+  const hasFallback = Boolean(brain.extendedConfig.fallbackMessage && brain.extendedConfig.fallbackMessage.trim());
+
+  const hasHumanHandoff = Boolean(brain.extendedConfig.escalationRules && brain.extendedConfig.escalationRules.trim().length > 0);
+
+  const representativeFailures: string[] = [];
+  if (pricedProducts[0]) {
+    const sample = pricedProducts[0];
+    const matched = matchCatalogue(`how much is ${sample.name}`, brain.products);
+    if (!matched.some((product) => product.id === sample.id)) {
+      representativeFailures.push(`Cannot quote the configured price for ${sample.name}.`);
+    }
+  }
+  if (brain.delivery.deliveryEnabled && brain.delivery.zones[0] && !brain.delivery.zones[0].estimatedTime) {
+    representativeFailures.push(`Delivery to ${brain.delivery.zones[0].name} has no expected time.`);
+  }
+  if (!hasFallback) representativeFailures.push("Unknown questions have no configured fallback.");
 
   const checks: ReadinessCheckItem[] = [
     {
@@ -92,22 +132,44 @@ export async function evaluateAIReadiness(businessId: string): Promise<AIReadine
     },
     {
       id: "catalogue_or_faq",
-      label: "At least one product, service, or FAQ exists",
+      label: "At least one product, service, or approved knowledge item",
       passed: hasCatalogueOrFaq,
       detail: hasCatalogueOrFaq
         ? `${brain.products.length} products, ${brain.services.length} services, ${brain.faqs.length} FAQs`
         : "Add at least one product, service, or approved FAQ.",
     },
     {
+      id: "pricing",
+      label: "Pricing configured where ordering is enabled",
+      passed: hasPricing && unpriced.length === 0,
+      detail:
+        unpriced.length > 0
+          ? `Add a price for: ${unpriced.map((product) => product.name).join(", ")}.`
+          : hasPricing
+            ? orderingEnabled
+              ? `${pricedProducts.length} priced products, ${pricedServices.length} priced services`
+              : "Ordering disabled (pricing not required)"
+            : "Add at least one priced product or service before ordering can go live.",
+    },
+    {
+      id: "operating_status",
+      label: "Operating status configured",
+      passed: hasOperatingStatus,
+      detail: `Status: ${brain.extendedConfig.operationalStatus}`,
+    },
+    {
+      id: "operating_hours",
+      label: "Operating hours configured",
+      passed: hasOperatingHours,
+      detail: hasOperatingHours ? brain.business.openingHours || "Configured" : "Add opening days and hours.",
+    },
+    {
       id: "notification_destination",
-      label: "Nominated business notification destination exists",
+      label: "Nominated business notification number configured",
       passed: hasNotificationDestination,
       detail: hasNotificationDestination
-        ? brain.notificationRecipients[0]?.phone ||
-          brain.business.whatsapp ||
-          brain.business.phone ||
-          "Configured"
-        : "Nominate a WhatsApp or SMS number for order and escalation alerts.",
+        ? `${brain.notificationRecipients[0]?.label || "PRIMARY"} ${brain.notificationRecipients[0]?.phone || brain.notificationRecipients[0]?.email || ""}`.trim()
+        : "Nominate a PRIMARY, SECONDARY, OWNER, or STAFF number for orders and escalations.",
     },
     {
       id: "payment_configuration",
@@ -121,21 +183,46 @@ export async function evaluateAIReadiness(businessId: string): Promise<AIReadine
     },
     {
       id: "delivery_configuration",
-      label: "Delivery policy configured if delivery is enabled",
-      passed: hasDeliveryIfEnabled,
-      detail: hasDeliveryIfEnabled
+      label: "Delivery zones, fees, and expected times configured if delivery is enabled",
+      passed: deliveryZonesReady,
+      detail: deliveryZonesReady
         ? brain.delivery.deliveryEnabled
-          ? `${brain.delivery.zones.length} delivery zone(s) configured`
+          ? `${brain.delivery.zones.length} delivery zone(s) with fee and expected time`
           : "Pickup only (delivery disabled)"
-        : "Add at least one delivery zone and fee in KES, or switch to Pickup only.",
+        : "Add each delivery zone with its fee and expected time, or switch delivery off.",
+    },
+    {
+      id: "business_rules",
+      label: "Required business rules configured",
+      passed: hasBusinessRules,
+      detail: hasBusinessRules
+        ? "Order, refund, or escalation rules are saved"
+        : "Add the rules the AI must follow, such as refunds, order limits, or escalation.",
+    },
+    {
+      id: "fallback_behavior",
+      label: "Fallback behavior configured",
+      passed: hasFallback,
+      detail: hasFallback
+        ? brain.extendedConfig.fallbackMessage
+        : "Set the message used when the Business Brain does not contain the answer.",
     },
     {
       id: "human_handoff",
-      label: "Human handoff rule exists",
+      label: "Human escalation configured",
       passed: hasHumanHandoff,
       detail: hasHumanHandoff
-        ? "Escalation rule and contact channel ready"
-        : "Configure human escalation rules or a business contact number.",
+        ? "Escalation rule is saved"
+        : "Say when the AI should call a person, including missing information and complaints.",
+    },
+    {
+      id: "representative_answers",
+      label: "AI can answer representative configured questions",
+      passed: representativeFailures.length === 0,
+      detail:
+        representativeFailures.length === 0
+          ? "Configured prices and delivery records can be quoted without guessing"
+          : representativeFailures.join(" "),
     },
   ];
 

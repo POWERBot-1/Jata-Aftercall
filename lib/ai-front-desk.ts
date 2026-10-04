@@ -15,6 +15,8 @@
 
 import { getBusinessBrain, type KnowledgeConflict } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
+import { resolveCommerceTurn } from "./ai-commerce-turn";
+import { formatProductPriceLine, interpretOpeningStatus, isOpenQuestion, matchCatalogue, openingHoursSummary, stockIsConfirmed } from "./ai-grounding";
 import {
   getOrCreateConversationContext,
   updateConversationContext,
@@ -216,7 +218,7 @@ export async function handleAIFrontDeskTurn(params: {
   }
   if (brain.delivery.deliveryEnabled && brain.delivery.zones.length === 0) {
     missingInformation.push("Delivery zones and fees are not configured.");
-    configurationImprovement.push("Add delivery zones and fees (e.g., CBD, Westlands, Kilimani).");
+    configurationImprovement.push("Add this business's own delivery zones, fees, and expected delivery times.");
   }
   if (brain.conflicts.length > 0) {
     for (const c of brain.conflicts) {
@@ -236,9 +238,10 @@ export async function handleAIFrontDeskTurn(params: {
   // emergency pause to take effect immediately, while the owner's own Preview stays available.
   const operationalStatus = brain.extendedConfig.operationalStatus;
   if ((operationalStatus === "MAINTENANCE" || operationalStatus === "PAUSED") && !preview) {
+    const pausedNotice = brain.extendedConfig.pausedMessage?.trim();
     const statusReply =
       operationalStatus === "PAUSED"
-        ? `Our AI Front Desk for ${brain.business.name} is temporarily paused. ${HUMAN_HANDOFF_MESSAGE}`
+        ? `${pausedNotice ? `${pausedNotice} ` : ""}Our AI Front Desk for ${brain.business.name} is temporarily paused. ${HUMAN_HANDOFF_MESSAGE}`
         : `Our AI Front Desk for ${brain.business.name} is temporarily in maintenance mode. ${HUMAN_HANDOFF_MESSAGE}`;
     return finalizeTurn({
       conv,
@@ -335,9 +338,39 @@ export async function handleAIFrontDeskTurn(params: {
     });
   }
 
+  const commerceTurn = await resolveCommerceTurn({
+    businessId,
+    message: rawMessage,
+    brain,
+    conv,
+    preview,
+    customerName: params.customerName,
+    customerPhone: params.customerPhone,
+  });
+  if (commerceTurn) {
+    return finalizeTurn({
+      conv: commerceTurn.conv,
+      rawMessage,
+      reply: commerceTurn.reply,
+      responseType: commerceTurn.responseType,
+      source: commerceTurn.source,
+      confidence: commerceTurn.confidence,
+      escalatedToHuman: commerceTurn.escalatedToHuman,
+      preview,
+      brain,
+      toolsInvoked: [...toolsInvoked, ...commerceTurn.toolsInvoked],
+      informationFound: [...informationFound, ...commerceTurn.informationFound],
+      informationNotFound: [...informationNotFound, ...commerceTurn.informationNotFound],
+      missingInformation,
+      configurationImprovement,
+      cartSummary: commerceTurn.cartSummary,
+      orderCreated: commerceTurn.orderCreated,
+    });
+  }
+
   // 3. High-Risk / Refund / Cancellation / Complaint / Human Handoff (§9, §23, §55 Scenario 6)
   if (
-    /\b(refund|money\s+back|cancel\s+(?:my\s+)?order|speak\s+to\s+(?:a\s+)?(?:human|person|manager|owner|agent)|talk\s+to\s+(?:a\s+)?(?:human|person)|complaint|damaged|wrong\s+order)\b/i.test(
+    /\b(refund|money\s+back|cancel\s+(?:my\s+)?order|speak\s+to\s+(?:a\s+|the\s+)?(?:human|person|manager|owner|agent|someone)|talk\s+to\s+(?:a\s+|the\s+)?(?:human|person|manager|owner|agent|someone)|complaint|damaged|wrong\s+order)\b/i.test(
       lower,
     )
   ) {
@@ -548,7 +581,7 @@ export async function handleAIFrontDeskTurn(params: {
 
   // 6. Opening Hours & Location (English + Kiswahili — §25)
   if (
-    /\b(opening\s+hours|what\s+time\s+do\s+you\s+(?:open|close)|when\s+are\s+you\s+open|hours|saa\s+ngapi|mnafungua|mnafunga|mko\s+wapi|where\s+are\s+you\s+located|location)\b/i.test(
+    /\b(opening\s+hours|what\s+time\s+do\s+you\s+(?:open|close)|when\s+are\s+you\s+open|are\s+you\s+open|open\s+today|open\s+now|hours|saa\s+ngapi|mnafungua|mnafunga|mko\s+wapi|mko\s+wazi|where\s+are\s+you\s+located|location)\b/i.test(
       lower,
     )
   ) {
@@ -560,7 +593,7 @@ export async function handleAIFrontDeskTurn(params: {
         conv,
         rawMessage,
         reply: `${brain.business.name} is located at ${brain.business.location}.${
-          brain.business.openingHours ? ` Opening hours: ${brain.business.openingHours}.` : ""
+          brain.business.openingHours ? ` Opening hours: ${openingHoursSummary(brain.business.openingHours) || brain.business.openingHours}.` : ""
         }`,
         responseType: "KNOWN",
         source: "structured_data",
@@ -577,10 +610,17 @@ export async function handleAIFrontDeskTurn(params: {
     }
     if (brain.business.openingHours) {
       informationFound.push(`Opening hours: ${brain.business.openingHours}`);
+      const openStatus = isOpenQuestion(rawMessage) ? interpretOpeningStatus(brain.business.openingHours) : null;
+      const openClause =
+        openStatus?.openNow === true
+          ? " We are open now."
+          : openStatus?.openNow === false
+            ? " We are closed now."
+            : "";
       return finalizeTurn({
         conv,
         rawMessage,
-        reply: `${brain.business.name} opening hours: ${brain.business.openingHours}.${
+        reply: `${brain.business.name} opening hours: ${openingHoursSummary(brain.business.openingHours) || brain.business.openingHours}.${openClause}${
           brain.business.location ? ` Location: ${brain.business.location}.` : ""
         }`,
         responseType: "KNOWN",
@@ -753,19 +793,49 @@ export async function handleAIFrontDeskTurn(params: {
   }
 
   // 9. Product, Variant & Price Lookup (Structured Data Precedence — §7, §18, §24, §55 Scenarios 1, 2, 3, 7)
-  const matchedProducts = brain.products.filter((p) => {
-    const pLower = p.name.toLowerCase();
-    if (lower.includes(pLower)) return true;
-    const words = pLower.split(/\s+/).filter((w) => w.length >= 4);
-    return words.some((w) => new RegExp(`\\b${w}s?\\b`, "i").test(lower));
-  });
+  const matchedProducts = matchCatalogue(rawMessage, brain.products);
 
   // Check if the customer is referring to the active product in conversation memory (§24)
   // e.g., "How much is it?", "Do you have medium?", "Is size 42 available?"
+  const contextCandidate = extractRequestedProductCandidate(rawMessage);
+  const candidateIsDifferentProduct = Boolean(
+    contextCandidate &&
+      !/\b(size|small|medium|large|xl|xxl|it|that|this)\b/i.test(contextCandidate) &&
+      matchCatalogue(contextCandidate, brain.products).length === 0,
+  );
   const usesContextReference =
     matchedProducts.length === 0 &&
+    !candidateIsDifferentProduct &&
     conv.activeProductId &&
     /\b(it|that|this|one|medium|large|small|size|black|white|red|blue|available|in\s+stock|how\s+much)\b/i.test(lower);
+
+  if (matchedProducts.length > 1) {
+    const priced = matchedProducts.filter((product) => product.basePriceKES != null || product.variantPriceKES != null);
+    if (priced.length > 0) {
+      informationFound.push(...priced.map((product) => formatProductPriceLine(product)));
+      return finalizeTurn({
+        conv: {
+          ...conv,
+          activeProductId: null,
+          activeProductName: null,
+          discussedProductIds: priced.map((product) => product.id),
+        },
+        rawMessage,
+        reply: priced.map((product) => formatProductPriceLine(product, 1, brain.extendedConfig.bulkPricing)).join(". ") + ".",
+        responseType: "KNOWN",
+        source: "structured_data",
+        confidence: "high",
+        escalatedToHuman: false,
+        preview,
+        brain,
+        toolsInvoked: [...toolsInvoked, "search_products"],
+        informationFound,
+        informationNotFound,
+        missingInformation,
+        configurationImprovement,
+      });
+    }
+  }
 
   const targetProduct =
     matchedProducts.length === 1
@@ -827,8 +897,34 @@ export async function handleAIFrontDeskTurn(params: {
     }
 
     informationFound.push(
-      `Structured product: ${targetProduct.name} (KES ${authoritativePrice ?? "N/A"}, ${availability.stockStatus})`,
+      `Structured product: ${targetProduct.name} (KES ${authoritativePrice ?? "N/A"}, ${stockIsConfirmed(targetProduct) ? availability.stockStatus : "STOCK_UNCONFIRMED"})`,
     );
+
+    if (!stockIsConfirmed(targetProduct)) {
+      return finalizeTurn({
+        conv: {
+          ...conv,
+          activeProductId: targetProduct.id,
+          activeProductName: targetProduct.name,
+          discussedProductIds: [targetProduct.id],
+        },
+        rawMessage,
+        reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0}.${
+          targetProduct.description ? ` ${targetProduct.description}` : ""
+        } Stock has not been confirmed, so I cannot say whether it is available.`,
+        responseType: authoritativePrice === null ? "UNKNOWN" : "KNOWN",
+        source: authoritativePrice === null ? "fallback" : "structured_data",
+        confidence: authoritativePrice === null ? "low" : "high",
+        escalatedToHuman: authoritativePrice === null,
+        preview,
+        brain,
+        toolsInvoked,
+        informationFound,
+        informationNotFound: ["Confirmed stock"],
+        missingInformation,
+        configurationImprovement,
+      });
+    }
 
     if (!availability.available) {
       if (!preview) {
@@ -865,6 +961,7 @@ export async function handleAIFrontDeskTurn(params: {
         ...conv,
         activeProductId: targetProduct.id,
         activeProductName: targetProduct.name,
+        discussedProductIds: [targetProduct.id],
       },
       rawMessage,
       reply: `${targetProduct.name} is KES ${authoritativePrice ?? 0} (${availability.stockStatus}).${
@@ -1117,6 +1214,10 @@ async function finalizeTurn(params: {
     activeProductName: params.conv.activeProductName,
     pendingCartLines: params.conv.pendingCartLines,
     pendingDeliveryZone: params.conv.pendingDeliveryZone,
+    pendingFulfilment: params.conv.pendingFulfilment,
+    collectedCustomerName: params.conv.collectedCustomerName,
+    collectedCustomerPhone: params.conv.collectedCustomerPhone,
+    discussedProductIds: params.conv.discussedProductIds,
     turns: nextTurns,
   });
 

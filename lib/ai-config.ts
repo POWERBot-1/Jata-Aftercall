@@ -59,7 +59,43 @@ export type BusinessPoliciesConfig = {
   guaranteePolicy?: string | null;
   privacyNotice?: string | null;
   retentionDays?: number;
+  creditPolicy?: string | null;
+  exchangePolicy?: string | null;
+  minimumOrderKES?: number | null;
+  bulkOrderRules?: string | null;
+  deliveryConditions?: string | null;
+  bookingConditions?: string | null;
+  preorderConditions?: string | null;
 };
+
+export type BranchInfo = {
+  name: string;
+  location?: string | null;
+  phone?: string | null;
+  openingHours?: string | null;
+};
+
+export type BulkPriceRule = {
+  productName: string;
+  minQuantity: number;
+  unitPriceKES: number;
+};
+
+export type PublicPaymentDetails = {
+  mpesaTill?: string | null;
+  paybill?: string | null;
+  paybillAccount?: string | null;
+  pochi?: string | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  cash?: boolean;
+  cashOnDelivery?: boolean;
+  depositRequirements?: string | null;
+  otherInstructions?: string | null;
+};
+
+export type OutOfStockBehavior = "state_fact" | "offer_preorder" | "handoff" | "offer_alternative";
+export type AfterHoursBehavior = "message_only" | "accept_enquiries" | "handoff";
 
 export type ExtendedAIConfig = {
   businessId: string;
@@ -90,6 +126,17 @@ export type ExtendedAIConfig = {
   delivery: DeliveryConfiguration;
   policies: BusinessPoliciesConfig;
   escalationTopics: string[];
+  walkInsAccepted: boolean | null;
+  requiredCustomerFields: Array<"name" | "phone" | "delivery_location" | "notes">;
+  preparationTime: string | null;
+  fulfilmentProcedure: string | null;
+  modificationRules: string | null;
+  outOfStockBehavior: OutOfStockBehavior;
+  afterHoursBehavior: AfterHoursBehavior;
+  pausedMessage: string | null;
+  branches: BranchInfo[];
+  bulkPricing: BulkPriceRule[];
+  paymentDetails: PublicPaymentDetails;
   draftVersion: number;
   publishedVersion: number;
   publishedAt?: string | null;
@@ -213,6 +260,71 @@ export function sanitizeDeliveryConfig(
   };
 }
 
+function textOrNull(value: unknown, max = 1000): string | null {
+  return typeof value === "string" ? value.trim().slice(0, max) || null : null;
+}
+
+export function sanitizeBranches(raw: unknown): BranchInfo[] {
+  if (!Array.isArray(raw)) return [];
+  const branches: BranchInfo[] = [];
+  for (const entry of raw.slice(0, 20)) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as Record<string, unknown>;
+    const name = textOrNull(item.name, 80);
+    if (!name) continue;
+    branches.push({
+      name,
+      location: textOrNull(item.location, 160),
+      phone: textOrNull(item.phone, 30),
+      openingHours: textOrNull(item.openingHours, 200),
+    });
+  }
+  return branches;
+}
+
+export function sanitizeBulkPricing(raw: unknown): BulkPriceRule[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 40)
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const item = entry as Record<string, unknown>;
+      const productName = textOrNull(item.productName, 120);
+      const minQuantity = Math.round(Number(item.minQuantity) || 0);
+      const unitPriceKES = Math.round(Number(item.unitPriceKES) || 0);
+      if (!productName || minQuantity < 2 || unitPriceKES < 0) return null;
+      return { productName, minQuantity, unitPriceKES };
+    })
+    .filter((item): item is BulkPriceRule => item !== null);
+}
+
+export function sanitizePaymentDetails(raw: unknown): PublicPaymentDetails {
+  if (!raw || typeof raw !== "object") return {};
+  const item = raw as Record<string, unknown>;
+  return {
+    mpesaTill: textOrNull(item.mpesaTill, 20),
+    paybill: textOrNull(item.paybill, 20),
+    paybillAccount: textOrNull(item.paybillAccount, 40),
+    pochi: textOrNull(item.pochi, 20),
+    bankName: textOrNull(item.bankName, 60),
+    bankAccount: textOrNull(item.bankAccount, 40),
+    cash: item.cash === true,
+    cashOnDelivery: item.cashOnDelivery === true,
+    depositRequirements: textOrNull(item.depositRequirements, 300),
+    otherInstructions: textOrNull(item.otherInstructions, 500),
+  };
+}
+
+const CUSTOMER_FIELDS = ["name", "phone", "delivery_location", "notes"] as const;
+
+export function sanitizeRequiredCustomerFields(raw: unknown): ExtendedAIConfig["requiredCustomerFields"] {
+  if (!Array.isArray(raw)) return ["name", "phone"];
+  const fields = raw.filter((item): item is ExtendedAIConfig["requiredCustomerFields"][number] =>
+    (CUSTOMER_FIELDS as readonly string[]).includes(String(item)),
+  );
+  return fields.length ? fields : ["name", "phone"];
+}
+
 export function sanitizePoliciesConfig(raw: unknown): BusinessPoliciesConfig {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_POLICIES_CONFIG };
   const obj = raw as Record<string, unknown>;
@@ -238,6 +350,16 @@ export function sanitizePoliciesConfig(raw: unknown): BusinessPoliciesConfig {
       typeof obj.guaranteePolicy === "string"
         ? obj.guaranteePolicy.trim().slice(0, 1000) || null
         : null,
+    creditPolicy: textOrNull(obj.creditPolicy),
+    exchangePolicy: textOrNull(obj.exchangePolicy),
+    bulkOrderRules: textOrNull(obj.bulkOrderRules),
+    deliveryConditions: textOrNull(obj.deliveryConditions),
+    bookingConditions: textOrNull(obj.bookingConditions),
+    preorderConditions: textOrNull(obj.preorderConditions),
+    minimumOrderKES:
+      obj.minimumOrderKES === null || obj.minimumOrderKES === undefined || obj.minimumOrderKES === ""
+        ? null
+        : Math.max(0, Math.round(Number(obj.minimumOrderKES) || 0)) || null,
     privacyNotice:
       typeof obj.privacyNotice === "string" && obj.privacyNotice.trim()
         ? obj.privacyNotice.trim().slice(0, 1000)
@@ -468,6 +590,28 @@ export async function getExtendedAIConfig(
     escalationTopics: Array.isArray(merged.escalationTopics)
       ? merged.escalationTopics.map(String).slice(0, 20)
       : ["refund", "complaint", "discount_negotiation", "custom_quote"],
+    walkInsAccepted: typeof merged.walkInsAccepted === "boolean" ? merged.walkInsAccepted : null,
+    requiredCustomerFields: sanitizeRequiredCustomerFields(merged.requiredCustomerFields),
+    preparationTime: textOrNull(merged.preparationTime, 120),
+    fulfilmentProcedure: textOrNull(merged.fulfilmentProcedure, 500),
+    modificationRules: textOrNull(merged.modificationRules, 500),
+    outOfStockBehavior:
+      merged.outOfStockBehavior === "offer_preorder" ||
+      merged.outOfStockBehavior === "handoff" ||
+      merged.outOfStockBehavior === "offer_alternative" ||
+      merged.outOfStockBehavior === "state_fact"
+        ? merged.outOfStockBehavior
+        : "state_fact",
+    afterHoursBehavior:
+      merged.afterHoursBehavior === "accept_enquiries" ||
+      merged.afterHoursBehavior === "handoff" ||
+      merged.afterHoursBehavior === "message_only"
+        ? merged.afterHoursBehavior
+        : "message_only",
+    pausedMessage: textOrNull(merged.pausedMessage, 300),
+    branches: sanitizeBranches(merged.branches),
+    bulkPricing: sanitizeBulkPricing(merged.bulkPricing),
+    paymentDetails: sanitizePaymentDetails(merged.paymentDetails),
     draftVersion: typeof merged.draftVersion === "number" ? merged.draftVersion : 1,
     publishedVersion: typeof merged.publishedVersion === "number" ? merged.publishedVersion : 0,
     publishedAt: merged.publishedAt || null,
@@ -496,6 +640,14 @@ export async function saveExtendedAIConfig(
       updates.policies !== undefined
         ? sanitizePoliciesConfig(updates.policies)
         : current.policies,
+    branches: updates.branches !== undefined ? sanitizeBranches(updates.branches) : current.branches,
+    bulkPricing: updates.bulkPricing !== undefined ? sanitizeBulkPricing(updates.bulkPricing) : current.bulkPricing,
+    paymentDetails:
+      updates.paymentDetails !== undefined ? sanitizePaymentDetails(updates.paymentDetails) : current.paymentDetails,
+    requiredCustomerFields:
+      updates.requiredCustomerFields !== undefined
+        ? sanitizeRequiredCustomerFields(updates.requiredCustomerFields)
+        : current.requiredCustomerFields,
     draftVersion: (current.draftVersion || 1) + 1,
   };
 

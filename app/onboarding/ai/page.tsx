@@ -51,7 +51,7 @@ export default async function AIOnboardingPage({
         <header>
           <h1 className="text-2xl font-bold">AI Business Front Desk — Self-Service Setup</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Configure your Business Brain, preview your AI assistant safely, verify readiness, and publish live.
+            Tell JATA how your business works. The answers become this business&apos;s digital front desk.
           </p>
         </header>
 
