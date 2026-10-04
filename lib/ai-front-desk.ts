@@ -128,6 +128,17 @@ export function detectPromptInjection(message: string): { isInjection: boolean; 
   return { isInjection: false };
 }
 
+/**
+ * An item phrase inside a request. Letters, digits, spaces and hyphens only: a dot is accepted
+ * solely as the decimal point of a grade ("32.5", "42.5N"), so a sentence can never be swallowed
+ * whole into the candidate just because it contains a number.
+ */
+const ITEM_PHRASE_CAPTURE = "([a-z0-9][a-z0-9\\s-]{1,40}?(?:[.,]\\d{1,3}[a-z]{0,2})?)";
+const QUANTITY_CAPTURE =
+  "(?:(?:\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\\s*(?:of\\s+)?|\\d{1,3}[.,]\\d{1,3}\\s+)?";
+/** Sentence-final punctuation the phrase may end with. */
+const PHRASE_END = "(?:\\?|[.!]|$)";
+
 function extractRequestedProductCandidate(
   message: string,
 ): { candidate: string; frame: ProductRequestFrame } | null {
@@ -135,24 +146,39 @@ function extractRequestedProductCandidate(
   if (isBareDeliveryFollowUp(m)) return null;
   const patterns: Array<{ pattern: RegExp; frame: ProductRequestFrame }> = [
     {
-      pattern: /(?:how\s+much\s+(?:is|are|for)\s+(?:the\s+|a\s+|an\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i,
+      pattern: new RegExp(
+        `(?:how\\s+much\\s+(?:is|are|for)\\s+(?:the\\s+|a\\s+|an\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
       frame: "price",
     },
     {
-      pattern: /(?:do\s+you\s+(?:have|sell|stock)\s+(?:any\s+|the\s+|a\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i,
+      pattern: new RegExp(
+        `(?:do\\s+you\\s+(?:have|sell|stock)\\s+(?:any\\s+|the\\s+|a\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
+      frame: "availability",
+    },
+    {
+      pattern: new RegExp(`(?:price\\s+of\\s+(?:the\\s+|a\\s+)?)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"),
       frame: "price",
     },
-    { pattern: /(?:price\s+of\s+(?:the\s+|a\s+)?)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
-    { pattern: /(?:bei\s+ya\s+)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
-    { pattern: /(?:mnauza\s+)([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$)/i, frame: "price" },
+    { pattern: new RegExp(`(?:bei\\s+ya\\s+)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"), frame: "price" },
     {
-      pattern: /(?:(?:i\s+need|i\s+want|order|buy|get\s+me|give\s+me|can\s+i\s+get|let\s+me\s+have)\s+)(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s.-]{1,40}?)(?:\?|$|\.|\!)/i,
+      pattern: new RegExp(`(?:mnauza\\s+)${ITEM_PHRASE_CAPTURE}${PHRASE_END}`, "i"),
+      frame: "availability",
+    },
+    {
+      pattern: new RegExp(
+        `(?:(?:i\\s+need|i\\s+want|order|buy|get\\s+me|give\\s+me|can\\s+i\\s+get|let\\s+me\\s+have)\\s+)${QUANTITY_CAPTURE}${ITEM_PHRASE_CAPTURE}${PHRASE_END}`,
+        "i",
+      ),
       frame: "order",
     },
     {
       // A bare whole-message line ("50kg Savannah cement", "Savannah 42.5"). Anchored so that a
       // trailing word inside a longer sentence is never mistaken for a product name.
-      pattern: /^(?:(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\s*(?:kg|g|bags?|pieces?|pcs?|plates?|portions?)?\s*(?:of\s+)?)?([a-z0-9][a-z0-9\s.-]{1,40}?)$/i,
+      pattern: new RegExp(`^${QUANTITY_CAPTURE}${ITEM_PHRASE_CAPTURE}[.!]?$`, "i"),
       frame: "bare",
     },
   ];

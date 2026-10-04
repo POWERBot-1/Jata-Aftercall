@@ -819,6 +819,13 @@ async function progressOrder(params: {
     unlistedItems.length > 0
       ? ` Note: I don't have ${unlistedItems.join(", ")} listed, so it is not included in this cart.`
       : "";
+  // The missed demand for that item is recorded the same way the front-desk unlisted-product branch
+  // records it, so a mixed order does not lose the signal (review observation OBS-4).
+  if (!params.preview) {
+    for (const item of unlistedItems) {
+      await recordDemandInsight(params.businessId, "UNAVAILABLE_PRODUCT", item);
+    }
+  }
   const missing = missingOrderDetails(nextConv, brain, params.deliveryMention || referring);
   const tomorrow = isPreorderIntent(message)
     ? brain.extendedConfig.preordersAllowed

@@ -82,9 +82,11 @@ export function singularize(word: string): string {
   const lower = word.toLowerCase().trim();
   if (lower === "chips" || lower === "fries" || lower.length <= 3) return lower;
   if (lower.endsWith("ies") && lower.length > 4) return `${lower.slice(0, -3)}y`;
-  if (lower.endsWith("es") && lower.length > 4 && !lower.endsWith("oes") && !lower.endsWith("ses")) {
-    return lower.slice(0, -2);
-  }
+  // Only -es plurals built on a sibilant stem drop the whole "-es" (boxes, watches, dishes,
+  // glasses, tomatoes). Stems that already end in -e keep it: pieces → piece, plates → plate,
+  // boxes → box. The previous rule turned "pieces" into "piec", which made ordinary
+  // "3 pieces" corrections look like unknown product tokens.
+  if (/(?:ch|sh|ss|x|o)es$/.test(lower) && lower.length > 4) return lower.slice(0, -2);
   if (lower.endsWith("s") && !lower.endsWith("ss")) return lower.slice(0, -1);
   return lower;
 }
@@ -101,6 +103,8 @@ export function contentTokens(text: string): string[] {
 const UNIT_OR_PACK_TOKENS = new Set([
   "50kg", "25kg", "20kg", "10kg", "5kg", "1kg", "kg", "kgs",
   "bag", "bags", "piece", "pieces", "plate", "plates", "portion", "portions", "pcs", "pc",
+  "box", "boxes", "bottle", "bottles", "carton", "cartons", "unit", "units", "tin", "tins",
+  "crate", "crates", "pack", "packs", "packet", "packets", "sachet", "sachets",
 ]);
 
 /** Category nouns and pack sizes are not a brand or model. */
@@ -143,7 +147,7 @@ export function unrecognizedProductTokens(
   // Conversational/venue words are not brand evidence: "cement for construction" is a
   // category-level request, so it must not block a catalogue answer as if it named a product.
   return identityTokens(message, generic).filter(
-    (token) => !known.has(token) && !NON_PRODUCT_WORDS.has(token),
+    (token) => !known.has(token) && !isNonProductWord(token),
   );
 }
 
@@ -194,7 +198,58 @@ const NON_PRODUCT_WORDS = new Set<string>([
   "site", "sites", "project", "projects", "building", "buildings", "construction", "mjengo",
   "home", "house", "office", "shop", "store", "farm", "school", "church", "hospital", "hotel",
   "plot", "land", "yard", "compound", "warehouse", "factory", "apartment", "estate",
+  // facilities and channels a business may or may not offer — questions about them never name
+  // an unlisted product the business sells
+  "wifi", "wi-fi", "internet", "website", "parking", "branch", "branches", "shop", "shops",
+  // verbs that carry a correction or an instruction rather than an item
+  "mean", "means", "meant", "meaning", "forget", "forgot", "remember", "remind", "repeat",
+  "resend", "check", "checks", "checking", "checked", "change", "changes", "changed", "changing",
+  "add", "adds", "added", "adding", "update", "updates", "updated", "updating",
+  "take", "takes", "taking", "took", "taken",
+  // transaction verbs — they describe how the item is acquired, never what it is
+  "buy", "buys", "buying", "bought", "purchase", "purchases", "purchasing",
 ]);
+
+/**
+ * Discourse markers, corrections and acknowledgements. They introduce or correct a message but
+ * never identify the item being discussed, so they can neither make a phrase a product nor add
+ * product evidence to it ("Actually 20 bags." is a quantity correction, not an item).
+ */
+const CONVERSATIONAL_FILLER_WORDS = new Set<string>([
+  "actually", "maybe", "instead", "exactly", "basically", "honestly", "perhaps", "probably",
+  "definitely", "certainly", "surely", "possibly", "anyway", "however", "otherwise", "really",
+  "quite", "alright", "roughly", "only", "even", "mostly", "finally", "meanwhile", "sorry",
+  "please", "yes", "just", "now", "today", "tomorrow", "again", "also", "then", "well", "hmm",
+  "so", "and",
+]);
+
+/** Conversational words are never product identity, whatever list they come from. */
+function isNonProductWord(token: string): boolean {
+  return NON_PRODUCT_WORDS.has(token) || CONVERSATIONAL_FILLER_WORDS.has(token);
+}
+
+/**
+ * Clause glue: function words that join a clause but cannot be part of an item name. A phrase that
+ * still contains one of them is a sentence rather than an item ("2 bags is enough", "budget is
+ * around 20,000", "cement that is cheap"), so any number inside it is not product evidence.
+ */
+const CLAUSE_WORDS = new Set<string>([
+  "am", "is", "are", "was", "were", "be", "been", "being",
+  "will", "would", "shall", "should", "can", "could", "may", "might", "must",
+  "do", "does", "did", "done", "have", "has", "had",
+  "i", "we", "you", "they", "he", "she", "it", "this", "that", "these", "those", "there", "here",
+  "what", "which", "who", "whom", "whose", "why", "how", "when", "where",
+  "but", "or", "if", "because", "than", "too", "very", "much", "many", "more", "most", "less",
+  "least", "enough", "around", "about", "like", "still", "yet", "ever", "never", "always",
+]);
+
+function containsClauseGlue(phrase: string): boolean {
+  return (phrase || "")
+    .split(/\s+/)
+    .map((token) => token.toLowerCase().replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean)
+    .some((token) => CLAUSE_WORDS.has(token) || CLAUSE_WORDS.has(singularize(token)));
+}
 
 const PHONE_LIKE_PATTERN = /\b\d{9,}\b/;
 
@@ -231,26 +286,74 @@ export function unlistedProductTokens(
       !catalogueIdentity.has(token) &&
       !hints.has(token) &&
       !NON_IDENTITY_TOKENS.has(token) &&
-      !NON_PRODUCT_WORDS.has(token) &&
+      !isNonProductWord(token) &&
       !isUnitOrNumericToken(token),
   );
 }
 
-/** How a candidate was captured: an explicit price/availability question, an order phrase, or a bare line. */
-export type ProductRequestFrame = "price" | "order" | "bare";
+/** How a candidate was captured: a price question, an availability question, an order phrase, or a bare line. */
+export type ProductRequestFrame = "price" | "availability" | "order" | "bare";
 
 const QUANTITY_UNIT_PATTERN =
   /\b\d{1,4}\s*(?:x\s*|×\s*)?(?:kg|kgs|g|gm|gms|bags?|pieces?|pcs?|pc|plates?|portions?|packs?|packets?)\b/i;
 const MODEL_GRADE_PATTERN = /\d+[.,]\d+/;
 
+const PACKAGING_UNIT_TEXT = "kg|kgs|g|gm|gms|bags?|pieces?|pcs?|pc|plates?|portions?|packs?|packets?";
+
+/**
+ * Quantity or grade sitting immediately in front of the item phrase ("10 bags of Savannah",
+ * "42.5 Dangote"). Such a prefix belongs to that item; a quantity anywhere else in the sentence
+ * does not, which is what keeps "Actually 20 bags." from becoming a product.
+ */
+function hasItemEvidencePrefix(message: string, phrase: string): boolean {
+  if (!phrase.trim()) return false;
+  const escaped = escapeForRegex(phrase.trim());
+  const quantity = `(?:\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty)\\s*(?:${PACKAGING_UNIT_TEXT})?\\s*(?:of\\s+)?`;
+  const grade = "\\d{1,3}[.,]\\d{1,3}[a-z]{0,2}\\s+";
+  return new RegExp(`(?:^|[^a-z0-9])(?:${quantity}|${grade})${escaped}(?:$|[^a-z0-9])`, "i").test(message);
+}
+
+/**
+ * The item phrase inside a captured candidate. Conversational words at either edge are not part of
+ * the item, so they can neither identify a product nor supply product evidence:
+ * "Actually 20 bags." is a quantity correction, not an item, and "savannah cement for my site"
+ * still names savannah cement. Quantities, pack sizes and grade numbers are deliberately kept,
+ * because they belong to the item when the item is real ("42.5 Dangote", "50kg Savannah cement").
+ */
+export function productPhrase(candidate: string): string {
+  const parts = (candidate || "").trim().split(/\s+/).filter(Boolean);
+  const conversational = (token: string): boolean => {
+    const clean = token.toLowerCase().replace(/[^a-z0-9.]/g, "");
+    if (!clean) return true;
+    const singular = singularize(clean);
+    // Pack sizes and units ("bags", "pieces", "kg") are part of the item phrase, never padding:
+    // they carry the quantity evidence the caller needs ("20 bags", "50kg savannah cement").
+    if (UNIT_OR_PACK_TOKENS.has(clean) || UNIT_OR_PACK_TOKENS.has(singular)) return false;
+    return (
+      isNonProductWord(clean) ||
+      isNonProductWord(singular) ||
+      CONNECTOR_WORDS.has(clean) ||
+      CONNECTOR_WORDS.has(singular) ||
+      STOPWORDS.has(clean) ||
+      STOPWORDS.has(singular)
+    );
+  };
+  let start = 0;
+  let end = parts.length;
+  while (start < end && conversational(parts[start])) start += 1;
+  while (end > start && conversational(parts[end - 1])) end -= 1;
+  return parts.slice(start, end).join(" ");
+}
+
 /**
  * Deterministic plausibility test for an unlisted-product determination.
  *
- * A message only names a product the business does not carry when it carries product evidence
- * beyond a bare noun: an explicit price/availability question, a quantity with packaging, a
- * model/grade number, a catalogue category noun, or a multi-token item phrase. Greetings,
- * contact details, place names and generic service words never qualify
- * (PR #34 DEFECT-1 remediation).
+ * A message only names a product the business does not carry when its item phrase carries credible
+ * product evidence: a grade/model number, a quantity with packaging, a catalogue category noun, or
+ * (in an availability/order phrase) a multi-token item name. The evidence must sit inside the item
+ * phrase itself — a number or grade elsewhere in the sentence is never product evidence, so
+ * "Actually 20 bags." stays a conversation rather than becoming an unavailable product
+ * (PR #34 remediation regression).
  */
 export function detectUnlistedProductRequest(input: {
   message: string;
@@ -259,19 +362,29 @@ export function detectUnlistedProductRequest(input: {
   products: CatalogueProduct[];
   extraKnownPhrases?: string[];
 }): { plausible: boolean; tokens: string[] } {
-  const tokens = unlistedProductTokens(input.candidate, input.products, input.extraKnownPhrases || []);
+  const phrase = productPhrase(input.candidate);
+  const tokens = unlistedProductTokens(phrase, input.products, input.extraKnownPhrases || []);
   if (tokens.length === 0) return { plausible: false, tokens };
-  if (PHONE_LIKE_PATTERN.test(input.candidate)) return { plausible: false, tokens };
+  if (PHONE_LIKE_PATTERN.test(input.message) || PHONE_LIKE_PATTERN.test(phrase)) {
+    return { plausible: false, tokens };
+  }
+  // A sentence that still carries clause glue is ordinary conversation, whatever numbers or
+  // grades it happens to contain.
+  if (containsClauseGlue(phrase)) return { plausible: false, tokens };
+  // "How much is the pizza?" names an item the business may not carry, so a pure price question
+  // stays answerable. Availability questions ("Do you have wifi?", "Do you sell in Karen?") and
+  // order phrases must show one of the product evidence kinds above.
   if (input.frame === "price") return { plausible: true, tokens };
   const active = input.products.filter((product) => product.isActive !== false);
   const categoryTokens = new Set(active.flatMap((product) => contentTokens(product.category || "")));
-  const hasCategoryNoun = contentTokens(input.candidate).some((token) => categoryTokens.has(token));
-  const plausible =
-    QUANTITY_UNIT_PATTERN.test(input.message) ||
-    MODEL_GRADE_PATTERN.test(input.message) ||
-    hasCategoryNoun ||
-    (input.frame === "order" && tokens.length >= 2);
-  return { plausible, tokens };
+  const phraseTokens = contentTokens(phrase);
+  const evidence =
+    QUANTITY_UNIT_PATTERN.test(phrase) ||
+    MODEL_GRADE_PATTERN.test(phrase) ||
+    phraseTokens.some((token) => categoryTokens.has(token)) ||
+    ((input.frame === "order" || input.frame === "availability") && tokens.length >= 2) ||
+    hasItemEvidencePrefix(input.message, phrase);
+  return { plausible: evidence, tokens };
 }
 
 const CONNECTOR_WORDS = new Set([
@@ -280,10 +393,10 @@ const CONNECTOR_WORDS = new Set([
 ]);
 
 /**
- * Trim trailing conversational, venue and connector words from a reported item so the customer
- * sees the item itself ("savannah cement") instead of the whole sentence fragment
- * ("savannah cement for my site"). Words that belong to a configured product name or category
- * are never trimmed.
+ * Trim leading and trailing conversational, venue and connector words from a reported item so the
+ * customer sees the item itself ("savannah cement") instead of the whole sentence fragment
+ * ("savannah cement for my site", "actually 20 bags"). Words that belong to a configured product
+ * name or category are never trimmed.
  */
 export function productLabel(candidate: string, products: CatalogueProduct[] = []): string {
   const parts = (candidate || "").trim().split(/\s+/).filter(Boolean);
@@ -304,13 +417,15 @@ export function productLabel(candidate: string, products: CatalogueProduct[] = [
       CONNECTOR_WORDS.has(singular) ||
       STOPWORDS.has(clean) ||
       STOPWORDS.has(singular) ||
-      NON_PRODUCT_WORDS.has(clean) ||
-      NON_PRODUCT_WORDS.has(singular)
+      isNonProductWord(clean) ||
+      isNonProductWord(singular)
     );
   };
+  let start = 0;
   let end = parts.length;
-  while (end > 1 && trimmable(parts[end - 1])) end -= 1;
-  return parts.slice(0, end).join(" ");
+  while (end > start + 1 && trimmable(parts[end - 1])) end -= 1;
+  while (start < end - 1 && trimmable(parts[start])) start += 1;
+  return parts.slice(start, end).join(" ");
 }
 
 function escapeForRegex(value: string): string {
@@ -428,8 +543,34 @@ export function extractQuantityNear(message: string, productName: string): numbe
   return parseQuantityToken(matches[matches.length - 1][1]);
 }
 
+/**
+ * Prefixes that only carry a correction of a live cart ("Actually 20 bags.", "Make it 20 bags.").
+ * Skipping them lets the quantity belong to the cart instead of the filler being read as an item.
+ */
+const STANDALONE_QUANTITY_PREFIX_WORDS = new Set<string>([
+  ...CONVERSATIONAL_FILLER_WORDS,
+  "make", "it", "let", "lets",
+]);
+
 export function extractStandaloneQuantity(message: string): number | null {
-  const text = (message || "").toLowerCase().trim();
+  const words = (message || "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  let start = 0;
+  while (
+    start < words.length - 1 &&
+    STANDALONE_QUANTITY_PREFIX_WORDS.has(words[start].replace(/[^a-z']/g, ""))
+  ) {
+    start += 1;
+  }
+  const text = words.slice(start).join(" ");
+  if (start > 0) {
+    // Behind a conversational prefix only an explicit number plus packaging is a cart
+    // correction ("Actually 20 bags"). A bare grade ("Maybe 42.5.") is not a quantity.
+    const correction = text.match(
+      /^(\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty|moja|mbili|tatu|nne|tano|kumi|ishirini)\s*(?:kg|kgs|g|gm|gms|bags?|pieces?|pcs?|pc|plates?|portions?|packs?|packets?)\b/,
+    );
+    if (!correction) return null;
+    return parseQuantityToken(correction[1]);
+  }
   const match = text.match(
     /\b(?:give me|i need|i want|i'd like|i would like|nataka|naomba|nipe|get me|add|order|buy|can i get|let me have)\s+(\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|twenty|moja|mbili|tatu|nne|tano|kumi|ishirini)\b/,
   );
