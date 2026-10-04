@@ -29,8 +29,6 @@ export type WebhookInput = {
   payload: Record<string, unknown>;
   headers: Headers;
   url: URL;
-  /** Only JATA operators replaying an event through the internal admin path may set this. */
-  skipSignatureVerification?: boolean;
   client?: PaymentClient;
   now?: Date;
   fetchImpl?: typeof fetch;
@@ -75,9 +73,14 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
   }
 
   // ── 1. Authenticate (§35) ────────────────────────────────────────────────
-  const verification = input.skipSignatureVerification
-    ? { ok: true as const, eventId: "", eventType: "" }
-    : await adapter.verifyEvent({ rawBody: input.rawBody, headers: input.headers, payload: input.payload, url: input.url }, ctx);
+  // Unconditional: there is no flag, no internal caller and no replay path that may skip this.
+  // Every stored event that reached the point of being applied was authenticated first, so an
+  // event JATA refused at the door can never be re-run — not by an operator, not by a retry, and
+  // not by anything that reuses this function (§35, §120).
+  const verification = await adapter.verifyEvent(
+    { rawBody: input.rawBody, headers: input.headers, payload: input.payload, url: input.url },
+    ctx,
+  );
 
   const eventIdFromPayload = () => {
     const id = input.payload?.id;
@@ -122,7 +125,7 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
         provider,
         providerEventId: eventId,
         eventType: eventType || "UNKNOWN",
-        signatureVerified: !input.skipSignatureVerification,
+        signatureVerified: true,
         status: "RECEIVED",
         payload: { type: eventType || "UNKNOWN" },
       },
@@ -173,7 +176,7 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
       await handleUnmatched(client, { provider, outcome, eventRowId, destinationIdentified: false });
     }
 
-    if (!input.skipSignatureVerification && input.client === undefined) {
+    if (input.client === undefined) {
       // Notifications are delivered outside the money path (§100). The business id is known for a
       // settled payment; an unmatched event is surfaced through reconciliation instead.
       const businessId = result.kind === "settled" ? result.businessId : null;

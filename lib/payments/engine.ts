@@ -141,6 +141,10 @@ export async function applyConfirmation(params: {
 }): Promise<ApplyResult> {
   const { provider, event } = params;
 
+  // A settlement that cannot be booked exactly as the customer paid throws rather than returning:
+  // the whole confirmation must roll back, so no sale and no paid state are left behind. The
+  // refusal is then caught here — outside the failed transaction — so the money that arrived is
+  // still recorded for a person instead of vanishing with the rollback (§42, §44, §98).
   const outcome = await inTransaction(params.client, async (tx: PaymentClient) => {
     const located = await locateTransaction(provider, event, tx);
     const transaction = located.transaction;
@@ -281,7 +285,11 @@ export async function applyConfirmation(params: {
     if (!saleId && context?.pos) {
       const settled = await settlePosSale({ businessId, transaction, event, context, client: tx });
       if (!isOk(settled)) {
-        // Rolling back here is deliberate: the caller records the exception outside the transaction.
+        // The provider confirmed the money, but JATA will not book a sale that no longer matches it
+        // (the cart was re-priced, stock ran out, credit was refused). The payment stays CONFIRMED
+        // — never PAID — and the arrival is recorded as an exception a person can act on. Silence
+        // here would be the one outcome the spec forbids: money arriving with no record (§42, §44).
+        await recordFailedSettlement({ businessId, transaction, event, reason: settled.code, client: tx });
         return { kind: "exception" as const, reason: settled.code, transactionId: transaction.id };
       }
       saleId = settled.saleId;
@@ -341,6 +349,29 @@ export async function applyConfirmation(params: {
       saleId,
       status: paidStatus,
       duplicate: false,
+    };
+  }).catch(async (error: unknown) => {
+    if (!(error instanceof AmountDriftError)) throw error;
+    // The cart re-priced between the request and the customer's payment, so no sale was booked and
+    // the confirmation rolled back: the payment is not paid and no receipt exists. This branch is
+    // reached outside that rolled-back transaction, which is the only place the arrival can still
+    // be recorded (§42, §44).
+    const transaction = await (params.client ?? prisma).paymentTransaction
+      .findFirst({ where: { id: error.transactionId } })
+      .catch(() => null);
+    if (transaction) {
+      await recordFailedSettlement({
+        businessId: String(transaction.businessId),
+        transaction,
+        event,
+        reason: "AMOUNT_DRIFT",
+        client: params.client ?? prisma,
+      });
+    }
+    return {
+      kind: "exception" as const,
+      reason: "AMOUNT_DRIFT",
+      transactionId: error.transactionId,
     };
   });
 
@@ -422,6 +453,49 @@ async function settlePosSale(params: {
   const status: PaymentStatus = Number(outcome.totals?.balanceKES ?? 0) > 0 ? "PARTIALLY_PAID" : "PAID";
   return { ok: true, saleId: String(outcome.sale.id), status, receiptNumber: outcome.sale.receiptNumber ?? null };
 }
+
+/**
+ * Records a provider-confirmed payment JATA could not book, so it appears in the merchant's books
+ * and in JATA operations instead of only in the provider's records (§42, §44, §43).
+ *
+ * The payment itself is deliberately left alone: it is not PAID (no sale exists) and it is not
+ * FAILED (the provider did not fail). Whoever looks at it sees the confirmed amount next to what
+ * the sale would have cost, with plain-language notes, and decides what to do.
+ */
+async function recordFailedSettlement(params: {
+  businessId: string;
+  transaction: any;
+  event: ConfirmationEvent;
+  reason: string;
+  client: PaymentClient;
+}) {
+  const { businessId, transaction, event, reason, client } = params;
+  const notes = SETTLEMENT_FAILURE_NOTES[reason] ?? "The provider confirmed this payment, but the sale it was for could not be recorded as it stands.";
+  await recordReconciliationException({
+    businessId,
+    transactionId: transaction.id,
+    provider: transaction.provider,
+    providerReference: transaction.providerReference ?? event.providerReference ?? null,
+    result: "UNCONFIRMED",
+    expectedAmountMinor: transaction.amountMinor,
+    receivedAmountMinor: event.amountMinor,
+    notes,
+  }, client).catch(() => null);
+}
+
+/** Plain language for the reasons a confirmed payment could not be booked (§86: no codes to users). */
+const SETTLEMENT_FAILURE_NOTES: Record<string, string> = {
+  AMOUNT_DRIFT:
+    "The provider confirmed this payment, but the sale re-priced to a different total after the customer paid, so JATA did not book it. Review the sale and the payment before treating it as settled.",
+  SHORT_PAYMENT:
+    "The provider confirmed this payment, but the sale now costs more than the customer paid, so JATA did not book it. Review the sale and the payment before treating it as settled.",
+  INSUFFICIENT_STOCK:
+    "The provider confirmed this payment, but the items were no longer in stock, so JATA did not book the sale. The money arrived and needs a decision.",
+  CREDIT_APPROVAL_REQUIRED:
+    "The provider confirmed this payment, but the credit on the rest of the sale still needs approval, so JATA did not book it.",
+  CREDIT_DECLINED:
+    "The provider confirmed this payment, but credit on the rest of the sale was refused, so JATA did not book it.",
+};
 
 export class AmountDriftError extends Error {
   constructor(public transactionId: string, public rePricedMinor: number, public paidMinor: number) {

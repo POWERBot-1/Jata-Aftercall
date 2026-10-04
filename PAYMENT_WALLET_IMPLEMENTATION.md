@@ -183,11 +183,14 @@ always work, and without a gateway external channels are recorded as **SKIPPED**
 - **Integration, wallet journey** (`tests/integration/payments-journey.test.ts`): a server-priced
   request → instructions → provider confirmation → sale + stock + receipt + reconciliation +
   notifications in one transaction; a repeated confirmation changes nothing; an amount that does not
-  match is refused and recorded; an `EXPIRED` payment still settles on a late confirmation; two
-  sales get two distinct payments.
+  match is refused and recorded; **a confirmed payment JATA cannot book — the cart re-priced either
+  way while the customer was paying — is refused, never settled at the wrong amount, and recorded as
+  a durable exception with plain-language notes instead of being thrown away**; an `EXPIRED` payment
+  still settles on a late confirmation; two sales get two distinct payments.
 - **Integration, provider events** (`tests/integration/payments-webhooks.test.ts`): M-PESA STK
   confirmation applied once, with a byte-identical retry changing nothing; a wrong callback token
-  refused (HTTP 401); no
+  refused (HTTP 401); an event that tries to carry the removed "skip signature" flag is refused like
+  any other unauthenticated callback; no
   token registered → refused; a failure callback becomes `FAILED`, never PAID; money that cannot be
   attributed is recorded as `UNKNOWN_PAYMENT` against the destination's business; Paystack
   `charge.success` re-verified with the provider before applying; a forged signature refused; a
@@ -220,6 +223,30 @@ always work, and without a gateway external channels are recorded as **SKIPPED**
   and by the additive-migration guard.
 - **Outbound SMS/WhatsApp delivery**: no gateway is configured; those channels are recorded as
   SKIPPED rather than sent.
+
+### Known limitations found in the review of this change (2026-10-04)
+
+These are honest gaps, not defects that hide money: each one fails closed, and none can create a
+paid or refunded state that the provider did not confirm.
+
+1. **M-PESA reversals are only correct for till/PayBill payments.** The transaction stores the
+   provider's *attempt handle* — for an STK payment that is the CheckoutRequestID (`ws_CO_…`), the
+   value Daraja quotes in its callbacks — while Daraja's reversal API wants the M-PESA receipt
+   number (`S…`/`R…`). A refund of an STK-paid sale is therefore refused by Safaricom and recorded
+   as `FAILED` with its reason and a reconciliation exception; nothing is marked refunded. C2B
+   payments store the receipt, so they reverse correctly. Fixing it means storing the receipt on the
+   transaction at confirmation time (the receipt is already retained in the sanitized
+   `PaymentEvent.payload`).
+2. **The refund cap has no compare-and-set.** `requestRefund` validates against the last committed
+   `amountRefundedMinor`, so two *simultaneous* refund requests for the same payment could both
+   reach the provider before either is recorded. Sequential refunds are capped correctly, and the
+   provider still refuses a second payout it cannot fund, so the exposure is a duplicate provider
+   call rather than phantom state. A conditional update (or a per-payment refund lock) closes it.
+3. **The local integration suites run against an in-memory Prisma double** that does not model
+   transactions/rollback or unique constraints, so rollback-dependent behaviour is not visible to
+   them (this is how the settlement-failure defect fixed in this change stayed hidden). CI applies
+   the migration and runs both database-backed journeys against real Postgres, but the payment
+   suites themselves are still the fake.
 
 **The wallet must not be described as PRODUCTION READY until a real provider confirmation has been
 observed end to end** (§129).

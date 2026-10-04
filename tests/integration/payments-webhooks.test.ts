@@ -150,6 +150,23 @@ describe("M-PESA callbacks (§35, §90)", () => {
     expect(fake().rows("paymentEvent")[0]).toMatchObject({ status: "REJECTED", signatureVerified: false });
   });
 
+  it("cannot be talked into skipping authentication by any caller (§35, §120)", async () => {
+    // The replay path that used to be able to set a skip flag is gone; this proves the pipeline
+    // refuses an unauthenticated event even when a caller passes the flag it used to honour.
+    const forged = {
+      ...mpesaRequest(mpesaStkPayload(), "wrong-token"),
+      skipSignatureVerification: true,
+    } as unknown as Parameters<typeof applyProviderEvent>[0];
+
+    const result = await applyProviderEvent(forged);
+    expect(result.status).toBe("rejected");
+    expect(result.httpStatus).toBe(401);
+    expect(fake().rows("paymentTransaction")[0].status).toBe("PENDING");
+    expect(fake().rows("paymentEvent")[0]).toMatchObject({ status: "REJECTED", signatureVerified: false });
+    // Nothing was applied and no reconciliation record was invented for it either.
+    expect(fake().rows("paymentReconciliation")).toHaveLength(0);
+  });
+
   it("refuses a Daraja-shaped callback when JATA has no token registered at all", async () => {
     delete process.env.MPESA_CALLBACK_TOKEN;
     expect(readMpesaConfig().callbackToken).toBe("");

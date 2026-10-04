@@ -271,6 +271,64 @@ describe("a provider confirmation settles the sale exactly once (§25, §33, §4
     expect(fake().rows("paymentTransaction")[0].status).toBe("PAID");
   });
 
+  /**
+   * A confirmed payment JATA cannot book must never disappear. The money is real, so the merchant's
+   * books and JATA operations have to show it and say, in plain language, why it was not settled —
+   * the one outcome the specification forbids is money arriving with no record of it (§42, §44).
+   *
+   * Regression: this used to throw out of the whole webhook pipeline for the "re-priced lower"
+   * variant (rolling back the confirmation and recording nothing), and for every variant it wrote
+   * only an event error code — nothing a merchant or an operator could ever see.
+   */
+  it("records money it cannot book instead of losing it, when the cart got cheaper (§42, §44)", async () => {
+    await requestSale();
+    const row = fake().rows("paymentTransaction")[0];
+    expect(row.amountMinor).toBe(35_000);
+
+    // The merchant edits a price while the customer is paying: 2 × 20 + 250 = 290 for a 350 payment.
+    fake().rows("posProduct").find((product) => product.id === "p_a1")!.priceKES = 20;
+
+    const result = await applyConfirmation({ provider: "MPESA", event: confirmationFor(row), client: prisma });
+
+    // Refused — not thrown, and not settled at the wrong amount.
+    expect(result.kind).toBe("exception");
+    if (result.kind !== "exception") return;
+    expect(result.reason).toBe("AMOUNT_DRIFT");
+
+    const exception = fake().rows("paymentReconciliation").find((entry) => entry.result === "UNCONFIRMED");
+    expect(exception).toBeTruthy();
+    expect(exception?.businessId).toBe("bizA");
+    expect(exception?.transactionId).toBe(row.id);
+    expect(exception?.expectedAmountMinor).toBe(35_000);
+    // Plain language, the amounts, and what a person should do next.
+    expect(String(exception?.notes)).toMatch(/re-priced|different total/i);
+    expect(String(exception?.notes)).not.toMatch(/\b(AMOUNT_DRIFT|SHORT_PAYMENT)\b/);
+
+    // …and the trail says what happened, rather than claiming an amount mismatch that did not occur.
+    const actions = fake().rows("paymentAuditEvent").map((event) => event.action);
+    expect(actions).toContain("PAYMENT_NEEDS_REVIEW");
+    expect(actions).not.toContain("PAYMENT_AMOUNT_MISMATCH");
+  });
+
+  it("records money it cannot book when the cart got more expensive (§42, §44)", async () => {
+    await requestSale();
+    const row = fake().rows("paymentTransaction")[0];
+
+    // 2 × 100 + 250 = 450 for a 350 payment: the sale is now short.
+    fake().rows("posProduct").find((product) => product.id === "p_a1")!.priceKES = 100;
+
+    const result = await applyConfirmation({ provider: "MPESA", event: confirmationFor(row), client: prisma });
+    expect(result.kind).toBe("exception");
+    if (result.kind !== "exception") return;
+    expect(result.reason).toBe("SHORT_PAYMENT");
+
+    const exception = fake().rows("paymentReconciliation").find((entry) => entry.result === "UNCONFIRMED");
+    expect(exception?.businessId).toBe("bizA");
+    expect(exception?.receivedAmountMinor).toBe(35_000);
+    expect(String(exception?.notes)).toMatch(/costs more than the customer paid|not book/i);
+    expect(fake().rows("paymentAuditEvent").map((event) => event.action)).toContain("PAYMENT_NEEDS_REVIEW");
+  });
+
   it("never settles a payment twice across two different sales", async () => {
     await requestSale("till-tap-A");
     const firstRow = fake().rows("paymentTransaction")[0];

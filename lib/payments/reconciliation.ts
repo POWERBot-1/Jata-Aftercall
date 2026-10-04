@@ -8,7 +8,7 @@
  */
 
 import prisma from "@/lib/db";
-import { logPaymentAudit } from "./audit";
+import { logPaymentAudit, type PaymentAuditAction } from "./audit";
 import { db, type PaymentClient } from "./context";
 import type { ProviderKey } from "./types";
 
@@ -77,17 +77,28 @@ export async function recordReconciliationException(params: {
       notes: params.notes.slice(0, 500),
     },
   });
+  // The audit action says what happened, not what a catch-all default assumed: an exception is an
+  // amount mismatch only when the amounts are what did not line up (§86, §114).
   await logPaymentAudit({
     businessId: params.businessId,
     transactionId: params.transactionId ?? null,
     actorKind: "JATA_SYSTEM",
-    action: params.result === "UNKNOWN_PAYMENT" ? "PAYMENT_UNMATCHED" : "PAYMENT_AMOUNT_MISMATCH",
+    action: RECONCILIATION_AUDIT_ACTION[params.result] ?? "PAYMENT_NEEDS_REVIEW",
     summary: params.notes,
     beforeState: { expectedAmountMinor: expected },
     afterState: { receivedAmountMinor: received, differenceMinor: difference, result: params.result },
   }, client);
   return row;
 }
+
+/** One exception, one accurate audit action (§86: the trail must not claim something untrue). */
+const RECONCILIATION_AUDIT_ACTION: Record<string, PaymentAuditAction> = {
+  UNKNOWN_PAYMENT: "PAYMENT_UNMATCHED",
+  AMOUNT_MISMATCH: "PAYMENT_AMOUNT_MISMATCH",
+  DUPLICATE: "PAYMENT_NEEDS_REVIEW",
+  UNCONFIRMED: "PAYMENT_NEEDS_REVIEW",
+  MANUAL_MATCHED: "MANUAL_MATCH",
+};
 
 export type DailyReconciliation = {
   posSalesKES: number;
