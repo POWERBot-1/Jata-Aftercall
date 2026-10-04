@@ -1,7 +1,9 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPayments() {
+  await requireAdminPage();
   const payments = await prisma.payment.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { user: true, business: true } });
   return (
     <div>

@@ -1,7 +1,9 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AdminSubscriptions() {
+  await requireAdminPage();
   const subs = await prisma.subscription.findMany({ orderBy: { expiresAt: "asc" }, include: { business: true, plan: true, user: true } });
   return (
     <div>

@@ -1,9 +1,11 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 import AdminBusinessActions from "@/components/AdminBusinessActions";
 export const dynamic = "force-dynamic";
 
 
 export default async function AdminBusinesses({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  await requireAdminPage();
   const { q: query } = await searchParams;
   const q = (query || "").trim();
   const where = q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { slug: { contains: q, mode: "insensitive" as const } }] } : {};

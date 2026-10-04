@@ -4,6 +4,7 @@ import { activateSubscriptionForPayment, isWebhookProcessed, verifyTransaction, 
 import { logAudit } from "@/lib/audit";
 import { validatePaymentEvidence } from "@/lib/paymentVerification";
 import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
+import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -55,10 +56,30 @@ export async function POST(req: Request) {
         return NextResponse.json({ status: "partial_refund_requires_review" });
       }
       if (data.amount !== refundPayment.amount || data.currency !== refundPayment.currency) return NextResponse.json({ error: "Refund evidence did not match this payment." }, { status: 400 });
+      // A Business POS payment settles the separate POS subscription (§4, §80), so its refund must
+      // revoke the POS — and must leave the business's AFTERCALL page plan alone. Resolved from the
+      // stored plan, never from the webhook body.
+      const refundPlanKey = refundPayment.planId
+        ? (await prisma.planConfig.findUnique({ where: { id: refundPayment.planId }, select: { key: true } }))?.key ?? null
+        : null;
       await prisma.$transaction(async (tx) => {
         await tx.processedWebhook.create({ data: { id: eventId } });
         const changed = await tx.payment.updateMany({ where: { id: refundPayment.id, status: "PAID" }, data: { status: "REFUNDED" } });
-        if (changed.count && refundPayment.businessId) {
+        if (changed.count && refundPayment.businessId && refundPlanKey === POS_PLAN_KEY) {
+          await tx.posSubscription.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
+          await tx.posEntitlement.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
+          await tx.posConfiguration.updateMany({ where: { businessId: refundPayment.businessId, status: "LIVE" }, data: { status: "SUSPENDED" } });
+          await tx.posAuditEvent.create({
+            data: {
+              businessId: refundPayment.businessId,
+              actorId: refundPayment.userId,
+              action: "POS_SUSPENDED",
+              targetType: "PAYMENT",
+              targetId: refundPayment.id,
+              metadata: JSON.stringify({ reason: "REFUNDED" }),
+            },
+          });
+        } else if (changed.count && refundPayment.businessId) {
           await tx.subscription.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
           await tx.aIPackageEntitlement?.updateMany?.({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
         }

@@ -1,7 +1,9 @@
+import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCustomers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  await requireAdminPage();
   const { q: query } = await searchParams;
   const q = (query || "").trim();
   const where = q
