@@ -407,13 +407,17 @@ export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "S
   // balance increment still makes the write itself safe.
   const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
   if (typeof rawIdentifier !== "function") return;
-  const table = partyType === "SUPPLIER" ? "PosSupplier" : "PosCustomer";
-  try {
-    await client.$queryRaw`SELECT 1 FROM ${rawIdentifier(table)} WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
-  } catch {
-    // Raw SQL unsupported on this client: the atomic increment in applyBalanceChange still
-    // makes the write itself safe; the decision window is exercised by the real-Postgres suite.
-  }
+  // Quoted, and it has to be. Prisma's raw helper splices the string in verbatim, so an unquoted
+  // PosCustomer is folded to lower case by PostgreSQL and matches nothing — the table is created
+  // as "PosCustomer". The unquoted form failed with 42P01 ("relation \"poscustomer\" does not
+  // exist") on every call, which the bare catch below used to hide while leaving the caller's
+  // transaction aborted.
+  const table = partyType === "SUPPLIER" ? '"PosSupplier"' : '"PosCustomer"';
+  // No try/catch: see lockSaleRow. A failed statement aborts the transaction, and swallowing it
+  // here let the credit decision and the balance move run on inside a dead transaction, where
+  // the next statement failed with 25P02. The two capability guards above already cover a client
+  // that genuinely cannot run raw SQL.
+  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier(table)} WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
 }
 
 /**
@@ -438,7 +442,7 @@ export async function lockSaleRow(client: PosClient, businessId: string, saleId:
   // is aborted") and surfaced as an opaque engine error instead of the retryable conflict it
   // actually was. A deadlock or a lock timeout has to reach the caller so the transaction rolls
   // back cleanly and the caller can say so.
-  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier("PosSale")} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
+  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier('"PosSale"')} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
 }
 
 export async function listCreditEntries(
