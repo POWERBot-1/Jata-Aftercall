@@ -1,7 +1,8 @@
 import { emptyStateFor } from "@/lib/pos/presentation";
 import { formSpec } from "@/lib/pos/forms";
 import { listCustomers } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { RecordBoard } from "@/components/pos/RecordBoard";
 
 /**
@@ -16,7 +17,10 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosCustomersPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Customers are the customers module's read (§25).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_CUSTOMERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "customer");
 

@@ -24,7 +24,12 @@ export async function GET(_request: Request, context: RouteContext) {
     options: { permission: "VIEW_STAFF", fast: true },
     fallback: "We couldn't load your team.",
     handler: async ({ ctx }) => {
-      const [staff, branches] = await Promise.all([listStaff(businessId, { activeOnly: false }), listBranches(businessId)]);
+      // The roster is a business-wide record, but the locations a person can be assigned to are
+      // read under the actor's own scope, exactly as the locations API reads them (§16, §75).
+      const [staff, branches] = await Promise.all([
+        listStaff(businessId, { activeOnly: false }),
+        listBranches(businessId, undefined, { only: ctx.branchId }),
+      ]);
       const roles = resolveRoles(ctx.configuration).map((role) => ({
         key: role.key,
         name: role.name,

@@ -4,8 +4,9 @@ import { listCustomers, listOrders, listProducts } from "@/lib/pos/store";
 import { nextStates } from "@/lib/pos/workflow";
 import { resolveStates } from "@/lib/pos/workflow";
 import { sanitizeRange } from "@/lib/pos/validation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { OrderBoardClient } from "@/components/pos/OrderBoardClient";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { NewOrderPanel } from "@/components/pos/NewOrderPanel";
 import type { PosModuleKey } from "@/lib/pos/types";
 
@@ -31,13 +32,17 @@ export async function OrderScreen({
   openNew?: boolean;
   stateFilter?: string;
 }) {
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // The board reads orders for the actor's own scope — the same branch read the orders API
+  // enforces (§16, §75). A location's board shows that location's tickets, not the group's.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_ORDERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const activeWorkflow = workflowKey ?? configuration.orders.workflowKey;
   const range = sanitizeRange({}, 30);
 
   const [orders, products, customers] = await Promise.all([
-    listOrders(businessId, { range: { from: range.from, to: range.to }, workflowKey: workflowKey, take: 150 }),
+    listOrders(businessId, { range: { from: range.from, to: range.to }, workflowKey: workflowKey, branchId: workspace.branchId, take: 150 }),
     listProducts(businessId, { take: 300 }),
     configuration.customers.enabled ? listCustomers(businessId, { take: 200 }) : Promise.resolve([]),
   ]);

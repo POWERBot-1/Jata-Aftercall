@@ -2,14 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { channelLabel } from "@/lib/pos/receipt";
-import { findOrder } from "@/lib/pos/store";
+import { branchRecordInScope, findOrder } from "@/lib/pos/store";
 import { nextStates, stateLabel } from "@/lib/pos/workflow";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { MoveOrderPanel } from "@/components/pos/MoveOrderPanel";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * One order (§28, §29). Everything that has happened to it, and the moves the workflow allows
  * from where it stands now.
+ *
+ * An order is the orders module's read (§11, §25), so the page asks for `VIEW_ORDERS` — the same
+ * permission `GET /api/pos/:id/orders/:orderId` enforces — before the row is read. A direct URL
+ * is not a way around the board's gate.
  */
 
 export const dynamic = "force-dynamic";
@@ -18,9 +23,15 @@ type Props = { params: Promise<{ businessId: string; orderId: string }> };
 
 export default async function PosOrderDetailPage({ params }: Props) {
   const { businessId, orderId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_ORDERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const order = await findOrder(businessId, orderId);
   if (!order) notFound();
+  // A branch-bound clerk opens their own location's tickets only, exactly as the order API and
+  // the board read them (§16, §75): a guessed order id from another location is not found here
+  // rather than rendered.
+  if (!branchRecordInScope(workspace, order.branchId)) notFound();
 
   const states = nextStates(order.workflowKey, order.stateKey).map((state) => ({
     key: state.key,

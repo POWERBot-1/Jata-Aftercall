@@ -1,5 +1,6 @@
 import { listProducts, listPurchases, listSuppliers } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { PurchasesClient } from "@/components/pos/PurchasesClient";
 
 /**
@@ -15,11 +16,17 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosPurchasesPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Purchases belong to the suppliers module (§17).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SUPPLIERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
+  // Deliveries are received at one location, so the board shows the actor's own (§16, §75) —
+  // the same scope the purchases API applies. Suppliers and products are business-wide records
+  // and carry no location of their own.
   const [purchases, suppliers, products] = await Promise.all([
-    listPurchases(businessId, { take: 40 }),
+    listPurchases(businessId, { take: 40, branchId: workspace.branchId }),
     listSuppliers(businessId, { take: 200 }),
     listProducts(businessId, { take: 400 }),
   ]);

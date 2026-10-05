@@ -11,6 +11,7 @@
  */
 
 import prisma from "@/lib/db";
+import { baselineConfiguration, normalizeConfiguration } from "./configuration";
 import { hasCapability } from "./capabilities";
 import { decideCredit, validateRepayment, RECEIVABLE } from "./credit";
 import { checkAvailability, movementsForReturn, movementsForSale } from "./inventory";
@@ -91,6 +92,23 @@ export type SaleOutcome = {
 
 function problem(code: string, message: string, warnings: string[] = []): SaleOutcome {
   return { ok: false, code, message, warnings };
+}
+
+/** Raised inside the sale transaction when a wallet settlement cannot be verified (§112). */
+export class WalletSettlementRefused extends Error {
+  constructor(public code: string, message: string) {
+    super(message);
+    this.name = "WalletSettlementRefused";
+  }
+}
+
+/** Raised inside the sale transaction when the credit decision, re-run under the customer's row
+ * lock, refuses the sale (§30). The refusal is audited outside the rolled-back transaction. */
+export class CreditDecisionRefused extends Error {
+  constructor(public code: string, message: string) {
+    super(message);
+    this.name = "CreditDecisionRefused";
+  }
 }
 
 /**
@@ -283,8 +301,12 @@ export async function priceSaleRequest(params: {
    * as it will be at settlement; only the "the sale is short" rule is relaxed, because the money
    * is being collected by the JATA Payment Orchestrator and will be confirmed by the provider
    * before the sale is recorded (§30: nothing is settled on a promise).
+   *
+   * `walletSettlement` is passed only by the payment engine when it settles a provider-confirmed
+   * wallet payment (§112): it admits the "wallet" tender, which the till's own routes never
+   * produce. It never relaxes the amount — the settlement amount is the confirmed amount.
    */
-  options?: { unpaid?: boolean };
+  options?: { unpaid?: boolean; walletSettlement?: boolean };
 }): Promise<PricedSale | SaleOutcome> {
   const { businessId, configuration, actor, request } = params;
   const client: PosClient = params.client ?? prisma;
@@ -335,7 +357,7 @@ export async function priceSaleRequest(params: {
     })),
   });
 
-  const paymentCheck = validatePayments(configuration, calculation);
+  const paymentCheck = validatePayments(configuration, calculation, { walletSettlement: params.options?.walletSettlement === true });
   if (!paymentCheck.ok) {
     const deferredElectronicPayment = params.options?.unpaid === true && paymentCheck.code === "SHORT_PAYMENT";
     if (!deferredElectronicPayment) {
@@ -360,13 +382,28 @@ export async function createSale(params: {
   configurationVersion?: number;
   configurationFingerprint?: string | null;
   client?: PosClient;
+  /**
+   * Deliberate wallet settlement (§112): passed only by the payment engine, and only with the id
+   * of the transaction it just moved to CONFIRMED inside its own database transaction. The "wallet"
+   * tender is admitted in pricing only when that transaction exists for the same tenant and its
+   * provider-confirmed amount matches the tender — so no route, and no caller without a
+   * provider-confirmed transaction, can declare a sale paid by wallet.
+   */
+  options?: { walletSettlement?: { transactionId: string } };
+  /**
+   * A replay guard for the till (§27, §32, §54). When a key is supplied, the sale claims it in
+   * its own transaction: a second request carrying the same key cannot also create a sale, so a
+   * double tap charges the customer once and moves stock once. A request without a key behaves
+   * exactly as it did before.
+   */
+  idempotency?: { key: string | null; requestHash: string } | null;
 }): Promise<SaleOutcome> {
   const { businessId, business, configuration, actor, request } = params;
   const client: PosClient = params.client ?? prisma;
 
   // Pricing is one engine call, so a payment requested over the JATA Payment Orchestrator is
   // priced by exactly the same code that records the sale when the money arrives (§20, §56).
-  const priced = await priceSaleRequest(params);
+  const priced = await priceSaleRequest({ ...params, options: { walletSettlement: params.options?.walletSettlement != null } });
   if (!isPricedSale(priced)) return priced;
   const { warnings, lines, variants, costKES, saleDiscount, feeKES, channel, payments, calculation, paymentCheck } = priced;
   const { totals } = calculation;
@@ -383,18 +420,26 @@ export async function createSale(params: {
     return problem("CUSTOMER_REQUIRED", `Choose the ${customerWord(configuration)} this sale is for before putting it on credit.`);
   }
 
-  let creditDecision: ReturnType<typeof decideCredit> | null = null;
-  if (creditKES > 0) {
+  // ── Credit, first look (§30) ──
+  // The authoritative decision repeats inside the sale transaction under the customer's row
+  // lock, so two concurrent credit sales cannot both pass the limit on the same read balance.
+  // This early pass exists so the till answers in the same order it always has — a declined
+  // credit is refused before a stock question, and the refusal is audited either way.
+  if (creditKES > 0 && customer) {
     const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, client);
     const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
-    creditDecision = decideCredit({
+    const earlyDecision = decideCredit({
       config: configuration,
-      party: { balanceKES: Number(customer.balanceKES ?? 0), limitKES: Number(customer.creditLimitKES ?? 0), partyType: RECEIVABLE },
+      party: {
+        balanceKES: Number(customer.balanceKES ?? 0),
+        limitKES: Number(customer.creditLimitKES ?? 0),
+        partyType: RECEIVABLE,
+      },
       amountKES: creditKES,
       roleKey: actor.roleKey,
       oldestEntryAt: oldestDebit,
     });
-    if (!creditDecision.allowed) {
+    if (!earlyDecision.allowed) {
       await logPosAuditInTransaction(client, {
         businessId,
         actorId: actor.actorId,
@@ -402,11 +447,11 @@ export async function createSale(params: {
         action: "POS_CREDIT_DECLINED",
         targetType: "CUSTOMER",
         targetId: customer.id,
-        metadata: { code: creditDecision.code, amountKES: creditKES, reason: creditDecision.reason },
+        metadata: { code: earlyDecision.code, amountKES: creditKES, reason: earlyDecision.reason },
       });
-      return problem(creditDecision.code ?? "CREDIT_DECLINED", creditDecision.reason, warnings);
+      return problem(earlyDecision.code ?? "CREDIT_DECLINED", earlyDecision.reason, warnings);
     }
-    if (creditDecision.requiresApproval && !actorCan(actor, "APPROVE_CREDIT")) {
+    if (earlyDecision.requiresApproval && !actorCan(actor, "APPROVE_CREDIT")) {
       await logPosAuditInTransaction(client, {
         businessId,
         actorId: actor.actorId,
@@ -420,10 +465,18 @@ export async function createSale(params: {
     }
   }
 
+  // ── Branch (§16, §75) ──
+  // The location a sale is recorded at is the actor's scope, not the browser's: a staff member
+  // bound to a branch always records into that branch, and a branch named by an unbound actor
+  // must exist in the business. Stock is checked against the same resolved location.
+  const branchDecision = await store.resolveBranch(businessId, actor, request.branchId, client, true);
+  if ("code" in branchDecision) return problem(branchDecision.code, branchDecision.message, warnings);
+  const saleBranchId = branchDecision.branchId;
+
   // ── Stock (§33) ──
   const productIds = lines.map((line) => line.productId).filter(Boolean) as string[];
   const stock = configuration.inventory.enabled
-    ? await stockMap(businessId, productIds, request.branchId ?? actor.branchId, client)
+    ? await stockMap(businessId, productIds, saleBranchId, client)
     : {};
   const availability = checkAvailability(configuration, lines, stock);
   if (!availability.ok) {
@@ -442,12 +495,92 @@ export async function createSale(params: {
     warnings.push(`${request.kind === "QUOTATION" ? "Quotations" : "Invoices"} are not switched on, so this was saved as a sale.`);
   }
 
-  const branchId = clampNote(request.branchId, 64) ?? actor.branchId;
+  const branchId = saleBranchId;
   const staffId = clampNote(request.staffId, 64) ?? actor.staffId;
   const now = new Date();
   const prefix = receiptPrefixFromBusinessName(configuration.receipt.businessName || business.name);
 
-  const sale = await inTransaction(params.client, async (tx: PosClient) => {
+  const walletSettlement = params.options?.walletSettlement ?? null;
+  const idempotencyKey = store.normalizeIdempotencyKey(params.idempotency?.key);
+  const idempotencyHash = String(params.idempotency?.requestHash ?? "").slice(0, 128);
+  let creditDecision: ReturnType<typeof decideCredit> | null = null;
+  let sale: any;
+  try {
+    sale = await inTransaction(params.client, async (tx: PosClient) => {
+    // ── Wallet settlement guard (§112) ─────────────────────────────────────────
+    // The "wallet" tender is only real when it is the settlement record of a provider-confirmed
+    // transaction of this tenant, for exactly the confirmed amount, and of a transaction that has
+    // not already settled another sale. The engine passes the id it just confirmed; anything else
+    // is refused before a single row is written.
+    if (walletSettlement) {
+      const walletTenderKES = calculation.payments
+        .filter((payment) => String(payment.method).trim().toLowerCase() === "wallet" && payment.amountKES > 0)
+        .reduce((total, payment) => total + payment.amountKES, 0);
+      const settlementTransaction = await tx.paymentTransaction.findFirst({
+        where: { id: walletSettlement.transactionId, businessId },
+      });
+      const settlementStatus = String(settlementTransaction?.status ?? "");
+      if (
+        !settlementTransaction ||
+        !["CONFIRMED", "PAID", "PARTIALLY_PAID"].includes(settlementStatus) ||
+        Number(settlementTransaction.amountMinor) !== Math.round(walletTenderKES * 100) ||
+        settlementTransaction.posSaleId != null
+      ) {
+        throw new WalletSettlementRefused(
+          "WALLET_SETTLEMENT_UNCONFIRMED",
+          "A wallet sale can only be recorded from the confirmed wallet payment it settles.",
+        );
+      }
+    }
+
+    // ── Spend the replay key first, inside this transaction (§27, §32, §54) ──
+    // Claiming here — before a single sale, stock or money row is written — is what makes the
+    // guard real rather than advisory. A duplicate that lands while this transaction is still
+    // open violates the unique index, so the loser writes nothing at all and its transaction
+    // rolls back: no second sale, no second stock movement, no second charge. Whichever request
+    // claims first blocks the other until it commits, by which time the sale id below is set.
+    if (idempotencyKey) {
+      await store.claimIdempotencyKey(
+        {
+          businessId,
+          actorId: actor.actorId,
+          scope: store.IDEMPOTENCY_SCOPES.saleCreate,
+          key: idempotencyKey,
+          requestHash: idempotencyHash,
+        },
+        tx,
+      );
+    }
+
+    // ── Credit, decided under the customer's row lock (§30) ───────────────────
+    // The balance the limit is checked against is the current one: a concurrent credit sale for
+    // this customer commits before this lock is taken, so its balance is already in it. A sale
+    // that fails the check is rolled back — the refusal is audited after the rollback.
+    if (creditKES > 0 && customer) {
+      await store.lockPartyRow(tx, RECEIVABLE, businessId, customer.id);
+      const current = await store.findCustomer(businessId, customer.id, tx);
+      const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, tx);
+      const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
+      const decision = decideCredit({
+        config: configuration,
+        party: {
+          balanceKES: Number(current?.balanceKES ?? customer.balanceKES ?? 0),
+          limitKES: Number(current?.creditLimitKES ?? customer.creditLimitKES ?? 0),
+          partyType: RECEIVABLE,
+        },
+        amountKES: creditKES,
+        roleKey: actor.roleKey,
+        oldestEntryAt: oldestDebit,
+      });
+      if (!decision.allowed) {
+        throw new CreditDecisionRefused(decision.code ?? "CREDIT_DECLINED", decision.reason);
+      }
+      if (decision.requiresApproval && !actorCan(actor, "APPROVE_CREDIT")) {
+        throw new CreditDecisionRefused("CREDIT_APPROVAL_REQUIRED", "A manager needs to approve this credit sale.");
+      }
+      creditDecision = decision;
+    }
+
     const sequence = await store.nextSaleSequence(businessId, tx);
     const receiptNumber = formatReceiptNumber(prefix, sequence);
     const status = totals.balanceKES > 0 ? "PARTIALLY_PAID" : "COMPLETED";
@@ -473,6 +606,7 @@ export async function createSale(params: {
         paidKES: totals.paidKES,
         balanceKES: totals.balanceKES,
         refundedKES: 0,
+        creditRefundedKES: 0,
         costKES: costKES || null,
         notes: clampNote(request.notes),
         configurationVersion: params.configurationVersion ?? 0,
@@ -491,6 +625,7 @@ export async function createSale(params: {
           kind: line.kind,
           unitKey: line.unitKey ?? null,
           quantity: line.quantity,
+          returnedQty: 0,
           unitPriceKES: line.unitPriceKES,
           discountKES: line.lineDiscountKES,
           taxKES: line.lineTaxKES,
@@ -528,7 +663,14 @@ export async function createSale(params: {
         branchId,
         conversions: configuration.inventory.conversions,
       })) {
-        await store.recordMovement(businessId, { ...movement, reason: movement.reason, refType: "SALE", createdById: actor.actorId }, tx);
+        await store.recordMovement(
+          businessId,
+          { ...movement, reason: movement.reason, refType: "SALE", createdById: actor.actorId },
+          tx,
+          // Same rule `checkAvailability` used a moment ago: a business that does not track
+          // stock levels sells on, a business that does can never be taken below zero (§33, §47).
+          { configuration },
+        );
       }
     }
 
@@ -577,8 +719,68 @@ export async function createSale(params: {
       },
     });
 
+    // ── Finish spending the replay key (§27, §32, §54) ──
+    // The key was claimed at the top of this transaction; this records which sale it bought, so
+    // a later request with the same key is answered with this receipt. Both writes live inside
+    // the sale's own transaction: if the sale never commits, the key is never spent.
+    if (idempotencyKey) {
+      await store.completeIdempotencyKey(
+        {
+          businessId,
+          actorId: actor.actorId,
+          scope: store.IDEMPOTENCY_SCOPES.saleCreate,
+          key: idempotencyKey,
+          requestHash: idempotencyHash,
+        },
+        created.id,
+        tx,
+      );
+    }
+
     return created;
-  });
+    });
+  } catch (error) {
+    if (error instanceof WalletSettlementRefused) {
+      return problem(error.code, error.message, warnings);
+    }
+    if (error instanceof CreditDecisionRefused) {
+      if (customer) {
+        await logPosAuditInTransaction(client, {
+          businessId,
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          action: "POS_CREDIT_DECLINED",
+          targetType: "CUSTOMER",
+          targetId: customer.id,
+          metadata: { code: error.code, amountKES: creditKES, reason: error.message },
+        });
+      }
+      return problem(error.code, error.message, warnings);
+    }
+    if (error instanceof store.StockShortage) {
+      return problem("INSUFFICIENT_STOCK", error.message, warnings);
+    }
+    // The key was already spent: another request created this sale first. Its transaction has
+    // been rolled back, so nothing at all was written here — the caller re-reads the record and
+    // answers with the sale that won (§27, §32, §54).
+    if (idempotencyKey && isUniqueConstraintError(error)) {
+      const existing = await store.findIdempotencyRecord(
+        { businessId, actorId: actor.actorId, scope: store.IDEMPOTENCY_SCOPES.saleCreate, key: idempotencyKey, requestHash: idempotencyHash },
+        client,
+      );
+      if (existing) {
+        return {
+          ok: false,
+          code: "DUPLICATE_REQUEST",
+          message: "That sale was already recorded.",
+          warnings,
+          duplicateOfSaleId: existing.saleId,
+          duplicateRequestHashMatches: existing.requestHash === idempotencyHash,
+        } as SaleOutcome;
+      }
+    }
+    throw error;
+  }
 
   const receiptSale = {
     receiptNumber: sale.receiptNumber,
@@ -658,8 +860,20 @@ export type RefundOutcome = {
 
 /**
  * Refunds money and, when items are named, puts stock back with its own RETURN movements.
- * The original sale row keeps its totals; only `refundedKES` and `status` move forward, and
- * the audit log records both the before and the after (§37, §54).
+ *
+ * Integrity rules (§30, §54, §56, §112):
+ *
+ * - The sale is locked and re-read inside the transaction, so every limit below is enforced
+ *   against the current ledger: two concurrent refunds cannot both spend the same refundable
+ *   amount, and the per-line returned quantity can only ever reach the quantity sold.
+ * - Money goes back only where it actually came from. The cash part is capped by what the till
+ *   collected (the sale's settled `IN` payment rows) minus cash already refunded, and it is the
+ *   only part that writes a cash OUT row. The credit part is the DEBIT the sale put on the
+ *   customer's receivable minus credit already refunded — capped further by what the customer
+ *   still owes — and it is applied back to that receivable. A credit refund never produces
+ *   cash, so money that was never received can never be "returned".
+ * - A sale that a payment wallet transaction settled is refused here: its refund runs through
+ *   the Payment Wallet's refund flow, which is the single ledger for that money (§112).
  */
 export async function refundSale(params: {
   businessId: string;
@@ -685,75 +899,179 @@ export async function refundSale(params: {
   const saleId = clampNote(request.saleId, 64);
   if (!saleId) return { ok: false, code: "SALE_REQUIRED", message: "Choose the sale to refund.", warnings };
 
-  const sale = await store.findSale(businessId, saleId, client);
-  if (!sale) {
-    // Same answer for "not yours" and "does not exist" — never confirm another tenant's data (§56).
-    return { ok: false, code: "SALE_NOT_FOUND", message: "That sale was not found.", warnings };
-  }
-  if (sale.status === "VOIDED") {
-    return { ok: false, code: "ALREADY_VOIDED", message: "That sale was already voided.", warnings };
+  // Tenant scoping first, without the lock: one answer covers "not yours" and "does not exist",
+  // so a foreign id never confirms existence (§56).
+  const exists = await store.findSale(businessId, saleId, client);
+  if (!exists) return { ok: false, code: "SALE_NOT_FOUND", message: "That sale was not found.", warnings };
+
+  // ── Branch scope (§16, §75) ──
+  // The sale id arrives as a path parameter, so nothing in the request names a branch: the only
+  // scope that can be applied is the branch the staff row binds this actor to. A cashier may
+  // refund and void their own location's sales and no other's — the browser cannot widen it, and
+  // the check runs before the sale is locked or a single row is written.
+  if (!store.branchRecordInScope(actor, exists.branchId)) {
+    return { ok: false, code: "BRANCH_OUT_OF_SCOPE", message: store.branchOutOfScopeMessage(), warnings };
   }
 
-  // ── Which items are coming back? ──
   const requestedReturns = (request.items ?? []).filter((item) => item && typeof item === "object");
-  const itemById = new Map<string, any>((sale.items ?? []).map((item: any) => [item.id, item] as [string, any]));
-  const returnLines: SaleLineInput[] = [];
-  for (const entry of requestedReturns) {
-    const line = itemById.get(String(entry.saleItemId));
-    if (!line) continue;
-    const quantity = Math.min(clampQuantity(entry.quantity), Number(line.quantity ?? 0));
-    if (quantity <= 0) continue;
-    const unitPrice = Number(line.totalKES ?? 0) / Math.max(1, Number(line.quantity ?? 1));
-    returnLines.push({
-      productId: line.productId ?? undefined,
-      name: line.name,
-      kind: line.kind === "SERVICE" ? "SERVICE" : "PRODUCT",
-      unitKey: line.unitKey ?? undefined,
-      quantity,
-      unitPriceKES: Math.round(unitPrice),
-    });
-  }
-
-  // ── How much money goes back? ──
-  const stockValueKES = returnLines.reduce((total, line) => total + line.quantity * line.unitPriceKES, 0);
-  const requestedAmount = request.amountKES == null ? stockValueKES : sanitizeAmountKES(request.amountKES);
-  const amountKES = action === "POS_SALE_VOIDED" ? Math.max(0, Number(sale.paidKES ?? 0) - Number(sale.refundedKES ?? 0)) : requestedAmount;
-  const check = validateRefund(Number(sale.paidKES ?? 0), Number(sale.refundedKES ?? 0), amountKES);
-
-  if (action === "POS_SALE_VOIDED") {
-    // A void reverses the whole sale: all stock comes back and any money taken goes back.
-    for (const item of sale.items ?? []) {
-      if (!returnLines.some((line) => line.productId && line.productId === item.productId)) {
-        returnLines.push({
-          productId: item.productId ?? undefined,
-          name: item.name,
-          kind: item.kind === "SERVICE" ? "SERVICE" : "PRODUCT",
-          unitKey: item.unitKey ?? undefined,
-          quantity: Number(item.quantity ?? 0),
-          unitPriceKES: Number(item.unitPriceKES ?? 0),
-        });
-      }
-    }
-  } else if (!check.ok && stockValueKES <= 0) {
-    return { ok: false, code: "REFUND_INVALID", message: check.message ?? "That refund could not be recorded.", warnings };
-  }
-
-  const refundKES = check.ok ? check.amountKES : 0;
-  if (!refundKES && !returnLines.length) {
-    return { ok: false, code: "NOTHING_TO_REFUND", message: "Nothing left to refund on that sale.", warnings };
-  }
-
-  const method = clampNote(request.method, 32) ?? "cash";
+  // A refund method is a financial fact, not a preference: it is derived from the tenders this
+  // sale was actually paid with (see `resolveRefundMethods` below). The browser's value is only
+  // an expression of intent and is validated against that authoritative state — it can never
+  // name a method the sale was not funded by, and never an arbitrary label (§35, §57).
+  const requestedMethod = clampNote(request.method, 32);
   const reason = clampNote(request.reason, 240);
-  const refundedTotal = Number(sale.refundedKES ?? 0) + refundKES;
-  const nextStatus = action === "POS_SALE_VOIDED"
-    ? "VOIDED"
-    : refundedTotal >= Number(sale.totalKES ?? 0)
-      ? "REFUNDED"
-      : "PARTIALLY_REFUNDED";
 
   const updated = await inTransaction(params.client, async (tx: PosClient) => {
-    if (refundKES > 0) {
+    // ── Lock and re-read: every limit is enforced against the current state ──
+    await store.lockSaleRow(tx, businessId, saleId);
+    const sale = await store.findSale(businessId, saleId, tx);
+    if (!sale) return { returnedToStock: 0, code: "SALE_NOT_FOUND" as string | undefined, message: "That sale was not found.", refundKES: 0 };
+    if (sale.status === "VOIDED") return { returnedToStock: 0, code: "ALREADY_VOIDED" as string | undefined, message: "That sale was already voided.", refundKES: 0 };
+
+    // A sale the payment wallet settled has its own refund flow; refunding it here would open a
+    // second ledger for the same money (§112).
+    const walletTransaction = await tx.paymentTransaction.findFirst({ where: { businessId, posSaleId: sale.id } });
+    if (walletTransaction) {
+      return {
+        returnedToStock: 0,
+        code: "REFUND_VIA_PAYMENTS" as string | undefined,
+        message: "This sale was paid through your payment wallet. Refund it from Payments so the wallet ledger stays the single source of truth.",
+        refundKES: 0,
+      };
+    }
+
+    const settledPayments = (sale.payments ?? []).filter((payment: any) => payment.status === "SETTLED");
+    const collectedKES = settledPayments
+      .filter((payment: any) => payment.direction === "IN")
+      .reduce((total: number, payment: any) => total + Number(payment.amountKES ?? 0), 0);
+    const refundedKES = Number(sale.refundedKES ?? 0);
+    const creditRefundedKES = Number(sale.creditRefundedKES ?? 0);
+    const cashRefundedKES = Math.max(0, refundedKES - creditRefundedKES);
+
+    // The credit this sale put on the customer's account is recorded by its DEBIT ledger entry —
+    // a credit sale counts as "paid" on the sale row, so the receivable ledger, not the sale,
+    // is the source of truth for what the credit part of a refund may be (§30).
+    const saleCreditEntries = sale.customerId
+      ? await tx.posCreditEntry.findMany({ where: { businessId, saleId: sale.id, direction: "DEBIT" }, select: { amountKES: true } })
+      : [];
+    const creditPortionKES = saleCreditEntries.reduce((total: number, entry: any) => total + Number(entry.amountKES ?? 0), 0);
+    // …and it can only come back as far as the customer still owes: money already repaid was
+    // received, not extended.
+    const receivableNowKES = sale.customerId
+      ? Math.max(0, Number((await store.findCustomer(businessId, sale.customerId, tx))?.balanceKES ?? 0))
+      : 0;
+
+    const cashRefundableKES = Math.max(0, collectedKES - cashRefundedKES);
+    const creditRefundableKES = Math.max(0, Math.min(creditPortionKES - creditRefundedKES, receivableNowKES));
+
+    // ── Which methods may this money come back through? ──
+    // Not the browser's: the tenders this sale was actually funded by, less what has already
+    // been refunded out of each. The drawer figure is read from these rows, so the method is
+    // derived from the ledger (§35, §57).
+    const tenders = settledPayments
+      .filter((payment: any) => payment.direction === "IN")
+      .map((payment: any) => ({ method: String(payment.method ?? "cash"), amountKES: Number(payment.amountKES ?? 0) }));
+    const alreadyRefundedByMethod = (sale.payments ?? [])
+      .filter((payment: any) => payment.status === "SETTLED" && payment.direction === "OUT" && String(payment.purpose ?? "") === "REFUND")
+      .map((payment: any) => ({ method: String(payment.method ?? "cash"), amountKES: Number(payment.amountKES ?? 0) }));
+    const methodCapacityKES = allocateRefundMethods({
+      tenders,
+      alreadyRefunded: alreadyRefundedByMethod,
+      requestedMethod: null,
+      amountKES: Number.MAX_SAFE_INTEGER,
+    }).reduce((total: number, entry) => total + entry.amountKES, 0);
+    // Never pay out through a method that did not fund this sale, and never more than the
+    // till collected: the stricter of the ledger and the funding decides.
+    const fundableKES = Math.max(0, Math.min(cashRefundableKES, methodCapacityKES));
+
+    // ── Items coming back: per line, only what is left to return, claimed atomically ──
+    const returnLines: SaleLineInput[] = [];
+    const claimLine = async (line: any, quantity: number): Promise<boolean> => {
+      // The claim itself is the guard: `returnedQty + quantity` may never pass the quantity
+      // sold, and the check and the write are one conditional statement, so a concurrent
+      // over-return loses instead of sneaking past a stale read (§54).
+      const claimed = await tx.posSaleItem.updateMany({
+        where: {
+          businessId,
+          id: line.id,
+          returnedQty: { lte: round3(Number(line.quantity ?? 0)) - quantity + 1e-9 },
+        },
+        data: { returnedQty: { increment: quantity } },
+      });
+      if (!claimed?.count) return false;
+      returnLines.push(lineFromSaleItem(line, quantity));
+      return true;
+    };
+
+    if (action === "POS_SALE_VOIDED") {
+      for (const item of sale.items ?? []) {
+        const remaining = Math.max(0, round3(Number(item.quantity ?? 0)) - round3(Number(item.returnedQty ?? 0)));
+        if (remaining > 0) await claimLine(item, remaining);
+      }
+    } else {
+      const itemById = new Map<string, any>((sale.items ?? []).map((item: any) => [item.id, item] as [string, any]));
+      for (const entry of requestedReturns) {
+        const line = itemById.get(String(entry.saleItemId));
+        if (!line) continue;
+        const remaining = Math.max(0, round3(Number(line.quantity ?? 0)) - round3(Number(line.returnedQty ?? 0)));
+        const requestedLine = clampQuantity(entry.quantity);
+        const quantity = Math.min(requestedLine, remaining);
+        if (quantity <= 0) {
+          warnings.push(`${line.name} has nothing left to return.`);
+          continue;
+        }
+        if (quantity < requestedLine) {
+          warnings.push(`Only ${quantity} of ${line.name} is left to return.`);
+        }
+        if (!(await claimLine(line, quantity))) {
+          warnings.push(`${line.name} has nothing left to return.`);
+        }
+      }
+    }
+
+    // ── Money: what goes back, and how it splits between the till and the credit ledger ──
+    // A void takes back everything left; an explicit amount is honoured as asked; a return with
+    // no amount is priced at what the returned lines are worth, as before.
+    const returnedValueKES = returnLines.reduce((total, line) => total + Math.round(line.quantity * line.unitPriceKES), 0);
+    const requestedAmount =
+      action === "POS_SALE_VOIDED"
+        ? cashRefundableKES + creditRefundableKES
+        : request.amountKES != null
+          ? sanitizeAmountKES(request.amountKES)
+          : returnedValueKES;
+    const totalRefundableKES = cashRefundableKES + creditRefundableKES;
+    if (action !== "POS_SALE_VOIDED" && requestedAmount > totalRefundableKES) {
+      return {
+        returnedToStock: 0,
+        code: "REFUND_INVALID" as string | undefined,
+        message: `Only KES ${totalRefundableKES.toLocaleString("en-KE")} of that sale is left to refund.`,
+        refundKES: 0,
+      };
+    }
+    // Money is the only part that may leave through a tender; the credit part goes back to the
+    // customer's account. Money is taken first, so a sale with both never pays out more than was
+    // funded, and never through a method the customer did not pay with.
+    const cashPart = Math.min(Math.max(0, requestedAmount), fundableKES);
+    const creditPart = Math.min(Math.max(0, requestedAmount - cashPart), creditRefundableKES);
+    const refundKES = cashPart + creditPart;
+
+    // The authoritative split: one row per tender, each capped by what that tender funded and
+    // has not already returned. A browser that asks for "cash" on a credit sale, or for "mpesa"
+    // on a cash sale, gets the tender the ledger says was paid — never the label it sent.
+    const methodAllocations = allocateRefundMethods({
+      tenders,
+      alreadyRefunded: alreadyRefundedByMethod,
+      requestedMethod: requestedMethod,
+      amountKES: cashPart,
+    });
+
+    if (refundKES <= 0 && !returnLines.length) {
+      return { returnedToStock: 0, code: "NOTHING_TO_REFUND" as string | undefined, message: "Nothing left to refund on that sale.", refundKES: 0 };
+    }
+
+    // ── Apply: money rows, credit ledger, stock back, totals forward, audit ──
+    for (const allocation of methodAllocations) {
+      if (allocation.amountKES <= 0) continue;
       await tx.posPayment.create({
         data: {
           businessId,
@@ -762,14 +1080,34 @@ export async function refundSale(params: {
           branchId: sale.branchId ?? null,
           direction: "OUT",
           purpose: "REFUND",
-          method,
-          amountKES: refundKES,
+          method: allocation.method,
+          amountKES: allocation.amountKES,
           reference: clampNote(request.reference, 80),
           status: "SETTLED",
           notes: reason,
           createdById: actor.actorId,
         },
       });
+    }
+
+    if (creditPart > 0 && sale.customerId) {
+      // The credit part goes back to the customer's account — never to the till (§30, §54).
+      const result = await store.applyBalanceChange(
+        businessId,
+        { partyType: RECEIVABLE, partyId: sale.customerId, partyName: sale.customerName ?? null },
+        {
+          deltaKES: -creditPart,
+          direction: "CREDIT",
+          saleId: sale.id,
+          note: reason ?? `Credit refunded against ${sale.receiptNumber}`,
+        },
+        tx,
+      );
+      if (!result) {
+        // The receivable row is gone: roll the whole refund back rather than refund cash and
+        // leave the credit part hanging.
+        throw new RefundAborted("CREDIT_PARTY_MISSING");
+      }
     }
 
     let returnedToStock = 0;
@@ -783,15 +1121,34 @@ export async function refundSale(params: {
           businessId,
           { ...movement, refType: "SALE", note: reason ?? `${action === "POS_SALE_VOIDED" ? "Voided" : "Returned"} against ${sale.receiptNumber}`, createdById: actor.actorId },
           tx,
+          { configuration },
         );
         returnedToStock += Math.abs(movement.delta);
       }
     }
 
-    await tx.posSale.updateMany({
-      where: { businessId, id: sale.id },
-      data: { refundedKES: refundedTotal, status: nextStatus },
+    // The totals move with a compare-and-set on the snapshot we locked: a refund that somehow
+    // changed the row underneath us (possible on clients without raw SQL locking) changes
+    // nothing and is refused instead of double-counting.
+    const nextRefundedKES = refundedKES + refundKES;
+    const nextCreditRefundedKES = creditRefundedKES + creditPart;
+    const nextStatus =
+      action === "POS_SALE_VOIDED" ? "VOIDED" : nextRefundedKES >= Number(sale.totalKES ?? 0) ? "REFUNDED" : "PARTIALLY_REFUNDED";
+    const moved = await tx.posSale.updateMany({
+      where: {
+        businessId,
+        id: sale.id,
+        refundedKES,
+        creditRefundedKES,
+        status: String(sale.status),
+      },
+      data: {
+        refundedKES: nextRefundedKES,
+        creditRefundedKES: nextCreditRefundedKES,
+        status: nextStatus,
+      },
     });
+    if (!moved?.count) throw new RefundAborted("REFUND_CONFLICT");
 
     await logPosAuditInTransaction(tx, {
       businessId,
@@ -801,24 +1158,281 @@ export async function refundSale(params: {
       targetType: "SALE",
       targetId: sale.id,
       branchId: sale.branchId ?? null,
-      before: { refundedKES: Number(sale.refundedKES ?? 0), status: sale.status },
-      after: { refundedKES: refundedTotal, status: nextStatus },
-      metadata: { receiptNumber: sale.receiptNumber, refundKES, method, reason, returnedLines: returnLines.length },
+      before: { refundedKES, creditRefundedKES, status: String(sale.status) },
+      after: { refundedKES: nextRefundedKES, creditRefundedKES: nextCreditRefundedKES, status: nextStatus },
+      metadata: {
+        receiptNumber: sale.receiptNumber,
+        cashPart,
+        creditPart,
+        // What the ledger recorded, and what the browser asked for: the two are shown side by
+        // side so a forged method is visible in the trail even where it was simply ignored.
+        methods: methodAllocations.map((entry) => ({ method: entry.method, amountKES: entry.amountKES })),
+        requestedMethod: requestedMethod ?? null,
+        reason,
+        returnedLines: returnLines.length,
+      },
     });
 
-    return { returnedToStock };
+    return { returnedToStock, code: undefined, message: undefined, refundKES };
+  }).catch(async (error: unknown) => {
+    if (error instanceof RefundAborted) {
+      if (error.message === "CREDIT_PARTY_MISSING") {
+        return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That refund could not be recorded — try again.", refundKES: 0 };
+      }
+      return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That sale is changing at the same moment — try the refund again.", refundKES: 0 };
+    }
+    // A deadlock is the database refusing one of two simultaneous refunds. The transaction is
+    // already rolled back and nothing was written, so this is the same retryable answer the
+    // compare-and-set gives — not a broken request and not an engine error.
+    if (isWriteConflictError(error)) {
+      return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That sale is changing at the same moment — try the refund again.", refundKES: 0 };
+    }
+    throw error;
   });
 
-  if (refundKES < requestedAmount && action !== "POS_SALE_VOIDED") {
-    warnings.push(`Only KES ${refundKES.toLocaleString("en-KE")} was refundable on that sale.`);
+  if (updated.code) {
+    return { ok: false, code: updated.code, message: updated.message ?? "That refund could not be recorded.", warnings };
   }
 
   return {
     ok: true,
     warnings,
-    refundedKES: refundKES,
+    refundedKES: updated.refundKES,
     returnedToStock: updated.returnedToStock,
-    sale: await store.findSale(businessId, sale.id, client),
+    sale: await store.findSale(businessId, saleId, client),
+  };
+}
+
+export type RestoredStockResult = {
+  /** Units put back on the shelf this call, in the product's base unit. */
+  returnedToStock: number;
+  /** Lines that had something left to bring back and were claimed by this call. */
+  restoredLines: number;
+};
+
+/**
+ * Puts a sale's goods back on the shelf — once (§33, §54).
+ *
+ * A sale the Payment Wallet settled is refunded through the wallet's own flow, which settles
+ * money but knows nothing about stock. Without this, refunding such a sale left the money
+ * reversed and the goods gone: the ledger said KES 0 out, the shelf said one unit short, and
+ * nothing in the business could explain the difference. The wallet path now calls this from
+ * inside the same locked transaction that marks the refund COMPLETED, so money and stock move
+ * together or not at all.
+ *
+ * The claim is the guard, exactly as in `refundSale`: `returnedQty` may only be advanced while
+ * `returnedQty + quantity` stays within the quantity sold, and the compare and the write are one
+ * conditional statement. A line another process has already brought back (a concurrent wallet
+ * callback, a duplicate provider result, or a POS-side return) therefore claims nothing here, so
+ * the goods can come back once and only once however many times the refund is confirmed.
+ *
+ * `onlyWhenFullyRefunded` keeps a partial refund honest: someone who was given back part of
+ * their money keeps the goods, so nothing returns to stock until the sale's refunded total has
+ * reached what it was paid.
+ */
+export async function restoreRefundedSaleStock(params: {
+  businessId: string;
+  saleId: string;
+  /** Only bring stock back once the money has all come back (a partial refund keeps the goods). */
+  onlyWhenFullyRefunded?: boolean;
+  paidKES?: number | null;
+  refundedKES?: number | null;
+  note?: string | null;
+  createdById?: string | null;
+  client?: PosClient;
+}): Promise<RestoredStockResult> {
+  const client: PosClient = params.client ?? prisma;
+  const sale = await client.posSale.findFirst({ where: { businessId: params.businessId, id: params.saleId } });
+  if (!sale) return { returnedToStock: 0, restoredLines: 0 };
+
+  if (params.onlyWhenFullyRefunded !== false) {
+    const paid = Number(params.paidKES ?? sale.paidKES ?? 0);
+    const refunded = Number(params.refundedKES ?? sale.refundedKES ?? 0);
+    if (refunded < paid) return { returnedToStock: 0, restoredLines: 0 };
+  }
+
+  const configuration = await loadConfigurationFor(params.businessId, client);
+  const items = await client.posSaleItem.findMany({ where: { businessId: params.businessId, saleId: sale.id } });
+
+  let returnedToStock = 0;
+  let restoredLines = 0;
+  for (const item of items ?? []) {
+    if (!item?.productId) continue;
+    const sold = round3(Number(item.quantity ?? 0));
+    const remaining = Math.max(0, sold - round3(Number(item.returnedQty ?? 0)));
+    if (remaining <= 0) continue;
+    // Claim the line atomically: whoever wins this statement owns the return.
+    const claimed = await client.posSaleItem.updateMany({
+      where: {
+        businessId: params.businessId,
+        id: item.id,
+        returnedQty: { lte: sold - remaining + 1e-9 },
+      },
+      data: { returnedQty: { increment: remaining } },
+    });
+    if (!claimed?.count) continue;
+    restoredLines += 1;
+
+    for (const movement of movementsForReturn(
+      [{ productId: item.productId, name: String(item.name ?? "Item"), kind: "PRODUCT", quantity: remaining, unitKey: item.unitKey ?? undefined, unitPriceKES: Number(item.unitPriceKES ?? 0) }],
+      { saleId: sale.id, branchId: sale.branchId ?? null, conversions: configuration.inventory.conversions },
+    )) {
+      await store.recordMovement(
+        params.businessId,
+        {
+          ...movement,
+          refType: "SALE",
+          note: params.note ?? `Refunded against ${sale.receiptNumber}`,
+          createdById: params.createdById ?? null,
+        },
+        client,
+        // A return adds stock, so the negative-stock question never arises; passing the
+        // configuration keeps the same contract the POS engine uses everywhere else.
+        { configuration },
+      );
+      returnedToStock += Math.abs(movement.delta);
+    }
+  }
+  return { returnedToStock, restoredLines };
+}
+
+/** The configuration a stock movement must be interpreted against, read inside the caller's transaction. */
+async function loadConfigurationFor(businessId: string, client: PosClient): Promise<PosConfiguration> {
+  const row = await client.posConfiguration?.findFirst?.({ where: { businessId } });
+  const raw = row?.publishedJson ?? row?.draftJson ?? null;
+  if (!raw) return baselineConfiguration();
+  try {
+    return normalizeConfiguration(JSON.parse(raw));
+  } catch {
+    return baselineConfiguration();
+  }
+}
+
+export type RefundMethodAllocation = { method: string; amountKES: number };
+
+/**
+ * Splits the money side of a refund across the tenders the sale was *actually* funded by (§35,
+ * §57).
+ *
+ * A refund is a reversal of money that moved, so the method on the refund row is a financial
+ * fact, not a preference the browser may name. The day's cash figure is read from these rows
+ * (`dailyClosing` counts `posPayment` rows with `method === "cash"`), so a client-supplied
+ * method is a way to forge the drawer: take KES 5,000 out of the till, file it as "mpesa", and
+ * the close reports a drawer that is KES 5,000 over.
+ *
+ * The rules, in order:
+ *  - a method may only receive what was tendered in it and not yet refunded out of it;
+ *  - the browser's requested method is honoured *only* while that method still has capacity —
+ *    it is an expression of intent, validated against the ledger, never a label we write;
+ *  - the rest follows the tender order recorded on the sale (the order the money arrived in);
+ *  - a method that was never tendered can never appear, whatever the request says.
+ */
+export function allocateRefundMethods(params: {
+  /** Settled money that came IN for this sale: the tenders it was funded by. */
+  tenders: { method: string; amountKES: number }[];
+  /** Settled refund money already paid OUT per method. */
+  alreadyRefunded: { method: string; amountKES: number }[];
+  /** What the browser asked for; used only if that method still has room. */
+  requestedMethod?: string | null;
+  amountKES: number;
+}): RefundMethodAllocation[] {
+  const key = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  const tendered = new Map<string, { method: string; amountKES: number }>();
+  for (const tender of params.tenders ?? []) {
+    const amount = Math.max(0, Math.round(Number(tender.amountKES ?? 0)));
+    if (amount <= 0) continue;
+    const id = key(tender.method) || "cash";
+    const seen = tendered.get(id);
+    // Keep the spelling the sale recorded, so the refund row matches the tender row.
+    tendered.set(id, { method: seen?.method ?? String(tender.method ?? "cash"), amountKES: (seen?.amountKES ?? 0) + amount });
+  }
+  const refunded = new Map<string, number>();
+  for (const row of params.alreadyRefunded ?? []) {
+    const id = key(row.method) || "cash";
+    refunded.set(id, (refunded.get(id) ?? 0) + Math.max(0, Math.round(Number(row.amountKES ?? 0))));
+  }
+
+  const capacity = [...tendered.entries()]
+    .map(([id, tender]) => ({ id, method: tender.method, amountKES: Math.max(0, tender.amountKES - (refunded.get(id) ?? 0)) }))
+    .filter((entry) => entry.amountKES > 0);
+
+  // The requested method leads when it is one of the sale's real tenders and still has room;
+  // every other method with room follows in the order the money arrived.
+  const requestedId = key(params.requestedMethod);
+  const ordered = requestedId
+    ? [...capacity.filter((entry) => entry.id === requestedId), ...capacity.filter((entry) => entry.id !== requestedId)]
+    : capacity;
+
+  const allocations: RefundMethodAllocation[] = [];
+  let remaining = Math.max(0, Math.round(Number(params.amountKES ?? 0)));
+  for (const entry of ordered) {
+    if (remaining <= 0) break;
+    const amountKES = Math.min(remaining, entry.amountKES);
+    if (amountKES <= 0) continue;
+    allocations.push({ method: entry.method, amountKES });
+    remaining -= amountKES;
+  }
+  return allocations;
+}
+
+/**
+ * True for a failed unique constraint — Prisma's `P2002`, and the raw driver shapes a raw or
+ * pooled connection can surface it under. Used to recognise that an idempotency key was claimed
+ * by the request that got there first (§27, §54).
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+  const code = String((error as { code?: unknown })?.code ?? "");
+  if (code === "P2002") return true;
+  const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
+  return message.includes("unique constraint") || message.includes("duplicate key");
+}
+
+/**
+ * True for the database refusing one of two simultaneous writes — Prisma's `P2034` (write
+ * conflict or deadlock) and the raw driver shapes of PostgreSQL's 40P01 (deadlock_detected) and
+ * 40001 (serialization_failure).
+ *
+ * Two refunds of the same sale take the same locks in the same order, so the row lock normally
+ * serialises them. When it does not, PostgreSQL aborts one transaction outright. That is the
+ * database doing the same job as the compare-and-set, so it owes the caller the same answer: the
+ * transaction is already rolled back, nothing was written, and the refund can be retried. Left
+ * to propagate it became an opaque engine error on a money-moving endpoint.
+ */
+function isWriteConflictError(error: unknown): boolean {
+  const code = String((error as { code?: unknown })?.code ?? "");
+  if (code === "P2034") return true;
+  const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
+  return (
+    message.includes("deadlock") ||
+    message.includes("write conflict") ||
+    message.includes("could not serialize") ||
+    message.includes("serialization failure")
+  );
+}
+
+/** Raised to roll a refund back when its preconditions fail after rows were written. */
+class RefundAborted extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RefundAborted";
+  }
+}
+
+function round3(value: number): number {
+  return Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0;
+}
+
+function lineFromSaleItem(line: any, quantity: number): SaleLineInput {
+  // The line recorded its own price at the moment of sale; derive it only where that is absent.
+  const recorded = Number(line.unitPriceKES ?? 0);
+  const unitPrice = recorded > 0 ? recorded : Number(line.totalKES ?? 0) / Math.max(1e-9, Number(line.quantity ?? 1));
+  return {
+    productId: line.productId ?? undefined,
+    name: line.name,
+    kind: line.kind === "SERVICE" ? "SERVICE" : "PRODUCT",
+    unitKey: line.unitKey ?? undefined,
+    quantity,
+    unitPriceKES: Math.round(unitPrice),
   };
 }
 
@@ -864,10 +1478,15 @@ export async function recordRepayment(params: {
   const customer = await store.findCustomer(businessId, customerId, client);
   if (!customer) return { ok: false, code: "CUSTOMER_NOT_FOUND", message: "That record was not found.", warnings };
 
-  const check = validateRepayment(Number(customer.balanceKES ?? 0), sanitizeAmountKES(params.amountKES));
-  if (!check.ok) return { ok: false, code: "REPAYMENT_INVALID", message: check.message ?? "That repayment could not be recorded.", warnings };
-
-  await inTransaction(params.client, async (tx: PosClient) => {
+  const amountKES = sanitizeAmountKES(params.amountKES);
+  const result = await inTransaction(params.client, async (tx: PosClient) => {
+    // Re-validate against the balance under the customer's row lock: a concurrent refund or
+    // sale that changes the balance commits before this lock is taken, so an over-repayment
+    // that looked fine a moment ago is still refused here (§30).
+    await store.lockPartyRow(tx, RECEIVABLE, businessId, customerId);
+    const current = await store.findCustomer(businessId, customerId, tx);
+    const check = validateRepayment(Number(current?.balanceKES ?? 0), amountKES);
+    if (!check.ok) throw new RepaymentAborted(check.message ?? "That repayment could not be recorded.");
     const payment = await tx.posPayment.create({
       data: {
         businessId,
@@ -883,12 +1502,13 @@ export async function recordRepayment(params: {
         createdById: actor.actorId,
       },
     });
-    await store.applyBalanceChange(
+    const applied = await store.applyBalanceChange(
       businessId,
       { partyType: RECEIVABLE, partyId: customerId, partyName: customer.name },
       { deltaKES: -check.amountKES, direction: "CREDIT", paymentId: payment.id, note: clampNote(params.note) ?? "Repayment" },
       tx,
     );
+    const balanceAfterKES = applied?.balanceKES ?? Number(current?.balanceKES ?? 0) - check.amountKES;
     await logPosAuditInTransaction(tx, {
       businessId,
       actorId: actor.actorId,
@@ -896,11 +1516,27 @@ export async function recordRepayment(params: {
       action: "POS_REPAYMENT_RECORDED",
       targetType: "CUSTOMER",
       targetId: customerId,
-      before: { balanceKES: Number(customer.balanceKES ?? 0) },
-      after: { balanceKES: check.newBalanceKES },
+      before: { balanceKES: Number(current?.balanceKES ?? customer.balanceKES ?? 0) },
+      after: { balanceKES: balanceAfterKES },
       metadata: { amountKES: check.amountKES, method: payment.method, paymentId: payment.id },
     });
+    return { amountKES: check.amountKES, balanceKES: balanceAfterKES };
+  }).catch((error: unknown) => {
+    if (error instanceof RepaymentAborted) return { invalid: error.message };
+    throw error;
   });
 
-  return { ok: true, warnings, amountKES: check.amountKES, balanceKES: check.newBalanceKES };
+  if (result && "invalid" in result) {
+    return { ok: false, code: "REPAYMENT_INVALID", message: result.invalid, warnings };
+  }
+  const done = result as { amountKES: number; balanceKES: number } | undefined;
+  return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined };
+}
+
+/** Raised inside the repayment transaction when the re-validated balance no longer fits (§30). */
+class RepaymentAborted extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RepaymentAborted";
+  }
 }

@@ -73,6 +73,18 @@ const EXCEPTION_LABELS: Record<string, string> = {
   MATCHED: "Matched",
 };
 
+/** "Reconciled" means every wallet payment matched a sale with matching amounts (§43). */
+function reconciliationStatusLabel(daily: any): string {
+  if (!daily) return "Not yet";
+  const mismatches = Number(daily.mismatches ?? 0);
+  const exceptions = Number(daily.exceptions ?? 0);
+  if (daily.status === "NO_WALLET_PAYMENTS") return "None yet";
+  if (daily.status === "MATCHED") return "Yes";
+  if (mismatches > 0) return `${mismatches} need review`;
+  if (exceptions > 0) return "Review exceptions";
+  return "Not yet";
+}
+
 export function PaymentsClient({
   businessId,
   basePath,
@@ -665,16 +677,18 @@ function ReconciliationTab({
   return (
     <section className="space-y-4">
       <dl className="jata-stat-grid">
-        <div className="jata-stat"><dt>Confirmed payments today</dt><dd>KES {Number(daily?.confirmedPaymentsKES ?? 0).toLocaleString("en-KE")}</dd></div>
-        <div className="jata-stat"><dt>Sales today</dt><dd>KES {Number(daily?.posSalesKES ?? 0).toLocaleString("en-KE")}</dd></div>
-        <div className="jata-stat"><dt>Every payment matched?</dt><dd>{daily?.reconciled ? "Yes" : "Not yet"}</dd></div>
+        <div className="jata-stat"><dt>Confirmed wallet payments today</dt><dd>KES {Number(daily?.confirmedPaymentsKES ?? 0).toLocaleString("en-KE")}</dd></div>
+        <div className="jata-stat"><dt>Wallet sales today (net of refunds)</dt><dd>KES {Number(daily?.posSalesKES ?? 0).toLocaleString("en-KE")}</dd></div>
+        <div className="jata-stat"><dt>Refunded today</dt><dd>KES {Number(daily?.refundedKES ?? 0).toLocaleString("en-KE")}</dd></div>
+        <div className="jata-stat"><dt>Payments matched to a sale</dt><dd>{Number(daily?.settled ?? 0)} of {Number(daily?.transactions ?? 0)}</dd></div>
+        <div className="jata-stat"><dt>Every payment matched?</dt><dd>{reconciliationStatusLabel(daily)}</dd></div>
         <div className="jata-stat"><dt>Waiting for an explanation</dt><dd>{Number(daily?.exceptions ?? 0)}</dd></div>
       </dl>
 
-      {exceptions.length === 0 ? (
+      {exceptions.length === 0 && !(daily && Number(daily.mismatches ?? 0) > 0) ? (
         <div className="pos-empty">
           <strong>Everything lines up</strong>
-          <p>Every confirmed payment matches a sale. Nothing needs your attention today.</p>
+          <p>Every confirmed wallet payment is matched to the sale it settled. Nothing needs your attention today.</p>
         </div>
       ) : (
         <div className="pos-rows">

@@ -1,7 +1,8 @@
 import { emptyStateFor } from "@/lib/pos/presentation";
 import { formSpec } from "@/lib/pos/forms";
 import { listSuppliers } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { RecordBoard } from "@/components/pos/RecordBoard";
 
 /** Suppliers (§12, §30). What you owe them is kept in a separate ledger from what customers owe you. */
@@ -13,7 +14,10 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosSuppliersPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Suppliers are the suppliers module's read (§17).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SUPPLIERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "supplier");
   const suppliers = await listSuppliers(businessId, { take: 300 });

@@ -23,6 +23,12 @@ export type PosRouteInput = {
   actor: PosActor;
   body: JsonBody;
   url: URL;
+  /**
+   * The request's headers, when there was a request. A route reads them for transport-level
+   * concerns only — an `Idempotency-Key`, a content type — never for authorization, which is
+   * resolved server-side by `guard.ts` (§5, §56).
+   */
+  headers: Headers | null;
 };
 
 export type PosHandlerResult = { status?: number; data: unknown };
@@ -97,7 +103,7 @@ export async function handlePosRequest(params: {
       return NextResponse.json({ error: SAFE_ERRORS.noAccess, code: "TENANT_ID_MISMATCH" }, { status: 403 });
     }
 
-    const result = await params.handler({ businessId, ctx, actor: toActor(ctx), body, url });
+    const result = await params.handler({ businessId, ctx, actor: toActor(ctx), body, url, headers: params.request?.headers ?? null });
     return NextResponse.json(result.data, { status: result.status ?? 200 });
   } catch (error) {
     const mapped = posErrorBody(error, fallback);

@@ -62,6 +62,10 @@ export function readMpesaConfig(): MpesaConfig {
   if (!consumerSecret) missing.push("MPESA_CONSUMER_SECRET");
   if (!shortcode) missing.push("MPESA_SHORTCODE");
   if (!passkey) missing.push("MPESA_PASSKEY");
+  // Without the callback token the adapter refuses every provider callback (it cannot tell a real
+  // Daraja event from a stranger's POST), so a deployment that lacks it cannot confirm money —
+  // readiness must say so instead of reporting the connector live (§35, §129).
+  if (!callbackToken) missing.push("MPESA_CALLBACK_TOKEN");
 
   return {
     env,

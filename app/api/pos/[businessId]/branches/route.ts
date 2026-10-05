@@ -23,7 +23,9 @@ export async function GET(_request: Request, context: RouteContext) {
     options: { fast: true },
     fallback: "We couldn't load your locations.",
     handler: async ({ ctx }) => {
-      const branches = await listBranches(businessId);
+      // A staff member bound to a location is shown that location and none other (§16, §75);
+      // an unbound actor (owner, admin) sees the whole business.
+      const branches = await listBranches(businessId, undefined, { only: ctx.branchId });
       return posOk({
         branches,
         multiLocation: Boolean(ctx.configuration.inventory.locations) && ctx.configuration.branches.enabled,

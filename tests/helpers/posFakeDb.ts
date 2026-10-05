@@ -33,20 +33,61 @@ export function rowMatches(row: Row, where: Row | undefined): boolean {
     if (condition && typeof condition === "object" && !Array.isArray(condition) && !(condition instanceof Date)) {
       const filter = condition as Row;
       const known = ["in", "notIn", "gte", "lte", "gt", "lt", "contains", "startsWith", "equals", "not"];
-      if (!known.some((operator) => operator in filter)) continue; // relation filter: not modelled
-      if ("in" in filter && !filter.in.includes(value)) return false;
-      if ("notIn" in filter && filter.notIn.includes(value)) return false;
-      if ("gte" in filter && !(value >= filter.gte)) return false;
-      if ("lte" in filter && !(value <= filter.lte)) return false;
-      if ("gt" in filter && !(value > filter.gt)) return false;
-      if ("lt" in filter && !(value < filter.lt)) return false;
-      if ("contains" in filter && !String(value ?? "").toLowerCase().includes(String(filter.contains).toLowerCase())) return false;
-      if ("equals" in filter && value !== filter.equals) return false;
-      continue;
+      if (known.some((operator) => operator in filter)) {
+        if ("in" in filter && !filter.in.includes(value)) return false;
+        if ("notIn" in filter && filter.notIn.includes(value)) return false;
+        if ("gte" in filter && !(value >= filter.gte)) return false;
+        if ("lte" in filter && !(value <= filter.lte)) return false;
+        if ("gt" in filter && !(value > filter.gt)) return false;
+        if ("lt" in filter && !(value < filter.lt)) return false;
+        if ("contains" in filter && !String(value ?? "").toLowerCase().includes(String(filter.contains).toLowerCase())) return false;
+        if ("equals" in filter && value !== filter.equals) return false;
+        continue;
+      }
+      // Prisma compound-unique input: `{ productId_branchId: { productId, branchId } }` — the
+      // *key* is the underlying fields joined by underscores and the value carries them. It
+      // matches when every named field equals this row's, and fails when the pair is given but
+      // nothing matches. Getting this wrong is not a near miss: an unmatched compound key used
+      // to fall through to "relation filter — not modelled", which matched *every* row, so the
+      // upsert in `recordMovement` that creates the first stock row for a location would instead
+      // move some other product's stock.
+      if (key.includes("_")) {
+        const parts = key.split("_");
+        const entries = Object.entries(filter);
+        const named = entries.length > 0 && entries.every(([field], index) => parts[index] === field);
+        if (named) {
+          if (entries.every(([field, wanted]) => row[field] === wanted)) continue;
+          return false;
+        }
+        continue; // an underscore key that does not name these fields is a relation filter
+      }
+      continue; // relation filter: not modelled
     }
     if (value !== condition) return false;
   }
   return true;
+}
+
+/**
+ * Applies a Prisma update payload to a row: plain values assign, and the atomic operators
+ * (`increment`, `decrement`, `multiply`, `divide`) change the existing value in place — the
+ * in-memory equivalent of the single-statement `SET column = column + δ` the real client sends.
+ */
+export function applyUpdateData(row: Row, data: Row | undefined): void {
+  if (!data) return;
+  for (const [key, value] of Object.entries(data)) {
+    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      const operator = value as Row;
+      const current = Number(row[key] ?? 0);
+      if ("increment" in operator) row[key] = current + Number(operator.increment);
+      else if ("decrement" in operator) row[key] = current - Number(operator.decrement);
+      else if ("multiply" in operator) row[key] = current * Number(operator.multiply);
+      else if ("divide" in operator) row[key] = Number(operator.divide) ? current / Number(operator.divide) : current;
+      else row[key] = value;
+      continue;
+    }
+    row[key] = value;
+  }
 }
 
 /**
@@ -61,6 +102,18 @@ const RELATIONS: Record<string, { field: string; key: string }[]> = {
   product: [{ field: "posProduct", key: "productId" }],
   assets: [{ field: "posCustomerAsset", key: "customerId" }],
   events: [{ field: "posOrderEvent", key: "orderId" }],
+};
+
+/**
+ * Compound unique indexes the fake enforces the way PostgreSQL would (§5, §32).
+ *
+ * Without this, an insert that would violate a unique index silently succeeds and the caller's
+ * guard — the whole point of the index — is never exercised.
+ */
+const UNIQUE_INDEXES: Record<string, string[][]> = {
+  // The till's replay guard: one unspent key per business, actor and action. A duplicate
+  // submission must fail the insert, and with it the sale transaction that owns it.
+  posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],
 };
 
 export type FakeDb = {
@@ -79,6 +132,19 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
   function ensure(name: string): Row[] {
     if (!state[name]) state[name] = [];
     return state[name];
+  }
+
+  /** The `P2002` PostgreSQL/Prismaraise for a row already held under a unique index. */
+  function assertUnique(name: string, data: Row | undefined): void {
+    for (const fields of UNIQUE_INDEXES[name] ?? []) {
+      const conflict = ensure(name).some((row) => fields.every((field) => row[field] === (data as Row)?.[field]));
+      if (conflict) {
+        throw Object.assign(
+          new Error(`Unique constraint failed on the fields: (${fields.join(", ")})`),
+          { code: "P2002", meta: { target: fields } },
+        );
+      }
+    }
   }
 
   function decorate(row: Row, include: Row | undefined): Row {
@@ -120,6 +186,7 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         return { _sum: sum, _count: { _all: scoped.length } };
       }),
       create: vi_fn(async ({ data }: any) => {
+        assertUnique(name, data);
         const row = { id: data.id ?? `${name}_${++counter}`, createdAt: new Date(), ...data };
         rows.push(row);
         return row;
@@ -132,20 +199,21 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
       update: vi_fn(async ({ where, data }: any) => {
         const row = rows.find((entry) => rowMatches(entry, where));
         if (!row) throw Object.assign(new Error("Record to update does not exist."), { code: "P2025" });
-        Object.assign(row, data);
+        applyUpdateData(row, data);
         return row;
       }),
       updateMany: vi_fn(async ({ where, data }: any) => {
         const scoped = rows.filter((row) => rowMatches(row, where));
-        for (const row of scoped) Object.assign(row, data);
+        for (const row of scoped) applyUpdateData(row, data);
         return { count: scoped.length };
       }),
       upsert: vi_fn(async ({ where, create, update }: any) => {
         const row = rows.find((entry) => rowMatches(entry, where));
         if (row) {
-          Object.assign(row, update);
+          applyUpdateData(row, update);
           return row;
         }
+        assertUnique(name, create);
         const created = { id: `${name}_${++counter}`, ...create };
         rows.push(created);
         return created;
@@ -168,6 +236,12 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     {
       get(_target, property: string) {
         if (property === "$transaction") {
+          // Pass-through. It is deliberately NOT a snapshot/rollback: undoing a failed
+          // transaction by restoring an entry-time snapshot would also erase changes committed
+          // by a concurrent transaction between the snapshot and the failure — the opposite of
+          // what PostgreSQL does. Failed-write visibility is therefore asserted only where the
+          // engine guarantees it without rollback (the compare-and-set caps), and true
+          // transactional rollback is exercised by the DATABASE_URL-backed suites.
           return async (work: any) => (typeof work === "function" ? work(db) : Promise.all(work));
         }
         // The fake lets non-concurrency unit tests reach refund logic. PostgreSQL locking semantics
@@ -232,6 +306,7 @@ export function standardSeed(): Record<string, Row[]> {
     posConfigurationVersion: [],
     posSubscription: [],
     posEntitlement: [],
+    posReceiptSequence: [],
     posBranch: [{ id: "br_a1", businessId: "bizA", name: "Nyumbani Kitchen", isPrimary: true, isActive: true }],
     posStaff: [{ id: "st_a1", businessId: "bizA", userId: "cashierA", name: "Mary Cashier", roleKey: "CASHIER", isActive: true, branchId: null, commissionPercent: 0 }],
     posProduct: [

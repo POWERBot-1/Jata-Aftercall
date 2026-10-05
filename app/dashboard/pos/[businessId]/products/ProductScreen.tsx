@@ -1,8 +1,9 @@
 import { emptyStateFor } from "@/lib/pos/presentation";
 import { formSpec } from "@/lib/pos/forms";
 import { listProducts, stockLevels } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import type { PosModuleKey } from "@/lib/pos/types";
 
 /**
@@ -24,7 +25,10 @@ export async function ProductScreen({
   kind?: "PRODUCT" | "SERVICE";
   openNew?: boolean;
 }) {
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // The catalogue is the inventory module's read (§13) — refused before a product row is loaded.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_INVENTORY");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "product");
 

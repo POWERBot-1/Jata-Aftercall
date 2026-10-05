@@ -1,7 +1,8 @@
 import { paymentMethodOptions } from "@/lib/pos/money";
 import { formatReceiptNumber, receiptPrefixFromBusinessName } from "@/lib/pos/receipt";
-import { listCustomers, listProducts, nextSaleSequence, stockLevels } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { listCustomers, listProducts, previewSaleSequence, stockLevels } from "@/lib/pos/store";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { loadWallet, type WalletView } from "@/lib/payments/wallet";
 import { TillClient } from "@/components/pos/TillClient";
 import type { WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
@@ -22,13 +23,17 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosSellPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // The till is the sales module's write screen — the same permission the sales API checks (§4).
+  const gate = await loadPosPageWorkspace(businessId, "CREATE_SALE");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
   const [products, customers, sequence, stock, wallet] = await Promise.all([
     listProducts(businessId, { take: 300 }),
     configuration.customers.enabled ? listCustomers(businessId, { take: 200 }) : Promise.resolve([]),
-    nextSaleSequence(businessId),
+    // Display only: the label peeks at the sequence without claiming a number.
+    previewSaleSequence(businessId),
     configuration.inventory.enabled ? stockLevels(businessId) : Promise.resolve([]),
     // Who may take a wallet payment: the till shows the wallet to somebody who can see payments,
     // and never to a role that cannot (§11, §36).

@@ -1,8 +1,9 @@
 import { manualReasons } from "@/lib/pos/inventory";
 import { listBranches, listMovements, listProducts, stockWithProducts } from "@/lib/pos/store";
 import { sanitizeRange } from "@/lib/pos/validation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { InventoryClient } from "@/components/pos/InventoryClient";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Stock (§16, §33). What is on hand, what needs attention, and the ledger of every change with
@@ -17,14 +18,21 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosInventoryPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Stock is the inventory module's read (§13) — the page answers like the stock API.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_INVENTORY");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const range = sanitizeRange({ from: query.from, to: query.to }, 14);
 
+  // The page reads through the same branch scope as `GET /api/pos/:id/inventory` (§16, §75): a
+  // clerk bound to a location sees that location's stock, its movements and its name in the
+  // location list, and never the other locations'.
+  const branchId = workspace.branchId;
   const [items, movements, branches, products] = await Promise.all([
-    stockWithProducts(businessId),
-    listMovements(businessId, { range: { from: range.from, to: range.to }, take: 150 }),
-    configuration.branches.enabled ? listBranches(businessId) : Promise.resolve([]),
+    stockWithProducts(businessId, undefined, { branchId }),
+    listMovements(businessId, { range: { from: range.from, to: range.to }, branchId, take: 150 }),
+    configuration.branches.enabled ? listBranches(businessId, undefined, { only: branchId }) : Promise.resolve([]),
     listProducts(businessId, { take: 400 }),
   ]);
 

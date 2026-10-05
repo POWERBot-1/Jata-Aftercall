@@ -450,6 +450,11 @@ async function settlePosSale(params: {
   };
 
   const method = (transaction.method ?? pos.method ?? "mpesa").toLowerCase().includes("paystack") ? "card" : "mpesa";
+  const settlementMethod = String(pos.method || method).trim().toLowerCase();
+  // "wallet" is not a till tender — it is the settlement record of this provider-confirmed wallet
+  // payment. Only the engine passes the settlement flag, and only for the wallet tender, so the
+  // sale row carries the method the customer actually paid with (§112).
+  const walletSettlement = settlementMethod === "wallet";
   const request: SaleRequest = {
     ...pos.request,
     payments: [
@@ -470,6 +475,7 @@ async function settlePosSale(params: {
     actor,
     request,
     client,
+    options: walletSettlement ? { walletSettlement: { transactionId: String(transaction.id) } } : undefined,
   });
 
   if (!outcome.ok || !outcome.sale) {

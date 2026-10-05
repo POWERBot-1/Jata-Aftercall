@@ -101,46 +101,107 @@ const RECONCILIATION_AUDIT_ACTION: Record<string, PaymentAuditAction> = {
 };
 
 export type DailyReconciliation = {
+  /** Wallet-backed sales for the day, net of refunds — matched one-to-one with transactions. */
   posSalesKES: number;
+  /** Confirmed wallet transactions for the day, gross (before refunds). */
   confirmedPaymentsKES: number;
+  /** What provider refunds have already returned, so the net figure above explains itself. */
+  refundedKES: number;
   differenceKES: number;
+  /** Confirmed wallet transactions in the range. */
   transactions: number;
+  /** Transactions whose sale exists and whose confirmed amount equals the sale total. */
+  settled: number;
+  /** Transactions whose sale is missing or whose amounts do not line up. */
+  mismatches: number;
+  /** Confirmed transactions with no sale attached (direct amounts) — reported, not compared. */
+  directPayments: number;
+  /** Reconciliation rows that matched (kept from the event-time matcher). */
   matched: number;
+  /** Unresolved exception rows (kept from the event-time matcher). */
   exceptions: number;
   unmatchedKES: number;
+  /**
+   * True only when every wallet transaction matched a sale with matching amounts, there are no
+   * mismatches, and no unresolved exceptions. "Reconciled" is never the absence of exception
+   * rows on an empty day — a day with no wallet payments is reported as NO_WALLET_PAYMENTS.
+   */
   reconciled: boolean;
+  status: "NO_WALLET_PAYMENTS" | "MATCHED" | "DIFFERENCE" | "EXCEPTIONS";
   byProvider: { provider: string; confirmedKES: number; count: number }[];
 };
 
+const PAID_STATUSES = ["CONFIRMED", "PAID", "PARTIALLY_PAID", "PARTIALLY_REFUNDED", "FULLY_REFUNDED"];
+
 /**
- * The daily reconciliation (§43): POS sales against confirmed payments, with every difference
- * explainable as a counted exception rather than a rounding shrug.
+ * The daily reconciliation (§43, §44): wallet money matched to POS sales by their authoritative
+ * identifiers, not by two date totals that happen to share a day.
+ *
+ * Every confirmed wallet transaction names the sale it settled (`posSaleId`, written atomically
+ * with the settlement). Matching on that identifier means a cash sale, a direct wallet amount and
+ * a refund are each accounted for exactly where they belong: a transaction is *settled* when its
+ * sale exists in the same tenant and the provider-confirmed amount equals the sale total;
+ * anything else is a counted difference, and refunds are reported as the refund that already
+ * happened to the matched pair rather than as a mystery in the totals.
  */
 export async function dailyReconciliation(
   businessId: string,
   range: { from: Date; to: Date },
   client: PaymentClient = prisma,
 ): Promise<DailyReconciliation> {
-  const [sales, transactions, reconciliations] = await Promise.all([
-    client.posSale.findMany({
-      where: { businessId, createdAt: { gte: range.from, lte: range.to }, status: { not: "VOIDED" } },
-      select: { totalKES: true, status: true },
-    }),
+  const [transactions, reconciliations] = await Promise.all([
     client.paymentTransaction.findMany({
       where: { businessId, createdAt: { gte: range.from, lte: range.to } },
-      select: { amountMinor: true, status: true, provider: true },
+      select: {
+        id: true,
+        posSaleId: true,
+        amountMinor: true,
+        amountPaidMinor: true,
+        amountRefundedMinor: true,
+        status: true,
+        provider: true,
+      },
     }),
     client.paymentReconciliation.findMany({
       where: { businessId, createdAt: { gte: range.from, lte: range.to } },
-      select: { result: true, differenceMinor: true },
+      select: { result: true, differenceMinor: true, receivedAmountMinor: true },
     }),
   ]);
 
-  const posSalesKES = (sales ?? []).reduce((total: number, sale: any) => total + Number(sale.totalKES ?? 0), 0);
-  const confirmed = (transactions ?? []).filter((row: any) =>
-    ["CONFIRMED", "PAID", "PARTIALLY_PAID", "PARTIALLY_REFUNDED", "FULLY_REFUNDED"].includes(String(row.status)),
-  );
-  const confirmedPaymentsKES = confirmed.reduce((total: number, row: any) => Math.round(total + Number(row.amountMinor ?? 0) / 100), 0);
+  const confirmed = (transactions ?? []).filter((row: any) => PAID_STATUSES.includes(String(row.status)));
+  const withSale = confirmed.filter((row: any) => row.posSaleId);
+  const direct = confirmed.filter((row: any) => !row.posSaleId);
+
+  const saleIds = [...new Set(withSale.map((row: any) => String(row.posSaleId)))];
+  const saleRows: any[] = saleIds.length
+    ? (await client.posSale.findMany({
+        where: { businessId, id: { in: saleIds }, status: { not: "VOIDED" } },
+        select: { id: true, totalKES: true, refundedKES: true },
+      })) ?? []
+    : [];
+  const saleById: Map<string, any> = new Map(saleRows.map((row: any) => [String(row.id), row]));
+
+  let posSalesKES = 0;
+  let settled = 0;
+  let mismatches = 0;
+  let confirmedPaymentsKES = 0;
+  let refundedKES = 0;
+
+  for (const row of withSale) {
+    confirmedPaymentsKES += Math.round(Number(row.amountMinor ?? 0) / 100);
+    refundedKES += Math.round(Number(row.amountRefundedMinor ?? 0) / 100);
+    const sale = saleById.get(String(row.posSaleId));
+    const expectedMinor = sale ? Math.round(Number(sale.totalKES ?? 0) * 100) : null;
+    const receivedMinor = Number(row.amountPaidMinor ?? row.amountMinor ?? 0);
+    if (sale && expectedMinor !== null && receivedMinor === expectedMinor) {
+      // Net of the refunds the wallet already processed on this pair (§43).
+      posSalesKES += Math.max(0, Number(sale.totalKES ?? 0) - Number(sale.refundedKES ?? 0));
+      settled += 1;
+    } else {
+      mismatches += 1;
+    }
+  }
+
   const matched = (reconciliations ?? []).filter((row: any) => row.result === "MATCHED" || row.result === "MANUAL_MATCHED").length;
   const exceptions = (reconciliations ?? []).filter((row: any) => row.result !== "MATCHED" && row.result !== "MANUAL_MATCHED").length;
   const unmatchedKES = (reconciliations ?? [])
@@ -156,15 +217,23 @@ export async function dailyReconciliation(
     providerTotals.set(key, current);
   }
 
+  const status: DailyReconciliation["status"] =
+    withSale.length === 0 ? "NO_WALLET_PAYMENTS" : mismatches > 0 ? "DIFFERENCE" : exceptions > 0 ? "EXCEPTIONS" : "MATCHED";
+
   return {
     posSalesKES,
     confirmedPaymentsKES,
-    differenceKES: confirmedPaymentsKES - posSalesKES,
-    transactions: (transactions ?? []).length,
+    refundedKES,
+    differenceKES: confirmedPaymentsKES - posSalesKES - refundedKES,
+    transactions: withSale.length,
+    settled,
+    mismatches,
+    directPayments: direct.length,
     matched,
     exceptions,
     unmatchedKES,
-    reconciled: exceptions === 0,
+    reconciled: status === "MATCHED",
+    status,
     byProvider: [...providerTotals.entries()].map(([provider, totals]) => ({ provider, ...totals })),
   };
 }

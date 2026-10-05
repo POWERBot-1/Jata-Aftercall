@@ -39,21 +39,29 @@ type CardSources = {
 };
 
 /** Loads only what the configured cards actually need (§34 — no metric for every business). */
-export async function loadCardSources(businessId: string, config: PosConfiguration, cards: DashboardCardKey[]): Promise<CardSources> {
+export async function loadCardSources(
+  businessId: string,
+  config: PosConfiguration,
+  cards: DashboardCardKey[],
+  options: { branchId?: string | null } = {},
+): Promise<CardSources> {
   const wanted = new Set(cards);
   const today = dayRange();
   const month = monthRange();
+  // A staff member bound to a location sees that location's numbers; an unbound actor sees the
+  // whole business (§16, §75). Credit and supplier balances are party-level, not location-level.
+  const branchId = options.branchId ?? null;
   const needsSales = ["today_sales", "cash", "mpesa", "staff_performance", "top_products"].some((key) => wanted.has(key as DashboardCardKey));
   const needsOrders = ["orders", "appointments", "pending_jobs", "pending_deliveries", "kitchen_queue"].some((key) => wanted.has(key as DashboardCardKey));
 
   const [sales, orders, customerParties, supplierParties, lowStock, expenses, stock, newCustomers] = await Promise.all([
-    needsSales ? store.salesForReport(businessId, { from: today.from, to: today.to }) : Promise.resolve([]),
-    needsOrders ? store.ordersForReport(businessId, { from: new Date(Date.now() - 30 * 86_400_000), to: new Date() }) : Promise.resolve([]),
+    needsSales ? store.salesForReport(businessId, { from: today.from, to: today.to }, undefined, { branchId }) : Promise.resolve([]),
+    needsOrders ? store.ordersForReport(businessId, { from: new Date(Date.now() - 30 * 86_400_000), to: new Date() }, undefined, { branchId }) : Promise.resolve([]),
     wanted.has("credit_owed") ? store.partiesWithBalances(businessId, "CUSTOMER") : Promise.resolve([]),
     wanted.has("supplier_debt") ? store.partiesWithBalances(businessId, "SUPPLIER") : Promise.resolve([]),
-    wanted.has("stock_alerts") && config.inventory.enabled ? store.lowStock(businessId) : Promise.resolve([]),
-    wanted.has("expenses") ? store.expensesForReport(businessId, { from: month.from, to: month.to }) : Promise.resolve([]),
-    wanted.has("inventory_value") ? store.stockWithProducts(businessId) : Promise.resolve([]),
+    wanted.has("stock_alerts") && config.inventory.enabled ? store.lowStock(businessId, undefined, { branchId }) : Promise.resolve([]),
+    wanted.has("expenses") ? store.expensesForReport(businessId, { from: month.from, to: month.to }, undefined, { branchId }) : Promise.resolve([]),
+    wanted.has("inventory_value") ? store.stockWithProducts(businessId, undefined, { branchId }) : Promise.resolve([]),
     wanted.has("new_customers")
       ? store.countNewCustomers(businessId, today.from)
       : Promise.resolve(0),

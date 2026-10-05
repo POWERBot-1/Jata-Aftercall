@@ -33,7 +33,18 @@ export type SaleRecord = {
   items?: { name: string; quantity: number; totalKES: number; costKES?: number | null }[];
 };
 
-export type ExpenseRecord = { id: string; createdAt: Date | string; categoryKey: string; amountKES: number; branchId?: string | null };
+export type ExpenseRecord = { id: string; createdAt: Date | string; categoryKey: string; amountKES: number; method?: string | null; branchId?: string | null };
+
+/** A settled row of the till's payment ledger — the only record of money in and out of the drawer. */
+export type PaymentLedgerRecord = {
+  id: string;
+  createdAt: Date | string;
+  direction: string;
+  purpose: string;
+  method: string;
+  amountKES: number;
+  branchId?: string | null;
+};
 
 export type DateRange = { from: Date; to: Date };
 
@@ -238,22 +249,44 @@ export type DailyClosing = {
   sales: SalesSummary;
   methods: MethodBreakdown;
   expensesKES: number;
+  /** Cash the ledger says the drawer should hold: every settled cash movement, in and out. */
   expectedCashKES: number;
+  cashInKES: number;
+  cashOutKES: number;
   basis: "recorded";
 };
 
-export function dailyClosing(sales: SaleRecord[], expenses: ExpenseRecord[], now: Date = new Date()): DailyClosing {
+/**
+ * Daily closing (§8 finance, §57).
+ *
+ * The drawer figure is read from the till's payment ledger — the single record of money
+ * physically in and out — not from a category label:
+ *
+ *   expected = Σ settled cash IN  (sales, deposits, credit repayments)
+ *            − Σ settled cash OUT (refunds, supplier payments, expenses)
+ *
+ * A sale paid by M-Pesa never touches the drawer, a cash refund empties it, and an expense
+ * paid by bank transfer is visible in the expense total without moving the drawer at all.
+ */
+export function dailyClosing(sales: SaleRecord[], expenses: ExpenseRecord[], payments: PaymentLedgerRecord[] = [], now: Date = new Date()): DailyClosing {
   const range = dayRange(now);
   const summary = summarizeSales(sales, range);
   const methods = paymentBreakdown(sales, range);
   const expensesKES = summarizeExpenses(expenses, range).totalKES;
-  const cash = methods.find((entry) => entry.method === "cash")?.amountKES ?? 0;
+  const cashInKES = payments
+    .filter((row) => inRange(row.createdAt, range) && row.direction === "IN" && String(row.method).toLowerCase() === "cash")
+    .reduce((total, row) => total + num(row.amountKES), 0);
+  const cashOutKES = payments
+    .filter((row) => inRange(row.createdAt, range) && row.direction === "OUT" && String(row.method).toLowerCase() === "cash")
+    .reduce((total, row) => total + num(row.amountKES), 0);
   return {
     date: range.from.toISOString().slice(0, 10),
     sales: summary,
     methods,
     expensesKES,
-    expectedCashKES: cash - expenses.filter((expense) => inRange(expense.createdAt, range) && expense.categoryKey === "cash_drawer").reduce((total, expense) => total + num(expense.amountKES), 0),
+    expectedCashKES: cashInKES - cashOutKES,
+    cashInKES,
+    cashOutKES,
     basis: "recorded",
   };
 }

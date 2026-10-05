@@ -11,6 +11,7 @@ const envKeys = [
   "MPESA_ENV",
   "MPESA_INITIATOR_NAME",
   "MPESA_SECURITY_CREDENTIAL",
+  "MPESA_CALLBACK_TOKEN",
   "MPESA_C2B_CONFIRMATION_URL",
   "MPESA_C2B_VALIDATION_URL",
 ] as const;
@@ -72,6 +73,9 @@ beforeEach(() => {
   process.env.MPESA_ENV = "sandbox";
   process.env.MPESA_INITIATOR_NAME = "JATA_TEST";
   process.env.MPESA_SECURITY_CREDENTIAL = "test-security-credential";
+  // A connected deployment has registered its callback token; readiness requires it, and the
+  // C2B URLs above carry it.
+  process.env.MPESA_CALLBACK_TOKEN = "test";
   process.env.MPESA_C2B_CONFIRMATION_URL = "https://jata.test/api/payments/webhooks/mpesa/confirmation?token=test";
   process.env.MPESA_C2B_VALIDATION_URL = "https://jata.test/api/payments/webhooks/mpesa/validation?token=test";
   resetMpesaTokenCache();

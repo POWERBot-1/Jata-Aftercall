@@ -13,7 +13,16 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(__dirname, "../..");
 const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
-const migration = readFileSync(path.join(root, "prisma/migrations/20261003000000_business_pos/migration.sql"), "utf8");
+// The POS schema is the original business_pos migration plus the authorized additive follow-ups.
+// New POS tables or columns must be added as a new migration AND listed here, so the guard keeps
+// proving that the migrations create exactly what the schema declares.
+const POS_MIGRATIONS = [
+  "20261003000000_business_pos",
+  "20261005020000_pos_sale_refund_integrity",
+  "20261005030000_pos_fractional_quantities",
+  "20261005040000_pos_sale_idempotency",
+];
+const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");
 const dbSource = readFileSync(path.join(root, "lib/db.ts"), "utf8");
 
@@ -47,28 +56,38 @@ function modelNameFromAccessor(accessor: string): string {
 }
 
 function tableColumns(table: string): Map<string, string> {
-  const start = migration.indexOf(`CREATE TABLE IF NOT EXISTS "${table}" (`);
-  if (start < 0) return new Map();
-  const end = migration.indexOf("\n);", start);
-  const block = migration.slice(start, end);
   const columns = new Map<string, string>();
-  for (const raw of block.split("\n")) {
-    const line = raw.trim();
-    const match = /^"(\w+)"\s+([A-Z]+(?:\(\d\))*)(.*)$/.exec(line.replace(/,$/, ""));
-    if (!match) continue;
-    columns.set(match[1], `${match[2]} ${match[3]}`.trim());
+  const start = migration.indexOf(`CREATE TABLE IF NOT EXISTS "${table}" (`);
+  if (start >= 0) {
+    const end = migration.indexOf("\n);", start);
+    const block = migration.slice(start, end);
+    for (const raw of block.split("\n")) {
+      const line = raw.trim();
+      const match = /^"(\w+)"\s+([A-Z]+(?:\(\d+\))*)(.*)$/.exec(line.replace(/,$/, ""));
+      if (!match) continue;
+      columns.set(match[1], `${match[2]} ${match[3]}`.trim());
+    }
+  }
+  // Columns added later by an additive migration are part of the table too (§80).
+  for (const add of migration.matchAll(new RegExp(`ALTER TABLE "${table}"\\s+ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^;\\n]*)`, "g"))) {
+    columns.set(add[1], `${add[2]} ${add[3]}`.trim());
   }
   return columns;
 }
 
 describe("the POS data model is tenant-scoped by construction (§5)", () => {
+  // The receipt sequence is a tenant-scoped counter: a plain unique `businessId` column, no
+  // relation, by design — the same shape the stock room's sequence must have (§32).
+  const RELATIONLESS = new Set(["PosReceiptSequence"]);
+
   it("gives every POS model a businessId and an index on it", () => {
-    expect(posModels.length).toBeGreaterThanOrEqual(20);
+    expect(posModels.length).toBeGreaterThanOrEqual(21);
     for (const model of posModels) {
       expect(model.fields.has("businessId"), `${model.name}.businessId`).toBe(true);
       // Optional only where a template outlives the business it was saved from (onDelete: SetNull).
       expect(["String", "String?"], `${model.name}.businessId type`).toContain(model.fields.get("businessId"));
       expect(model.body, `${model.name} index`).toContain("@@index([businessId");
+      if (RELATIONLESS.has(model.name)) continue;
       // Cascade everywhere, except a saved template which outlives the business it came from.
       expect(model.body, `${model.name} relation`).toMatch(/references: \[id\], onDelete: (Cascade|SetNull)/);
     }
@@ -124,6 +143,29 @@ describe("the POS data model is tenant-scoped by construction (§5)", () => {
     const sale = posModels.find((model) => model.name === "PosSale")!;
     expect(sale.fields.has("configurationVersion")).toBe(true);
     expect(sale.fields.has("refundedKES")).toBe(true);
+  });
+
+  it("records the refund split and the per-line returns, so a refund can never be paid twice (§30, §54)", () => {
+    const sale = posModels.find((model) => model.name === "PosSale")!;
+    expect(sale.fields.get("creditRefundedKES"), "PosSale.creditRefundedKES").toBe("Int");
+    const item = posModels.find((model) => model.name === "PosSaleItem")!;
+    expect(item.fields.get("returnedQty"), "PosSaleItem.returnedQty").toBe("Float");
+  });
+
+  it("keeps one per-business receipt sequence row so concurrent sales get unique numbers (§32)", () => {
+    const sequence = posModels.find((model) => model.name === "PosReceiptSequence")!;
+    expect(sequence, "PosReceiptSequence model").toBeTruthy();
+    expect(sequence.body).toMatch(/businessId\s+String\s+@unique/);
+    expect(sequence.fields.get("nextValue")).toBe("Int");
+  });
+
+  it("stores measurable quantities as three-decimal floats, never truncated ints (§13, §14)", () => {
+    for (const name of ["PosSaleItem", "PosInventoryItem", "PosInventoryMovement", "PosOrderItem", "PosPurchaseItem"]) {
+      const model = posModels.find((entry) => entry.name === name)!;
+      expect(model.fields.get("quantity"), `${name}.quantity`).toBe("Float");
+    }
+    expect(posModels.find((model) => model.name === "PosInventoryMovement")!.fields.get("delta")).toBe("Float");
+    expect(posModels.find((model) => model.name === "PosPurchaseItem")!.fields.get("receivedQty")).toBe("Float");
   });
 
   it("uses one generic asset record instead of a table per trade (§18, §52)", () => {
@@ -182,7 +224,18 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
       const uniques = [...model.body.matchAll(/@@unique\(\[([^\]]+)\]\)/g)].map((match) => match[1].split(",").map((part) => part.trim()));
       for (const columns of uniques) {
         const name = `${model.name}_${columns.join("_")}_key`;
-        expect(migration, name).toContain(`"${name}" UNIQUE`);
+        // One guarantee, two legal spellings: a unique constraint
+        // (`... ADD CONSTRAINT "name" UNIQUE (...)`) or a unique index
+        // (`CREATE UNIQUE INDEX [IF NOT EXISTS] "name" ON "Model"(...)`). They are enforced
+        // identically — including as an ON CONFLICT target — but only the index form is
+        // re-runnable, so new migrations use it. Both must carry the exact name the schema
+        // derives, so a rename on either side is still caught here.
+        const asConstraint = migration.includes(`"${name}" UNIQUE`);
+        const asIndex = new RegExp(
+          `CREATE\\s+UNIQUE\\s+INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?"${name}"\\s+ON\\s+"${model.name}"\\s*\\(\\s*${columns.map((column) => `"${column}"`).join("\\s*,\\s*")}\\s*\\)`,
+          "i",
+        ).test(migration);
+        expect(asConstraint || asIndex, `${name} unique over (${columns.join(", ")})`).toBe(true);
       }
       const relations = [...model.body.matchAll(/@relation\(fields: \[(\w+)\], references: \[(\w+)\]/g)];
       for (const relation of relations) {
