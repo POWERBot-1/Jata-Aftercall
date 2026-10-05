@@ -438,7 +438,13 @@ const pgStamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 describe.skipIf(!postgresEnabled)("POS refund race with real PostgreSQL", () => {
   it("two full refunds in the same moment: one commits, the other is refused, the till pays once", async () => {
     const { baselineConfiguration } = await import("@/lib/pos/configuration");
-    const config = baselineConfiguration();
+    // Refunds have to be switched on for this test to mean anything. The baseline ships with
+    // them off, and with them off `refundSale` refuses on the configuration guard before it
+    // opens a transaction — so both calls would be refused, the assertion below would see zero
+    // accepted refunds, and the test would be failing while never once reaching the concurrent
+    // path it exists to cover.
+    const base = baselineConfiguration();
+    const config = { ...base, sales: { ...base.sales, refunds: true } };
 
     const user = await prisma.user.create({
       data: { email: `refund-race-${pgStamp}@example.test`, name: "Race Owner", passwordHash: "not-a-real-login" },
@@ -475,10 +481,14 @@ describe.skipIf(!postgresEnabled)("POS refund race with real PostgreSQL", () => 
     });
     if (!saleOutcome.ok) throw new Error(`PG sale setup failed: ${saleOutcome.code}`);
     const saleId = (saleOutcome.sale as any).id;
+    // The goods are named explicitly: a refund that only names an amount leaves the shelf
+    // alone, and this test's last assertion is that the units come back exactly once.
+    const saleItems = await prisma.posSaleItem.findMany({ where: { businessId: business.id, saleId } });
+    const returnItems = saleItems.map((item: any) => ({ saleItemId: item.id, quantity: Number(item.quantity) }));
 
     const [first, second] = await Promise.all([
-      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash" } }),
-      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash" } }),
+      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems } }),
+      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems } }),
     ]);
     const accepted = [first, second].filter((result) => result.ok);
     expect(accepted).toHaveLength(1);
