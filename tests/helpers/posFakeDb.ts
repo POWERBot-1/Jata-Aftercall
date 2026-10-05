@@ -170,6 +170,9 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         if (property === "$transaction") {
           return async (work: any) => (typeof work === "function" ? work(db) : Promise.all(work));
         }
+        // The fake lets non-concurrency unit tests reach refund logic. PostgreSQL locking semantics
+        // are exercised only by the dedicated DATABASE_URL-backed refund integration suite.
+        if (property === "$queryRaw") return async () => [];
         if (property === "$connect" || property === "$disconnect") return async () => undefined;
         if (typeof property !== "string") return undefined;
         ensure(property);

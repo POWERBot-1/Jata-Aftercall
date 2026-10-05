@@ -27,8 +27,16 @@ const fake = () => (globalThis as any).__posFake as FakeDb;
 
 const CALLBACK_TOKEN = "jata-token-abc123";
 
-function mpesaStkPayload(overrides: { amount?: number; checkoutId?: string; resultCode?: string } = {}) {
+function mpesaStkPayload(overrides: { amount?: number; checkoutId?: string; resultCode?: string; receipt?: string | null } = {}) {
   const amount = overrides.amount ?? 350;
+  const items: Record<string, unknown>[] = [
+    { Name: "Amount", Value: amount },
+    { Name: "TransactionDate", Value: 20261004104830 },
+    { Name: "PhoneNumber", Value: 254712111111 },
+  ];
+  if (overrides.receipt !== null) {
+    items.push({ Name: "MpesaReceiptNumber", Value: overrides.receipt ?? "NLJ7RT61SV" });
+  }
   return {
     Body: {
       stkCallback: {
@@ -36,14 +44,7 @@ function mpesaStkPayload(overrides: { amount?: number; checkoutId?: string; resu
         CheckoutRequestID: overrides.checkoutId ?? "ws_CO_191220191020363925",
         ResultCode: overrides.resultCode ?? "0",
         ResultDesc: "The service request is processed successfully.",
-        CallbackMetadata: {
-          Item: [
-            { Name: "Amount", Value: amount },
-            { Name: "MpesaReceiptNumber", Value: "NLJ7RT61SV" },
-            { Name: "TransactionDate", Value: 20261004104830 },
-            { Name: "PhoneNumber", Value: 254712111111 },
-          ],
-        },
+        CallbackMetadata: { Item: items },
       },
     },
   };
@@ -112,6 +113,40 @@ function mpesaRequest(payload: Record<string, unknown>, token: string = CALLBACK
   };
 }
 
+function mpesaResultRequest(payload: Record<string, unknown>, token: string = CALLBACK_TOKEN) {
+  const rawBody = JSON.stringify(payload);
+  return {
+    provider: "MPESA" as const,
+    rawBody,
+    payload,
+    headers: new Headers({ "x-forwarded-for": "196.201.214.200" }),
+    url: new URL(`https://jata.test/api/payments/webhooks/mpesa/result?token=${token}`),
+    client: prisma,
+  };
+}
+
+function seedPendingMpesaRefund() {
+  Object.assign(fake().rows("paymentTransaction")[0], {
+    status: "PAID",
+    method: "MPESA_STK",
+    amountPaidMinor: 35_000,
+    amountRefundedMinor: 0,
+    providerReceipt: "NLJ7RT61SV",
+  });
+  fake().rows("refund").push({
+    id: "refund_a1",
+    businessId: "bizA",
+    transactionId: "tx_a1",
+    provider: "MPESA",
+    amountMinor: 10_000,
+    currency: "KES",
+    status: "PENDING_PROVIDER",
+    reason: "Customer cancellation",
+    providerReference: "AG_TEST_REFUND_1",
+    requestedAt: new Date(),
+  });
+}
+
 beforeEach(() => {
   process.env.MPESA_CALLBACK_TOKEN = CALLBACK_TOKEN;
   process.env.PAYSTACK_SECRET_KEY = "sk_test_jata_webhook";
@@ -129,17 +164,88 @@ describe("M-PESA callbacks (§35, §90)", () => {
     const first = await applyProviderEvent(mpesaRequest(mpesaStkPayload()));
     expect(first.status).toBe("processed");
     expect(fake().rows("paymentTransaction")[0].status).toBe("PAID");
-    // The provider's attempt handle (the CheckoutRequestID) stays the correlation key; the M-PESA
-    // receipt itself is kept, untouched, in the provider event that carried it.
+    // Keep the two provider identities distinct: CheckoutRequestID remains the correlation key,
+    // while the authoritative M-PESA receipt is persisted for reversal.
     expect(fake().rows("paymentTransaction")[0].providerTransactionId).toBe("ws_CO_191220191020363925");
+    expect(fake().rows("paymentTransaction")[0].providerReceipt).toBe("NLJ7RT61SV");
     expect(JSON.stringify(fake().rows("paymentEvent")[0].payload)).toContain("NLJ7RT61SV");
     expect(fake().rows("paymentEvent")[0]).toMatchObject({ status: "PROCESSED", signatureVerified: true });
 
-    // Safaricom retries a callback it thinks was not answered: one financial effect, still.
-    const second = await applyProviderEvent(mpesaRequest(mpesaStkPayload()));
+    // A replay with a conflicting receipt has the same provider event id: it cannot overwrite the
+    // receipt already bound to the CheckoutRequestID.
+    const second = await applyProviderEvent(mpesaRequest(mpesaStkPayload({ receipt: "ABCD123456" })));
     expect(second.status).toBe("already_processed");
     expect(fake().rows("paymentTransaction")[0].status).toBe("PAID");
     expect(fake().rows("paymentTransaction")[0].amountPaidMinor).toBe(35_000);
+    expect(fake().rows("paymentTransaction")[0].providerReceipt).toBe("NLJ7RT61SV");
+  });
+
+  it("does not mark an STK confirmation paid when its authenticated receipt is absent", async () => {
+    const result = await applyProviderEvent(mpesaRequest(mpesaStkPayload({ receipt: null })));
+    expect(result.status).toBe("processed");
+    const transaction = fake().rows("paymentTransaction")[0];
+    expect(transaction.status).toBe("PENDING");
+    expect(transaction.amountPaidMinor).toBe(0);
+    expect(transaction.providerTransactionId).toBe("ws_CO_191220191020363925");
+    expect(transaction.providerReceipt ?? null).toBeNull();
+    expect(fake().rows("paymentReconciliation")).toContainEqual(expect.objectContaining({
+      businessId: "bizA",
+      transactionId: "tx_a1",
+      result: "UNCONFIRMED",
+      notes: expect.stringMatching(/valid M-PESA receipt/i),
+    }));
+    expect(fake().rows("paymentEvent")[0]).toMatchObject({ status: "PROCESSED", errorCode: "MISSING_MPESA_RECEIPT" });
+  });
+
+  it("records a provider-confirmed asynchronous reversal as a completed refund", async () => {
+    seedPendingMpesaRefund();
+    const payload = {
+      Result: {
+        ResultCode: 0,
+        ResultDesc: "The service request is processed successfully.",
+        ConversationID: "AG_DARAJA_INTERNAL_9",
+        OriginatorConversationID: "AG_TEST_REFUND_1",
+        ResultParameters: { ResultParameter: [{ Key: "Amount", Value: 100 }, { Key: "TransID", Value: "NLJ7RT61SV" }] },
+      },
+    };
+    const result = await applyProviderEvent(mpesaResultRequest(payload));
+    expect(result.status).toBe("processed");
+    expect(fake().rows("refund")[0].status).toBe("COMPLETED");
+    expect(fake().rows("paymentAuditEvent").find((row) => row.action === "REFUND_COMPLETED")?.afterState).toMatchObject({
+      refundStatus: "COMPLETED",
+      amountRefundedMinor: 10_000,
+    });
+    expect(fake().rows("paymentTransaction")[0]).toMatchObject({
+      status: "PARTIALLY_REFUNDED",
+      amountRefundedMinor: 10_000,
+      providerReceipt: "NLJ7RT61SV",
+      providerTransactionId: "ws_CO_191220191020363925",
+    });
+
+    const duplicate = await applyProviderEvent(mpesaResultRequest(payload));
+    expect(duplicate.status).toBe("already_processed");
+    expect(fake().rows("refund")[0].status).toBe("COMPLETED");
+    expect(fake().rows("paymentTransaction")[0].amountRefundedMinor).toBe(10_000);
+  });
+
+  it("releases a pending refund reservation on an authenticated provider failure result", async () => {
+    seedPendingMpesaRefund();
+    const payload = {
+      Result: {
+        ResultCode: 1032,
+        ResultDesc: "The reversal was not completed.",
+        ConversationID: "AG_DARAJA_INTERNAL_9",
+        OriginatorConversationID: "AG_TEST_REFUND_1",
+      },
+    };
+    const result = await applyProviderEvent(mpesaResultRequest(payload));
+    expect(result.status).toBe("processed");
+    expect(fake().rows("refund")[0].status).toBe("FAILED");
+    expect(fake().rows("paymentTransaction")[0]).toMatchObject({ status: "PAID", amountRefundedMinor: 0 });
+    expect(fake().rows("paymentReconciliation")).toContainEqual(expect.objectContaining({
+      transactionId: "tx_a1",
+      result: "UNCONFIRMED",
+    }));
   });
 
   it("refuses a callback that does not carry JATA's token (§35, §120)", async () => {
@@ -306,6 +412,81 @@ describe("Paystack events (§35, §90)", () => {
     });
     expect(result.status).toBe("ignored");
     expect(fake().rows("paymentTransaction").find((entry) => entry.id === "tx_ps1")?.status).toBe("PENDING");
+  });
+
+  it("settles a pending Paystack refund reservation using the refund id, never the charge reference (§47)", async () => {
+    // Seed a paid payment and a reservation waiting on Paystack.
+    const payment = fake().rows("paymentTransaction").find((entry) => entry.id === "tx_ps1")!;
+    Object.assign(payment, { status: "PAID", amountPaidMinor: 35_000, amountRefundedMinor: 0, providerTransactionId: "99001" });
+    fake().rows("refund").push({
+      id: "refund_ps1",
+      businessId: "bizA",
+      transactionId: "tx_ps1",
+      provider: "PAYSTACK",
+      amountMinor: 10_000,
+      currency: "KES",
+      status: "PENDING_PROVIDER",
+      reason: "Customer cancellation",
+      providerReference: "3018284", // Paystack refund id (data.id), not the charge reference.
+      requestedAt: new Date(),
+    });
+
+    // Webhook carries the refund id as data.id — not data.transaction_reference — as Paystack
+    // documents it. Matching by the charge reference would miss the reservation.
+    const ok = await applyProviderEvent(paystackRequest("refund.processed", {
+      id: 3018284,
+      status: "processed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 10_000,
+      currency: "KES",
+    }));
+    expect(ok.status).toBe("processed");
+    expect(fake().rows("refund")[0].status).toBe("COMPLETED");
+    expect(payment.amountRefundedMinor).toBe(10_000);
+    expect(payment.status).toBe("PARTIALLY_REFUNDED");
+
+    // A duplicate delivery is already_processed and does not double-count.
+    const dup = await applyProviderEvent(paystackRequest("refund.processed", {
+      id: 3018284,
+      status: "processed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 10_000,
+      currency: "KES",
+    }));
+    expect(dup.status).toBe("already_processed");
+    expect(payment.amountRefundedMinor).toBe(10_000);
+
+    // A refund.failed releases the reservation so the merchant can retry.
+    fake().rows("refund").push({
+      id: "refund_ps2",
+      businessId: "bizA",
+      transactionId: "tx_ps1",
+      provider: "PAYSTACK",
+      amountMinor: 5_000,
+      currency: "KES",
+      status: "PENDING_PROVIDER",
+      reason: "Second cancellation",
+      providerReference: "3018285",
+      requestedAt: new Date(),
+    });
+    const failedRawBody = JSON.stringify({ id: 302962, event: "refund.failed", data: {
+      id: 3018285,
+      status: "failed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 5_000,
+      currency: "KES",
+    } });
+    const failed = await applyProviderEvent({
+      provider: "PAYSTACK" as const,
+      rawBody: failedRawBody,
+      payload: JSON.parse(failedRawBody),
+      headers: new Headers({ "x-paystack-signature": paystackSignature(failedRawBody, "sk_test_jata_webhook") }),
+      url: new URL("https://jata.test/api/payments/webhooks/paystack"),
+      client: prisma,
+      fetchImpl: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
+    });
+    expect(failed.status).toBe("processed");
+    expect(fake().rows("refund").find((r) => r.id === "refund_ps2")?.status).toBe("FAILED");
   });
 });
 

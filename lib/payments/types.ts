@@ -209,6 +209,7 @@ export type TransactionRecord = {
   status: PaymentStatus;
   providerReference: string | null;
   providerTransactionId: string | null;
+  providerReceipt?: string | null;
   method: string | null;
   amountMinor: number;
   amountPaidMinor: number;
@@ -300,6 +301,8 @@ export type ProviderEventOutcome =
       kind: "confirmation";
       providerReference: string;
       providerTransactionId: string | null;
+      /** Actual M-PESA receipt; distinct from the STK CheckoutRequestID correlation handle. */
+      providerReceipt?: string | null;
       amountMinor: number;
       currency: string;
       destination: DestinationHint;

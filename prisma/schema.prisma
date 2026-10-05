@@ -1739,7 +1739,10 @@ model PaymentTransaction {
   /// JATA's reference handed to the provider (§64).
   providerReference     String?
   /// The provider's own transaction id — the authoritative external identity (§32, §33).
+  /// For M-PESA STK this remains the CheckoutRequestID correlation handle.
   providerTransactionId String?
+  /// Actual M-PESA STK receipt from the authenticated callback; never a correlation substitute.
+  providerReceipt       String?
   idempotencyKey        String                   @unique
   /// How the payment was made: MPESA_STK | MPESA_PAYBILL | MPESA_QR | CARD | BANK_TRANSFER …
   method                String?
@@ -1915,6 +1918,7 @@ model Refund {
 
   @@index([businessId, createdAt])
   @@index([transactionId])
+  @@index([provider, providerReference])
 }
 
 /// Payment audit trail (§60, §98). Immutable through normal interfaces — a database trigger

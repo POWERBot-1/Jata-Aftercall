@@ -63,6 +63,7 @@ export const TRANSACTION_SELECT = {
   status: true,
   providerReference: true,
   providerTransactionId: true,
+  providerReceipt: true,
   method: true,
   amountMinor: true,
   amountPaidMinor: true,

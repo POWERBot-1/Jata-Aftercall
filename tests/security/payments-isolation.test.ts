@@ -21,7 +21,7 @@ import { applyConfirmation } from "@/lib/payments/engine";
 import { createPaymentRequest } from "@/lib/payments/orchestrator";
 import { listRecentPayments, paymentDetail, toMerchantPaymentRow } from "@/lib/payments/store";
 import { addDestination, loadWallet, paymentHealthRows, paymentHealth } from "@/lib/payments/wallet";
-import { refundValidation, requestRefund } from "@/lib/payments/refunds";
+import { refundSummary, refundValidation, requestRefund } from "@/lib/payments/refunds";
 import { isOk } from "@/lib/payments/result";
 import { applyProviderEvent } from "@/lib/payments/webhooks";
 import { connectorReadiness, readMpesaConfig } from "@/lib/payments/config";
@@ -116,6 +116,26 @@ describe("one business never sees another business's money (§5, §57, §75)", (
     expect(await paymentDetail("bizB", "tx_a1", prisma)).toBeNull();
     expect(await paymentDetail("bizA", "tx_b1", prisma)).toBeNull();
     expect(await paymentDetail("bizA", "tx_a1", prisma)).not.toBeNull();
+  });
+
+  it("does not expose or act on another tenant's persisted STK receipt", async () => {
+    const source = fake().rows("paymentTransaction").find((row) => row.id === "tx_a1")!;
+    source.providerReceipt = "NLJ7RT61SV";
+    expect(await paymentDetail("bizB", "tx_a1", prisma)).toBeNull();
+    const tenantBRows = await listRecentPayments("bizB", {}, prisma);
+    expect(JSON.stringify(tenantBRows)).not.toContain("NLJ7RT61SV");
+    expect(toMerchantPaymentRow(source)).not.toHaveProperty("providerReceipt");
+
+    const attempted = await requestRefund({
+      businessId: "bizB",
+      transactionId: "tx_a1",
+      amountKES: 100,
+      reason: "Cross-tenant refund attempt",
+      actor: { ...storeOwner, permissions: ["REFUND_PAYMENT"], confirmed: true },
+      client: prisma,
+    });
+    expect(attempted).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(fake().rows("refund")).toHaveLength(0);
   });
 
   it("refuses a destination from another tenant even when the id is correct", async () => {
@@ -278,6 +298,124 @@ describe("only the right role can move where money lands (§36, §62)", () => {
     if (isOk(unconfirmed)) return;
     expect(unconfirmed.code).toBe("CONFIRMATION_REQUIRED");
     expect(fake().rows("refund")).toHaveLength(0);
+  });
+
+  it("records a missing STK receipt as a failed refund and durable reconciliation exception", async () => {
+    const transaction = fake().rows("paymentTransaction")[0];
+    Object.assign(transaction, {
+      status: "PAID",
+      method: "MPESA_STK",
+      providerTransactionId: "ws_CO_191220191020363925",
+      providerReceipt: null,
+      amountPaidMinor: 35_000,
+    });
+
+    const outcome = await requestRefund({
+      businessId: "bizA",
+      transactionId: "tx_a1",
+      amountKES: 100,
+      reason: "Customer cancellation",
+      actor: { ...storeOwner, confirmed: true },
+      client: prisma,
+    });
+
+    expect(outcome).toMatchObject({ ok: false, code: "MISSING_MPESA_RECEIPT" });
+    expect(fake().rows("paymentTransaction")[0].amountRefundedMinor).toBe(0);
+    expect(fake().rows("refund")[0]).toMatchObject({ status: "FAILED", amountMinor: 10_000 });
+    expect(fake().rows("paymentReconciliation")).toContainEqual(expect.objectContaining({
+      businessId: "bizA",
+      transactionId: "tx_a1",
+      result: "UNCONFIRMED",
+      notes: expect.stringMatching(/M-PESA receipt/i),
+    }));
+    expect(fake().rows("paymentAuditEvent").some((row) => row.action === "REFUND_FAILED")).toBe(true);
+  });
+
+  it("keeps the reservation when the provider response is ambiguous instead of releasing money", async () => {
+    const oldSecret = process.env.PAYSTACK_SECRET_KEY;
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_ambiguous_refund";
+    const transaction = fake().rows("paymentTransaction")[0];
+    Object.assign(transaction, {
+      provider: "PAYSTACK",
+      providerTransactionId: "paystack-provider-transaction",
+      status: "PAID",
+      amountPaidMinor: 35_000,
+      amountRefundedMinor: 0,
+    });
+
+    try {
+      const outcome = await requestRefund({
+        businessId: "bizA",
+        transactionId: "tx_a1",
+        amountKES: 100,
+        reason: "Customer cancellation",
+        actor: { ...storeOwner, confirmed: true },
+        fetchImpl: (async () => { throw new Error("simulated network timeout"); }) as unknown as typeof fetch,
+        client: prisma,
+      });
+      expect(outcome).toMatchObject({ ok: false, code: "PAYSTACK_UNREACHABLE" });
+      expect(fake().rows("refund")[0]).toMatchObject({ status: "PENDING_PROVIDER", amountMinor: 10_000 });
+      expect(refundValidation({ transaction, amountKES: 300, outstandingRefundMinor: 10_000 }).code).toBe("AMOUNT_TOO_HIGH");
+      expect(fake().rows("paymentReconciliation")).toContainEqual(expect.objectContaining({
+        transactionId: "tx_a1",
+        result: "UNCONFIRMED",
+      }));
+    } finally {
+      if (oldSecret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+      else process.env.PAYSTACK_SECRET_KEY = oldSecret;
+    }
+  });
+
+  it("counts completed refund ledger rows if the stored aggregate is stale", async () => {
+    const transaction = fake().rows("paymentTransaction")[0];
+    Object.assign(transaction, { status: "PAID", amountPaidMinor: 35_000, amountRefundedMinor: 0 });
+    fake().rows("refund").push({
+      id: "refund_completed_a1",
+      businessId: "bizA",
+      transactionId: "tx_a1",
+      provider: "MPESA",
+      amountMinor: 30_000,
+      status: "COMPLETED",
+      reason: "Previously refunded",
+    });
+
+    const outcome = await requestRefund({
+      businessId: "bizA",
+      transactionId: "tx_a1",
+      amountKES: 100,
+      reason: "Customer cancellation",
+      actor: { ...storeOwner, confirmed: true },
+      client: prisma,
+    });
+
+    expect(outcome).toMatchObject({ ok: false, code: "AMOUNT_TOO_HIGH" });
+    expect(fake().rows("refund")).toHaveLength(1);
+    expect(transaction.amountRefundedMinor).toBe(0);
+  });
+
+  it("shows completed refunds and outstanding reservations in the available balance", () => {
+    // `paymentDetail` supplies a merchant read model in KES major units, not the raw database row.
+    const summary = refundSummary({
+      status: "PAID",
+      amountKES: 100,
+      paidKES: 100,
+      refundedKES: 0,
+    }, [
+      { status: "COMPLETED", amountKES: 40 },
+      { status: "PENDING_PROVIDER", amountKES: 50 },
+    ]);
+    expect(summary).toMatchObject({
+      paidKES: 100,
+      refundedKES: 40,
+      reservedKES: 50,
+      refundableKES: 10,
+      refundable: true,
+    });
+    expect(refundSummary({ status: "PENDING", amountKES: 100, paidKES: 0, refundedKES: 0 })).toMatchObject({
+      paidKES: 0,
+      refundableKES: 0,
+      refundable: false,
+    });
   });
 
   it("never lets a refund exceed what was actually paid", () => {

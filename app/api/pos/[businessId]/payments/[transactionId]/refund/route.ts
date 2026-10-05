@@ -29,7 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
     handler: async () => {
       const detail = await paymentDetail(businessId, transactionId);
       if (!detail) return posFail("That payment was not found for this business.", 404, "NOT_FOUND");
-      return posOk({ refund: refundSummary(detail.payment), payment: detail.payment });
+      return posOk({ refund: refundSummary(detail.payment, detail.refunds), payment: detail.payment });
     },
   });
 }
