@@ -2,7 +2,8 @@ import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
 import { emptyStateFor } from "@/lib/pos/presentation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * The dashboard (§34, §60, §61).
@@ -18,8 +19,11 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosDashboardPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
-  const sources = await loadCardSources(businessId, workspace.configuration, workspace.dashboardCards);
+  // The dashboard's "today" figures are the sales summary (§34) — refused before any card read.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SALES");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
+  const sources = await loadCardSources(businessId, workspace.configuration, workspace.dashboardCards, { branchId: workspace.branchId });
   const cards = buildDashboardCards(workspace.configuration, workspace.basePath, workspace.dashboardCards, sources);
   const emptyState = emptyStateFor(workspace.configuration, "dashboard", workspace.basePath);
   const terminology = workspace.terminology;

@@ -1,8 +1,9 @@
 import { manualReasons } from "@/lib/pos/inventory";
 import { listBranches, listMovements, listProducts, stockWithProducts } from "@/lib/pos/store";
 import { sanitizeRange } from "@/lib/pos/validation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { InventoryClient } from "@/components/pos/InventoryClient";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Stock (§16, §33). What is on hand, what needs attention, and the ledger of every change with
@@ -17,7 +18,10 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosInventoryPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Stock is the inventory module's read (§13) — the page answers like the stock API.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_INVENTORY");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const range = sanitizeRange({ from: query.from, to: query.to }, 14);
 

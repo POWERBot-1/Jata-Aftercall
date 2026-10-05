@@ -4,8 +4,9 @@ import prisma from "@/lib/db";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { buildReceipt, channelLabel, receiptToText } from "@/lib/pos/receipt";
 import { findSale } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RefundPanel } from "@/components/pos/RefundPanel";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * One sale (§27, §32, §54).
@@ -21,7 +22,10 @@ type Props = { params: Promise<{ businessId: string; saleId: string }> };
 
 export default async function PosSaleDetailPage({ params }: Props) {
   const { businessId, saleId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // A receipt is sales data (§32) — the module read is enforced before the sale row is read.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SALES");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const sale = await findSale(businessId, saleId);
   if (!sale) notFound();
 

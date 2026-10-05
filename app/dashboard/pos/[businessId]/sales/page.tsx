@@ -4,7 +4,8 @@ import { emptyStateFor } from "@/lib/pos/presentation";
 import { channelLabel } from "@/lib/pos/receipt";
 import { listSales, salesTotals } from "@/lib/pos/store";
 import { sanitizeRange } from "@/lib/pos/validation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Sales history (§27, §54).
@@ -23,7 +24,10 @@ type Props = {
 export default async function PosSalesPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Sales history is the sales module's read (§27) — the page answers like the API that lists it.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SALES");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const range = sanitizeRange({ from: query.from, to: query.to }, 7);
   const [sales, totals] = await Promise.all([
     listSales(businessId, { range: { from: range.from, to: range.to }, status: query.status, take: 100 }),

@@ -4,8 +4,9 @@ import { listCustomers, listOrders, listProducts } from "@/lib/pos/store";
 import { nextStates } from "@/lib/pos/workflow";
 import { resolveStates } from "@/lib/pos/workflow";
 import { sanitizeRange } from "@/lib/pos/validation";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { OrderBoardClient } from "@/components/pos/OrderBoardClient";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { NewOrderPanel } from "@/components/pos/NewOrderPanel";
 import type { PosModuleKey } from "@/lib/pos/types";
 
@@ -31,7 +32,10 @@ export async function OrderScreen({
   openNew?: boolean;
   stateFilter?: string;
 }) {
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // The board reads orders for the whole business — the same module read the orders API enforces.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_ORDERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
   const activeWorkflow = workflowKey ?? configuration.orders.workflowKey;
   const range = sanitizeRange({}, 30);

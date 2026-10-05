@@ -4,7 +4,8 @@ import { formatKES, formatDateTime } from "@/lib/format";
 import { buildStatement, RECEIVABLE, toCreditEntries } from "@/lib/pos/credit";
 import { findCustomer, listCreditEntries, listCustomerAssets, listSales } from "@/lib/pos/store";
 import { assetFields } from "@/lib/pos/forms";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { RepaymentPanel } from "@/components/pos/RepaymentPanel";
 
 /**
@@ -20,7 +21,10 @@ type Props = { params: Promise<{ businessId: string; customerId: string }> };
 
 export default async function PosCustomerDetailPage({ params }: Props) {
   const { businessId, customerId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // A customer record is the customers module's read (§25).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_CUSTOMERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const customer = await findCustomer(businessId, customerId);
   if (!customer) notFound();
 

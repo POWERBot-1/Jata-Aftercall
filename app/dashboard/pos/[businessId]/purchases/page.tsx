@@ -1,5 +1,6 @@
 import { listProducts, listPurchases, listSuppliers } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { PurchasesClient } from "@/components/pos/PurchasesClient";
 
 /**
@@ -15,7 +16,10 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosPurchasesPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Purchases belong to the suppliers module (§17).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SUPPLIERS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
   const [purchases, suppliers, products] = await Promise.all([

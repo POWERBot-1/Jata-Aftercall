@@ -1,5 +1,6 @@
 import { reportCatalogueFor } from "@/lib/pos/reporting";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 import { ReportsClient } from "@/components/pos/ReportsClient";
 
 /**
@@ -19,7 +20,10 @@ type Props = { params: Promise<{ businessId: string }>; searchParams: Promise<{ 
 export default async function PosReportsPage({ params, searchParams }: Props) {
   const { businessId } = await params;
   const query = await searchParams;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Reports are the reports module's read (§35).
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_REPORTS");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
 
   if (!workspace.permissions.includes("VIEW_REPORTS")) {
     return (

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { listBranches, salesTotals, stockWithProducts } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { BranchPanel } from "@/components/pos/BranchPanel";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Locations (§16).
@@ -20,13 +21,17 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosBranchesPage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  // Locations carry per-branch stock values (§16) — the inventory module's read.
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_INVENTORY");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
+  // A bound staff member sees their own location; an unbound actor sees the whole business (§75).
   const [branches, stock, totals] = await Promise.all([
-    listBranches(businessId),
-    configuration.inventory.enabled ? stockWithProducts(businessId) : Promise.resolve([]),
-    salesTotals(businessId, {}),
+    listBranches(businessId, undefined, { only: workspace.branchId }),
+    configuration.inventory.enabled ? stockWithProducts(businessId, undefined, { branchId: workspace.branchId }) : Promise.resolve([]),
+    salesTotals(businessId, {}, undefined, { branchId: workspace.branchId }),
   ]);
 
   const rows = branches as any[];
