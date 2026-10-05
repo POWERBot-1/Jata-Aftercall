@@ -634,7 +634,14 @@ export async function createSale(params: {
         branchId,
         conversions: configuration.inventory.conversions,
       })) {
-        await store.recordMovement(businessId, { ...movement, reason: movement.reason, refType: "SALE", createdById: actor.actorId }, tx);
+        await store.recordMovement(
+          businessId,
+          { ...movement, reason: movement.reason, refType: "SALE", createdById: actor.actorId },
+          tx,
+          // Same rule `checkAvailability` used a moment ago: a business that does not track
+          // stock levels sells on, a business that does can never be taken below zero (§33, §47).
+          { configuration },
+        );
       }
     }
 
@@ -1003,6 +1010,7 @@ export async function refundSale(params: {
           businessId,
           { ...movement, refType: "SALE", note: reason ?? `${action === "POS_SALE_VOIDED" ? "Voided" : "Returned"} against ${sale.receiptNumber}`, createdById: actor.actorId },
           tx,
+          { configuration },
         );
         returnedToStock += Math.abs(movement.delta);
       }

@@ -109,6 +109,7 @@ export async function adjustStock(params: {
         createdById: actor.actorId,
       },
       tx,
+      { configuration },
     );
     await logPosAuditInTransaction(tx, {
       businessId,
@@ -201,6 +202,7 @@ export async function transferStock(params: {
         businessId,
         { ...movement, refType: "TRANSFER", refId: transferId, note: text(params.note, 240), createdById: actor.actorId },
         tx,
+        { configuration },
       );
     }
     await logPosAuditInTransaction(tx, {
@@ -271,6 +273,7 @@ export async function recordStockCount(params: {
         createdById: actor.actorId,
       },
       tx,
+      { configuration },
     );
     await logPosAuditInTransaction(tx, {
       businessId,
@@ -433,6 +436,7 @@ export async function createPurchase(params: {
             createdById: actor.actorId,
           },
           tx,
+          { configuration },
         );
       }
     }
@@ -528,6 +532,7 @@ export async function receivePurchase(params: {
             createdById: actor.actorId,
           },
           tx,
+          { configuration },
         );
       }
       received += line.amount;

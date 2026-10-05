@@ -1,6 +1,8 @@
 import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
+import { negativeStockAllowed } from "./inventory";
 import type { InventoryMovementReason } from "./types";
+import type { PosConfiguration } from "./types";
 
 /**
  * Tenant-scoped data access for the Business POS (spec §5, §53, §75).
@@ -655,7 +657,7 @@ export async function recordMovement(
   businessId: string,
   input: MovementInput,
   client: PosClient = db(),
-  options: { allowNegative?: boolean } = {},
+  options: { allowNegative?: boolean; configuration?: PosConfiguration | null } = {},
 ) {
   const scope = branchScope(input.branchId);
   const delta = asQuantity(input.delta);
@@ -683,7 +685,12 @@ export async function recordMovement(
 
   if (product.trackInventory !== false && delta !== 0) {
     const where: Record<string, unknown> = { businessId, productId: product.id, branchId: scope };
-    const forbidsNegative = delta < 0 && options.allowNegative !== true;
+    // The negative-stock rule is the configuration's, never the caller's guess: it is the same
+    // rule `checkAvailability` applies before a sale is allowed, so a permitted sale can never
+    // be refused here (§33, §47). A caller that names the configuration gets its rule; a caller
+    // that passes nothing gets the strict rule, so silence never weakens stock protection.
+    const allowNegative = options.allowNegative ?? (options.configuration ? negativeStockAllowed(options.configuration) : false);
+    const forbidsNegative = delta < 0 && !allowNegative;
     if (forbidsNegative) where.quantity = { gte: Math.abs(delta) };
 
     const moved = await client.posInventoryItem.updateMany({

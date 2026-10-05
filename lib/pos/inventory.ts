@@ -7,7 +7,32 @@
  */
 
 import { convertQuantity, roundQuantity } from "./units";
+import { hasCapability } from "./capabilities";
 import type { InventoryMovementReason, PosConfiguration, SaleLineInput, UnitConversion } from "./types";
+
+/**
+ * The ONE rule that decides whether a business's stock numbers may stop a sale (§33, §47).
+ *
+ * A business that tracks stock wants the till to refuse what it does not have. A business that
+ * only records movements (a salon selling a retail item, a bar, a farm) must keep taking money
+ * when the number is zero — §47: the POS keeps working. The capability is the contract, so the
+ * availability check and the movement writer must read the *same* rule; when they disagree the
+ * till refuses a sale it had just decided to allow.
+ *
+ * - WITH `stock_levels`: stock is enforced — a sale is refused when there is not enough, and no
+ *   movement may take an item below zero.
+ * - WITHOUT it: movements are still recorded (the ledger never lies), but a zero or negative
+ *   number never blocks the sale.
+ */
+export function stockLevelsEnforced(configuration: PosConfiguration | null | undefined): boolean {
+  if (!configuration) return false;
+  return Boolean(configuration.inventory?.enabled) && hasCapability(configuration, "stock_levels");
+}
+
+/** Whether a movement that would take this item below zero is allowed under the configuration. */
+export function negativeStockAllowed(configuration: PosConfiguration | null | undefined): boolean {
+  return !stockLevelsEnforced(configuration);
+}
 
 export const MOVEMENT_REASONS: { key: InventoryMovementReason; label: string; sign: 1 | -1 | 0; needsNote: boolean }[] = [
   { key: "OPENING", label: "Opening stock", sign: 1, needsNote: false },
@@ -93,7 +118,9 @@ export function checkAvailability(
   lines: SaleLineInput[],
   stock: Record<string, number>,
 ): AvailabilityResult {
-  if (!config.inventory.enabled || !config.capabilities.includes("stock_levels")) return { ok: true, shortages: [] };
+  // The same rule `recordMovement` enforces: a business that does not track stock levels is
+  // never blocked by a number it does not maintain (§47).
+  if (!stockLevelsEnforced(config)) return { ok: true, shortages: [] };
   const shortages: AvailabilityResult["shortages"] = [];
   for (const line of lines) {
     if (line.kind === "SERVICE") continue;
