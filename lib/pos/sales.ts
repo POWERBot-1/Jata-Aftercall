@@ -899,6 +899,26 @@ export async function refundSale(params: {
     const cashRefundableKES = Math.max(0, collectedKES - cashRefundedKES);
     const creditRefundableKES = Math.max(0, Math.min(creditPortionKES - creditRefundedKES, receivableNowKES));
 
+    // ── Which methods may this money come back through? ──
+    // Not the browser's: the tenders this sale was actually funded by, less what has already
+    // been refunded out of each. The drawer figure is read from these rows, so the method is
+    // derived from the ledger (§35, §57).
+    const tenders = settledPayments
+      .filter((payment: any) => payment.direction === "IN")
+      .map((payment: any) => ({ method: String(payment.method ?? "cash"), amountKES: Number(payment.amountKES ?? 0) }));
+    const alreadyRefundedByMethod = (sale.payments ?? [])
+      .filter((payment: any) => payment.status === "SETTLED" && payment.direction === "OUT" && String(payment.purpose ?? "") === "REFUND")
+      .map((payment: any) => ({ method: String(payment.method ?? "cash"), amountKES: Number(payment.amountKES ?? 0) }));
+    const methodCapacityKES = allocateRefundMethods({
+      tenders,
+      alreadyRefunded: alreadyRefundedByMethod,
+      requestedMethod: null,
+      amountKES: Number.MAX_SAFE_INTEGER,
+    }).reduce((total: number, entry) => total + entry.amountKES, 0);
+    // Never pay out through a method that did not fund this sale, and never more than the
+    // till collected: the stricter of the ledger and the funding decides.
+    const fundableKES = Math.max(0, Math.min(cashRefundableKES, methodCapacityKES));
+
     // ── Items coming back: per line, only what is left to return, claimed atomically ──
     const returnLines: SaleLineInput[] = [];
     const claimLine = async (line: any, quantity: number): Promise<boolean> => {
@@ -963,18 +983,30 @@ export async function refundSale(params: {
         refundKES: 0,
       };
     }
-    // Cash is the only part that may leave the till; the credit part goes back to the customer's
-    // account. Cash is taken first, so a sale with both never hands out cash for the credit part.
-    const cashPart = Math.min(Math.max(0, requestedAmount), cashRefundableKES);
+    // Money is the only part that may leave through a tender; the credit part goes back to the
+    // customer's account. Money is taken first, so a sale with both never pays out more than was
+    // funded, and never through a method the customer did not pay with.
+    const cashPart = Math.min(Math.max(0, requestedAmount), fundableKES);
     const creditPart = Math.min(Math.max(0, requestedAmount - cashPart), creditRefundableKES);
     const refundKES = cashPart + creditPart;
+
+    // The authoritative split: one row per tender, each capped by what that tender funded and
+    // has not already returned. A browser that asks for "cash" on a credit sale, or for "mpesa"
+    // on a cash sale, gets the tender the ledger says was paid — never the label it sent.
+    const methodAllocations = allocateRefundMethods({
+      tenders,
+      alreadyRefunded: alreadyRefundedByMethod,
+      requestedMethod: requestedMethod,
+      amountKES: cashPart,
+    });
 
     if (refundKES <= 0 && !returnLines.length) {
       return { returnedToStock: 0, code: "NOTHING_TO_REFUND" as string | undefined, message: "Nothing left to refund on that sale.", refundKES: 0 };
     }
 
-    // ── Apply: cash row, credit ledger, stock back, totals forward, audit ──
-    if (cashPart > 0) {
+    // ── Apply: money rows, credit ledger, stock back, totals forward, audit ──
+    for (const allocation of methodAllocations) {
+      if (allocation.amountKES <= 0) continue;
       await tx.posPayment.create({
         data: {
           businessId,
@@ -983,8 +1015,8 @@ export async function refundSale(params: {
           branchId: sale.branchId ?? null,
           direction: "OUT",
           purpose: "REFUND",
-          method,
-          amountKES: cashPart,
+          method: allocation.method,
+          amountKES: allocation.amountKES,
           reference: clampNote(request.reference, 80),
           status: "SETTLED",
           notes: reason,
@@ -1067,7 +1099,10 @@ export async function refundSale(params: {
         receiptNumber: sale.receiptNumber,
         cashPart,
         creditPart,
-        method,
+        // What the ledger recorded, and what the browser asked for: the two are shown side by
+        // side so a forged method is visible in the trail even where it was simply ignored.
+        methods: methodAllocations.map((entry) => ({ method: entry.method, amountKES: entry.amountKES })),
+        requestedMethod: requestedMethod ?? null,
         reason,
         returnedLines: returnLines.length,
       },
@@ -1200,6 +1235,73 @@ async function loadConfigurationFor(businessId: string, client: PosClient): Prom
   } catch {
     return baselineConfiguration();
   }
+}
+
+export type RefundMethodAllocation = { method: string; amountKES: number };
+
+/**
+ * Splits the money side of a refund across the tenders the sale was *actually* funded by (§35,
+ * §57).
+ *
+ * A refund is a reversal of money that moved, so the method on the refund row is a financial
+ * fact, not a preference the browser may name. The day's cash figure is read from these rows
+ * (`dailyClosing` counts `posPayment` rows with `method === "cash"`), so a client-supplied
+ * method is a way to forge the drawer: take KES 5,000 out of the till, file it as "mpesa", and
+ * the close reports a drawer that is KES 5,000 over.
+ *
+ * The rules, in order:
+ *  - a method may only receive what was tendered in it and not yet refunded out of it;
+ *  - the browser's requested method is honoured *only* while that method still has capacity —
+ *    it is an expression of intent, validated against the ledger, never a label we write;
+ *  - the rest follows the tender order recorded on the sale (the order the money arrived in);
+ *  - a method that was never tendered can never appear, whatever the request says.
+ */
+export function allocateRefundMethods(params: {
+  /** Settled money that came IN for this sale: the tenders it was funded by. */
+  tenders: { method: string; amountKES: number }[];
+  /** Settled refund money already paid OUT per method. */
+  alreadyRefunded: { method: string; amountKES: number }[];
+  /** What the browser asked for; used only if that method still has room. */
+  requestedMethod?: string | null;
+  amountKES: number;
+}): RefundMethodAllocation[] {
+  const key = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  const tendered = new Map<string, { method: string; amountKES: number }>();
+  for (const tender of params.tenders ?? []) {
+    const amount = Math.max(0, Math.round(Number(tender.amountKES ?? 0)));
+    if (amount <= 0) continue;
+    const id = key(tender.method) || "cash";
+    const seen = tendered.get(id);
+    // Keep the spelling the sale recorded, so the refund row matches the tender row.
+    tendered.set(id, { method: seen?.method ?? String(tender.method ?? "cash"), amountKES: (seen?.amountKES ?? 0) + amount });
+  }
+  const refunded = new Map<string, number>();
+  for (const row of params.alreadyRefunded ?? []) {
+    const id = key(row.method) || "cash";
+    refunded.set(id, (refunded.get(id) ?? 0) + Math.max(0, Math.round(Number(row.amountKES ?? 0))));
+  }
+
+  const capacity = [...tendered.entries()]
+    .map(([id, tender]) => ({ id, method: tender.method, amountKES: Math.max(0, tender.amountKES - (refunded.get(id) ?? 0)) }))
+    .filter((entry) => entry.amountKES > 0);
+
+  // The requested method leads when it is one of the sale's real tenders and still has room;
+  // every other method with room follows in the order the money arrived.
+  const requestedId = key(params.requestedMethod);
+  const ordered = requestedId
+    ? [...capacity.filter((entry) => entry.id === requestedId), ...capacity.filter((entry) => entry.id !== requestedId)]
+    : capacity;
+
+  const allocations: RefundMethodAllocation[] = [];
+  let remaining = Math.max(0, Math.round(Number(params.amountKES ?? 0)));
+  for (const entry of ordered) {
+    if (remaining <= 0) break;
+    const amountKES = Math.min(remaining, entry.amountKES);
+    if (amountKES <= 0) continue;
+    allocations.push({ method: entry.method, amountKES });
+    remaining -= amountKES;
+  }
+  return allocations;
 }
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */
