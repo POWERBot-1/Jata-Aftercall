@@ -496,6 +496,17 @@ describe.skipIf(!postgresEnabled)("POS refund race with real PostgreSQL", () => 
 
     // The ledger paid out exactly once: one refund row, the sale fully refunded, stock back once.
     const saleRow = await prisma.posSale.findUnique({ where: { id: saleId } });
+    console.log(
+      "REFUND_RACE_DIAG",
+      JSON.stringify({
+        first: { ok: first.ok, code: (first as any).code, message: (first as any).message, warnings: (first as any).warnings, refundedKES: (first as any).refundedKES },
+        second: { ok: second.ok, code: (second as any).code, message: (second as any).message, warnings: (second as any).warnings, refundedKES: (second as any).refundedKES },
+        payments: (await prisma.posPayment.findMany({ where: { businessId: business.id, saleId } })).map((row: any) => ({
+          id: row.id, direction: row.direction, purpose: row.purpose, method: row.method, amountKES: row.amountKES, status: row.status,
+        })),
+        sale: { refundedKES: saleRow?.refundedKES, creditRefundedKES: saleRow?.creditRefundedKES, status: saleRow?.status, totalKES: saleRow?.totalKES, paidKES: saleRow?.paidKES },
+      }),
+    );
     expect(Number(saleRow?.refundedKES ?? 0)).toBe(100);
     expect(await prisma.posPayment.count({ where: { businessId: business.id, saleId, direction: "OUT", purpose: "REFUND" } })).toBe(1);
     const movements = await prisma.posInventoryMovement.findMany({ where: { businessId: business.id, refType: "SALE", reason: "RETURN" } });
