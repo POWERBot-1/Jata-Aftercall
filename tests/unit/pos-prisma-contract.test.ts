@@ -20,7 +20,7 @@ const ROOT = process.cwd();
 
 // ── The schema, as Prisma sees it ─────────────────────────────────────────────
 
-type ModelShape = { fields: Set<string>; relations: Set<string> };
+type ModelShape = { fields: Set<string>; relations: Set<string>; /** `@@unique([a, b])` inputs, named `a_b` by Prisma. */ compoundKeys: Set<string> };
 
 export function parseSchema(): Map<string, ModelShape> {
   const source = readFileSync(join(ROOT, "prisma/schema.prisma"), "utf8");
@@ -30,16 +30,34 @@ export function parseSchema(): Map<string, ModelShape> {
   for (const match of source.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
     const fields = new Set<string>();
     const relations = new Set<string>();
+    const compoundKeys = new Set<string>();
     for (const rawLine of match[2].split("\n")) {
       const line = rawLine.split("//")[0].trim();
-      if (!line || line.startsWith("@@")) continue;
+      if (!line) continue;
+      if (line.startsWith("@@unique")) {
+        // Prisma names the compound-unique input after the joined fields, so
+        // `@@unique([productId, branchId])` admits `where: { productId_branchId: { … } }`.
+        const list = line.match(/\(([^)]*)\)/);
+        if (list) {
+          // The field list is written as `[productId, branchId]` — drop the square brackets.
+          const parts = list[1]
+            .replace(/^\[/, "")
+            .replace(/\]$/, "")
+            .split(",")
+            .map((part) => part.trim())
+            .filter(Boolean);
+          if (parts.length > 1) compoundKeys.add(parts.join("_"));
+        }
+        continue;
+      }
+      if (line.startsWith("@@")) continue;
       const [name, type] = line.split(/\s+/);
       if (!name || !type) continue;
       fields.add(name);
       const bare = type.replace("?", "").replace("[]", "");
       if (modelNames.has(bare)) relations.add(name);
     }
-    models.set(match[1], { fields, relations });
+    models.set(match[1], { fields, relations, compoundKeys });
   }
   return models;
 }
@@ -162,7 +180,9 @@ export function violationsInSource(source: string, path: string): Violation[] {
       const brace = args.indexOf("{", clause.index! + clause[0].length - 1);
       for (const key of firstLevelKeys(args, brace)) {
         if (LOGICAL_OPERATORS.has(key)) continue;
-        const allowed = clause[1] === "include" ? model.relations : new Set([...model.fields, ...model.relations]);
+        // A where may name a field, a relation, or one of the model's compound-unique inputs.
+        const allowed =
+          clause[1] === "include" ? model.relations : new Set([...model.fields, ...model.relations, ...model.compoundKeys]);
         if (!allowed.has(key)) {
           found.push({
             file: path,
