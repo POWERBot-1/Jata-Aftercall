@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { buildReceipt, channelLabel, receiptToText } from "@/lib/pos/receipt";
-import { findSale } from "@/lib/pos/store";
+import { branchRecordInScope, findSale } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RefundPanel } from "@/components/pos/RefundPanel";
 import { PosRefusal } from "@/components/pos/PosRefusal";
@@ -28,6 +28,11 @@ export default async function PosSaleDetailPage({ params }: Props) {
   const workspace = gate.workspace;
   const sale = await findSale(businessId, saleId);
   if (!sale) notFound();
+  // A branch-bound clerk reads receipts from its own location only, exactly as
+  // `GET /api/pos/:id/sales/:saleId` answers (§16, §75). A guessed receipt id from another
+  // branch is not found here rather than rendered, and a group-level receipt stays with
+  // headquarters.
+  if (!branchRecordInScope(workspace, sale.branchId)) notFound();
 
   const receipt = buildReceipt({
     config: workspace.configuration,

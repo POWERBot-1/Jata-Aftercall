@@ -838,8 +838,21 @@ export async function refundSale(params: {
   const exists = await store.findSale(businessId, saleId, client);
   if (!exists) return { ok: false, code: "SALE_NOT_FOUND", message: "That sale was not found.", warnings };
 
+  // ── Branch scope (§16, §75) ──
+  // The sale id arrives as a path parameter, so nothing in the request names a branch: the only
+  // scope that can be applied is the branch the staff row binds this actor to. A cashier may
+  // refund and void their own location's sales and no other's — the browser cannot widen it, and
+  // the check runs before the sale is locked or a single row is written.
+  if (!store.branchRecordInScope(actor, exists.branchId)) {
+    return { ok: false, code: "BRANCH_OUT_OF_SCOPE", message: store.branchOutOfScopeMessage(), warnings };
+  }
+
   const requestedReturns = (request.items ?? []).filter((item) => item && typeof item === "object");
-  const method = clampNote(request.method, 32) ?? "cash";
+  // A refund method is a financial fact, not a preference: it is derived from the tenders this
+  // sale was actually paid with (see `resolveRefundMethods` below). The browser's value is only
+  // an expression of intent and is validated against that authoritative state — it can never
+  // name a method the sale was not funded by, and never an arbitrary label (§35, §57).
+  const requestedMethod = clampNote(request.method, 32);
   const reason = clampNote(request.reason, 240);
 
   const updated = await inTransaction(params.client, async (tx: PosClient) => {

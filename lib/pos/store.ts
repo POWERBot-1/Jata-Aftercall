@@ -136,6 +136,33 @@ export async function readBranchId(
     : { error: { code: "BRANCH_NOT_FOUND", message: "That location doesn't belong to this business." } };
 }
 
+/**
+ * May this actor *touch an existing record* recorded at `recordBranchId`? (§16, §75)
+ *
+ * `resolveBranch` decides where a new row may be written; this decides whether an existing row
+ * may be read or changed — the path-parameter case, where a browser supplies the id directly and
+ * nothing else in the request mentions a branch at all. Without it a cashier bound to one
+ * location can read, refund or void another location's sale by guessing its id (IDOR).
+ *
+ * - A branch-bound actor may only touch records of their own location. A record with no
+ *   location (recorded business-wide by an unbound actor) is not theirs either: their reads are
+ *   scoped to their branch, so a record that cannot appear in their list cannot be opened by id.
+ * - An actor without a branch (owner, admin, unbound staff) keeps business-wide reach, exactly
+ *   as `readBranchId` scopes their reads.
+ *
+ * Nothing here is taken from the request: the scope is the staff row resolved by `guard.ts`.
+ */
+export function branchRecordInScope(actor: { branchId?: string | null } | null | undefined, recordBranchId: string | null | undefined): boolean {
+  const bound = actor?.branchId ? branchScope(actor.branchId) : "";
+  if (!bound) return true;
+  return branchScope(recordBranchId) === bound;
+}
+
+/** The plain-language refusal a record outside the actor's branch produces (§38). */
+export function branchOutOfScopeMessage(): string {
+  return "That record belongs to a location you are not assigned to.";
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Products and services (§13)
 // ─────────────────────────────────────────────────────────────────────────────
