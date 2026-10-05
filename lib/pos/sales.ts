@@ -1181,6 +1181,12 @@ export async function refundSale(params: {
       }
       return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That sale is changing at the same moment — try the refund again.", refundKES: 0 };
     }
+    // A deadlock is the database refusing one of two simultaneous refunds. The transaction is
+    // already rolled back and nothing was written, so this is the same retryable answer the
+    // compare-and-set gives — not a broken request and not an engine error.
+    if (isWriteConflictError(error)) {
+      return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That sale is changing at the same moment — try the refund again.", refundKES: 0 };
+    }
     throw error;
   });
 
@@ -1379,6 +1385,29 @@ function isUniqueConstraintError(error: unknown): boolean {
   if (code === "P2002") return true;
   const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
   return message.includes("unique constraint") || message.includes("duplicate key");
+}
+
+/**
+ * True for the database refusing one of two simultaneous writes — Prisma's `P2034` (write
+ * conflict or deadlock) and the raw driver shapes of PostgreSQL's 40P01 (deadlock_detected) and
+ * 40001 (serialization_failure).
+ *
+ * Two refunds of the same sale take the same locks in the same order, so the row lock normally
+ * serialises them. When it does not, PostgreSQL aborts one transaction outright. That is the
+ * database doing the same job as the compare-and-set, so it owes the caller the same answer: the
+ * transaction is already rolled back, nothing was written, and the refund can be retried. Left
+ * to propagate it became an opaque engine error on a money-moving endpoint.
+ */
+function isWriteConflictError(error: unknown): boolean {
+  const code = String((error as { code?: unknown })?.code ?? "");
+  if (code === "P2034") return true;
+  const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
+  return (
+    message.includes("deadlock") ||
+    message.includes("write conflict") ||
+    message.includes("could not serialize") ||
+    message.includes("serialization failure")
+  );
 }
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */

@@ -429,11 +429,16 @@ export async function lockSaleRow(client: PosClient, businessId: string, saleId:
   if (!client?.$queryRaw) return;
   const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
   if (typeof rawIdentifier !== "function") return;
-  try {
-    await client.$queryRaw`SELECT 1 FROM ${rawIdentifier("PosSale")} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
-  } catch {
-    // Raw SQL unsupported on this client: the conditional updates keep each write safe.
-  }
+  // No try/catch here, deliberately.
+  //
+  // A client that cannot run raw SQL is already handled by the two guards above, so the only
+  // thing a catch would still swallow is a real database error — and on PostgreSQL a failed
+  // statement aborts the whole transaction. Swallowing it here used to let the refund carry on
+  // inside a dead transaction, where the very next read failed with 25P02 ("current transaction
+  // is aborted") and surfaced as an opaque engine error instead of the retryable conflict it
+  // actually was. A deadlock or a lock timeout has to reach the caller so the transaction rolls
+  // back cleanly and the caller can say so.
+  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier("PosSale")} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
 }
 
 export async function listCreditEntries(
