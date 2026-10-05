@@ -14,6 +14,11 @@ name: Production smoke (read-only)
 # Runs only on workflow_dispatch — never on push, never unattended.
 
 on:
+  # Push-scoped to the session branch so the probe runs without touching main: GitHub only
+  # dispatches workflow_dispatch workflows that exist on the default branch, and any push to
+  # main costs a production build and deploy.
+  push:
+    branches: [arena/01a10b8d-jata-aftercall]
   workflow_dispatch:
 
 jobs:
