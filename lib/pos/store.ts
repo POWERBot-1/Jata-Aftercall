@@ -1058,6 +1058,104 @@ export async function orderStateCounts(businessId: string, workflowKey?: string,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Idempotency (§27, §32, §54) — a till that sends the same sale twice
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What an idempotency key may be spent on. One key space per action, so a key minted for a sale
+ * can never be reused to guard something else.
+ */
+export const IDEMPOTENCY_SCOPES = { saleCreate: "sale.create" } as const;
+
+export type IdempotencyScope = (typeof IDEMPOTENCY_SCOPES)[keyof typeof IDEMPOTENCY_SCOPES];
+
+export type IdempotencyClaim = {
+  businessId: string;
+  actorId: string | null;
+  scope: IdempotencyScope | string;
+  key: string;
+  requestHash: string;
+};
+
+export type IdempotencyRecord = {
+  id: string;
+  businessId: string;
+  actorId: string;
+  scope: string;
+  key: string;
+  requestHash: string;
+  saleId: string | null;
+  createdAt: Date | null;
+};
+
+/** A client key is bounded and trimmed; anything longer or blank is not a key. */
+export function normalizeIdempotencyKey(value: unknown): string | null {
+  const key = String(value ?? "").trim();
+  if (!key || key.length > 128) return null;
+  return key;
+}
+
+/**
+ * The record a key already bought, or null if the key has not been spent (§27, §32).
+ *
+ * Read inside the tenant *and* the actor: one cashier's key can never answer for another's
+ * request, and the same key in two different shops is two different requests (§5, §54).
+ */
+export async function findIdempotencyRecord(claim: IdempotencyClaim, client: PosClient = db()): Promise<IdempotencyRecord | null> {
+  if (!claim.key || !claim.actorId) return null;
+  const row = await client.posIdempotencyRecord.findFirst({
+    where: {
+      businessId: claim.businessId,
+      actorId: claim.actorId,
+      scope: claim.scope,
+      key: claim.key,
+    },
+  });
+  return (row as IdempotencyRecord | null) ?? null;
+}
+
+/**
+ * Spend a key inside the caller's own transaction, before anything else is written (§27, §54).
+ *
+ * This is the whole point of the table: the insert shares the sale's transaction, so a duplicate
+ * that arrives while the first request is still open violates the unique index and PostgreSQL
+ * rolls the second attempt back with it. There is no window in which two sales can both be
+ * created under one key, and a request that was refused (no stock, no permission) never burns
+ * its key, because the refusal either happens before this line or rolls the transaction back.
+ */
+export async function claimIdempotencyKey(claim: IdempotencyClaim, client: PosClient): Promise<void> {
+  await client.posIdempotencyRecord.create({
+    data: {
+      businessId: claim.businessId,
+      actorId: claim.actorId ?? "",
+      scope: claim.scope,
+      key: claim.key,
+      requestHash: claim.requestHash,
+      saleId: null,
+    },
+  });
+}
+
+/**
+ * Record which sale the claimed key bought (§27, §54).
+ *
+ * Called at the end of the same transaction, so the row only ever carries the id of a sale that
+ * actually committed. A duplicate that loses the insert race can therefore always be answered
+ * with a real receipt rather than a promise.
+ */
+export async function completeIdempotencyKey(claim: IdempotencyClaim, saleId: string, client: PosClient): Promise<void> {
+  await client.posIdempotencyRecord.updateMany({
+    where: {
+      businessId: claim.businessId,
+      actorId: claim.actorId ?? "",
+      scope: claim.scope,
+      key: claim.key,
+    },
+    data: { saleId },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Workspace counts (§34, §61) — the setup checklist and empty states
 // ─────────────────────────────────────────────────────────────────────────────
 

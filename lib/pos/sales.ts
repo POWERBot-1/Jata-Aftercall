@@ -390,6 +390,13 @@ export async function createSale(params: {
    * provider-confirmed transaction, can declare a sale paid by wallet.
    */
   options?: { walletSettlement?: { transactionId: string } };
+  /**
+   * A replay guard for the till (§27, §32, §54). When a key is supplied, the sale claims it in
+   * its own transaction: a second request carrying the same key cannot also create a sale, so a
+   * double tap charges the customer once and moves stock once. A request without a key behaves
+   * exactly as it did before.
+   */
+  idempotency?: { key: string | null; requestHash: string } | null;
 }): Promise<SaleOutcome> {
   const { businessId, business, configuration, actor, request } = params;
   const client: PosClient = params.client ?? prisma;
@@ -494,6 +501,8 @@ export async function createSale(params: {
   const prefix = receiptPrefixFromBusinessName(configuration.receipt.businessName || business.name);
 
   const walletSettlement = params.options?.walletSettlement ?? null;
+  const idempotencyKey = store.normalizeIdempotencyKey(params.idempotency?.key);
+  const idempotencyHash = String(params.idempotency?.requestHash ?? "").slice(0, 128);
   let creditDecision: ReturnType<typeof decideCredit> | null = null;
   let sale: any;
   try {
@@ -522,6 +531,25 @@ export async function createSale(params: {
           "A wallet sale can only be recorded from the confirmed wallet payment it settles.",
         );
       }
+    }
+
+    // ── Spend the replay key first, inside this transaction (§27, §32, §54) ──
+    // Claiming here — before a single sale, stock or money row is written — is what makes the
+    // guard real rather than advisory. A duplicate that lands while this transaction is still
+    // open violates the unique index, so the loser writes nothing at all and its transaction
+    // rolls back: no second sale, no second stock movement, no second charge. Whichever request
+    // claims first blocks the other until it commits, by which time the sale id below is set.
+    if (idempotencyKey) {
+      await store.claimIdempotencyKey(
+        {
+          businessId,
+          actorId: actor.actorId,
+          scope: store.IDEMPOTENCY_SCOPES.saleCreate,
+          key: idempotencyKey,
+          requestHash: idempotencyHash,
+        },
+        tx,
+      );
     }
 
     // ── Credit, decided under the customer's row lock (§30) ───────────────────
@@ -691,6 +719,24 @@ export async function createSale(params: {
       },
     });
 
+    // ── Finish spending the replay key (§27, §32, §54) ──
+    // The key was claimed at the top of this transaction; this records which sale it bought, so
+    // a later request with the same key is answered with this receipt. Both writes live inside
+    // the sale's own transaction: if the sale never commits, the key is never spent.
+    if (idempotencyKey) {
+      await store.completeIdempotencyKey(
+        {
+          businessId,
+          actorId: actor.actorId,
+          scope: store.IDEMPOTENCY_SCOPES.saleCreate,
+          key: idempotencyKey,
+          requestHash: idempotencyHash,
+        },
+        created.id,
+        tx,
+      );
+    }
+
     return created;
     });
   } catch (error) {
@@ -713,6 +759,25 @@ export async function createSale(params: {
     }
     if (error instanceof store.StockShortage) {
       return problem("INSUFFICIENT_STOCK", error.message, warnings);
+    }
+    // The key was already spent: another request created this sale first. Its transaction has
+    // been rolled back, so nothing at all was written here — the caller re-reads the record and
+    // answers with the sale that won (§27, §32, §54).
+    if (idempotencyKey && isUniqueConstraintError(error)) {
+      const existing = await store.findIdempotencyRecord(
+        { businessId, actorId: actor.actorId, scope: store.IDEMPOTENCY_SCOPES.saleCreate, key: idempotencyKey, requestHash: idempotencyHash },
+        client,
+      );
+      if (existing) {
+        return {
+          ok: false,
+          code: "DUPLICATE_REQUEST",
+          message: "That sale was already recorded.",
+          warnings,
+          duplicateOfSaleId: existing.saleId,
+          duplicateRequestHashMatches: existing.requestHash === idempotencyHash,
+        } as SaleOutcome;
+      }
     }
     throw error;
   }
@@ -1302,6 +1367,18 @@ export function allocateRefundMethods(params: {
     remaining -= amountKES;
   }
   return allocations;
+}
+
+/**
+ * True for a failed unique constraint — Prisma's `P2002`, and the raw driver shapes a raw or
+ * pooled connection can surface it under. Used to recognise that an idempotency key was claimed
+ * by the request that got there first (§27, §54).
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+  const code = String((error as { code?: unknown })?.code ?? "");
+  if (code === "P2002") return true;
+  const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
+  return message.includes("unique constraint") || message.includes("duplicate key");
 }
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */

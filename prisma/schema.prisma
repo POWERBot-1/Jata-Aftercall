@@ -114,6 +114,7 @@ model Business {
   posOrderItems            PosOrderItem[]
   posOrderEvents           PosOrderEvent[]
   posAuditEvents           PosAuditEvent[]
+  posIdempotencyRecords    PosIdempotencyRecord[]
 
   // ── JATA Payment Wallet + Payment Orchestration (additive back-relations) ──
   paymentDestinations      PaymentDestination[]
@@ -1330,6 +1331,39 @@ model PosReceiptSequence {
   nextValue  Int    @default(1)
 
   @@index([businessId])
+}
+
+/// The replay guard for a till sale (§27, §32, §54).
+///
+/// A till sends the same sale twice more often than anyone expects: a second tap on "Charge"
+/// while the first request is still running, a retry after the network stalls, a page refreshed
+/// after the customer's phone has already shown the prompt. Without a guard each duplicate is a
+/// real second sale — stock moves twice, the customer is charged twice, and two receipts exist
+/// for one basket.
+///
+/// The key is scoped to `(businessId, actorId, scope, key)`, so one cashier's key can never
+/// spend or suppress another's request and the same key in two different shops is two different
+/// requests. `requestHash` makes a reused key with a *different* body a conflict instead of a
+/// silent replay. The row is written inside the sale's own transaction: a duplicate insert
+/// violates the unique index, the transaction rolls back, and no second sale is created.
+model PosIdempotencyRecord {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Whose key it is — taken from the session, never from the request body (§56).
+  actorId     String
+  /// What the key guards ("sale.create"), so one key space cannot be spent on another action.
+  scope       String
+  /// The client's key, trimmed and bounded before it is stored.
+  key         String
+  /// A hash of the request it was spent on: same key, different request is a conflict.
+  requestHash String
+  /// The sale this key bought, when the request did create one.
+  saleId      String?
+  createdAt   DateTime @default(now())
+
+  @@unique([businessId, actorId, scope, key])
+  @@index([businessId, createdAt])
 }
 
 model PosSaleItem {

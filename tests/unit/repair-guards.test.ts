@@ -70,9 +70,11 @@ describe("runtime and schema guards", () => {
     // Studio draft history (a bounded revision stack that powers Undo/Redo, plus one defaulted
     // cursor column on BusinessExperience), the JATA Payment Wallet, the additive STK receipt
     // column plus refund-reference lookup index, the POS refund-integrity columns and the
-    // per-business receipt sequence table, and the lossless INTEGER → DOUBLE PRECISION
-    // promotion of the POS quantity columns. Anything else stays a build failure, and no
-    // migration may destroy or rewrite existing data.
+    // per-business receipt sequence table, the lossless INTEGER → DOUBLE PRECISION
+    // promotion of the POS quantity columns, and the POS till-sale replay guard (one new
+    // tenant-scoped table that stops a duplicate till submission becoming a second sale).
+    // Anything else stays a build failure, and no migration may destroy or rewrite existing
+    // data.
     expect(migrations).toEqual([
       "20250915000000_init",
       "20260929000000_referral_stage2",
@@ -85,6 +87,7 @@ describe("runtime and schema guards", () => {
       "20261005010000_payment_wallet_stk_receipt",
       "20261005020000_pos_sale_refund_integrity",
       "20261005030000_pos_fractional_quantities",
+      "20261005040000_pos_sale_idempotency",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -120,6 +123,7 @@ describe("runtime and schema guards", () => {
       "20261005010000_payment_wallet_stk_receipt",
       "20261005020000_pos_sale_refund_integrity",
       "20261005030000_pos_fractional_quantities",
+      "20261005040000_pos_sale_idempotency",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
