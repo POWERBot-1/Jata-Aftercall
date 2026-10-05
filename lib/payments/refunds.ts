@@ -20,6 +20,7 @@ import { ensureNotificationsForConfirmation } from "./notifications";
 import { recordReconciliationException } from "./reconciliation";
 import { publishPaymentEvent } from "./realtime";
 import { minorToKes } from "./money";
+import { restoreRefundedSaleStock } from "@/lib/pos/sales";
 import type { ProviderReversalResult } from "./providers/types";
 import type { TransactionRecord } from "./types";
 
@@ -315,18 +316,22 @@ export async function requestRefund(params: {
     });
     if (updated.count !== 1) throw new Error("Refund reservation changed before finalization.");
 
+    let restored = { returnedToStock: 0, restoredLines: 0 };
     if (status === "COMPLETED") {
-      await applyRefundedTotals({
+      const applied = await applyRefundedTotals({
         businessId: params.businessId,
         transaction: currentTransaction,
         amountMinor: reservation.amountMinor,
         client: tx,
       });
+      restored = applied.restored;
     }
 
     const action = status === "COMPLETED" ? "REFUND_COMPLETED" : status === "FAILED" ? "REFUND_FAILED" : "REFUND_REQUESTED";
     const summary = status === "COMPLETED"
-      ? `Refund completed through the provider: ${result.message}`
+      ? (restored.returnedToStock > 0
+        ? `Refund completed through the provider: ${result.message} ${restored.returnedToStock} unit${restored.returnedToStock === 1 ? "" : "s"} went back into stock.`
+        : `Refund completed through the provider: ${result.message}`)
       : status === "FAILED"
         ? `Refund could not be completed through the provider: ${result.message}`
         : `Refund is awaiting provider confirmation: ${result.message}`;
@@ -339,7 +344,13 @@ export async function requestRefund(params: {
       action,
       summary,
       beforeState: { status: currentTransaction.status, amountRefundedMinor: currentTransaction.amountRefundedMinor ?? 0 },
-      afterState: { refundMinor: reservation.amountMinor, refundStatus: status, providerReference: result.ok ? result.providerReference ?? null : null },
+      afterState: {
+        refundMinor: reservation.amountMinor,
+        refundStatus: status,
+        providerReference: result.ok ? result.providerReference ?? null : null,
+        returnedToStock: restored.returnedToStock,
+        restoredLines: restored.restoredLines,
+      },
       reason,
     }, tx);
 
@@ -517,7 +528,7 @@ export async function resolvePendingProviderRefund(params: {
       paidMinor(transaction),
       Math.max(Number(transaction.amountRefundedMinor ?? 0) + Number(refund.amountMinor), completedRowsMinor),
     );
-    const nextStatus = await applyRefundedTotals({
+    const applied = await applyRefundedTotals({
       businessId: transaction.businessId,
       transaction,
       amountMinor: Number(refund.amountMinor),
@@ -528,15 +539,22 @@ export async function resolvePendingProviderRefund(params: {
       transactionId: transaction.id,
       actorKind: "JATA_SYSTEM",
       action: "REFUND_COMPLETED",
-      summary: "The provider confirmed the reserved refund.",
+      summary: applied.restored.returnedToStock > 0
+        ? `The provider confirmed the reserved refund. ${applied.restored.returnedToStock} unit${applied.restored.returnedToStock === 1 ? "" : "s"} went back into stock.`
+        : "The provider confirmed the reserved refund.",
       beforeState: { refundStatus: refund.status, amountRefundedMinor: transaction.amountRefundedMinor ?? 0 },
-      afterState: { refundStatus: "COMPLETED", amountRefundedMinor: amountRefundedNext },
+      afterState: {
+        refundStatus: "COMPLETED",
+        amountRefundedMinor: amountRefundedNext,
+        returnedToStock: applied.restored.returnedToStock,
+        restoredLines: applied.restored.restoredLines,
+      },
       reason: refund.reason,
     }, tx);
     const refreshed = await tx.paymentTransaction.findFirst({ where: { id: transaction.id, businessId: transaction.businessId } });
     await ensureNotificationsForConfirmation({
       businessId: transaction.businessId,
-      transaction: refreshed ?? { ...transaction, status: nextStatus },
+      transaction: refreshed ?? { ...transaction, status: applied.status },
       destinationId: transaction.destinationId ?? null,
       saleId: transaction.posSaleId ?? null,
       client: tx,
@@ -547,21 +565,28 @@ export async function resolvePendingProviderRefund(params: {
       kind: "settled" as const,
       transactionId: transaction.id,
       businessId: transaction.businessId,
-      status: (refreshed?.status ?? nextStatus) as PaymentStatus,
+      status: (refreshed?.status ?? applied.status) as PaymentStatus,
     };
   });
   return outcome;
 }
 
-/** Moves the refunded total forward; the original payment row keeps its own amount forever (§114). */
+/**
+ * Moves the refunded total forward; the original payment row keeps its own amount forever (§114).
+ *
+ * Also settles the goods side of a refunded POS sale, so money and stock move together. The
+ * result carries how much came back to the shelf so the caller can put it in the audit trail
+ * beside the money.
+ */
 export async function applyRefundedTotals(params: {
   businessId: string;
   transaction: any;
   amountMinor: number;
   client: PaymentClient;
-}) {
+}): Promise<{ status: PaymentStatus; restored: { returnedToStock: number; restoredLines: number } }> {
   const { businessId, transaction, amountMinor, client } = params;
   const paid = paidMinor(transaction);
+  let restored = { returnedToStock: 0, restoredLines: 0 };
   // Callers have transitioned the reservation to COMPLETED in this same locked transaction, so
   // the ledger sum includes this refund. `amountRefundedMinor + amountMinor` preserves the normal
   // sequential path; max also repairs a stale aggregate without double-counting completed rows.
@@ -590,6 +615,8 @@ export async function applyRefundedTotals(params: {
         data: {
           businessId,
           saleId: sale.id,
+          customerId: sale.customerId ?? null,
+          branchId: sale.branchId ?? null,
           direction: "OUT",
           purpose: "REFUND",
           method: transaction.method ?? "mpesa",
@@ -599,9 +626,23 @@ export async function applyRefundedTotals(params: {
           notes: `Refund against ${transaction.jataPaymentId}`,
         },
       });
+      // Stock comes back with the money, in this same locked transaction. Once the whole sale
+      // has been refunded the customer no longer has the goods, so leaving them off the shelf
+      // would quietly lose inventory. The claim inside is atomic, so a repeated provider
+      // callback, a duplicate confirmation or a POS-side return cannot double-restore (§33, §54).
+      // Deliberately not swallowed: if the goods cannot be accounted for, the whole refund
+      // transaction rolls back rather than settling money and silently losing inventory.
+      restored = await restoreRefundedSaleStock({
+        businessId,
+        saleId: sale.id,
+        paidKES: salePaid,
+        refundedKES: saleRefunded,
+        note: `Refunded against ${transaction.jataPaymentId}`,
+        client: client as any,
+      });
     }
   }
-  return nextStatus;
+  return { status: nextStatus, restored };
 }
 
 /** §47: what a refund screen shows before anyone commits to anything. */

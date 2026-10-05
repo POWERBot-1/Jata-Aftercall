@@ -11,6 +11,7 @@
  */
 
 import prisma from "@/lib/db";
+import { baselineConfiguration, normalizeConfiguration } from "./configuration";
 import { hasCapability } from "./capabilities";
 import { decideCredit, validateRepayment, RECEIVABLE } from "./credit";
 import { checkAvailability, movementsForReturn, movementsForSale } from "./inventory";
@@ -1094,6 +1095,111 @@ export async function refundSale(params: {
     returnedToStock: updated.returnedToStock,
     sale: await store.findSale(businessId, saleId, client),
   };
+}
+
+export type RestoredStockResult = {
+  /** Units put back on the shelf this call, in the product's base unit. */
+  returnedToStock: number;
+  /** Lines that had something left to bring back and were claimed by this call. */
+  restoredLines: number;
+};
+
+/**
+ * Puts a sale's goods back on the shelf — once (§33, §54).
+ *
+ * A sale the Payment Wallet settled is refunded through the wallet's own flow, which settles
+ * money but knows nothing about stock. Without this, refunding such a sale left the money
+ * reversed and the goods gone: the ledger said KES 0 out, the shelf said one unit short, and
+ * nothing in the business could explain the difference. The wallet path now calls this from
+ * inside the same locked transaction that marks the refund COMPLETED, so money and stock move
+ * together or not at all.
+ *
+ * The claim is the guard, exactly as in `refundSale`: `returnedQty` may only be advanced while
+ * `returnedQty + quantity` stays within the quantity sold, and the compare and the write are one
+ * conditional statement. A line another process has already brought back (a concurrent wallet
+ * callback, a duplicate provider result, or a POS-side return) therefore claims nothing here, so
+ * the goods can come back once and only once however many times the refund is confirmed.
+ *
+ * `onlyWhenFullyRefunded` keeps a partial refund honest: someone who was given back part of
+ * their money keeps the goods, so nothing returns to stock until the sale's refunded total has
+ * reached what it was paid.
+ */
+export async function restoreRefundedSaleStock(params: {
+  businessId: string;
+  saleId: string;
+  /** Only bring stock back once the money has all come back (a partial refund keeps the goods). */
+  onlyWhenFullyRefunded?: boolean;
+  paidKES?: number | null;
+  refundedKES?: number | null;
+  note?: string | null;
+  createdById?: string | null;
+  client?: PosClient;
+}): Promise<RestoredStockResult> {
+  const client: PosClient = params.client ?? prisma;
+  const sale = await client.posSale.findFirst({ where: { businessId: params.businessId, id: params.saleId } });
+  if (!sale) return { returnedToStock: 0, restoredLines: 0 };
+
+  if (params.onlyWhenFullyRefunded !== false) {
+    const paid = Number(params.paidKES ?? sale.paidKES ?? 0);
+    const refunded = Number(params.refundedKES ?? sale.refundedKES ?? 0);
+    if (refunded < paid) return { returnedToStock: 0, restoredLines: 0 };
+  }
+
+  const configuration = await loadConfigurationFor(params.businessId, client);
+  const items = await client.posSaleItem.findMany({ where: { businessId: params.businessId, saleId: sale.id } });
+
+  let returnedToStock = 0;
+  let restoredLines = 0;
+  for (const item of items ?? []) {
+    if (!item?.productId) continue;
+    const sold = round3(Number(item.quantity ?? 0));
+    const remaining = Math.max(0, sold - round3(Number(item.returnedQty ?? 0)));
+    if (remaining <= 0) continue;
+    // Claim the line atomically: whoever wins this statement owns the return.
+    const claimed = await client.posSaleItem.updateMany({
+      where: {
+        businessId: params.businessId,
+        id: item.id,
+        returnedQty: { lte: sold - remaining + 1e-9 },
+      },
+      data: { returnedQty: { increment: remaining } },
+    });
+    if (!claimed?.count) continue;
+    restoredLines += 1;
+
+    for (const movement of movementsForReturn(
+      [{ productId: item.productId, name: String(item.name ?? "Item"), kind: "PRODUCT", quantity: remaining, unitKey: item.unitKey ?? undefined, unitPriceKES: Number(item.unitPriceKES ?? 0) }],
+      { saleId: sale.id, branchId: sale.branchId ?? null, conversions: configuration.inventory.conversions },
+    )) {
+      await store.recordMovement(
+        params.businessId,
+        {
+          ...movement,
+          refType: "SALE",
+          note: params.note ?? `Refunded against ${sale.receiptNumber}`,
+          createdById: params.createdById ?? null,
+        },
+        client,
+        // A return adds stock, so the negative-stock question never arises; passing the
+        // configuration keeps the same contract the POS engine uses everywhere else.
+        { configuration },
+      );
+      returnedToStock += Math.abs(movement.delta);
+    }
+  }
+  return { returnedToStock, restoredLines };
+}
+
+/** The configuration a stock movement must be interpreted against, read inside the caller's transaction. */
+async function loadConfigurationFor(businessId: string, client: PosClient): Promise<PosConfiguration> {
+  const row = await client.posConfiguration?.findFirst?.({ where: { businessId } });
+  const raw = row?.publishedJson ?? row?.draftJson ?? null;
+  if (!raw) return baselineConfiguration();
+  try {
+    return normalizeConfiguration(JSON.parse(raw));
+  } catch {
+    return baselineConfiguration();
+  }
 }
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */
