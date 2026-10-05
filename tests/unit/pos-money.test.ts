@@ -498,10 +498,38 @@ describe("reports separate recorded from calculated (§35)", () => {
   });
 
   it("closes the day with what should be in the drawer", () => {
-    const closing = dailyClosing(sales, [{ id: "e1", createdAt: new Date("2026-10-01T11:00:00Z"), categoryKey: "cash_drawer", amountKES: 200 }], new Date("2026-10-01T18:00:00Z"));
+    // The drawer figure is read from the till's payment ledger — cash in (the 900 sale) minus
+    // cash out (the 200 expense) — not from the expense's category label (§57).
+    const payments = [
+      { id: "pay1", createdAt: new Date("2026-10-01T10:30:00Z"), direction: "IN", purpose: "SALE", method: "cash", amountKES: 900 },
+      { id: "pay2", createdAt: new Date("2026-10-01T11:00:00Z"), direction: "OUT", purpose: "EXPENSE", method: "cash", amountKES: 200 },
+    ];
+    const closing = dailyClosing(
+      sales,
+      [{ id: "e1", createdAt: new Date("2026-10-01T11:00:00Z"), categoryKey: "food", amountKES: 200, method: "cash" }],
+      payments,
+      new Date("2026-10-01T18:00:00Z"),
+    );
     expect(closing.sales.count).toBe(1);
     expect(closing.expectedCashKES).toBe(700);
+    expect(closing.cashInKES).toBe(900);
+    expect(closing.cashOutKES).toBe(200);
     expect(closing.basis).toBe("recorded");
+  });
+
+  it("keeps money that never touched the drawer out of the drawer figure", () => {
+    // An M-Pesa sale and a bank-transfer supplier payment are in the ledger, but neither one
+    // emptied or filled the till, so the drawer stays at what the cash rows say (§57).
+    const payments = [
+      { id: "pay1", createdAt: new Date("2026-10-01T09:00:00Z"), direction: "IN", purpose: "SALE", method: "mpesa", amountKES: 2500 },
+      { id: "pay2", createdAt: new Date("2026-10-01T10:00:00Z"), direction: "IN", purpose: "SALE", method: "cash", amountKES: 300 },
+      { id: "pay3", createdAt: new Date("2026-10-01T11:00:00Z"), direction: "OUT", purpose: "SUPPLIER", method: "bank_transfer", amountKES: 1000 },
+      { id: "pay4", createdAt: new Date("2026-10-01T12:00:00Z"), direction: "OUT", purpose: "REFUND", method: "cash", amountKES: 50 },
+    ];
+    const closing = dailyClosing(sales, [], payments, new Date("2026-10-01T18:00:00Z"));
+    expect(closing.expectedCashKES).toBe(250);
+    expect(closing.cashInKES).toBe(300);
+    expect(closing.cashOutKES).toBe(50);
   });
 });
 
