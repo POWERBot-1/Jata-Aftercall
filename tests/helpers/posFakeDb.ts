@@ -33,20 +33,62 @@ export function rowMatches(row: Row, where: Row | undefined): boolean {
     if (condition && typeof condition === "object" && !Array.isArray(condition) && !(condition instanceof Date)) {
       const filter = condition as Row;
       const known = ["in", "notIn", "gte", "lte", "gt", "lt", "contains", "startsWith", "equals", "not"];
-      if (!known.some((operator) => operator in filter)) continue; // relation filter: not modelled
-      if ("in" in filter && !filter.in.includes(value)) return false;
-      if ("notIn" in filter && filter.notIn.includes(value)) return false;
-      if ("gte" in filter && !(value >= filter.gte)) return false;
-      if ("lte" in filter && !(value <= filter.lte)) return false;
-      if ("gt" in filter && !(value > filter.gt)) return false;
-      if ("lt" in filter && !(value < filter.lt)) return false;
-      if ("contains" in filter && !String(value ?? "").toLowerCase().includes(String(filter.contains).toLowerCase())) return false;
-      if ("equals" in filter && value !== filter.equals) return false;
-      continue;
+      if (known.some((operator) => operator in filter)) {
+        if ("in" in filter && !filter.in.includes(value)) return false;
+        if ("notIn" in filter && filter.notIn.includes(value)) return false;
+        if ("gte" in filter && !(value >= filter.gte)) return false;
+        if ("lte" in filter && !(value <= filter.lte)) return false;
+        if ("gt" in filter && !(value > filter.gt)) return false;
+        if ("lt" in filter && !(value < filter.lt)) return false;
+        if ("contains" in filter && !String(value ?? "").toLowerCase().includes(String(filter.contains).toLowerCase())) return false;
+        if ("equals" in filter && value !== filter.equals) return false;
+        continue;
+      }
+      // Prisma compound-unique input: `{ productId_branchId: { productId, branchId } }` — the
+      // key is the underlying fields joined by underscores. It matches when every named field
+      // of the pair matches this row (and fails when the pair is given but nothing matches).
+      if (Object.keys(filter).length === 1 && key.includes("_")) {
+        const compoundKey = Object.keys(filter)[0];
+        const compound = filter[compoundKey];
+        if (compound && typeof compound === "object" && !Array.isArray(compound)) {
+          const entries = Object.entries(compound as Row);
+          const parts = compoundKey.split("_");
+          if (entries.length > 0 && parts.length >= entries.length) {
+            const fields = parts.slice(0, entries.length);
+            const matched = entries.every(([field, wanted]) => row[field] === wanted);
+            if (matched) continue;
+          }
+          return false;
+        }
+        continue; // any other single-key object is a relation filter: not modelled
+      }
+      continue; // relation filter: not modelled
     }
     if (value !== condition) return false;
   }
   return true;
+}
+
+/**
+ * Applies a Prisma update payload to a row: plain values assign, and the atomic operators
+ * (`increment`, `decrement`, `multiply`, `divide`) change the existing value in place — the
+ * in-memory equivalent of the single-statement `SET column = column + δ` the real client sends.
+ */
+export function applyUpdateData(row: Row, data: Row | undefined): void {
+  if (!data) return;
+  for (const [key, value] of Object.entries(data)) {
+    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      const operator = value as Row;
+      const current = Number(row[key] ?? 0);
+      if ("increment" in operator) row[key] = current + Number(operator.increment);
+      else if ("decrement" in operator) row[key] = current - Number(operator.decrement);
+      else if ("multiply" in operator) row[key] = current * Number(operator.multiply);
+      else if ("divide" in operator) row[key] = Number(operator.divide) ? current / Number(operator.divide) : current;
+      else row[key] = value;
+      continue;
+    }
+    row[key] = value;
+  }
 }
 
 /**
@@ -132,18 +174,18 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
       update: vi_fn(async ({ where, data }: any) => {
         const row = rows.find((entry) => rowMatches(entry, where));
         if (!row) throw Object.assign(new Error("Record to update does not exist."), { code: "P2025" });
-        Object.assign(row, data);
+        applyUpdateData(row, data);
         return row;
       }),
       updateMany: vi_fn(async ({ where, data }: any) => {
         const scoped = rows.filter((row) => rowMatches(row, where));
-        for (const row of scoped) Object.assign(row, data);
+        for (const row of scoped) applyUpdateData(row, data);
         return { count: scoped.length };
       }),
       upsert: vi_fn(async ({ where, create, update }: any) => {
         const row = rows.find((entry) => rowMatches(entry, where));
         if (row) {
-          Object.assign(row, update);
+          applyUpdateData(row, update);
           return row;
         }
         const created = { id: `${name}_${++counter}`, ...create };
@@ -168,6 +210,12 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     {
       get(_target, property: string) {
         if (property === "$transaction") {
+          // Pass-through. It is deliberately NOT a snapshot/rollback: undoing a failed
+          // transaction by restoring an entry-time snapshot would also erase changes committed
+          // by a concurrent transaction between the snapshot and the failure — the opposite of
+          // what PostgreSQL does. Failed-write visibility is therefore asserted only where the
+          // engine guarantees it without rollback (the compare-and-set caps), and true
+          // transactional rollback is exercised by the DATABASE_URL-backed suites.
           return async (work: any) => (typeof work === "function" ? work(db) : Promise.all(work));
         }
         // The fake lets non-concurrency unit tests reach refund logic. PostgreSQL locking semantics
@@ -232,6 +280,7 @@ export function standardSeed(): Record<string, Row[]> {
     posConfigurationVersion: [],
     posSubscription: [],
     posEntitlement: [],
+    posReceiptSequence: [],
     posBranch: [{ id: "br_a1", businessId: "bizA", name: "Nyumbani Kitchen", isPrimary: true, isActive: true }],
     posStaff: [{ id: "st_a1", businessId: "bizA", userId: "cashierA", name: "Mary Cashier", roleKey: "CASHIER", isActive: true, branchId: null, commissionPercent: 0 }],
     posProduct: [

@@ -207,12 +207,22 @@ function paymentProblem(code: string, message: string): PaymentValidation {
 /**
  * Payment rules come from the configuration (§31). A browser can never declare a sale paid:
  * this decides what was tendered, what is still owed and whether credit may absorb it.
+ *
+ * `walletSettlement` marks the one deliberate exception: the JATA payment engine settling a sale
+ * after the customer's wallet payment reached CONFIRMED on the provider. "wallet" is not a till
+ * payment method — it is the settlement record of a provider-confirmed wallet transaction, and it
+ * is accepted only when the engine passes this flag. No POS route may pass it (§30, §112).
  */
-export function validatePayments(config: PosConfiguration, calculation: SaleCalculation): PaymentValidation {
+export function validatePayments(
+  config: PosConfiguration,
+  calculation: SaleCalculation,
+  options?: { walletSettlement?: boolean },
+): PaymentValidation {
   const { totals } = calculation;
   const payments = calculation.payments ?? [];
   const allowed = allowedMethods(config);
   const creditAllowed = config.payments.credit || config.credit.enabled;
+  const walletSettlement = options?.walletSettlement === true;
 
   if (totals.totalKES <= 0) {
     return paymentProblem("EMPTY_SALE", "Add something to the sale first.");
@@ -224,6 +234,15 @@ export function validatePayments(config: PosConfiguration, calculation: SaleCalc
     const amount = sanitizeAmountKES(payment.amountKES);
     if (amount <= 0) continue;
     const method = String(payment.method ?? "").trim().toLowerCase();
+    if (walletSettlement) {
+      // The settlement amount is exactly the provider-confirmed amount and it is wallet money,
+      // full stop: no remapping to another method, no other method at all (§112).
+      if (method !== "wallet") {
+        return paymentProblem("METHOD_NOT_ALLOWED", "A confirmed wallet payment can only settle as wallet.");
+      }
+      tendered += amount;
+      continue;
+    }
     if (!allowed.has(method) && !allowed.has(String(payment.method ?? ""))) {
       return paymentProblem("METHOD_NOT_ALLOWED", `${payment.method} is not one of your payment methods.`);
     }
