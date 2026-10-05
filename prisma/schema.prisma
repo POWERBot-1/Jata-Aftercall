@@ -1167,7 +1167,10 @@ model PosInventoryItem {
   // Empty string means "the business's own stock room". A nullable column would make the
   // unique pair below meaningless in Postgres, where NULLs never collide (§16, §33).
   branchId     String     @default("")
-  quantity     Int        @default(0)
+  // Float: measurable units (kilogram, litre, metre) carry up to three decimal places (§13, §14);
+  // countable units are still stored whole. Never edited directly: the number is the sum of
+  // PosInventoryMovement rows.
+  quantity     Float      @default(0)
   reorderLevel Int        @default(0)
   updatedAt    DateTime   @updatedAt
   createdAt    DateTime   @default(now())
@@ -1186,8 +1189,8 @@ model PosInventoryMovement {
   product     PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   branchId    String?
   reason      String     // SALE | RETURN | PURCHASE | ADJUSTMENT | DAMAGE | COUNT | TRANSFER_IN …
-  delta       Int        // signed change in base units
-  quantity    Int        @default(0)
+  delta       Float      // signed change in base units (three-decimal precision, §13)
+  quantity    Float      @default(0)
   unitKey     String?
   refType     String?    // SALE | PURCHASE | ADJUSTMENT | TRANSFER
   refId       String?
@@ -1295,6 +1298,9 @@ model PosSale {
   paidKES                Int       @default(0)
   balanceKES             Int       @default(0)
   refundedKES            Int       @default(0)
+  // Of `refundedKES`, the part already applied against the customer's receivable (a credit refund
+  // never produces cash). The remainder of `refundedKES` is cash that left the till (§30, §54).
+  creditRefundedKES      Int       @default(0)
   costKES                Int?
   notes                  String?   @db.Text
   // Which configuration produced this transaction, so it stays interpretable later (§48)
@@ -1313,6 +1319,19 @@ model PosSale {
   paymentTransactions PaymentTransaction[]
 }
 
+//
+// The per-business receipt sequence (§32). The single allocation point for sale receipt
+// numbers: a sale transaction claims its number with one atomic upsert, so concurrent sales
+// always receive unique sequences and no sale fails because another chose the same number.
+// No relation by design — like the stock room, the table is tenant-scoped by `businessId`
+// (unique), and a plain column keeps the back-relation surface of `Business` unchanged.
+model PosReceiptSequence {
+  businessId String @unique
+  nextValue  Int    @default(1)
+
+  @@index([businessId])
+}
+
 model PosSaleItem {
   id           String   @id @default(cuid())
   businessId   String
@@ -1324,7 +1343,11 @@ model PosSaleItem {
   name         String
   kind         String   @default("PRODUCT")
   unitKey      String?
-  quantity     Int      @default(1)
+  // Float: measurable units (kilogram, litre, metre) carry up to three decimal places (§13, §14).
+  quantity     Float      @default(1)
+  // How much of this line has already been returned. A line may only ever be returned up to its
+  // quantity; the check is enforced atomically against this column (§54).
+  returnedQty  Float      @default(0)
   unitPriceKES Int      @default(0)
   discountKES  Int      @default(0)
   taxKES       Int      @default(0)
@@ -1448,8 +1471,8 @@ model PosPurchaseItem {
   productId    String?
   name         String
   unitKey      String?
-  quantity     Int       @default(1)
-  receivedQty  Int       @default(0)
+  quantity     Float       @default(1)
+  receivedQty  Float       @default(0)
   unitCostKES  Int       @default(0)
   totalKES     Int       @default(0)
   createdAt    DateTime  @default(now())
@@ -1505,7 +1528,7 @@ model PosOrderItem {
   order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   String?
   name        String
-  quantity    Int      @default(1)
+  quantity    Float      @default(1)
   unitKey     String?
   unitPriceKES Int     @default(0)
   totalKES    Int      @default(0)

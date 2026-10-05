@@ -395,6 +395,12 @@ function createFallbackPrisma(): any {
       findMany: async () => [],
       create: async () => { throw new Error("DB not available"); },
     },
+    // Per-business receipt sequence (§81): the row is bumped with an atomic increment in the
+    // sale transaction, so the fallback answers the upsert shape without a database.
+    posReceiptSequence: {
+      upsert: async ({ create }: any) => ({ ...(create ?? {}), nextValue: 1 }),
+      findUnique: async () => null,
+    },
     posPayment: {
       findMany: async () => [],
       create: async () => { throw new Error("DB not available"); },
