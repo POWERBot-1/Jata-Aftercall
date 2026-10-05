@@ -26,10 +26,12 @@ export async function GET(request: Request, context: RouteContext) {
     fallback: "We couldn't load your stock.",
     handler: async ({ ctx, url }) => {
       const range = sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 7);
+      // A staff member bound to a location sees that location's stock and its movements, and only
+      // that location in the list (§16, §75); an unbound actor sees the whole business.
       const [items, movements, branches, products] = await Promise.all([
-        stockWithProducts(businessId),
-        listMovements(businessId, { range: { from: range.from, to: range.to }, take: Math.min(queryInt(url, "take", 100), 500) }),
-        ctx.configuration.branches.enabled ? listBranches(businessId) : Promise.resolve([]),
+        stockWithProducts(businessId, undefined, { branchId: ctx.branchId }),
+        listMovements(businessId, { range: { from: range.from, to: range.to }, branchId: ctx.branchId, take: Math.min(queryInt(url, "take", 100), 500) }),
+        ctx.configuration.branches.enabled ? listBranches(businessId, undefined, { only: ctx.branchId }) : Promise.resolve([]),
         listProducts(businessId, { take: 500 }),
       ]);
       const alerts = stockAlerts(

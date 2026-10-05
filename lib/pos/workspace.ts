@@ -165,8 +165,10 @@ export async function loadPosWorkspaceForSession(
   const terminology: Terminology = context.terminology ?? resolveTerminology(configuration);
   const counts = await posCounts(businessId);
   const [today, stock, outstanding] = await Promise.all([
-    salesTotals(businessId, { from: startOfToday() }),
-    configuration.inventory.enabled ? lowStock(businessId) : Promise.resolve([]),
+    // "Today" is the actor's own scope: a staff member bound to a location sees that
+    // location's takings, an unbound actor sees the whole business (§16, §75).
+    salesTotals(businessId, { from: startOfToday() }, prisma, { branchId: context.branchId }),
+    configuration.inventory.enabled ? lowStock(businessId, prisma, { branchId: context.branchId }) : Promise.resolve([]),
     outstandingTotals(businessId),
   ]);
 

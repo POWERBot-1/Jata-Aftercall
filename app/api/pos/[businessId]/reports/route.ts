@@ -32,13 +32,14 @@ export async function GET(request: Request, context: RouteContext) {
         if (!ctx.permissions.includes("CLOSE_DAY")) {
           return { status: 403, data: { error: "You don't have permission to close the day.", code: "NOT_ALLOWED" } };
         }
-        return posOk({ closing: await runDailyClosing(businessId, ctx.configuration) });
+        // A staff member bound to a location closes the books for that location (§16, §75).
+        return posOk({ closing: await runDailyClosing(businessId, ctx.configuration, undefined, { branchId: ctx.branchId }) });
       }
       const key = requested as ReportKey;
       const range = queryString(url, "from") || queryString(url, "to")
         ? sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 0)
         : defaultRangeFor(key);
-      return posOk({ report: await runReport(businessId, ctx.configuration, key, range) });
+      return posOk({ report: await runReport(businessId, ctx.configuration, key, range, { branchId: ctx.branchId }) });
     },
   });
 }

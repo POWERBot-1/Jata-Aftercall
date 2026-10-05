@@ -88,7 +88,10 @@ export async function adjustStock(params: {
   if (!product) return failure("PRODUCT_NOT_FOUND", "That item was not found.", warnings);
 
   const reason = adjustment.reason as InventoryMovementReason;
-  const branchId = adjustment.branchId ?? actor.branchId;
+  // A stock change lands where the actor's scope says it may (§16, §75).
+  const branchDecision = await store.resolveBranch(businessId, actor, adjustment.branchId, client, true);
+  if ("code" in branchDecision) return failure(branchDecision.code, branchDecision.message, warnings);
+  const branchId = branchDecision.branchId;
   const delta = movementDelta(reason, adjustment.quantity);
 
   const movement = await inTransaction(params.client, async (tx: PosClient) => {
@@ -153,11 +156,22 @@ export async function transferStock(params: {
 
   const amount = quantity(params.quantity);
   if (amount <= 0) return failure("INVALID_QUANTITY", "Enter a quantity greater than zero.", warnings);
+  // Moving stock between locations is by definition cross-scope, so only an actor without a
+  // fixed location may do it (§16, §75).
+  if (actor.branchId) {
+    return failure("NOT_ALLOWED", "Staff assigned to a location can't move stock between locations — ask staff without a fixed location to make the move.", warnings);
+  }
   const from = text(params.fromBranchId, 64) ?? store.branchScope(actor.branchId);
   const to = text(params.toBranchId, 64);
   if (!to) return failure("DESTINATION_REQUIRED", "Choose where the stock is going.", warnings);
   if (store.branchScope(from) === store.branchScope(to)) {
     return failure("SAME_LOCATION", "Choose a different location to move it to.", warnings);
+  }
+  // Both locations must belong to this business — a guessed or foreign branch id moves nothing.
+  for (const location of [from, to]) {
+    if (!location) continue;
+    const branch = await client.posBranch.findFirst({ where: { businessId, id: location, isActive: true } });
+    if (!branch) return failure("BRANCH_NOT_FOUND", "That location does not belong to this business.", warnings);
   }
 
   const product = await store.findProduct(businessId, text(params.productId, 64) ?? "", client);
@@ -228,7 +242,10 @@ export async function recordStockCount(params: {
   const product = await store.findProduct(businessId, text(params.productId, 64) ?? "", client);
   if (!product) return failure("PRODUCT_NOT_FOUND", "That item was not found.", warnings);
 
-  const branchId = store.branchScope(params.branchId ?? actor.branchId);
+  // A count is written where the actor's scope says it may (§16, §75).
+  const countBranch = await store.resolveBranch(businessId, actor, params.branchId, client, true);
+  if ("code" in countBranch) return failure(countBranch.code, countBranch.message, warnings);
+  const branchId = store.branchScope(countBranch.branchId);
   const levels = await store.stockLevels(businessId, [product.id], client);
   const system = levels
     .filter((item: any) => store.branchScope(item.branchId) === branchId)
@@ -460,6 +477,13 @@ export async function receivePurchase(params: {
   if (!purchase) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
   if (purchase.status === "CANCELLED") return failure("CANCELLED", "That purchase order was cancelled.", warnings);
 
+  // Receiving moves stock; stock moves only where the actor's scope allows it (§16, §75).
+  // An order placed at a different location than a branch-bound actor's is refused rather than
+  // silently received into someone else's stock room.
+  if (actor.branchId && purchase.branchId && purchase.branchId !== actor.branchId) {
+    return failure("BRANCH_OUT_OF_SCOPE", "That order belongs to a different location than the one you are assigned to.", warnings);
+  }
+
   const requested = new Map<string, number>(
     (params.items ?? []).filter((item) => item && typeof item === "object").map((item) => [String(item.purchaseItemId), quantity(item.quantity)] as [string, number]),
   );
@@ -676,8 +700,10 @@ export async function recordExpense(params: {
       },
       tx,
     );
-    if (created && params.input?.method) {
-      // Money left the till: record it so the cash report balances (§35).
+    if (created) {
+      // Money left the business: record it so the cash report balances against the ledger,
+      // whatever the method (§35, §57). A cash expense is the one that empties the drawer —
+      // the daily closing reads these rows, not the expense table.
       await tx.posPayment.create({
         data: {
           businessId,

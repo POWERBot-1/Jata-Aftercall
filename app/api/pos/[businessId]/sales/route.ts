@@ -1,7 +1,7 @@
 import { fromOutcome, handlePosRequest, posOk, queryString, queryInt } from "@/lib/pos/http";
 import { receiptToText } from "@/lib/pos/receipt";
 import { createSale } from "@/lib/pos/sales";
-import { listSales, paymentMix, salesTotals, topItems } from "@/lib/pos/store";
+import { listSales, paymentMix, readBranchId, salesTotals, topItems } from "@/lib/pos/store";
 import { sanitizeRange, sanitizeSaleRequest } from "@/lib/pos/validation";
 import { formatReceiptNumber, receiptPrefixFromBusinessName } from "@/lib/pos/receipt";
 
@@ -29,17 +29,21 @@ export async function GET(request: Request, context: RouteContext) {
     fallback: "We couldn't load your sales.",
     handler: async ({ ctx, url }) => {
       const range = sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 0);
+      // A bound staff member reads their own location; an unbound one may name a real one (§75).
+      const branch = await readBranchId(businessId, ctx.branchId, queryString(url, "branch"));
+      if (branch.error) return { status: 400, data: { error: branch.error.message, code: branch.error.code } };
       const filter = {
         range: { from: range.from, to: range.to },
         status: queryString(url, "status") ?? undefined,
         customerId: queryString(url, "customerId") ?? undefined,
+        branchId: branch.branchId,
         take: Math.min(queryInt(url, "take", 50), 200),
       };
       const [sales, totals, mix, top] = await Promise.all([
         listSales(businessId, filter),
-        salesTotals(businessId, filter.range),
-        paymentMix(businessId, filter.range),
-        topItems(businessId, filter.range, 8),
+        salesTotals(businessId, filter.range, undefined, { branchId: branch.branchId }),
+        paymentMix(businessId, filter.range, undefined, { branchId: branch.branchId }),
+        topItems(businessId, filter.range, 8, undefined, { branchId: branch.branchId }),
       ]);
       return posOk({
         sales: sales.map((sale: any) => ({

@@ -1,3 +1,4 @@
+import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
 import type { InventoryMovementReason } from "./types";
 
@@ -46,6 +47,16 @@ function asInt(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
+/**
+ * Quantities, not money (§13, §14). Money stays whole shillings; quantities keep the three
+ * decimals the business logic has always accepted for measurable units (kilogram, litre,
+ * metre), rounded once so stock can never carry a phantom fraction.
+ */
+export function asQuantity(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? Math.round(parsed * 1000) / 1000 : fallback;
+}
+
 function clampText(value: unknown, max = 200): string | null {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) return null;
@@ -55,6 +66,72 @@ function clampText(value: unknown, max = 200): string | null {
 /** Branch scope key: "" means the business's own stock room (see PosInventoryItem.branchId). */
 export function branchScope(branchId: string | null | undefined): string {
   return typeof branchId === "string" ? branchId : "";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch isolation (§16, §75) — the server decides whose location an action touches
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BranchScopeDecision =
+  | { ok: true; branchId: string | null }
+  | { ok: false; code: "BRANCH_NOT_FOUND" | "BRANCH_OUT_OF_SCOPE"; message: string };
+
+/**
+ * Decides which branch a permitted action may touch (§16, §75).
+ *
+ * - A staff member bound to a branch never widens or moves their scope: on reads their branch
+ *   is forced (a client-supplied branch is ignored), and on writes naming a different branch is
+ *   refused rather than silently rewritten.
+ * - An actor without a branch (owner, admin) may name a branch, but it must belong to this
+ *   business — a guessed or foreign id is refused. `null` means business-wide.
+ *
+ * `strict` is used by writes: a branch-bound actor who names another location is told so
+ * instead of having their action land somewhere else.
+ */
+export async function resolveBranch(
+  businessId: string,
+  actor: { branchId: string | null },
+  requested: string | null | undefined,
+  client: PosClient = db(),
+  strict = false,
+): Promise<BranchScopeDecision> {
+  if (actor.branchId) {
+    const requestedId = clampText(requested, 64);
+    if (requestedId && requestedId !== actor.branchId && strict) {
+      return { ok: false, code: "BRANCH_OUT_OF_SCOPE", message: "That location is not the one you are assigned to." };
+    }
+    return { ok: true, branchId: actor.branchId };
+  }
+  const requestedId = clampText(requested, 64);
+  if (!requestedId) return { ok: true, branchId: null };
+  const branch = await client.posBranch.findFirst({ where: { businessId, id: requestedId, isActive: true } });
+  if (!branch) return { ok: false, code: "BRANCH_NOT_FOUND", message: "That location does not belong to this business." };
+  return { ok: true, branchId: branch.id };
+}
+
+/** The branch a branch-bound actor's reads are forced to; null means business-wide. */
+export function forcedBranchId(actor: { branchId: string | null }): string | null {
+  return actor.branchId ? actor.branchId : null;
+}
+
+/**
+ * The branch a READ is scoped to (§16, §75). A staff member bound to a location always reads
+ * their own location — a branch named in the request is ignored, not trusted. An unbound actor
+ * may name a branch, but only one that exists and belongs to the business.
+ */
+export async function readBranchId(
+  businessId: string,
+  actorBranchId: string | null,
+  requested: string | null | undefined,
+  client: PosClient = db(),
+): Promise<{ branchId?: string | null; error?: { code: string; message: string } }> {
+  if (actorBranchId) return { branchId: actorBranchId };
+  const wanted = clampText(requested, 64);
+  if (!wanted) return { branchId: null };
+  const branch = await client.posBranch.findFirst({ where: { businessId, id: wanted, isActive: true }, select: { id: true } });
+  return branch
+    ? { branchId: branch.id }
+    : { error: { code: "BRANCH_NOT_FOUND", message: "That location doesn't belong to this business." } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,8 +315,12 @@ export async function updateCustomer(businessId: string, customerId: string, inp
 
 /**
  * Applies a signed balance change and writes the matching ledger row in one step (§30).
- * The balance is never set directly from a client-supplied number: it moves by `deltaKES`
- * from whatever the server just read, and `partyType` keeps receivables and payables apart.
+ *
+ * The balance is never set from a number the caller read earlier: it moves by `deltaKES` inside
+ * a single atomic `UPDATE … SET balanceKES = balanceKES + δ`, so two concurrent sales,
+ * repayments or refunds cannot both read the same balance and one of them lose the other's
+ * change. The ledger row carries the balance *after* this change, re-read in the same
+ * transaction, so the ledger and the balance always agree (§30, §57).
  */
 export async function applyBalanceChange(
   businessId: string,
@@ -248,11 +329,19 @@ export async function applyBalanceChange(
   client: PosClient = db(),
 ) {
   const delta = asInt(change.deltaKES);
+  if (delta === 0) return null;
   const model = party.partyType === "SUPPLIER" ? client.posSupplier : client.posCustomer;
+
+  // One statement, no read-modify-write window: the increment happens where the row lives.
+  const moved = await model.updateMany({
+    where: { businessId, id: party.partyId },
+    data: { balanceKES: { increment: delta } },
+  });
+  if (!moved?.count) return null;
+
   const existing = await model.findFirst({ where: { businessId, id: party.partyId }, select: { balanceKES: true, name: true } });
   if (!existing) return null;
-  const balanceAfterKES = asInt(existing.balanceKES) + delta;
-  await model.updateMany({ where: { businessId, id: party.partyId }, data: { balanceKES: balanceAfterKES } });
+  const balanceAfterKES = asInt(existing.balanceKES);
   const entry = await client.posCreditEntry.create({
     data: {
       businessId,
@@ -270,6 +359,52 @@ export async function applyBalanceChange(
     },
   });
   return { balanceKES: balanceAfterKES, entry };
+}
+
+/**
+ * Takes a row lock on a ledger party for the duration of the caller's transaction (§30).
+ *
+ * On PostgreSQL this is `SELECT … FOR UPDATE`: a concurrent sale, refund or repayment for the
+ * same customer waits here until the first transaction commits, so the decision (is this credit
+ * allowed, does this repayment fit the balance?) and the atomic balance move in
+ * `applyBalanceChange` run against the same, current number. On a client without raw SQL (the
+ * in-memory test double) this is a no-op; the atomic increment still serializes the write.
+ */
+export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "SUPPLIER", businessId: string, partyId: string): Promise<void> {
+  if (!client?.$queryRaw) return;
+  // The table name is a fixed identifier chosen here (never user input), so it is spliced with
+  // Prisma's raw-identifier helper; the ids are bound parameters. When the generated client is
+  // not available (offline build), the helper is absent and the lock is a no-op — the atomic
+  // balance increment still makes the write itself safe.
+  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
+  if (typeof rawIdentifier !== "function") return;
+  const table = partyType === "SUPPLIER" ? "PosSupplier" : "PosCustomer";
+  try {
+    await client.$queryRaw`SELECT 1 FROM ${rawIdentifier(table)} WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  } catch {
+    // Raw SQL unsupported on this client: the atomic increment in applyBalanceChange still
+    // makes the write itself safe; the decision window is exercised by the real-Postgres suite.
+  }
+}
+
+/**
+ * Takes a row lock on a sale for the duration of the caller's transaction (§54).
+ *
+ * A refund re-reads the sale, its lines and its payment rows under this lock, so two concurrent
+ * refunds both see every change the other committed: the per-line returned quantity and the
+ * cash/credit split can never be computed from the same stale snapshot twice. On a client
+ * without raw SQL (the in-memory test double) this is a no-op; the atomic conditional updates
+ * below still make each write individually safe.
+ */
+export async function lockSaleRow(client: PosClient, businessId: string, saleId: string): Promise<void> {
+  if (!client?.$queryRaw) return;
+  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
+  if (typeof rawIdentifier !== "function") return;
+  try {
+    await client.$queryRaw`SELECT 1 FROM ${rawIdentifier("PosSale")} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
+  } catch {
+    // Raw SQL unsupported on this client: the conditional updates keep each write safe.
+  }
 }
 
 export async function listCreditEntries(
@@ -413,8 +548,12 @@ export async function updateStaff(businessId: string, staffId: string, input: St
   });
 }
 
-export async function listBranches(businessId: string, client: PosClient = db()) {
-  return client.posBranch.findMany({ where: { businessId }, orderBy: [{ isPrimary: "desc" }, { name: "asc" }] });
+export async function listBranches(businessId: string, client: PosClient = db(), options: { only?: string | null } = {}) {
+  // `only` scopes the list to one location — a staff member bound to a location is shown their
+  // own, never the others (§16, §75).
+  const where: Record<string, unknown> = { businessId };
+  if (options.only) where.id = options.only;
+  return client.posBranch.findMany({ where, orderBy: [{ isPrimary: "desc" }, { name: "asc" }] });
 }
 
 export async function createBranch(
@@ -451,9 +590,11 @@ export async function ensurePrimaryBranch(businessId: string, businessName: stri
 // Inventory (§33) — stock only ever moves through a recorded movement
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function stockLevels(businessId: string, productIds: string[] = [], client: PosClient = db()) {
+export async function stockLevels(businessId: string, productIds: string[] = [], client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const where: Record<string, unknown> = { businessId };
   if (productIds.length) where.productId = { in: productIds.slice(0, 500) };
+  // A branch scope is an exact location, including "" for the business's own stock room.
+  if (options.branchId != null) where.branchId = options.branchId;
   return client.posInventoryItem.findMany({ where });
 }
 
@@ -487,14 +628,37 @@ export type MovementInput = {
   createdById?: string | null;
 };
 
+/** Raised inside a transaction when a movement would drive stock negative (§33). */
+export class StockShortage extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StockShortage";
+  }
+}
+
 /**
  * Writes the ledger row and moves the on-hand number together (§33). There is no code path in
  * the POS that edits `PosInventoryItem.quantity` without a movement: stock is an audit trail,
  * not a field.
+ *
+ * The on-hand move is a single atomic `UPDATE … SET quantity = quantity + δ` with the
+ * not-negative check folded into the same statement's `WHERE` — no read-modify-write window,
+ * so two concurrent sales can never both sell the last unit. When the statement matches no row
+ * because stock would go negative, a `StockShortage` is raised and the caller's transaction
+ * rolls back; when the location simply has no row yet, the row is created idempotently
+ * (a concurrent creator of the same row can win without breaking the movement).
+ *
+ * `options.allowNegative` admits movements that may legitimately land below zero in the system
+ * (a corrective count fixing an over-recorded stock); sales never set it.
  */
-export async function recordMovement(businessId: string, input: MovementInput, client: PosClient = db()) {
+export async function recordMovement(
+  businessId: string,
+  input: MovementInput,
+  client: PosClient = db(),
+  options: { allowNegative?: boolean } = {},
+) {
   const scope = branchScope(input.branchId);
-  const delta = asInt(input.delta);
+  const delta = asQuantity(input.delta);
   const product = await client.posProduct.findFirst({
     where: { businessId, id: input.productId },
     select: { id: true, trackInventory: true, unitKey: true },
@@ -508,7 +672,7 @@ export async function recordMovement(businessId: string, input: MovementInput, c
       branchId: scope || null,
       reason: String(input.reason),
       delta,
-      quantity: Math.abs(asInt(input.quantity, delta)),
+      quantity: Math.abs(asQuantity(input.quantity, delta)),
       unitKey: clampText(input.unitKey ?? product.unitKey, 24),
       refType: clampText(input.refType, 32),
       refId: clampText(input.refId, 64),
@@ -517,16 +681,25 @@ export async function recordMovement(businessId: string, input: MovementInput, c
     },
   });
 
-  if (product.trackInventory !== false) {
-    const item = await client.posInventoryItem.findFirst({ where: { businessId, productId: product.id, branchId: scope } });
-    if (item) {
-      await client.posInventoryItem.updateMany({
-        where: { businessId, productId: product.id, branchId: scope },
-        data: { quantity: asInt(item.quantity) + delta },
-      });
-    } else {
-      await client.posInventoryItem.create({
-        data: { businessId, productId: product.id, branchId: scope, quantity: delta, reorderLevel: 0 },
+  if (product.trackInventory !== false && delta !== 0) {
+    const where: Record<string, unknown> = { businessId, productId: product.id, branchId: scope };
+    const forbidsNegative = delta < 0 && options.allowNegative !== true;
+    if (forbidsNegative) where.quantity = { gte: Math.abs(delta) };
+
+    const moved = await client.posInventoryItem.updateMany({
+      where,
+      data: { quantity: { increment: delta } },
+    });
+    if (!moved?.count) {
+      if (forbidsNegative) {
+        throw new StockShortage(`Only ${asQuantity(await stockAt(businessId, product.id, scope, client), 0)} ${product.unitKey ?? "units"} left at that location.`);
+      }
+      // First movement for this location: create the row, then apply the delta — the upsert's
+      // update branch covers the race where a concurrent movement created the row first.
+      await client.posInventoryItem.upsert({
+        where: { productId_branchId: { productId: product.id, branchId: scope } },
+        update: { quantity: { increment: delta } },
+        create: { businessId, productId: product.id, branchId: scope, quantity: delta, reorderLevel: 0 },
       });
     }
   }
@@ -534,15 +707,20 @@ export async function recordMovement(businessId: string, input: MovementInput, c
   return movement;
 }
 
+async function stockAt(businessId: string, productId: string, scope: string, client: PosClient): Promise<number> {
+  const item = await client.posInventoryItem.findFirst({ where: { businessId, productId, branchId: scope }, select: { quantity: true } });
+  return asQuantity(item?.quantity);
+}
+
 /** Items at or below their reorder level — the "low stock" card (§34). */
-export async function lowStock(businessId: string, client: PosClient = db()) {
+export async function lowStock(businessId: string, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const items = await client.posInventoryItem.findMany({
-    where: { businessId },
+    where: { businessId, ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     include: { product: { select: { id: true, name: true, unitKey: true, reorderLevel: true, trackInventory: true } } },
   });
   return items.filter((item: any) => {
     const level = Math.max(asInt(item.reorderLevel), asInt(item.product?.reorderLevel));
-    return asInt(item.quantity) <= level;
+    return asQuantity(item.quantity) <= level;
   });
 }
 
@@ -590,11 +768,32 @@ export async function findSaleByReceipt(businessId: string, receiptNumber: strin
 /**
  * Next receipt sequence for the business (§32). Receipt numbers are unique per business, so two
  * tenants can both be on #0007 without colliding — and one tenant can never read another's
- * sequence, because the count is scoped.
+ * sequence, because the row is scoped by the unique business id.
+ *
+ * The number is claimed with a single atomic upsert — `INSERT … ON CONFLICT DO UPDATE SET
+ * nextValue = nextValue + 1` — so two concurrent sales always get two different numbers. The
+ * old read-max-plus-one let two sales pick the same number and fail one of them; the number now
+ * can only be lost if the sale transaction that claimed it rolls back, and even then it is a
+ * skipped number, never a duplicate (§32).
  */
 export async function nextSaleSequence(businessId: string, client: PosClient = db()) {
-  const latest = await client.posSale.findFirst({ where: { businessId }, orderBy: { sequence: "desc" }, select: { sequence: true } });
-  return asInt(latest?.sequence) + 1;
+  const row = await client.posReceiptSequence.upsert({
+    where: { businessId },
+    update: { nextValue: { increment: 1 } },
+    create: { businessId, nextValue: 1 },
+  });
+  return asInt(row.nextValue);
+}
+
+/**
+ * A read-only peek at the next receipt number for a screen's label. It must NOT consume a
+ * number — the sell screen shows "next receipt" on every view, and only an actual sale inside
+ * its transaction may advance the sequence.
+ */
+export async function previewSaleSequence(businessId: string, client: PosClient = db()): Promise<number> {
+  const row = await client.posReceiptSequence.findUnique({ where: { businessId } });
+  // No row yet means the first sale will take number one.
+  return row ? asInt(row.nextValue) : 1;
 }
 
 export async function listPayments(
@@ -609,8 +808,9 @@ export async function listPayments(
 }
 
 /** Totals used by the dashboard cards and reports (§34, §35) — computed in the database. */
-export async function salesTotals(businessId: string, range: DateRange = {}, client: PosClient = db()) {
-  const where = { businessId, ...createdBetween(range) };
+export async function salesTotals(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
+  const where: Record<string, unknown> = { businessId, ...createdBetween(range) };
+  if (options.branchId != null) where.branchId = options.branchId;
   const totals = await client.posSale.aggregate({
     where,
     _sum: { totalKES: true, paidKES: true, balanceKES: true, discountKES: true, refundedKES: true, costKES: true },
@@ -628,9 +828,9 @@ export async function salesTotals(businessId: string, range: DateRange = {}, cli
 }
 
 /** Best-selling items in a range, by unit quantity (§35). */
-export async function topItems(businessId: string, range: DateRange = {}, limit = 10, client: PosClient = db()) {
+export async function topItems(businessId: string, range: DateRange = {}, limit = 10, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const sales = await client.posSale.findMany({
-    where: { businessId, ...createdBetween(range) },
+    where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     select: { id: true },
     take: 2000,
   });
@@ -643,7 +843,7 @@ export async function topItems(businessId: string, range: DateRange = {}, limit 
   const grouped = new Map<string, { name: string; quantity: number; totalKES: number }>();
   for (const item of items) {
     const row = grouped.get(item.name) ?? { name: item.name, quantity: 0, totalKES: 0 };
-    row.quantity += asInt(item.quantity);
+    row.quantity += asQuantity(item.quantity);
     row.totalKES += asInt(item.totalKES);
     grouped.set(item.name, row);
   }
@@ -651,9 +851,9 @@ export async function topItems(businessId: string, range: DateRange = {}, limit 
 }
 
 /** Payment mix for a range — cash vs M-Pesa vs card vs credit (§31, §35). */
-export async function paymentMix(businessId: string, range: DateRange = {}, client: PosClient = db()) {
+export async function paymentMix(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const payments = await client.posPayment.findMany({
-    where: { businessId, direction: "IN", status: "SETTLED", ...createdBetween(range) },
+    where: { businessId, direction: "IN", status: "SETTLED", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     select: { method: true, amountKES: true },
   });
   const grouped = new Map<string, { method: string; count: number; amountKES: number }>();
@@ -670,7 +870,7 @@ export async function paymentMix(businessId: string, range: DateRange = {}, clie
 // Expenses (§17)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listExpenses(businessId: string, options: { range?: DateRange; categoryKey?: string; take?: number } = {}, client: PosClient = db()) {
+export async function listExpenses(businessId: string, options: { range?: DateRange; categoryKey?: string; branchId?: string | null; take?: number } = {}, client: PosClient = db()) {
   const where: Record<string, unknown> = { businessId };
   const from = toDate(options.range?.from);
   const to = toDate(options.range?.to);
@@ -678,6 +878,7 @@ export async function listExpenses(businessId: string, options: { range?: DateRa
     where.occurredAt = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
   }
   if (options.categoryKey) where.categoryKey = options.categoryKey;
+  if (options.branchId != null) where.branchId = options.branchId;
   return client.posExpense.findMany({ where, orderBy: { occurredAt: "desc" }, take: Math.min(asInt(options.take, 100), 500) });
 }
 
@@ -753,13 +954,14 @@ export async function nextPurchaseReference(businessId: string, client: PosClien
 
 export async function listOrders(
   businessId: string,
-  options: { stateKey?: string; workflowKey?: string; channel?: string; range?: DateRange; take?: number } = {},
+  options: { stateKey?: string; workflowKey?: string; channel?: string; range?: DateRange; branchId?: string | null; take?: number } = {},
   client: PosClient = db(),
 ) {
   const where: Record<string, unknown> = { businessId, ...createdBetween(options.range) };
   if (options.stateKey) where.stateKey = options.stateKey;
   if (options.workflowKey) where.workflowKey = options.workflowKey;
   if (options.channel) where.channel = options.channel;
+  if (options.branchId != null) where.branchId = options.branchId;
   return client.posOrder.findMany({
     where,
     orderBy: { createdAt: "desc" },
@@ -787,9 +989,10 @@ export async function nextOrderReference(businessId: string, prefix: string, cli
   return `${prefix}-${String(next).padStart(4, "0")}`;
 }
 
-export async function orderStateCounts(businessId: string, workflowKey?: string, client: PosClient = db()) {
+export async function orderStateCounts(businessId: string, workflowKey?: string, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const where: Record<string, unknown> = { businessId };
   if (workflowKey) where.workflowKey = workflowKey;
+  if (options.branchId != null) where.branchId = options.branchId;
   const orders = await client.posOrder.findMany({ where, select: { stateKey: true } });
   const counts = new Map<string, number>();
   for (const order of orders) counts.set(order.stateKey, asInt(counts.get(order.stateKey)) + 1);
@@ -836,38 +1039,53 @@ export async function countNewCustomers(businessId: string, since: Date, client:
 
 export const REPORT_ROW_LIMIT = 5000;
 
-export async function salesForReport(businessId: string, range: DateRange = {}, client: PosClient = db()) {
+export async function salesForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   return client.posSale.findMany({
-    where: { businessId, ...createdBetween(range) },
+    where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
     include: { items: { select: { name: true, quantity: true, totalKES: true, costKES: true } }, payments: { select: { method: true, amountKES: true, direction: true } } },
   });
 }
 
-export async function expensesForReport(businessId: string, range: DateRange = {}, client: PosClient = db()) {
+export async function expensesForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   const from = toDate(range.from);
   const to = toDate(range.to);
   return client.posExpense.findMany({
-    where: { businessId, ...((from || to) ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
+    where: { businessId, ...(options.branchId != null ? { branchId: options.branchId } : {}), ...((from || to) ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
     orderBy: { occurredAt: "asc" },
     take: REPORT_ROW_LIMIT,
-    select: { id: true, createdAt: true, occurredAt: true, categoryKey: true, amountKES: true, branchId: true },
+    select: { id: true, createdAt: true, occurredAt: true, categoryKey: true, amountKES: true, method: true, branchId: true },
   });
 }
 
-export async function movementsForReport(businessId: string, range: DateRange = {}, client: PosClient = db()) {
+/**
+ * The cash ledger for a range (§35, §57): every settled money movement the till recorded —
+ * sales and repayments in, refunds, supplier payments and expenses out. This is the only
+ * source the daily closing uses for "what the drawer should hold", so the figure can never
+ * disagree with the ledger it was counted from.
+ */
+export async function paymentsForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
+  return client.posPayment.findMany({
+    where: { businessId, status: "SETTLED", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
+    orderBy: { createdAt: "asc" },
+    take: REPORT_ROW_LIMIT,
+    select: { id: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
+  });
+}
+
+export async function movementsForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   return client.posInventoryMovement.findMany({
-    where: { businessId, ...createdBetween(range) },
+    where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
     include: { product: { select: { id: true, name: true, unitKey: true, costKES: true } } },
   });
 }
 
-export async function ordersForReport(businessId: string, range: DateRange = {}, client: PosClient = db()) {
+export async function ordersForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   return client.posOrder.findMany({
-    where: { businessId, ...createdBetween(range) },
+    where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
     include: { items: true },
@@ -875,9 +1093,9 @@ export async function ordersForReport(businessId: string, range: DateRange = {},
 }
 
 /** Stock with the product's cost price, for valuation (§35 — calculated, never guessed). */
-export async function stockWithProducts(businessId: string, client: PosClient = db()) {
+export async function stockWithProducts(businessId: string, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   return client.posInventoryItem.findMany({
-    where: { businessId },
+    where: { businessId, ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     include: { product: { select: { id: true, name: true, unitKey: true, costKES: true, priceKES: true, trackInventory: true } } },
   });
 }

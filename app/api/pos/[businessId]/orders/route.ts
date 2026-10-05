@@ -1,7 +1,7 @@
 import { fromOutcome, handlePosRequest, posOk, queryString, queryInt } from "@/lib/pos/http";
 import { createOrder } from "@/lib/pos/operations";
 import { orderStatesFor } from "@/lib/pos/presentation";
-import { listCustomers, listOrders, orderStateCounts } from "@/lib/pos/store";
+import { listCustomers, listOrders, orderStateCounts, readBranchId } from "@/lib/pos/store";
 import { initialState, nextStates } from "@/lib/pos/workflow";
 import { sanitizeOrderInput, sanitizeRange } from "@/lib/pos/validation";
 
@@ -27,15 +27,19 @@ export async function GET(request: Request, context: RouteContext) {
     fallback: "We couldn't load your orders.",
     handler: async ({ ctx, url }) => {
       const range = sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 7);
+      // A bound staff member reads their own location's board; an unbound one may name a real one.
+      const branch = await readBranchId(businessId, ctx.branchId, queryString(url, "branch"));
+      if (branch.error) return { status: 400, data: { error: branch.error.message, code: branch.error.code } };
       const workflowKey = ctx.configuration.orders.workflowKey;
       const [orders, counts] = await Promise.all([
         listOrders(businessId, {
           stateKey: queryString(url, "state") ?? undefined,
           channel: queryString(url, "channel") ?? undefined,
+          branchId: branch.branchId,
           range: { from: range.from, to: range.to },
           take: Math.min(queryInt(url, "take", 50), 200),
         }),
-        orderStateCounts(businessId, workflowKey),
+        orderStateCounts(businessId, workflowKey, undefined, { branchId: branch.branchId }),
       ]);
       const states = orderStatesFor(ctx.configuration);
       return posOk({

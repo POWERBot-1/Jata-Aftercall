@@ -29,6 +29,7 @@ import {
   weekRange,
   type DateRange,
   type ExpenseRecord,
+  type PaymentLedgerRecord,
   type SaleRecord,
 } from "./reports";
 import * as store from "./store";
@@ -92,7 +93,20 @@ function toExpenseRecords(rows: any[]): ExpenseRecord[] {
     createdAt: row.occurredAt ?? row.createdAt,
     categoryKey: row.categoryKey,
     amountKES: Number(row.amountKES ?? 0),
+    method: row.method ?? null,
     branchId: row.branchId,
+  }));
+}
+
+function toPaymentLedgerRecords(rows: any[]): PaymentLedgerRecord[] {
+  return rows.map((row) => ({
+    id: row.id,
+    createdAt: row.createdAt,
+    direction: String(row.direction ?? "IN"),
+    purpose: String(row.purpose ?? "SALE"),
+    method: String(row.method ?? "cash"),
+    amountKES: Number(row.amountKES ?? 0),
+    branchId: row.branchId ?? null,
   }));
 }
 
@@ -134,7 +148,11 @@ export async function runReport(
   config: PosConfiguration,
   key: ReportKey,
   range: DateRange = defaultRangeFor(key),
+  options: { branchId?: string | null } = {},
 ): Promise<ReportPayload> {
+  // Staff bound to a location only read that location's figures (§16, §75); an unbound actor
+  // (owner, admin) reads the whole business.
+  const branchId = options.branchId ?? null;
   const definitions = reportDefinitions(config);
   const definition = definitions.find((entry) => entry.key === key);
   if (!definition) {
@@ -153,7 +171,7 @@ export async function runReport(
     case "monthly_sales":
     case "gross_sales":
     case "net_sales": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const summary = summarizeSales(sales, range);
       const series = dailySeries(sales, 7, range.to);
       return payload(definition, range, {
@@ -184,7 +202,7 @@ export async function runReport(
     }
 
     case "refunds": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const refunded = sales.filter((sale) => Number(sale.refundedKES ?? 0) > 0 || sale.status === "VOIDED");
       const totalKES = refunded.reduce((sum, sale) => sum + Number(sale.refundedKES ?? 0), 0);
       return payload(definition, range, {
@@ -204,7 +222,7 @@ export async function runReport(
     }
 
     case "payment_breakdown": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const methods = paymentBreakdown(sales, range);
       const total = methods.reduce((sum, method) => sum + method.amountKES, 0);
       return payload(definition, range, {
@@ -262,7 +280,7 @@ export async function runReport(
     }
 
     case "expenses": {
-      const expenses = toExpenseRecords(await store.expensesForReport(businessId, range));
+      const expenses = toExpenseRecords(await store.expensesForReport(businessId, range, undefined, { branchId }));
       const summary = summarizeExpenses(expenses, range);
       return payload(definition, range, {
         summary: [
@@ -281,8 +299,8 @@ export async function runReport(
 
     case "profitability": {
       const [sales, expenses] = await Promise.all([
-        store.salesForReport(businessId, range),
-        store.expensesForReport(businessId, range),
+        store.salesForReport(businessId, range, undefined, { branchId }),
+        store.expensesForReport(businessId, range, undefined, { branchId }),
       ]);
       const result = profitability(toSaleRecords(sales), toExpenseRecords(expenses), range);
       return payload(definition, range, {
@@ -303,7 +321,7 @@ export async function runReport(
     }
 
     case "inventory_value": {
-      const items = await store.stockWithProducts(businessId);
+      const items = await store.stockWithProducts(businessId, undefined, { branchId });
       const withCost = items.map((item: any) => ({ quantity: Number(item.quantity ?? 0), costKES: item.product?.costKES }));
       const missingCost = withCost.filter((item) => item.costKES == null).length;
       const value = inventoryValueKES(withCost);
@@ -341,7 +359,7 @@ export async function runReport(
     }
 
     case "best_sellers": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const top = bestSellers(sales, 20, range);
       return payload(definition, range, {
         rows: top.map((item) => ({ item: item.name, sold: item.quantity, revenue: formatKES(item.revenueKES) })),
@@ -351,8 +369,8 @@ export async function runReport(
     }
 
     case "slow_movers": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
-      const items = await store.stockWithProducts(businessId);
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const items = await store.stockWithProducts(businessId, undefined, { branchId });
       const names = items.map((item: any) => String(item.product?.name ?? ""));
       const slow = slowMovers(sales, names, range, 20);
       return payload(definition, range, {
@@ -363,7 +381,7 @@ export async function runReport(
     }
 
     case "customer_activity": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const byCustomer = new Map<string, { visits: number; revenueKES: number; lastVisit: Date }>();
       for (const sale of sales) {
         const name = sale.customerName ?? "Walk-in";
@@ -395,7 +413,7 @@ export async function runReport(
 
     case "staff_performance":
     case "commissions": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const staff = await store.listStaff(businessId, { activeOnly: false });
       const byName: Record<string, number> = {};
       for (const member of staff) byName[String(member.name)] = Number(member.commissionPercent ?? 0);
@@ -418,7 +436,7 @@ export async function runReport(
     }
 
     case "channel_attribution": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const rows = channelAttribution(sales, range);
       const total = rows.reduce((sum, row) => sum + row.revenueKES, 0);
       return payload(definition, range, {
@@ -435,7 +453,7 @@ export async function runReport(
     }
 
     case "ingredient_usage": {
-      const movements = await store.movementsForReport(businessId, range);
+      const movements = await store.movementsForReport(businessId, range, undefined, { branchId });
       const used = movements.filter((movement: any) => ["SALE", "DAMAGE", "EXPIRY", "WASTAGE"].includes(movement.reason));
       const byItem = new Map<string, { name: string; unit: string; quantity: number; wasted: number }>();
       for (const movement of used) {
@@ -462,7 +480,7 @@ export async function runReport(
     }
 
     case "production": {
-      const movements = await store.movementsForReport(businessId, range);
+      const movements = await store.movementsForReport(businessId, range, undefined, { branchId });
       const rows = movements.filter((movement: any) => ["PRODUCTION_IN", "PRODUCTION_OUT"].includes(movement.reason));
       return payload(definition, range, {
         rows: rows.slice(-200).reverse().map((movement: any) => ({
@@ -477,9 +495,9 @@ export async function runReport(
     }
 
     case "job_profitability": {
-      const orders = await store.ordersForReport(businessId, range);
+      const orders = await store.ordersForReport(businessId, range, undefined, { branchId });
       const jobs = orders.filter((order: any) => !isTerminal(order.workflowKey, order.stateKey) || order.stateKey !== "CANCELLED");
-      const sales = toSaleRecords(await store.salesForReport(businessId, range));
+      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
       const saleById = new Map(sales.map((sale) => [sale.id, sale]));
       const rows = jobs.map((order: any) => {
         const sale = order.saleId ? saleById.get(order.saleId) : null;
@@ -507,7 +525,7 @@ export async function runReport(
     }
 
     case "projects": {
-      const orders = await store.ordersForReport(businessId, range);
+      const orders = await store.ordersForReport(businessId, range, undefined, { branchId });
       const projects = orders.filter((order: any) => order.workflowKey === "project");
       const deposits = projects.reduce((sum: number, order: any) => sum + Number(order.depositKES ?? 0), 0);
       const balances = projects.reduce((sum: number, order: any) => sum + Math.max(0, Number(order.totalKES ?? 0) - Number(order.depositKES ?? 0)), 0);
@@ -549,13 +567,16 @@ export async function runReport(
 }
 
 /** Closing the day (§8 finance): one screen with the numbers to count against the till. */
-export async function runDailyClosing(businessId: string, config: PosConfiguration, now: Date = new Date()) {
+export async function runDailyClosing(businessId: string, config: PosConfiguration, now: Date = new Date(), options: { branchId?: string | null } = {}) {
+  // The same branch rule as every other report (§16, §75).
+  const branchId = options.branchId ?? null;
   const range = dayRange(now);
-  const [sales, expenses] = await Promise.all([
-    store.salesForReport(businessId, range),
-    store.expensesForReport(businessId, range),
+  const [sales, expenses, payments] = await Promise.all([
+    store.salesForReport(businessId, range, undefined, { branchId }),
+    store.expensesForReport(businessId, range, undefined, { branchId }),
+    store.paymentsForReport(businessId, range, undefined, { branchId }),
   ]);
-  const closing = dailyClosing(toSaleRecords(sales), toExpenseRecords(expenses), now);
+  const closing = dailyClosing(toSaleRecords(sales), toExpenseRecords(expenses), toPaymentLedgerRecords(payments), now);
   return {
     ...closing,
     summary: [
