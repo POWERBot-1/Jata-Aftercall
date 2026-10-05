@@ -487,8 +487,8 @@ describe.skipIf(!postgresEnabled)("POS refund race with real PostgreSQL", () => 
     const returnItems = saleItems.map((item: any) => ({ saleItemId: item.id, quantity: Number(item.quantity) }));
 
     const [first, second] = await Promise.all([
-      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems } }),
-      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems } }),
+      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems, reference: "DIAG-A" } }),
+      refundSale({ businessId: business.id, configuration: config, actor: raceActor, request: { saleId, amountKES: 100, method: "cash", items: returnItems, reference: "DIAG-B" } }),
     ]);
     const accepted = [first, second].filter((result) => result.ok);
     expect(accepted).toHaveLength(1);
@@ -502,8 +502,9 @@ describe.skipIf(!postgresEnabled)("POS refund race with real PostgreSQL", () => 
         first: { ok: first.ok, code: (first as any).code, message: (first as any).message, warnings: (first as any).warnings, refundedKES: (first as any).refundedKES },
         second: { ok: second.ok, code: (second as any).code, message: (second as any).message, warnings: (second as any).warnings, refundedKES: (second as any).refundedKES },
         payments: (await prisma.posPayment.findMany({ where: { businessId: business.id, saleId } })).map((row: any) => ({
-          id: row.id, direction: row.direction, purpose: row.purpose, method: row.method, amountKES: row.amountKES, status: row.status,
+          id: row.id, direction: row.direction, purpose: row.purpose, method: row.method, amountKES: row.amountKES, status: row.status, reference: row.reference,
         })),
+        items: (await prisma.posSaleItem.findMany({ where: { businessId: business.id, saleId } })).map((row: any) => ({ id: row.id, quantity: row.quantity, returnedQty: row.returnedQty })),
         sale: { refundedKES: saleRow?.refundedKES, creditRefundedKES: saleRow?.creditRefundedKES, status: saleRow?.status, totalKES: saleRow?.totalKES, paidKES: saleRow?.paidKES },
       }),
     );
