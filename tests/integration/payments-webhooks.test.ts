@@ -413,6 +413,81 @@ describe("Paystack events (§35, §90)", () => {
     expect(result.status).toBe("ignored");
     expect(fake().rows("paymentTransaction").find((entry) => entry.id === "tx_ps1")?.status).toBe("PENDING");
   });
+
+  it("settles a pending Paystack refund reservation using the refund id, never the charge reference (§47)", async () => {
+    // Seed a paid payment and a reservation waiting on Paystack.
+    const payment = fake().rows("paymentTransaction").find((entry) => entry.id === "tx_ps1")!;
+    Object.assign(payment, { status: "PAID", amountPaidMinor: 35_000, amountRefundedMinor: 0, providerTransactionId: "99001" });
+    fake().rows("refund").push({
+      id: "refund_ps1",
+      businessId: "bizA",
+      transactionId: "tx_ps1",
+      provider: "PAYSTACK",
+      amountMinor: 10_000,
+      currency: "KES",
+      status: "PENDING_PROVIDER",
+      reason: "Customer cancellation",
+      providerReference: "3018284", // Paystack refund id (data.id), not the charge reference.
+      requestedAt: new Date(),
+    });
+
+    // Webhook carries the refund id as data.id — not data.transaction_reference — as Paystack
+    // documents it. Matching by the charge reference would miss the reservation.
+    const ok = await applyProviderEvent(paystackRequest("refund.processed", {
+      id: 3018284,
+      status: "processed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 10_000,
+      currency: "KES",
+    }));
+    expect(ok.status).toBe("processed");
+    expect(fake().rows("refund")[0].status).toBe("COMPLETED");
+    expect(payment.amountRefundedMinor).toBe(10_000);
+    expect(payment.status).toBe("PARTIALLY_REFUNDED");
+
+    // A duplicate delivery is already_processed and does not double-count.
+    const dup = await applyProviderEvent(paystackRequest("refund.processed", {
+      id: 3018284,
+      status: "processed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 10_000,
+      currency: "KES",
+    }));
+    expect(dup.status).toBe("already_processed");
+    expect(payment.amountRefundedMinor).toBe(10_000);
+
+    // A refund.failed releases the reservation so the merchant can retry.
+    fake().rows("refund").push({
+      id: "refund_ps2",
+      businessId: "bizA",
+      transactionId: "tx_ps1",
+      provider: "PAYSTACK",
+      amountMinor: 5_000,
+      currency: "KES",
+      status: "PENDING_PROVIDER",
+      reason: "Second cancellation",
+      providerReference: "3018285",
+      requestedAt: new Date(),
+    });
+    const failedRawBody = JSON.stringify({ id: 302962, event: "refund.failed", data: {
+      id: 3018285,
+      status: "failed",
+      transaction_reference: "JTP-20261004-1050-PSAA",
+      amount: 5_000,
+      currency: "KES",
+    } });
+    const failed = await applyProviderEvent({
+      provider: "PAYSTACK" as const,
+      rawBody: failedRawBody,
+      payload: JSON.parse(failedRawBody),
+      headers: new Headers({ "x-paystack-signature": paystackSignature(failedRawBody, "sk_test_jata_webhook") }),
+      url: new URL("https://jata.test/api/payments/webhooks/paystack"),
+      client: prisma,
+      fetchImpl: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
+    });
+    expect(failed.status).toBe("processed");
+    expect(fake().rows("refund").find((r) => r.id === "refund_ps2")?.status).toBe("FAILED");
+  });
 });
 
 /**

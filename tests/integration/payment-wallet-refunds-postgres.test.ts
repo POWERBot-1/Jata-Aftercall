@@ -31,9 +31,9 @@ function deferred<T = void>() {
   return { promise, resolve };
 }
 
-function paystackResponse(ok = true, id = "refund-test-provider-id") {
+function paystackResponse(ok = true, id = "refund-test-provider-id", options: { async?: boolean } = {}) {
   return new Response(JSON.stringify(ok
-    ? { status: true, data: { id } }
+    ? { status: true, data: { id, status: options.async ? "pending" : "processed" } }
     : { status: false, message: "Refund refused by test provider." }), {
     status: ok ? 200 : 400,
     headers: { "content-type": "application/json" },
@@ -116,7 +116,7 @@ describe.skipIf(!enabled)("Payment Wallet refund reservation with real PostgreSQ
     else process.env.PAYSTACK_SECRET_KEY = originalPaystackSecret;
   });
 
-  it("rejects the competing full-balance request while the first provider call is still in flight", async () => {
+  it("rejects the competing full-balance request while the first async provider call is still in flight", async () => {
     process.env.PAYSTACK_SECRET_KEY = "sk_test_refund_atomicity";
     const fixture = await makeFixture("race");
     const providerStarted = deferred<void>();
@@ -127,7 +127,8 @@ describe.skipIf(!enabled)("Payment Wallet refund reservation with real PostgreSQ
       firstProviderCalls += 1;
       providerStarted.resolve();
       await releaseProvider.promise;
-      return paystackResponse(true, `refund-${stamp}-first`);
+      // Real Paystack queues refunds (status: "pending") and replies with refund.processed later.
+      return paystackResponse(true, `refund-${stamp}-first`, { async: true });
     }) as unknown as typeof fetch;
 
     const firstPromise = request(fixture, 100, firstFetch);
@@ -148,12 +149,29 @@ describe.skipIf(!enabled)("Payment Wallet refund reservation with real PostgreSQ
     }
 
     const first = await firstPromise;
-    expect(first).toMatchObject({ ok: true, amountKES: 100, remainingKES: 0, status: "COMPLETED" });
+    // The refund stays PENDING_PROVIDER — the reservation remains booked until the
+    // refund.processed webhook settles it (§47).
+    expect(first).toMatchObject({ ok: true, amountKES: 100, remainingKES: 0, status: "PENDING_PROVIDER" });
     expect(firstProviderCalls).toBe(1);
-    const { transaction, outstanding } = await checkInvariant(fixture.transactionId, fixture.paidMinor);
-    expect(outstanding).toBe(0);
-    expect(transaction?.amountRefundedMinor).toBe(10_000);
-    expect(transaction?.status).toBe("FULLY_REFUNDED");
+    const pending = await checkInvariant(fixture.transactionId, fixture.paidMinor);
+    expect(pending.outstanding).toBe(10_000);
+    expect(pending.transaction?.amountRefundedMinor).toBe(0);
+    expect(pending.transaction?.status).toBe("PAID");
+    expect(await prisma.refund.count({ where: { transactionId: fixture.transactionId, status: "PENDING_PROVIDER" } })).toBe(1);
+
+    // Simulate the asynchronous refund.processed webhook arriving to settle the reservation.
+    const { resolvePendingProviderRefund } = await import("@/lib/payments/refunds");
+    const settled = await resolvePendingProviderRefund({
+      provider: "PAYSTACK",
+      providerReference: `refund-${stamp}-first`,
+      succeeded: true,
+      amountMinor: 10_000,
+    });
+    expect(settled).toMatchObject({ matched: true, kind: "settled" });
+    const after = await checkInvariant(fixture.transactionId, fixture.paidMinor);
+    expect(after.outstanding).toBe(0);
+    expect(after.transaction?.amountRefundedMinor).toBe(10_000);
+    expect(after.transaction?.status).toBe("FULLY_REFUNDED");
     expect(await prisma.refund.count({ where: { transactionId: fixture.transactionId, status: "COMPLETED" } })).toBe(1);
   });
 

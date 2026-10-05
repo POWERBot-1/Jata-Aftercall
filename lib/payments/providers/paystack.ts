@@ -348,17 +348,39 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
         };
       }
 
+      // Refund lifecycle events (§47, §48): use the refund id (data.id / data.refund_reference),
+      // never the original charge reference. The refund id is what we persisted as providerReference
+      // when the refund was requested; using transaction_reference here would miss every reservation.
+      const refundId = (typeof data.id === "string" || typeof data.id === "number")
+        ? String(data.id)
+        : (typeof data.refund_reference === "string" ? data.refund_reference : null);
+
       if (eventType === "refund.processed") {
-        const refundReference = typeof data.transaction_reference === "string" ? data.transaction_reference : reference;
-        if (!refundReference) {
+        if (!refundId) {
           return { kind: "ignored", reason: "REFUND_WITHOUT_REFERENCE", sanitized };
         }
         return {
           kind: "reversal",
-          providerReference: refundReference,
-          providerTransactionId,
+          providerReference: refundId,
+          providerTransactionId: typeof data.transaction_reference === "string" ? data.transaction_reference : null,
           amountMinor: amountMinor ?? 0,
           reason: "Paystack refund processed",
+          sanitized,
+        };
+      }
+
+      if (eventType === "refund.failed") {
+        if (!refundId) {
+          return { kind: "ignored", reason: "REFUND_WITHOUT_REFERENCE", sanitized };
+        }
+        return {
+          kind: "failure",
+          providerReference: refundId,
+          providerTransactionId: typeof data.transaction_reference === "string" ? data.transaction_reference : null,
+          code: "PAYSTACK_REFUND_FAILED",
+          message: typeof data.status === "string" && data.status
+            ? `Paystack reported refund status: ${data.status}`
+            : "Paystack could not complete this refund.",
           sanitized,
         };
       }
@@ -408,10 +430,21 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
             outcomeUnknown: !result || response.status >= 500,
           };
         }
+        const refundId = result.data?.id == null ? null : String(result.data.id);
+        const refundStatus = typeof result.data?.status === "string" ? result.data.status : "";
+        // Paystack queues refunds; status: "pending" / "processing" means the provider will send a
+        // refund.processed webhook later. Only an immediate "processed" response means the money
+        // moved during this request. When queued, return the refund id so the webhook can
+        // settle the reservation; the refund stays PENDING_PROVIDER until then (§47).
+        const immediate = refundStatus === "processed";
         return {
           ok: true,
-          providerReference: result.data?.id == null ? null : String(result.data.id),
-          message: "Paystack accepted the refund and will confirm when it completes.",
+          // Non-null providerReference is the signal to keep the reservation awaiting a callback.
+          // When the provider completes the refund synchronously we do not need one.
+          providerReference: immediate ? null : refundId,
+          message: immediate
+            ? "Paystack completed the refund."
+            : "Paystack accepted the refund and will confirm when it completes.",
         };
       } catch {
         return { ok: false, code: "PAYSTACK_UNREACHABLE", message: "Paystack could not be reached for this refund.", retryable: true, outcomeUnknown: true };

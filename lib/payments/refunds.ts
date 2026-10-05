@@ -286,8 +286,13 @@ export async function requestRefund(params: {
   }
 
   if (result.ok === false && result.outcomeUnknown) providerOutcomeUnknown = true;
+  // When the adapter returns a providerReference the refund is awaiting an authenticated
+  // asynchronous result from the provider (M-PESA reversal result or Paystack refund.processed);
+  // that's when the reservation must stay booked. A successful response without a follow-up
+  // reference can be treated as final only if the provider confirmed the money moved.
+  const asyncProviderAwaited = result.ok && result.providerReference;
   const status = result.ok
-    ? (transaction.provider === "MPESA" ? "PENDING_PROVIDER" : "COMPLETED")
+    ? (asyncProviderAwaited ? "PENDING_PROVIDER" : "COMPLETED")
     : (providerOutcomeUnknown ? "PENDING_PROVIDER" : "FAILED");
   const finalized = await refundTransaction(client, async (tx: PaymentClient) => {
     const currentTransaction = await lockPaymentForRefund(tx, params.businessId, transaction.id);
