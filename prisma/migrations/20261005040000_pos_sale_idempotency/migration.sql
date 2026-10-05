@@ -34,10 +34,16 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- The replay guard itself: one unspent key per (business, actor, action).
-DO $$ BEGIN
-    ALTER TABLE "PosIdempotencyRecord" ADD CONSTRAINT "PosIdempotencyRecord_businessId_actorId_scope_key_key" UNIQUE ("businessId", "actorId", "scope", "key");
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+--
+-- Declared as a unique *index*, not as a unique *constraint*. ALTER TABLE ... ADD CONSTRAINT
+-- builds its backing index before it registers the constraint, so re-running it raises 42P07
+-- (duplicate_table) — which an `EXCEPTION WHEN duplicate_object` guard does not catch, because
+-- that guard only sees 42710. CREATE UNIQUE INDEX IF NOT EXISTS is re-runnable for real, which
+-- is also the convention the rest of this repository's migrations follow. A unique index
+-- enforces exactly the same uniqueness as a unique constraint, including as the target of
+-- ON CONFLICT, which is how the idempotency claim collides.
+CREATE UNIQUE INDEX IF NOT EXISTS "PosIdempotencyRecord_businessId_actorId_scope_key_key"
+    ON "PosIdempotencyRecord"("businessId", "actorId", "scope", "key");
 
 CREATE INDEX IF NOT EXISTS "PosIdempotencyRecord_businessId_createdAt_idx"
     ON "PosIdempotencyRecord"("businessId", "createdAt");

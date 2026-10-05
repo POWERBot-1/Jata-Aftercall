@@ -224,7 +224,18 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
       const uniques = [...model.body.matchAll(/@@unique\(\[([^\]]+)\]\)/g)].map((match) => match[1].split(",").map((part) => part.trim()));
       for (const columns of uniques) {
         const name = `${model.name}_${columns.join("_")}_key`;
-        expect(migration, name).toContain(`"${name}" UNIQUE`);
+        // One guarantee, two legal spellings: a unique constraint
+        // (`... ADD CONSTRAINT "name" UNIQUE (...)`) or a unique index
+        // (`CREATE UNIQUE INDEX [IF NOT EXISTS] "name" ON "Model"(...)`). They are enforced
+        // identically — including as an ON CONFLICT target — but only the index form is
+        // re-runnable, so new migrations use it. Both must carry the exact name the schema
+        // derives, so a rename on either side is still caught here.
+        const asConstraint = migration.includes(`"${name}" UNIQUE`);
+        const asIndex = new RegExp(
+          `CREATE\\s+UNIQUE\\s+INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?"${name}"\\s+ON\\s+"${model.name}"\\s*\\(\\s*${columns.map((column) => `"${column}"`).join("\\s*,\\s*")}\\s*\\)`,
+          "i",
+        ).test(migration);
+        expect(asConstraint || asIndex, `${name} unique over (${columns.join(", ")})`).toBe(true);
       }
       const relations = [...model.body.matchAll(/@relation\(fields: \[(\w+)\], references: \[(\w+)\]/g)];
       for (const relation of relations) {
