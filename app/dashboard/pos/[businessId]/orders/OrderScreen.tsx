@@ -32,7 +32,8 @@ export async function OrderScreen({
   openNew?: boolean;
   stateFilter?: string;
 }) {
-  // The board reads orders for the whole business — the same module read the orders API enforces.
+  // The board reads orders for the actor's own scope — the same branch read the orders API
+  // enforces (§16, §75). A location's board shows that location's tickets, not the group's.
   const gate = await loadPosPageWorkspace(businessId, "VIEW_ORDERS");
   if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
   const workspace = gate.workspace;
@@ -41,7 +42,7 @@ export async function OrderScreen({
   const range = sanitizeRange({}, 30);
 
   const [orders, products, customers] = await Promise.all([
-    listOrders(businessId, { range: { from: range.from, to: range.to }, workflowKey: workflowKey, take: 150 }),
+    listOrders(businessId, { range: { from: range.from, to: range.to }, workflowKey: workflowKey, branchId: workspace.branchId, take: 150 }),
     listProducts(businessId, { take: 300 }),
     configuration.customers.enabled ? listCustomers(businessId, { take: 200 }) : Promise.resolve([]),
   ]);

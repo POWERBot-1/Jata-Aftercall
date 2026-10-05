@@ -910,7 +910,11 @@ export async function paymentMix(businessId: string, range: DateRange = {}, clie
 // Expenses (§17)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listExpenses(businessId: string, options: { range?: DateRange; categoryKey?: string; branchId?: string | null; take?: number } = {}, client: PosClient = db()) {
+export async function listExpenses(
+  businessId: string,
+  options: { range?: DateRange; categoryKey?: string; branchId?: string | null; take?: number } = {},
+  client: PosClient = db(),
+) {
   const where: Record<string, unknown> = { businessId };
   const from = toDate(options.range?.from);
   const to = toDate(options.range?.to);
@@ -922,8 +926,15 @@ export async function listExpenses(businessId: string, options: { range?: DateRa
   return client.posExpense.findMany({ where, orderBy: { occurredAt: "desc" }, take: Math.min(asInt(options.take, 100), 500) });
 }
 
-export async function expenseTotals(businessId: string, range: DateRange = {}, client: PosClient = db()) {
-  const expenses = await listExpenses(businessId, { range, take: 500 }, client);
+export async function expenseTotals(
+  businessId: string,
+  range: DateRange = {},
+  client: PosClient = db(),
+  options: { branchId?: string | null } = {},
+) {
+  // The total is the total of the rows this actor is allowed to read — a location's spend is
+  // summed for the people who work that location, not for the whole business (§16, §75).
+  const expenses = await listExpenses(businessId, { range, take: 500, branchId: options.branchId }, client);
   const byCategory = new Map<string, { categoryKey: string; amountKES: number }>();
   let amountKES = 0;
   for (const expense of expenses) {
@@ -962,9 +973,16 @@ export async function createExpense(
 // Purchases and receiving (§12, §33)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listPurchases(businessId: string, options: { status?: string; take?: number } = {}, client: PosClient = db()) {
+export async function listPurchases(
+  businessId: string,
+  options: { status?: string; take?: number; branchId?: string | null } = {},
+  client: PosClient = db(),
+) {
   const where: Record<string, unknown> = { businessId };
   if (options.status) where.status = options.status;
+  // Stock is bought in at one location, so the record belongs to that location (§16, §75): a
+  // clerk bound to one shop reads that shop's deliveries, not the group's.
+  if (options.branchId != null) where.branchId = options.branchId;
   return client.posPurchase.findMany({
     where,
     orderBy: { createdAt: "desc" },

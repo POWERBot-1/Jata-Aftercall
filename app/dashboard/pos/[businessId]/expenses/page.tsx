@@ -28,7 +28,12 @@ export default async function PosExpensesPage({ params, searchParams }: Props) {
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "expense");
 
-  const [expenses, totals] = await Promise.all([listExpenses(businessId, { take: 200 }), expenseTotals(businessId, {})]);
+  // Money leaves one location at a time, so the ledger and its total are the actor's own (§16,
+  // §75) — the same scope the expenses API applies.
+  const [expenses, totals] = await Promise.all([
+    listExpenses(businessId, { take: 200, branchId: workspace.branchId }),
+    expenseTotals(businessId, {}, undefined, { branchId: workspace.branchId }),
+  ]);
 
   return (
     <div className="space-y-3">

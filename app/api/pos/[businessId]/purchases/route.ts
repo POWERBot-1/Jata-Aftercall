@@ -22,7 +22,8 @@ export async function GET(request: Request, context: RouteContext) {
     options: { permission: "VIEW_SUPPLIERS", fast: true },
     fallback: "We couldn't load your purchases.",
     handler: async ({ ctx, url }) => posOk({
-      purchases: await listPurchases(businessId, { status: queryString(url, "status") ?? undefined, take: 50 }),
+      // Received at one location, so read for the actor's own location (§16, §75).
+      purchases: await listPurchases(businessId, { status: queryString(url, "status") ?? undefined, take: 50, branchId: ctx.branchId }),
       suppliers: await listSuppliers(businessId, {}),
       purchaseOrders: ctx.configuration.suppliers.purchaseOrders,
       partialReceiving: ctx.configuration.suppliers.partialReceiving,

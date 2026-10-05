@@ -893,6 +893,12 @@ export async function moveOrder(params: {
 
   const order = await store.findOrder(businessId, text(params.orderId, 64) ?? "", client);
   if (!order) return failure("ORDER_NOT_FOUND", `That ${words(configuration).order.toLowerCase()} was not found.`, warnings);
+  // A ticket belongs to the location it was taken at (§16, §75). Moving one is a write, so a
+  // branch-bound actor naming another location's order is refused with the reason rather than
+  // having the move quietly land somewhere else.
+  if (!store.branchRecordInScope(actor, order.branchId)) {
+    return failure("BRANCH_OUT_OF_SCOPE", store.branchOutOfScopeMessage(), warnings);
+  }
 
   const toState = text(params.toState, 40) ?? "";
   const cancelling = toState.toUpperCase() === "CANCELLED";

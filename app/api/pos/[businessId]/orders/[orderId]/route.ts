@@ -1,6 +1,6 @@
 import { fromOutcome, handlePosRequest, posOk } from "@/lib/pos/http";
 import { moveOrder } from "@/lib/pos/operations";
-import { findOrder } from "@/lib/pos/store";
+import { branchOutOfScopeMessage, branchRecordInScope, findOrder } from "@/lib/pos/store";
 import { nextStates } from "@/lib/pos/workflow";
 import { text } from "@/lib/pos/validation";
 
@@ -20,9 +20,15 @@ export async function GET(_request: Request, context: RouteContext) {
     businessId,
     options: { permission: "VIEW_ORDERS", fast: true },
     fallback: "We couldn't load that order.",
-    handler: async () => {
+    handler: async ({ ctx }) => {
       const order = await findOrder(businessId, orderId);
       if (!order) return { status: 404, data: { error: "That order was not found." } };
+      // A ticket belongs to the location it was taken at (§16, §75): a guessed id from another
+      // location is refused here, not served, so the board's branch scope cannot be walked around
+      // by typing the URL directly (IDOR).
+      if (!branchRecordInScope(ctx, order.branchId)) {
+        return { status: 404, data: { error: branchOutOfScopeMessage() } };
+      }
       return posOk({
         order,
         nextStates: nextStates(order.workflowKey, order.stateKey).map((state) => ({ key: state.key, label: state.label, hint: state.hint ?? "" })),

@@ -24,8 +24,8 @@ export async function GET(request: Request, context: RouteContext) {
     handler: async ({ ctx, url }) => {
       const range = sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 30);
       const [expenses, totals] = await Promise.all([
-        listExpenses(businessId, { range: { from: range.from, to: range.to }, take: 200 }),
-        expenseTotals(businessId, { from: range.from, to: range.to }),
+        listExpenses(businessId, { range: { from: range.from, to: range.to }, take: 200, branchId: ctx.branchId }),
+        expenseTotals(businessId, { from: range.from, to: range.to }, undefined, { branchId: ctx.branchId }),
       ]);
       return posOk({
         expenses,

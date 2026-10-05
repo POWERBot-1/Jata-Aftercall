@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { formatKES, formatDateTime } from "@/lib/format";
 import { listMovements, listSales, stockWithProducts } from "@/lib/pos/store";
-import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
+import { loadPosPageWorkspace } from "@/lib/pos/workspace";
+import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
  * Produce (§18 farm and agribusiness).
@@ -9,6 +10,10 @@ import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
  * A farm's harvest log is not part of this release, and the screen says so instead of showing
  * invented numbers (§35). What it does show is real: what was sold, what went out of the store,
  * and what is still standing in the stock room — the records the business already keeps.
+ *
+ * Everything on this screen is somebody else's sales and stock data, so the page asks for
+ * `VIEW_SALES` — the read the sold-lines section is made of — before a single row is read (§11,
+ * §36). The nav link is not a permission, and a direct URL is not a way around the gate.
  */
 
 export const dynamic = "force-dynamic";
@@ -19,12 +24,17 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function PosProducePage({ params }: Props) {
   const { businessId } = await params;
-  const workspace = await loadPosWorkspaceCached(businessId);
+  const gate = await loadPosPageWorkspace(businessId, "VIEW_SALES");
+  if (!gate.workspace) return <PosRefusal message={gate.refusal} basePath={gate.basePath} />;
+  const workspace = gate.workspace;
 
+  // The same branch scope the sales and stock APIs apply (§16, §75): a clerk bound to one
+  // location reads that location's sales, movements and stock, not the whole business's.
+  const branchId = workspace.branchId;
   const [sales, movements, stock] = await Promise.all([
-    listSales(businessId, { take: 30 }),
-    listMovements(businessId, { take: 40 }),
-    stockWithProducts(businessId),
+    listSales(businessId, { branchId, take: 30 }),
+    listMovements(businessId, { branchId, take: 40 }),
+    stockWithProducts(businessId, undefined, { branchId }),
   ]);
 
   const soldLines = (sales as any[]).flatMap((sale) =>

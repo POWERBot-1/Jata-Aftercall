@@ -29,7 +29,13 @@ export default async function PosStaffPage({ params, searchParams }: Props) {
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "staff");
 
-  const [staff, branches] = await Promise.all([listStaff(businessId, { activeOnly: false }), listBranches(businessId)]);
+  // Who works here is a business-wide record, so the roster is not filtered — but the locations
+  // a person can be assigned to are read under the actor's own scope, exactly as the locations
+  // API and the staff API read them (§16, §75).
+  const [staff, branches] = await Promise.all([
+    listStaff(businessId, { activeOnly: false }),
+    listBranches(businessId, undefined, { only: workspace.branchId }),
+  ]);
   const roles = resolveRoles(configuration);
   const roleName = new Map(roles.map((role) => [role.key, role.name]));
 

@@ -22,8 +22,11 @@ export default async function PosPurchasesPage({ params }: Props) {
   const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
+  // Deliveries are received at one location, so the board shows the actor's own (§16, §75) —
+  // the same scope the purchases API applies. Suppliers and products are business-wide records
+  // and carry no location of their own.
   const [purchases, suppliers, products] = await Promise.all([
-    listPurchases(businessId, { take: 40 }),
+    listPurchases(businessId, { take: 40, branchId: workspace.branchId }),
     listSuppliers(businessId, { take: 200 }),
     listProducts(businessId, { take: 400 }),
   ]);

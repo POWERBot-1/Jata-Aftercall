@@ -31,7 +31,9 @@ export default async function PosCustomerDetailPage({ params }: Props) {
   const configuration = workspace.configuration;
   const [entries, sales, assets] = await Promise.all([
     configuration.credit.enabled ? listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 200 }) : Promise.resolve([]),
-    listSales(businessId, { customerId, take: 50 }),
+    // A branch-bound clerk sees what this customer bought at its own location (§16, §75) —
+    // the customer record stays business-wide, the receipts behind it follow the branch scope.
+    listSales(businessId, { customerId, branchId: workspace.branchId, take: 50 }),
     listCustomerAssets(businessId, customerId),
   ]);
 

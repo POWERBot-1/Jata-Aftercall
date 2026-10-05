@@ -20,12 +20,13 @@ export async function GET(_request: Request, context: RouteContext) {
     businessId,
     options: { permission: "VIEW_SUPPLIERS", fast: true },
     fallback: "We couldn't load that supplier.",
-    handler: async () => {
+    handler: async ({ ctx }) => {
       const supplier = await findSupplier(businessId, supplierId);
       if (!supplier) return { status: 404, data: { error: "That supplier was not found." } };
       const [entries, purchases] = await Promise.all([
         listCreditEntries(businessId, { partyType: PAYABLE, partyId: supplierId, take: 200 }),
-        listPurchases(businessId, { take: 25 }),
+        // Deliveries from this supplier are read for the actor's own location (§16, §75).
+        listPurchases(businessId, { take: 25, branchId: ctx.branchId }),
       ]);
       const statement = buildStatement(toCreditEntries(entries, PAYABLE), PAYABLE);
       return posOk({

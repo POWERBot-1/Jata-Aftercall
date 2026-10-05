@@ -63,7 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
           branchId: movement.branchId,
         })),
         alerts,
-        lowStock: await lowStock(businessId),
+        lowStock: await lowStock(businessId, undefined, { branchId: ctx.branchId }),
         branches,
         products: products.map((product: any) => ({ id: product.id, name: product.name, unitKey: product.unitKey })),
         reasons: manualReasons(ctx.configuration),
