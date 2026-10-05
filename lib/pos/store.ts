@@ -775,14 +775,20 @@ export async function findSaleByReceipt(businessId: string, receiptNumber: strin
  * old read-max-plus-one let two sales pick the same number and fail one of them; the number now
  * can only be lost if the sale transaction that claimed it rolls back, and even then it is a
  * skipped number, never a duplicate (§32).
+ *
+ * The row holds the number the *next* sale will take, and the claim returns the one before it.
+ * That is what `previewSaleSequence` reads and what migration
+ * `20261005020000_pos_sale_refund_integrity` backfills (`MAX("sequence") + 1`); keeping the two
+ * in step is what stops a business that already sold from skipping a receipt number forever.
+ * A row is created already advanced to 2 so the first sale takes number 1.
  */
 export async function nextSaleSequence(businessId: string, client: PosClient = db()) {
   const row = await client.posReceiptSequence.upsert({
     where: { businessId },
     update: { nextValue: { increment: 1 } },
-    create: { businessId, nextValue: 1 },
+    create: { businessId, nextValue: 2 },
   });
-  return asInt(row.nextValue);
+  return asInt(row.nextValue) - 1;
 }
 
 /**

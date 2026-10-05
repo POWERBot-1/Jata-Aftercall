@@ -8,6 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applyUpdateData } from "@/tests/helpers/posFakeDb";
 
 type Row = Record<string, any>;
 
@@ -55,21 +56,26 @@ function model(rows: Row[]) {
       rows.push(row);
       return row;
     }),
+    // Writes go through `applyUpdateData`, the same resolver the shared POS fake uses, so the
+    // atomic operators the store relies on (`{ increment }`) change the stored number the way
+    // PostgreSQL's single-statement `SET column = column + δ` does. Without it, every assertion
+    // below that reads a balance or a stock level back would be checked against a row holding
+    // `{ increment: n }` instead of a number — i.e. it would pass without proving anything.
     update: vi.fn(async ({ where, data }: any) => {
       const row = rows.find((entry) => matches(entry, where));
       if (!row) throw new Error("NOT_FOUND");
-      Object.assign(row, data);
+      applyUpdateData(row, data);
       return row;
     }),
     updateMany: vi.fn(async ({ where, data }: any) => {
       const scoped = rows.filter((row) => matches(row, where));
-      for (const row of scoped) Object.assign(row, data);
+      for (const row of scoped) applyUpdateData(row, data);
       return { count: scoped.length };
     }),
     upsert: vi.fn(async ({ where, create, update }: any) => {
       const row = rows.find((entry) => matches(entry, where));
       if (row) {
-        Object.assign(row, update);
+        applyUpdateData(row, update);
         return row;
       }
       const created = { id: `upserted_${rows.length + 1}`, ...create };
@@ -102,6 +108,7 @@ const MODEL_KEYS = [
   "posSaleItem", "posPayment", "posCreditEntry", "posInventoryItem", "posInventoryMovement", "posExpense",
   "posPurchase", "posPurchaseItem", "posOrder", "posOrderItem", "posOrderEvent", "posAuditEvent",
   "posConfiguration", "posConfigurationVersion", "posTemplate", "posSubscription", "posEntitlement",
+  "posReceiptSequence",
   "business", "businessMember", "payment", "processedWebhook", "user",
 ];
 
@@ -181,6 +188,17 @@ function reset() {
   ]);
   set("businessMember", [{ id: "mem_a", businessId: "bizA", userId: "cashierA", role: "STAFF" }]);
   set("user", [{ id: "userA", name: "Owner A", email: "a@example.com" }, { id: "userB", name: "Owner B", email: "b@example.com" }]);
+  // Seeded exactly as migration `20261005020000_pos_sale_refund_integrity` backfills it on a real
+  // database — one row per business holding `MAX(sequence) + 1` of that business's sales. Without
+  // it the fake would start every tenant at 1 and the per-tenant sequence assertion would be
+  // checking a counter no deployment ever has.
+  set(
+    "posReceiptSequence",
+    ["bizA", "bizB"].map((businessId) => ({
+      businessId,
+      nextValue: state.posSale.filter((sale) => sale.businessId === businessId).reduce((max, sale) => Math.max(max, Number(sale.sequence ?? 0)), 0) + 1,
+    })),
+  );
 }
 
 vi.mock("@/lib/db", () => {

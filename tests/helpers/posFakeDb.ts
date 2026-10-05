@@ -45,22 +45,21 @@ export function rowMatches(row: Row, where: Row | undefined): boolean {
         continue;
       }
       // Prisma compound-unique input: `{ productId_branchId: { productId, branchId } }` — the
-      // key is the underlying fields joined by underscores. It matches when every named field
-      // of the pair matches this row (and fails when the pair is given but nothing matches).
-      if (Object.keys(filter).length === 1 && key.includes("_")) {
-        const compoundKey = Object.keys(filter)[0];
-        const compound = filter[compoundKey];
-        if (compound && typeof compound === "object" && !Array.isArray(compound)) {
-          const entries = Object.entries(compound as Row);
-          const parts = compoundKey.split("_");
-          if (entries.length > 0 && parts.length >= entries.length) {
-            const fields = parts.slice(0, entries.length);
-            const matched = entries.every(([field, wanted]) => row[field] === wanted);
-            if (matched) continue;
-          }
+      // *key* is the underlying fields joined by underscores and the value carries them. It
+      // matches when every named field equals this row's, and fails when the pair is given but
+      // nothing matches. Getting this wrong is not a near miss: an unmatched compound key used
+      // to fall through to "relation filter — not modelled", which matched *every* row, so the
+      // upsert in `recordMovement` that creates the first stock row for a location would instead
+      // move some other product's stock.
+      if (key.includes("_")) {
+        const parts = key.split("_");
+        const entries = Object.entries(filter);
+        const named = entries.length > 0 && entries.every(([field], index) => parts[index] === field);
+        if (named) {
+          if (entries.every(([field, wanted]) => row[field] === wanted)) continue;
           return false;
         }
-        continue; // any other single-key object is a relation filter: not modelled
+        continue; // an underscore key that does not name these fields is a relation filter
       }
       continue; // relation filter: not modelled
     }
@@ -105,6 +104,18 @@ const RELATIONS: Record<string, { field: string; key: string }[]> = {
   events: [{ field: "posOrderEvent", key: "orderId" }],
 };
 
+/**
+ * Compound unique indexes the fake enforces the way PostgreSQL would (§5, §32).
+ *
+ * Without this, an insert that would violate a unique index silently succeeds and the caller's
+ * guard — the whole point of the index — is never exercised.
+ */
+const UNIQUE_INDEXES: Record<string, string[][]> = {
+  // The till's replay guard: one unspent key per business, actor and action. A duplicate
+  // submission must fail the insert, and with it the sale transaction that owns it.
+  posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],
+};
+
 export type FakeDb = {
   db: any;
   state: Record<string, Row[]>;
@@ -121,6 +132,19 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
   function ensure(name: string): Row[] {
     if (!state[name]) state[name] = [];
     return state[name];
+  }
+
+  /** The `P2002` PostgreSQL/Prismaraise for a row already held under a unique index. */
+  function assertUnique(name: string, data: Row | undefined): void {
+    for (const fields of UNIQUE_INDEXES[name] ?? []) {
+      const conflict = ensure(name).some((row) => fields.every((field) => row[field] === (data as Row)?.[field]));
+      if (conflict) {
+        throw Object.assign(
+          new Error(`Unique constraint failed on the fields: (${fields.join(", ")})`),
+          { code: "P2002", meta: { target: fields } },
+        );
+      }
+    }
   }
 
   function decorate(row: Row, include: Row | undefined): Row {
@@ -162,6 +186,7 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         return { _sum: sum, _count: { _all: scoped.length } };
       }),
       create: vi_fn(async ({ data }: any) => {
+        assertUnique(name, data);
         const row = { id: data.id ?? `${name}_${++counter}`, createdAt: new Date(), ...data };
         rows.push(row);
         return row;
@@ -188,6 +213,7 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
           applyUpdateData(row, update);
           return row;
         }
+        assertUnique(name, create);
         const created = { id: `${name}_${++counter}`, ...create };
         rows.push(created);
         return created;
