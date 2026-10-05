@@ -1,0 +1,86 @@
+name: Production smoke (read-only)
+
+# Read-only production probe.
+#
+# The agent sandbox has no outbound access to *.vercel.app and no production credentials, so the
+# runtime half of the deployment check cannot be performed from there. GitHub runners do have
+# egress, so the probe runs here instead.
+#
+# Everything below is an unauthenticated GET. Nothing is created, mutated or deleted in
+# production: no accounts, no sales, no refunds, no payment attempts. Functional behaviour
+# (POS, refunds, credit, idempotency, tenant isolation) is covered by the CI suite against a real
+# PostgreSQL, not by writing test data into the live database.
+#
+# Runs only on workflow_dispatch — never on push, never unattended.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Read-only production probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    env:
+      BASE_URL: https://jata-aftercall.vercel.app
+
+    steps:
+      - name: Probe the production origin
+        id: probe
+        run: |
+          set -u
+          report="PRODUCTION SMOKE (read-only) — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          report="$report"$'\n'"base url: $BASE_URL"
+          report="$report"$'\n'
+
+          probe() {
+            label="$1"; path="$2"; expect="$3"
+            url="${BASE_URL}${path}"
+            code=$(curl -sS -m 30 -o /tmp/body -w '%{http_code}' "$url" 2>/dev/null || echo "ERR")
+            bytes=$(wc -c < /tmp/body 2>/dev/null || echo 0)
+            time_total=$(curl -sS -m 30 -o /dev/null -w '%{time_total}' "$url" 2>/dev/null || echo "?")
+            report="$report"$'\n'"- $label"
+            report="$report"$'\n'"    GET $path -> HTTP $code  (${bytes} bytes, ${time_total}s)  expect $expect"
+            if [ "$path" = "/health" ]; then
+              report="$report"$'\n'"    body: $(tr -d '\n' < /tmp/body | cut -c1-300)"
+            fi
+            # A secret in any response body is a deployment defect, not just a probe result.
+            if grep -qE "sk_live_|sk_test_|pk_live_[A-Za-z0-9]{10,}|-----BEGIN|DATABASE_URL=" /tmp/body 2>/dev/null; then
+              report="$report"$'\n'"    SECRET-SHAPED STRING IN RESPONSE BODY — investigate immediately"
+            fi
+          }
+
+          probe "health / database"        "/health"                   "200"
+          probe "homepage"                 "/"                         "200"
+          probe "login (auth surface)"     "/login"                    "200"
+          probe "register (auth surface)"  "/register"                 "200"
+          probe "paystack webhook route"   "/api/paystack/webhook"     "405 or 4xx (GET not allowed)"
+          probe "m-pesa stk callback"      "/api/mpesa/stk/callback"   "route present"
+
+          report="$report"$'\n'
+          report="$report"$'\n'"checks that cannot be performed from a runner:"
+          report="$report"$'\n'"- tenant isolation, branch isolation, module permissions, POS, sales,"
+          report="$report"$'\n'"  inventory, refunds, credit, idempotency, receipts, wallet, AI front desk:"
+          report="$report"$'\n'"  all require authenticated sessions and would write to the live database."
+
+          echo "$report"
+          echo "$report" > /tmp/report.txt
+
+      - name: Post the report to PR #40
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/report.txt', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 40,
+              body: body,
+            });
