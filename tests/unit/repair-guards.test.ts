@@ -68,8 +68,10 @@ describe("runtime and schema guards", () => {
     // Business package schema, the Configurable Business POS schema, the Website Studio AI
     // schema (image provenance on MediaAsset plus the AiGeneration audit table), the Website
     // Studio draft history (a bounded revision stack that powers Undo/Redo, plus one defaulted
-    // cursor column on BusinessExperience), the JATA Payment Wallet, and the additive STK receipt
-    // column plus refund-reference lookup index. Anything else stays a build failure, and no
+    // cursor column on BusinessExperience), the JATA Payment Wallet, the additive STK receipt
+    // column plus refund-reference lookup index, the POS refund-integrity columns and the
+    // per-business receipt sequence table, and the lossless INTEGER → DOUBLE PRECISION
+    // promotion of the POS quantity columns. Anything else stays a build failure, and no
     // migration may destroy or rewrite existing data.
     expect(migrations).toEqual([
       "20250915000000_init",
@@ -81,6 +83,8 @@ describe("runtime and schema guards", () => {
       "20261004010000_studio_draft_history",
       "20261005000000_payment_wallet",
       "20261005010000_payment_wallet_stk_receipt",
+      "20261005020000_pos_sale_refund_integrity",
+      "20261005030000_pos_fractional_quantities",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -95,6 +99,16 @@ describe("runtime and schema guards", () => {
       'UPDATE "Service" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;',
       'ALTER TABLE "Service" ALTER COLUMN "updatedAt" SET NOT NULL;',
     ];
+    // The fractional-quantity migration's only ALTERs are lossless type promotions: every
+    // integer value is exactly representable as a double, so no row is rewritten — authorised
+    // here by their exact text, exactly like the Service backfill above.
+    const authorizedQuantityPromotions = [
+      'ALTER TABLE "PosSaleItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
+      'ALTER TABLE "PosInventoryItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
+      'ALTER TABLE "PosInventoryMovement"\n    ALTER COLUMN "delta" SET DATA TYPE DOUBLE PRECISION,\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
+      'ALTER TABLE "PosOrderItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
+      'ALTER TABLE "PosPurchaseItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION,\n    ALTER COLUMN "receivedQty" SET DATA TYPE DOUBLE PRECISION;',
+    ];
     for (const migration of [
       "20260929000000_referral_stage2",
       "20260930000000_commerce_baseline",
@@ -104,12 +118,19 @@ describe("runtime and schema guards", () => {
       "20261004010000_studio_draft_history",
       "20261005000000_payment_wallet",
       "20261005010000_payment_wallet_stk_receipt",
+      "20261005020000_pos_sale_refund_integrity",
+      "20261005030000_pos_fractional_quantities",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
         for (const line of authorizedBackfill) {
           expect(sql).toContain(line);
           sql = sql.replace(line, "");
+        }
+      } else if (migration === "20261005030000_pos_fractional_quantities") {
+        for (const statement of authorizedQuantityPromotions) {
+          expect(sql, statement).toContain(statement);
+          sql = sql.replace(statement, "");
         }
       } else {
         // Every other migration leaves existing rows and column definitions completely alone.
