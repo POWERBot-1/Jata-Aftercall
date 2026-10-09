@@ -1,8 +1,8 @@
 /**
  * M-PESA C2B reversal result callback (§35, §111).
  *
- * This is the exact URL JATA registers with Safaricom as the reversal `ResultURL` (derived from
- * `MPESA_C2B_CONFIRMATION_URL`: `…/mpesa/confirmation?token=…` → `…/mpesa/result?token=…`). When a
+ * This is a legacy path for the reversal `ResultURL`, which JATA derives from the confirmation URL
+ * (`…/confirmation?token=…` → `…/result?token=…`). When a
  * reversal is requested, Safaricom posts the outcome here and the shared pipeline correlates it
  * back to the recorded reversal. It runs the same shared handler as the base union endpoint.
  */

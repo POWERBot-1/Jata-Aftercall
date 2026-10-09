@@ -287,6 +287,14 @@ export type ProviderStatusReport = {
   currency: string | null;
   providerTransactionId: string | null;
   message: string | null;
+  /**
+   * False when the provider's answer does not itself carry the paid amount (Daraja's STK Query
+   * reports only a result code). The caller then books the amount that was *requested* — which an
+   * STK prompt charges exactly — and records that the figure was not independently reported.
+   */
+  amountVerified?: boolean;
+  /** A provider receipt, when the status answer carries one (Daraja's STK Query does not). */
+  providerReceipt?: string | null;
 };
 
 /** Where a provider event says the money went (used to identify the tenant, §13, §56). */
@@ -303,6 +311,12 @@ export type ProviderEventOutcome =
       providerTransactionId: string | null;
       /** Actual M-PESA receipt; distinct from the STK CheckoutRequestID correlation handle. */
       providerReceipt?: string | null;
+      /**
+       * True only for a confirmation obtained by asking the provider (a status query) rather than
+       * from an authenticated callback: such an answer carries no receipt, so its absence is
+       * expected and does not block settlement. A callback without a receipt still does.
+       */
+      receiptOptional?: boolean;
       amountMinor: number;
       currency: string;
       destination: DestinationHint;
@@ -316,6 +330,8 @@ export type ProviderEventOutcome =
       kind: "reversal";
       providerReference: string;
       providerTransactionId: string | null;
+      /** The receipt of the payment that was reversed, when the result names it. */
+      originalTransactionId?: string | null;
       amountMinor: number;
       reason: string | null;
       sanitized: Record<string, unknown>;
@@ -325,8 +341,22 @@ export type ProviderEventOutcome =
       providerReference: string | null;
       /** The provider's handle for the attempt, when the event carries one (§64). */
       providerTransactionId: string | null;
+      /** The receipt of the payment a failed reversal referred to, when the result names it. */
+      originalTransactionId?: string | null;
       code: string;
       message: string;
+      sanitized: Record<string, unknown>;
+    }
+  | {
+      /**
+       * The provider's queue gave up on a request before processing it. This is NOT a verdict: the
+       * operation may still complete later, so it must never be treated as a failure or released
+       * for a retry (M-PESA reversal QueueTimeOutURL).
+       */
+      kind: "reversal_timeout";
+      providerReference: string | null;
+      providerTransactionId: string | null;
+      originalTransactionId?: string | null;
       sanitized: Record<string, unknown>;
     }
   | { kind: "ignored"; reason: string; sanitized: Record<string, unknown> };

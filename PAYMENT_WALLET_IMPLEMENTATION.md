@@ -81,7 +81,8 @@ Amounts are `Int` **minor units** (never a float); currency is a column, KES fir
 **JATA-owned provider events** (§35, §111) — merchants never see these:
 
 ```
-POST /api/payments/webhooks/mpesa      (STK, C2B confirmation, validation)
+POST /api/payments/webhooks/daraja/{stk,confirmation,validation,result,timeout}   (M-PESA — the default JATA registers)
+POST /api/payments/webhooks/mpesa/{stk,confirmation,validation,result,timeout}    (M-PESA — legacy paths, same handler)
 POST /api/payments/webhooks/paystack
 ```
 
@@ -141,16 +142,18 @@ deployment. It never pretends a connection exists (§16, §120).
 
 ### M-PESA (Safaricom Daraja)
 
+> **Production readiness, the Daraja products each flow needs, the exact registration procedure and the Safaricom-dependent checklist are in [`JATA_AFTERCALL_MPESA_READINESS.md`](./JATA_AFTERCALL_MPESA_READINESS.md).** The wallet must not be described as production ready on the strength of this document.
+
 | Requirement | Purpose |
 | --- | --- |
-| `MPESA_ENV` = `sandbox` \| `production` | which Daraja host |
+| `MPESA_ENV` = `sandbox` \| `production` | which Daraja host — **required, exactly one of the two; there is no default and no fallback** |
 | `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET` | app credentials for the Daraja API |
 | `MPESA_SHORTCODE` | the Buy Goods till / PayBill that collects |
 | `MPESA_PASSKEY` | Lipa na M-PESA online passkey for that shortcode |
-| `MPESA_CALLBACK_TOKEN` | JATA's own shared secret appended to the callback URLs — Daraja does not sign callbacks, so without it JATA refuses unauthenticated callbacks rather than trusting whoever finds the URL |
+| `MPESA_CALLBACK_TOKEN` | JATA's own shared secret carried as `?token=` in the callback URLs — Daraja does not sign callbacks, so without it JATA refuses unauthenticated callbacks rather than trusting whoever finds the URL. 24–128 URL-safe characters (`openssl rand -hex 24`) |
 | Daraja app **authorized** for STK push and C2B, with the C2B confirmation/validation URLs registered | Daraja will not deliver events JATA has not registered |
-| `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL` (only for refunds/reversals paid out via B2C) | B2C payout |
-| Optional: `MPESA_STK_CALLBACK_URL`, `MPESA_C2B_CONFIRMATION_URL`, `MPESA_C2B_VALIDATION_URL`, `MPESA_ALLOWED_IPS` | URL overrides and source-IP filtering |
+| `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL` (reversals only) | the API initiator and its base64 SecurityCredential for **this** environment. Without them a reversal is refused locally and nothing is sent |
+| Optional: `MPESA_STK_CALLBACK_URL`, `MPESA_C2B_CONFIRMATION_URL`, `MPESA_C2B_VALIDATION_URL`, `MPESA_ALLOWED_IPS` | URL overrides (used verbatim; each must be public https, end in `/stk` / `/confirmation` / `/validation` and carry the token) and an exact-IP allowlist |
 
 ### Paystack
 
@@ -166,11 +169,10 @@ bank destination is instructions-only and says so.
 
 ### Deployment
 
-`JATA_PAYMENTS_TEST_MODE` (`on` \| unset) — `on` lets a deployment accept unsigned Daraja-shaped
-callbacks for local testing; unset means JATA refuses unauthenticated provider events and derives
-test mode from whether a live connector is configured (§94).
-`JATA_NOTIFICATION_GATEWAY_URL/TOKEN` — optional outbound SMS/WhatsApp/e-mail; POS/in-app messages
-always work, and without a gateway external channels are recorded as **SKIPPED**, never as sent.
+`JATA_PAYMENTS_TEST_MODE` (`on` \| unset) — `on` lets a *non-production* deployment accept unsigned Daraja-shaped
+callbacks for local testing; it is ignored when `MPESA_ENV=production` or on a Vercel Production deployment. Unset means
+JATA refuses unauthenticated provider events and derives test mode from what is connected: only a live connector (M-PESA in
+production mode, or a `sk_live_` Paystack key) is live — a fully configured M-PESA sandbox connector is still test mode (§94).
 
 ---
 

@@ -310,10 +310,13 @@ describe("only the right role can move where money lands (§36, §62)", () => {
       amountPaidMinor: 35_000,
     });
 
+    // M-PESA reverses a payment in full, so the refund is for the whole KES 350 (a partial amount is
+    // refused earlier, by policy, and leaves nothing behind). What this test pins is what happens
+    // when the *data* is the problem: no receipt on record.
     const outcome = await requestRefund({
       businessId: "bizA",
       transactionId: "tx_a1",
-      amountKES: 100,
+      amountKES: 350,
       reason: "Customer cancellation",
       actor: { ...storeOwner, confirmed: true },
       client: prisma,
@@ -321,7 +324,7 @@ describe("only the right role can move where money lands (§36, §62)", () => {
 
     expect(outcome).toMatchObject({ ok: false, code: "MISSING_MPESA_RECEIPT" });
     expect(fake().rows("paymentTransaction")[0].amountRefundedMinor).toBe(0);
-    expect(fake().rows("refund")[0]).toMatchObject({ status: "FAILED", amountMinor: 10_000 });
+    expect(fake().rows("refund")[0]).toMatchObject({ status: "FAILED", amountMinor: 35_000 });
     expect(fake().rows("paymentReconciliation")).toContainEqual(expect.objectContaining({
       businessId: "bizA",
       transactionId: "tx_a1",

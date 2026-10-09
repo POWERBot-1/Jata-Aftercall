@@ -2,20 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adapterContext } from "@/lib/payments/context";
 import { createMpesaAdapter, resetMpesaTokenCache } from "@/lib/payments/providers/mpesa";
 import type { TransactionRecord } from "@/lib/payments/types";
+import { applyMpesaEnv } from "@/tests/helpers/mpesaEnv";
 
-const envKeys = [
-  "MPESA_CONSUMER_KEY",
-  "MPESA_CONSUMER_SECRET",
-  "MPESA_SHORTCODE",
-  "MPESA_PASSKEY",
-  "MPESA_ENV",
-  "MPESA_INITIATOR_NAME",
-  "MPESA_SECURITY_CREDENTIAL",
-  "MPESA_CALLBACK_TOKEN",
-  "MPESA_C2B_CONFIRMATION_URL",
-  "MPESA_C2B_VALIDATION_URL",
-] as const;
-const previousEnv = new Map<string, string | undefined>();
+let restoreEnv: () => void = () => undefined;
 
 function transaction(overrides: Record<string, unknown> = {}) {
   return {
@@ -64,29 +53,13 @@ function configuredFetch(capture: (url: string, init?: RequestInit) => void) {
 }
 
 beforeEach(() => {
-  previousEnv.clear();
-  for (const key of envKeys) previousEnv.set(key, process.env[key]);
-  process.env.MPESA_CONSUMER_KEY = "test-consumer-key";
-  process.env.MPESA_CONSUMER_SECRET = "test-consumer-secret";
-  process.env.MPESA_SHORTCODE = "174379";
-  process.env.MPESA_PASSKEY = "test-passkey";
-  process.env.MPESA_ENV = "sandbox";
-  process.env.MPESA_INITIATOR_NAME = "JATA_TEST";
-  process.env.MPESA_SECURITY_CREDENTIAL = "test-security-credential";
-  // A connected deployment has registered its callback token; readiness requires it, and the
-  // C2B URLs above carry it.
-  process.env.MPESA_CALLBACK_TOKEN = "test";
-  process.env.MPESA_C2B_CONFIRMATION_URL = "https://jata.test/api/payments/webhooks/mpesa/confirmation?token=test";
-  process.env.MPESA_C2B_VALIDATION_URL = "https://jata.test/api/payments/webhooks/mpesa/validation?token=test";
+  // A complete, valid (and obviously fake) sandbox configuration — including the reversal initiator.
+  restoreEnv = applyMpesaEnv();
   resetMpesaTokenCache();
 });
 
 afterEach(() => {
-  for (const key of envKeys) {
-    const value = previousEnv.get(key);
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
+  restoreEnv();
   resetMpesaTokenCache();
 });
 
@@ -100,7 +73,7 @@ describe("M-PESA reversal transaction identity", () => {
     const result = await adapter.reverse({
       transaction: transaction(),
       destination: null,
-      amountMinor: 10_000,
+      amountMinor: 35_000,
       reason: "Customer cancellation",
     }, adapterContext(new Date("2026-10-04T10:00:00Z"), { fetchImpl, verifyWithProvider: true }));
 
@@ -114,7 +87,7 @@ describe("M-PESA reversal transaction identity", () => {
     const result = await createMpesaAdapter().reverse({
       transaction: transaction({ providerReceipt: null }),
       destination: null,
-      amountMinor: 10_000,
+      amountMinor: 35_000,
       reason: "Customer cancellation",
     }, adapterContext(new Date(), { fetchImpl, verifyWithProvider: true }));
 
@@ -134,7 +107,7 @@ describe("M-PESA reversal transaction identity", () => {
         method: "MPESA_C2B_TILL",
       }),
       destination: null,
-      amountMinor: 10_000,
+      amountMinor: 35_000,
       reason: "Customer cancellation",
     }, adapterContext(new Date(), { fetchImpl, verifyWithProvider: true }));
 

@@ -114,6 +114,8 @@ const UNIQUE_INDEXES: Record<string, string[][]> = {
   // The till's replay guard: one unspent key per business, actor and action. A duplicate
   // submission must fail the insert, and with it the sale transaction that owns it.
   posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],
+  // schema.prisma: PaymentEvent @@unique([provider, providerEventId]) — the webhook replay guard.
+  paymentEvent: [["provider", "providerEventId"]],
 };
 
 export type FakeDb = {

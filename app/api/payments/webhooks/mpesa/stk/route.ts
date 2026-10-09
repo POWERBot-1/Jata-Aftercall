@@ -1,8 +1,9 @@
 /**
  * M-PESA STK prompt result callback (§35, §111).
  *
- * This is the exact URL JATA registers as the Daraja `CallBackURL` when it raises an STK prompt
- * (`MPESA_STK_CALLBACK_URL`, default `/api/payments/webhooks/mpesa/stk?token=…`). It runs the same
+ * This is a legacy path for the Daraja `CallBackURL` JATA sends when it raises an STK prompt
+ * (`MPESA_STK_CALLBACK_URL`; the default is the neutral `/api/payments/webhooks/daraja/stk?token=…`
+ * and this legacy path stays live). It runs the same
  * shared handler as the base union endpoint — the same authentication, the same pipeline — so the
  * registered callback URL and the documented endpoint can never diverge.
  */

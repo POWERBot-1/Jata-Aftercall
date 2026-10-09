@@ -18,7 +18,8 @@
  * C2B validation/confirmation callbacks and a reversal request.
  */
 
-import { readMpesaConfig, readTestMode, publicBaseUrl, type MpesaConfig } from "../config";
+import { createHash } from "crypto";
+import { MPESA_HOSTS, MPESA_MAX_TRANSACTION_KES, readMpesaConfig, readTestMode, publicBaseUrl, type MpesaConfig } from "../config";
 import { decimalStringToMinor, formatMinor, maskPhone, normalizePhoneKE } from "../money";
 import { normalizeMpesaReceipt } from "./mpesa-receipt";
 import { identifyDestination, type DestinationDraft, type DestinationInput, type IdentificationResult } from "../destinations";
@@ -38,6 +39,8 @@ import type {
   PaymentProviderAdapter,
   ProviderEventRequest,
   ProviderReversalResult,
+  RefundValidationInput,
+  RefundValidation,
   ReversalInput,
 } from "./types";
 
@@ -51,8 +54,28 @@ const DECLARED_CAPABILITIES: ProviderCapability[] = [
   "PAYMENT_INSTRUCTIONS",
 ];
 
+/**
+ * STK Query result codes that are a final failure for the CheckoutRequestID (1 insufficient
+ * balance, 1032 cancelled by the customer, 1037 customer unreachable / timed out, 2001 wrong PIN).
+ * Deliberately short: a code JATA is not certain is final is treated as "still pending".
+ */
+const FINAL_STK_FAILURE_CODES = new Set(["1", "1032", "1037", "2001"]);
+
 type TokenCache = { token: string; expiresAt: number };
-let tokenCache: TokenCache | null = null;
+
+/**
+ * OAuth tokens are cached per (Daraja host, consumer key), never globally: a token minted for the
+ * sandbox can never be presented to production, or the reverse, even if the configuration changes
+ * inside a long-lived process.
+ */
+const tokenCache = new Map<string, TokenCache>();
+
+function tokenCacheKey(config: MpesaConfig): string {
+  return `${config.baseUrl}|${createHash("sha256").update(config.consumerKey).digest("hex").slice(0, 16)}`;
+}
+
+/** The documented identifier type for a reversal (see JATA_AFTERCALL_MPESA_READINESS.md §Reversals). */
+export const MPESA_REVERSAL_RECEIVER_IDENTIFIER_TYPE = "11";
 
 /** EAT (UTC+3) timestamp in the format Daraja expects: YYYYMMDDHHmmss. */
 export function darajaTimestamp(now: Date): string {
@@ -66,11 +89,24 @@ function stkPassword(config: MpesaConfig, timestamp: string): string {
 }
 
 export function resetMpesaTokenCache(): void {
-  tokenCache = null;
+  tokenCache.clear();
 }
 
-async function accessToken(config: MpesaConfig, ctx: AdapterContext): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt > ctx.now.getTime() + 30_000) return tokenCache.token;
+/**
+ * Fail closed before any network call: the connector must be fully configured and pointed at one
+ * of the two official Safaricom hosts for its declared environment. There is no fallback host.
+ */
+function assertConnectorUsable(config: MpesaConfig): void {
+  if (!config.env || !config.ready || config.baseUrl !== MPESA_HOSTS[config.env]) {
+    throw new Error("MPESA_NOT_CONFIGURED");
+  }
+}
+
+async function accessToken(config: MpesaConfig, ctx: AdapterContext, forceRefresh = false): Promise<string> {
+  assertConnectorUsable(config);
+  const key = tokenCacheKey(config);
+  const cached = tokenCache.get(key);
+  if (!forceRefresh && cached && cached.expiresAt > ctx.now.getTime() + 30_000) return cached.token;
   const credentials = Buffer.from(`${config.consumerKey}:${config.consumerSecret}`).toString("base64");
   const response = await ctx.fetchImpl(`${config.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
     method: "GET",
@@ -79,10 +115,21 @@ async function accessToken(config: MpesaConfig, ctx: AdapterContext): Promise<st
   });
   const body = (await response.json().catch(() => null)) as { access_token?: unknown; expires_in?: unknown } | null;
   const token = typeof body?.access_token === "string" ? body.access_token : "";
-  if (!response.ok || !token) throw new Error("MPESA_AUTH_FAILED");
+  if (!response.ok || !token) {
+    tokenCache.delete(key);
+    throw new Error("MPESA_AUTH_FAILED");
+  }
   const expiresIn = Number(body?.expires_in);
-  tokenCache = { token, expiresAt: ctx.now.getTime() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 3_000_000) };
+  tokenCache.set(key, { token, expiresAt: ctx.now.getTime() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 3_000_000) });
   return token;
+}
+
+type DarajaResponse = { ok: boolean; status: number; body: Record<string, unknown> | null };
+
+/** Safaricom answers a stale or revoked OAuth token with 401 / errorCode 404.001.03 before processing anything. */
+function isInvalidTokenResponse(result: DarajaResponse): boolean {
+  if (result.status === 401) return true;
+  return typeof result.body?.errorCode === "string" && result.body.errorCode === "404.001.03";
 }
 
 async function darajaPost(
@@ -90,16 +137,26 @@ async function darajaPost(
   ctx: AdapterContext,
   path: string,
   body: Record<string, unknown>,
-): Promise<{ ok: boolean; status: number; body: Record<string, unknown> | null }> {
-  const token = await accessToken(config, ctx);
-  const response = await ctx.fetchImpl(`${config.baseUrl}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  return { ok: response.ok, status: response.status, body: parsed };
+): Promise<DarajaResponse> {
+  const send = async (token: string): Promise<DarajaResponse> => {
+    const response = await ctx.fetchImpl(`${config.baseUrl}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    return { ok: response.ok, status: response.status, body: parsed };
+  };
+  let result = await send(await accessToken(config, ctx));
+  if (isInvalidTokenResponse(result)) {
+    // The gateway rejected the credential before processing the request, so one retry with a
+    // freshly minted token cannot repeat a financial operation. This is the only retry in the
+    // adapter: no timeout, 5xx or ambiguous answer is ever re-sent automatically.
+    tokenCache.delete(tokenCacheKey(config));
+    result = await send(await accessToken(config, ctx, true));
+  }
+  return result;
 }
 
 function stringField(payload: Record<string, unknown>, key: string): string {
@@ -109,32 +166,97 @@ function stringField(payload: Record<string, unknown>, key: string): string {
   return "";
 }
 
-/** Safaricom error codes → the plain language a merchant may be shown (§86). */
-export function mpesaFailureMessage(code: string, description: string): string {
+/**
+ * Safaricom STK result codes → the plain language a merchant may be shown (§86). Codes follow the
+ * documented STK vocabulary (0 success, 1 insufficient balance, 1001 subscriber locked, 1019
+ * expired, 1025 push error, 1032 cancelled by the customer, 1037 customer unreachable / timed out,
+ * 2001 wrong PIN). Anything else gets a neutral sentence — Safaricom's free text is never echoed to
+ * a merchant — and the code itself stays on the audit trail.
+ */
+export function mpesaFailureMessage(code: string, _description?: string): string {
   switch (code) {
-    case "1032":
-    case "1037":
-    case "2001":
-      return "The customer did not enter their M-PESA PIN in time. They can try again.";
     case "1":
-      return "The customer cancelled the payment on their phone.";
-    case "1025":
-      return "The customer has no money in their M-PESA account.";
-    case "1026":
-      return "The customer cancelled the payment on their phone.";
-    case "1031":
-      return "M-PESA is busy right now. Please try again.";
-    case "9999":
-      return "M-PESA could not complete this payment.";
+      return "The customer's M-PESA balance was too low for this payment.";
     case "1001":
-      return "Another payment is already in progress for this customer.";
+      return "Another M-PESA request is already open for this customer. Ask them to finish or cancel it, then try again.";
+    case "1019":
+      return "The M-PESA request expired before the customer approved it. They can try again.";
+    case "1025":
+      return "M-PESA could not send the prompt to the customer's phone. Try again.";
+    case "1032":
+      return "The customer cancelled the payment on their phone.";
+    case "1037":
+      return "The customer did not respond to the M-PESA prompt in time. They can try again.";
+    case "2001":
+      return "The customer entered the wrong M-PESA PIN. They can try again.";
     default:
-      return description || "We couldn't confirm this payment yet. It may still be processing.";
+      return "M-PESA did not complete this payment. Nothing is marked paid unless M-PESA confirms it.";
   }
 }
 
 function mpesaReversalFailureMessage(): string {
   return "M-PESA did not complete the reversal. The provider result has been recorded for review.";
+}
+
+/** A transport failure, classified without ever claiming more than JATA knows. */
+function classifyTransportError(error: unknown): { code: string; message: string; retryable: boolean; sent: boolean } {
+  const message = error instanceof Error ? error.message : "";
+  const name = error instanceof Error ? error.name : "";
+  if (message === "MPESA_NOT_CONFIGURED") {
+    return { code: "MPESA_NOT_CONFIGURED", message: "M-PESA is not configured correctly in this deployment, so nothing was sent.", retryable: false, sent: false };
+  }
+  if (message === "MPESA_AUTH_FAILED") {
+    return { code: "MPESA_AUTH_FAILED", message: "JATA could not authenticate with M-PESA, so nothing was sent. JATA's connector credentials need attention.", retryable: false, sent: false };
+  }
+  if (name === "TimeoutError" || name === "AbortError") {
+    return { code: "MPESA_TIMEOUT", message: "M-PESA did not answer in time. If the customer sees a prompt they can still complete it — check before charging again.", retryable: true, sent: true };
+  }
+  return { code: "MPESA_UNREACHABLE", message: "M-PESA could not be reached. If the customer sees a prompt they can still complete it — check before charging again.", retryable: true, sent: true };
+}
+
+/** Daraja STK `AccountReference`: alphanumeric, at most 12 characters (documented limit). */
+export const STK_ACCOUNT_REFERENCE_MAX = 12;
+/** Daraja STK `TransactionDesc`: at most 13 characters (documented limit). */
+export const STK_TRANSACTION_DESC = "JATA payment";
+
+/**
+ * The reference shown on the customer's STK prompt. A PayBill's own account number must reach it
+ * unchanged, so one that cannot fit the 12-character limit means no STK prompt (null → show the
+ * customer how to pay instead) rather than a silently altered account. Otherwise the tail of the
+ * JATA payment id is used: it carries the order sequence and the random suffix. The authoritative
+ * correlation is the CheckoutRequestID, never this text.
+ */
+export function stkAccountReference(input: { jataPaymentId: string; destination: { kind: string; providerAccountRef?: string | null } }): string | null {
+  const merchantRef = String(input.destination.providerAccountRef ?? "").trim();
+  if (input.destination.kind === "MPESA_PAYBILL" && merchantRef) {
+    return /^[A-Za-z0-9]{1,12}$/.test(merchantRef) ? merchantRef : null;
+  }
+  const alphanumeric = String(input.jataPaymentId ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  return alphanumeric.slice(-STK_ACCOUNT_REFERENCE_MAX) || "JATA";
+}
+
+/** The identity of an asynchronous result or timeout payload (reversals). */
+function readResultIdentity(body: Record<string, unknown>) {
+  const resultBody = body.Result && typeof body.Result === "object" && !Array.isArray(body.Result)
+    ? body.Result as Record<string, unknown>
+    : body;
+  const parameters = resultBody.ResultParameters as Record<string, unknown> | undefined;
+  const items = Array.isArray(parameters?.ResultParameter) ? (parameters.ResultParameter as Record<string, unknown>[]) : [];
+  const parameter = (key: string) => items.find((item) => stringField(item, "Key") === key)?.Value;
+  return {
+    conversationId: stringField(resultBody, "ConversationID") || stringField(resultBody, "OriginatorConversationID"),
+    originatorId: stringField(resultBody, "OriginatorConversationID"),
+    resultCode: stringField(resultBody, "ResultCode"),
+    resultDescription: stringField(resultBody, "ResultDesc").slice(0, 200),
+    amountValue: parameter("Amount"),
+    // The receipt of the payment that was reversed — how a result is tied back to a refund even if
+    // the synchronous response that would have carried the conversation id was lost.
+    originalTransactionId: normalizeMpesaReceipt(parameter("OriginalTransactionID")),
+  };
+}
+
+function normalizeIp(value: string): string {
+  return value.trim().toLowerCase().replace(/^::ffff:/, "");
 }
 
 /** The M-PESA till/PayBill that a callback's shortcode refers to (§56). */
@@ -263,11 +385,37 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         // No prompt is possible without a phone number: show where to pay instead of guessing.
         return { kind: "manual" as const, method: `${input.destination.kind}_MANUAL`, instructions: createMpesaAdapterInstructions(input, ctx) };
       }
+      const manualInstead = () => ({
+        kind: "manual" as const,
+        method: `${input.destination.kind}_MANUAL`,
+        instructions: createMpesaAdapterInstructions(input, ctx),
+      });
+
+      // ── Request validation: every rule Daraja documents is checked before anything is sent ──
+      const partyB = String(input.destination.providerDestinationId ?? "").replace(/[^0-9]/g, "");
+      if (!/^\d{5,7}$/.test(partyB)) {
+        return { kind: "failed" as const, code: "MPESA_DESTINATION_INVALID", message: "This payment destination is not a valid M-PESA till or PayBill number.", retryable: false };
+      }
+      // For CustomerPayBillOnline Daraja requires PartyB to be the shortcode that receives the
+      // money (the BusinessShortCode). A PayBill that is not the connector's own cannot be
+      // prompted for: the customer is shown how to pay instead of being sent a doomed request.
+      if (input.destination.kind === "MPESA_PAYBILL" && partyB !== config.shortcode) return manualInstead();
+      const accountReference = stkAccountReference(input);
+      if (!accountReference) return manualInstead();
+
+      // STK Push charges whole shillings. A fractional total is refused, never rounded: rounding
+      // would charge the customer a different amount from the sale and the confirmation would
+      // then (correctly) fail the exact-amount check.
+      if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor % 100 !== 0) {
+        return { kind: "failed" as const, code: "MPESA_AMOUNT_NOT_WHOLE", message: "M-PESA can only charge whole shillings. Adjust the total so it has no cents, or let the customer pay manually.", retryable: false };
+      }
+      const amount = input.amountMinor / 100;
+      if (amount < 1 || amount > MPESA_MAX_TRANSACTION_KES) {
+        return { kind: "failed" as const, code: "MPESA_AMOUNT_OUT_OF_RANGE", message: `M-PESA can charge between KES 1 and KES ${MPESA_MAX_TRANSACTION_KES.toLocaleString("en-KE")} in one payment.`, retryable: false };
+      }
 
       const timestamp = darajaTimestamp(ctx.now);
       const transactionType = input.destination.kind === "MPESA_PAYBILL" ? "CustomerPayBillOnline" : "CustomerBuyGoodsOnline";
-      const amount = Math.max(1, Math.round(input.amountMinor / 100));
-
       const body: Record<string, unknown> = {
         BusinessShortCode: config.shortcode,
         Password: stkPassword(config, timestamp),
@@ -275,24 +423,33 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         TransactionType: transactionType,
         Amount: amount,
         PartyA: phone,
-        PartyB: input.destination.providerDestinationId,
+        PartyB: partyB,
         PhoneNumber: phone,
         CallBackURL: config.stkCallbackUrl,
-        AccountReference: input.destination.providerAccountRef || input.providerReference,
-        TransactionDesc: `JATA ${input.providerReference}`.slice(0, 100),
+        AccountReference: accountReference,
+        TransactionDesc: STK_TRANSACTION_DESC,
       };
 
-      const response = await darajaPost(config, ctx, "/mpesa/stkpush/v1/processrequest", body);
-      const checkoutRequestId = stringField(response.body ?? {}, "CheckoutRequestID");
-      const errorCode = stringField(response.body ?? {}, "errorCode");
-      const errorMessage = stringField(response.body ?? {}, "errorMessage");
+      let response: DarajaResponse;
+      try {
+        response = await darajaPost(config, ctx, "/mpesa/stkpush/v1/processrequest", body);
+      } catch (error) {
+        const failure = classifyTransportError(error);
+        return { kind: "failed" as const, code: failure.code, message: failure.message, retryable: failure.retryable };
+      }
+      const payload = response.body ?? {};
+      const checkoutRequestId = stringField(payload, "CheckoutRequestID");
+      const responseCode = stringField(payload, "ResponseCode");
+      const errorCode = stringField(payload, "errorCode");
+      const errorMessage = stringField(payload, "errorMessage").slice(0, 200);
 
-      if (!response.ok || !checkoutRequestId) {
+      // Acceptance means ResponseCode "0" *and* a CheckoutRequestID — the handle the callback quotes.
+      if (!response.ok || responseCode !== "0" || !checkoutRequestId) {
         return {
           kind: "failed" as const,
-          code: errorCode || "MPESA_REQUEST_FAILED",
+          code: errorCode || (responseCode ? `MPESA_RESPONSE_${responseCode}` : "MPESA_REQUEST_FAILED"),
           message: errorMessage ? `M-PESA could not start this payment: ${errorMessage}` : "M-PESA could not start this payment. Try again.",
-          retryable: true,
+          retryable: response.status >= 500 || response.status === 429,
         };
       }
 
@@ -330,26 +487,56 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         };
       }
       const timestamp = darajaTimestamp(ctx.now);
+      const unknown = (message: string | null): ProviderStatusReport => ({
+        status: "UNKNOWN",
+        amountMinor: null,
+        currency: null,
+        providerTransactionId: transaction.providerTransactionId,
+        message,
+      });
+      let response: DarajaResponse;
       try {
-        const response = await darajaPost(config, ctx, "/mpesa/stkpushquery/v1/query", {
+        response = await darajaPost(config, ctx, "/mpesa/stkpushquery/v1/query", {
           BusinessShortCode: config.shortcode,
           Password: stkPassword(config, timestamp),
           Timestamp: timestamp,
           CheckoutRequestID: transaction.providerTransactionId,
         });
-        const code = stringField(response.body ?? {}, "ResultCode");
-        const description = stringField(response.body ?? {}, "ResultDesc");
-        if (response.ok && code === "0") {
-          return { status: "CONFIRMED", amountMinor: transaction.amountMinor, currency: transaction.currency, providerTransactionId: transaction.providerTransactionId, message: description || null };
-        }
-        if (response.ok && code && code !== "0") {
-          return { status: "FAILED", amountMinor: null, currency: null, providerTransactionId: transaction.providerTransactionId, message: mpesaFailureMessage(code, description) };
-        }
-        // A query for a payment the customer has not answered yet reports "pending", not "failed".
-        return { status: "PENDING", amountMinor: null, currency: null, providerTransactionId: transaction.providerTransactionId, message: description || null };
       } catch {
-        return { status: "UNKNOWN", amountMinor: null, currency: null, providerTransactionId: transaction.providerTransactionId, message: null };
+        return unknown(null);
       }
+      const code = stringField(response.body ?? {}, "ResultCode");
+
+      // Only a *final* answer moves a payment. Safaricom answers an in-flight request with
+      // ResultCode 4999 ("still under processing", HTTP 200) or with the non-discriminating error
+      // 500.001.1001 — neither is a verdict, and neither may close a payment the customer is still
+      // completing. Unrecognised codes are treated the same way: pending, never failed.
+      if (response.ok && code === "0") {
+        // The query carries no amount and no receipt. The prompt charged exactly what was
+        // requested, so that figure is booked — flagged as not independently reported.
+        return {
+          status: "CONFIRMED",
+          amountMinor: transaction.amountMinor,
+          currency: transaction.currency,
+          providerTransactionId: transaction.providerTransactionId,
+          message: "M-PESA confirmed this payment.",
+          amountVerified: false,
+          providerReceipt: null,
+        };
+      }
+      if (response.ok && FINAL_STK_FAILURE_CODES.has(code)) {
+        return { status: "FAILED", amountMinor: null, currency: null, providerTransactionId: transaction.providerTransactionId, message: mpesaFailureMessage(code, "") };
+      }
+      if (response.ok && code) {
+        return {
+          status: "PENDING",
+          amountMinor: null,
+          currency: null,
+          providerTransactionId: transaction.providerTransactionId,
+          message: "M-PESA has not given a final answer yet. Nothing is marked paid until it does.",
+        };
+      }
+      return unknown("M-PESA could not say yet. Nothing is marked paid until it confirms.");
     },
 
     /**
@@ -357,11 +544,13 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
      * (or arrives from an allowed provider address when an allowlist is configured). The token is
      * compared in constant time and never echoed back.
      */
-    verifyEvent: async (request: ProviderEventRequest, ctx: AdapterContext): Promise<EventVerification> => {
+    verifyEvent: async (request: ProviderEventRequest, _ctx: AdapterContext): Promise<EventVerification> => {
       const config = readMpesaConfig();
-      const path = request.url.pathname;
+      const path = request.url.pathname.replace(/\/+$/, "");
       const isStk = path.endsWith("/stk");
       const isValidation = path.endsWith("/validation");
+      const isTimeout = path.endsWith("/timeout");
+      const isResult = path.endsWith("/result");
 
       const body = request.payload;
       const resultBody = body.Result && typeof body.Result === "object" && !Array.isArray(body.Result)
@@ -373,17 +562,33 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       const transId = stringField(body, "TransID") || stringField(resultBody, "TransID");
       const conversationId = stringField(resultBody, "ConversationID") || stringField(resultBody, "OriginatorConversationID");
 
+      // The event id is the idempotency key. A timeout is its own event, never the same as the
+      // result that may still follow for the same conversation; a timeout payload that names no
+      // conversation is keyed by a digest of its body so it is still acknowledged exactly once.
       const eventId = isStk
-        ? `stk:${checkoutId}:${resultCode}`
+        ? checkoutId ? `stk:${checkoutId}:${resultCode}` : ""
         : isValidation
           ? `c2b-validation:${transId || conversationId}`
-          : path.endsWith("/result") && conversationId
-            ? `result:${conversationId}:${resultCode}`
-            : transId
-              ? `c2b:${transId}`
-              : conversationId
-                ? `result:${conversationId}:${resultCode}`
-                : "";
+          : isTimeout
+            ? conversationId
+              ? `timeout:${conversationId}`
+              : `timeout:body:${createHash("sha256").update(request.rawBody).digest("hex").slice(0, 32)}`
+            : isResult && conversationId
+              ? `result:${conversationId}:${resultCode}`
+              : transId
+                ? `c2b:${transId}`
+                : conversationId
+                  ? `result:${conversationId}:${resultCode}`
+                  : "";
+      const eventType = isStk
+        ? "STK_CALLBACK"
+        : isValidation
+          ? "C2B_VALIDATION"
+          : isTimeout
+            ? "REVERSAL_TIMEOUT"
+            : isResult
+              ? "REVERSAL_RESULT"
+              : "C2B_CONFIRMATION";
 
       if (!eventId || eventId.length > 200) {
         return { ok: false, code: "INVALID_EVENT", message: "Unrecognised provider payload.", eventId: null, eventType: null };
@@ -392,34 +597,31 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       const presented = request.url.searchParams.get("token") ?? "";
       if (config.callbackToken) {
         if (!safeEqual(presented, config.callbackToken)) {
-          return { ok: false, code: "CALLBACK_TOKEN_INVALID", message: "Callback token did not match.", eventId, eventType: isStk ? "STK_CALLBACK" : "C2B" };
+          return { ok: false, code: "CALLBACK_TOKEN_INVALID", message: "Callback token did not match.", eventId, eventType };
         }
-      } else if (config.ready || !readTestMode().explicit) {
+      } else if (!readTestMode().explicit) {
         // Without a registered callback token JATA cannot tell a real Daraja callback from a
         // stranger's POST, so it refuses instead of trusting that whoever found the URL is
-        // Safaricom. A deployment running deliberately in test mode (JATA_PAYMENTS_TEST_MODE=on)
-        // may accept them; a production deployment never will (§35, §120).
-        return { ok: false, code: "CALLBACK_TOKEN_NOT_CONFIGURED", message: "JATA has not registered a callback token for M-PESA.", eventId, eventType: isStk ? "STK_CALLBACK" : "C2B" };
+        // Safaricom. Only a deployment running deliberately in test mode
+        // (JATA_PAYMENTS_TEST_MODE=on, which is ignored on any production deployment) may accept
+        // them; a production deployment never will (§35, §120).
+        return { ok: false, code: "CALLBACK_TOKEN_NOT_CONFIGURED", message: "JATA has not registered a callback token for M-PESA.", eventId, eventType };
       }
 
       if (config.allowedIps.length) {
         const forwarded = (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ?? "";
-        const clientIp = forwarded || request.headers.get("x-real-ip")?.trim() || "";
-        if (!clientIp || !config.allowedIps.includes(clientIp)) {
-          return { ok: false, code: "CALLBACK_IP_REJECTED", message: "Callback did not come from an allowed M-PESA address.", eventId, eventType: isStk ? "STK_CALLBACK" : "C2B" };
+        const clientIp = normalizeIp(forwarded || request.headers.get("x-real-ip") || "");
+        if (!clientIp || !config.allowedIps.map(normalizeIp).includes(clientIp)) {
+          return { ok: false, code: "CALLBACK_IP_REJECTED", message: "Callback did not come from an allowed M-PESA address.", eventId, eventType };
         }
       }
 
-      return {
-        ok: true,
-        eventId,
-        eventType: isStk ? "STK_CALLBACK" : isValidation ? "C2B_VALIDATION" : path.endsWith("/result") ? "REVERSAL_RESULT" : "C2B_CONFIRMATION",
-      };
+      return { ok: true, eventId, eventType };
     },
 
     parseEvent: async (request: ProviderEventRequest, ctx: AdapterContext): Promise<ProviderEventOutcome> => {
       const body = request.payload;
-      const path = request.url.pathname;
+      const path = request.url.pathname.replace(/\/+$/, "");
       const stkCallback = (body.Body as Record<string, unknown> | undefined)?.stkCallback as Record<string, unknown> | undefined;
 
       // ── STK prompt result ────────────────────────────────────────────────────
@@ -427,7 +629,7 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         const checkoutId = stringField(stkCallback, "CheckoutRequestID");
         const resultCode = stringField(stkCallback, "ResultCode");
         const resultDesc = stringField(stkCallback, "ResultDesc");
-        const sanitized: Record<string, unknown> = { type: "STK_CALLBACK", checkoutRequestId: checkoutId, resultCode, resultDesc };
+        const sanitized: Record<string, unknown> = { type: "STK_CALLBACK", checkoutRequestId: checkoutId, resultCode, resultDesc: resultDesc.slice(0, 200) };
         if (resultCode !== "0") {
           return {
             kind: "failure",
@@ -445,13 +647,23 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         const providerReceipt = normalizeMpesaReceipt(valueOf("MpesaReceiptNumber"));
         const phone = valueOf("PhoneNumber");
         if (amountMinor === null || amountMinor <= 0) {
+          // ResultCode 0 means the customer PAID. A success whose amount JATA cannot verify is not
+          // a failure — closing the payment as FAILED (a terminal state) would hide real money. It
+          // goes through the amount-mismatch path instead: nothing is marked paid, the payment stays
+          // open for "Check status" (STK Query) to settle, and a reconciliation exception is raised.
           return {
-            kind: "failure",
-            providerReference: null,
+            kind: "confirmation",
+            providerReference: "",
             providerTransactionId: checkoutId || null,
-            code: "MPESA_CONFIRMATION_INCOMPLETE",
-            message: "M-PESA's confirmation did not include a verifiable amount.",
-            sanitized,
+            providerReceipt,
+            amountMinor: 0,
+            currency: "KES",
+            destination: { kind: null, providerDestinationId: null, providerAccountRef: null },
+            method: "MPESA_STK",
+            customerName: null,
+            customerPhoneMasked: maskPhone(phone),
+            occurredAt: ctx.now,
+            sanitized: { ...sanitized, amountStatus: "MISSING_OR_INVALID", ...(providerReceipt ? { receipt: providerReceipt } : {}) },
           };
         }
         return {
@@ -471,6 +683,25 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
             ...sanitized,
             ...(providerReceipt ? { receipt: providerReceipt } : { receiptStatus: "MISSING_OR_INVALID" }),
             amountMinor,
+          },
+        };
+      }
+
+      // ── Reversal queue timeout: a notice, never a verdict ────────────────────────────
+      // QueueTimeOutURL means Safaricom's queue gave up on the request. The operation may still
+      // complete later, so this must not be read as "the reversal failed" (which would release the
+      // reserved amount for a second, duplicate payout).
+      if (path.endsWith("/timeout")) {
+        const identity = readResultIdentity(body);
+        return {
+          kind: "reversal_timeout",
+          providerReference: identity.originatorId || identity.conversationId || null,
+          providerTransactionId: identity.conversationId || null,
+          originalTransactionId: identity.originalTransactionId,
+          sanitized: {
+            type: "REVERSAL_TIMEOUT",
+            conversationId: identity.conversationId || null,
+            originatorConversationId: identity.originatorId || null,
           },
         };
       }
@@ -510,39 +741,44 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
         };
       }
 
-      // ── Asynchronous result (for example a reversal) ─────────────────────────
-      const resultBody = body.Result && typeof body.Result === "object" && !Array.isArray(body.Result)
-        ? body.Result as Record<string, unknown>
-        : body;
-      const resultCode = stringField(resultBody, "ResultCode");
-      const conversationId = stringField(resultBody, "ConversationID") || stringField(resultBody, "OriginatorConversationID");
-      const refundReference = stringField(resultBody, "OriginatorConversationID") || conversationId;
-      const resultParameters = resultBody.ResultParameters as Record<string, unknown> | undefined;
-      const resultItems = Array.isArray(resultParameters?.ResultParameter)
-        ? resultParameters.ResultParameter as Record<string, unknown>[]
-        : [];
-      const resultAmount = resultItems.find((item) => stringField(item, "Key") === "Amount")?.Value;
-      const reversalAmountMinor = amountMinor ?? decimalStringToMinor(resultAmount);
-      const resultDescription = stringField(resultBody, "ResultDesc");
-      if (conversationId && resultCode) {
-        const success = resultCode === "0";
+      // ── Asynchronous result (a reversal) ─────────────────────────────────────
+      const identity = readResultIdentity(body);
+      const reversalAmountMinor = amountMinor ?? decimalStringToMinor(identity.amountValue);
+      if (identity.conversationId && identity.resultCode) {
+        const success = identity.resultCode === "0";
+        // Daraja's OriginatorConversationID is what the refund reservation persisted.
+        const reference = identity.originatorId || identity.conversationId;
         return {
           kind: success ? "reversal" : "failure",
           ...(success
             ? {
-                // Daraja's OriginatorConversationID is persisted on the Refund reservation.
-                providerReference: refundReference,
-                providerTransactionId: conversationId,
+                providerReference: reference,
+                providerTransactionId: identity.conversationId,
+                originalTransactionId: identity.originalTransactionId,
                 amountMinor: reversalAmountMinor ?? 0,
-                reason: resultDescription || "Provider reversal",
-                sanitized: { type: "RESULT", resultCode, conversationId, resultDesc: resultDescription || null, amountMinor: reversalAmountMinor },
+                reason: identity.resultDescription || "Provider reversal",
+                sanitized: {
+                  type: "RESULT",
+                  resultCode: identity.resultCode,
+                  conversationId: identity.conversationId,
+                  resultDesc: identity.resultDescription || null,
+                  amountMinor: reversalAmountMinor,
+                  originalTransactionId: identity.originalTransactionId,
+                },
               }
             : {
-                providerReference: refundReference,
-                providerTransactionId: conversationId,
-                code: `MPESA_${resultCode}`,
+                providerReference: reference,
+                providerTransactionId: identity.conversationId,
+                originalTransactionId: identity.originalTransactionId,
+                code: `MPESA_${identity.resultCode}`,
                 message: mpesaReversalFailureMessage(),
-                sanitized: { type: "RESULT", resultCode, conversationId },
+                sanitized: {
+                  type: "RESULT",
+                  resultCode: identity.resultCode,
+                  conversationId: identity.conversationId,
+                  resultDesc: identity.resultDescription || null,
+                  originalTransactionId: identity.originalTransactionId,
+                },
               }),
         } as ProviderEventOutcome;
       }
@@ -555,7 +791,15 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       return createMpesaAdapter().reverse(input, ctx);
     },
 
-    /** §48: a provider-issued reversal, requested through Daraja's reversal API. */
+    /**
+     * §48: a provider-issued reversal, requested through Daraja's Reversal API (the
+     * `TransactionReversal` command). It needs the initiator credentials in addition to the
+     * collection ones and reverses a payment in full — see `validateRefund`.
+     *
+     * Money moves out here, so this method never retries and never claims more than it knows:
+     * a timeout, a 5xx or an answer without a conversation id is an UNKNOWN outcome (the reversal
+     * may still be processed), not a failure, and `retryable` is always false for it.
+     */
     reverse: async (input: ReversalInput, ctx: AdapterContext): Promise<ProviderReversalResult> => {
       const isStk = String(input.transaction.method ?? "").startsWith("MPESA_STK") ||
         /^ws_CO_/i.test(String(input.transaction.providerTransactionId ?? ""));
@@ -583,36 +827,119 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
           retryable: false,
         };
       }
+      if (!config.reversalReady) {
+        // No invented initiator and no empty credential: a reversal is refused locally, with a
+        // diagnostic that names the variable, before anything is sent to Safaricom.
+        return {
+          ok: false,
+          code: "MPESA_REVERSAL_NOT_CONFIGURED",
+          message: "M-PESA reversals are not set up in this deployment yet (the API initiator is not configured). Nothing was sent.",
+          retryable: false,
+        };
+      }
+      const paidMinor = Number(input.transaction.amountPaidMinor || input.transaction.amountMinor || 0);
+      if (input.amountMinor !== paidMinor || Number(input.transaction.amountRefundedMinor ?? 0) > 0) {
+        return {
+          ok: false,
+          code: "MPESA_PARTIAL_REVERSAL_UNSUPPORTED",
+          message: "M-PESA can only reverse a payment in full, once. Nothing was sent.",
+          retryable: false,
+        };
+      }
       const amount = Math.max(1, Math.round(input.amountMinor / 100));
-      const response = await darajaPost(config, ctx, "/mpesa/reversal/v1/request", {
-        Initiator: process.env.MPESA_INITIATOR_NAME || "JATA",
-        SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL || "",
-        CommandID: "TransactionReversal",
-        TransactionID: providerTransactionId,
-        Amount: amount,
-        ReceiverParty: config.shortcode,
-        RecieverIdentifierType: "4",
-        ResultURL: config.c2bConfirmationUrl.replace("/confirmation", "/result"),
-        QueueTimeOutURL: config.c2bValidationUrl.replace("/validation", "/timeout"),
-        Remarks: input.reason.slice(0, 100),
-        Occasion: "JATA reversal",
-      });
+      const destinationDigits = String(input.destination?.providerDestinationId ?? "").replace(/[^0-9]/g, "");
+      let response: DarajaResponse;
+      try {
+        response = await darajaPost(config, ctx, "/mpesa/reversal/v1/request", {
+          Initiator: config.initiatorName,
+          SecurityCredential: config.securityCredential,
+          CommandID: "TransactionReversal",
+          TransactionID: providerTransactionId,
+          Amount: amount,
+          ReceiverParty: /^\d{5,7}$/.test(destinationDigits) ? destinationDigits : config.shortcode,
+          RecieverIdentifierType: MPESA_REVERSAL_RECEIVER_IDENTIFIER_TYPE,
+          ResultURL: config.c2bConfirmationUrl.replace("/confirmation", "/result"),
+          QueueTimeOutURL: config.c2bValidationUrl.replace("/validation", "/timeout"),
+          Remarks: input.reason.slice(0, 100),
+          Occasion: "JATA reversal",
+        });
+      } catch (error) {
+        const failure = classifyTransportError(error);
+        if (!failure.sent) {
+          // Authentication or configuration failed before the request existed: nothing is in flight.
+          return { ok: false, code: failure.code, message: failure.message, retryable: false };
+        }
+        return {
+          ok: false,
+          code: "MPESA_REVERSAL_RESULT_UNKNOWN",
+          message: "M-PESA did not confirm the reversal request. It may still be processed, so JATA keeps the amount reserved and will not send it again. Check the M-PESA portal before trying again.",
+          retryable: false,
+          outcomeUnknown: true,
+        };
+      }
       const body = response.body ?? {};
       const errorCode = stringField(body, "errorCode");
+      if (response.status >= 500) {
+        return {
+          ok: false,
+          code: "MPESA_REVERSAL_RESULT_UNKNOWN",
+          message: "M-PESA answered with a server error. The reversal may still be processed, so JATA keeps the amount reserved and will not send it again. Check the M-PESA portal before trying again.",
+          retryable: false,
+          outcomeUnknown: true,
+        };
+      }
       if (!response.ok || errorCode) {
+        // A 4xx with an error code is Safaricom refusing the request: nothing was reversed.
+        const detail = stringField(body, "errorMessage").slice(0, 200);
         return {
           ok: false,
           code: errorCode || "MPESA_REVERSAL_FAILED",
-          message: errorCode ? `M-PESA refused the reversal: ${stringField(body, "errorMessage")}` : "M-PESA could not be reached for this reversal.",
-          retryable: true,
-          outcomeUnknown: !errorCode && response.status >= 500,
+          message: detail ? `M-PESA refused the reversal: ${detail}` : "M-PESA refused the reversal. Nothing was reversed.",
+          retryable: false,
+        };
+      }
+      const conversation = stringField(body, "OriginatorConversationID") || stringField(body, "ConversationID");
+      if (stringField(body, "ResponseCode") !== "0" || !conversation) {
+        // Accepted, refused or lost? Without ResponseCode 0 and a conversation id JATA cannot tie
+        // the later Result callback to this refund, so it is recorded as unknown, not completed.
+        return {
+          ok: false,
+          code: "MPESA_REVERSAL_RESULT_UNKNOWN",
+          message: "M-PESA's answer to the reversal request was incomplete. JATA keeps the amount reserved and will not send it again. Check the M-PESA portal before trying again.",
+          retryable: false,
+          outcomeUnknown: true,
         };
       }
       return {
         ok: true,
-        providerReference: stringField(body, "OriginatorConversationID") || stringField(body, "ConversationID") || null,
+        providerReference: conversation,
         message: "M-PESA accepted the reversal; it will confirm shortly.",
       };
+    },
+
+    /**
+     * Pre-flight for a refund, run while the payment is locked and before any amount is reserved.
+     * It refuses only what Daraja's Reversal API makes impossible *by policy*, so nothing is
+     * reserved or sent for it: Pochi payments cannot be reversed, and a payment is reversed once
+     * and in full (partial reversal is not documented, so it is refused rather than guessed).
+     *
+     * Data and configuration problems — a missing receipt, an unconfigured initiator — are NOT
+     * refused here. They go on to `reverse`, which fails them with a durable refund row, audit event
+     * and reconciliation exception, so a person is told which payment needs attention.
+     */
+    validateRefund: (input: RefundValidationInput): RefundValidation => {
+      if (input.destination?.kind === "MPESA_POCHI") {
+        return { ok: false, code: "MPESA_NOT_REVERSIBLE", message: "Pochi la Biashara payments cannot be reversed through M-PESA." };
+      }
+      const paidMinor = Number(input.transaction.amountPaidMinor || input.transaction.amountMinor || 0);
+      if (input.alreadyRefundedMinor > 0 || input.outstandingMinor > 0 || input.amountMinor !== paidMinor) {
+        return {
+          ok: false,
+          code: "MPESA_PARTIAL_REVERSAL_UNSUPPORTED",
+          message: "M-PESA can only reverse a payment in full, once. Refund the whole amount, or return part of it another way (for example in cash).",
+        };
+      }
+      return { ok: true };
     },
 
     reconcile: async (transaction, destination, ctx) => createMpesaAdapter().getPaymentStatus(transaction, destination, ctx),

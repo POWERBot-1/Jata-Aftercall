@@ -26,6 +26,29 @@ import type { TransactionRecord } from "./types";
 
 const RESERVED_REFUND_STATUSES = ["REQUESTED", "PENDING_PROVIDER"] as const;
 
+/**
+ * A refund whose provider outcome is not known is PENDING_PROVIDER (the amount stays reserved) with
+ * this marker at the start of `failureReason`. The provider may still complete it, so it is neither
+ * released for a retry nor reported as done — it waits for the authenticated result, or for a
+ * person to check the provider's own records.
+ */
+export const REFUND_OUTCOME_UNKNOWN_MARKER = "OUTCOME UNKNOWN — ";
+
+/** The explicit lifecycle of a refund, derived from the stored row (no schema change). */
+export type RefundOutcomeState = "RESERVED" | "AWAITING_PROVIDER" | "UNKNOWN" | "COMPLETED" | "FAILED" | "REJECTED";
+
+export function refundOutcomeState(refund: { status?: unknown; providerReference?: unknown; failureReason?: unknown }): RefundOutcomeState {
+  const status = String(refund?.status ?? "");
+  if (status === "COMPLETED") return "COMPLETED";
+  if (status === "FAILED") return "FAILED";
+  if (status === "REJECTED") return "REJECTED";
+  if (status === "REQUESTED") return "RESERVED";
+  // PENDING_PROVIDER: accepted and awaiting a result — unless JATA has no conversation id to match
+  // a result to, or the provider reported that its queue timed out. Then the outcome is unknown.
+  if (!refund?.providerReference || String(refund?.failureReason ?? "").startsWith(REFUND_OUTCOME_UNKNOWN_MARKER)) return "UNKNOWN";
+  return "AWAITING_PROVIDER";
+}
+
 export type RefundActor = {
   actorId: string | null;
   actorName: string | null;
@@ -37,7 +60,7 @@ export type RefundActor = {
 
 export type RefundOutcome =
   | { ok: true; refundId: string; status: string; amountKES: number; message: string; remainingKES: number }
-  | { ok: false; code: string; message: string };
+  | { ok: false; code: string; message: string; /** The provider may still complete this refund; the amount stays reserved. */ outcomeUnknown?: boolean };
 
 function minorFromKes(value: unknown): number {
   const amountMinor = Math.round(Number(value ?? 0) * 100);
@@ -218,6 +241,30 @@ export async function requestRefund(params: {
       };
     }
 
+    // The provider's own limits (full amount only, receipt required, initiator configured) are
+    // checked while the payment row is locked and *before* anything is reserved or sent, so an
+    // impossible refund leaves no reservation, no provider call and no failed-refund row behind.
+    const destinationRow = transaction.destinationId
+      ? await tx.paymentDestination.findFirst({ where: { id: transaction.destinationId, businessId: params.businessId } })
+      : null;
+    const providerCheck = adapter.validateRefund?.({
+      transaction: transaction as TransactionRecord,
+      destination: destinationRow,
+      amountMinor: validation.amountMinor,
+      alreadyRefundedMinor,
+      outstandingMinor: outstanding,
+    });
+    if (providerCheck && !providerCheck.ok) {
+      return {
+        ok: false as const,
+        outcome: {
+          ok: false as const,
+          code: providerCheck.code ?? "NOT_REFUNDABLE",
+          message: providerCheck.message ?? "This payment cannot be refunded through the provider.",
+        },
+      };
+    }
+
     const refund = await tx.refund.create({
       data: {
         businessId: params.businessId,
@@ -310,7 +357,9 @@ export async function requestRefund(params: {
       data: {
         status,
         providerReference: result.ok ? result.providerReference ?? null : null,
-        failureReason: result.ok ? (providerOutcomeUnknown ? result.message.slice(0, 300) : null) : result.message.slice(0, 300),
+        failureReason: result.ok
+          ? null
+          : (providerOutcomeUnknown ? `${REFUND_OUTCOME_UNKNOWN_MARKER}${result.message}` : result.message).slice(0, 300),
         completedAt: status === "COMPLETED" ? new Date() : null,
       },
     });
@@ -327,7 +376,13 @@ export async function requestRefund(params: {
       restored = applied.restored;
     }
 
-    const action = status === "COMPLETED" ? "REFUND_COMPLETED" : status === "FAILED" ? "REFUND_FAILED" : "REFUND_REQUESTED";
+    const action = status === "COMPLETED"
+      ? "REFUND_COMPLETED"
+      : status === "FAILED"
+        ? "REFUND_FAILED"
+        : providerOutcomeUnknown
+          ? "REFUND_OUTCOME_UNKNOWN"
+          : "REFUND_REQUESTED";
     const summary = status === "COMPLETED"
       ? (restored.returnedToStock > 0
         ? `Refund completed through the provider: ${result.message} ${restored.returnedToStock} unit${restored.returnedToStock === 1 ? "" : "s"} went back into stock.`
@@ -380,7 +435,9 @@ export async function requestRefund(params: {
     await emitRefundUpdate({ businessId: params.businessId, transaction: finalized.transaction, client });
   }
 
-  if (result.ok === false) return { ok: false, code: result.code, message: result.message };
+  if (result.ok === false) {
+    return { ok: false, code: result.code, message: result.message, ...(providerOutcomeUnknown ? { outcomeUnknown: true } : {}) };
+  }
 
   return {
     ok: true,
@@ -420,6 +477,8 @@ export async function resolvePendingProviderRefund(params: {
   succeeded: boolean;
   amountMinor?: number | null;
   failureReason?: string | null;
+  /** The receipt of the payment the result says was reversed — a fallback way to find the refund. */
+  originalTransactionId?: string | null;
   client?: PaymentClient;
 }): Promise<
   | { matched: false }
@@ -427,19 +486,37 @@ export async function resolvePendingProviderRefund(params: {
 > {
   const client = params.client ?? db();
   const providerReference = String(params.providerReference ?? "").trim();
-  if (!providerReference) return { matched: false };
+  const originalTransactionId = String(params.originalTransactionId ?? "").trim();
+  if (!providerReference && !originalTransactionId) return { matched: false };
 
-  const candidates = await client.refund.findMany({
-    where: { provider: params.provider, providerReference },
-    orderBy: { createdAt: "asc" },
-    take: 2,
-  });
+  let candidates: any[] = providerReference
+    ? await client.refund.findMany({
+        where: { provider: params.provider, providerReference },
+        orderBy: { createdAt: "asc" },
+        take: 2,
+      })
+    : [];
+  // A result whose conversation id matches no refund (the synchronous answer that would have
+  // recorded it was lost) is still tied back by the receipt it reversed — but only when exactly
+  // one open refund on exactly one payment carries that receipt.
+  let correlatedByOriginal = false;
+  if (!candidates?.length && originalTransactionId) {
+    const correlated = await findPendingRefundByOriginalTransaction(client, params.provider, originalTransactionId);
+    if (correlated.ambiguous) return { matched: true, kind: "exception", reason: "AMBIGUOUS_PROVIDER_REFUND_REFERENCE" };
+    if (correlated.refund) {
+      candidates = [correlated.refund];
+      correlatedByOriginal = true;
+    }
+  }
   if (!candidates?.length) return { matched: false };
   if (candidates.length !== 1) {
     return { matched: true, kind: "exception", reason: "AMBIGUOUS_PROVIDER_REFUND_REFERENCE" };
   }
 
   const candidate = candidates[0];
+  // When the refund was found by the reversed receipt, its stored reference is empty or stale:
+  // record the conversation id the provider used, so the trail ties both ends together.
+  const backfillReference = correlatedByOriginal && providerReference && !candidate.providerReference ? { providerReference } : {};
   const outcome = await refundTransaction(client, async (tx: PaymentClient) => {
     const transaction = await lockPaymentForRefund(tx, candidate.businessId, candidate.transactionId);
     if (!transaction) return { matched: true as const, kind: "exception" as const, transactionId: candidate.transactionId, businessId: candidate.businessId, reason: "REFUND_PAYMENT_NOT_FOUND" };
@@ -449,7 +526,7 @@ export async function resolvePendingProviderRefund(params: {
         businessId: candidate.businessId,
         transactionId: candidate.transactionId,
         provider: params.provider,
-        providerReference,
+        ...(correlatedByOriginal ? {} : { providerReference }),
       },
     });
     if (!refund) return { matched: true as const, kind: "exception" as const, transactionId: transaction.id, businessId: transaction.businessId, reason: "REFUND_NOT_FOUND" };
@@ -491,7 +568,7 @@ export async function resolvePendingProviderRefund(params: {
       const message = String(params.failureReason ?? "The provider did not complete this refund.").slice(0, 300);
       const changed = await tx.refund.updateMany({
         where: { id: refund.id, businessId: transaction.businessId, transactionId: transaction.id, status: { in: ["REQUESTED", "PENDING_PROVIDER"] } },
-        data: { status: "FAILED", failureReason: message, completedAt: null },
+        data: { status: "FAILED", failureReason: message, completedAt: null, ...backfillReference },
       });
       if (changed.count !== 1) return { matched: true as const, kind: "duplicate" as const, transactionId: transaction.id, businessId: transaction.businessId };
       await logPaymentAudit({
@@ -519,7 +596,7 @@ export async function resolvePendingProviderRefund(params: {
 
     const changed = await tx.refund.updateMany({
       where: { id: refund.id, businessId: transaction.businessId, transactionId: transaction.id, status: { in: ["REQUESTED", "PENDING_PROVIDER"] } },
-      data: { status: "COMPLETED", failureReason: null, completedAt: new Date() },
+      data: { status: "COMPLETED", failureReason: null, completedAt: new Date(), ...backfillReference },
     });
     if (changed.count !== 1) return { matched: true as const, kind: "duplicate" as const, transactionId: transaction.id, businessId: transaction.businessId };
 
@@ -569,6 +646,109 @@ export async function resolvePendingProviderRefund(params: {
     };
   });
   return outcome;
+}
+
+/** The one open refund on the one payment that carries this M-PESA receipt, or "ambiguous". */
+async function findPendingRefundByOriginalTransaction(
+  client: PaymentClient,
+  provider: string,
+  originalTransactionId: string,
+): Promise<{ refund: any | null; ambiguous: boolean }> {
+  const transactions = await client.paymentTransaction.findMany({
+    where: { provider, OR: [{ providerReceipt: originalTransactionId }, { providerTransactionId: originalTransactionId }] },
+    take: 3,
+  });
+  if (!transactions?.length) return { refund: null, ambiguous: false };
+  if (transactions.length > 1) return { refund: null, ambiguous: true };
+  const refunds = await client.refund.findMany({
+    where: {
+      businessId: transactions[0].businessId,
+      transactionId: transactions[0].id,
+      provider,
+      status: { in: [...RESERVED_REFUND_STATUSES] },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 3,
+  });
+  if (!refunds?.length) return { refund: null, ambiguous: false };
+  if (refunds.length > 1) return { refund: null, ambiguous: true };
+  return { refund: refunds[0], ambiguous: false };
+}
+
+/**
+ * A reversal QueueTimeOut notice (M-PESA): the provider's queue gave up, which is NOT a verdict —
+ * the reversal may still be processed. The refund therefore stays PENDING_PROVIDER with its amount
+ * reserved (so it cannot be re-sent or double-spent), is marked with an explicit unknown outcome,
+ * and is surfaced for a person to check the provider's records. It is never released as a failure.
+ */
+export async function recordPendingProviderRefundTimeout(params: {
+  provider: string;
+  providerReference?: string | null;
+  originalTransactionId?: string | null;
+  client?: PaymentClient;
+}): Promise<
+  | { matched: false }
+  | { matched: true; kind: "unknown" | "duplicate" | "exception"; transactionId?: string; businessId?: string; reason?: string }
+> {
+  const client = params.client ?? db();
+  const providerReference = String(params.providerReference ?? "").trim();
+  const originalTransactionId = String(params.originalTransactionId ?? "").trim();
+  if (!providerReference && !originalTransactionId) return { matched: false };
+
+  let candidates: any[] = providerReference
+    ? await client.refund.findMany({ where: { provider: params.provider, providerReference }, orderBy: { createdAt: "asc" }, take: 2 })
+    : [];
+  let correlatedByOriginal = false;
+  if (!candidates?.length && originalTransactionId) {
+    const correlated = await findPendingRefundByOriginalTransaction(client, params.provider, originalTransactionId);
+    if (correlated.ambiguous) return { matched: true, kind: "exception", reason: "AMBIGUOUS_PROVIDER_REFUND_REFERENCE" };
+    if (correlated.refund) {
+      candidates = [correlated.refund];
+      correlatedByOriginal = true;
+    }
+  }
+  if (!candidates?.length) return { matched: false };
+  if (candidates.length !== 1) return { matched: true, kind: "exception", reason: "AMBIGUOUS_PROVIDER_REFUND_REFERENCE" };
+  const candidate = candidates[0];
+
+  return refundTransaction(client, async (tx: PaymentClient) => {
+    const transaction = await lockPaymentForRefund(tx, candidate.businessId, candidate.transactionId);
+    if (!transaction) return { matched: true as const, kind: "exception" as const, transactionId: candidate.transactionId, businessId: candidate.businessId, reason: "REFUND_PAYMENT_NOT_FOUND" };
+    const refund = await tx.refund.findFirst({
+      where: { id: candidate.id, businessId: candidate.businessId, transactionId: candidate.transactionId, provider: params.provider },
+    });
+    if (!refund) return { matched: true as const, kind: "exception" as const, transactionId: transaction.id, businessId: transaction.businessId, reason: "REFUND_NOT_FOUND" };
+    if (refund.status === "COMPLETED" || refund.status === "FAILED" || refund.status === "REJECTED") {
+      // A timeout notice that arrives after the verdict changes nothing.
+      return { matched: true as const, kind: "duplicate" as const, transactionId: transaction.id, businessId: transaction.businessId };
+    }
+    const note = "M-PESA reported that its queue timed out before processing this reversal. It may still complete, so the amount stays reserved and the reversal must not be sent again.";
+    const backfill = correlatedByOriginal && providerReference && !refund.providerReference ? { providerReference } : {};
+    await tx.refund.updateMany({
+      where: { id: refund.id, businessId: transaction.businessId, transactionId: transaction.id, status: { in: [...RESERVED_REFUND_STATUSES] } },
+      data: { status: "PENDING_PROVIDER", failureReason: `${REFUND_OUTCOME_UNKNOWN_MARKER}${note}`.slice(0, 300), ...backfill },
+    });
+    await logPaymentAudit({
+      businessId: transaction.businessId,
+      transactionId: transaction.id,
+      actorKind: "JATA_SYSTEM",
+      action: "REFUND_OUTCOME_UNKNOWN",
+      summary: note,
+      beforeState: { refundStatus: refund.status },
+      afterState: { refundStatus: "PENDING_PROVIDER", outcome: "UNKNOWN", reservationReleased: false },
+    }, tx);
+    await recordReconciliationException({
+      businessId: transaction.businessId,
+      transactionId: transaction.id,
+      provider: params.provider,
+      providerReference: providerReference || refund.providerReference || null,
+      result: "UNCONFIRMED",
+      expectedAmountMinor: refund.amountMinor,
+      receivedAmountMinor: null,
+      notes: "Reversal outcome unknown after an M-PESA queue timeout. Check the M-PESA portal before refunding by any other means.",
+    }, tx);
+    return { matched: true as const, kind: "unknown" as const, transactionId: transaction.id, businessId: transaction.businessId };
+  });
 }
 
 /**
@@ -673,7 +853,10 @@ export function refundSummary(transaction: any, refunds: any[] = []) {
   }, 0);
   const available = refundableMinor({ ...(transaction ?? {}), amountRefundedMinor: refunded }, reserved);
   const status = String(transaction?.status ?? "") as PaymentStatus;
+  const unknownOutcomeRefunds = (refunds ?? []).filter((refund) => refundOutcomeState(refund) === "UNKNOWN").length;
   return {
+    /** Refunds the provider may still complete; their amounts stay reserved. */
+    unknownOutcomeRefunds,
     paidKES: minorToKes(paid),
     refundedKES: minorToKes(refunded),
     reservedKES: minorToKes(reserved),

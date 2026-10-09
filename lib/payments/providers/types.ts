@@ -69,6 +69,19 @@ export type ProviderReversalResult =
   | { ok: true; providerReference: string | null; message: string }
   | { ok: false; code: string; message: string; retryable: boolean; outcomeUnknown?: boolean };
 
+/** What an adapter needs to say whether a refund may be attempted at all, before any money is reserved. */
+export type RefundValidationInput = {
+  transaction: TransactionRecord;
+  destination: DestinationRecord | null;
+  amountMinor: number;
+  /** Completed refunds so far. */
+  alreadyRefundedMinor: number;
+  /** Refunds reserved or awaiting the provider. */
+  outstandingMinor: number;
+};
+
+export type RefundValidation = { ok: boolean; code?: string; message?: string };
+
 export type ProviderEventRequest = {
   rawBody: string;
   headers: Headers;
@@ -131,6 +144,12 @@ export interface PaymentProviderAdapter {
 
   /** Refund through the provider (§47) — where the provider offers refunds at all. */
   refund(input: ReversalInput, ctx: AdapterContext): Promise<ProviderReversalResult>;
+  /**
+   * Optional pre-flight for a refund: a provider whose reversal product has limits (full amount
+   * only, a receipt required, an initiator that must be configured) says so *before* an amount is
+   * reserved, so an impossible refund never creates a reservation or a provider call.
+   */
+  validateRefund?(input: RefundValidationInput): RefundValidation;
 
   /** Reverse a payment the provider can reverse (§48). */
   reverse(input: ReversalInput, ctx: AdapterContext): Promise<ProviderReversalResult>;

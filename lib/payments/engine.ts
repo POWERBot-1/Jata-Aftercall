@@ -30,11 +30,12 @@ import { canTransition, type PaymentStatus } from "./states";
 import type { ProviderEventOutcome, ProviderKey, TransactionRecord } from "./types";
 import { getAdapter } from "./providers/registry";
 import { normalizeMpesaReceipt } from "./providers/mpesa-receipt";
-import { resolvePendingProviderRefund } from "./refunds";
+import { recordPendingProviderRefundTimeout, resolvePendingProviderRefund } from "./refunds";
 
 export type ConfirmationEvent = Extract<ProviderEventOutcome, { kind: "confirmation" }>;
 export type ReversalEvent = Extract<ProviderEventOutcome, { kind: "reversal" }>;
 export type FailureEvent = Extract<ProviderEventOutcome, { kind: "failure" }>;
+export type ReversalTimeoutEvent = Extract<ProviderEventOutcome, { kind: "reversal_timeout" }>;
 
 export type ApplyResult =
   | { kind: "settled"; transactionId: string; businessId: string; saleId: string | null; status: PaymentStatus; duplicate: boolean }
@@ -121,11 +122,17 @@ export async function locateTransaction(
     orderBy: { createdAt: "desc" },
     take: 5,
   });
-  const fresh = (candidates ?? []).find((row: any) => {
+  const fresh = (candidates ?? []).filter((row: any) => {
     const created = row.createdAt ? new Date(row.createdAt).getTime() : 0;
     return Date.now() - created <= 24 * 60 * 60 * 1000;
   });
-  return { transaction: fresh ?? null, how: fresh ? ("DESTINATION_AND_AMOUNT" as const) : ("NONE" as const), destination };
+  // Destination + amount is only an inference. With exactly one open payment it is a sound one;
+  // with several (two customers each paying KES 500 at the same till) it is a coin toss, and the
+  // wrong answer would settle one customer's sale with another customer's money. JATA does not
+  // guess: the payment is recorded for a person to match (§44).
+  if (fresh.length > 1) return { transaction: null, how: "AMBIGUOUS" as const, destination };
+  const only = fresh[0] ?? null;
+  return { transaction: only, how: only ? ("DESTINATION_AND_AMOUNT" as const) : ("NONE" as const), destination };
 }
 
 /**
@@ -151,7 +158,7 @@ export async function applyConfirmation(params: {
     const located = await locateTransaction(provider, event, tx);
     const transaction = located.transaction;
     if (!transaction) {
-      return { kind: "no_match" as const, reason: "NO_MATCHING_TRANSACTION" };
+      return { kind: "no_match" as const, reason: located.how === "AMBIGUOUS" ? "AMBIGUOUS_MATCH" : "NO_MATCHING_TRANSACTION" };
     }
 
     const businessId = String(transaction.businessId);
@@ -197,7 +204,9 @@ export async function applyConfirmation(params: {
         result: "AMOUNT_MISMATCH",
         expectedAmountMinor: transaction.amountMinor,
         receivedAmountMinor: event.amountMinor,
-        notes: `Expected ${transaction.amountMinor} ${transaction.currency}, provider confirmed ${event.amountMinor} ${event.currency}.`,
+        notes: event.amountMinor <= 0
+          ? "M-PESA reported a successful payment, but its confirmation carried no verifiable amount. Nothing was marked paid; use Check status to ask M-PESA directly."
+          : `Expected ${transaction.amountMinor} ${transaction.currency}, provider confirmed ${event.amountMinor} ${event.currency}.`,
       }, tx);
       await logPaymentAudit({
         businessId,
@@ -211,10 +220,36 @@ export async function applyConfirmation(params: {
       return { kind: "amount_mismatch" as const, transactionId: transaction.id, expectedMinor: transaction.amountMinor, receivedMinor: event.amountMinor };
     }
 
+    const isStkPayment = provider === "MPESA" && (
+      String(transaction.method ?? "").startsWith("MPESA_STK") || String(event.method ?? "").startsWith("MPESA_STK")
+    );
+    const providerReceipt = isStkPayment ? normalizeMpesaReceipt(event.providerReceipt) : null;
+
     // ── Idempotency: a compare-and-set on the state, backed by unique indexes (§33) ──
     const currentStatus = transaction.status as PaymentStatus;
     if (!canTransition(currentStatus, "CONFIRMED")) {
       if (["CONFIRMED", "PAID", "PARTIALLY_PAID", "PARTIALLY_REFUNDED", "FULLY_REFUNDED"].includes(currentStatus)) {
+        // The same payment confirmed twice changes nothing — except that a payment first confirmed
+        // by a status check has no receipt, and the authenticated callback that arrives later does.
+        // The amount was verified above, so recording it is safe, and it is what makes the payment
+        // reversible.
+        if (isStkPayment && providerReceipt && !transaction.providerReceipt) {
+          const recorded = await tx.paymentTransaction.updateMany({
+            where: { id: transaction.id, businessId, providerReceipt: null },
+            data: { providerReceipt },
+          });
+          if (recorded?.count) {
+            await logPaymentAudit({
+              businessId,
+              transactionId: transaction.id,
+              actorKind: "JATA_SYSTEM",
+              action: "PAYMENT_RECEIPT_RECORDED",
+              summary: "The M-PESA receipt arrived after the payment was already confirmed and is now on record.",
+              beforeState: { status: currentStatus, receiptPersisted: false },
+              afterState: { status: currentStatus, receiptPersisted: true },
+            }, tx);
+          }
+        }
         return { kind: "duplicate" as const, transactionId: transaction.id };
       }
       // A definitive failure followed by a confirmation: money arrived for a payment JATA had
@@ -232,11 +267,9 @@ export async function applyConfirmation(params: {
       return { kind: "exception" as const, reason: `LATE_CONFIRMATION_${currentStatus}`, transactionId: transaction.id };
     }
 
-    const isStkPayment = provider === "MPESA" && (
-      String(transaction.method ?? "").startsWith("MPESA_STK") || String(event.method ?? "").startsWith("MPESA_STK")
-    );
-    const providerReceipt = isStkPayment ? normalizeMpesaReceipt(event.providerReceipt) : null;
-    if (isStkPayment && !providerReceipt) {
+    // A callback that confirms money without a receipt is refused (it could never be reversed). A
+    // confirmation obtained by *asking* M-PESA (STK Query) legitimately carries none.
+    if (isStkPayment && !providerReceipt && !event.receiptOptional) {
       const notes = "An authenticated M-PESA STK confirmation matched this payment but did not include a valid M-PESA receipt; it was not marked paid.";
       await recordReconciliationException({
         businessId,
@@ -281,6 +314,19 @@ export async function applyConfirmation(params: {
     if (claimed?.count === 0) {
       // Another instance confirmed it between our read and our write: exactly one financial effect.
       return { kind: "duplicate" as const, transactionId: transaction.id };
+    }
+
+    if (event.receiptOptional && isStkPayment && !providerReceipt) {
+      await logPaymentAudit({
+        businessId,
+        transactionId: transaction.id,
+        actorKind: "JATA_SYSTEM",
+        action: "PAYMENT_CONFIRMED_BY_STATUS_CHECK",
+        summary:
+          "M-PESA confirmed this payment when JATA asked. The status check does not carry the amount or the M-PESA receipt, so the requested amount was booked and the receipt is not on record yet.",
+        beforeState: { status: currentStatus },
+        afterState: { status: "CONFIRMED", amountMinor: event.amountMinor, receiptPersisted: false },
+      }, tx);
     }
 
     await logPaymentAudit({
@@ -554,12 +600,13 @@ export async function applyReversal(params: {
 }): Promise<ApplyResult> {
   const { provider, event } = params;
   const outcome = await inTransaction(params.client, async (tx: PaymentClient) => {
-    if (event.providerReference) {
+    if (event.providerReference || event.originalTransactionId) {
       const refundResult = await resolvePendingProviderRefund({
         provider,
-        providerReference: event.providerReference,
+        providerReference: event.providerReference ?? "",
         succeeded: true,
         amountMinor: event.amountMinor,
+        originalTransactionId: event.originalTransactionId ?? null,
         client: tx,
       });
       if (refundResult.matched) {
@@ -676,6 +723,30 @@ export async function applyReversal(params: {
   return outcome;
 }
 
+/**
+ * A reversal QueueTimeOut notice. Not a verdict: the refund stays reserved with an explicit unknown
+ * outcome and is surfaced for a person — never released as failed, never re-sent.
+ */
+export async function applyReversalTimeout(params: {
+  provider: ProviderKey | string;
+  event: ReversalTimeoutEvent;
+  client?: PaymentClient;
+}): Promise<ApplyResult> {
+  const outcome = await recordPendingProviderRefundTimeout({
+    provider: String(params.provider),
+    providerReference: params.event.providerReference,
+    originalTransactionId: params.event.originalTransactionId ?? null,
+    client: params.client,
+  });
+  if (!outcome.matched) return { kind: "no_match", reason: "NO_MATCHING_REFUND" };
+  if (outcome.kind === "duplicate" && outcome.transactionId) return { kind: "duplicate", transactionId: outcome.transactionId };
+  return {
+    kind: "exception",
+    reason: outcome.reason ?? "REFUND_OUTCOME_UNKNOWN",
+    ...(outcome.transactionId ? { transactionId: outcome.transactionId } : {}),
+  };
+}
+
 /** A definitive provider failure. It can never be followed by an automatic PAID (§30, §31). */
 export async function applyFailure(params: {
   provider: ProviderKey | string;
@@ -684,12 +755,13 @@ export async function applyFailure(params: {
 }): Promise<ApplyResult> {
   const { provider, event } = params;
   return inTransaction(params.client, async (tx: PaymentClient) => {
-    if (event.providerReference) {
+    if (event.providerReference || event.originalTransactionId) {
       const refundResult = await resolvePendingProviderRefund({
         provider,
-        providerReference: event.providerReference,
+        providerReference: event.providerReference ?? "",
         succeeded: false,
         failureReason: event.message,
+        originalTransactionId: event.originalTransactionId ?? null,
         client: tx,
       });
       if (refundResult.matched) {
@@ -782,7 +854,13 @@ export async function expireStalePayments(params: { businessId?: string; now?: D
   return { expired };
 }
 
-/** Server-side status re-check (§67, §68): ask the provider, then apply what it says. */
+/**
+ * Server-side status re-check (§67, §68): ask the provider, then apply what it says.
+ *
+ * This is the recovery path for a lost callback (Daraja does not retry them). Only a *final*
+ * provider answer moves a payment; an in-flight answer changes nothing, and once JATA's own waiting
+ * window has passed the payment is expired (still confirmable if the money later turns up).
+ */
 export async function refreshStatus(params: {
   businessId: string;
   transaction: any;
@@ -793,7 +871,8 @@ export async function refreshStatus(params: {
 }) {
   const adapter = getAdapter(params.transaction.provider);
   if (!adapter) return { checked: false, status: params.transaction.status as PaymentStatus, message: null as string | null };
-  const ctx = adapterContext(params.now ?? new Date(), { fetchImpl: params.fetchImpl, verifyWithProvider: true });
+  const now = params.now ?? new Date();
+  const ctx = adapterContext(now, { fetchImpl: params.fetchImpl, verifyWithProvider: true });
   const report = await adapter.getPaymentStatus(params.transaction as TransactionRecord, params.destination, ctx);
   if (report.status === "CONFIRMED") {
     const applied = await applyConfirmation({
@@ -802,14 +881,17 @@ export async function refreshStatus(params: {
         kind: "confirmation",
         providerReference: params.transaction.providerReference ?? "",
         providerTransactionId: report.providerTransactionId ?? params.transaction.providerTransactionId ?? null,
+        providerReceipt: report.providerReceipt ?? null,
+        // An answer obtained by asking carries no receipt; absence is expected, not a refusal.
+        receiptOptional: true,
         amountMinor: report.amountMinor ?? params.transaction.amountMinor,
         currency: report.currency ?? params.transaction.currency,
         destination: { kind: null, providerDestinationId: null, providerAccountRef: null },
         method: params.transaction.method ?? "UNKNOWN",
         customerName: null,
         customerPhoneMasked: null,
-        occurredAt: params.now ?? new Date(),
-        sanitized: { source: "STATUS_QUERY" },
+        occurredAt: now,
+        sanitized: { source: "STATUS_QUERY", amountVerified: report.amountVerified !== false },
       },
       client: params.client,
     });
@@ -829,6 +911,13 @@ export async function refreshStatus(params: {
       client: params.client,
     });
     return { checked: true, status: "FAILED" as PaymentStatus, message: report.message };
+  }
+
+  // No final answer (pending / unknown). If JATA's waiting window has passed, stop waiting — the
+  // payment becomes EXPIRED, which remains reconcilable if the money later turns up.
+  const open = ["CREATED", "PAYMENT_REQUESTED", "PENDING", "PROCESSING"].includes(String(params.transaction.status));
+  if (open && params.transaction.expiresAt && new Date(params.transaction.expiresAt).getTime() <= now.getTime()) {
+    await expireStalePayments({ businessId: params.businessId, now, limit: 25, client: params.client ?? prisma });
   }
   return { checked: true, status: params.transaction.status as PaymentStatus, message: report.message };
 }

@@ -861,7 +861,16 @@ function PaymentDrawer({
                 setLocalError("We couldn't send that refund.");
                 return;
               }
-              setLocalNote(`Refund ${String(data.status ?? "").toLowerCase()} through the provider.`);
+              const refundStatus = String(data.status ?? "");
+              // Only a COMPLETED refund is described as done. A pending one is not complete until the
+              // provider's own confirmation arrives, and its amount stays reserved until then.
+              setLocalNote(
+                refundStatus === "COMPLETED"
+                  ? "Refund completed through the provider."
+                  : refundStatus === "PENDING_PROVIDER"
+                    ? "Refund sent. It is not complete until the provider confirms it — the amount stays reserved until then."
+                    : `Refund ${refundStatus.toLowerCase().replace(/_/g, " ")}.`,
+              );
               await onChanged();
             }}
           >

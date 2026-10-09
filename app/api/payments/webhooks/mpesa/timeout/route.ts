@@ -1,10 +1,11 @@
 /**
- * M-PESA C2B queue-timeout callback (§35, §111).
+ * M-PESA reversal queue-timeout notice (§35, §111).
  *
- * This is the exact URL JATA registers with Safaricom as the reversal `QueueTimeOutURL` (derived
- * from `MPESA_C2B_VALIDATION_URL`: `…/mpesa/validation?token=…` → `…/mpesa/timeout?token=…`).
- * Safaricom posts here when a queued C2B transaction expires unanswered, and the shared pipeline
- * records the timeout. It runs the same shared handler as the base union endpoint.
+ * This is a legacy path for the reversal `QueueTimeOutURL`, which JATA derives from the validation
+ * URL (`…/validation?token=…` → `…/timeout?token=…`). Safaricom posts here when its queue gave up
+ * on a reversal request. That is a notice, not a verdict — the reversal may still complete — so the
+ * pipeline keeps the refund reserved with an explicit unknown outcome and never releases it as a
+ * failure. It runs the same shared handler as the base union endpoint.
  */
 
 import { NextResponse } from "next/server";
