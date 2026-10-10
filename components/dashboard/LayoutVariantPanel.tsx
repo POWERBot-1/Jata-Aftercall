@@ -119,6 +119,12 @@ export function LayoutVariantPanel({
             {busy === "apply" ? "Applying…" : "Use this layout"}
           </button>
         ) : null}
+        {/* A layout that scored too similar is not blocked: the owner may still choose it, having seen why. */}
+        {result && !result.accepted ? (
+          <button type="button" className="jata-btn" disabled={busy !== ""} onClick={() => void apply()}>
+            {busy === "apply" ? "Applying…" : "Use it anyway"}
+          </button>
+        ) : null}
       </div>
       {result ? (
         <div className="mt-3 text-sm text-zinc-700" aria-live="polite">

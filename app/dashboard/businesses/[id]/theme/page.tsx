@@ -34,6 +34,7 @@ export default async function ThemePage({ params }: { params: Promise<{ id: stri
       <ThemeEditor
         businessId={id}
         document={workspace.document}
+        draftVersion={workspace.experience?.draftVersion ?? null}
         themes={themes}
         showCommerce={workspace.profile.capabilities.includes("commerce")}
         showBooking={workspace.profile.capabilities.includes("booking")}

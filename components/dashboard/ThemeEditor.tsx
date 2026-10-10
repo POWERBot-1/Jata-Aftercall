@@ -8,7 +8,7 @@
  * never become unreadable because of an owner's colour choice (§21).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExperienceDocument, ExperienceSettings } from "@/lib/experience/types";
 import type { ThemeOption } from "./ThemeOption";
@@ -18,18 +18,23 @@ import { MediaPicker } from "./MediaPicker";
 export function ThemeEditor({
   businessId,
   document: initial,
+  draftVersion,
   themes,
   showCommerce,
   showBooking,
 }: {
   businessId: string;
   document: ExperienceDocument;
+  /** The draft version this editor was rendered from. Every save sends it; a stale save is refused. */
+  draftVersion: number | null;
   themes: ThemeOption[];
   showCommerce: boolean;
   showBooking: boolean;
 }) {
   const router = useRouter();
   const [document, setDocument] = useState<ExperienceDocument>(initial);
+  const [version, setVersion] = useState<number | null>(draftVersion);
+  useEffect(() => setVersion(draftVersion), [draftVersion]);
   const [message, setMessage] = useState<{ tone: "ok" | "error" | "saving"; text: string } | null>(null);
 
   async function save(patch: { themeKey?: string; brand?: Partial<ExperienceDocument["brand"]>; settings?: Partial<ExperienceSettings> }) {
@@ -38,14 +43,21 @@ export function ThemeEditor({
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...patch }),
+        body: JSON.stringify({ businessId, ...patch, ...(version ? { expectedDraftVersion: version } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.code === "draft_version_conflict") {
+        // Nothing was written. Reload the latest draft rather than saving over it.
+        setMessage({ tone: "error", text: "Your website changed in another window, so this change was not saved. The page will reload to the latest draft. Nothing was overwritten." });
+        router.refresh();
+        return;
+      }
       if (!response.ok) {
         setMessage({ tone: "error", text: data.error || "We couldn’t save that change." });
         return;
       }
       setDocument(data.document as ExperienceDocument);
+      if (typeof data.experience?.draftVersion === "number") setVersion(data.experience.draftVersion);
       setMessage({ tone: "ok", text: "Saved ✓" });
       router.refresh();
     } catch {

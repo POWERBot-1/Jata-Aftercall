@@ -48,6 +48,7 @@ export default async function DesignPage({ params }: { params: Promise<{ id: str
       <DesignPanel
         businessId={id}
         document={document}
+        draftVersion={workspace.experience?.draftVersion ?? null}
         directions={directions}
         themes={themes}
         currentDirectionKey={document.designDirectionKey || null}

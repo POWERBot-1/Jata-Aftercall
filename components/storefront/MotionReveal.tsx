@@ -5,8 +5,9 @@
  *
  * Visual state is controlled entirely by CSS under `html[data-motion-ready]`, so in Lite mode
  * this wrapper is inert and the content is always visible. The element is marked `is-visible`
- * once it enters the viewport. Without IntersectionObserver, or if the observer never fires,
- * the content is revealed after a short safety timeout, so nothing is ever left blank.
+ * once it enters the viewport, or once the visitor has scrolled past it. Without
+ * IntersectionObserver, or if the observer never fires, the content is revealed after a short
+ * safety timeout, so nothing is ever left blank.
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
@@ -30,7 +31,10 @@ export function MotionReveal({ children, expressive = false }: { children: React
     try {
       observer = new IntersectionObserver(
         (entries) => {
-          if (entries.some((entry) => entry.isIntersecting)) {
+          // A block the visitor has already scrolled past (for example while scripts were still
+          // loading) is above the viewport when the observer first attaches. It counts as seen, so
+          // it is revealed now rather than waiting for the safety timer or a scroll back up.
+          if (entries.some((entry) => entry.isIntersecting || entry.boundingClientRect.bottom < 0)) {
             reveal();
             observer?.disconnect();
           }

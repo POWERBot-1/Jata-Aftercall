@@ -15,7 +15,7 @@
  * document is restored with one tap.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExperienceDocument } from "@/lib/experience/types";
 import { MediaPicker } from "./MediaPicker";
@@ -27,18 +27,24 @@ type ThemeOption = { key: string; name: string; description: string; swatches: s
 export function DesignPanel({
   businessId,
   document: initial,
+  draftVersion,
   directions,
   themes,
   currentDirectionKey,
 }: {
   businessId: string;
   document: ExperienceDocument;
+  /** The draft version this panel was rendered from. Every save sends it; a stale save is refused. */
+  draftVersion: number | null;
   directions: DesignDirection[];
   themes: ThemeOption[];
   currentDirectionKey: string | null;
 }) {
   const router = useRouter();
   const [document, setDocument] = useState<ExperienceDocument>(initial);
+  const [version, setVersion] = useState<number | null>(draftVersion);
+  // A fresh server render (after router.refresh) carries the newest version; adopt it.
+  useEffect(() => setVersion(draftVersion), [draftVersion]);
   const [undoSnapshot, setUndoSnapshot] = useState<ExperienceDocument | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{ tone: "ok" | "error" | "saving"; text: string } | null>(null);
@@ -53,15 +59,22 @@ export function DesignPanel({
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...patch }),
+        body: JSON.stringify({ businessId, ...patch, ...(version ? { expectedDraftVersion: version } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.code === "draft_version_conflict") {
+        // Nothing was written. The local copy is out of date, so reload the latest draft before trying again.
+        setMessage({ tone: "error", text: "Your website changed in another window, so this change was not saved. The page will reload to the latest draft. Nothing was overwritten." });
+        router.refresh();
+        return false;
+      }
       if (!response.ok) {
         setMessage({ tone: "error", text: data.error || "We couldn't save that change." });
         return false;
       }
       setUndoSnapshot(before);
       setDocument(data.document as ExperienceDocument);
+      if (typeof data.experience?.draftVersion === "number") setVersion(data.experience.draftVersion);
       setMessage({ tone: "ok", text: `Saved ✓ ${note} — preview it, or undo if you prefer the previous look.` });
       router.refresh();
       return true;

@@ -55,11 +55,12 @@ export async function POST(req: Request) {
       take: RECENT_LIMIT,
       select: { snapshotJson: true },
     });
-    const recent: ExperienceDocument[] = versions.map((row) => {
+    // An unreadable snapshot is skipped, never counted as a comparison (so the history basis stays truthful).
+    const recent: ExperienceDocument[] = versions.flatMap((row) => {
       try {
-        return normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), current.categoryKey);
+        return [normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), current.categoryKey)];
       } catch {
-        return normalizeExperienceDocument({}, current.categoryKey);
+        return [];
       }
     });
 

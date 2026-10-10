@@ -14,6 +14,8 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_CHARS,
   MAX_SOURCE_BYTES,
+  MIME_FOR_FORMAT,
+  WEB_SAFE_FORMATS,
   decodeFailureIssue,
   humanFileSize,
   parseImageDataUrl,
@@ -231,6 +233,67 @@ export type PrepareOptions = {
  * The mobile upload path: file → validated, rotated, resized, web-ready data URL.
  * This is what fixes the "photo never leaves the phone" failure (§19).
  */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * When the optional optimisation step fails for a photo the server already accepts as it is
+ * (JPEG, PNG, WebP or GIF), upload the original bytes instead of losing the photo. The bytes are
+ * re-checked by signature and size first. Anything else (HEIC, unknown, oversize) returns null and
+ * keeps its normal, specific error.
+ */
+/**
+ * A truncated file keeps a valid signature, so the signature check alone is not enough to upload it
+ * as-is. Each format must also end where it should: JPEG EOI, PNG IEND, WebP RIFF length, GIF trailer.
+ */
+function looksComplete(bytes: Uint8Array, format: ImageFormat): boolean {
+  const n = bytes.length;
+  if (format === "jpeg") {
+    for (let i = Math.max(0, n - 16); i < n - 1; i += 1) if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) return true;
+    return false;
+  }
+  if (format === "png") {
+    const tail = String.fromCharCode(...bytes.subarray(Math.max(0, n - 16)));
+    return tail.includes("IEND");
+  }
+  if (format === "webp") {
+    if (n < 12) return false;
+    const riffSize = bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24);
+    return riffSize + 8 === n;
+  }
+  if (format === "gif") return bytes[n - 1] === 0x3b;
+  return false;
+}
+
+function originalFallback(bytes: Uint8Array, format: ImageFormat, notes: string[]): PrepareResult | null {
+  if (!WEB_SAFE_FORMATS.includes(format)) return null;
+  if (!looksComplete(bytes, format)) return null;
+  const mime = MIME_FOR_FORMAT[format];
+  const verdict = validateImageBytes(bytes, { declaredMime: mime, maxBytes: MAX_UPLOAD_BYTES });
+  if (verdict.status !== "ok") return null;
+  const dataUrl = `data:${mime};base64,${bytesToBase64(bytes)}`;
+  if (dataUrl.length > MAX_UPLOAD_CHARS) return null;
+  return {
+    status: "ok",
+    upload: {
+      dataUrl,
+      mime,
+      format,
+      width: verdict.facts.width ?? 0,
+      height: verdict.facts.height ?? 0,
+      bytes: bytes.length,
+      sourceBytes: bytes.length,
+      notes: [...notes, "We couldn't optimise this photo, so we uploaded the original. It may load a little more slowly."],
+    },
+  };
+}
+
 export async function prepareUpload(file: File, options: PrepareOptions = {}): Promise<PrepareResult> {
   report(options.onProgress, "reading", 5);
   if (!file || file.size === 0) {
@@ -278,7 +341,7 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
   try {
     decoded = await decodeFile(file);
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return originalFallback(bytes, format, []) ?? { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
   }
 
   try {
@@ -331,7 +394,7 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
       resized: resize.scaled,
     });
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return originalFallback(bytes, format, []) ?? { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
   } finally {
     decoded.revoke?.();
   }

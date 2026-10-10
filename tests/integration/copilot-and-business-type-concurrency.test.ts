@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   experienceFindUnique: vi.fn(),
   revision: vi.fn(),
   audit: vi.fn(),
+  versionFindMany: vi.fn(),
 }));
 
 const OWNED = "business-a";
@@ -48,6 +49,7 @@ vi.mock("@/lib/db", () => ({
       upsert: vi.fn(),
     },
     business: { findUnique: vi.fn(async () => null) },
+    experienceVersion: { findMany: mocks.versionFindMany },
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
@@ -86,6 +88,9 @@ beforeEach(() => {
   mocks.experienceUpdate.mockImplementation(async (args: any) => ({ id: "exp-a", draftVersion: args.data.draftVersion }));
   mocks.revision.mockResolvedValue({});
   mocks.audit.mockResolvedValue({});
+  mocks.versionFindMany.mockImplementation(async () =>
+    mocks.publishedJson ? [{ snapshotJson: mocks.publishedJson }] : [],
+  );
 });
 
 describe("copilot apply: draft version and diversity", () => {
@@ -146,8 +151,8 @@ describe("copilot apply: draft version and diversity", () => {
     expect(typeof body.diversity.maxSimilarity).toBe("number");
   });
 
-  it("still applies when the published snapshot is malformed, and reports no comparison", async () => {
-    mocks.publishedJson = "{not json";
+  it("still applies when a published snapshot is malformed, and does not fail the apply", async () => {
+    mocks.versionFindMany.mockResolvedValue([{ snapshotJson: "{not json" }]);
     const response = await copilotPost(jsonRequest("https://jata.test/api/studio/copilot", { businessId: OWNED, message: PREMIUM, apply: true }));
     const body = await response.json();
     expect(response.status).toBe(200);

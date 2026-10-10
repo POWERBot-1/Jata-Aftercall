@@ -29,6 +29,7 @@ import { historyBasisFor } from "@/lib/experience/variant";
 
 export const dynamic = "force-dynamic";
 
+const DIVERSITY_HISTORY_LIMIT = 5; // matches the variant preview route
 const DRAFT_CHANGED_CODE = "draft_version_conflict";
 const DRAFT_CHANGED_MESSAGE = "Your website changed while JATA was preparing this. Ask again so it works from your latest draft. Nothing was overwritten.";
 
@@ -175,19 +176,30 @@ export async function POST(req: Request) {
 
     // Informational only: the owner has already reviewed and confirmed this proposal, so it is not
     // blocked. The report says what it was compared with, and says so when there is no published history.
-    // Parsed defensively: the draft is already written at this point, so a bad published snapshot
-    // must never turn a successful apply into an error response.
-    let publishedDocument: ReturnType<typeof normalizeExperienceDocument> | null = null;
+    // Compared with the business's own published history (immutable ExperienceVersion snapshots),
+    // the same source the variant preview uses. Read defensively: the draft is already written, so a
+    // bad snapshot must never turn a successful apply into an error response.
+    let publishedDocuments: ReturnType<typeof normalizeExperienceDocument>[] = [];
     try {
-      const published = await prisma.businessExperience.findUnique({ where: { businessId }, select: { publishedJson: true } });
-      publishedDocument = published?.publishedJson
-        ? normalizeExperienceDocument(JSON.parse(published.publishedJson), document.categoryKey)
-        : null;
+      const versions = await prisma.experienceVersion.findMany({
+        where: { businessId },
+        orderBy: { version: "desc" },
+        take: DIVERSITY_HISTORY_LIMIT,
+        select: { snapshotJson: true },
+      });
+      // A snapshot that cannot be read is skipped, never counted as a comparison.
+      publishedDocuments = versions.flatMap((row) => {
+        try {
+          return [normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), document.categoryKey)];
+        } catch {
+          return [];
+        }
+      });
     } catch {
-      publishedDocument = null;
+      publishedDocuments = [];
     }
-    const diversity = publishedDocument
-      ? { ...diversityReport(document, [publishedDocument]), ...historyBasisFor(1) }
+    const diversity = publishedDocuments.length > 0
+      ? { ...diversityReport(document, publishedDocuments), ...historyBasisFor(publishedDocuments.length) }
       : { ...historyBasisFor(0), maxSimilarity: null, ok: null };
 
     // AI changes are recorded like any other change, so Undo covers them with the same one tap.
