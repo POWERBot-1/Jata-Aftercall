@@ -420,7 +420,11 @@ model Product {
 
   // ── Interactive Business catalogue fields (§7–§10, §17) ──
   // Category-shaped, all optional: the experience profile decides which are shown.
-  salePriceKES       Int?       // Display/strike-through price; `basePriceKES` stays authoritative.
+  // Sale price (KES). Applies ONLY inside [salePriceStartsAt, salePriceEndsAt): start-inclusive, end-exclusive,
+  // stored in UTC. Outside the window, or with no window, `basePriceKES` is charged. See lib/sale-pricing.ts.
+  salePriceKES       Int?
+  salePriceStartsAt  DateTime?  @db.Timestamp(3)
+  salePriceEndsAt    DateTime?  @db.Timestamp(3)
   imageUrl           String?    @db.Text
   images             String?    @db.Text   // JSON array of media urls (gallery)
   brand              String?
@@ -1135,6 +1139,10 @@ model PosProduct {
   description       String?   @db.Text
   unitKey           String    @default("piece")
   priceKES          Int       @default(0)
+  // Same sale-window rule as Product (lib/sale-pricing.ts): the sale applies only inside the window, UTC storage.
+  salePriceKES      Int?
+  salePriceStartsAt DateTime? @db.Timestamp(3)
+  salePriceEndsAt   DateTime? @db.Timestamp(3)
   wholesalePriceKES Int?
   costKES           Int?
   sku               String?

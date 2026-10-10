@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       prisma.businessExperience.findUnique({ where: { businessId } }),
       prisma.product.count({ where: { businessId, isActive: true } }),
       prisma.service.count({ where: { businessId, isActive: true } }),
-      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
     ]);
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 

@@ -11,6 +11,7 @@ import { getExperienceProfile } from "./categories";
 import { normalizeExperienceDocument } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
+import { displayPriceKES } from "../sale-pricing";
 
 export type StorefrontVariant = { id: string; label: string; priceKES: number | null; stockStatus: string; options: Record<string, string> };
 export type StorefrontAddOn = { id: string; name: string; priceKES: number };
@@ -138,6 +139,8 @@ function mapProduct(product: {
   description: string | null;
   basePriceKES: number | null;
   salePriceKES: number | null;
+  salePriceStartsAt?: Date | string | null;
+  salePriceEndsAt?: Date | string | null;
   imageUrl: string | null;
   images: string | null;
   category: string | null;
@@ -152,14 +155,16 @@ function mapProduct(product: {
   variantOptions: string | null;
   variants?: Array<{ id: string; label: string; priceKES: number | null; stockStatus: string; options: string | null }>;
 }): StorefrontItem {
-  const price = product.salePriceKES && product.salePriceKES > 0 ? product.salePriceKES : product.basePriceKES;
+  // Shown exactly as checkout charges it: the sale only inside its window (lib/sale-pricing.ts).
+  const shown = displayPriceKES(product);
+  const price = shown.priceKES;
   return {
     id: product.id,
     kind: "product",
     name: product.name,
     description: product.description,
     price,
-    wasPrice: product.salePriceKES && product.salePriceKES > 0 && product.basePriceKES ? product.basePriceKES : null,
+    wasPrice: shown.wasPriceKES,
     priceLabel: null,
     pricingType: "FIXED",
     imageUrl: product.imageUrl || parseJsonArray(product.images)[0] || null,

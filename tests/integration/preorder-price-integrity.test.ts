@@ -96,10 +96,35 @@ describe("pre-order price comes from the catalogue", () => {
   });
 
   it("charges the sale price when one is set, the same unit price the storefront charges", async () => {
-    mocks.products[0] = { ...CHICKEN, salePriceKES: 700 };
+    // A sale runs only inside its window: this one is open now.
+    mocks.products[0] = {
+      ...CHICKEN,
+      salePriceKES: 700,
+      salePriceStartsAt: new Date("2020-01-01T00:00:00Z"),
+      salePriceEndsAt: new Date("2100-01-01T00:00:00Z"),
+    };
     const res = await POST(request({ ...base, quantity: 1 }));
     expect(res.status).toBe(200);
     expect(mocks.created[0].fullPriceKES).toBe(700);
+  });
+
+  it("charges the base price once the sale window has ended, with no manual clean-up", async () => {
+    mocks.products[0] = {
+      ...CHICKEN,
+      salePriceKES: 700,
+      salePriceStartsAt: new Date("2020-01-01T00:00:00Z"),
+      salePriceEndsAt: new Date("2020-06-01T00:00:00Z"),
+    };
+    const res = await POST(request({ ...base, quantity: 1 }));
+    expect(res.status).toBe(200);
+    expect(mocks.created[0].fullPriceKES).toBe(900);
+  });
+
+  it("charges the base price for a sale with no window (inactive, never indefinite)", async () => {
+    mocks.products[0] = { ...CHICKEN, salePriceKES: 700, salePriceStartsAt: null, salePriceEndsAt: null };
+    const res = await POST(request({ ...base, quantity: 1 }));
+    expect(res.status).toBe(200);
+    expect(mocks.created[0].fullPriceKES).toBe(900);
   });
 
   it("applies a configured bulk price for the quantity (a legitimate discount rule)", async () => {

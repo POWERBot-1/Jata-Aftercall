@@ -15,6 +15,7 @@ import { sanitizeText } from "@/lib/validation";
 import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
 import { getExperienceProfile } from "@/lib/experience/categories";
+import { validateSaleWrite } from "@/lib/sale-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,40 @@ function parseVariants(value: unknown): VariantInput[] {
 
 type ProductPayload = Record<string, unknown>;
 
+/**
+ * Sale fields are written only through validateSaleWrite (a sale needs a valid [start, end) window, Nairobi
+ * time read, UTC stored). `stored` is the current row on update, null on create.
+ * Returns null when the request does not touch the sale; `{ error }` when it is invalid.
+ */
+function saleDataFrom(
+  body: ProductPayload,
+  stored: { basePriceKES: number | null; variantPriceKES: number | null; salePriceKES: number | null; salePriceStartsAt: Date | null; salePriceEndsAt: Date | null } | null,
+): { data: Record<string, unknown> } | { error: string } | null {
+  const touched = body.salePriceKES !== undefined || body.salePriceStartsAt !== undefined || body.salePriceEndsAt !== undefined;
+  if (!touched) return null;
+  const sale = body.salePriceKES === undefined ? (stored?.salePriceKES ?? null) : intOrNull(body.salePriceKES);
+  const windowSent = (body.salePriceStartsAt ?? null) !== null || (body.salePriceEndsAt ?? null) !== null;
+  // An unchanged sale with no window sent is left exactly as stored. Nothing is rewritten, and a legacy sale
+  // with no dates stays inactive (see lib/sale-pricing.ts). It does not block unrelated edits.
+  if (stored && sale === (stored.salePriceKES ?? null) && !windowSent) return null;
+  const result = validateSaleWrite({
+    basePriceKES: body.basePriceKES !== undefined ? intOrNull(body.basePriceKES) : stored?.basePriceKES ?? null,
+    variantPriceKES: stored?.variantPriceKES ?? null,
+    salePriceKES: sale,
+    startsAt: body.salePriceStartsAt,
+    endsAt: body.salePriceEndsAt,
+    stored: stored ?? undefined,
+  });
+  if (result.ok === false) return { error: result.error };
+  return {
+    data: {
+      salePriceKES: result.salePriceKES,
+      salePriceStartsAt: result.salePriceStartsAt,
+      salePriceEndsAt: result.salePriceEndsAt,
+    },
+  };
+}
+
 function productDataFrom(body: ProductPayload) {
   const data: Record<string, unknown> = {};
   if (body.name !== undefined) data.name = sanitizeText(String(body.name), 120);
@@ -85,7 +120,6 @@ function productDataFrom(body: ProductPayload) {
   if (body.ingredients !== undefined) data.ingredients = sanitizeText(String(body.ingredients), 1000) || null;
   if (body.sku !== undefined) data.sku = sanitizeText(String(body.sku), 40) || null;
   if (body.basePriceKES !== undefined) data.basePriceKES = intOrNull(body.basePriceKES);
-  if (body.salePriceKES !== undefined) data.salePriceKES = intOrNull(body.salePriceKES);
   if (body.prepMinutes !== undefined) data.prepMinutes = intOrNull(body.prepMinutes, 0, 1440);
   if (body.quantity !== undefined) data.quantity = intOrNull(body.quantity, 0, 1_000_000);
   if (body.minOrder !== undefined) data.minOrder = Math.max(1, intOrNull(body.minOrder, 1, 999) ?? 1);
@@ -162,6 +196,9 @@ export async function POST(req: Request) {
     if (name.length < 2) return NextResponse.json({ error: "Give this item a name." }, { status: 400 });
 
     const data = productDataFrom(body);
+    const sale = saleDataFrom(body, null);
+    if (sale && "error" in sale) return NextResponse.json({ error: sale.error }, { status: 400 });
+    if (sale && !("error" in sale)) Object.assign(data, sale.data);
     const variants = parseVariants(body?.variants);
     const product = await prisma.product.create({
       data: {
@@ -207,10 +244,16 @@ export async function PATCH(req: Request) {
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // Ownership is re-checked against the stored row: the id in the body is never trusted.
-    const existing = await prisma.product.findFirst({ where: { id, businessId }, select: { id: true } });
+    const existing = await prisma.product.findFirst({
+      where: { id, businessId },
+      select: { id: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true },
+    });
     if (!existing) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
     const data = productDataFrom(body);
+    const sale = saleDataFrom(body, existing);
+    if (sale && "error" in sale) return NextResponse.json({ error: sale.error }, { status: 400 });
+    if (sale && !("error" in sale)) Object.assign(data, sale.data);
     if (body?.name !== undefined) {
       const name = sanitizeText(String(body.name), 120);
       if (name.length < 2) return NextResponse.json({ error: "Give this item a name." }, { status: 400 });

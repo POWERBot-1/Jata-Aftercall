@@ -72,7 +72,9 @@ describe("runtime and schema guards", () => {
     // column plus refund-reference lookup index, the POS refund-integrity columns and the
     // per-business receipt sequence table, the lossless INTEGER → DOUBLE PRECISION
     // promotion of the POS quantity columns, and the POS till-sale replay guard (one new
-    // tenant-scoped table that stops a duplicate till submission becoming a second sale).
+    // tenant-scoped table that stops a duplicate till submission becoming a second sale), and the
+    // sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
+    // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -88,6 +90,8 @@ describe("runtime and schema guards", () => {
       "20261005020000_pos_sale_refund_integrity",
       "20261005030000_pos_fractional_quantities",
       "20261005040000_pos_sale_idempotency",
+      "20261010000000_sale_price_windows",
+      "20261010000100_pos_sale_price_windows",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

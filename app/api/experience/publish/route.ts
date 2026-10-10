@@ -38,7 +38,7 @@ async function loadPublishContext(businessId: string) {
     prisma.businessExperience.findUnique({ where: { businessId } }),
     prisma.product.count({ where: { businessId, isActive: true } }),
     prisma.service.count({ where: { businessId, isActive: true } }),
-    prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+    prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
     prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
     prisma.subscription.findUnique({
       where: { businessId },

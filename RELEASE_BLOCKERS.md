@@ -125,3 +125,26 @@ plus one pricing fix in the commit that adds this section. The final SHA is in t
 3. Whether leads should also require an entitled business.
 4. Whether `PATCH /api/media` should be version-gated.
 5. Motion library: none added. Storage provider: not approved.
+
+## Sale-price policy C: implementation status (uncommitted at time of writing; see commit on this branch)
+
+Approved policy C (`RELEASE_DECISIONS.md` §2.5–2.6) is implemented on `arena/33ebb805-jata-aftercall`. Sale price applies only when `salePriceStartsAt <= now < salePriceEndsAt` (UTC storage, Africa/Nairobi input and display). Existing sales with no window are inactive. Nothing is rewritten.
+
+Verification on the tree at this change (local only, not CI):
+- `tsc --noEmit`: exit 0.
+- `vitest run`: 141 files passed, 5 skipped; 1687 tests passed, 51 skipped (includes the new `tests/unit/sale-pricing.test.ts`, 30 tests, and `tests/unit/sale-channels.test.ts`, 15 tests).
+- `next lint`: exit 0, 1 pre-existing warning.
+- `npm run build`: exit 0, "Build completed successfully".
+
+Not verified:
+- **DB-backed gate: not run.** No PostgreSQL in the sandbox. The two new migrations (`20261010000000_sale_price_windows`, `20261010000100_pos_sale_price_windows`) are additive and rerunnable but have not been executed against a database.
+- **Concurrent checkout, and the storefront/preorder/AI create_order paths against a real database:** not run. Pure-logic and mocked integration tests only.
+- **Browser checks: blocked** (no Chrome, `CHROME_PATH` unset).
+- **CI at the final SHA: not obtained.** `gh workflow run` returned HTTP 403 at `08da5fe` and was not retried.
+
+Known gaps in this change:
+- Storefront checkout still creates the order and payment in separate steps, with no transaction and no idempotency key (existing gap, unchanged).
+- `createAuthoritativeOrder` idempotency is an in-memory map, not durable (existing gap, unchanged).
+- `app/api/ai/brain/route.ts` and `app/api/ai/dashboard/route.ts` still return raw product fields and do not return the effective price.
+
+Release decision: **BLOCKED** until the mandatory DB-backed and browser gates pass at the final SHA, with an authorized maintainer CI run whose head SHA is verified.

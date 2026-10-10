@@ -11,6 +11,8 @@
 import prisma from "../db";
 import { calculateCommerceTotal, type CommerceCalculation } from "../commerce-pricing";
 import type { ExperienceSettings } from "./types";
+import { chargeableUnitPrice, effectiveUnitPrice, listPriceKES, type QuantityRule } from "../sale-pricing";
+import { getExtendedAIConfig } from "../ai-config";
 
 export const PAYMENT_CURRENCY = "KES";
 
@@ -18,8 +20,11 @@ export const PAYMENT_CURRENCY = "KES";
 type ProductRow = {
   id: string;
   name: string;
-  basePriceKES: number;
+  basePriceKES: number | null;
+  variantPriceKES: number | null;
   salePriceKES: number | null;
+  salePriceStartsAt: Date | null;
+  salePriceEndsAt: Date | null;
   imageUrl: string | null;
   minOrder: number | null;
   maxOrder: number | null;
@@ -85,15 +90,16 @@ function parseAddOns(raw: string | null | undefined): AddOn[] {
   }
 }
 
-/** The price the tenant actually charges for one unit, resolved from the database. */
-export function unitPriceFor(product: { basePriceKES?: number | null; salePriceKES?: number | null }, variant?: { priceKES?: number | null } | null): number {
-  if (variant && typeof variant.priceKES === "number" && Number.isFinite(variant.priceKES)) {
-    return Math.max(0, Math.round(variant.priceKES));
-  }
-  if (typeof product.salePriceKES === "number" && Number.isFinite(product.salePriceKES) && product.salePriceKES > 0) {
-    return Math.max(0, Math.round(product.salePriceKES));
-  }
-  return Math.max(0, Math.round(Number(product.basePriceKES || 0)));
+/**
+ * The price one unit costs right now: the variant price, else the sale price inside its window, else the base
+ * price. Delegates to lib/sale-pricing.ts (the single rule shared by every channel).
+ */
+export function unitPriceFor(
+  product: { basePriceKES?: number | null; variantPriceKES?: number | null; salePriceKES?: number | null; salePriceStartsAt?: Date | string | null; salePriceEndsAt?: Date | string | null },
+  variant?: { priceKES?: number | null } | null,
+  now: Date = new Date(),
+): number {
+  return effectiveUnitPrice(product, now, variant).unitPriceKES;
 }
 
 const PURCHASABLE = new Set(["IN_STOCK", "LOW_STOCK", "PRE_ORDER", "AVAILABLE_ON_REQUEST"]);
@@ -110,8 +116,15 @@ export async function priceBasket(params: {
   fulfilment?: "PICKUP" | "DELIVERY";
   settings?: ExperienceSettings | null;
   allowPreOrder?: boolean;
+  /** The instant the prices are taken at. Defaults to now. One instant is used for the whole basket. */
+  now?: Date;
 }): Promise<OrderPricing> {
   const { businessId, settings } = params;
+  const now = params.now ?? new Date();
+  // The owner's quantity rules (applied after the sale window, never stacked). Loaded inside the tenant.
+  const bulkRules: QuantityRule[] = await getExtendedAIConfig(businessId)
+    .then((config) => config.bulkPricing)
+    .catch(() => []);
   const requests = Array.isArray(params.items) ? params.items.slice(0, 60) : [];
   const unavailable: Array<{ productId: string; reason: string }> = [];
 
@@ -130,7 +143,7 @@ export async function priceBasket(params: {
   const products = (await prisma.product.findMany({
     where: { businessId, id: { in: productIds } },
     select: {
-      id: true, name: true, basePriceKES: true, salePriceKES: true, imageUrl: true,
+      id: true, name: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true, imageUrl: true,
       minOrder: true, maxOrder: true, stockStatus: true, preOrderAllowed: true,
       deliveryEligible: true, addOns: true, isActive: true,
     },
@@ -196,7 +209,12 @@ export async function priceBasket(params: {
       .filter((addOn): addOn is AddOn => Boolean(addOn))
       .slice(0, 10);
 
-    const unitBase = unitPriceFor(product, variant);
+    // Sale window (lib/sale-pricing.ts) first, then the owner's quantity rule. Never stacked.
+    const unitBase = chargeableUnitPrice({ product, productName: product.name, quantity, now, rules: bulkRules, variant }).unitPriceKES;
+    if (!(unitBase > 0)) {
+      unavailable.push({ productId: product.id, reason: `${product.name} has no price set.` });
+      continue;
+    }
     const unitPriceKES = unitBase + addOns.reduce((sum, addOn) => sum + addOn.priceKES, 0);
     const variantDesc = [variant?.label, addOns.length ? `+ ${addOns.map((addOn) => addOn.name).join(", ")}` : ""]
       .filter(Boolean)

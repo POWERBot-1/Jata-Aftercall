@@ -135,6 +135,8 @@ export async function getBusinessBrain(businessId: string) {
         basePriceKES: true,
         variantPriceKES: true,
         salePriceKES: true,
+        salePriceStartsAt: true,
+        salePriceEndsAt: true,
         currency: true,
         stockStatus: true,
         quantity: true,

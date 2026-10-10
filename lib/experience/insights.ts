@@ -7,6 +7,7 @@
  */
 
 import prisma from "@/lib/db";
+import { displayPriceKES } from "@/lib/sale-pricing";
 import { conversionRate, EMPTY_METRICS, getBusinessMetricsSince, getTopSubjects, type BusinessMetrics, type EventType } from "@/lib/analytics";
 
 export type BusinessSummary = {
@@ -97,7 +98,7 @@ export async function businessSummary(businessId: string): Promise<BusinessSumma
     productIds.length
       ? prisma.product.findMany({
           where: { businessId, id: { in: productIds } },
-          select: { id: true, name: true, basePriceKES: true, salePriceKES: true, imageUrl: true },
+          select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true, imageUrl: true },
         })
       : Promise.resolve([]),
     serviceIds.length
@@ -142,7 +143,8 @@ export async function businessSummary(businessId: string): Promise<BusinessSumma
       id: product.id,
       name: product.name,
       basePriceKES: product.basePriceKES,
-      salePriceKES: product.salePriceKES,
+      // Only a sale running now is reported; an expired or unscheduled sale is not.
+      salePriceKES: displayPriceKES(product).wasPriceKES !== null ? product.salePriceKES : null,
       imageUrl: product.imageUrl,
       views: topProducts.find((entry) => entry.subjectId === product.id)?.count || 0,
     })),

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AI_BUSINESS_TEMPLATES, starterForTemplate, type BusinessTemplate } from "@/lib/ai-templates";
 import { composePublicPaymentText, PREVIEW_TEST_QUESTIONS, type PublicPaymentDetails } from "@/lib/ai-grounding";
 import type { DeliveryZoneRule } from "@/lib/ai-config";
+import { toBusinessLocalInput } from "@/lib/sale-pricing";
 
 function readableStoredHours(raw: unknown): string {
   if (typeof raw !== "string" || !raw.trim()) return "";
@@ -36,6 +37,9 @@ type CatalogueDraft = {
   minQty: string;
   maxQty: string;
   promoPrice: string;
+  /** Sale window, Africa/Nairobi local input (datetime-local). The sale runs only between these. */
+  promoStart: string;
+  promoEnd: string;
   active: boolean;
   instructions: string;
 };
@@ -68,6 +72,8 @@ const EMPTY_ITEM: CatalogueDraft = {
   minQty: "1",
   maxQty: "",
   promoPrice: "",
+  promoStart: "",
+  promoEnd: "",
   active: true,
   instructions: "",
 };
@@ -241,6 +247,8 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           minQty: product.minOrder != null ? String(product.minOrder) : "1",
           maxQty: product.maxOrder != null ? String(product.maxOrder) : "",
           promoPrice: product.salePriceKES != null ? String(product.salePriceKES) : "",
+          promoStart: toBusinessLocalInput(product.salePriceStartsAt ? new Date(String(product.salePriceStartsAt)) : null),
+          promoEnd: toBusinessLocalInput(product.salePriceEndsAt ? new Date(String(product.salePriceEndsAt)) : null),
           active: product.isActive !== false,
           instructions: "",
         })),
@@ -258,6 +266,8 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           minQty: "1",
           maxQty: "",
           promoPrice: "",
+          promoStart: "",
+          promoEnd: "",
           active: service.isActive !== false,
           instructions: "",
         })),
@@ -426,6 +436,8 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
         portionSize: item.unit || null,
         basePriceKES: money(item.price),
         salePriceKES: money(item.promoPrice),
+        salePriceStartsAt: item.promoStart.trim() || null,
+        salePriceEndsAt: item.promoEnd.trim() || null,
         stockStatus: item.quantity.trim() || item.stockStatus ? item.stockStatus : undefined,
         quantity: item.quantity.trim() ? Number(item.quantity) : null,
         minOrder: Number(item.minQty) || 1,
@@ -619,7 +631,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           <div className="grid gap-2 sm:grid-cols-2">
             <Field label="Name" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} />
             <Field label="Category" value={draft.category} onChange={(value) => setDraft({ ...draft, category: value })} />
-            <Field label="Price (KES)" value={draft.price} onChange={(value) => setDraft({ ...draft, price: value })} />
+            <Field label="Original price (KES)" value={draft.price} onChange={(value) => setDraft({ ...draft, price: value })} />
             <Field label="Unit" value={draft.unit} onChange={(value) => setDraft({ ...draft, unit: value })} placeholder="bag, plate, session" />
             <Field label="Variations (Label:price, Label:price)" value={draft.variations} onChange={(value) => setDraft({ ...draft, variations: value })} />
             <label className="text-xs">
@@ -635,7 +647,15 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
             <Field label="Quantity on hand" value={draft.quantity} onChange={(value) => setDraft({ ...draft, quantity: value })} />
             <Field label="Minimum quantity" value={draft.minQty} onChange={(value) => setDraft({ ...draft, minQty: value })} />
             <Field label="Maximum quantity" value={draft.maxQty} onChange={(value) => setDraft({ ...draft, maxQty: value })} />
-            <Field label="Promotional price (KES)" value={draft.promoPrice} onChange={(value) => setDraft({ ...draft, promoPrice: value })} />
+            <Field label="Sale price (KES, optional)" value={draft.promoPrice} onChange={(value) => setDraft({ ...draft, promoPrice: value })} />
+            <label className="block text-xs">
+              Sale starts (Africa/Nairobi)
+              <input type="datetime-local" value={draft.promoStart} onChange={(event) => setDraft({ ...draft, promoStart: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2 text-sm" />
+            </label>
+            <label className="block text-xs">
+              Sale ends (Africa/Nairobi)
+              <input type="datetime-local" value={draft.promoEnd} onChange={(event) => setDraft({ ...draft, promoEnd: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2 text-sm" />
+            </label>
             <Field label="Special instructions" value={draft.instructions} onChange={(value) => setDraft({ ...draft, instructions: value })} />
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />

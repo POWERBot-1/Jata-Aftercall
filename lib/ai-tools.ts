@@ -18,6 +18,7 @@ import { evaluateProductAvailability } from "./inventory";
 import { captureLead, type LeadClassification } from "./leads";
 import { createAuthoritativeOrder, hasServerVerifiedOrderPayment } from "./order";
 import { createPreOrderSummary, resolvePreorderPricing } from "./preorder";
+import { chargeableUnitPrice } from "./sale-pricing";
 import { createNotification } from "./notification";
 import { initializeOrderPayment, PAYMENT_PURPOSE } from "./experience/payments";
 import prisma from "./db";
@@ -291,11 +292,19 @@ export async function executeBusinessTool(
             (typeof item.name === "string" && p.name.toLowerCase() === item.name.toLowerCase()),
         );
         if (prod) {
+          // Same server rule as createAuthoritativeOrder: sale window first, then the owner's quantity rule.
+          const unitPriceKES = chargeableUnitPrice({
+            product: prod,
+            productName: prod.name,
+            quantity: qty,
+            now: new Date(),
+            rules: brain.extendedConfig?.bulkPricing ?? [],
+          }).unitPriceKES;
           lineItems.push({
             productId: prod.id,
             name: prod.name,
             quantity: qty,
-            unitPriceKES: Math.max(0, Math.round(Number(prod.basePriceKES ?? prod.variantPriceKES ?? 0))),
+            unitPriceKES,
             variantDesc: typeof item.variantDesc === "string" ? item.variantDesc : undefined,
           });
         }

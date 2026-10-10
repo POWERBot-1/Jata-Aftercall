@@ -6,6 +6,7 @@
  */
 
 import { formatOpeningHours } from "./openingHours";
+import { applyQuantityRule, effectiveUnitPrice, listPriceKES } from "./sale-pricing";
 import type { DeliveryConfiguration, DeliveryZoneConfig } from "./ai-config";
 
 export const PREVIEW_TEST_QUESTIONS = [
@@ -61,6 +62,8 @@ export type CatalogueProduct = {
   basePriceKES?: number | null;
   variantPriceKES?: number | null;
   salePriceKES?: number | null;
+  salePriceStartsAt?: Date | string | null;
+  salePriceEndsAt?: Date | string | null;
   stockStatus?: string | null;
   quantity?: number | null;
   preOrderAllowed?: boolean | null;
@@ -720,27 +723,26 @@ export function extractContactDetails(message: string): { name: string | null; p
   };
 }
 
-export function authoritativeUnitPrice(product: CatalogueProduct): number | null {
-  const base = product.basePriceKES ?? product.variantPriceKES ?? null;
-  if (typeof base === "number" && Number.isFinite(base) && base >= 0) return Math.round(base);
-  return null;
+/**
+ * The unit price the AI may quote, and the price checkout charges, at the current instant. Sale windows and
+ * the shared rule live in lib/sale-pricing.ts; this is the AI-facing name for the same value.
+ */
+export function authoritativeUnitPrice(product: CatalogueProduct, now: Date = new Date()): number | null {
+  if (listPriceKES(product) === null) return null;
+  return effectiveUnitPrice(product, now).unitPriceKES;
 }
 
+/**
+ * Owner's quantity rule applied to a unit price. Never raises a price; never stacks with a sale.
+ * Delegates to lib/sale-pricing.ts so every channel uses the same rule.
+ */
 export function applyBulkUnitPrice(
   productName: string,
   baseUnitKES: number,
   quantity: number,
   rules: BulkPriceRule[] | null | undefined,
 ): { unitPriceKES: number; bulkApplied: boolean } {
-  const match = (rules || []).find(
-    (rule) =>
-      rule.productName.trim().toLowerCase() === productName.trim().toLowerCase() &&
-      quantity >= rule.minQuantity &&
-      Number.isFinite(rule.unitPriceKES) &&
-      rule.unitPriceKES >= 0,
-  );
-  if (!match) return { unitPriceKES: baseUnitKES, bulkApplied: false };
-  return { unitPriceKES: Math.round(match.unitPriceKES), bulkApplied: true };
+  return applyQuantityRule(productName, baseUnitKES, quantity, rules);
 }
 
 export function stockIsConfirmed(product: CatalogueProduct): boolean {

@@ -17,7 +17,32 @@ import { MediaPicker } from "./MediaPicker";
 import { AssistBox } from "./AssistBox";
 
 type Variant = { label: string; priceKES: number | null };
+import { displayPriceKES, formatBusinessDateTime, toBusinessLocalInput } from "@/lib/sale-pricing";
+
 type AddOn = { id?: string; name: string; priceKES: number };
+
+function parseSaleDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** One line for the list: the sale price and when it ends, or that a scheduled/expired sale is not running. */
+function saleSummary(product: ProductRow): string {
+  const shown = displayPriceKES({
+    basePriceKES: product.basePriceKES,
+    salePriceKES: product.salePriceKES,
+    salePriceStartsAt: parseSaleDate(product.salePriceStartsAt),
+    salePriceEndsAt: parseSaleDate(product.salePriceEndsAt),
+  });
+  if (shown.saleState === "ACTIVE" && shown.priceKES !== null) {
+    return ` · Sale ${formatKES(shown.priceKES)} until ${formatBusinessDateTime(parseSaleDate(product.salePriceEndsAt))}`;
+  }
+  if (shown.saleState === "SCHEDULED") return ` · Sale ${formatKES(product.salePriceKES ?? 0)} from ${formatBusinessDateTime(parseSaleDate(product.salePriceStartsAt))} (not running yet)`;
+  if (shown.saleState === "EXPIRED") return " · Sale ended (original price charged)";
+  if (shown.saleState === "NO_WINDOW" || shown.saleState === "INVALID_WINDOW") return " · Sale not running: set a start and end time";
+  return "";
+}
 
 type ProductRow = {
   id: string;
@@ -26,6 +51,9 @@ type ProductRow = {
   category: string | null;
   basePriceKES: number | null;
   salePriceKES: number | null;
+  /** Sale window. Stored in UTC; shown and entered in Africa/Nairobi time. A sale runs only inside it. */
+  salePriceStartsAt: string | null;
+  salePriceEndsAt: string | null;
   imageUrl: string | null;
   images: string | null;
   brand: string | null;
@@ -180,7 +208,7 @@ export function ItemsEditor({
 
   function blankProduct(): ProductRow {
     return {
-      id: `new-${Date.now()}`, name: "", description: null, category: null, basePriceKES: null, salePriceKES: null,
+      id: `new-${Date.now()}`, name: "", description: null, category: null, basePriceKES: null, salePriceKES: null, salePriceStartsAt: null, salePriceEndsAt: null,
       imageUrl: null, images: null, brand: null, portionSize: null, ingredients: null, prepMinutes: null,
       tags: null, addOns: null, variantOptions: null, stockStatus: "IN_STOCK", isFeatured: false, isActive: true, sortOrder: 0,
     };
@@ -257,8 +285,8 @@ export function ItemsEditor({
                     {!product.isActive ? <span className="ml-2 text-xs font-normal text-zinc-500">Hidden</span> : null}
                   </p>
                   <p className="truncate text-xs text-zinc-600">
-                    {product.basePriceKES !== null ? formatKES(product.basePriceKES) : "Price on request"}
-                    {product.salePriceKES ? ` · was ${formatKES(product.salePriceKES)}` : ""}
+                    {product.basePriceKES !== null ? `Original ${formatKES(product.basePriceKES)}` : "Price on request"}
+                    {saleSummary(product)}
                     {product.stockStatus !== "IN_STOCK" ? ` · ${STOCK_OPTIONS.find((option) => option.value === product.stockStatus)?.label || product.stockStatus}` : ""}
                   </p>
                 </div>
@@ -337,13 +365,18 @@ export function ItemsEditor({
               {productFields.price ? (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="jata-field">
-                    <label className="jata-label" htmlFor="p-price">Price (KES)</label>
+                    <label className="jata-label" htmlFor="p-price">Original price (KES)</label>
                     <input id="p-price" type="number" min={0} className="jata-input" value={editingProduct.basePriceKES ?? ""} onChange={(event) => setEditingProduct({ ...editingProduct, basePriceKES: event.target.value === "" ? null : Number(event.target.value) })} />
                   </div>
                   {productFields.salePrice ? (
                     <div className="jata-field">
-                      <label className="jata-label" htmlFor="p-was">Was (KES)</label>
-                      <input id="p-was" type="number" min={0} className="jata-input" value={editingProduct.salePriceKES ?? ""} onChange={(event) => setEditingProduct({ ...editingProduct, salePriceKES: event.target.value === "" ? null : Number(event.target.value) })} />
+                      <label className="jata-label" htmlFor="p-sale">Sale price (KES, optional)</label>
+                      <input id="p-sale" type="number" min={0} className="jata-input" value={editingProduct.salePriceKES ?? ""} onChange={(event) => setEditingProduct({ ...editingProduct, salePriceKES: event.target.value === "" ? null : Number(event.target.value) })} />
+                      <p className="text-xs text-zinc-500">The sale applies only between the two times below (Africa/Nairobi). Outside them the original price is charged.</p>
+                      <label className="jata-label" htmlFor="p-sale-start">Sale starts (Africa/Nairobi)</label>
+                      <input id="p-sale-start" type="datetime-local" className="jata-input" value={toBusinessLocalInput(parseSaleDate(editingProduct.salePriceStartsAt))} onChange={(event) => setEditingProduct({ ...editingProduct, salePriceStartsAt: event.target.value || null })} />
+                      <label className="jata-label" htmlFor="p-sale-end">Sale ends (Africa/Nairobi)</label>
+                      <input id="p-sale-end" type="datetime-local" className="jata-input" value={toBusinessLocalInput(parseSaleDate(editingProduct.salePriceEndsAt))} onChange={(event) => setEditingProduct({ ...editingProduct, salePriceEndsAt: event.target.value || null })} />
                     </div>
                   ) : null}
                 </div>

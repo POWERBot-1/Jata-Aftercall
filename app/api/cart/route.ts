@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
 import { buildCartFromLines, parseConversationalOrder, type CartLine } from "@/lib/cart";
 import { getExtendedAIConfig, resolveDeliveryZoneFee } from "@/lib/ai-config";
-import { unitPriceFor } from "@/lib/experience/pricing";
+import { chargeableUnitPrice } from "@/lib/sale-pricing";
 
 export async function POST(req: Request) {
   try {
@@ -38,7 +38,8 @@ export async function POST(req: Request) {
 
     if (typeof naturalLanguageOrder === "string" && naturalLanguageOrder.trim()) {
       const catalogue = await prisma.product?.findMany?.({ where: { businessId } }).catch(() => []) ?? [];
-      const parsed = parseConversationalOrder(naturalLanguageOrder, catalogue);
+      const bulkRules = await getExtendedAIConfig(businessId).then((config) => config.bulkPricing).catch(() => []);
+      const parsed = parseConversationalOrder(naturalLanguageOrder, catalogue, { rules: bulkRules });
       resolvedLines.push(...parsed.matchedLines);
     }
 
@@ -57,7 +58,10 @@ export async function POST(req: Request) {
         if (!prod) {
           return NextResponse.json({ error: "Only items in this business catalogue can be added to a cart." }, { status: 400 });
         }
-        const unitPriceKES = unitPriceFor(prod, null);
+        // Same rule as checkout: sale window at this instant, then the owner's quantity rule.
+        const quantity = Math.max(1, Math.round(Number(raw.quantity) || 1));
+        const bulkRules = await getExtendedAIConfig(businessId).then((config) => config.bulkPricing).catch(() => []);
+        const unitPriceKES = chargeableUnitPrice({ product: prod, productName: prod.name, quantity, now: new Date(), rules: bulkRules }).unitPriceKES;
         if (!(unitPriceKES > 0)) {
           return NextResponse.json({ error: `${prod.name} has no price set.` }, { status: 409 });
         }
@@ -65,7 +69,7 @@ export async function POST(req: Request) {
           productId: prod.id,
           name: prod.name,
           variantDesc: raw.variantDesc || undefined,
-          quantity: Math.max(1, Math.round(Number(raw.quantity) || 1)),
+          quantity,
           unitPriceKES,
         });
       }

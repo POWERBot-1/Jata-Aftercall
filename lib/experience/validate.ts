@@ -15,6 +15,7 @@ import { isValidThemeKey } from "./themes";
 import { safeUrl } from "./document";
 import type { EntitlementState } from "./entitlement";
 import type { ExperienceDocument } from "./types";
+import { displayPriceKES } from "../sale-pricing";
 
 export type PublishCheckId =
   | "business-name"
@@ -205,14 +206,20 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
 }
 
 /** Catalogue rows that cannot be shown to customers (bad price or missing name). */
-export function findInvalidCatalogueItems(items: Array<{ id: string; name?: string | null; basePriceKES?: number | null; salePriceKES?: number | null }>) {
+export function findInvalidCatalogueItems(items: Array<{ id: string; name?: string | null; basePriceKES?: number | null; salePriceKES?: number | null; salePriceStartsAt?: Date | string | null; salePriceEndsAt?: Date | string | null }>) {
   const invalid: Array<{ id: string; name?: string | null; reason: string }> = [];
   for (const item of items) {
     if (!item.name || item.name.trim().length < 2) {
       invalid.push({ id: item.id, name: item.name, reason: "Every item needs a name." });
       continue;
     }
-    const price = item.salePriceKES ?? item.basePriceKES ?? null;
+    // A stored base price that is negative or not a whole KES amount is invalid, even though it is not a price.
+    const rawBase = item.basePriceKES;
+    if (rawBase !== null && rawBase !== undefined && (!Number.isSafeInteger(Number(rawBase)) || Number(rawBase) < 0)) {
+      invalid.push({ id: item.id, name: item.name, reason: `${item.name} has an invalid price.` });
+      continue;
+    }
+    const price = displayPriceKES(item).priceKES;
     if (price === null) continue;
     if (!Number.isSafeInteger(Number(price)) || Number(price) < 0) {
       invalid.push({ id: item.id, name: item.name, reason: `${item.name} has an invalid price.` });

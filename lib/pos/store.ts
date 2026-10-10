@@ -221,6 +221,9 @@ export type ProductInput = {
   description?: string | null;
   unitKey?: string;
   priceKES?: number;
+  /** Sale fields, present only when the request sent them (validated in validation.ts). */
+  sale?: { salePriceKES: number | null; salePriceStartsAt: Date | null; salePriceEndsAt: Date | null };
+  saleError?: string;
   wholesalePriceKES?: number | null;
   costKES?: number | null;
   sku?: string | null;
@@ -237,6 +240,7 @@ export type ProductInput = {
 
 function productData(input: ProductInput): Record<string, unknown> {
   return {
+    ...(input.sale ?? {}),
     name: clampText(input.name, 160) ?? "Untitled item",
     kind: input.kind === "SERVICE" ? "SERVICE" : "PRODUCT",
     category: clampText(input.category, 80),

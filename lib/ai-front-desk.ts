@@ -807,7 +807,7 @@ export async function handleAIFrontDeskTurn(params: {
       });
     }
 
-    const parsedOrder = parseConversationalOrder(rawMessage, brain.products);
+    const parsedOrder = parseConversationalOrder(rawMessage, brain.products, { rules: brain.extendedConfig.bulkPricing });
     if (parsedOrder.outOfStockItems.length > 0 && parsedOrder.matchedLines.length === 0) {
       const oos = parsedOrder.outOfStockItems[0];
       toolsInvoked.push("check_inventory");

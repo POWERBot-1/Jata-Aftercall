@@ -9,7 +9,7 @@
 import crypto from "crypto";
 import prisma from "./db";
 import { calculateCommerceTotal } from "./commerce-pricing";
-import { applyBulkUnitPrice } from "./ai-grounding";
+import { chargeableUnitPrice, listPriceKES } from "./sale-pricing";
 import { getExtendedAIConfig, resolveDeliveryZoneFee } from "./ai-config";
 import { evaluateProductAvailability, reserveInventoryForOrder } from "./inventory";
 import { createNotification } from "./notification";
@@ -170,6 +170,8 @@ export async function createAuthoritativeOrder(input: {
   }
 
   const rawItems = Array.isArray(input.items) ? input.items : [];
+  // One instant for the whole order, so every line is priced at the same moment (sale windows, lib/sale-pricing.ts).
+  const now = new Date();
   const bulkRules = await getExtendedAIConfig(businessId)
     .then((config) => config.bulkPricing)
     .catch(() => []);
@@ -193,18 +195,23 @@ export async function createAuthoritativeOrder(input: {
         if (!availability.available) {
           throw new Error(availability.reason);
         }
+        // A product with no price cannot be sold at 0 (checkout refuses it too).
+        if (listPriceKES(dbProduct) === null) {
+          throw new Error(`${dbProduct.name} has no price set, so it cannot be ordered yet.`);
+        }
         resolvedLines.push({
           productId: dbProduct.id,
           name: dbProduct.name,
           variantDesc: raw.variantDesc,
           quantity,
-          // Always use the authoritative database price, never the client-supplied price (§16)
-          unitPriceKES: applyBulkUnitPrice(
-            dbProduct.name,
-            Math.max(0, Math.round(Number(dbProduct.basePriceKES ?? dbProduct.variantPriceKES ?? 0))),
+          // Always the authoritative database price at this instant, never the client-supplied price (§16).
+          unitPriceKES: chargeableUnitPrice({
+            product: dbProduct,
+            productName: dbProduct.name,
             quantity,
-            bulkRules,
-          ).unitPriceKES,
+            now,
+            rules: bulkRules,
+          }).unitPriceKES,
         });
         continue;
       }

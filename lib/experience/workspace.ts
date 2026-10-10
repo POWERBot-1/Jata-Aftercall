@@ -107,7 +107,7 @@ export async function loadWorkspace(businessId: string): Promise<Workspace | nul
       prisma.mediaAsset.count({ where: { businessId } }),
       prisma.booking.count({ where: { businessId } }),
       prisma.order.count({ where: { businessId } }),
-      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
       getInteractiveEntitlement(businessId),
       prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
       prisma.subscription.findUnique({
