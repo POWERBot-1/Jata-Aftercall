@@ -15,6 +15,7 @@
 
 import { getBusinessBrain, type KnowledgeConflict } from "./ai-business-brain";
 import { resolveDeliveryZoneFee } from "./ai-config";
+import { authoritativeUnitPrice } from "./ai-grounding";
 import { resolveCommerceTurn } from "./ai-commerce-turn";
 import {
   detectUnlistedProductRequest,
@@ -934,7 +935,8 @@ export async function handleAIFrontDeskTurn(params: {
       ? productFocusPinnedAfterMention(conv.discussedProductIds || [], targetProduct.id)
       : conv.productFocusPinned;
     toolsInvoked.push("get_product", "check_inventory");
-    const authoritativePrice = targetProduct.basePriceKES ?? targetProduct.variantPriceKES ?? null;
+    // The effective price at this instant (sale window applied), never the raw base price.
+    const authoritativePrice = authoritativeUnitPrice(targetProduct as any) ?? null;
     const availability = evaluateProductAvailability({ product: targetProduct, requestedQuantity: 1 });
 
     // Check if customer asked about a specific size/variant
@@ -1069,7 +1071,7 @@ export async function handleAIFrontDeskTurn(params: {
     !conv.activeProductId &&
     /\b(how\s+much\s+is\s+it|what\s+is\s+the\s+price|bei\s+gani|is\s+it\s+available|do\s+you\s+have\s+it)\b/i.test(lower)
   ) {
-    const productNames = brain.products.slice(0, 5).map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`);
+    const productNames = brain.products.slice(0, 5).map((p) => `${p.name} (KES ${(authoritativeUnitPrice(p as any) ?? 0)})`);
     if (productNames.length > 1) {
       informationFound.push("Multiple catalogue items require disambiguation");
       return finalizeTurn({
@@ -1101,7 +1103,7 @@ export async function handleAIFrontDeskTurn(params: {
     if (brain.products.length > 0 || brain.services.length > 0) {
       const prodLines = brain.products
         .filter((p) => p.isActive !== false)
-        .map((p) => `${p.name}: KES ${p.basePriceKES ?? p.variantPriceKES ?? 0} (${p.stockStatus || "IN_STOCK"})`);
+        .map((p) => `${p.name}: KES ${(authoritativeUnitPrice(p as any) ?? 0)} (${p.stockStatus || "IN_STOCK"})`);
       const svcLines = brain.services
         .filter((s) => s.isActive !== false)
         .map((s) => `${s.title}: KES ${s.priceFrom ?? 0}`);
@@ -1242,7 +1244,7 @@ export async function handleAIFrontDeskTurn(params: {
     const alternativeLabel = categoryAlternatives.length > 0 ? "Configured alternatives" : "We currently have";
     const availableSummary =
       alternatives.length > 0
-        ? ` ${alternativeLabel}: ${alternatives.map((p) => `${p.name} (KES ${p.basePriceKES ?? p.variantPriceKES ?? 0})`).join(", ")}.`
+        ? ` ${alternativeLabel}: ${alternatives.map((p) => `${p.name} (KES ${(authoritativeUnitPrice(p as any) ?? 0)})`).join(", ")}.`
         : "";
     return finalizeTurn({
       conv,

@@ -4,6 +4,7 @@
  * free-form documents (§7). Never exposes payment credentials (§6, §10, §43).
  */
 
+import { authoritativeUnitPrice } from "./ai-grounding";
 import prisma from "./db";
 import { getExtendedAIConfig, type ExtendedAIConfig } from "./ai-config";
 
@@ -28,6 +29,9 @@ export function detectKnowledgeConflicts(params: {
     name: string;
     basePriceKES?: number | null;
     variantPriceKES?: number | null;
+    salePriceKES?: number | null;
+    salePriceStartsAt?: Date | null;
+    salePriceEndsAt?: Date | null;
     stockStatus?: string | null;
   }>;
   knowledge: Array<{ title: string; content: string; sourceType?: string }>;
@@ -42,7 +46,8 @@ export function detectKnowledgeConflicts(params: {
   for (const product of params.products) {
     const productNameLower = product.name.trim().toLowerCase();
     if (!productNameLower || productNameLower.length < 2) continue;
-    const authoritativePrice = product.basePriceKES ?? product.variantPriceKES ?? null;
+    // The price a customer pays now (sale window applied). Comparing against the base price would flag a correct sale.
+    const authoritativePrice = authoritativeUnitPrice(product as any) ?? null;
     const authoritativeStock = product.stockStatus || "IN_STOCK";
 
     for (const src of sources) {

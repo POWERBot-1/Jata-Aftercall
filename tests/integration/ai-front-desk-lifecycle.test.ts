@@ -168,7 +168,6 @@ vi.mock("@/lib/db", () => {
 import { evaluateAIReadiness, publishAIBusinessFrontDesk } from "@/lib/ai-readiness";
 import { assertAIFrontDeskPlanPricing, deriveAIEntitlement } from "@/lib/ai-entitlement";
 import { createAuthoritativeOrder, resetOrderIdempotencyForTests } from "@/lib/order";
-import { reserveInventoryForOrder } from "@/lib/inventory";
 import { approveAnswer, recordUnansweredQuestion, resetIntelligenceForTests } from "@/lib/intelligence";
 import { handleAIFrontDeskTurn } from "@/lib/ai-front-desk";
 import { resetExtendedAIConfigForTests, saveExtendedAIConfig } from "@/lib/ai-config";
@@ -372,12 +371,19 @@ describe("AI Business Front Desk Lifecycle Integration Suite (§3, §4, §16–�
     expect(state.orders.size).toBe(1); // No duplicate order created
 
     // 3. Second customer attempting to reserve the now-exhausted scarce product is prevented from overselling
-    const secondAttempt = await reserveInventoryForOrder({
-      businessId: bizId,
-      items: [{ productId: "prod_scarce", quantity: 1 }],
-      idempotencyKey: "idem_order_truffle_2",
-    });
-    expect(secondAttempt.ok).toBe(false);
+    // Stock is reserved inside the order transaction (lib/order.ts -> lib/checkout-transaction.ts), so a sold-out
+    // product refuses the order and leaves no order behind.
+    await expect(
+      createAuthoritativeOrder({
+        businessId: bizId,
+        customerName: "Second Customer",
+        customerPhone: "0722333444",
+        items: [{ productId: "prod_scarce", quantity: 1 }],
+        idempotencyKey: "idem_order_truffle_2",
+        confirmedByCustomer: true,
+      }),
+    ).rejects.toThrow(/sold|stock|remaining|available/i);
+    expect(state.orders.size).toBe(1);
   });
 
   it("honours the emergency pause: a paused Front Desk stops serving customers but stays previewable (§45)", async () => {

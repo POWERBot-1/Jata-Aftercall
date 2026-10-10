@@ -158,6 +158,27 @@ describe("AI Business Front Desk — business-anchored behavior", () => {
     });
   });
 
+  it("quotes the sale price inside its window and the base price after it (single-product answer)", async () => {
+    const window = { salePriceKES: 700, salePriceStartsAt: new Date("2026-10-01T00:00:00Z"), salePriceEndsAt: new Date("2026-10-31T00:00:00Z") };
+    mockState.products.set(hardware, [
+      { id: "p32", businessId: hardware, name: "Bamburi 32.5", category: "Cement", portionSize: "bag", basePriceKES: 750, ...window, stockStatus: "IN_STOCK", quantity: 200, isActive: true },
+    ]);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-10T09:00:00Z"));
+      const during = await handleAIFrontDeskTurn({ businessId: hardware, message: "How much is Bamburi 32.5?" });
+      expect(during.reply).toContain("KES 700");
+      expect(during.reply).not.toContain("KES 750");
+
+      vi.setSystemTime(new Date("2026-10-31T00:00:00Z")); // the end instant is outside the window
+      const after = await handleAIFrontDeskTurn({ businessId: hardware, message: "How much is Bamburi 32.5?" });
+      expect(after.reply).toContain("KES 750");
+      expect(after.reply).not.toContain("KES 700");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("quotes both configured Bamburi prices and does not invent a third", async () => {
     const turn = await handleAIFrontDeskTurn({ businessId: hardware, message: "How much is Bamburi cement?" });
     expect(turn.responseType).toBe("KNOWN");

@@ -18,6 +18,7 @@ export const PAYMENT_CURRENCY = "KES";
 
 /** Explicit shapes so the pricing engine compiles even before `prisma generate` has run. */
 type ProductRow = {
+  quantity?: number | null;
   id: string;
   name: string;
   basePriceKES: number | null;
@@ -143,7 +144,7 @@ export async function priceBasket(params: {
   const products = (await prisma.product.findMany({
     where: { businessId, id: { in: productIds } },
     select: {
-      id: true, name: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true, imageUrl: true,
+      id: true, name: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true, imageUrl: true, quantity: true,
       minOrder: true, maxOrder: true, stockStatus: true, preOrderAllowed: true,
       deliveryEligible: true, addOns: true, isActive: true,
     },
@@ -194,6 +195,15 @@ export async function priceBasket(params: {
     const quantity = Math.max(minOrder, Math.min(maxOrder, Number.isFinite(requestedQuantity) ? requestedQuantity : 1));
     if (quantity < minOrder) {
       unavailable.push({ productId: product.id, reason: `${product.name} has a minimum order of ${minOrder}.` });
+      continue;
+    }
+    // Tracked stock: the quote must refuse a quantity that cannot be sold, so the customer never confirms a total for
+    // it. Checkout re-checks this atomically at commit (lib/checkout-transaction.ts).
+    if (typeof product.quantity === "number" && quantity > product.quantity) {
+      unavailable.push({
+        productId: product.id,
+        reason: product.quantity > 0 ? `Only ${product.quantity} of ${product.name} left.` : `${product.name} is out of stock.`,
+      });
       continue;
     }
 

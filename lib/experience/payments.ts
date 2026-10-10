@@ -172,8 +172,10 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
   return startOrderPayment(record, input);
 }
 
+const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
+
 /**
- * Settle a verified order/deposit payment. Idempotent: the compare-and-set on PENDING means
+ * Settle a verified order/deposit payment. Idempotent: the compare-and-set on a settleable state means
  * concurrent webhook retries can only ever settle once (§27).
  */
 export async function settleOrderPayment(
@@ -192,10 +194,15 @@ export async function settleOrderPayment(
       if (options.eventId) await tx.processedWebhook.create({ data: { id: options.eventId } });
       return { alreadySettled: true, orderId: payment.orderId, bookingId: payment.bookingId };
     }
-    if (payment.status !== "PENDING") throw new Error("PAYMENT_NOT_PENDING");
+    // A provider-verified success settles the payment even if an earlier attempt on the same reference was marked
+    // failed, cancelled or expired (Paystack can report a failed card attempt and then a successful one). PAID and
+    // REFUNDED stay terminal. The caller has already verified the transaction with the provider.
+    if (!SETTLEABLE_PAYMENT_STATES.includes(payment.status as (typeof SETTLEABLE_PAYMENT_STATES)[number])) {
+      throw new Error("PAYMENT_NOT_PENDING");
+    }
 
     const changed = await tx.payment.updateMany({
-      where: { id: payment.id, status: "PENDING" },
+      where: { id: payment.id, status: { in: [...SETTLEABLE_PAYMENT_STATES] } },
       data: {
         status: "PAID",
         ...(options.verification?.paystackId ? { paystackId: options.verification.paystackId } : {}),
