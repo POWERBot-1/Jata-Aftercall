@@ -25,6 +25,10 @@ export type ImmersiveStageProps = {
   /** Static image shown first, and kept whenever 3D is unavailable. */
   fallbackImageUrl: string | null;
   reducedMotion?: boolean;
+  /** Called when the model is on screen. */
+  onReady?: () => void;
+  /** Called when 3D is abandoned (load error, WebGL error). The static image stays. */
+  onFailed?: () => void;
 };
 
 function StaticFallback({ alt, fallbackImageUrl }: { alt: string; fallbackImageUrl: string | null }) {
@@ -66,11 +70,17 @@ class ViewerBoundary extends Component<{ onError: () => void; children: ReactNod
   }
 }
 
-export function ImmersiveStage({ modelUrl, alt, fallbackImageUrl, reducedMotion = false }: ImmersiveStageProps) {
+export function ImmersiveStage({ modelUrl, alt, fallbackImageUrl, reducedMotion = false, onReady: onReadyProp, onFailed }: ImmersiveStageProps) {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
-  const onFail = useCallback(() => setFailed(true), []);
-  const onReady = useCallback(() => setReady(true), []);
+  const onFail = useCallback(() => {
+    setFailed(true);
+    onFailed?.();
+  }, [onFailed]);
+  const onReady = useCallback(() => {
+    setReady(true);
+    onReadyProp?.();
+  }, [onReadyProp]);
 
   const fallback = <StaticFallback alt={alt} fallbackImageUrl={fallbackImageUrl} />;
   if (failed) return fallback;

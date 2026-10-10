@@ -16,7 +16,8 @@
     "seed": "tsx prisma/seed.ts",
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
     "migrate": "bash scripts/migrate.sh",
-    "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'"
+    "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'",
+    "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -38,6 +39,7 @@
     "eslint-config-next": "15.5.26",
     "postcss": "8.5.28",
     "prisma": "^5.22.0",
+    "puppeteer-core": "^23.11.1",
     "tailwindcss": "^3.4.6",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4",

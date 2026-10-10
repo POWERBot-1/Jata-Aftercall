@@ -13,6 +13,7 @@
 import { getExperienceProfile } from "../experience/categories";
 import { resolveExperienceTheme } from "../experience/themes";
 import { layoutSummaryOf } from "../experience/variant";
+import { normalizeExperienceDocument } from "../experience/document";
 import { PHOTOGRAPHY_STYLE_KEYS, type CategoryKey, type ExperienceBrand, type ExperienceDocument } from "../experience/types";
 
 export type PhotographyStyle = {
@@ -251,4 +252,22 @@ export function designContextForDocument(document: ExperienceDocument, extras: {
     // Carry the draft's structural seed into copy and image prompts, so writing varies with the layout.
     variation: document.generation?.seed ? { seed: document.generation.seed, layout: layoutSummaryOf(document) } : null,
   });
+}
+
+/**
+ * Design context for one business's stored draft (JSON text). Returns null when there is no usable
+ * draft, so the caller falls back to the deterministic defaults. A malformed draft never fails the
+ * request: writing still works, it just has no seed or brand context.
+ */
+export function designContextFromDraftJson(
+  draftJson: string | null | undefined,
+  options: { businessName: string; categoryKey?: string | null; toneOfVoice?: string | null },
+): DesignContext | null {
+  if (!draftJson) return null;
+  try {
+    const document = normalizeExperienceDocument(JSON.parse(draftJson), options.categoryKey ?? undefined);
+    return designContextForDocument(document, { businessName: options.businessName, toneOfVoice: options.toneOfVoice ?? null });
+  } catch {
+    return null;
+  }
 }

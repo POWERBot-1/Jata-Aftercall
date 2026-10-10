@@ -62,3 +62,49 @@ The estimate is small at this scale, but usage-based billing is unbounded. A per
 - Approve the secret to be created and added to the environment.
 - Approve the monthly spend ceiling and per-tenant quota.
 - Approve when 3D asset uploads may be enabled for real businesses.
+
+## 7. Activation runbook (proposed, NOT active)
+
+Nothing in this section is enabled. Each step needs the owner's explicit approval, listed in section 7.4.
+
+### 7.1 Environment variables
+
+| Variable | Current value | Purpose | Secret? |
+| --- | --- | --- | --- |
+| `JATA_STORAGE_PROVIDER` | unset (defaults to `inline-data-url`) | Selects the provider. `vercel-blob` is refused today with a clear error. | No |
+| `JATA_IMMERSIVE_ENABLED` | unset (off) | Master switch for visitor-facing 3D. Also requires a durable provider with model support. | No |
+| `BLOB_READ_WRITE_TOKEN` | not set, not created | Vercel Blob read-write token, if Vercel Blob is approved. Expected name; confirm against the SDK before use. | **Yes** |
+
+No variable is read from the repository, and no secret is committed. The token must be created by the owner in the Vercel dashboard and stored only in the Vercel project's environment settings.
+
+### 7.2 Estimated costs (Vercel Blob, from the official price list in section 4)
+
+- Storage is roughly $0.28 per month for the 500-business example, and grows linearly with images and models.
+- Transfer depends on cache hit rate. Uncached transfer for 100,000 page views at 1.5 MB is about $7.50 per month.
+- Each upload and each read is an operation, billed per million. At this scale these are small. They are unmeasured here.
+- Real GLB sizes are unknown. Each model may be up to 8 MB under the policy. Measure before enabling any uploads.
+
+### 7.3 Spending safeguards (required before activation)
+
+1. Set a spend limit and budget alert in the Vercel dashboard. Confirm the limit with the owner first.
+2. Per-tenant upload quota (count and bytes) enforced in the application before `put()` is called.
+3. Global storage ceiling, checked before each upload. Uploads refuse when the ceiling is reached.
+4. Enforce the per-kind size limits in `lib/storage/keys.ts` (images and models) at the server.
+5. Cache all served assets with long-lived immutable URLs, so repeat reads are cheap.
+6. Keep 3D disabled (`JATA_IMMERSIVE_ENABLED` unset) until real transfer numbers are known.
+
+### 7.4 Migration behaviour (designed, not executed)
+
+- Existing images are inline data URLs inside the draft JSON. They keep working unchanged. Nothing is migrated automatically.
+- A backfill job would, per business: read the draft, upload each inline image to the provider under `tenants/<businessId>/…`, save a new draft revision that points at the stored URL, and keep the previous revision so Undo still works.
+- The old inline data is removed only after the new revision is confirmed and the revision history has been pruned by the owner's retention rule. Neon size stays bounded throughout.
+- The backfill is idempotent (keys are deterministic per content hash) and tenant-scoped. It must be dry-run first and run on an isolated copy, not production, before any real run.
+- Rollback: the provider can be switched back to inline, since references are only rewritten through new revisions.
+
+### 7.5 Owner decisions required before activation
+
+1. Approve Vercel Blob (or name another provider) as the durable store.
+2. Approve creating `BLOB_READ_WRITE_TOKEN` in the Vercel project.
+3. Approve the monthly spend limit and the per-tenant quota values.
+4. Approve running the backfill against production data, after a dry run on a copy.
+5. Approve the enabling of visitor-facing 3D (`JATA_IMMERSIVE_ENABLED`). This is separate from storage approval.
