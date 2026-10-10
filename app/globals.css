@@ -1025,7 +1025,8 @@ button:focus-visible {
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-.eb-actionbar .eb-btn { flex: 1; }
+/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
+.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
 .eb-actionbar-spacer { height: 5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }

@@ -24,8 +24,13 @@ import { loadWorkspace } from "@/lib/experience/workspace";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
 import { loadStudioIntelligence } from "@/lib/studio/studioData";
 import { applyProposal, buildCopilotReply, COPILOT_SUGGESTIONS, type CopilotContext } from "@/lib/studio/copilot";
+import { diversityReport } from "@/lib/experience/diversity";
+import { historyBasisFor } from "@/lib/experience/variant";
 
 export const dynamic = "force-dynamic";
+
+const DRAFT_CHANGED_CODE = "draft_version_conflict";
+const DRAFT_CHANGED_MESSAGE = "Your website changed while JATA was preparing this. Ask again so it works from your latest draft. Nothing was overwritten.";
 
 async function buildContext(businessId: string) {
   const workspace = await loadWorkspace(businessId);
@@ -111,6 +116,8 @@ export async function POST(req: Request) {
         suggestions: reply.suggestions,
         health: context.health,
         applied: false,
+        // The version the proposal was computed from. The client returns it on apply.
+        draftVersion: workspace.experience?.draftVersion ?? null,
       });
     }
 
@@ -138,18 +145,50 @@ export async function POST(req: Request) {
     const document = normalizeExperienceDocument(result.document, workspace.document.categoryKey);
     document.updatedAt = new Date().toISOString();
 
-    const nextVersion = Math.max(1, Number(workspace.experience?.draftVersion) || 1) + 1;
-    await prisma.businessExperience.update({
-      where: { businessId },
-      data: {
-        categoryKey: document.categoryKey,
-        themeKey: document.themeKey,
-        draftJson: JSON.stringify(document),
-        draftVersion: nextVersion,
-        historyCursor: nextVersion,
-      },
-      select: { id: true, draftVersion: true },
-    });
+    // Compare-and-swap on the version this proposal was computed from. If the draft changed in
+    // between (another window, a manual edit), nothing is written and the owner is asked to re-ask.
+    const baseVersion = Number(workspace.experience?.draftVersion) || 1;
+    const expectedDraftVersion = Number(body?.expectedDraftVersion);
+    if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== baseVersion) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
+    const nextVersion = Math.max(1, baseVersion) + 1;
+    const written = await prisma.businessExperience
+      .update({
+        where: { businessId, draftVersion: workspace.experience?.draftVersion ?? baseVersion },
+        data: {
+          categoryKey: document.categoryKey,
+          themeKey: document.themeKey,
+          draftJson: JSON.stringify(document),
+          draftVersion: nextVersion,
+          historyCursor: nextVersion,
+        },
+        select: { id: true, draftVersion: true },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2025") return null;
+        throw error;
+      });
+    if (!written) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
+
+    // Informational only: the owner has already reviewed and confirmed this proposal, so it is not
+    // blocked. The report says what it was compared with, and says so when there is no published history.
+    // Parsed defensively: the draft is already written at this point, so a bad published snapshot
+    // must never turn a successful apply into an error response.
+    let publishedDocument: ReturnType<typeof normalizeExperienceDocument> | null = null;
+    try {
+      const published = await prisma.businessExperience.findUnique({ where: { businessId }, select: { publishedJson: true } });
+      publishedDocument = published?.publishedJson
+        ? normalizeExperienceDocument(JSON.parse(published.publishedJson), document.categoryKey)
+        : null;
+    } catch {
+      publishedDocument = null;
+    }
+    const diversity = publishedDocument
+      ? { ...diversityReport(document, [publishedDocument]), ...historyBasisFor(1) }
+      : { ...historyBasisFor(0), maxSimilarity: null, ok: null };
 
     // AI changes are recorded like any other change, so Undo covers them with the same one tap.
     await recordDraftRevision(prisma, {
@@ -185,6 +224,9 @@ export async function POST(req: Request) {
       suggestions: reply.suggestions,
       applied: true,
       document,
+      // The client sends this back with Undo so a stale undo cannot overwrite newer edits.
+      draftVersion: nextVersion,
+      diversity,
       appliedChanges: result.applied,
       skippedChanges: result.skipped,
       health: refreshed.health,

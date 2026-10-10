@@ -158,17 +158,31 @@ export async function POST(req: Request) {
         categoryKey,
       );
       const profile = getExperienceProfile(categoryKey);
+      // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
+      // client that read version N must send N, and the write is a compare-and-swap on it.
+      const expectedDraftVersion = Number(body?.expectedDraftVersion);
+      if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== Number(existing.draftVersion)) {
+        return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
+      }
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
-      const updated = await prisma.businessExperience.update({
-        where: { businessId },
-        data: {
-          categoryKey,
-          themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
-          draftJson: JSON.stringify(document),
-          draftVersion: nextVersion,
-          historyCursor: nextVersion,
-        },
-      });
+      const updated = await prisma.businessExperience
+        .update({
+          where: { businessId, draftVersion: existing.draftVersion },
+          data: {
+            categoryKey,
+            themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
+            draftJson: JSON.stringify(document),
+            draftVersion: nextVersion,
+            historyCursor: nextVersion,
+          },
+        })
+        .catch((error: unknown) => {
+          if ((error as { code?: string })?.code === "P2025") return null;
+          throw error;
+        });
+      if (!updated) {
+        return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+      }
       await recordDraftRevision(prisma, {
         businessId,
         draftVersion: nextVersion,
