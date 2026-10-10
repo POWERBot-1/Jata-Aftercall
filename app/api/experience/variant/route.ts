@@ -88,6 +88,11 @@ export async function POST(req: Request) {
       attempts: result.attempts.map((attempt) => ({ attempt: attempt.attempt, maxSimilarity: attempt.maxSimilarity, ok: attempt.ok })),
       change: result.change,
       comparedWith: recent.length,
+      // The draft version this preview was built from. Applying sends it back, so a draft that
+      // changed in the meantime is never overwritten silently (see PATCH expectedDraftVersion).
+      baseDraftVersion: experience.draftVersion,
+      // Honest scope of the check: a business with no published versions is compared only with its draft.
+      history: result.history,
     });
   } catch {
     return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });

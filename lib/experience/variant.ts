@@ -95,6 +95,22 @@ export function buildVariant(
 
 export type VariantAttemptRecord = { attempt: number; seed: string; maxSimilarity: number; ok: boolean };
 
+/** What the gate could actually compare against. Reported so the owner is never told more than was checked. */
+export type HistoryBasis = {
+  /** Number of the business's own published versions compared (in addition to the current draft). */
+  publishedCompared: number;
+  /** Plain-language limitation, or null when published history was available. */
+  limitation: string | null;
+};
+
+export const NO_PUBLISHED_HISTORY_LIMITATION =
+  "There are no published versions to compare against yet, so this layout was checked only against your current draft. It may still resemble a layout you have used before.";
+
+export function historyBasisFor(publishedCount: number): HistoryBasis {
+  const count = Math.max(0, Math.floor(publishedCount));
+  return { publishedCompared: count, limitation: count === 0 ? NO_PUBLISHED_HISTORY_LIMITATION : null };
+}
+
 export type VariantResult = {
   /** The best candidate found. Save only if the owner applies it. */
   document: ExperienceDocument;
@@ -103,6 +119,7 @@ export type VariantResult = {
   report: DiversityReport;
   attempts: VariantAttemptRecord[];
   change: VariantChange;
+  history: HistoryBasis;
 };
 
 /**
@@ -129,7 +146,7 @@ export function generateGatedVariant(params: {
     const report = diversityReport(document, compareWith, params.threshold);
     attempts.push({ attempt, seed, maxSimilarity: report.maxSimilarity, ok: report.ok });
 
-    const candidate: VariantResult = { document, seed, accepted: report.ok, report, attempts, change };
+    const candidate: VariantResult = { document, seed, accepted: report.ok, report, attempts, change, history: historyBasisFor(params.recent.length) };
     if (report.ok) {
       return { ...candidate, attempts: [...attempts] };
     }
@@ -153,4 +170,20 @@ export function layoutSummaryOf(doc: ExperienceDocument): string {
     .map((section) => section.type)
     .join(" > ");
   return `theme ${doc.themeKey}; sections ${order || "none"}`.slice(0, 160);
+}
+
+/**
+ * Seeds a brand-new draft so that later regenerations are reproducible. The default layout is
+ * deliberately NOT randomised: a business with no history gets the standard structure, and the
+ * seed only records provenance. The diversity status says plainly that nothing was compared.
+ */
+export function seedNewDocument(
+  doc: ExperienceDocument,
+  businessId: string,
+): { document: ExperienceDocument; diversity: { status: "no-history"; limitation: string; seed: string } } {
+  const seed = `${businessId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40)}:1`;
+  return {
+    document: { ...doc, generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: 0 } },
+    diversity: { status: "no-history", limitation: NO_PUBLISHED_HISTORY_LIMITATION, seed },
+  };
 }

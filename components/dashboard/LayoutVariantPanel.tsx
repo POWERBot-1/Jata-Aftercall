@@ -19,6 +19,8 @@ type Candidate = {
   report: { maxSimilarity: number; threshold: number };
   change: { themeChanged: boolean; sectionOrderChanged: boolean };
   comparedWith: number;
+  baseDraftVersion: number;
+  history: { publishedCompared: number; limitation: string | null };
 };
 
 export function LayoutVariantPanel({
@@ -63,14 +65,21 @@ export function LayoutVariantPanel({
     if (!result) return;
     setBusy("apply");
     try {
+      // Send the draft version the preview was built from. If the draft changed since, the server
+      // refuses (409) and nothing is overwritten; the owner previews again from the latest draft.
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, document: result.candidate }),
+        body: JSON.stringify({ businessId, document: result.candidate, expectedDraftVersion: result.baseDraftVersion }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(data.error || "We couldn't save that layout. Your current draft is unchanged.");
+        setMessage(
+          data.code === "draft_version_conflict"
+            ? "Your website changed while you were previewing. Preview a layout again from the latest draft. Nothing was overwritten."
+            : data.error || "We couldn't save that layout. Your current draft is unchanged.",
+        );
+        if (data.code === "draft_version_conflict") setResult(null);
         return;
       }
       onApplied(data.document as ExperienceDocument);
@@ -121,6 +130,11 @@ export function LayoutVariantPanel({
           <p className="jata-hint">
             Similarity to your current and recent layouts: {Math.round(result.report.maxSimilarity * 100)}% (limit {Math.round(result.report.threshold * 100)}%).
           </p>
+          {result.history.limitation ? (
+            <p className="jata-hint" data-testid="variant-history-limitation">
+              {result.history.limitation}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {message ? (

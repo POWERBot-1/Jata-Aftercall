@@ -157,6 +157,27 @@ function sharpenCanvas(canvas: HTMLCanvasElement, strength: number): boolean {
   return true;
 }
 
+let webpEncodeSupport: boolean | null = null;
+
+/**
+ * Probes whether this browser really encodes WebP. Some browsers silently fall back to PNG when
+ * asked for WebP, so the probe checks the produced data-URL prefix rather than trusting the request.
+ * The result is cached for the page lifetime.
+ */
+export function browserCanEncodeWebp(): boolean {
+  if (webpEncodeSupport !== null) return webpEncodeSupport;
+  try {
+    if (typeof document === "undefined") return false;
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    webpEncodeSupport = probe.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch {
+    webpEncodeSupport = false;
+  }
+  return webpEncodeSupport;
+}
+
 async function canvasToDataUrl(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<string> {
   if (typeof canvas.toBlob === "function") {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((value) => resolve(value), mime, quality));
@@ -382,7 +403,11 @@ async function finish(
     height: canvas.height,
     pixelsSource: options.purpose ?? "upload",
   });
-  const { dataUrl, attempts } = await encodeWithinBudget(canvas, choice.mime, options.quality ?? choice.quality);
+  // Owner uploads go out as WebP when this browser can really encode it (smaller at similar quality).
+  // AI-generated and enhanced images keep JPEG. The server re-checks the bytes either way.
+  const useWebp = (options.purpose ?? "upload") === "upload" && browserCanEncodeWebp();
+  const mime = useWebp ? "image/webp" : choice.mime;
+  const { dataUrl, attempts } = await encodeWithinBudget(canvas, mime, options.quality ?? choice.quality);
   if (attempts > 1) notes.push("Compressed a little further to keep your site fast.");
   if (dataUrl.length > MAX_UPLOAD_CHARS) {
     // Never hand the API something it will refuse: the owner is told now, while their photo is

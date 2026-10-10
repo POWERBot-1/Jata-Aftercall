@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { seedNewDocument } from "@/lib/experience/variant";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
@@ -42,6 +43,9 @@ function parseDocument(json: string | null | undefined, fallbackCategory?: strin
     return null;
   }
 }
+
+const DRAFT_CHANGED_CODE = "draft_version_conflict";
+const DRAFT_CHANGED_MESSAGE = "Your website changed in another window. Reload to see the latest draft, then try again. Nothing was overwritten.";
 
 /** Load everything the editor and the publish gate need, scoped to one tenant. */
 export async function GET(req: Request) {
@@ -182,7 +186,10 @@ export async function POST(req: Request) {
     });
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
-    const document = createExperienceDocument({
+    // The new draft is seeded so later regenerations are reproducible. A brand-new business has no
+    // published history to compare against, so the diversity status says so instead of claiming a check.
+    const seeded = seedNewDocument(
+      createExperienceDocument({
       categoryKey,
       businessName: business.name,
       description: business.description,
@@ -190,7 +197,10 @@ export async function POST(req: Request) {
       whatsapp: business.whatsapp,
       location: business.location,
       themeKey: typeof body?.themeKey === "string" ? body.themeKey : null,
-    });
+      }),
+      businessId,
+    );
+    const document = seeded.document;
 
     const experience = await prisma.businessExperience.create({
       data: {
@@ -212,7 +222,7 @@ export async function POST(req: Request) {
       createdById: session.userId,
     });
 
-    return NextResponse.json({ experience, document }, { status: 201 });
+    return NextResponse.json({ experience, document, diversity: seeded.diversity }, { status: 201 });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);
     if (mapped.status === 500) console.error("experience create failed");
@@ -236,6 +246,13 @@ export async function PATCH(req: Request) {
 
     const experience = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (!experience) return NextResponse.json({ error: "Create your website before editing it." }, { status: 409 });
+
+    // Optimistic concurrency: a client that read draft version N sends N back. If the draft has
+    // moved on (another window, another editor), the write is refused instead of overwriting it.
+    const expectedDraftVersion = Number(body?.expectedDraftVersion);
+    if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== Number(experience.draftVersion)) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
+    }
 
     let document = parseDocument(experience.draftJson, experience.categoryKey);
     if (!document) document = createExperienceDocument({ categoryKey: experience.categoryKey, businessName: "" });
@@ -327,17 +344,27 @@ export async function PATCH(req: Request) {
 
     document.updatedAt = new Date().toISOString();
     const nextVersion = Math.max(1, Number(experience.draftVersion) || 1) + 1;
-    const updated = await prisma.businessExperience.update({
-      where: { businessId },
-      data: {
-        categoryKey: document.categoryKey,
-        themeKey: document.themeKey,
-        draftJson: JSON.stringify(document),
-        draftVersion: nextVersion,
-        historyCursor: nextVersion,
-      },
-      select: { id: true, draftVersion: true, publishedVersion: true, status: true, updatedAt: true },
-    });
+    // Compare-and-swap on the version this edit was built from. If another write landed first, the
+    // row no longer matches, Prisma reports P2025, and the owner gets a conflict instead of an overwrite.
+    const updated = await prisma.businessExperience
+      .update({
+        where: { businessId, draftVersion: experience.draftVersion },
+        data: {
+          categoryKey: document.categoryKey,
+          themeKey: document.themeKey,
+          draftJson: JSON.stringify(document),
+          draftVersion: nextVersion,
+          historyCursor: nextVersion,
+        },
+        select: { id: true, draftVersion: true, publishedVersion: true, status: true, updatedAt: true },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2025") return null;
+        throw error;
+      });
+    if (!updated) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
 
     // One revision per owner-visible change — the single mechanism behind Undo and Redo for
     // sections, design, photos, catalogue edits and AI copy alike (§45). Recording can fail
