@@ -45,7 +45,7 @@ export function SectionEditor({
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...payload, ...(version ? { expectedDraftVersion: version } : {}) }),
+        body: JSON.stringify({ businessId, ...payload, expectedDraftVersion: version }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {

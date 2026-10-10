@@ -104,6 +104,7 @@ describe("experience editing is tenant-scoped", () => {
       businessId: OWNED,
       op: "toggle",
       sectionId: "s1",
+      expectedDraftVersion: 3,
     }));
     expect(response.status).toBe(200);
     expect(mocks.experienceUpdate).toHaveBeenCalled();

@@ -83,7 +83,7 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
           businessId,
           op: "studio-fix",
           fixId: id,
-          ...(payload?.draftVersion ? { expectedDraftVersion: payload.draftVersion } : {}),
+          expectedDraftVersion: payload?.draftVersion ?? null,
         }),
       });
       const data = await response.json().catch(() => ({}));

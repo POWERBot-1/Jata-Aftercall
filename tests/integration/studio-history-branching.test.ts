@@ -115,11 +115,14 @@ function documentFor(name: string, heroImageUrl = "") {
   };
 }
 
-function edit(body: unknown) {
+// Every draft write names the version it was made from. Callers that do not pass one get the version the
+// client would have read: the store's current draft version (a stale version is passed explicitly in tests).
+function edit(body: Record<string, unknown>) {
+  const versioned = "expectedDraftVersion" in body ? body : { ...body, expectedDraftVersion: store.experience?.draftVersion };
   return PATCH(
     new Request("https://jata.test/api/experience", {
       method: "PATCH",
-      body: JSON.stringify(body),
+      body: JSON.stringify(versioned),
       headers: { "content-type": "application/json" },
     }),
   );

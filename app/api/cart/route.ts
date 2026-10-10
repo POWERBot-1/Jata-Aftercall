@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
 import { buildCartFromLines, parseConversationalOrder, type CartLine } from "@/lib/cart";
 import { getExtendedAIConfig, resolveDeliveryZoneFee } from "@/lib/ai-config";
+import { unitPriceFor } from "@/lib/experience/pricing";
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +16,6 @@ export async function POST(req: Request) {
       customerPhone,
       customerName,
       deliveryZone,
-      deliveryFeeKES,
       preview,
     } = body || {};
 
@@ -23,12 +23,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
 
+    // Carts are a business-side tool. Guest shopping goes through the storefront checkout, which only serves
+    // published businesses and prices the basket on the server. An anonymous caller may not create a cart.
     const user = await getCurrentUser().catch(() => null);
-    if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
-      }
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const resolvedLines: CartLine[] = [];
@@ -42,29 +45,28 @@ export async function POST(req: Request) {
     if (Array.isArray(items)) {
       for (const raw of items) {
         if (!raw || typeof raw !== "object") continue;
-        const qty = Math.max(1, Math.round(Number(raw.quantity) || 1));
-        if (raw.productId && prisma.product?.findFirst) {
-          const prod = await prisma.product
-            .findFirst({ where: { id: raw.productId, businessId } })
-            .catch(() => null);
-          if (prod) {
-            resolvedLines.push({
-              productId: prod.id,
-              name: prod.name,
-              variantDesc: raw.variantDesc || undefined,
-              quantity: qty,
-              unitPriceKES: Math.max(0, Math.round(Number(prod.basePriceKES ?? prod.variantPriceKES ?? 0))),
-            });
-            continue;
-          }
+        // Services are booked through the booking flow; a client price for a service is never accepted here.
+        if (raw.serviceId) {
+          return NextResponse.json({ error: "Services are booked, not added to a cart." }, { status: 400 });
+        }
+        // Every line is a catalogue product of this business, priced from the catalogue. A client-supplied
+        // name or price is never used, and a product id from another business is treated as not found.
+        const prod = typeof raw.productId === "string" && raw.productId
+          ? await prisma.product.findFirst({ where: { id: raw.productId, businessId } }).catch(() => null)
+          : null;
+        if (!prod) {
+          return NextResponse.json({ error: "Only items in this business catalogue can be added to a cart." }, { status: 400 });
+        }
+        const unitPriceKES = unitPriceFor(prod, null);
+        if (!(unitPriceKES > 0)) {
+          return NextResponse.json({ error: `${prod.name} has no price set.` }, { status: 409 });
         }
         resolvedLines.push({
-          productId: raw.productId || undefined,
-          serviceId: raw.serviceId || undefined,
-          name: String(raw.name || "Item"),
+          productId: prod.id,
+          name: prod.name,
           variantDesc: raw.variantDesc || undefined,
-          quantity: qty,
-          unitPriceKES: Math.max(0, Math.round(Number(raw.unitPriceKES) || 0)),
+          quantity: Math.max(1, Math.round(Number(raw.quantity) || 1)),
+          unitPriceKES,
         });
       }
     }
@@ -73,7 +75,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "businessId and non-empty items required." }, { status: 400 });
     }
 
-    let resolvedDeliveryFee = typeof deliveryFeeKES === "number" ? Math.max(0, Math.round(deliveryFeeKES)) : 0;
+    // The delivery fee comes only from a configured zone. A fee sent by the client is ignored.
+    let resolvedDeliveryFee = 0;
     if (typeof deliveryZone === "string" && deliveryZone.trim()) {
       const aiConfig = await prisma.aIConfiguration?.findUnique?.({ where: { businessId } }).catch(() => null);
       const ext = await getExtendedAIConfig(businessId, aiConfig);

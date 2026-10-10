@@ -296,19 +296,17 @@ export async function PATCH(req: Request) {
     const experience = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (!experience) return NextResponse.json({ error: "Create your website before editing it." }, { status: 409 });
 
-    // Optimistic concurrency: a client that read draft version N sends N back. If the draft has
-    // moved on (another window, another editor), the write is refused instead of overwriting it.
+    // Optimistic concurrency, mandatory for every draft write (section ops, studio fixes, theme and brand
+    // edits, and whole-document saves). A client sends the draft version it read. Missing or malformed: 428
+    // (a precondition is missing; nothing was changed). Stale: 409 (the draft has moved on). The write below
+    // is also a compare-and-swap on that version, so a write that lands between this check and the update is
+    // refused too.
     const expectedDraftVersion = Number(body?.expectedDraftVersion);
-    if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== Number(experience.draftVersion)) {
-      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
-    }
-
-    // A whole-document write replaces everything in the draft, so it must say which version it was
-    // built from. Without that, a stale window could silently overwrite newer edits (428, not 409:
-    // the request is missing a precondition rather than being out of date).
-    const isWholeDocumentWrite = typeof body?.op !== "string" && Boolean(body?.document) && typeof body.document === "object";
-    if (isWholeDocumentWrite && !(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+    if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
       return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+    }
+    if (expectedDraftVersion !== Number(experience.draftVersion)) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
     }
 
     let document = parseDocument(experience.draftJson, experience.categoryKey);

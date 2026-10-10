@@ -103,10 +103,13 @@ describe("PATCH draft concurrency", () => {
     expect(response.status).toBe(500);
   });
 
-  it("keeps working for clients that do not send a base version (no concurrency claim is made)", async () => {
+  it("refuses a client that does not send a base version (428), with no write", async () => {
+    // Compatibility: the only clients are this app's own editors, which all send the version they read
+    // (see RELEASE_BLOCKERS.md, item 3). An unversioned write could silently overwrite a newer draft, so it is refused.
     const response = await PATCH(patch({ businessId: OWNED, op: "toggle", sectionId: "s1" }));
-    expect(response.status).toBe(200);
-    expect(mocks.experienceUpdate.mock.calls[0][0].where).toEqual({ businessId: OWNED, draftVersion: 3 });
+    expect(response.status).toBe(428);
+    expect((await response.json()).code).toBe("draft_version_required");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
   });
 });
 

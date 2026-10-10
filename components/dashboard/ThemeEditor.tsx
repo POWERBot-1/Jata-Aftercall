@@ -43,7 +43,7 @@ export function ThemeEditor({
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...patch, ...(version ? { expectedDraftVersion: version } : {}) }),
+        body: JSON.stringify({ businessId, ...patch, expectedDraftVersion: version }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409 && data.code === "draft_version_conflict") {

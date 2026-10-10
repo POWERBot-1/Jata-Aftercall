@@ -128,15 +128,15 @@ describe("PATCH: whole-document writes must name their base version", () => {
     expect(mocks.experienceUpdate).not.toHaveBeenCalled();
   });
 
-  it("still allows a section op without a version (it is applied to the latest draft and compare-and-swapped)", async () => {
-    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: baseDocument().sections[0].id }));
+  it("applies a section op sent with the current version, compare-and-swapped on that version", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: baseDocument().sections[0].id, expectedDraftVersion: 3 }));
     expect(response.status).toBe(200);
     expect(mocks.experienceUpdate.mock.calls[0][0].where).toEqual({ businessId: OWNED, draftVersion: 3 });
   });
 
   it("turns a concurrent write between read and update (P2025) into 409 for a section op, with no revision", async () => {
     mocks.experienceUpdate.mockRejectedValue(Object.assign(new Error("Record to update not found."), { code: "P2025" }));
-    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: baseDocument().sections[0].id }));
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: baseDocument().sections[0].id, expectedDraftVersion: 3 }));
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe("draft_version_conflict");
     expect(mocks.revision).not.toHaveBeenCalled();
@@ -290,5 +290,39 @@ describe("section operations and studio fixes are version-checked", () => {
     const response = await PATCH(jsonRequest({ businessId: FOREIGN, op: "toggle", sectionId: baseDocument().sections[0].id, expectedDraftVersion: 3 }, "PATCH"));
     expect(response.status).toBe(403);
     expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("every draft write must name the version it was made from", () => {
+  it("refuses a section operation with no version (428) and writes nothing", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: "hero" }, "PATCH"));
+    expect(response.status).toBe(428);
+    expect((await response.json()).code).toBe("draft_version_required");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("refuses a theme or brand edit with no version (428) and writes nothing", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, brand: { businessName: "New name" } }, "PATCH"));
+    expect(response.status).toBe(428);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a studio fix with no version (428) and writes nothing", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "studio-fix", fixId: "hero-copy" }, "PATCH"));
+    expect(response.status).toBe(428);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a version that is not a positive whole number (428), not a silent unversioned write", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: "hero", expectedDraftVersion: "three" }, "PATCH"));
+    expect(response.status).toBe(428);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("applies a current-version theme edit with a compare-and-swap on the version", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, brand: { businessName: "New name" }, expectedDraftVersion: 3 }, "PATCH"));
+    expect(response.status).toBe(200);
+    expect(mocks.experienceUpdate.mock.calls[0][0].where).toEqual({ businessId: OWNED, draftVersion: 3 });
   });
 });
