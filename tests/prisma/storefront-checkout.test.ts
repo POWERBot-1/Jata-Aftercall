@@ -20,9 +20,15 @@ vi.mock("@/lib/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth")>();
   return { ...actual, getSession: async () => mocks.session.current };
 });
+// Paystack HTTP is replaced at the lowest level, so every path (route and internal resume) is covered and nothing
+// reaches the network. The authorization URL echoes the stored reference, so each attempt gets its own link.
 vi.mock("@/lib/paystack", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/paystack")>();
-  return { ...actual, verifyTransaction: mocks.verifyTransaction };
+  return {
+    ...actual,
+    verifyTransaction: mocks.verifyTransaction,
+    initializeTransaction: async (params: { reference: string }) => ({ authorization_url: `https://paystack.test/checkout/${params.reference}`, reference: params.reference, access_code: "test" }),
+  };
 });
 vi.mock("@/lib/experience/payments", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/experience/payments")>();
@@ -36,6 +42,7 @@ vi.mock("@/lib/analytics", async (importOriginal) => {
 import { POST as quote } from "@/app/api/storefront/quote/route";
 import { POST as checkout } from "@/app/api/storefront/checkout/route";
 import { GET as paystackVerify } from "@/app/api/paystack/verify/route";
+import { POST as resumeRoute } from "@/app/api/storefront/orders/resume-payment/route";
 
 const p = realPrismaConfigured ? sharedPrisma() : (null as any);
 let counter = 0;
@@ -156,33 +163,125 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
     expect(mocks.startPayment).toHaveBeenCalledTimes(1);
   });
 
-  it("a new key for the same basket while the first payment is still PENDING returns that payment, not a second order", async () => {
-    vi.setSystemTime(T("2026-10-10T09:00:00Z"));
+  // Recovery tests use real time, because payment and order timestamps are written by the database clock.
+  async function orderIdOf(orderReference: string) {
+    return (await p.order.findFirst({ where: { orderReference }, select: { id: true } })).id as string;
+  }
+  async function ageAttempts(orderReference: string, minutesAgo: number, status?: string) {
+    const orderId = await orderIdOf(orderReference);
+    await p.payment.updateMany({ where: { orderId }, data: { createdAt: new Date(Date.now() - minutesAgo * 60000), ...(status ? { status } : {}) } });
+  }
+  // Paystack echoes the stored reference and amount (the stored amount is in the smallest currency unit).
+  const providerSays = (status: string) => async (reference: string) => {
+    const row = await p.payment.findUnique({ where: { reference }, select: { amount: true } });
+    return { id: 5150, status, reference, amount: row?.amount, currency: "KES" };
+  };
+
+  it("a repeat of an unpaid basket within the cooldown returns PROCESSING and creates no second order or payment", async () => {
+    vi.useRealTimers();
     const phone = "0722666001";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `a-${uid()}` }));
     expect(first.status).toBe(201);
     const firstBody = await first.json();
     const again = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `b-${uid()}` }));
-    expect(again.status).toBe(201);
-    const againBody = await again.json();
-    expect(againBody.orderReference).toBe(firstBody.orderReference);
-    expect(againBody.reusedUnpaidOrder).toBe(true);
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ processing: true, orderReference: firstBody.orderReference, reusedUnpaidOrder: true });
     expect(await p.order.count({ where: { businessId: biz.id, customerPhone: phone } })).toBe(1);
+    expect(await p.payment.count({ where: { orderId: await orderIdOf(firstBody.orderReference) } })).toBe(1);
     expect(mocks.startPayment).toHaveBeenCalledTimes(1);
   });
 
-  it("once the earlier payment has failed, a new key places a new order (the customer is not stuck)", async () => {
-    vi.setSystemTime(T("2026-10-10T09:00:00Z"));
+  it("a repeat after the earlier attempt was abandoned at Paystack starts a new attempt on the SAME order", async () => {
+    vi.useRealTimers();
     const phone = "0722666002";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
-    const first = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `f-${uid()}` }));
-    const firstBody = await first.json();
-    await p.payment.updateMany({ where: { reference: { not: "" }, orderId: (await p.order.findFirst({ where: { orderReference: firstBody.orderReference }, select: { id: true } })).id }, data: { status: "FAILED" } });
+    const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `f-${uid()}` }))).json();
+    await ageAttempts(first.orderReference, 5);
+    mocks.verifyTransaction.mockImplementation(providerSays("abandoned"));
     const retry = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `g-${uid()}` }));
     expect(retry.status).toBe(201);
-    expect((await retry.json()).orderReference).not.toBe(firstBody.orderReference);
-    expect(await p.order.count({ where: { businessId: biz.id, customerPhone: phone } })).toBe(2);
+    const body = await retry.json();
+    expect(body).toMatchObject({ orderReference: first.orderReference, reusedUnpaidOrder: true });
+    expect(body.paymentReference).not.toBe(first.paymentReference);
+    expect(await p.order.count({ where: { businessId: biz.id, customerPhone: phone } })).toBe(1);
+    expect(await p.payment.count({ where: { orderId: await orderIdOf(first.orderReference) } })).toBe(2);
+    expect((await p.payment.findUnique({ where: { reference: first.paymentReference }, select: { status: true } }))?.status).toBe("CANCELLED");
+  });
+
+  it("a repeat while Paystack still reports the recent attempt in progress starts nothing", async () => {
+    vi.useRealTimers();
+    const phone = "0722666003";
+    const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
+    const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `h-${uid()}` }))).json();
+    await ageAttempts(first.orderReference, 5);
+    mocks.verifyTransaction.mockImplementation(providerSays("ongoing"));
+    const retry = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `i-${uid()}` }));
+    expect(retry.status).toBe(409);
+    expect(await retry.json()).toMatchObject({ processing: true });
+    expect(await p.payment.count({ where: { orderId: await orderIdOf(first.orderReference) } })).toBe(1);
+  });
+
+  it("an attempt older than 30 minutes that Paystack still reports open is replaced on the same order", async () => {
+    vi.useRealTimers();
+    const phone = "0722666004";
+    const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
+    const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `j-${uid()}` }))).json();
+    await ageAttempts(first.orderReference, 40);
+    mocks.verifyTransaction.mockImplementation(providerSays("pending"));
+    const retry = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `k-${uid()}` }));
+    expect(retry.status).toBe(201);
+    expect((await retry.json()).orderReference).toBe(first.orderReference);
+  });
+
+  it("when Paystack gives no usable answer, a repeat is NOT treated as a failure and starts nothing", async () => {
+    vi.useRealTimers();
+    const phone = "0722666005";
+    const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
+    const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `l-${uid()}` }))).json();
+    await ageAttempts(first.orderReference, 40);
+    mocks.verifyTransaction.mockResolvedValue(null); // no usable provider answer: the same no-verdict path as an outage
+    const retry = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `m-${uid()}` }));
+    expect(retry.status).toBe(409);
+    expect(await p.payment.count({ where: { orderId: await orderIdOf(first.orderReference) } })).toBe(1);
+  });
+
+  it("the resume endpoint is tenant scoped and refuses orders that are paid or cancelled", async () => {
+    vi.useRealTimers();
+    const { ...unused } = {};
+    void unused;
+    const phone = "0722666006";
+    const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
+    const made = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `n-${uid()}` }))).json();
+    const resume = (body: unknown) => resumeRoute(new Request("https://jata.test/api/storefront/orders/resume-payment", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }));
+    // Another shop's slug cannot reach this order.
+    expect((await resume({ slug: otherSlug, reference: made.orderReference })).status).toBe(404);
+    expect((await resume({ slug: "no-such-shop", reference: made.orderReference })).status).toBe(404);
+    expect((await resume({ slug, reference: "ORD-DOES-NOT-EXIST" })).status).toBe(404);
+    // A paid order is reported as paid, with no new payment.
+    await p.order.update({ where: { orderReference: made.orderReference }, data: { paymentStatus: "PAID", status: "CONFIRMED" } });
+    const before = await p.payment.count({ where: { orderId: await orderIdOf(made.orderReference) } });
+    expect(await (await resume({ slug, reference: made.orderReference })).json()).toEqual({ paid: true });
+    expect(await p.payment.count({ where: { orderId: await orderIdOf(made.orderReference) } })).toBe(before);
+    // A cancelled order cannot be resumed.
+    const other = await (await checkout(req("/api/storefront/checkout", { ...payload, customer: customer("0722666007") }, { "idempotency-key": `o-${uid()}` }))).json();
+    await p.order.update({ where: { orderReference: other.orderReference }, data: { status: "CANCELLED" } });
+    expect((await resume({ slug, reference: other.orderReference })).status).toBe(409);
+  });
+
+  it("the resume endpoint returns a fresh payment for an order whose last attempt was abandoned", async () => {
+    vi.useRealTimers();
+    const phone = "0722666008";
+    const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
+    const made = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `p-${uid()}` }))).json();
+    await ageAttempts(made.orderReference, 5);
+    mocks.verifyTransaction.mockImplementation(providerSays("abandoned"));
+    const res = await resumeRoute(new Request("https://jata.test/api/storefront/orders/resume-payment", { method: "POST", body: JSON.stringify({ slug, reference: made.orderReference }), headers: { "content-type": "application/json" } }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.authorizationUrl).toBeTruthy();
+    expect(body.paymentReference).not.toBe(made.paymentReference);
+    expect(await p.order.count({ where: { businessId: biz.id, customerPhone: phone } })).toBe(1);
   });
 
   it("a different phone with the same basket is a different customer and gets a new order", async () => {

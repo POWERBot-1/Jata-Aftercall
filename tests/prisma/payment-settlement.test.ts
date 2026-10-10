@@ -173,4 +173,27 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: order payment settlement an
     expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("PAID");
     expect(paystack.verifyTransaction).not.toHaveBeenCalled();
   });
+
+  it("a second successful payment on an already-PAID order is recorded but does not re-confirm the order; the owner is asked to refund", async () => {
+    const order = await unpaidOrder(business.id);
+    const first = await pendingPayment(business.id, owner.id, order.id);
+    await settleOrderPayment(first.id, { verification: { paystackId: "7" } });
+    const second = await pendingPayment(business.id, owner.id, order.id);
+    const res = await settleOrderPayment(second.id, { verification: { paystackId: "8" } });
+    expect(res.alreadySettled).toBe(false);
+    expect((await p.payment.findUnique({ where: { id: second.id }, select: { status: true } }))?.status).toBe("PAID");
+    expect(await p.order.findUnique({ where: { id: order.id }, select: { status: true, paymentStatus: true } })).toEqual({ status: "CONFIRMED", paymentStatus: "PAID" });
+    expect(await notifications(order.orderReference, "PAYMENT_DUPLICATE_ON_ORDER")).toBe(1);
+    expect(await notifications(order.orderReference, "PAYMENT_VERIFIED")).toBe(1);
+    expect(await p.auditEvent.count({ where: { targetId: second.id, action: "ORDER_DUPLICATE_PAYMENT" } })).toBe(1);
+  });
+
+  it("when the provider gives no usable answer, confirmation reports providerChecked=false and changes nothing", async () => {
+    const order = await unpaidOrder(business.id);
+    const payment = await pendingPayment(business.id, owner.id, order.id, 800, "FAILED");
+    paystack.verifyTransaction.mockResolvedValue(null); // no usable provider answer: the same no-verdict path as an outage
+    const verdict = await verifyOrderPayment(payment.reference);
+    expect(verdict.providerChecked).toBe(false);
+    expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("FAILED");
+  });
 });

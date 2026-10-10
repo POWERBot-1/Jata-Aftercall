@@ -31,8 +31,13 @@ Its results are reported as engine `wasm-query-engine+adapter-pg`, which is not 
   tenant isolation, last-unit race through the route, same-key retry, unpaid-attempt rule, and
   `/api/paystack/verify` on an order payment (no subscription created).
 
+- `subscription-payment` (real webhook route, real HMAC signatures): PENDING subscription activates (regression);
+  KNOWN GAP (current behaviour recorded): a charge.success after charge.failed is refused with 503 and never activates.
+  The gap test is `it.fails`: it passes while the gap exists and must be flipped when the gap is closed.
+
 ## Not covered here
 
 - Bulk pricing through the real `AIConfiguration` table (the mock suite covers it).
 - Browser journeys (Playwright) against a live server with a database.
+- Customer browser flows for "Continue to payment" (needs the browser journeys, which need a DB-backed server).
 - Migrations applied by `prisma migrate deploy` (the wasm harness was migrated with raw SQL; see the release report).

@@ -21,6 +21,7 @@ import { priceBasket, type PricedLine } from "@/lib/experience/pricing";
 import {
   createOrderPaymentRecord,
   notifyNewOrder,
+  resumeOrderPayment,
   PAYMENT_PURPOSE,
   startOrderPayment,
   type InitializeOrderPaymentInput,
@@ -32,7 +33,7 @@ import {
   commitOrderOnce,
   findIdempotencyRecord,
   markCheckoutCompleted,
-  findLiveUnpaidAttempt,
+  findSameBasketUnpaidOrder,
   requestHashOf,
   StockConflictError,
   type IdempotencyRecordView,
@@ -295,18 +296,24 @@ export async function POST(req: Request) {
       }, { status: 409 });
     }
 
-    // Same basket, same phone, still awaiting payment: answer with the earlier attempt instead of a second unpaid order.
-    const liveAttempt = await findLiveUnpaidAttempt({
+    // Same basket, same phone, still unpaid: recover that order instead of creating a second unpaid one.
+    const sameBasket = await findSameBasketUnpaidOrder({
       businessId: business.id,
-      scope: SCOPE,
       customerPhone: customer.phone,
       totalKES: pricing.totalKES,
       lines: pricing.lineItems.map((line: PricedLine) => ({ productId: line.productId, variantDesc: line.variantDesc, quantity: line.quantity })),
       now: new Date(),
     });
-    if (liveAttempt) {
-      const body = liveAttempt.body && typeof liveAttempt.body === "object" ? { ...(liveAttempt.body as object), reusedUnpaidOrder: true } : liveAttempt.body;
-      return NextResponse.json(body, { status: liveAttempt.status });
+    if (sameBasket) {
+      const recovered = await resumeOrderPayment({ businessId: business.id, orderReference: sameBasket.orderReference });
+      if (recovered.kind === "REDIRECT") {
+        return NextResponse.json({ orderReference: recovered.orderReference, paymentReference: recovered.paymentReference, authorizationUrl: recovered.authorizationUrl, totalKES: pricing.totalKES, reusedUnpaidOrder: true }, { status: 201 });
+      }
+      if (recovered.kind === "PAID") {
+        return NextResponse.json({ orderReference: sameBasket.orderReference, totalKES: pricing.totalKES, paymentStatus: "PAID", reusedUnpaidOrder: true }, { status: 200 });
+      }
+      const message = recovered.kind === "PROCESSING" || recovered.kind === "NOT_PAYABLE" || recovered.kind === "ERROR" ? recovered.message : "We couldn’t place that order. Please try again.";
+      return NextResponse.json({ error: message, processing: recovered.kind === "PROCESSING", orderReference: sameBasket.orderReference, reusedUnpaidOrder: true }, { status: 409 });
     }
 
     const reference = orderReference();
