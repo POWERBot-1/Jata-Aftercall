@@ -65,7 +65,8 @@ export function PreviewClient({
       const response = await fetch("/api/experience/versions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, version }),
+        // Restoring replaces the draft, so it names the version the preview was built from (409 if it moved on).
+        body: JSON.stringify({ businessId, version, expectedDraftVersion: draftVersion }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return setMessage({ tone: "error", text: data.error || "We couldn’t restore that version." });

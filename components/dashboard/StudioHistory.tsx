@@ -27,6 +27,8 @@ type HistoryState = {
   head: number;
   count: number;
   revisions: Revision[];
+  /** The draft version this list was read at. Undo, redo and open-a-version send it back. */
+  draftVersion: number | null;
 };
 
 function when(value: string | null): string {
@@ -57,6 +59,7 @@ export function StudioHistory({ businessId }: { businessId: string }) {
           head: Number(data.head) || 0,
           count: Number(data.count) || 0,
           revisions: data.revisions,
+          draftVersion: Number(data.draftVersion) || null,
         });
       }
     } catch {
@@ -76,7 +79,8 @@ export function StudioHistory({ businessId }: { businessId: string }) {
       const response = await fetch("/api/experience/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...payload }),
+        // Only move if the draft is still the one this list was read from; otherwise the server refuses (409).
+        body: JSON.stringify({ businessId, ...payload, ...(state?.draftVersion ? { expectedDraftVersion: state.draftVersion } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -91,6 +95,7 @@ export function StudioHistory({ businessId }: { businessId: string }) {
         head: Number(data.head) || 0,
         count: Number(data.count) || 0,
         revisions: Array.isArray(data.revisions) ? data.revisions : [],
+        draftVersion: Number(data.draftVersion) || null,
       });
       setMessage(typeof data.message === "string" ? data.message : "Your draft was updated.");
       router.refresh();

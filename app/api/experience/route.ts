@@ -7,7 +7,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { seedNewDocument } from "@/lib/experience/variant";
+import { historyBasisFor, seedNewDocument } from "@/lib/experience/variant";
+import { diversityReport } from "@/lib/experience/diversity";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
@@ -46,6 +47,8 @@ function parseDocument(json: string | null | undefined, fallbackCategory?: strin
 
 const DRAFT_CHANGED_CODE = "draft_version_conflict";
 const DRAFT_CHANGED_MESSAGE = "Your website changed in another window. Reload to see the latest draft, then try again. Nothing was overwritten.";
+const VERSION_REQUIRED_CODE = "draft_version_required";
+const VERSION_REQUIRED_MESSAGE = "This change needs the draft version it was made from. Reload the page and try again. Nothing was changed.";
 
 /** Load everything the editor and the publish gate need, scoped to one tenant. */
 export async function GET(req: Request) {
@@ -161,7 +164,13 @@ export async function POST(req: Request) {
       // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
       // client that read version N must send N, and the write is a compare-and-swap on it.
       const expectedDraftVersion = Number(body?.expectedDraftVersion);
-      if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== Number(existing.draftVersion)) {
+      // Creating a website is the only thing this form does for a business with no draft. For a business
+      // that already has one, a change must name the version it was made from, so a stale window that
+      // still shows "create" cannot silently rewrite a newer draft.
+      if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+        return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+      }
+      if (expectedDraftVersion !== Number(existing.draftVersion)) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
       }
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
@@ -236,7 +245,31 @@ export async function POST(req: Request) {
       createdById: session.userId,
     });
 
-    return NextResponse.json({ experience, document, diversity: seeded.diversity }, { status: 201 });
+    // Informational only. The default layout is deterministic (nothing is generated to choose from), so
+    // nothing is blocked. If this business has published versions, the new draft is compared with them.
+    let publishedDocuments: ReturnType<typeof normalizeExperienceDocument>[] = [];
+    try {
+      const versions = await prisma.experienceVersion.findMany({
+        where: { businessId },
+        orderBy: { version: "desc" },
+        take: 5,
+        select: { snapshotJson: true },
+      });
+      publishedDocuments = versions.flatMap((row) => {
+        try {
+          return [normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), document.categoryKey)];
+        } catch {
+          return [];
+        }
+      });
+    } catch {
+      publishedDocuments = [];
+    }
+    const diversity = publishedDocuments.length > 0
+      ? { ...diversityReport(document, publishedDocuments), ...historyBasisFor(publishedDocuments.length), seed: seeded.diversity.seed }
+      : seeded.diversity;
+
+    return NextResponse.json({ experience, document, diversity }, { status: 201 });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);
     if (mapped.status === 500) console.error("experience create failed");
@@ -266,6 +299,14 @@ export async function PATCH(req: Request) {
     const expectedDraftVersion = Number(body?.expectedDraftVersion);
     if (Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 && expectedDraftVersion !== Number(experience.draftVersion)) {
       return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
+    }
+
+    // A whole-document write replaces everything in the draft, so it must say which version it was
+    // built from. Without that, a stale window could silently overwrite newer edits (428, not 409:
+    // the request is missing a precondition rather than being out of date).
+    const isWholeDocumentWrite = typeof body?.op !== "string" && Boolean(body?.document) && typeof body.document === "object";
+    if (isWholeDocumentWrite && !(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+      return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
     }
 
     let document = parseDocument(experience.draftJson, experience.categoryKey);

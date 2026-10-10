@@ -190,7 +190,7 @@ describe("changing business type on an existing website: draft version", () => {
 
   it("returns 409 on a lost race (P2025) and records no revision", async () => {
     mocks.experienceUpdate.mockRejectedValue(Object.assign(new Error("Record to update not found."), { code: "P2025" }));
-    const response = await change({});
+    const response = await change({ expectedDraftVersion: 3 });
     expect(response.status).toBe(409);
     expect(mocks.revision).not.toHaveBeenCalled();
   });

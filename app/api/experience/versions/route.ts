@@ -41,6 +41,8 @@ export async function GET(req: Request) {
   }
 }
 
+const CONFLICT_MESSAGE = "Your website changed in another window, so nothing was restored. Reload to see the latest draft, then try again.";
+
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
@@ -69,19 +71,32 @@ export async function POST(req: Request) {
     });
     if (!existing) return NextResponse.json({ error: "Create your website before restoring a version." }, { status: 409 });
 
+    // A restore replaces the whole draft. If the client named a version and the draft has moved on, refuse.
+    const expected = Number(body?.expectedDraftVersion);
+    if (Number.isInteger(expected) && expected > 0 && expected !== Number(existing.draftVersion)) {
+      return NextResponse.json({ error: CONFLICT_MESSAGE, code: "draft_version_conflict" }, { status: 409 });
+    }
+
     const document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), snapshot.categoryKey);
     const nextVersion = Math.max(1, existing.draftVersion) + 1;
-    const experience = await prisma.businessExperience.update({
-      where: { businessId },
-      data: {
-        draftJson: JSON.stringify(document),
-        draftVersion: nextVersion,
-        historyCursor: nextVersion,
-        categoryKey: snapshot.categoryKey,
-        themeKey: snapshot.themeKey,
-      },
-      select: { id: true, draftVersion: true },
-    });
+    // Compare-and-swap on the version read above: a write that lands in between makes this a 409, never a silent overwrite.
+    const experience = await prisma.businessExperience
+      .update({
+        where: { businessId, draftVersion: existing.draftVersion },
+        data: {
+          draftJson: JSON.stringify(document),
+          draftVersion: nextVersion,
+          historyCursor: nextVersion,
+          categoryKey: snapshot.categoryKey,
+          themeKey: snapshot.themeKey,
+        },
+        select: { id: true, draftVersion: true },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2025") return null;
+        throw error;
+      });
+    if (!experience) return NextResponse.json({ error: CONFLICT_MESSAGE, code: "draft_version_conflict" }, { status: 409 });
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,

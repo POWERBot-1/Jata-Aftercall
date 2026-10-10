@@ -171,7 +171,11 @@ export function describeDraftChange(op: string | null, detail?: { type?: string;
 export type HistoryMoveResult =
   | { status: "ok"; document: ExperienceDocument; draftVersion: number; label: string; source: string; message: string }
   | { status: "missing"; reason: string }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string }
+  | { status: "conflict"; reason: string };
+
+export const HISTORY_CONFLICT_REASON =
+  "Your website changed in another window, so nothing was undone or restored. Reload to see the latest draft, then try again.";
 
 type HistoryClient = {
   businessExperience: {
@@ -262,7 +266,7 @@ export async function recordDraftRevision(
  */
 export async function moveDraftHistory(
   db: HistoryClient,
-  params: { businessId: string; direction?: "undo" | "redo"; version?: number | null },
+  params: { businessId: string; direction?: "undo" | "redo"; version?: number | null; expectedDraftVersion?: number | null },
 ): Promise<HistoryMoveResult> {
   const { businessId } = params;
   const [experience, revisions] = await Promise.all([
@@ -273,6 +277,11 @@ export async function moveDraftHistory(
     loadDraftHistory(db, businessId),
   ]);
   if (!experience) return { status: "missing", reason: "Create your website before editing it." };
+  // A client that read version N sends N back; a newer draft is never rolled back from a stale window.
+  const expected = Number(params.expectedDraftVersion);
+  if (Number.isInteger(expected) && expected > 0 && expected !== Number(experience.draftVersion)) {
+    return { status: "conflict", reason: HISTORY_CONFLICT_REASON };
+  }
   if (!revisions.length) {
     return { status: "unavailable", reason: "There is nothing to undo yet — make a change to your website first." };
   }
@@ -301,16 +310,24 @@ export async function moveDraftHistory(
     return { status: "unavailable", reason: "That version can no longer be opened." };
   }
 
-  await db.businessExperience.update({
-    where: { businessId },
-    data: {
-      draftJson: JSON.stringify(document),
-      draftVersion: target,
-      historyCursor: target,
-      categoryKey: document.categoryKey,
-      themeKey: document.themeKey,
-    },
-  });
+  // Compare-and-swap on the version this move was computed from: if another write landed after the read,
+  // nothing is written (a lost race is a conflict, never a silent overwrite of the newer draft).
+  const written = await db.businessExperience
+    .update({
+      where: { businessId, draftVersion: experience.draftVersion },
+      data: {
+        draftJson: JSON.stringify(document),
+        draftVersion: target,
+        historyCursor: target,
+        categoryKey: document.categoryKey,
+        themeKey: document.themeKey,
+      },
+    })
+    .catch((error: unknown) => {
+      if ((error as { code?: string })?.code === "P2025") return null;
+      throw error;
+    });
+  if (!written) return { status: "conflict", reason: HISTORY_CONFLICT_REASON };
 
   const label = snapshot.label || `Version ${target}`;
   return {
