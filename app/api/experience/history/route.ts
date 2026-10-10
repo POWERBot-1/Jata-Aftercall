@@ -82,7 +82,8 @@ export async function POST(req: Request) {
     if (result.status === "unavailable") return NextResponse.json({ error: result.reason, unchanged: true }, { status: 409 });
 
     const revisions = await loadDraftHistory(prisma, businessId);
-    const state = historyState(revisions, result.draftVersion);
+    // The cursor, not the new draft version: the draft now equals the restored revision.
+    const state = historyState(revisions, result.cursor);
 
     await logAudit({
       actorId: session.userId,
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
       message: result.message,
       unchanged: false,
       ...state,
-      revisions: revisionSummaries(revisions, result.draftVersion),
+      revisions: revisionSummaries(revisions, result.cursor),
     });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);

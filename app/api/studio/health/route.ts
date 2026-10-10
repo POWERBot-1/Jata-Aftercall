@@ -7,6 +7,8 @@
  */
 
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { guardTenantMutation } from "@/lib/tenant";
 import { loadWorkspace } from "@/lib/experience/workspace";
 import { loadStudioIntelligence } from "@/lib/studio/studioData";
 import { healthSummaryLine } from "@/lib/studio/health";
@@ -15,7 +17,13 @@ import { providerStatus } from "@/lib/ai/registry";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  // The health report reveals a business's publishing state and readiness. It is for its owners only:
+  // authenticate, then check the caller owns this business, before reading anything.
+  const session = await getSession();
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
+  const guard = await guardTenantMutation(session, businessId, "read");
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
   const workspace = await loadWorkspace(businessId);
   if (!workspace) return NextResponse.json({ error: "We couldn't find that website." }, { status: 404 });
 
@@ -28,6 +36,8 @@ export async function GET(req: Request) {
     });
     const provider = providerStatus();
     return NextResponse.json({
+      // The draft version this report was computed from. A fix sends it back, so a stale report cannot fix a newer draft.
+      draftVersion: workspace.experience?.draftVersion ?? null,
       report: intelligence.health,
       summary: healthSummaryLine(intelligence.health),
       counts: intelligence.counts,

@@ -12,7 +12,7 @@ import { assertBusinessOwnership } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
-import { recordDraftRevision } from "@/lib/experience/history";
+import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (!snapshot) return NextResponse.json({ error: "That version is no longer available." }, { status: 404 });
     const existing = await prisma.businessExperience.findUnique({
       where: { businessId },
-      select: { draftVersion: true },
+      select: { draftVersion: true, historyCursor: true },
     });
     if (!existing) return NextResponse.json({ error: "Create your website before restoring a version." }, { status: 409 });
 
@@ -100,6 +100,7 @@ export async function POST(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,
+      discardAfter: draftCursorOf(existing),
       document,
       label: `Restored your published version ${version}`,
       source: "RESTORE",

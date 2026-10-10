@@ -53,9 +53,9 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
-vi.mock("@/lib/experience/history", () => ({
+vi.mock("@/lib/experience/history", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/experience/history")>()),
   recordDraftRevision: mocks.revision,
-  describeDraftChange: vi.fn(() => "change"),
 }));
 
 import { PATCH, POST } from "@/app/api/experience/route";
@@ -245,5 +245,50 @@ describe("POST: creating a website for a business with no draft", () => {
     expect(response.status).toBe(403);
     expect(mocks.experienceCreate).not.toHaveBeenCalled();
     expect(mocks.versionFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("section operations and studio fixes are version-checked", () => {
+  it("refuses a stale section toggle with 409: a stale view cannot act on sections that have since moved", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "toggle", sectionId: baseDocument().sections[0].id, expectedDraftVersion: 2 }, "PATCH"));
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("draft_version_conflict");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("applies a current section update with a compare-and-swap, and leaves every other section as it was", async () => {
+    // The stored draft is the baseline. baseDocument() mints new section ids on every call, so it cannot be used here.
+    const before = JSON.parse(mocks.experience.draftJson);
+    const target = before.sections[0];
+    const response = await PATCH(
+      jsonRequest({ businessId: OWNED, op: "update", sectionId: target.id, patch: { title: "Changed headline" }, expectedDraftVersion: 3 }, "PATCH"),
+    );
+    expect(response.status).toBe(200);
+    const args = mocks.experienceUpdate.mock.calls[0][0];
+    expect(args.where).toEqual({ businessId: OWNED, draftVersion: 3 });
+    const written = JSON.parse(args.data.draftJson);
+    expect(written.sections.find((section: any) => section.id === target.id).title).toBe("Changed headline");
+    for (const other of before.sections.slice(1)) {
+      const after = written.sections.find((section: any) => section.id === other.id);
+      expect(after).toBeDefined();
+      expect(after.type).toBe(other.type);
+      expect(after.title).toBe(other.title);
+      expect(after.visible).toBe(other.visible);
+    }
+  });
+
+  it("refuses a stale studio fix with 409 and changes nothing", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, op: "studio-fix", fixId: "hero-copy", expectedDraftVersion: 2 }, "PATCH"));
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("draft_version_conflict");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("refuses a section op from another tenant before any version check or write", async () => {
+    const response = await PATCH(jsonRequest({ businessId: FOREIGN, op: "toggle", sectionId: baseDocument().sections[0].id, expectedDraftVersion: 3 }, "PATCH"));
+    expect(response.status).toBe(403);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
   });
 });

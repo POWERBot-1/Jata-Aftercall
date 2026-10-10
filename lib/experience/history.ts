@@ -169,7 +169,7 @@ export function describeDraftChange(op: string | null, detail?: { type?: string;
 }
 
 export type HistoryMoveResult =
-  | { status: "ok"; document: ExperienceDocument; draftVersion: number; label: string; source: string; message: string }
+  | { status: "ok"; document: ExperienceDocument; draftVersion: number; cursor: number; label: string; source: string; message: string }
   | { status: "missing"; reason: string }
   | { status: "unavailable"; reason: string }
   | { status: "conflict"; reason: string };
@@ -208,17 +208,33 @@ export async function loadDraftHistory(db: HistoryClient, businessId: string, li
 }
 
 /**
+ * The revision the draft currently equals. `historyCursor` is authoritative once it has been set; a
+ * row that has never been moved (cursor 0) is at its own draft version.
+ */
+export function draftCursorOf(row: { draftVersion?: unknown; historyCursor?: unknown }): number {
+  const cursor = Number(row.historyCursor) || 0;
+  return cursor > 0 ? cursor : Number(row.draftVersion) || 0;
+}
+
+/**
  * Record the document a change produced.
  *
- * Called after every successful write. Pruning keeps the newest `DRAFT_HISTORY_LIMIT` revisions,
- * and a new edit made after an Undo discards the revisions that are now ahead of it, so Redo can
- * never resurrect a branch the owner abandoned.
+ * `draftVersion` is strictly increasing for a draft: Undo and Redo move the draft to a NEW version
+ * number and point `historyCursor` at the revision they restored. Version numbers are never reused,
+ * so a stale client that still holds an older version cannot match a newer draft in the
+ * compare-and-swap (the ABA problem).
+ *
+ * `discardAfter` is the cursor the draft had before this change. Revisions above it are the
+ * abandoned Redo branch and are removed, so Redo can never resurrect them. Pruning keeps the newest
+ * `DRAFT_HISTORY_LIMIT` revisions.
  */
 export async function recordDraftRevision(
   db: HistoryClient,
   params: {
     businessId: string;
     draftVersion: number;
+    /** The draft's cursor before this change (see draftCursorOf). Use 0 for a brand-new draft. */
+    discardAfter: number;
     document: ExperienceDocument;
     label?: string;
     source?: DraftRevisionSource;
@@ -227,10 +243,11 @@ export async function recordDraftRevision(
 ): Promise<boolean> {
   const { businessId, draftVersion } = params;
   if (!Number.isSafeInteger(draftVersion) || draftVersion < 1) return false;
+  const discardAfter = Number.isSafeInteger(params.discardAfter) && params.discardAfter >= 0 ? params.discardAfter : 0;
   try {
-    // `gte` (not `gt`): a new edit made after an Undo takes the number the abandoned branch was
-    // using, so that stale revision is replaced rather than left to collide with the unique key.
-    await db.experienceDraftRevision.deleteMany({ where: { businessId, draftVersion: { gte: draftVersion } } });
+    await db.experienceDraftRevision.deleteMany({
+      where: { businessId, OR: [{ draftVersion: { gt: discardAfter } }, { draftVersion }] },
+    });
     await db.experienceDraftRevision.create({
       data: {
         businessId,
@@ -312,12 +329,16 @@ export async function moveDraftHistory(
 
   // Compare-and-swap on the version this move was computed from: if another write landed after the read,
   // nothing is written (a lost race is a conflict, never a silent overwrite of the newer draft).
+  // The draft version moves FORWARD to a number never used before; only the cursor returns to the
+  // restored revision. Reusing an older number here is what let a stale window overwrite newer work.
+  const newest = revisions.reduce((max: number, revision: any) => Math.max(max, Number(revision.draftVersion) || 0), 0);
+  const nextVersion = Math.max(Number(experience.draftVersion) || 0, newest) + 1;
   const written = await db.businessExperience
     .update({
       where: { businessId, draftVersion: experience.draftVersion },
       data: {
         draftJson: JSON.stringify(document),
-        draftVersion: target,
+        draftVersion: nextVersion,
         historyCursor: target,
         categoryKey: document.categoryKey,
         themeKey: document.themeKey,
@@ -333,7 +354,9 @@ export async function moveDraftHistory(
   return {
     status: "ok",
     document,
-    draftVersion: target,
+    draftVersion: nextVersion,
+    /** The revision the restored draft equals. The version above is new; this is where Undo/Redo stand. */
+    cursor: target,
     label,
     source: snapshot.source || "RESTORE",
     message: requested

@@ -41,6 +41,7 @@ export type Workspace = {
     categoryKey: string;
     themeKey: string;
     draftVersion: number;
+    historyCursor?: number;
     publishedVersion: number;
     publishedAt: Date | null;
     updatedAt: Date;
@@ -155,6 +156,7 @@ export async function loadWorkspace(businessId: string): Promise<Workspace | nul
           categoryKey: experience.categoryKey,
           themeKey: experience.themeKey,
           draftVersion: experience.draftVersion,
+          historyCursor: experience.historyCursor,
           publishedVersion: experience.publishedVersion,
           publishedAt: experience.publishedAt,
           updatedAt: experience.updatedAt,

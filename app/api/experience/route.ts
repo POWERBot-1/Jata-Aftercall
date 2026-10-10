@@ -30,7 +30,7 @@ import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
 import { applyStudioFix, STUDIO_FIX_IDS, type StudioFixId } from "@/lib/studio/fixes";
-import { describeDraftChange, recordDraftRevision } from "@/lib/experience/history";
+import { describeDraftChange, recordDraftRevision, draftCursorOf } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +195,7 @@ export async function POST(req: Request) {
       await recordDraftRevision(prisma, {
         businessId,
         draftVersion: nextVersion,
+        discardAfter: draftCursorOf(existing),
         document,
         label: `Changed your business type to ${profile.label}`,
         source: "EDIT",
@@ -239,6 +240,7 @@ export async function POST(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: 1,
+      discardAfter: 0,
       document,
       label: "Created your website",
       source: "SYSTEM",
@@ -438,6 +440,7 @@ export async function PATCH(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,
+      discardAfter: draftCursorOf(experience),
       document,
       label: describeDraftChange(changeKind, {
         type: affectedType || undefined,

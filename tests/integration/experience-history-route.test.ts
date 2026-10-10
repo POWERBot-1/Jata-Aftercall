@@ -46,13 +46,15 @@ vi.mock("@/lib/db", () => ({
         return args.data;
       }),
       deleteMany: vi.fn(async (args: any) => {
-        const where = args?.where?.draftVersion ?? {};
+        const clauses: any[] = Array.isArray(args?.where?.OR) ? args.where.OR : [{ draftVersion: args?.where?.draftVersion ?? {} }];
         const ids: string[] | undefined = args?.where?.id?.in;
         const before = mocks.rows.length;
         mocks.rows = mocks.rows.filter((row) => {
-          const byVersion =
-            (typeof where.gt === "number" && row.draftVersion > where.gt) ||
-            (typeof where.gte === "number" && row.draftVersion >= where.gte);
+          const byVersion = clauses.some((clause: any) => {
+            const w = clause.draftVersion;
+            if (typeof w === "number") return row.draftVersion === w;
+            return (typeof w?.gt === "number" && row.draftVersion > w.gt) || (typeof w?.gte === "number" && row.draftVersion >= w.gte);
+          });
           return !(byVersion || (ids ? ids.includes(row.id) : false));
         });
         return { count: before - mocks.rows.length };
@@ -149,13 +151,14 @@ describe("POST /api/experience/history", () => {
     const response = await post({ businessId: "business-a", direction: "undo" });
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.draftVersion).toBe(2);
+    // Undo moves the draft to a new version (4) and points the cursor at revision 2; no version is reused.
+    expect(data.draftVersion).toBe(4);
     expect(data.label).toBe("Edited the Hero section");
     expect(data.document.brand.businessName).toBe("Name 2");
     expect(data.message).toContain("Undone");
     expect(data.canRedo).toBe(true);
     expect(data.canUndo).toBe(true);
-    expect(mocks.updates[0].data).toMatchObject({ draftVersion: 2, historyCursor: 2, themeKey: "food-grill" });
+    expect(mocks.updates[0].data).toMatchObject({ draftVersion: 4, historyCursor: 2, themeKey: "food-grill" });
     expect(mocks.updates[0].data.publishedJson).toBeUndefined();
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "EXPERIENCE_DRAFT_UNDO" }));
   });
@@ -165,7 +168,7 @@ describe("POST /api/experience/history", () => {
     const response = await post({ businessId: "business-a", direction: "redo" });
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.draftVersion).toBe(3);
+    expect(data.draftVersion).toBe(4);
     expect(data.document.brand.businessName).toBe("Name 3");
     expect(data.message).toContain("Redone");
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "EXPERIENCE_DRAFT_REDO" }));
@@ -184,7 +187,8 @@ describe("POST /api/experience/history", () => {
     const response = await post({ businessId: "business-a", version: 1 });
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.draftVersion).toBe(1);
+    // A new version (4), with the content of revision 1.
+    expect(data.draftVersion).toBe(4);
     expect(data.document.brand.businessName).toBe("Name 1");
     expect(data.message).toContain("Created your website");
     expect(data.message).toContain("publish");
@@ -218,7 +222,7 @@ describe("POST /api/experience/history", () => {
     const response = await post({ businessId: "business-a", direction: "undo" });
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.draftVersion).toBe(2);
+    expect(data.draftVersion).toBe(10);
     expect(Array.isArray(data.document.sections)).toBe(true);
     expect(data.document.sections.length).toBeGreaterThan(0);
   });

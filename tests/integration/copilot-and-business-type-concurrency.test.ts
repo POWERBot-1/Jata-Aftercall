@@ -53,7 +53,10 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
-vi.mock("@/lib/experience/history", () => ({ recordDraftRevision: mocks.revision }));
+vi.mock("@/lib/experience/history", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/experience/history")>()),
+  recordDraftRevision: mocks.revision,
+}));
 vi.mock("@/lib/experience/workspace", () => ({ loadWorkspace: vi.fn(async () => mocks.workspace) }));
 vi.mock("@/lib/studio/studioData", () => ({
   loadStudioIntelligence: vi.fn(async () => ({ health: { score: 60, bandLabel: "Good" }, items: [], topSellingIds: [] })),

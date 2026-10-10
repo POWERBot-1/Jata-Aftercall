@@ -81,13 +81,15 @@ vi.mock("@/lib/db", () => ({
         return row;
       }),
       deleteMany: vi.fn(async (args: any) => {
-        const where = args?.where?.draftVersion ?? {};
+        const clauses: any[] = Array.isArray(args?.where?.OR) ? args.where.OR : [{ draftVersion: args?.where?.draftVersion ?? {} }];
         const ids: string[] | undefined = args?.where?.id?.in;
         const before = store.revisions.length;
         store.revisions = store.revisions.filter((row) => {
-          const byVersion =
-            (typeof where.gt === "number" && row.draftVersion > where.gt) ||
-            (typeof where.gte === "number" && row.draftVersion >= where.gte);
+          const byVersion = clauses.some((clause: any) => {
+            const w = clause.draftVersion;
+            if (typeof w === "number") return row.draftVersion === w;
+            return (typeof w?.gt === "number" && row.draftVersion > w.gt) || (typeof w?.gte === "number" && row.draftVersion >= w.gte);
+          });
           return !(byVersion || (ids ? ids.includes(row.id) : false));
         });
         return { count: before - store.revisions.length };
@@ -180,7 +182,8 @@ describe("undo and redo through the route", () => {
     const response = await history({ businessId: "business-a", direction: "undo" });
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.draftVersion).toBe(1);
+    // Undo moves the draft to a new version (3); the content and cursor are those of revision 1.
+    expect(data.draftVersion).toBe(3);
     expect(data.document.sections.find((section: any) => section.id === "hero").title).toBe("Welcome");
     expect(data.label).toBe("Created your website");
 
@@ -195,9 +198,9 @@ describe("undo and redo through the route", () => {
     await history({ businessId: "business-a", direction: "undo" });
     const response = await history({ businessId: "business-a", direction: "redo" });
     const data = await response.json();
-    expect(data.draftVersion).toBe(2);
+    expect(data.draftVersion).toBe(4);
     expect(data.document.sections.find((section: any) => section.id === "hero").title).toBe("Karibu");
-    expect(store.experience?.draftVersion).toBe(2);
+    expect(store.experience?.draftVersion).toBe(4);
   });
 });
 
@@ -210,24 +213,25 @@ describe("branch replacement after an undo", () => {
 
     // undo to 2 …
     await history({ businessId: "business-a", direction: "undo" });
-    expect(store.experience?.draftVersion).toBe(2);
+    expect(store.experience?.draftVersion).toBe(4);
+    expect(store.experience?.historyCursor).toBe(2);
     expect(store.revisions.map((row) => row.draftVersion)).toEqual([1, 2, 3]);
 
     // … then make a new edit
     const response = await edit({ businessId: "business-a", op: "update", sectionId: "hero", patch: { title: "Brand new" } });
     expect(response.status).toBe(200);
 
-    // 1 → 2 → NEW 3: the same numbers, the abandoned snapshot gone, no duplicate, no collision.
-    expect(store.revisions.map((row) => row.draftVersion)).toEqual([1, 2, 3]);
-    const third = store.revisions.find((row) => row.draftVersion === 3);
-    expect(JSON.parse(third!.snapshotJson).sections.find((section: any) => section.id === "hero").title).toBe("Brand new");
-    expect(store.experience?.draftVersion).toBe(3);
-    expect(store.experience?.historyCursor).toBe(3);
+    // 1 → 2 → NEW 5: the abandoned revision 3 is gone, and the new edit takes a number never used before.
+    expect(store.revisions.map((row) => row.draftVersion)).toEqual([1, 2, 5]);
+    const fifth = store.revisions.find((row) => row.draftVersion === 5);
+    expect(JSON.parse(fifth!.snapshotJson).sections.find((section: any) => section.id === "hero").title).toBe("Brand new");
+    expect(store.experience?.draftVersion).toBe(5);
+    expect(store.experience?.historyCursor).toBe(5);
 
     const list = await (await historyList()).json();
-    expect(list.head).toBe(3);
+    expect(list.head).toBe(5);
     expect(list.canRedo).toBe(false);
-    expect(list.revisions.map((entry: any) => entry.draftVersion)).toEqual([3, 2, 1]);
+    expect(list.revisions.map((entry: any) => entry.draftVersion)).toEqual([5, 2, 1]);
   });
 
   it("keeps every revision unique after several undo-then-edit cycles", async () => {
@@ -262,3 +266,25 @@ describe("retention", () => {
     expect(JSON.parse(newest.snapshotJson).sections.find((section: any) => section.id === "hero").title).toBe("Change 33");
   });
 });
+
+describe("a stale window after undo cannot overwrite a newer draft (no version reuse)", () => {
+  it("refuses an edit built from a version the draft has moved past, even when undo and a new edit have happened since", async () => {
+    await edit({ businessId: "business-a", op: "update", sectionId: "hero", patch: { title: "Two" } });
+    await edit({ businessId: "business-a", op: "update", sectionId: "hero", patch: { title: "Three" } });
+    // A second window read the draft at version 3 (title "Three") and has not refreshed yet.
+    expect(store.experience?.draftVersion).toBe(3);
+
+    await history({ businessId: "business-a", direction: "undo" });
+    const fresh = await edit({ businessId: "business-a", op: "update", sectionId: "hero", patch: { title: "Brand new" } });
+    expect(fresh.status).toBe(200);
+    const newVersion = store.experience?.draftVersion;
+
+    const stale = await edit({ businessId: "business-a", op: "update", sectionId: "hero", patch: { title: "Stale window" }, expectedDraftVersion: 3 });
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).code).toBe("draft_version_conflict");
+    expect(store.experience?.draftVersion).toBe(newVersion);
+    const newest = store.revisions.find((row) => row.draftVersion === newVersion);
+    expect(JSON.parse(newest!.snapshotJson).sections.find((section: any) => section.id === "hero").title).toBe("Brand new");
+  });
+});
+

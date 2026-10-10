@@ -67,14 +67,16 @@ function fakeDb(options: { experience?: any; revisions?: any[] } = {}) {
         return args.data;
       },
       deleteMany: async (args: any) => {
-        const where = args?.where?.draftVersion ?? {};
+        const clauses: any[] = Array.isArray(args?.where?.OR) ? args.where.OR : [{ draftVersion: args?.where?.draftVersion ?? {} }];
         const ids: string[] | undefined = args?.where?.id?.in;
         let before = rows.length;
         for (let index = rows.length - 1; index >= 0; index -= 1) {
           const row = rows[index];
-          const byVersion =
-            (typeof where.gt === "number" && row.draftVersion > where.gt) ||
-            (typeof where.gte === "number" && row.draftVersion >= where.gte);
+          const byVersion = clauses.some((clause: any) => {
+            const w = clause.draftVersion;
+            if (typeof w === "number") return row.draftVersion === w;
+            return (typeof w?.gt === "number" && row.draftVersion > w.gt) || (typeof w?.gte === "number" && row.draftVersion >= w.gte);
+          });
           const remove = byVersion || (ids ? ids.includes(row.id) : false);
           if (remove) rows.splice(index, 1);
         }
@@ -156,7 +158,7 @@ describe("describeDraftChange", () => {
 describe("recordDraftRevision", () => {
   it("writes one snapshot and prunes anything older than the limit", async () => {
     const { db, rows } = fakeDb({ revisions: Array.from({ length: DRAFT_HISTORY_LIMIT }, (_, index) => revision(index + 1, `v${index + 1}`)) });
-    const saved = await recordDraftRevision(db, { businessId: "b", draftVersion: DRAFT_HISTORY_LIMIT + 1, document: documentFor("Newest") });
+    const saved = await recordDraftRevision(db, { businessId: "b", draftVersion: DRAFT_HISTORY_LIMIT + 1, discardAfter: DRAFT_HISTORY_LIMIT, document: documentFor("Newest") });
     expect(saved).toBe(true);
     expect(rows).toHaveLength(DRAFT_HISTORY_LIMIT);
     expect(rows.some((row) => row.draftVersion === 1)).toBe(false);
@@ -165,24 +167,25 @@ describe("recordDraftRevision", () => {
 
   it("discards the redo branch when a new edit follows an Undo", async () => {
     const { db, rows } = fakeDb({ revisions: [revision(1, "one"), revision(2, "two"), revision(3, "three")] });
-    await recordDraftRevision(db, { businessId: "b", draftVersion: 3, document: documentFor("Replacement") });
-    expect(rows.map((row) => row.draftVersion).sort()).toEqual([1, 2, 3]);
-    expect(JSON.parse(rows[2].snapshotJson).brand.businessName).toBe("Replacement");
+    // After an Undo from 3 to the cursor at 2, the new edit is version 4 and discards the abandoned revision 3.
+    await recordDraftRevision(db, { businessId: "b", draftVersion: 4, discardAfter: 2, document: documentFor("Replacement") });
+    expect(rows.map((row) => row.draftVersion).sort()).toEqual([1, 2, 4]);
+    expect(JSON.parse(rows.find((row) => row.draftVersion === 4).snapshotJson).brand.businessName).toBe("Replacement");
   });
 
   it("refuses an impossible version and never throws when history cannot be written", async () => {
     const { db } = fakeDb();
-    expect(await recordDraftRevision(db, { businessId: "b", draftVersion: 0, document: documentFor("x") })).toBe(false);
+    expect(await recordDraftRevision(db, { businessId: "b", draftVersion: 0, discardAfter: 0 - 1, document: documentFor("x") })).toBe(false);
     const broken = { ...db, experienceDraftRevision: { ...db.experienceDraftRevision, create: async () => { throw new Error("table missing"); } } };
-    expect(await recordDraftRevision(broken, { businessId: "b", draftVersion: 2, document: documentFor("x") })).toBe(false);
+    expect(await recordDraftRevision(broken, { businessId: "b", draftVersion: 2, discardAfter: 1, document: documentFor("x") })).toBe(false);
   });
 
   it("keeps labels short and human", async () => {
     const { db, rows } = fakeDb();
     const long = "x".repeat(400);
-    await recordDraftRevision(db, { businessId: "b", draftVersion: 1, document: documentFor("x"), label: long });
+    await recordDraftRevision(db, { businessId: "b", draftVersion: 1, discardAfter: 1 - 1, document: documentFor("x"), label: long });
     expect(rows[0].label.length).toBeLessThanOrEqual(160);
-    await recordDraftRevision(db, { businessId: "b", draftVersion: 2, document: documentFor("x") });
+    await recordDraftRevision(db, { businessId: "b", draftVersion: 2, discardAfter: 2 - 1, document: documentFor("x") });
     expect(rows[1].label).toBe("Saved a change to your website");
   });
 });
@@ -195,7 +198,9 @@ describe("moveDraftHistory", () => {
     const result = await moveDraftHistory(db, { businessId: "b", direction: "undo" });
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("expected ok");
-    expect(result.draftVersion).toBe(2);
+    // Undo moves the draft to a NEW version (4), never back to an earlier number, and the cursor records revision 2.
+    expect(result.draftVersion).toBe(4);
+    expect(updates[0].data.draftVersion).toBeGreaterThan(3);
     expect(result.label).toBe("Edited the hero section");
     expect(result.document.brand.businessName).toBe("Name 2");
     expect(result.message).toContain("Undone");
@@ -210,7 +215,7 @@ describe("moveDraftHistory", () => {
     const result = await moveDraftHistory(db, { businessId: "b", direction: "redo" });
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("expected ok");
-    expect(result.draftVersion).toBe(3);
+    expect(result.draftVersion).toBe(4);
     expect(result.message).toContain("Redone");
   });
 
@@ -245,7 +250,7 @@ describe("moveDraftHistory", () => {
     const result = await moveDraftHistory(db, { businessId: "b", version: 1 });
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("expected ok");
-    expect(result.draftVersion).toBe(1);
+    expect(result.draftVersion).toBe(6);
     expect(result.message).toContain("Created your website");
     expect(result.message).toContain("publish");
 
@@ -259,6 +264,7 @@ describe("moveDraftHistory", () => {
     expect(await recordDraftRevision({ ...broken, businessExperience: { findUnique: async () => null, update: async () => ({}) } }, {
       businessId: "b",
       draftVersion: 1,
+      discardAfter: 0,
       document: documentFor("x"),
     })).toBe(false);
   });

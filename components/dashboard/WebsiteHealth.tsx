@@ -39,6 +39,8 @@ type Report = {
 };
 
 type Payload = {
+  /** The draft version the report was computed from. Fixes send it back. */
+  draftVersion?: number | null;
   report: Report;
   summary: string;
   publishing: { entitled: boolean; ready: boolean; hasUnpublishedChanges: boolean; failedChecks: string[] };
@@ -77,10 +79,22 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, op: "studio-fix", fixId: id }),
+        body: JSON.stringify({
+          businessId,
+          op: "studio-fix",
+          fixId: id,
+          ...(payload?.draftVersion ? { expectedDraftVersion: payload.draftVersion } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        // The website changed after this report was made: show the conflict and reload the report. Nothing was applied.
+        if (data.code === "draft_version_conflict") {
+          setMessage({ tone: "warn", text: data.error || "Your website changed in another window. Nothing was changed." });
+          await load();
+          router.refresh();
+          return;
+        }
         setMessage({ tone: data.needsOwnerInput ? "warn" : "error", text: data.error || "We couldn't apply that fix." });
         return;
       }

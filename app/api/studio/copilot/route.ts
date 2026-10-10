@@ -19,7 +19,7 @@ import { getSession } from "@/lib/auth";
 import { guardTenantMutation } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
-import { recordDraftRevision } from "@/lib/experience/history";
+import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
 import { loadWorkspace } from "@/lib/experience/workspace";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
 import { loadStudioIntelligence } from "@/lib/studio/studioData";
@@ -206,6 +206,7 @@ export async function POST(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,
+      discardAfter: draftCursorOf(workspace.experience ?? {}),
       document,
       label: reply.message.slice(0, 140),
       source: "AI",

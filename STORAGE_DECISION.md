@@ -6,7 +6,7 @@ Scope: image derivatives and GLB models. Lite storefronts do not depend on eithe
 ## 1. Rules that do not change
 
 - Binary media never goes into Neon. Neon stores metadata only: key, provider, URL, bytes, content type, dimensions and provenance.
-- Data URLs are not the long-term store for images or 3D assets. The inline provider in `lib/storage/inline.ts` is a development and fallback path only. It is declared non-durable and is refused for derivatives and models (`assertCanStore`).
+- Data URLs are not the long-term store for images or 3D assets. The inline provider in `lib/storage/inline.ts` is a development and fallback path only. It is declared non-durable. `assertCanStore` in `lib/storage/index.ts` encodes the refusal rules for derivatives and models, but **no production call site invokes it yet**. Today the only guard that stops 3D is the feature flag (`immersiveFeatureEnabled`), which also requires a durable provider. Any future upload path must call `assertCanStore` before writing.
 - Tenant isolation: every key is built as `tenants/<businessId>/<kind>/<name>` (`lib/storage/keys.ts`). Traversal, extension mismatch and oversize inputs are rejected before any provider is called.
 - No secret is read, written or printed by the code in this change. `resolveStorageProvider` fails loudly for an unknown or not-yet-implemented provider (currently `vercel-blob`).
 

@@ -8,7 +8,7 @@
  * Every change is a save to the draft; nothing touches the live site until publish.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExperienceDocument, ExperienceSection } from "@/lib/experience/types";
 import { addableSectionsFor, sectionDefinition, sectionLabel, type SectionField } from "@/lib/experience/sections";
@@ -19,12 +19,19 @@ type SaveState = { tone: "idle" | "saving" | "saved" | "error"; text?: string };
 export function SectionEditor({
   businessId,
   document: initial,
+  draftVersion,
 }: {
   businessId: string;
   document: ExperienceDocument;
+  /** The draft version this document was read at. Every change sends it back (409 if the draft has moved on). */
+  draftVersion?: number | null;
 }) {
   const router = useRouter();
   const [document, setDocument] = useState<ExperienceDocument>(initial);
+  const [version, setVersion] = useState<number | null>(draftVersion ?? null);
+  // After a refresh the server's document and version replace the local copy, so a conflict never leaves stale sections on screen.
+  useEffect(() => setDocument(initial), [initial]);
+  useEffect(() => setVersion(draftVersion ?? null), [draftVersion]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [state, setState] = useState<SaveState>({ tone: "idle" });
   const [addType, setAddType] = useState("");
@@ -38,14 +45,16 @@ export function SectionEditor({
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...payload }),
+        body: JSON.stringify({ businessId, ...payload, ...(version ? { expectedDraftVersion: version } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setState({ tone: "error", text: data.error || "We couldn’t save that change." });
+        if (data.code === "draft_version_conflict") router.refresh();
         return false;
       }
       setDocument(data.document as ExperienceDocument);
+      if (typeof data.experience?.draftVersion === "number") setVersion(data.experience.draftVersion);
       setState({ tone: "saved" });
       router.refresh();
       return true;
