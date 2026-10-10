@@ -56,7 +56,10 @@ export function planDisplayName(plan: { key: string; name?: string | null }): st
 }
 
 export async function getPlanByKey(key: string): Promise<Plan | null> {
-  return (await prisma.planConfig?.findUnique?.({ where: { key } })) ?? null;
+  // A database error reads as "no stored plan", so callers use the canonical fallback (as getPlanConfig does)
+  // instead of failing the pricing lookup.
+  const plan = await prisma.planConfig?.findUnique?.({ where: { key } }).catch(() => null);
+  return plan ?? null;
 }
 
 export async function getPlanConfig(
