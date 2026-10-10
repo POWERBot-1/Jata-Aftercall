@@ -7,13 +7,24 @@
  * nothing is charged from the browser — the server prices the basket and starts the payment.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useCart } from "./CartProvider";
 import { trackEvent } from "./Track";
 import { formatKES } from "@/lib/format";
 
 type Step = 1 | 2 | 3;
+
+/** The server's price for the basket right now (POST /api/storefront/quote). The browser never sets these amounts. */
+type Quote = {
+  subtotalKES: number;
+  deliveryFeeKES: number;
+  discountKES: number;
+  totalKES: number;
+  minOrderKES: number;
+  lines: Array<{ productId: string; name: string; quantity: number; unitPriceKES: number; lineSubtotalKES: number }>;
+  unavailable: Array<{ productId: string; reason: string }>;
+};
 
 export function CheckoutClient({
   slug,
@@ -48,9 +59,62 @@ export function CheckoutClient({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const subtotal = cart.subtotalKES;
-  const delivery = fulfilment === "DELIVERY" ? deliveryFeeKES : 0;
-  const estimate = subtotal + delivery;
+  // The basket as the server prices it. Changing items or fulfilment fetches a fresh quote and clears the confirmation.
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const idempotency = useRef<{ signature: string; key: string } | null>(null);
+
+  const basketItems = cart.lines.map((line) => ({
+    productId: line.productId,
+    variantId: line.variantId,
+    quantity: line.quantity,
+    addOnIds: (line.addOns || []).map((addOn) => addOn.id),
+    notes: line.notes,
+  }));
+  const basketKey = JSON.stringify({ items: basketItems, fulfilment });
+
+  useEffect(() => {
+    const parsed = JSON.parse(basketKey) as { items: unknown[]; fulfilment: string };
+    if (parsed.items.length === 0) {
+      setQuote(null);
+      return;
+    }
+    let active = true;
+    setQuoteLoading(true);
+    setQuoteError(null);
+    setConfirmed(false);
+    fetch("/api/storefront/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, items: parsed.items, fulfilment: parsed.fulfilment }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        if (!response.ok) {
+          setQuote(null);
+          setQuoteError(data.error || "We couldn’t price your basket. Please try again.");
+          return;
+        }
+        setQuote(data as Quote);
+      })
+      .catch(() => {
+        if (active) setQuoteError("We couldn’t reach the server to price your basket. Check your connection.");
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [basketKey, slug]);
+
+  const subtotal = quote ? quote.subtotalKES : cart.subtotalKES;
+  const delivery = quote ? quote.deliveryFeeKES : fulfilment === "DELIVERY" ? deliveryFeeKES : 0;
+  const estimate = quote ? quote.totalKES : subtotal + delivery;
+  const unavailableQuote = Boolean(quote && quote.unavailable.length > 0);
 
   const validation = useMemo(() => {
     if (step === 1) {
@@ -66,23 +130,26 @@ export function CheckoutClient({
   }, [step, name, phone, email, fulfilment, location]);
 
   async function placeOrder() {
+    if (!quote || !confirmed || unavailableQuote) return;
     setError(null);
     setBusy(true);
     trackEvent(businessId, "CHECKOUT_STARTED");
+    // One key per checkout attempt. A double tap or a retry sends the same key, so the server returns one order.
+    // Changing the basket or the customer details starts a new attempt.
+    const signature = JSON.stringify({ basketKey, name: name.trim(), phone: phone.trim(), email: email.trim(), location, instructions, notes });
+    if (!idempotency.current || idempotency.current.signature !== signature) {
+      idempotency.current = { signature, key: crypto.randomUUID() };
+    }
     try {
       const response = await fetch("/api/storefront/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency.current.key },
         body: JSON.stringify({
           slug,
-          items: cart.lines.map((line) => ({
-            productId: line.productId,
-            variantId: line.variantId,
-            quantity: line.quantity,
-            addOnIds: (line.addOns || []).map((addOn) => addOn.id),
-            notes: line.notes,
-          })),
+          items: basketItems,
           fulfilment,
+          // The total the customer confirmed. The server charges only this amount, or refuses with the new price.
+          expectedTotalKES: quote.totalKES,
           customer: { name: name.trim(), phone: phone.trim(), email: email.trim() },
           location: fulfilment === "DELIVERY" ? location.trim() : null,
           instructions: fulfilment === "DELIVERY" ? instructions.trim() : null,
@@ -90,6 +157,13 @@ export function CheckoutClient({
         }),
       });
       const data = await response.json().catch(() => ({}));
+      if (data.priceChanged) {
+        // Nothing was charged or created. Show the new total and ask the customer to confirm it again.
+        setQuote((current) => (current ? { ...current, ...data } : (data as Quote)));
+        setConfirmed(false);
+        setError(data.error || "The price has changed. Review the new total.");
+        return;
+      }
       if (!response.ok && !data.orderReference) {
         setError(data.error || "We couldn’t place that order. Please try again.");
         return;
@@ -103,7 +177,7 @@ export function CheckoutClient({
         window.location.href = data.authorizationUrl;
         return;
       }
-      // No payment gateway configured (demo): the order exists and is awaiting payment.
+      // No payment gateway configured (demo), or the payment could not be started: the order exists and is shown.
       cart.clear();
       window.location.href = `/b/${slug}/order/${data.orderReference}`;
     } catch {
@@ -204,11 +278,25 @@ export function CheckoutClient({
               You will be taken to Paystack to pay with M-Pesa or card. {businessName} receives your order as soon as payment is confirmed.
             </p>
             <div className="eb-totals" style={{ marginTop: "1.25rem" }}>
-              <div className="eb-totals__row"><span>Subtotal</span><span>{formatKES(subtotal)}</span></div>
-              {delivery ? <div className="eb-totals__row"><span>Delivery</span><span>{formatKES(delivery)}</span></div> : null}
-              <div className="eb-totals__row eb-totals__row--total"><span>Total</span><span>{formatKES(estimate)}</span></div>
+              {quoteLoading || !quote ? <p className="eb-muted">{quoteError ? quoteError : "Pricing your basket…"}</p> : null}
+              {quote ? (
+                <>
+                  <div className="eb-totals__row"><span>Subtotal</span><span>{formatKES(subtotal)}</span></div>
+                  {delivery ? <div className="eb-totals__row"><span>Delivery</span><span>{formatKES(delivery)}</span></div> : null}
+                  <div className="eb-totals__row eb-totals__row--total"><span>Total you will pay</span><span>{formatKES(estimate)}</span></div>
+                </>
+              ) : null}
             </div>
-            <p className="eb-muted">The final total is confirmed by the business’s own prices when you pay.</p>
+            {quote && unavailableQuote ? (
+              <p className="eb-error" role="alert">{quote.unavailable.map((entry) => entry.reason).join(" ")} Go back to the basket to change it.</p>
+            ) : null}
+            {quote ? (
+              <label className="eb-label" style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "1rem" }}>
+                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                <span>I confirm I will pay {formatKES(estimate)} for this order.</span>
+              </label>
+            ) : null}
+            <p className="eb-muted">This price is set by the business for your basket now. If it changes before you pay, you will be asked to confirm the new total.</p>
           </div>
         ) : null}
 
@@ -227,8 +315,8 @@ export function CheckoutClient({
               Continue
             </button>
           ) : (
-            <button type="button" className="eb-btn" disabled={busy || belowMinimum} onClick={placeOrder}>
-              {busy ? "Starting payment…" : `Pay ${formatKES(estimate)}`}
+            <button type="button" className="eb-btn" disabled={busy || belowMinimum || !quote || !confirmed || unavailableQuote} onClick={placeOrder}>
+              {busy ? "Starting payment…" : quote ? `Pay ${formatKES(estimate)}` : "Pricing…"}
             </button>
           )}
         </div>
@@ -246,7 +334,7 @@ export function CheckoutClient({
                 {line.variantLabel ? <p className="eb-card__meta" style={{ margin: 0 }}>{line.variantLabel}</p> : null}
               </div>
               <div className="eb-row__side">
-                <span>{formatKES((line.unitPriceKES + (line.addOns || []).reduce((total, addOn) => total + addOn.priceKES, 0)) * line.quantity)}</span>
+                <span>{formatKES(quote?.lines.find((entry) => entry.productId === line.productId)?.lineSubtotalKES ?? (line.unitPriceKES + (line.addOns || []).reduce((total, addOn) => total + addOn.priceKES, 0)) * line.quantity)}</span>
               </div>
             </li>
           ))}
@@ -254,7 +342,7 @@ export function CheckoutClient({
         <div className="eb-totals" style={{ marginTop: "1rem" }}>
           <div className="eb-totals__row"><span>Subtotal</span><span>{formatKES(subtotal)}</span></div>
           {fulfilment === "DELIVERY" ? <div className="eb-totals__row"><span>Delivery</span><span>{formatKES(delivery)}</span></div> : null}
-          <div className="eb-totals__row eb-totals__row--total"><span>Estimated total</span><span>{formatKES(estimate)}</span></div>
+          <div className="eb-totals__row eb-totals__row--total"><span>{quote ? "Total" : "Estimated total"}</span><span>{formatKES(estimate)}</span></div>
         </div>
       </aside>
     </div>

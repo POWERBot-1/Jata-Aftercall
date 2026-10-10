@@ -26,25 +26,60 @@ const mocks = vi.hoisted(() => ({
   variants: [] as Array<Record<string, any>>,
   orderCreate: vi.fn(),
   initialize: vi.fn(),
+  paymentRecord: vi.fn(),
+  records: new Map<string, any>(),
   notify: vi.fn(),
   recordEvent: vi.fn(),
 }));
 
-vi.mock("@/lib/db", () => ({
-  default: {
+vi.mock("@/lib/db", () => {
+  const db: any = {
     business: { findUnique: vi.fn(async () => mocks.business) },
     businessExperience: { findUnique: vi.fn(async () => mocks.experience) },
-    product: { findMany: vi.fn(async ({ where }: any) => mocks.products.filter((row) => where.id.in.includes(row.id))) },
+    product: {
+      findMany: vi.fn(async ({ where }: any) => mocks.products.filter((row) => where.id.in.includes(row.id))),
+      findFirst: vi.fn(async ({ where }: any) => mocks.products.find((row) => row.id === where.id) || null),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
     productVariant: { findMany: vi.fn(async ({ where }: any) => mocks.variants.filter((row) => where.id.in.includes(row.id))) },
     order: { create: mocks.orderCreate },
-  },
-}));
+    checkoutIdempotencyRecord: {
+      // Stateful fake: a unique index on (businessId, scope, key), so a second create with the same key fails with P2002.
+      create: vi.fn(async ({ data }: any) => {
+        const k = `${data.businessId}|${data.scope}|${data.key}`;
+        if (mocks.records.has(k)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        const row = { id: `rec_${mocks.records.size + 1}`, orderId: null, paymentId: null, responseJson: null, ...data };
+        mocks.records.set(k, row);
+        return { id: row.id };
+      }),
+      findUnique: vi.fn(async ({ where }: any) => {
+        const { businessId, scope, key } = where.businessId_scope_key;
+        return mocks.records.get(`${businessId}|${scope}|${key}`) ?? null;
+      }),
+      update: vi.fn(async ({ where, data }: any) => {
+        const row = [...mocks.records.values()].find((r) => r.id === where.id);
+        Object.assign(row, data);
+        return row;
+      }),
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const row = [...mocks.records.values()].find((r) => r.id === where.id && where.state.in.includes(r.state));
+        if (!row) return { count: 0 };
+        Object.assign(row, data);
+        return { count: 1 };
+      }),
+    },
+  };
+  db.$transaction = vi.fn(async (fn: any) => fn(db));
+  return { default: db };
+});
 
 vi.mock("@/lib/experience/payments", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/experience/payments")>();
   return {
     ...actual,
-    initializeOrderPayment: mocks.initialize,
+    // The route now splits the database row (inside the order transaction) from the provider call (after commit).
+    createOrderPaymentRecord: mocks.paymentRecord,
+    startOrderPayment: mocks.initialize,
     notifyNewOrder: mocks.notify,
   };
 });
@@ -63,7 +98,13 @@ function request(body: unknown, headers: Record<string, string> = {}) {
     method: "POST",
     body: JSON.stringify(body),
     // A distinct IP per call keeps the in-memory throttle from tripping across tests.
-    headers: { "content-type": "application/json", "x-forwarded-for": `10.0.0.${requestCounter % 250}` , ...headers },
+    headers: {
+      "content-type": "application/json",
+      "x-forwarded-for": `10.0.0.${requestCounter % 250}`,
+      // Every checkout attempt carries a key. Tests that need a retry pass the same key explicitly.
+      "idempotency-key": `test-key-${requestCounter}`,
+      ...headers,
+    },
   });
 }
 
@@ -73,10 +114,13 @@ const order = {
   fulfilment: "DELIVERY",
   customer: { name: "Amina", phone: "0722123456" },
   location: "Kilimani",
+  // The customer confirmed this total: 2 × 900 + 200 delivery. The server refuses to charge anything else.
+  expectedTotalKES: 2000,
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.records.clear();
   mocks.products = [
     { id: "p1", name: "Chicken", basePriceKES: 900, salePriceKES: null, imageUrl: null, minOrder: 1, maxOrder: 10, stockStatus: "IN_STOCK", preOrderAllowed: false, deliveryEligible: true, addOns: null, isActive: true },
   ];
@@ -91,6 +135,7 @@ beforeEach(() => {
     sections: [],
   });
   mocks.orderCreate.mockImplementation(async ({ data }: any) => ({ id: "order-1", ...data, items: data.items.create }));
+  mocks.paymentRecord.mockResolvedValue({ kind: "record", paymentId: "pay-1", reference: "JATA-ORD-1", amount: 2000, ownerId: "owner-1" });
   mocks.initialize.mockResolvedValue({ kind: "ok", reference: "JATA-ORD-1", authorizationUrl: "https://paystack.test/authorize", mock: false, paymentId: "pay-1" });
   mocks.notify.mockResolvedValue(undefined);
   mocks.recordEvent.mockResolvedValue(undefined);
@@ -173,6 +218,45 @@ describe("POST /api/storefront/checkout", () => {
     const response = await POST(request({ ...order, fulfilment: "PICKUP" }));
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: expect.stringMatching(/minimum order/i) });
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
+  it("a retry with the same key returns the same order and does not create or charge a second one", async () => {
+    const first = await POST(request(order, { "idempotency-key": "same-key-1" }));
+    const second = await POST(request(order, { "idempotency-key": "same-key-1" }));
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(first.status);
+    expect((await second.json()).orderReference).toBe((await first.json()).orderReference);
+    expect(mocks.orderCreate).toHaveBeenCalledOnce();
+    expect(mocks.paymentRecord).toHaveBeenCalledOnce();
+  });
+
+  it("a key reused for a different basket is refused, and nothing is created", async () => {
+    await POST(request(order, { "idempotency-key": "same-key-2" }));
+    const other = await POST(request({ ...order, items: [{ productId: "p1", quantity: 3 }], expectedTotalKES: 3000 }, { "idempotency-key": "same-key-2" }));
+    expect(other.status).toBe(409);
+    expect(mocks.orderCreate).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a checkout whose confirmed total no longer matches the server price, and creates nothing", async () => {
+    // The customer reviewed 2000 on screen; the price has since changed (for example a sale ended).
+    mocks.products[0].basePriceKES = 1000;
+    const response = await POST(request(order, { "idempotency-key": "stale-1" }));
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toMatchObject({ priceChanged: true, totalKES: 2200 });
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+    expect(mocks.paymentRecord).not.toHaveBeenCalled();
+    expect(mocks.initialize).not.toHaveBeenCalled();
+  });
+
+  it("refuses a checkout with no idempotency key before anything is written", async () => {
+    const bare = new Request("https://jata.test/api/storefront/checkout", {
+      method: "POST",
+      body: JSON.stringify(order),
+      headers: { "content-type": "application/json", "x-forwarded-for": "10.9.9.9" },
+    });
+    expect((await POST(bare)).status).toBe(400);
     expect(mocks.orderCreate).not.toHaveBeenCalled();
   });
 

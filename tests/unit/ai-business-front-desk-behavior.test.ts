@@ -17,8 +17,8 @@ const mockState = vi.hoisted(() => ({
   notifications: [] as any[],
 }));
 
-vi.mock("@/lib/db", () => ({
-  default: {
+vi.mock("@/lib/db", () => {
+  const db: any = {
     business: {
       findUnique: vi.fn(async ({ where }: any) => mockState.businesses.get(where.id) || null),
       update: vi.fn(async ({ where, data }: any) => {
@@ -68,8 +68,17 @@ vi.mock("@/lib/db", () => ({
       }),
     },
     auditEvent: { create: vi.fn(async ({ data }: any) => data) },
-  },
-}));
+    checkoutIdempotencyRecord: {
+      create: vi.fn(async ({ data }: any) => ({ id: `rec_${Math.random().toString(36).slice(2)}`, ...data })),
+      findUnique: vi.fn(async () => null),
+      update: vi.fn(async ({ data }: any) => data),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+  };
+  // Transactions run in the same fake: the mock keeps the order and stock writes, it does not roll them back.
+  db.$transaction = vi.fn(async (fn: any) => fn(db));
+  return { default: db };
+});
 
 import { handleAIFrontDeskTurn } from "@/lib/ai-front-desk";
 import { saveExtendedAIConfig, resetExtendedAIConfigForTests } from "@/lib/ai-config";

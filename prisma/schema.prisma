@@ -115,6 +115,7 @@ model Business {
   posOrderEvents           PosOrderEvent[]
   posAuditEvents           PosAuditEvent[]
   posIdempotencyRecords    PosIdempotencyRecord[]
+  checkoutIdempotencyRecords CheckoutIdempotencyRecord[]
 
   // ── JATA Payment Wallet + Payment Orchestration (additive back-relations) ──
   paymentDestinations      PaymentDestination[]
@@ -1371,6 +1372,39 @@ model PosIdempotencyRecord {
   createdAt   DateTime @default(now())
 
   @@unique([businessId, actorId, scope, key])
+  @@index([businessId, createdAt])
+}
+
+/// Durable replay guard for an order placed from a customer or AI channel (storefront checkout, AI ordering).
+///
+/// A checkout can be sent twice: a double tap, a retry after a timeout, or a request repeated while the first is
+/// still running. The key is scoped to (businessId, scope, key) and written inside the same transaction that
+/// creates the order, its items, the stock decrement and the pending payment row. A duplicate insert violates the
+/// unique index, the transaction rolls back, and the caller is answered with the order the first request created.
+/// `requestHash` makes a reused key with a different request a conflict, not a silent replay.
+///
+/// The payment provider is called only after this transaction commits. `state` records how far the attempt got,
+/// so a retry after a crash resumes the provider step instead of creating a second order.
+model CheckoutIdempotencyRecord {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Which channel and action the key belongs to, e.g. "storefront.checkout" or "ai.order".
+  scope        String
+  /// The client's key, trimmed and bounded before it is stored.
+  key          String
+  /// Hash of the request the key was spent on.
+  requestHash  String
+  /// STARTED (inside the transaction), ORDER_CREATED (committed, provider step pending), COMPLETED (final response stored).
+  state        String
+  orderId      String?
+  paymentId    String?
+  /// The response returned to the caller once COMPLETED, replayed verbatim on a retry.
+  responseJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([businessId, scope, key])
   @@index([businessId, createdAt])
 }
 

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness, getBusinessRoleForUser } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
 import { evaluateAIReadiness } from "@/lib/ai-readiness";
+import { publicProductPrice, withPublicPricing } from "@/lib/ai-public-products";
 import { listConversationsForBusiness } from "@/lib/ai-conversation";
 import { listLeadsForBusiness } from "@/lib/leads";
 import {
@@ -126,7 +127,7 @@ export async function GET(req: Request) {
         topRequestedProducts: brain.products.slice(0, 5).map((p) => ({
           id: p.id,
           name: p.name,
-          priceKES: p.basePriceKES ?? p.variantPriceKES ?? 0,
+          priceKES: publicProductPrice(p).priceKES ?? 0,
           stockStatus: p.stockStatus,
         })),
         topDeliveryZones: brain.delivery.zones.slice(0, 5),
@@ -135,7 +136,7 @@ export async function GET(req: Request) {
       conversations,
       orders: enrichedOrders,
       preorders,
-      products: brain.products,
+      products: brain.products.map((p) => withPublicPricing(p)),
       services: brain.services,
       customers: leads,
       knowledge: {

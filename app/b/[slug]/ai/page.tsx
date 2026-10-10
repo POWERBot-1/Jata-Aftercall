@@ -8,6 +8,7 @@ import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { DEFAULT_SUGGESTED_ACTIONS } from "@/lib/ai-front-desk";
 import { generateAILinkQRCodeSvg, getShareableAILink } from "@/lib/qr";
 import AIFrontDeskCustomerClient from "@/components/AIFrontDeskCustomerClient";
+import { publicProductPrice } from "@/lib/ai-public-products";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,17 @@ export default async function PublicAIFrontDeskPage({
   return (
     <AIFrontDeskCustomerClient
       business={business}
-      products={brain.products.filter((p) => p.isActive !== false)}
+      products={brain.products
+        .filter((p) => p.isActive !== false)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          stockStatus: p.stockStatus,
+          preOrderAllowed: p.preOrderAllowed,
+          // Only the price a customer pays now, and the original only while a sale runs. No sale window.
+          ...publicProductPrice(p),
+        }))}
       services={brain.services.filter((s) => s.isActive !== false)}
       deliveryZones={brain.delivery.zones}
       greetingMessage={greeting}

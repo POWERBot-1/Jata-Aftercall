@@ -11,7 +11,8 @@ import prisma from "./db";
 import { calculateCommerceTotal } from "./commerce-pricing";
 import { chargeableUnitPrice, listPriceKES } from "./sale-pricing";
 import { getExtendedAIConfig, resolveDeliveryZoneFee } from "./ai-config";
-import { evaluateProductAvailability, reserveInventoryForOrder } from "./inventory";
+import { evaluateProductAvailability } from "./inventory";
+import { commitOrderOnce, findIdempotencyRecord, requestHashOf, StockConflictError } from "./checkout-transaction";
 import { createNotification } from "./notification";
 import { logAudit } from "./audit";
 
@@ -94,8 +95,10 @@ export type CreatedOrderSummary = {
   createdAt: string;
 };
 
-// In-memory idempotency cache keyed by `${businessId}::${idempotencyKey}`
-const idempotentOrders = new Map<string, CreatedOrderSummary>();
+/**
+ * Idempotency for AI and order-API creation is durable: it is a CheckoutIdempotencyRecord row written in the same
+ * transaction as the order (lib/checkout-transaction.ts). No in-memory cache is used.
+ */
 
 /**
  * Verifies whether a payment claim is backed by an authoritative server-side PAID Payment record (§15).
@@ -161,15 +164,35 @@ export async function createAuthoritativeOrder(input: {
     ? input.idempotencyKey.trim().slice(0, 120)
     : null;
 
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+
+  // The request, not the price, identifies the attempt. A retry with the same key and the same request returns the
+  // order created the first time, before any repricing or stock check: stock may already be gone because of it.
+  const requestHash = requestHashOf({
+    scope: "ai.order",
+    businessId,
+    customerName: input.customerName.trim(),
+    customerPhone: input.customerPhone?.trim() || null,
+    customerEmail: input.customerEmail?.trim() || null,
+    fulfilment: input.fulfilmentType === "DELIVERY" ? "DELIVERY" : "PICKUP",
+    deliveryLocation: input.deliveryLocation || null,
+    deliveryInstructions: input.deliveryInstructions || null,
+    items: rawItems.map((raw: any) => ({
+      productId: raw?.productId ?? null,
+      serviceId: raw?.serviceId ?? null,
+      quantity: Math.max(1, Math.round(Number(raw?.quantity) || 1)),
+      variantDesc: raw?.variantDesc ?? null,
+    })),
+  });
   if (idempotencyKey) {
-    const cacheKey = `${businessId}::${preview ? "preview" : "live"}::${idempotencyKey}`;
-    const cached = idempotentOrders.get(cacheKey);
-    if (cached) {
-      return { ...cached, idempotent: true };
+    const prior = await findIdempotencyRecord(businessId, "ai.order", idempotencyKey);
+    if (prior) {
+      if (prior.requestHash !== requestHash) {
+        throw new Error("This request key was already used for a different order.");
+      }
+      return summaryForStoredOrder(prior.orderId, businessId);
     }
   }
-
-  const rawItems = Array.isArray(input.items) ? input.items : [];
   // One instant for the whole order, so every line is priced at the same moment (sale windows, lib/sale-pricing.ts).
   const now = new Date();
   const bulkRules = await getExtendedAIConfig(businessId)
@@ -271,77 +294,25 @@ export async function createAuthoritativeOrder(input: {
       idempotent: false,
       createdAt: new Date().toISOString(),
     };
-    if (idempotencyKey) {
-      idempotentOrders.set(`${businessId}::preview::${idempotencyKey}`, previewSummary);
-    }
     return previewSummary;
-  }
-
-  // Check if order with this idempotent orderReference already exists in DB
-  if (idempotencyKey && prisma.order?.findUnique) {
-    const existingOrder = await prisma.order
-      .findUnique({ where: { orderReference }, include: { items: true } })
-      .catch(() => null);
-    if (existingOrder && existingOrder.businessId === businessId) {
-      const summary: CreatedOrderSummary = {
-        id: existingOrder.id,
-        orderReference: existingOrder.orderReference,
-        businessId: existingOrder.businessId,
-        customerName: existingOrder.customerName || input.customerName,
-        customerPhone: existingOrder.customerPhone || null,
-        customerEmail: existingOrder.customerEmail || null,
-        status: existingOrder.status as OrderState,
-        paymentStatus: (existingOrder.paymentStatus as "UNPAID" | "PAID") || "UNPAID",
-        subtotalKES: existingOrder.subtotalKES,
-        deliveryFeeKES: existingOrder.deliveryFeeKES,
-        discountKES: existingOrder.discountKES,
-        taxKES: 0,
-        totalKES: existingOrder.totalKES,
-        currency: existingOrder.currency,
-        fulfilmentType: (existingOrder.fulfilmentType as "PICKUP" | "DELIVERY") || "PICKUP",
-        deliveryLocation: existingOrder.deliveryLocation || null,
-        deliveryInstructions: existingOrder.deliveryInstructions || null,
-        lineItems: (existingOrder.items || []).map((it: any) => ({
-          productId: it.productId || undefined,
-          serviceId: it.serviceId || undefined,
-          name: it.name,
-          variantDesc: it.variantDesc || undefined,
-          quantity: it.quantity,
-          unitPriceKES: it.unitPriceKES,
-          lineSubtotalKES: it.quantity * it.unitPriceKES,
-        })),
-        preview: false,
-        idempotent: true,
-        createdAt: existingOrder.createdAt ? new Date(existingOrder.createdAt).toISOString() : new Date().toISOString(),
-      };
-      idempotentOrders.set(`${businessId}::live::${idempotencyKey}`, summary);
-      return summary;
-    }
-  }
-
-  // Reserve scarce inventory safely (§18)
-  if (calculation.lineItems.some((l) => l.productId)) {
-    const reservation = await reserveInventoryForOrder({
-      businessId,
-      items: calculation.lineItems.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-      idempotencyKey: idempotencyKey || orderReference,
-      preview: false,
-    });
-    if (reservation.ok === false) {
-      throw new Error((reservation as { error: string }).error);
-    }
   }
 
   const initialState: OrderState = input.confirmedByCustomer
     ? "PENDING_PAYMENT"
     : "PENDING_CUSTOMER_CONFIRMATION";
 
-  let orderId = `ord_${Date.now()}`;
-  if (prisma.order?.create) {
-    // A failed order write must be reported as a failure: returning an invented order id would
-    // tell the customer (and the owner) that an order exists when nothing was persisted (§28).
-    try {
-      const created = await prisma.order.create({
+  // One transaction: the idempotency record, the stock decrement (compare-and-set), and the order. A failure in any
+  // of them rolls back all of them, so reserved stock is never left behind by a failed order write (§18, §28).
+  const committed = await commitOrderOnce({
+    businessId,
+    scope: "ai.order",
+    idempotencyKey,
+    requestHash,
+    stockLines: calculation.lineItems
+      .filter((line) => Boolean(line.productId))
+      .map((line) => ({ productId: line.productId as string, quantity: line.quantity, name: line.name })),
+    create: async (tx: any) => {
+      const created = await tx.order.create({
         data: {
           orderReference,
           businessId,
@@ -374,12 +345,22 @@ export async function createAuthoritativeOrder(input: {
               }
             : {}),
         },
+        select: { id: true },
       });
-      if (created?.id) orderId = created.id;
-    } catch (error) {
-      throw error instanceof Error ? error : new Error("ORDER_PERSISTENCE_FAILED");
-    }
+      return { id: created.id as string };
+    },
+  }).catch((error: unknown) => {
+    if (error instanceof StockConflictError) throw new Error(error.message);
+    throw error instanceof Error ? error : new Error("ORDER_PERSISTENCE_FAILED");
+  });
+
+  if (committed.kind === "KEY_REUSED") {
+    throw new Error("This request key was already used for a different order.");
   }
+  if (committed.kind === "REPLAY") {
+    return summaryForStoredOrder(committed.record.orderId, businessId);
+  }
+  const orderId = committed.value.id;
 
   await logAudit({
     actorId: input.actorId || null,
@@ -426,13 +407,50 @@ export async function createAuthoritativeOrder(input: {
     createdAt: new Date().toISOString(),
   };
 
-  if (idempotencyKey) {
-    idempotentOrders.set(`${businessId}::live::${idempotencyKey}`, liveSummary);
-  }
-
   return liveSummary;
 }
 
+/** The summary of an order that an earlier request with the same idempotency key already created. */
+async function summaryForStoredOrder(orderId: string | null, businessId: string): Promise<CreatedOrderSummary> {
+  const existingOrder = orderId
+    ? await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } })
+    : null;
+  if (!existingOrder || existingOrder.businessId !== businessId) {
+    throw new Error("ORDER_PERSISTENCE_FAILED");
+  }
+  return {
+    id: existingOrder.id,
+    orderReference: existingOrder.orderReference,
+    businessId: existingOrder.businessId,
+    customerName: existingOrder.customerName || "",
+    customerPhone: existingOrder.customerPhone || null,
+    customerEmail: existingOrder.customerEmail || null,
+    status: existingOrder.status as OrderState,
+    paymentStatus: (existingOrder.paymentStatus as "UNPAID" | "PAID") || "UNPAID",
+    subtotalKES: existingOrder.subtotalKES,
+    deliveryFeeKES: existingOrder.deliveryFeeKES,
+    discountKES: existingOrder.discountKES,
+    taxKES: 0,
+    totalKES: existingOrder.totalKES,
+    currency: existingOrder.currency,
+    fulfilmentType: (existingOrder.fulfilmentType as "PICKUP" | "DELIVERY") || "PICKUP",
+    deliveryLocation: existingOrder.deliveryLocation || null,
+    deliveryInstructions: existingOrder.deliveryInstructions || null,
+    lineItems: (existingOrder.items || []).map((it: any) => ({
+      productId: it.productId || undefined,
+      serviceId: it.serviceId || undefined,
+      name: it.name,
+      variantDesc: it.variantDesc || undefined,
+      quantity: it.quantity,
+      unitPriceKES: it.unitPriceKES,
+      lineSubtotalKES: it.quantity * it.unitPriceKES,
+    })),
+    preview: false,
+    idempotent: true,
+    createdAt: existingOrder.createdAt ? new Date(existingOrder.createdAt).toISOString() : new Date().toISOString(),
+  };
+}
+
 export function resetOrderIdempotencyForTests() {
-  idempotentOrders.clear();
+  // Nothing is held in memory: idempotency is durable in the database. Kept so test setup stays unchanged.
 }

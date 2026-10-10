@@ -16,8 +16,9 @@ const state = vi.hoisted(() => ({
   auditEvents: [] as any[],
 }));
 
-vi.mock("@/lib/db", () => ({
-  default: {
+vi.mock("@/lib/db", () => {
+  const idempotencyRecords = new Map<string, any>();
+  const client: any = {
     business: {
       findUnique: vi.fn(async ({ where }: any) => state.businesses.get(where.id) || null),
       update: vi.fn(async ({ where, data }: any) => {
@@ -36,7 +37,9 @@ vi.mock("@/lib/db", () => ({
       updateMany: vi.fn(async ({ where, data }: any) => {
         const list = state.products.get(where.businessId) || [];
         const target = list.find((p) => p.id === where.id);
-        if (!target || typeof target.quantity !== "number" || target.quantity < (where.quantity?.gte ?? 1)) {
+        // Mirrors the compare-and-set: an exact-quantity match (the order transaction) or a minimum (legacy reserve).
+        const exactMismatch = typeof where.quantity === "number" && target?.quantity !== where.quantity;
+        if (!target || typeof target.quantity !== "number" || exactMismatch || target.quantity < (where.quantity?.gte ?? 1)) {
           return { count: 0 };
         }
         target.quantity = data.quantity;
@@ -103,7 +106,10 @@ vi.mock("@/lib/db", () => ({
       findFirst: vi.fn(async ({ where }: any) => (state.recipients.get(where.businessId) || [])[0] || null),
     },
     order: {
-      findUnique: vi.fn(async ({ where }: any) => state.orders.get(where.orderReference || where.id) || null),
+      findUnique: vi.fn(async ({ where }: any) =>
+        state.orders.get(where.orderReference || where.id) ||
+        [...state.orders.values()].find((o: any) => o.id === where.id) ||
+        null),
       create: vi.fn(async ({ data }: any) => {
         const created = { id: `ord_${state.orders.size + 1}`, ...data, items: data.items?.create || [] };
         state.orders.set(data.orderReference, created);
@@ -135,8 +141,29 @@ vi.mock("@/lib/db", () => ({
     aIQualityEvent: {
       create: vi.fn(async ({ data }: any) => ({ id: "aiq_1", ...data })),
     },
-  },
-}));
+    checkoutIdempotencyRecord: {
+      findUnique: vi.fn(async ({ where }: any) => {
+        const k = where.businessId_scope_key;
+        return [...idempotencyRecords.values()].find((r) => r.businessId === k.businessId && r.scope === k.scope && r.key === k.key) || null;
+      }),
+      create: vi.fn(async ({ data }: any) => {
+        const dup = [...idempotencyRecords.values()].find((r) => r.businessId === data.businessId && r.scope === data.scope && r.key === data.key);
+        if (dup) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        const created = { id: `idem_${idempotencyRecords.size + 1}`, orderId: null, paymentId: null, responseJson: null, ...data };
+        idempotencyRecords.set(created.id, created);
+        return created;
+      }),
+      update: vi.fn(async ({ where, data }: any) => {
+        const row = idempotencyRecords.get(where.id);
+        Object.assign(row, data);
+        return row;
+      }),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    }
+  };
+  client.$transaction = async (fn: any) => fn(client);
+  return { default: client };
+});
 
 import { evaluateAIReadiness, publishAIBusinessFrontDesk } from "@/lib/ai-readiness";
 import { assertAIFrontDeskPlanPricing, deriveAIEntitlement } from "@/lib/ai-entitlement";

@@ -73,7 +73,8 @@ describe("runtime and schema guards", () => {
     // per-business receipt sequence table, the lossless INTEGER → DOUBLE PRECISION
     // promotion of the POS quantity columns, and the POS till-sale replay guard (one new
     // tenant-scoped table that stops a duplicate till submission becoming a second sale), and the
-    // sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
+    // durable checkout idempotency table (replaces in-memory order idempotency maps, one additive table),
+    // and the sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
     // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
@@ -92,6 +93,7 @@ describe("runtime and schema guards", () => {
       "20261005040000_pos_sale_idempotency",
       "20261010000000_sale_price_windows",
       "20261010000100_pos_sale_price_windows",
+      "20261010000200_checkout_idempotency",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

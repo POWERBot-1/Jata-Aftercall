@@ -19,6 +19,7 @@ import { captureLead, type LeadClassification } from "./leads";
 import { createAuthoritativeOrder, hasServerVerifiedOrderPayment } from "./order";
 import { createPreOrderSummary, resolvePreorderPricing } from "./preorder";
 import { chargeableUnitPrice } from "./sale-pricing";
+import { requestHashOf } from "./checkout-transaction";
 import { createNotification } from "./notification";
 import { initializeOrderPayment, PAYMENT_PURPOSE } from "./experience/payments";
 import prisma from "./db";
@@ -442,7 +443,13 @@ export async function executeBusinessTool(
         discountKES: 0,
         fulfilmentType,
         deliveryLocation,
-        idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey : undefined,
+        // A retried or repeated create_order in the same conversation for the same request returns the first order.
+        idempotencyKey:
+          typeof args.idempotencyKey === "string" && args.idempotencyKey.trim()
+            ? args.idempotencyKey
+            : context.conversationId
+              ? `conv:${context.conversationId}:${requestHashOf({ items, customerPhone, fulfilmentType, deliveryLocation }).slice(0, 32)}`
+              : undefined,
         confirmedByCustomer: args.confirmedByCustomer === true,
         preview,
       });

@@ -8,8 +8,10 @@ type ProductSummary = {
   id: string;
   name: string;
   description?: string | null;
-  basePriceKES?: number | null;
-  variantPriceKES?: number | null;
+  /** Price charged now (sale only while its window runs). */
+  priceKES?: number | null;
+  /** Original price, shown only while a sale is running. */
+  wasPriceKES?: number | null;
   stockStatus: string;
   preOrderAllowed?: boolean;
 };
@@ -432,7 +434,14 @@ export default function AIFrontDeskCustomerClient({
                       onClick={() => sendMessage(`How much is ${p.name}?`)}
                       className="rounded bg-slate-800 px-2 py-1 font-semibold text-emerald-300 hover:bg-slate-700"
                     >
-                      KES {p.basePriceKES ?? p.variantPriceKES ?? 0}
+                      {p.priceKES != null ? (
+                        <>
+                          KES {p.priceKES}
+                          {p.wasPriceKES != null ? <span className="ml-1 text-[10px] text-slate-400 line-through">KES {p.wasPriceKES}</span> : null}
+                        </>
+                      ) : (
+                        "Price on request"
+                      )}
                     </button>
                   </div>
                 ))}

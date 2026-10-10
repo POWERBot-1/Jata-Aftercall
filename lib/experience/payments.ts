@@ -76,18 +76,26 @@ export type InitializeResult =
  * Create the payment row first, then ask Paystack to initialize. The amount always comes
  * from the server-priced order — never from the browser (§26).
  */
-export async function initializeOrderPayment(input: InitializeOrderPaymentInput): Promise<InitializeResult> {
+export type OrderPaymentRecord =
+  | { kind: "error"; error: string; status: number }
+  | { kind: "record"; paymentId: string; reference: string; amount: number; ownerId: string };
+
+/**
+ * Database step only: create the PENDING payment row for an order. No network call, so it can run inside the
+ * checkout transaction. The provider call is separate (startOrderPayment) and must run after commit.
+ */
+export async function createOrderPaymentRecord(input: InitializeOrderPaymentInput, client: any = prisma): Promise<OrderPaymentRecord> {
   const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
   if (amountKES <= 0) return { kind: "error", error: "This order has nothing to pay.", status: 400 };
 
-  const business = await prisma.business.findUnique({
+  const business = await client.business.findUnique({
     where: { id: input.businessId },
     select: { id: true, ownerId: true, slug: true },
   });
   if (!business) return { kind: "error", error: "Business not found.", status: 404 };
 
   const reference = generatePaymentReference();
-  const payment = await prisma.payment.create({
+  const payment = await client.payment.create({
     data: {
       reference,
       businessId: business.id,
@@ -102,6 +110,20 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
     },
     select: { id: true, reference: true, amount: true },
   });
+  return { kind: "record", paymentId: payment.id, reference: payment.reference, amount: payment.amount, ownerId: business.ownerId };
+}
+
+/**
+ * Provider step: ask Paystack to start the payment for a row created by createOrderPaymentRecord. Makes a network
+ * call, so it must never run while a database transaction is open.
+ */
+export async function startOrderPayment(
+  record: Extract<OrderPaymentRecord, { kind: "record" }>,
+  input: InitializeOrderPaymentInput,
+): Promise<InitializeResult> {
+  const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
+  const payment = { id: record.paymentId, reference: record.reference, amount: record.amount };
+  const business = { id: input.businessId, ownerId: record.ownerId };
 
   const callbackUrl = `${getBaseUrl()}${input.callbackPath.startsWith("/") ? input.callbackPath : `/${input.callbackPath}`}`;
 
@@ -141,6 +163,13 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
     await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
     return { kind: "error", error: "Paystack could not start this payment. Please try again.", status: 502 };
   }
+}
+
+/** Create the payment row, then ask Paystack to initialize (kept for existing callers). */
+export async function initializeOrderPayment(input: InitializeOrderPaymentInput): Promise<InitializeResult> {
+  const record = await createOrderPaymentRecord(input);
+  if (record.kind === "error") return record;
+  return startOrderPayment(record, input);
 }
 
 /**

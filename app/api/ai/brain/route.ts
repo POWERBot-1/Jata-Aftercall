@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { guardTenantMutation } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { publicProductPrice } from "@/lib/ai-public-products";
 
 /**
  * Business Brain (§7) — structured, authoritative business data retrieval.
@@ -41,6 +42,8 @@ export async function GET(req: Request) {
         category: p.category,
         basePriceKES: p.basePriceKES,
         variantPriceKES: p.variantPriceKES,
+        // The price charged now (sale only inside its window), and the original while a sale runs.
+        ...publicProductPrice(p),
         currency: p.currency,
         stockStatus: p.stockStatus,
         preOrderAllowed: p.preOrderAllowed,
