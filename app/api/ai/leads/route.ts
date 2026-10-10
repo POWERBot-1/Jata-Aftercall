@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import prisma from "@/lib/db";
 import { canAccessBusiness } from "@/lib/tenant";
 import {
   captureLead,
@@ -41,6 +42,13 @@ export async function POST(req: Request) {
       const allowed = await canAccessBusiness(user.id, businessId, user.role);
       if (!allowed) {
         return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
+      }
+    } else {
+      // Anonymous customers may only leave a lead with a published business (the same gate the public
+      // AI Front Desk chat applies). An unpublished or unknown business is refused without revealing which.
+      const target = await prisma.business.findUnique({ where: { id: String(businessId) }, select: { isPublished: true } }).catch(() => null);
+      if (!target || target.isPublished !== true) {
+        return NextResponse.json({ error: "This business is not accepting enquiries right now." }, { status: 403 });
       }
     }
 

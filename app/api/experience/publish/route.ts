@@ -22,6 +22,11 @@ import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experie
 
 export const dynamic = "force-dynamic";
 
+const DRAFT_CHANGED_CODE = "draft_version_conflict";
+const DRAFT_CHANGED_MESSAGE = "Your website changed in another window. Reload to see the latest version, then publish again. Nothing was published.";
+const VERSION_REQUIRED_CODE = "draft_version_required";
+const VERSION_REQUIRED_MESSAGE = "Reload the page and publish again so we know which version you reviewed.";
+
 type Loaded = Awaited<ReturnType<typeof loadPublishContext>>;
 
 async function loadPublishContext(businessId: string) {
@@ -49,10 +54,12 @@ export async function POST(req: Request) {
 
   let businessId = "";
   let action = "publish";
+  let expectedDraftVersion = 0;
   try {
     const body = await req.json();
     businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
     if (body?.action === "unpublish") action = "unpublish";
+    expectedDraftVersion = Number(body?.expectedDraftVersion);
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
@@ -84,6 +91,12 @@ export async function POST(req: Request) {
     }
 
     if (!experience) return NextResponse.json({ error: "Create your website before publishing it." }, { status: 409 });
+
+    // A publish publishes exactly the draft the owner reviewed. That draft is named by its version, so a
+    // stale window cannot publish a newer edit it never saw. Missing version: 428 (a precondition), not 409.
+    if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+      return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+    }
 
     const isAdmin = session.role === "ADMIN";
     const entitlement = await getInteractiveEntitlement(businessId);
@@ -127,12 +140,19 @@ export async function POST(req: Request) {
       }, { status: 409 });
     }
 
+    // Fast path: a stale window is refused before any write. The compare-and-swap below is what makes it safe.
+    if (expectedDraftVersion !== Number(experience.draftVersion)) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
+    }
+
     const nextVersion = Math.max(1, experience.draftVersion || experience.publishedVersion + 1);
     const publishedAt = new Date();
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.businessExperience.update({
-        where: { businessId },
+    // Compare-and-swap: the write applies only if the stored draft is still the one that was validated (same
+    // version AND same content). A newer edit in between makes this match no row, and nothing is published.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.businessExperience.updateMany({
+        where: { businessId, draftVersion: expectedDraftVersion, draftJson: experience.draftJson },
         data: {
           status: "PUBLISHED",
           publishedJson: JSON.stringify(document),
@@ -141,8 +161,13 @@ export async function POST(req: Request) {
           publishedAt,
           publishedById: session.userId,
         },
+      });
+      if (claimed.count !== 1) return null;
+      const updated = await tx.businessExperience.findUnique({
+        where: { businessId },
         select: { id: true, status: true, publishedVersion: true, publishedAt: true },
       });
+      if (!updated) return null;
       await tx.experienceVersion.upsert({
         where: { businessId_version: { businessId, version: nextVersion } },
         update: { snapshotJson: JSON.stringify(document), themeKey: document.themeKey, categoryKey: document.categoryKey, publishedAt, publishedById: session.userId },
@@ -168,6 +193,10 @@ export async function POST(req: Request) {
       });
       return updated;
     });
+    if (!outcome) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
+    const result = outcome;
 
     await syncInteractiveEntitlement(businessId);
 

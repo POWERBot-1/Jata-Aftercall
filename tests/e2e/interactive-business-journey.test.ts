@@ -203,7 +203,7 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
     });
     const response = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
-      body: { businessId: ctx.owner.businessId },
+      body: { businessId: ctx.owner.businessId, expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.owner.businessId } }))?.draftVersion },
     });
     expect(response.status).toBe(403);
     expect(response.body).toMatchObject({ published: false, requires: "PAYMENT" });
@@ -283,7 +283,7 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
   it("10 — the site publishes once payment is verified", async () => {
     const response = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
-      body: { businessId: ctx.owner.businessId },
+      body: { businessId: ctx.owner.businessId, expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.owner.businessId } }))?.draftVersion },
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
 

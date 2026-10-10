@@ -154,12 +154,17 @@ export async function GET(req: Request) {
     if (!cartId) {
       return NextResponse.json({ error: "cartId required." }, { status: 400 });
     }
+    // A cart is only ever read in the context of its business. Without a business id the lookup would be
+    // by cart id alone, which can return another tenant's cart (customer id, items, status).
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
+    }
 
     const cart = await prisma.cart.findUnique({ where: { id: cartId }, include: { items: true } });
     if (!cart) {
       return NextResponse.json({ error: "Cart not found." }, { status: 404 });
     }
-    if (businessId && cart.businessId !== businessId) {
+    if (cart.businessId !== businessId) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
