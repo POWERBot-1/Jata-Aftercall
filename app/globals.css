@@ -1594,3 +1594,32 @@ button:focus-visible {
     border-radius: 1.25rem;
   }
 }
+
+/* ── Immersive Website Engine: Motion mode (Phase 2) ───────────────────────────────────────
+   Only applies after the visitor's browser has chosen Motion (html[data-motion-ready]).
+   Lite pages carry no hidden state, so content is always visible without JavaScript.
+   Reduced-motion visitors never get the attribute, and the media query below is a second guard. */
+html[data-motion-ready] .eb-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  will-change: opacity, transform;
+}
+html[data-motion-ready] .eb-reveal--expressive {
+  transform: translateY(32px) scale(0.985);
+  transition-duration: 0.9s;
+}
+html[data-motion-ready] .eb-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-motion-ready] .eb-reveal,
+  html[data-motion-ready] .eb-reveal--expressive {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}

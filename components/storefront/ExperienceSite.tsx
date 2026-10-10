@@ -10,6 +10,9 @@ import type { StorefrontData } from "@/lib/experience/storefront";
 import { structuredDataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "./StorefrontShell";
 import { SectionRenderer } from "./Sections";
+import { RenderModeProbe } from "./RenderModeProbe";
+import { MotionReveal } from "./MotionReveal";
+import { isRenderPreference } from "@/lib/experience/renderMode";
 
 export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
   const { document, theme, profile, business } = data;
@@ -72,9 +75,17 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
         </section>
       ) : null}
 
-      {body.map((section) => (
-        <SectionRenderer key={section.id} section={section} data={data} />
-      ))}
+      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} />
+
+      {body.map((section) =>
+        theme.treatment.motion === "none" ? (
+          <SectionRenderer key={section.id} section={section} data={data} />
+        ) : (
+          <MotionReveal key={section.id} expressive={theme.treatment.motion === "expressive"}>
+            <SectionRenderer section={section} data={data} />
+          </MotionReveal>
+        ),
+      )}
 
       {body.length === 0 ? (
         <section className="eb-section">
