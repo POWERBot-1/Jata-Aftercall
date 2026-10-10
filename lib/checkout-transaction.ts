@@ -153,3 +153,54 @@ export async function markCheckoutCompleted(recordId: string, response: { status
     data: { state: "COMPLETED", responseJson: JSON.stringify(response) },
   });
 }
+
+/**
+ * Business rule for a new key that repeats an unpaid order. A customer who taps "Place order" twice with different keys
+ * (or reloads a stalled checkout) must not get two unpaid orders for the same basket. If an identical unpaid basket
+ * from the same phone was created within the window AND its payment is still PENDING, the earlier attempt's stored
+ * response (with its payment link) is returned instead. A payment that already failed or was cancelled does not block a
+ * new attempt, so a customer is never stuck. Nothing is written by this lookup.
+ */
+export const UNPAID_ATTEMPT_WINDOW_MS = 30 * 60 * 1000;
+
+export async function findLiveUnpaidAttempt(params: {
+  businessId: string;
+  scope: IdempotencyScope;
+  customerPhone: string;
+  totalKES: number;
+  lines: { productId?: string | null; variantDesc?: string | null; quantity: number }[];
+  now: Date;
+  client?: any;
+}): Promise<{ status: number; body: unknown } | null> {
+  const db = params.client ?? prisma;
+  const signature = (items: { productId?: string | null; variantDesc?: string | null; quantity: number }[]) =>
+    items.map((i) => `${i.productId ?? ""}|${i.variantDesc ?? ""}|${i.quantity}`).sort().join("\n");
+  const wanted = signature(params.lines);
+  const candidates = await db.order.findMany({
+    where: {
+      businessId: params.businessId,
+      customerPhone: params.customerPhone,
+      status: "PENDING_PAYMENT",
+      paymentStatus: "UNPAID",
+      totalKES: params.totalKES,
+      createdAt: { gte: new Date(params.now.getTime() - UNPAID_ATTEMPT_WINDOW_MS) },
+    },
+    select: { id: true, items: { select: { productId: true, variantDesc: true, quantity: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+  for (const order of candidates) {
+    if (signature(order.items) !== wanted) continue;
+    const record = await db.checkoutIdempotencyRecord.findFirst({
+      where: { businessId: params.businessId, scope: params.scope, orderId: order.id, state: "COMPLETED" },
+      select: { paymentId: true, responseJson: true },
+    });
+    if (!record?.responseJson || !record.paymentId) continue;
+    const payment = await db.payment.findUnique({ where: { id: record.paymentId }, select: { status: true } });
+    if (payment?.status !== "PENDING") continue;
+    const stored = JSON.parse(record.responseJson) as { status: number; body: unknown };
+    if (!(stored.status >= 200 && stored.status < 300)) continue;
+    return { status: stored.status, body: stored.body };
+  }
+  return null;
+}

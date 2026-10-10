@@ -42,7 +42,7 @@ vi.mock("@/lib/db", () => {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     productVariant: { findMany: vi.fn(async ({ where }: any) => mocks.variants.filter((row) => where.id.in.includes(row.id))) },
-    order: { create: mocks.orderCreate },
+    order: { findMany: vi.fn(async () => []), create: mocks.orderCreate },
     checkoutIdempotencyRecord: {
       // Stateful fake: a unique index on (businessId, scope, key), so a second create with the same key fails with P2002.
       create: vi.fn(async ({ data }: any) => {

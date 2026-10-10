@@ -17,6 +17,7 @@ import { PAYMENT_CURRENCY } from "../paymentCurrency";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
+import { classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
 import { formatKES } from "../format";
 
 export const PAYMENT_PURPOSE = {
@@ -39,6 +40,9 @@ export function paymentStateOf(payment: { status?: string | null } | null | unde
       return "CANCELLED";
     case "EXPIRED":
       return "EXPIRED";
+    case "CANCELLED":
+      // Paystack reported the customer abandoned the payment. Without this case it was shown as "Started".
+      return "CANCELLED";
     case "PENDING":
       return "PENDING";
     default:
@@ -221,6 +225,9 @@ export async function settleOrderPayment(
     if (payment.orderId) {
       const order = await tx.order.findUnique({ where: { id: payment.orderId }, select: { id: true, businessId: true, orderReference: true, totalKES: true, status: true, customerName: true } });
       if (order) {
+        // Business rule: money received for a CANCELLED order is recorded (payment PAID, order paymentStatus PAID) but
+        // the order is NOT reopened and nothing is refunded automatically. The owner decides: refund, or reinstate.
+        const cancelled = order.status === "CANCELLED";
         await tx.order.update({
           where: { id: order.id },
           data: {
@@ -231,21 +238,36 @@ export async function settleOrderPayment(
               : {}),
           },
         });
-        await tx.analyticsEvent.create({
-          data: { businessId: order.businessId, eventType: "PAYMENT_SUCCESS", subjectId: order.id },
-        });
-        await tx.notification.create({
-          data: {
-            businessId: order.businessId,
-            eventType: "PAYMENT_VERIFIED",
-            title: `Payment received — ${order.orderReference}`,
-            message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)}. Order ${order.orderReference}.`,
-            channel: "WHATSAPP",
-            status: "PENDING",
-            referenceId: order.id,
-            maxRetries: 3,
-          },
-        });
+        if (cancelled) {
+          await tx.notification.create({
+            data: {
+              businessId: order.businessId,
+              eventType: "PAYMENT_ON_CANCELLED_ORDER",
+              title: `Payment on a cancelled order — ${order.orderReference}`,
+              message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)} for order ${order.orderReference}, which is cancelled. Refund the payment or reinstate the order.`,
+              channel: "WHATSAPP",
+              status: "PENDING",
+              referenceId: order.id,
+              maxRetries: 3,
+            },
+          });
+        } else {
+          await tx.analyticsEvent.create({
+            data: { businessId: order.businessId, eventType: "PAYMENT_SUCCESS", subjectId: order.id },
+          });
+          await tx.notification.create({
+            data: {
+              businessId: order.businessId,
+              eventType: "PAYMENT_VERIFIED",
+              title: `Payment received — ${order.orderReference}`,
+              message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)}. Order ${order.orderReference}.`,
+              channel: "WHATSAPP",
+              status: "PENDING",
+              referenceId: order.id,
+              maxRetries: 3,
+            },
+          });
+        }
       }
     }
 
@@ -260,6 +282,14 @@ export async function settleOrderPayment(
     await tx.auditEvent.create({
       data: { action: "ORDER_PAYMENT_SETTLED", targetType: "PAYMENT", targetId: payment.id, metadata: JSON.stringify({ reference: payment.reference, orderId: payment.orderId, bookingId: payment.bookingId }) },
     });
+    if (payment.orderId) {
+      const cancelledOrder = await tx.order.findUnique({ where: { id: payment.orderId }, select: { status: true } });
+      if (cancelledOrder?.status === "CANCELLED") {
+        await tx.auditEvent.create({
+          data: { action: "ORDER_PAID_AFTER_CANCELLATION", targetType: "PAYMENT", targetId: payment.id, metadata: JSON.stringify({ reference: payment.reference, orderId: payment.orderId }) },
+        });
+      }
+    }
 
     return { alreadySettled: false, orderId: payment.orderId, bookingId: payment.bookingId };
   });
@@ -275,26 +305,36 @@ export async function failOrderPayment(paymentId: string): Promise<void> {
  * Returns the explicit state — never assumes success.
  */
 export async function verifyOrderPayment(reference: string): Promise<{ state: PaymentState; orderId?: string | null }> {
-  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, amount: true, purpose: true } });
+  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
   if (!payment) return { state: "NOT_STARTED" };
   if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId };
-  if (payment.status !== "PENDING") return { state: paymentStateOf(payment), orderId: payment.orderId };
+  if (payment.status === "REFUNDED") return { state: "CANCELLED", orderId: payment.orderId };
 
-  if (process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
-    // Test/demo confirmation path.
+  if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+    // Test/demo confirmation path (no provider configured). Never reachable in production.
     await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${reference}`, raw: { testMock: true } } });
     return { state: "SUCCESS", orderId: payment.orderId };
   }
 
+  // PENDING, FAILED, CANCELLED and EXPIRED are all re-checked with the provider. A local FAILED can be stale: Paystack can
+  // report a failed card attempt and then a successful one on the same reference. The provider's verified answer decides.
   try {
     const transaction = await verifyTransaction(reference);
-    if (transaction.status !== "success" || transaction.amount !== payment.amount || transaction.reference !== reference) {
-      return { state: "PENDING", orderId: payment.orderId };
+    const evidence = validatePaymentEvidence(payment, transaction);
+    if (evidence.ok === false) return { state: paymentStateOf(payment), orderId: payment.orderId };
+    const outcome = classifyProviderStatus(transaction.status);
+    if (outcome.kind === "in_progress") return { state: "PENDING", orderId: payment.orderId };
+    if (outcome.kind === "final_failure") {
+      // Record the terminal outcome only from PENDING; a payment that already failed keeps its state.
+      if (payment.status === "PENDING") {
+        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: outcome.status } });
+      }
+      return { state: paymentStateOf({ status: payment.status === "PENDING" ? outcome.status : payment.status }), orderId: payment.orderId };
     }
     const settled = await settleOrderPayment(payment.id, { verification: { paystackId: String(transaction.id), raw: transaction } });
     return { state: "SUCCESS", orderId: settled.orderId };
   } catch {
-    return { state: "PENDING", orderId: payment.orderId };
+    return { state: paymentStateOf(payment), orderId: payment.orderId };
   }
 }
 

@@ -39,6 +39,8 @@ vi.mock("@/lib/db", () => {
     },
     productVariant: { findMany: async () => [] },
     order: {
+      // No earlier unpaid orders in this mock; the unpaid-attempt rule is covered against real Prisma in tests/prisma.
+      findMany: async () => [],
       create: async ({ data }: any) => {
         const row = { id: `ord-${mocks.orders.length + 1}`, ...data, items: data.items?.create ?? [] };
         mocks.orders.push(row);

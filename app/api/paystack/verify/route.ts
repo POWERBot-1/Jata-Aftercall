@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { classifyProviderStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 import { getPlanById } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { verifyOrderPayment } from "@/lib/experience/payments";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -34,6 +35,12 @@ export async function GET(req: Request) {
       const status = error instanceof TenantError ? error.status : 403;
       return NextResponse.json({ error: status === 404 ? "Business not found." : "You are not authorized to view this payment." }, { status });
     }
+  }
+
+  // Order and booking payments settle through the order flow. They must never reach the subscription activation below.
+  if (payment.orderId || payment.bookingId) {
+    const result = await verifyOrderPayment(reference);
+    return NextResponse.json({ status: result.state === "SUCCESS" ? "PAID" : result.state, ...posReturn });
   }
 
   if (payment.status === "PAID") {

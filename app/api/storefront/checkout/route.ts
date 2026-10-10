@@ -32,6 +32,7 @@ import {
   commitOrderOnce,
   findIdempotencyRecord,
   markCheckoutCompleted,
+  findLiveUnpaidAttempt,
   requestHashOf,
   StockConflictError,
   type IdempotencyRecordView,
@@ -292,6 +293,20 @@ export async function POST(req: Request) {
         lines: pricing.lineItems.map((line: PricedLine) => ({ name: line.name, quantity: line.quantity, unitPriceKES: line.unitPriceKES, lineSubtotalKES: line.lineSubtotalKES })),
         unavailable: pricing.unavailable,
       }, { status: 409 });
+    }
+
+    // Same basket, same phone, still awaiting payment: answer with the earlier attempt instead of a second unpaid order.
+    const liveAttempt = await findLiveUnpaidAttempt({
+      businessId: business.id,
+      scope: SCOPE,
+      customerPhone: customer.phone,
+      totalKES: pricing.totalKES,
+      lines: pricing.lineItems.map((line: PricedLine) => ({ productId: line.productId, variantDesc: line.variantDesc, quantity: line.quantity })),
+      now: new Date(),
+    });
+    if (liveAttempt) {
+      const body = liveAttempt.body && typeof liveAttempt.body === "object" ? { ...(liveAttempt.body as object), reusedUnpaidOrder: true } : liveAttempt.body;
+      return NextResponse.json(body, { status: liveAttempt.status });
     }
 
     const reference = orderReference();
