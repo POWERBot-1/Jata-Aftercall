@@ -131,6 +131,16 @@ export function buildImagePrompt(facts: PromptFacts): string {
   );
   lines.push(`Vary lighting direction and framing the same way across every image for this business (style seed ${design.styleSeed}).`);
   lines.push(`Avoid: ${design.artDirection.avoid}; cluttered props; busy patterns; heavy HDR; anything that looks like a stock photo.`);
+  if (design.variation) {
+    lines.push(
+      `Creative variation ${clean(design.variation.seed, 80)}: ${clean(design.variation.layout, 160)}. Frame and compose this image differently from other images for this business, while keeping the brand palette and photography language.`,
+    );
+  }
+  if (facts.placement === "product" && !facts.hasReference) {
+    lines.push(
+      "This is a representative example, not the owner's actual product. Do not show a price, a label, a brand name or packaging text, and do not present it as the exact item.",
+    );
+  }
   if (facts.hasReference) {
     lines.push(
       "The owner attached a photo of their own product. Preserve its identity exactly: same shape, colour, packaging, label text, proportions and material. Improve only the presentation — lighting, background, framing.",
@@ -224,6 +234,9 @@ export function buildCopyPrompt(facts: {
     `TASK: ${shape.instruction} Keep it under ${shape.maxChars} characters. Shape: ${shape.shape}.`,
     facts.subjectName ? `SUBJECT: ${clean(facts.subjectName, 90)}.` : "",
     facts.question ? `CUSTOMER QUESTION: ${clean(facts.question, 200)}.` : "",
+    facts.design.variation
+      ? `WRITING VARIATION ${clean(facts.design.variation.seed, 80)}: use a fresh angle and different wording from earlier suggestions for this business. Variation never permits inventing facts.`
+      : "",
     `FACTS: ${suppliedFacts.length > 0 ? suppliedFacts.join(" | ") : "(none supplied)"}`,
     "If the FACTS list is empty or does not answer the task, write only generic wording that a customer can act on, and do not assert anything specific about the business.",
     `Return ${Math.max(1, Math.min(4, 3))} different options.`,

@@ -160,6 +160,8 @@ export function resolveRenderMode(input: {
   signals: CapabilitySignals;
   thresholds?: CapabilityThresholds;
   implemented?: readonly RenderMode[];
+  /** Result of the immersive eligibility policy. Anything but `true` keeps a visitor off 3D. */
+  immersiveEligible?: boolean;
 }): RenderDecision {
   const implemented = input.implemented ?? IMPLEMENTED_RENDER_MODES;
   const { score } = scoreCapabilities(input.signals);
@@ -184,10 +186,14 @@ export function resolveRenderMode(input: {
 
   let mode = requested;
   let fallbackReason: string | null = null;
-  if (mode === "immersive" && !input.signals.webgl) {
-    mode = "motion";
-    fallbackReason = "no-webgl";
-  }
+  // Each step records only the first reason that applied, in a fixed order.
+  const step = (next: RenderMode, reason: string) => {
+    mode = next;
+    if (fallbackReason === null) fallbackReason = reason;
+  };
+  if (mode === "immersive" && !input.signals.webgl) step("motion", "no-webgl");
+  if (mode === "immersive" && !implemented.includes("immersive")) step("motion", "not-implemented");
+  if (mode === "immersive" && input.immersiveEligible !== true) step("motion", "immersive-not-eligible");
 
   const startIndex = FALLBACK_ORDER.indexOf(mode);
   for (let index = startIndex; index < FALLBACK_ORDER.length; index += 1) {

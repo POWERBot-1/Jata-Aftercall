@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExperienceDocument } from "@/lib/experience/types";
 import { MediaPicker } from "./MediaPicker";
+import { LayoutVariantPanel } from "./LayoutVariantPanel";
 import type { DesignDirection } from "@/lib/studio/designDirections";
 
 type ThemeOption = { key: string; name: string; description: string; swatches: string[] };
@@ -132,6 +133,16 @@ export function DesignPanel({
           ↩︎ Undo the last design change
         </button>
       ) : null}
+
+      <LayoutVariantPanel
+        businessId={businessId}
+        current={document}
+        onApplied={(next) => {
+          setUndoSnapshot(document);
+          setDocument(next);
+          router.refresh();
+        }}
+      />
 
       <section className="jata-card">
         <h2 className="text-sm font-bold">Design directions</h2>

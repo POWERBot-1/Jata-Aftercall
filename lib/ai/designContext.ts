@@ -12,6 +12,7 @@
 
 import { getExperienceProfile } from "../experience/categories";
 import { resolveExperienceTheme } from "../experience/themes";
+import { layoutSummaryOf } from "../experience/variant";
 import { PHOTOGRAPHY_STYLE_KEYS, type CategoryKey, type ExperienceBrand, type ExperienceDocument } from "../experience/types";
 
 export type PhotographyStyle = {
@@ -149,6 +150,8 @@ export type DesignContext = {
   location?: string | null;
   /** A short, stable fingerprint so providers can key on a consistent style. */
   styleSeed: string;
+  /** Structural variation for this generation (Phase 3). Absent when the draft has no seeded variant. */
+  variation?: { seed: string; layout: string } | null;
 };
 
 function hexOr(value: unknown, fallback: string): string {
@@ -174,6 +177,7 @@ export function buildDesignContext(input: {
   language?: "en" | "sw" | "mixed" | null;
   location?: string | null;
   photographyStyle?: string | null;
+  variation?: { seed: string; layout: string } | null;
 }): DesignContext {
   const profile = getExperienceProfile(input.categoryKey);
   const theme = resolveExperienceTheme(input.themeKey || profile.defaultThemeKey);
@@ -202,6 +206,8 @@ export function buildDesignContext(input: {
     language: input.language || "en",
     location: input.location ? String(input.location).slice(0, 80) : null,
     styleSeed: hashSeed(`${input.businessName}|${profile.key}|${theme.key}|${styleKey || defaultStyleForCategory(profile.key)}`),
+    // Only present when a seeded variant exists, so existing contexts are unchanged.
+    ...(input.variation ? { variation: { seed: input.variation.seed, layout: input.variation.layout } } : {}),
   };
 }
 
@@ -242,5 +248,7 @@ export function designContextForDocument(document: ExperienceDocument, extras: {
     language: extras.language,
     location: document.settings.location ?? null,
     photographyStyle: (document as { photographyStyle?: string }).photographyStyle ?? null,
+    // Carry the draft's structural seed into copy and image prompts, so writing varies with the layout.
+    variation: document.generation?.seed ? { seed: document.generation.seed, layout: layoutSummaryOf(document) } : null,
   });
 }

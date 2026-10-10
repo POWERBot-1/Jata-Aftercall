@@ -228,6 +228,8 @@ export type ExperienceDocument = {
   photographyStyle?: PhotographyStyleKey | string;
   /** Owner's rendering preference. Absent in v1 documents, which behave as "auto" (Immersive Website Engine, Phase 1). */
   renderPreference?: RenderPreference;
+  /** Provenance of a seeded structural variant (Phase 3). Absent for hand-built documents. */
+  generation?: { seed: string; version: number; attempt: number };
   /** The design direction the owner chose, kept for the Studio's "current direction" state. */
   designDirectionKey?: string;
   updatedAt?: string;

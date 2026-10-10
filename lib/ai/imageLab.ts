@@ -35,6 +35,7 @@ import {
 } from "./generationStore";
 import { validateGroundedText } from "./grounding";
 import { PHOTOGRAPHY_STYLE_KEYS } from "../experience/types";
+import { layoutSummaryOf } from "../experience/variant";
 
 export type StudioImageRequest = {
   businessId: string;
@@ -148,6 +149,7 @@ export async function loadBusinessContext(businessId: string, photographyStyleOv
   let themeKey: string | null = experience?.themeKey ?? null;
   let categoryKey: string | null = experience?.categoryKey ?? null;
   let photographyStyle: string | null = photographyStyleOverride ?? null;
+  let variation: { seed: string; layout: string } | null = null;
   if (experience?.draftJson) {
     try {
       const document = JSON.parse(String(experience.draftJson));
@@ -156,6 +158,9 @@ export async function loadBusinessContext(businessId: string, photographyStyleOv
       categoryKey = document?.categoryKey || categoryKey;
       if (!photographyStyle && typeof document?.photographyStyle === "string") {
         photographyStyle = document.photographyStyle;
+      }
+      if (document?.generation && typeof document.generation.seed === "string") {
+        variation = { seed: document.generation.seed, layout: layoutSummaryOf(document) };
       }
     } catch {
       // A malformed draft must not block image generation: fall back to business defaults.
@@ -181,6 +186,7 @@ export async function loadBusinessContext(businessId: string, photographyStyleOv
     language: "mixed",
     location: business.location,
     photographyStyle,
+    variation,
   });
 
   return {
