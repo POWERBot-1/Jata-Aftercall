@@ -189,8 +189,9 @@ Server-side authorisation on every experience and media route (`lib/tenant.ts`
 | --- | --- |
 | Base `origin/main` | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` |
 | Baseline before edits | `77e35cec6a5726f569ab3febd3e7766300b14890` |
-| Implementation commit (pushed, remote-verified) | `bc1bbdeb5b7eca06fa83bb0e2c1e3476daf98f95` |
-| Documentation commit | see `git log --oneline -1` — this file is added in the commit immediately after `bc1bbde`; the remote branch SHA after that push is recorded in the next update of this section |
+| Implementation commit | `bc1bbdeb5b7eca06fa83bb0e2c1e3476daf98f95` |
+| Documentation commit (this file) | `cb5ca87e108321798c58e035a2a3504a96192a58` |
+| Remote branch SHA after the documentation push | verified with `git ls-remote origin refs/heads/arena/a9a473f2-jata-aftercall`; the SHA it returned is the final one for this delivery and is quoted in §1 |
 
 ---
 
