@@ -12,6 +12,8 @@ import { StorefrontShell } from "./StorefrontShell";
 import { SectionRenderer } from "./Sections";
 import { RenderModeProbe } from "./RenderModeProbe";
 import { MotionReveal } from "./MotionReveal";
+import { MotionEngineMount } from "./motion/MotionEngineMount";
+import { sectionRecipesForPage } from "@/lib/experience/motion";
 import { isRenderPreference } from "@/lib/experience/renderMode";
 
 export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
@@ -21,6 +23,15 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
   const heroImage = hero?.imageUrl || document.brand.heroImageUrl || null;
+
+  // Choreography is chosen on the server so the markup — and its CSS fallback — is complete before
+  // any script runs. The seed comes from the generation that produced this document, falling back
+  // to something equally stable for hand-built sites, so a business always animates the same way
+  // and two businesses sharing a theme do not animate identically (§7, §68).
+  const motionSeed = document.generation?.seed || `${document.categoryKey}:${business.slug}`;
+  const renderPreference = isRenderPreference(document.renderPreference) ? document.renderPreference : "auto";
+  const recipes = sectionRecipesForPage({ motionLevel: theme.treatment.motion, seed: motionSeed, sections: body });
+  const magnetic = theme.treatment.motion === "expressive";
 
   const structuredData = structuredDataFor({
     business,
@@ -55,7 +66,11 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
                 </h1>
                 {hero.subtitle ? <p className="eb-lede">{hero.subtitle}</p> : null}
                 <div className="eb-hero__actions">
-                  <Link href={commerce ? `/b/${business.slug}/shop` : booking ? `/b/${business.slug}/book` : "#contact"} className="eb-btn">
+                  <Link
+                    href={commerce ? `/b/${business.slug}/shop` : booking ? `/b/${business.slug}/book` : "#contact"}
+                    className="eb-btn"
+                    {...(magnetic ? { "data-eb-magnetic": "" } : {})}
+                  >
                     {hero.cta?.label || profile.cta.primary}
                   </Link>
                   {document.settings.whatsapp || document.settings.phone ? (
@@ -75,13 +90,14 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
         </section>
       ) : null}
 
-      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} />
+      <RenderModeProbe preference={renderPreference} />
+      <MotionEngineMount motionLevel={theme.treatment.motion} seed={motionSeed} preference={renderPreference} />
 
       {body.map((section) =>
         theme.treatment.motion === "none" ? (
           <SectionRenderer key={section.id} section={section} data={data} />
         ) : (
-          <MotionReveal key={section.id} expressive={theme.treatment.motion === "expressive"}>
+          <MotionReveal key={section.id} motionLevel={theme.treatment.motion} recipe={recipes[section.id] ?? null}>
             <SectionRenderer section={section} data={data} />
           </MotionReveal>
         ),

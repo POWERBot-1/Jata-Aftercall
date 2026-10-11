@@ -8,13 +8,29 @@
  * once it enters the viewport, or once the visitor has scrolled past it. Without
  * IntersectionObserver, or if the observer never fires, the content is revealed after a short
  * safety timeout, so nothing is ever left blank.
+ *
+ * When the JavaScript motion engine loads it takes over for sections that carry a
+ * `data-eb-motion` recipe: the stylesheet then leaves this wrapper opaque and the engine owns the
+ * entrance. The wrapper itself does not know or care whether that happened — the recipe is data,
+ * and the CSS above is the fallback either way. This module never imports `motion`.
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { sectionMotionMarkup } from "@/lib/experience/motion";
+import type { MotionLevel } from "@/lib/experience/themes";
 
 const SAFETY_REVEAL_MS = 4000;
 
-export function MotionReveal({ children, expressive = false }: { children: ReactNode; expressive?: boolean }) {
+export function MotionReveal({
+  children,
+  motionLevel = "subtle",
+  recipe = null,
+}: {
+  children: ReactNode;
+  motionLevel?: MotionLevel;
+  /** Recipe key from `lib/experience/motion.ts`. Null keeps the section on CSS only. */
+  recipe?: string | null;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,5 +74,11 @@ export function MotionReveal({ children, expressive = false }: { children: React
     };
   }, []);
 
-  return <div ref={ref} className={expressive ? "eb-reveal eb-reveal--expressive" : "eb-reveal"}>{children}</div>;
+  const markup = sectionMotionMarkup({ motionLevel, recipe });
+
+  return (
+    <div ref={ref} className={markup.className || undefined} data-eb-motion={markup.recipe ?? undefined}>
+      {children}
+    </div>
+  );
 }

@@ -1624,3 +1624,28 @@ html[data-motion-ready] .eb-reveal.is-visible {
     will-change: auto;
   }
 }
+
+/* ── Immersive Website Engine: the JavaScript motion engine (Phase 2) ────────────────────────
+   `html[data-motion-engine="js"]` is written by MotionEngineMount only after the `motion` chunk
+   has actually loaded. Until that moment — and forever, if it never loads — the CSS rules above
+   are what the visitor sees. Once the engine is running it owns the entrance: the stylesheet
+   therefore leaves every reveal fully opaque here, and the engine hides only the elements it is
+   about to animate. A failed, blocked or slow chunk can never leave a section invisible (§54, §78). */
+html[data-motion-engine="js"] .eb-reveal,
+html[data-motion-engine="js"] .eb-reveal--expressive {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  will-change: auto;
+}
+
+/* The hover-driven call to action (§21 "magnetic"). Pointer-only by construction: the runtime
+   attaches it solely for a fine pointer, so a touch visitor gets the plain button (§27). */
+[data-eb-magnetic] {
+  transition: transform 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-eb-magnetic] {
+    transition: none;
+  }
+}

@@ -17,12 +17,14 @@
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
     "migrate": "bash scripts/migrate.sh",
     "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'",
-    "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs"
+    "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs",
+    "test:browser:motion": "node scripts/browser/motion-engine.check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
+    "motion": "^14.1.0",
     "next": "15.5.26",
     "react": "18.3.1",
     "react-dom": "18.3.1",
