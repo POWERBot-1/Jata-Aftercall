@@ -21,6 +21,7 @@
     "test:browser:motion": "node scripts/browser/storefront-motion.check.mjs",
     "test:browser:layout": "node scripts/browser/fixture-layout.check.mjs",
     "test:browser:families": "node scripts/browser/storefront-families.check.mjs",
+    "test:browser:media-local": "node scripts/browser/local-media.check.mjs",
     "test:smoke:studio": "node scripts/browser/studio-production.smoke.mjs",
     "measure:studio-bundles": "node scripts/measure-website-studio-bundles.mjs"
   },

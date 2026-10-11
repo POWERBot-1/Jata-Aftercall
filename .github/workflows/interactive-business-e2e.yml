@@ -163,6 +163,7 @@ jobs:
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
+          npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
       # Publish real successful summaries too; direct Actions log downloads may be inaccessible.
       - name: Record successful verification evidence on the pull request
@@ -186,6 +187,7 @@ jobs:
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
               ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
+              ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
             const bundles = fs.readFileSync('/tmp/step-studio-bundles.log', 'utf8').slice(-2500);
             const head = context.payload.pull_request.head.sha;
@@ -224,6 +226,7 @@ jobs:
               ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
               ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
               ['Family browser', '/tmp/step-family-browser.log', 2500],
+              ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');

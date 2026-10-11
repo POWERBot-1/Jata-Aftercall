@@ -317,14 +317,12 @@ export function parseImageDataUrl(value: unknown): Base64Image | null {
   const mime = match[1].toLowerCase();
   const stripped = match[3].replace(/\s+/g, "");
   if (!stripped) return null;
-  let buffer: Buffer;
+  let bytes: Uint8Array;
   try {
-    buffer = Buffer.from(stripped, "base64");
-  } catch {
-    return null;
-  }
-  if (buffer.length === 0) return null;
-  const bytes = new Uint8Array(buffer);
+    if (typeof Buffer !== "undefined") bytes = new Uint8Array(Buffer.from(stripped, "base64"));
+    else { const binary = atob(stripped); bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0)); }
+  } catch { return null; }
+  if (bytes.length === 0) return null;
   const sniffed = sniffImageFormat(bytes);
   if (!sniffed) return null;
   // The declared MIME and the real bytes must agree when the declared type is a raster image;
@@ -388,7 +386,7 @@ export function validateImageBytes(
       issue: {
         code: "heic_unsupported",
         message:
-          "iPhone HEIC photos can't be shown on websites yet. Take a screenshot of the photo and upload that, or open Settings › Camera › Formats and choose “Most Compatible”.",
+          "HEIC conversion is not enabled in this photo preparer. Use a JPG, PNG or WebP copy, take a screenshot, or choose Settings › Camera › Formats › “Most Compatible”.",
         recoverable: false,
       },
     };

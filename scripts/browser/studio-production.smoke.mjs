@@ -31,7 +31,7 @@ try {
     server.once("error", (error) => { clearTimeout(timeout); reject(error); });
     server.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Production server exited ${code}`)); });
   });
-  for (const path of ["/dev/motion-preview?preference=immersive", "/dev/immersive-preview"]) {
+  for (const path of ["/dev/motion-preview?preference=immersive", "/dev/immersive-preview", "/dev/media-preview"]) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(20000) });
     const html = await response.text();
     check(`${path}: production returns 404`, response.status === 404);

@@ -34,3 +34,8 @@ Decision received 2026-10-11: **DEFER PROVIDER APPROVAL**. Persistent-original a
 5. Security/dependency/bundle/memory measurements and migration/backfill plan reviewed; no production mutation or deployment without separate approval.
 
 **No acceptance is closed by this document or an adapter alone.** Independent engine work continues; original-preservation/storage/provider acceptance remains BLOCKED until those gates are actually satisfied.
+
+
+## Independent local raster checkpoint (not activation)
+
+The local preparer now refuses optimization-failure original-inline substitution, works from an immutable File/temp decode copy and can produce a separate in-memory processed derivative. It does not retain originals durably, issue tokens, activate a provider or authorize a new upload endpoint. Existing legacy processed-derivative/read contracts stay unchanged. No exact OS-decoder memory guarantee or physical Android/HEIC acceptance is inferred from local pixel tests. These are independent safety checks; **persistent-original/provider acceptance remains BLOCKED**. All selection/access/retention/deletion/cost/configuration/actual-provider gates above still apply before activation.
