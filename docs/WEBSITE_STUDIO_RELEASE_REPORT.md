@@ -117,3 +117,58 @@ Source and documents are committed on the session branch; ignored tool caches ar
 
 - Request-contract commit / remote SHA: `3d7192c7b180ecbeaa879a8a29ef0bbd41c1525c`; run https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38143269483 **FAILED**: full native non-e2e suite/no-skips **PASSED**; experience journey **10 passed / 7 failed / 0 skipped**, downstream POS/build **NOT RUN**. PR diagnostic comment ID 6109534757 now preserves the complete leading root failure.
 - Root is one additional inherited edit (case 9) missing the required CAS version. Case 10 rightly refused publication without that unsaved primary visual; quote/order/booking/content-survival failures were downstream cascades from the unpublished site. Corrected case 9 to send the actual reviewed draft version. No primary-visual, price, entitlement, tenant or availability assertion relaxed; no guessed date or application booking workaround. Fresh CI remains required.
+
+### M2.1.3 — native journey recovery verified
+
+- Feature head **`a28c1a46101ac90bbf28d374b4986b689196de8d`**, verified branch/remote equality after push, now **PASS**: [Actions38143573261](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38143573261), job114482190445, completed2026-10-11T13:34:44Z.
+- Actual job metadata confirms native Prisma generate, lint/types,15 migrations/seed, full non-E2E/no-skips gate, experience/no-skips, Business POS/no-skips, and connected production build all succeeded. The two journeys contain17 and22 real route-handler cases respectively. These use real disposable Postgres, mocked sessions/test settlement; not live Paystack, physical-device or browser-authenticated full journey proof. Earlier3d7192c stdout reported1846 passed +1 expected fail in the non-E2E suite; that is historical evidence, not a fabricated fresh log download.
+- All CAS, publication readiness, server quote, exact total/idempotency and booking assertions retained. No production commerce fix or date workaround was needed. This supersedes the earlier failed journey status for that previous tested implementation only, not the new Motion source below.
+
+### M3 — actual scoped Motion implementation (local verification complete; fresh CI pending push)
+
+Implementation/remote SHA will be recorded by the follow-up documentation checkpoint after source commit and fresh CI. This paragraph deliberately cannot embed the hash of the commit containing itself.
+
+**Implemented, not merely installed:** real dynamic `motion/mini` import; visible server recipe wrapper; one storefront-scoped effect; fade/slide/scale/reveal presets (opacity≥0.92, ≤0.56 seconds, only opacity/transform);40-target and8-active+pending limits; owner Lite/none; live reduced-motion/Save-Data/connection/tab-visibility cancellation; legacy preference listeners; async epoch invalidation; exact original inline-style/priority restoration; no animation of focused/passed sections; static observer/preference failure and finite CSS fallback on missing APIs, failed/hung2-second import or partial native errors. Partial failures cancel only newly created animations. Owned static guards do not alter independently nested scopes. No global html motion flags, WebGL probe, scroll-jacking, generated executable configuration or permanently hidden/will-change state.
+
+Development harness uses the **actual ExperienceSite renderer and actual library**, with clearly labelled synthetic catalogue/imagery, noindex and production404. Real React unmount control exists only in this development harness. Local opt-in Arena framing/HMR configuration cannot affect production (NODE_ENV guard); existing production DENY/public-business SAMEORIGIN/self preserved.
+
+| Status | M3 verification | Actual evidence / limit |
+|---|---|---|
+| PASSED | npm dependency/peer inspection | motion/framer-motion14.1.0, React/DOM18.3.1 deduped, Next15.5.26 unchanged; no dependency or lockfile changes in this integration milestone |
+| PASSED | lint, typecheck, git diff whitespace | Existing CartProvider img warning and next-lint deprecation; SSR unit renderer additionally exposes an inherited React18 fetchPriority-prop warning, not an uncaught browser error |
+| PASSED | New unit/SSR/controller/config tests |35 passed;30 Motion +5 dev-header tests. Fake DOM/injected loader checks are not browser or database proof |
+| PASSED | Full local suite |151 files passed /11 skipped;1820 tests passed /102 skipped /1922 total;0 failed; `.cache/verification/motion-full-tests.log` (ignored scratch) |
+| SKIPPED | Local native DB/e2e tests |102 skipped, no local DATABASE_URL/native engine; not counted as passed. Previous head's native CI green does not validate the new Motion source |
+| PASSED | Actual Motion browser |HeadlessChrome153.0.8010.0;124 checks /0 failed /0 skipped,22 scenarios; real mini download/native animate calls, no-fetch Lite/reduced/Save-Data/low-resource cases, touch cart, no-JS visible HTML, import failure/hang/race, partial native API error, old API CSS, independent nested CSS, no overflow/global flags, live constraints and real React unmount |
+| PASSED | Existing actual immersive/layout harnesses |14 +7 checks,0 failed/skipped; synthetic/intercepted model/catalogue inputs, simulated mobile resources. This does not close full immersive-engine acceptance |
+| PASSED | Offline production build |Repository npm run build with documented pinned no-engine/downloader overrides and no DATABASE_URL. Genuine schema-derived types; no migration/runtime DB proof. `.cache/verification/motion-build.log` |
+| PASSED | Actual production HTTP isolation smoke |Six checks; ephemeral production server always stopped; motion and inherited immersive harnesses404, fixture content absent, DENY intact even with ARENA_LIVE_PREVIEW=1. No deployment |
+| PASSED | Measured gzip app entries + real lazy chunk |Table below; comparable archived baseline gzip method. Not total traffic/Core Web Vitals |
+| PASSED | CI workflow YAML/embedded JS syntax |Parsed with installed js-yaml/AsyncFunction; native DB gates retained; adds actual browsers/production smoke/bundle evidence and successful PR summaries. A missing Chrome is a failure/NOT RUN, not a synthetic pass |
+| NOT RUN | Fresh Motion head CI |Awaiting first source commit/push; follow-up records actual result and source/remote SHAs |
+| NOT RUN / BLOCKED | Physical Android, original preservation/CDN/provider calls |Storage/provider approval/configuration unavailable in this checkout; no real call or persistence claim |
+| NOT RUN | Production LCP/INP/CLS, full authenticated browser owner journey, live Paystack/provider operations |Not equivalent to emulation, fake sessions, route-handler tests or a compiled bundle |
+
+| Route / chunk | Baseline gzip B | M3 gzip B | Delta B |
+|---|---:|---:|---:|
+| `/b/[slug]/page` app entry |115794|116460|+666|
+| `/dashboard/businesses/[id]/design/page` app entry |144384|143692|−692|
+| `/page` app entry |106682|106722|+40|
+| Actual lazy `motion/mini` (not initial entry) |not imported|4876|+4876 only when eligible/intersecting|
+
+Method: gzipSync(default) of unique app-build-manifest entry files; excludes CSS/HTML/data/later chunks. `npm run measure:studio-bundles` explicitly fails if mini is in any listed initial entry or its actual async chunk cannot be found. Browser confirms one actual mini request for eligible pages and zero for guarded Lite/preferences; screenshots/JSON are ignored verification scratch, not release dependencies. Installed/locked version14.1.0 confirmed.
+
+Reproduction (local Chrome binary required):
+- `ARENA_LIVE_PREVIEW=1 npm run dev -- --port 4100`, then `CHROME_PATH=/path/to/chrome BASE_URL=http://localhost:4100 npm run test:browser:motion`; stop server before the production build to avoid .next/dev cache races.
+- `npm run test:browser:immersive` and `npm run test:browser:layout` against that development server.
+- After a genuine production build: `npm run test:smoke:studio` and `npm run measure:studio-bundles`.
+- Native DB/migration proof remains the workflow with both disposable database URLs, no downloader overrides and no skips. New success comments preserve actual totals/expected-failure count; failure excerpts retain summaries/head/tail within the comment limit.
+
+**Not an entire-engine release:** Phase2 is still partial (four primitives, not the entire motion/choreography library).20 structural template families/category-aware art direction/full recipes/scoring, durable originals/Android/signatures/HEIC/EXIF/memory/provenance/actual providers, approved scenes/compression/WebGPU, remaining commerce regression and measured performance/adaptation/analytics remain open. Inherited expected failure and19 dependency advisories remain unresolved. Full108-block specification/hash unchanged. No merge or production/provider/billing action authorized or executed. Automatic Vercel Git previews are separate from production deployment.
+
+#### M3 final local refinement and verification
+
+- New real-browser assertions caught an inherited theme-root bug which a count-only cart check missed. Sticky/backdrop-filter applied to the entire `.eb-scope` changed fixed positioning: cart top2078.0px /bottom2507.6px while viewport740px; scrim visible, drawer not usable. CSS now scopes this treatment to the actual header, and button uppercase to actual buttons. Measured fixed drawer top238.4px /bottom740px; header still sticky. Primary coarse-pointer target44px; quantity controls wrap. **Actual touch add, exact subtotal149→298→149, visible drawer, close all PASS**, without changing cart/price/stock/payment policies. Unit source assertions prevent root selector leakage.
+- Fixture now serves a real local decorative SVG, not a missing `.png` compensated for by interception. All22 actual Motion scenarios confirm image decode; no product-photo/provider claim. Catalogue remains labelled synthetic; analytics/external traffic is intercepted to avoid writes.
+- Final after these source edits: lint/types PASS; full local suite **151 files passed /11 skipped;1820 tests passed /102 skipped /1922 total;0 failed**. Actual Motion **124 checks PASS/0 failed/0 skipped**; inherited immersive14 and layout7 PASS; repeated production build + HTTP isolation6 PASS. Temporary servers stopped. These are separate checks, not a single live provider/customer transaction.
+- Repeated final gzip measurement: business**116460 B** (+666 vs baseline), design**143692 B** (−692), home**106722 B** (+40); real lazy mini**4876 B**, one chunk, excluded from all initial entries. No lockfile/dependency changes in M3; no new migration. Fresh native/Motion CI still pending source push at this documentation checkpoint.

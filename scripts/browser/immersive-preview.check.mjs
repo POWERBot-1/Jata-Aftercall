@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 const CHROME_PATH = process.env.CHROME_PATH;
 const BASE_URL = (process.env.BASE_URL || "http://localhost:3100").replace(/\/$/, "");
-const SHOTS = process.env.SHOTS_DIR || join(process.cwd(), "tmp-browser-evidence");
+const SHOTS = process.env.SHOTS_DIR || join(process.cwd(), ".cache", "verification", "immersive-browser");
 if (!CHROME_PATH) {
   console.error("CHROME_PATH is required (path to a Chrome/Chromium binary). Not run.");
   process.exit(2);

@@ -75,13 +75,13 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
         </section>
       ) : null}
 
-      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} />
+      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} enabled={theme.treatment.motion !== "none"} />
 
       {body.map((section) =>
         theme.treatment.motion === "none" ? (
           <SectionRenderer key={section.id} section={section} data={data} />
         ) : (
-          <MotionReveal key={section.id} expressive={theme.treatment.motion === "expressive"}>
+          <MotionReveal key={section.id} sectionType={section.type} expressive={theme.treatment.motion === "expressive"}>
             <SectionRenderer section={section} data={data} />
           </MotionReveal>
         ),

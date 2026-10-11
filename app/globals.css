@@ -711,7 +711,8 @@ button:focus-visible {
   color: var(--eb-header-text);
 }
 
-.eb-nav--sticky { position: sticky; top: 0; backdrop-filter: blur(10px); }
+/* Treatment classes live on the scope. Never filter/stick the entire page: fixed cart dialogs must use the viewport. */
+.eb-scope.eb-nav--sticky > .eb-nav { position: sticky; top: 0; backdrop-filter: blur(10px); }
 
 .eb-nav__inner {
   display: flex;
@@ -786,12 +787,13 @@ button:focus-visible {
 .eb-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .eb-btn:active:not(:disabled) { transform: translateY(1px); }
 .eb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.eb-btn--upper { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
+.eb-scope.eb-btn--upper .eb-btn { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
 .eb-btn--soft { background: var(--eb-surface-muted); color: var(--eb-text); }
 .eb-btn--outline { background: transparent; border-color: var(--eb-border); color: var(--eb-text); }
 .eb-btn--pill { border-radius: 999px; }
 .eb-btn--block { width: 100%; }
 .eb-btn--sm { min-height: 2.35rem; padding: 0.45rem 0.95rem; font-size: 0.85rem; }
+@media (pointer: coarse) { .eb-scope .eb-btn { min-width: 44px; min-height: 44px; } }
 .eb-btn--ghost { background: transparent; color: var(--eb-text); }
 
 /* ── Hero ── */
@@ -1596,31 +1598,29 @@ button:focus-visible {
   }
 }
 
-/* ── Immersive Website Engine: Motion mode (Phase 2) ───────────────────────────────────────
-   Only applies after the visitor's browser has chosen Motion (html[data-motion-ready]).
-   Lite pages carry no hidden state, so content is always visible without JavaScript.
-   Reduced-motion visitors never get the attribute, and the media query below is a second guard. */
-html[data-motion-ready] .eb-reveal {
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-  will-change: opacity, transform;
-}
-html[data-motion-ready] .eb-reveal--expressive {
-  transform: translateY(32px) scale(0.985);
-  transition-duration: 0.9s;
-}
-html[data-motion-ready] .eb-reveal.is-visible {
-  opacity: 1;
-  transform: none;
-  will-change: auto;
+/* Website Studio Motion: readable SSR baseline and scoped, finite CSS fallback.
+   No global html flag, zero-opacity state, permanent will-change or scroll-jacking. */
+.eb-scope .eb-reveal { opacity: 1; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="slide"] { animation: eb-motion-slide 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="scale"] { animation: eb-motion-scale 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="reveal"] { animation: eb-motion-reveal 0.56s ease-out; }
+@keyframes eb-motion-fade { from { opacity: 0.94; } to { opacity: 1; } }
+@keyframes eb-motion-slide { from { opacity: 0.94; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-scale { from { opacity: 0.94; transform: scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-reveal { from { opacity: 0.92; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+/* Immediate guard even before preference/network event handlers run or a native cancel fails. */
+.eb-scope [data-motion-static="true"] {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-motion-ready] .eb-reveal,
-  html[data-motion-ready] .eb-reveal--expressive {
-    opacity: 1;
-    transform: none;
-    transition: none;
-    will-change: auto;
+  .eb-scope [data-motion-recipe] {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

@@ -17,7 +17,11 @@
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
     "migrate": "bash scripts/migrate.sh",
     "postinstall": "prisma generate || echo 'prisma generate skipped (offline)'",
-    "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs"
+    "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs",
+    "test:browser:motion": "node scripts/browser/storefront-motion.check.mjs",
+    "test:browser:layout": "node scripts/browser/fixture-layout.check.mjs",
+    "test:smoke:studio": "node scripts/browser/studio-production.smoke.mjs",
+    "measure:studio-bundles": "node scripts/measure-website-studio-bundles.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
