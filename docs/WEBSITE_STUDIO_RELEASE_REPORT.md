@@ -299,7 +299,9 @@ Remaining actions, with the responsible party:
 2. **Owner / maintainer** — confirm whether `main` carries required status checks, since this
    token cannot read them, and confirm the CI run on the PR is green.
 3. **Maintainer** — review the diff against `main` and authorise the merge. Merging is not done
-   here.
+   here. Note the range is **20 commits / 167 files**: the branch was cut from
+   `arena/33ebb805-jata-aftercall`, which was already 17 commits ahead of `main`, so those
+   pre-existing unmerged commits travel with this PR.
 4. **Maintainer** — production deployment is a separate, explicitly authorised action. It has not
    been performed.
 
