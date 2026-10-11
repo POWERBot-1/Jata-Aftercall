@@ -16,17 +16,39 @@ says so rather than implying a pass.
 | Base (intended target) | `main` @ `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` |
 | Baseline HEAD before any edit | `77e35cec6a5726f569ab3febd3e7766300b14890` |
 | Feature branch | `arena/a9a473f2-jata-aftercall` |
-| Implementation commit | `bc1bbdeb5b7eca06fa83bb0e2c1e3476daf98f95` — *"Website Studio: install motion and build the Stage 2 motion engine on it"* |
-| Documentation commit | the commit that adds this file (SHA below, §8) |
+| Stage 2 (motion) commit | `bc1bbdeb5b7eca06fa83bb0e2c1e3476daf98f95` |
+| First documentation commit | `cb5ca87e108321798c58e035a2a3504a96192a58` |
+| Weight-check + decision-register commit | `a9029b3df316cd6065724267e900ce30a0053291` |
 | Branch URL | https://github.com/POWERBot-1/Jata-Aftercall/tree/arena/a9a473f2-jata-aftercall |
-| Pull request | **not opened yet** — see §9 |
-| Pushed and verified | **yes.** `git ls-remote origin refs/heads/arena/a9a473f2-jata-aftercall` returned `bc1bbdeb5b7eca06fa83bb0e2c1e3476daf98f95`, matching local HEAD at the time |
-| Force-push / history rewrite | none. One new branch push (`* [new branch]`), no `--force` anywhere |
+| Ancestry vs `origin/main` | **0 behind / 20 ahead** (`git rev-list --left-right --count origin/main...HEAD`) |
+| Force-push / history rewrite | none |
 | Merged | **no** |
 | Production deployed | **NOT DEPLOYED** |
 
-No unrelated changes are on the branch. `git diff --stat` against the baseline is exactly the 13
-implementation files plus these two documents.
+### Sandbox reset and recovery (session of 2026-10-11, second pass)
+
+The Arena sandbox was reset between sessions. Local `HEAD` had reverted to the baseline
+`77e35ce…`, the clone was shallow again, and the Stage 2 work existed only as uncommitted
+working-tree files. **Nothing was lost**, because the branch had already been pushed to GitHub.
+
+Recovery, with no destructive step:
+
+1. `git fetch --deepen 400 origin` — the remote commits became reachable locally.
+2. Compared the working tree against the remote commit `abdee80…`: `git diff --stat abdee80 -- .`
+   showed no difference for the six tracked files, and `git hash-object` matched the remote blob
+   hash for **all nine** new files (`IDENTICAL` × 9).
+3. Only then `git reset --mixed abdee80…` — moves the branch pointer and leaves every file byte
+   for byte as it was. The working tree came out clean.
+
+No `--hard`, no stash dropped, no file deleted, `origin/main` untouched.
+
+### Pull request
+
+`gh auth status` confirms `POWERBot-1` with `permissions: {admin: true, push: true, …}` on the
+repository, so opening a PR is authorized. **However** `gh api repos/…/branches/main/protection`
+returns **403 "Resource not accessible by integration"** — this token cannot read branch
+protection, so whether `main` has required status checks is **unverified**. PR status and the
+resulting SHA are recorded in §11.
 
 ---
 
@@ -67,7 +89,41 @@ Stage 2 of the plan: the motion engine, built on the mandated `motion` dependenc
 
 ---
 
-## 3. Dependency change: `motion`
+## 2b. Second increment — publishing weight check (§83) and the decision register
+
+Added in commit `a9029b3`.
+
+| File | Role |
+| --- | --- |
+| `lib/experience/weight.ts` | **new.** The §83 pre-publish weight calculation, computed from the experience document alone — no database query, no network call. Reports measured image bytes (from data-URL payloads), model bytes where the caller knows them, asset request count, which §39 budgets are breached, and plain-language recommendations. |
+| `app/api/studio/health/route.ts` | Adds a `weight` object to the existing GET response. **Additive only**: `buildHealthReport` and the readiness score are untouched. |
+| `tests/unit/experience-weight.test.ts` | **new.** 15 tests. |
+| `docs/WEBSITE_STUDIO_RELEASE_PLAN.md` | §4 is now a decision register covering Decisions A–E with verified evidence, risk, owner and the exact approval needed. |
+
+Design choices that matter, and why:
+
+- **Advisory, never blocking.** It cannot refuse a publication, cannot touch the payment or
+  entitlement gate, and does not feed the readiness score. An owner on a slow connection is better
+  served by a heavy-but-live website than by a refusal.
+- **Bytes are only claimed when known.** A remote URL has no size until something fetches it, so
+  it is counted as unmeasured and the verdict becomes `"unknown"` instead of pretending the page
+  is light. `verdict: "unknown"` is a real answer.
+- **The document walk is generic.** A hard-coded list of image fields would silently stop counting
+  new ones — galleries, variants, campaigns — which is how a budget check quietly becomes a lie.
+- **It cannot throw.** A malformed or cyclic document yields an empty report, bounded by a node
+  cap, so a health read can never fail the Studio page that displays it.
+
+Verified: the weight module is server-only. `/b/[slug]` first-load JS is unchanged at **3.95 kB /
+117 kB**, identical to the Stage 2 measurement.
+
+Two claims in `STORAGE_DECISION.md` were independently re-verified rather than trusted:
+`assertCanStore` has **no production call site** (grep finds only its definition and
+`tests/unit/storage-provider.test.ts`), and `resolveStorageProvider` is reached only from
+`lib/experience/immersive/policy.ts` — never from the upload path. The storage contract exists;
+nothing in production writes through it.
+
+---
+
 
 | Question | Answer, with evidence |
 | --- | --- |
@@ -115,7 +171,7 @@ bytes. Both numbers are real measurements, not estimates.
 | --- | --- | --- |
 | TypeScript | `npx tsc --noEmit` | **PASS**, exit 0 |
 | Lint | `npx next lint` | **PASS**, exit 0. One pre-existing warning: `components/storefront/CartProvider.tsx:210` `@next/next/no-img-element` — present at baseline, unrelated |
-| Unit / integration / security | `npx vitest run` | **147 files passed, 10 skipped; 1769 tests passed, 94 skipped** (baseline at `77e35ce`: 146 files / 1740 tests, same 10 skipped files). +1 file, +29 tests, 0 new failures |
+| Unit / integration / security | `npx vitest run` | **148 files passed, 10 skipped; 1784 tests passed, 94 skipped**. Progression: baseline `77e35ce` 146/1740 → after Stage 2 `bc1bbde` 147/1769 → after the weight check `a9029b3` **148/1784**. The 10 skipped files and 94 skipped tests are unchanged throughout. **0 new failures at any step.** |
 | Production build | `npx next build` | **PASS**, exit 0 |
 | Prisma schema validation | `npx prisma validate` | **BLOCKED** — `request to https://binaries.prisma.sh/... failed, reason: Client network socket disconnected before secure TLS connection was established` |
 | Prisma generate / migrate deploy | — | **BLOCKED**, same cause. No migration was added by this work, so nothing needed deploying |
@@ -223,3 +279,29 @@ git log --oneline 9c36bd1..origin/arena/a9a473f2-jata-aftercall
 ```
 
 `npm ci` restores the exact dependency tree from `package-lock.json`, including `motion` 14.1.0.
+
+---
+
+## 11. Pull request status
+
+| Item | Value |
+| --- | --- |
+| Authorization to open | **yes** — `gh auth status` = `POWERBot-1`; repo `permissions.admin = true` |
+| Required checks readable | **no** — `GET /repos/POWERBot-1/Jata-Aftercall/branches/main/protection` → `403 Resource not accessible by integration` |
+| PR | see below; the number and URL are filled in when it is opened |
+| Merge | **not performed** |
+| Release status | **BLOCKED** |
+
+Remaining actions, with the responsible party:
+
+1. **Owner** — answer Decisions A, B, C and D in `WEBSITE_STUDIO_RELEASE_PLAN.md` §4. Each has an
+   exact approval sentence; none can be inferred safely.
+2. **Owner / maintainer** — confirm whether `main` carries required status checks, since this
+   token cannot read them, and confirm the CI run on the PR is green.
+3. **Maintainer** — review the diff against `main` and authorise the merge. Merging is not done
+   here.
+4. **Maintainer** — production deployment is a separate, explicitly authorised action. It has not
+   been performed.
+
+Until 1 and 2 are satisfied, the release stays **BLOCKED** even though every check that can run in
+this environment passes.
