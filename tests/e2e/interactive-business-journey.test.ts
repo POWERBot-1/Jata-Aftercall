@@ -45,10 +45,12 @@ import { POST as publishPost } from "@/app/api/experience/publish/route";
 import { POST as mediaPost } from "@/app/api/media/route";
 import { POST as productPost } from "@/app/api/products/route";
 import { POST as servicePost } from "@/app/api/services/route";
+import { POST as storefrontQuotePost } from "@/app/api/storefront/quote/route";
 import { POST as storefrontCheckoutPost } from "@/app/api/storefront/checkout/route";
 import { GET as storefrontBookingGet, POST as storefrontBookingPost } from "@/app/api/storefront/booking/route";
 import { GET as ordersGet, PATCH as ordersPatch } from "@/app/api/orders/route";
 import { GET as bookingsGet, PATCH as bookingsPatch } from "@/app/api/bookings/route";
+import { freeSlotsFor, parseAvailability } from "@/lib/experience/booking";
 import { verifyOrderPayment } from "@/lib/experience/payments";
 import { syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { getBusinessUrl } from "@/lib/url";
@@ -60,9 +62,9 @@ const ctx: Record<string, any> = {
 };
 
 let ipCounter = 0;
-function request(url: string, init: { method?: string; body?: unknown } = {}) {
+function request(url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   ipCounter += 1;
-  const headers: Record<string, string> = { "x-forwarded-for": `10.20.0.${ipCounter}` };
+  const headers: Record<string, string> = { "x-forwarded-for": `10.20.0.${ipCounter}`, ...init.headers };
   if (init.body !== undefined) headers["content-type"] = "application/json";
   return new Request(url, {
     method: init.method || "GET",
@@ -71,7 +73,7 @@ function request(url: string, init: { method?: string; body?: unknown } = {}) {
   });
 }
 
-async function call(handler: (req: Request) => Promise<Response>, url: string, init: { method?: string; body?: unknown } = {}) {
+async function call(handler: (req: Request) => Promise<Response>, url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   const response = await handler(request(url, init));
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
@@ -301,21 +303,45 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
 
   it("11 — a customer's basket is priced by the server, not the browser", async () => {
     h.session.current = null; // a visitor, not the owner
+    const basket = {
+      slug: ctx.owner.slug,
+      items: [{ productId: ctx.productId, quantity: 2, trustedTotalKES: 1 }],
+      customer: { name: "John Customer", phone: "0700111222" },
+      fulfilment: "PICKUP",
+    };
+    const quote = await call(storefrontQuotePost, "https://jata.test/api/storefront/quote", { method: "POST", body: basket });
+    expect(quote.status, JSON.stringify(quote.body)).toBe(200);
+    // 2 × KES 850, pickup → no delivery fee. The client-supplied trusted total is ignored.
+    expect(quote.body).toMatchObject({ subtotalKES: 1700, deliveryFeeKES: 0, totalKES: 1700 });
+    const headers = { "idempotency-key": `e2e-checkout-${runId}` };
+    const missingKey = await call(storefrontCheckoutPost, "https://jata.test/api/storefront/checkout", {
+      method: "POST", body: { ...basket, expectedTotalKES: quote.body.totalKES },
+    });
+    expect(missingKey.status).toBe(400);
+    const tampered = await call(storefrontCheckoutPost, "https://jata.test/api/storefront/checkout", {
+      method: "POST", headers, body: { ...basket, expectedTotalKES: 1 },
+    });
+    expect(tampered.status).toBe(409);
+    expect(tampered.body).toMatchObject({ priceChanged: true, totalKES: 1700 });
+    expect(await prisma.order.count({ where: { businessId: ctx.owner.businessId } })).toBe(0);
+    const accepted = { ...basket, expectedTotalKES: quote.body.totalKES };
     const response = await call(storefrontCheckoutPost, "https://jata.test/api/storefront/checkout", {
-      method: "POST",
-      body: {
-        slug: ctx.owner.slug,
-        items: [{ productId: ctx.productId, quantity: 2, trustedTotalKES: 1 }],
-        customer: { name: "John Customer", phone: "0700111222" },
-        fulfilment: "PICKUP",
-      },
+      method: "POST", headers, body: accepted,
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
-    // 2 × KES 850, pickup → no delivery fee. The client-supplied total is ignored.
     expect(response.body).toMatchObject({ subtotalKES: 1700, deliveryFeeKES: 0, totalKES: 1700 });
-    ctx.orderId = response.body?.orderId;
-    ctx.orderReference = response.body?.orderReference;
-    ctx.orderPaymentReference = response.body?.paymentReference;
+    expect(response.body?.orderId).toBeTruthy();
+    expect(response.body?.paymentReference).toBeTruthy();
+    ctx.orderId = response.body.orderId;
+    ctx.orderReference = response.body.orderReference;
+    ctx.orderPaymentReference = response.body.paymentReference;
+    const replay = await call(storefrontCheckoutPost, "https://jata.test/api/storefront/checkout", {
+      method: "POST", headers, body: accepted,
+    });
+    expect(replay.status, JSON.stringify(replay.body)).toBe(201);
+    expect(replay.body?.orderId).toBe(ctx.orderId);
+    expect(replay.body?.paymentReference).toBe(ctx.orderPaymentReference);
+    expect(await prisma.order.count({ where: { businessId: ctx.owner.businessId } })).toBe(1);
   }, 120_000);
 
   it("12 — the customer's payment confirms and fulfils the order", async () => {
@@ -380,15 +406,25 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
     });
     expect(serviceResponse.status, JSON.stringify(serviceResponse.body)).toBe(201);
     ctx.serviceId = serviceResponse.body?.service?.id;
+    expect(ctx.serviceId, JSON.stringify(serviceResponse.body)).toBeTruthy();
+    const serviceFixture = await prisma.service.findUnique({ where: { id: ctx.serviceId } });
+    expect(serviceFixture).toMatchObject({ businessId: ctx.owner.businessId, isActive: true, bookingEnabled: true, durationMinutes: 60 });
+    const visibleBusiness = await prisma.business.findUnique({ where: { id: ctx.owner.businessId } });
+    expect(visibleBusiness?.isPublished).toBe(true);
+    expect(visibleBusiness?.status).not.toBe("SUSPENDED");
 
     const date = futureDate(1);
+    expect(freeSlotsFor({ date, availability: parseAvailability(serviceFixture!.availability), durationMinutes: serviceFixture!.durationMinutes })).toContain("11:00");
+    // Check the real booking query as well as the pure availability calculation; a swallowed
+    // database error in the public handler must not look like a legitimately empty schedule.
+    expect(await prisma.booking.findMany({ where: { businessId: ctx.owner.businessId, serviceId: ctx.serviceId } })).toEqual([]);
     h.session.current = null;
     const slots = await call(
       storefrontBookingGet,
       `https://jata.test/api/storefront/booking?slug=${ctx.owner.slug}&serviceId=${ctx.serviceId}&date=${date}`,
     );
-    expect(slots.status).toBe(200);
-    expect(slots.body?.slots).toContain("11:00");
+    expect(slots.status, JSON.stringify(slots.body)).toBe(200);
+    expect(slots.body?.slots, JSON.stringify(slots.body)).toContain("11:00");
 
     const booking = await call(storefrontBookingPost, "https://jata.test/api/storefront/booking", {
       method: "POST",
@@ -464,7 +500,7 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
 
     const publish = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
-      body: { businessId: ctx.stranger.businessId },
+      body: { businessId: ctx.stranger.businessId, expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.stranger.businessId } }))?.draftVersion },
     });
     expect(publish.status).toBe(403);
     expect(publish.body).toMatchObject({ requires: "PAYMENT" });
@@ -483,13 +519,14 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
     const entitlement = await syncInteractiveEntitlement(ctx.owner.businessId);
     expect(entitlement.status).toBe("EXPIRED");
 
-    await call(experiencePatch, "https://jata.test/api/experience", {
+    const edit = await call(experiencePatch, "https://jata.test/api/experience", {
       method: "PATCH",
-      body: { businessId: ctx.owner.businessId, brand: { tagline: "New season menu" } },
+      body: { businessId: ctx.owner.businessId, expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.owner.businessId } }))?.draftVersion, brand: { tagline: "New season menu" } },
     });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
     const republish = await call(publishPost, "https://jata.test/api/experience/publish", {
       method: "POST",
-      body: { businessId: ctx.owner.businessId },
+      body: { businessId: ctx.owner.businessId, expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.owner.businessId } }))?.draftVersion },
     });
     expect(republish.status).toBe(403);
 
@@ -502,7 +539,8 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
   }, 120_000);
 });
 
-describe.skipIf(enabled)("Interactive Business end-to-end journey (§66)", () => {
+// Register the offline configuration marker only offline, so real CI has zero artificial skips.
+if (!enabled) describe("Interactive Business end-to-end journey (§66) — offline configuration gate", () => {
   it("is skipped until DATABASE_URL is configured", () => {
     // Documented so the gate is visible in the suite output rather than silently missing.
     expect(enabled).toBe(false);
