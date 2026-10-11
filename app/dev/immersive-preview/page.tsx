@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
 const MODELS: Record<string, { url: string; bytes: number }> = {
   ok: { url: "https://models.preview.test/product-ok.glb", bytes: 2048 },
   missing: { url: "https://models.preview.test/product-missing.glb", bytes: 2048 },
+  unsafe: { url: "https://models.preview.test/product-unsafe.glb", bytes: 2048 },
+  compressed: { url: "https://models.preview.test/product-compressed.glb", bytes: 2048 },
 };
 
 export default async function ImmersivePreviewHarness({
