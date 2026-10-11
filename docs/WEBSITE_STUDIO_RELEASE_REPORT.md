@@ -45,10 +45,12 @@ No `--hard`, no stash dropped, no file deleted, `origin/main` untouched.
 ### Pull request
 
 `gh auth status` confirms `POWERBot-1` with `permissions: {admin: true, push: true, …}` on the
-repository, so opening a PR is authorized. **However** `gh api repos/…/branches/main/protection`
-returns **403 "Resource not accessible by integration"** — this token cannot read branch
-protection, so whether `main` has required status checks is **unverified**. PR status and the
-resulting SHA are recorded in §11.
+repository, so opening a PR was authorized, and **PR #42** is now open against `main`
+(https://github.com/POWERBot-1/Jata-Aftercall/pull/42). GitHub reports it `MERGEABLE` with
+`mergeStateStatus: UNSTABLE`, which means **required checks exist and had not yet passed** at the
+time of writing. `gh api repos/…/branches/main/protection` returns **403 "Resource not accessible
+by integration"**, so the protection *rules* cannot be read with this token — but
+`gh pr checks 42` shows what is actually running. Details and the observed check states are in §11.
 
 ---
 
@@ -172,6 +174,7 @@ bytes. Both numbers are real measurements, not estimates.
 | TypeScript | `npx tsc --noEmit` | **PASS**, exit 0 |
 | Lint | `npx next lint` | **PASS**, exit 0. One pre-existing warning: `components/storefront/CartProvider.tsx:210` `@next/next/no-img-element` — present at baseline, unrelated |
 | Unit / integration / security | `npx vitest run` | **148 files passed, 10 skipped; 1784 tests passed, 94 skipped**. Progression: baseline `77e35ce` 146/1740 → after Stage 2 `bc1bbde` 147/1769 → after the weight check `a9029b3` **148/1784**. The 10 skipped files and 94 skipped tests are unchanged throughout. **0 new failures at any step.** |
+| Same suite **against real PostgreSQL** (GitHub Actions, run `38150400914`) | `npx vitest run --exclude tests/e2e` | **156 test files passed (156); 1837 tests passed, 1 expected fail (1838); 0 skipped.** This is the first genuine database evidence for this work: `prisma generate`, `prisma migrate deploy`, `npm run seed`, then the suite against a live `postgres:16` service. The +53 tests over the local run are exactly the five `tests/prisma/` suites that self-skip without `PRISMA_TEST_DATABASE_URL`. |
 | Production build | `npx next build` | **PASS**, exit 0 |
 | Prisma schema validation | `npx prisma validate` | **BLOCKED** — `request to https://binaries.prisma.sh/... failed, reason: Client network socket disconnected before secure TLS connection was established` |
 | Prisma generate / migrate deploy | — | **BLOCKED**, same cause. No migration was added by this work, so nothing needed deploying |
@@ -288,7 +291,12 @@ git log --oneline 9c36bd1..origin/arena/a9a473f2-jata-aftercall
 | --- | --- |
 | Authorization to open | **yes** — `gh auth status` = `POWERBot-1`; repo `permissions.admin = true` |
 | Required checks readable | **no** — `GET /repos/POWERBot-1/Jata-Aftercall/branches/main/protection` → `403 Resource not accessible by integration` |
-| PR | see below; the number and URL are filled in when it is opened |
+| PR | **#42** — https://github.com/POWERBot-1/Jata-Aftercall/pull/42 · base `main`, head `arena/a9a473f2-jata-aftercall` |
+| PR mergeable | `MERGEABLE` (no conflict with `main`) |
+| PR merge state | `UNSTABLE` — required checks exist and were not yet satisfied at the time of writing |
+| Checks observed via `gh pr checks 42` | `Vercel` **pass**; `Vercel Preview Comments` **pass**; `Journey against a real database` **fail** — see §12 for the diagnosis |
+| Main suite inside that job | **156 files / 1837 tests passed, 0 skipped** against real `postgres:16` — the DB coverage now genuinely runs |
+| What still fails in that job | four tests in `tests/e2e/interactive-business-journey.test.ts` (13, 14, 16, 17), pre-existing, in the publish and payment contract — see §12 |
 | Merge | **not performed** |
 | Release status | **BLOCKED** |
 
@@ -307,3 +315,87 @@ Remaining actions, with the responsible party:
 
 Until 1 and 2 are satisfied, the release stays **BLOCKED** even though every check that can run in
 this environment passes.
+
+---
+
+## 12. CI evidence — what was broken, what was fixed, what remains
+
+The `Journey against a real database` job was red on the first two runs of PR #42. GitHub's log
+download endpoint is not reachable from this sandbox, but the workflow posts its own failing output
+to the pull request, which was used as the source of truth throughout.
+
+### First failure — a CI configuration gap, inherited from the baseline
+
+The workflow's skip guard failed the job:
+
+```
+↓ tests/prisma/storefront-checkout.test.ts (15 tests | 15 skipped)
+...
+if grep -qE "[1-9][0-9]* skipped"; then
+  echo "Database suites skipped — DATABASE_URL did not reach vitest." >&2
+  exit 1
+```
+
+The guard's message names the wrong variable. `tests/prisma/` gates on
+`realPrismaConfigured = Boolean(process.env.PRISMA_TEST_DATABASE_URL)`
+(`tests/helpers/prisma-client.ts:17`), while the job env set only `DATABASE_URL`. The
+`tests/integration/*-postgres.test.ts` suites gate on `DATABASE_URL` and did run; the five
+`tests/prisma/` suites skipped, and the guard failed the job. **The job could never have gone
+green once `tests/prisma/` landed.**
+
+Inherited, not introduced here — each point verified by command:
+
+- `git ls-tree 75f6440 tests/prisma` → **empty**. The directory did not exist at `75f6440`, the last
+  CI-green commit on the parent branch.
+- It was added by `143d1b1` *"Payment lifecycle rules and real-Prisma integration suite"*, one of
+  **11** parent-branch commits that never had a CI run. The baseline `77e35ce` itself was never
+  verified.
+- `git diff --name-only 77e35ce..HEAD -- .github tests/prisma` → **empty**. This work touched
+  neither.
+
+**Fix:** commit `4b0158e` sets `PRISMA_TEST_DATABASE_URL` in the job env, pointing at the same
+per-run migrated `postgres:16` service — which is what the helper's documented contract asks for
+("an ISOLATED PostgreSQL database that has been migrated. Never production"). No test was skipped,
+weakened, excluded or rewritten. Five real-Prisma suites that were silently skipping now run, and
+the result is the 1837-test pass in §4.
+
+### Second failure — the §66 journey, pre-existing, in payment and publish policy
+
+With the main suite green, the job reached its later steps for the first time. Four tests fail,
+all in `tests/e2e/interactive-business-journey.test.ts`:
+
+| Test | Line | Assertion that fails |
+| --- | --- | --- |
+| 13 — the owner receives the order and processes it | 341 | `expected undefined to be truthy` |
+| 14 — a customer books a service and the owner completes it | 391 | `expected [] to include '11:00'` |
+| 16 — an unpaid business can build but never publish | 469 | `expected 428 to be 403` |
+| 17 — a lapsed entitlement hides the site but never deletes the content | 494 | `expected 428 to be 403` |
+
+Root cause for 16 and 17, verified: `app/api/experience/publish/route.ts:98` returns **428**
+(`VERSION_REQUIRED_CODE`) when the request body has no `draftVersion`. The journey posts
+`{ businessId }` with no version, so it is rejected by the version guard before the entitlement
+gate can return the expected `403 { requires: "PAYMENT" }`. That guard was added by baseline
+commit `99f458b` *"Release remediation: publish version check, tenant gaps, browser checks"*; the
+journey was never updated to send a version. Tests 13 and 14 sit in the order/payment path and
+show a Prisma `clientVersion: 5.22.0` error surfacing from `lib/experience/payments.ts:329`
+(`verifyOrderPayment`).
+
+**Not fixed here, deliberately.** My 19 changed files touch none of these paths
+(`git diff --name-only 77e35ce..HEAD` is entirely motion, experience/weight, docs and the workflow).
+Repairing them means choosing between two contract changes — send a `draftVersion` from the journey
+and keep the guard as designed, or reorder the route so the entitlement gate runs first — and both
+touch the publish and payment contract, which is an owner decision. Guessing at payment behaviour
+from a sandbox with no database would be the failure mode the guardrails exist to prevent.
+
+`npm run test:e2e:pos` reported "(no output captured)" in the same run; its status is therefore
+**not claimed** either way.
+
+### What this changes about the release position
+
+- Real database coverage for the Website Studio work now exists and passes: **1837 tests, 0
+  skipped**, against `postgres:16` with migrations applied and plans seeded.
+- The branch is **not** mergeable while the §66 journey is red. That is a pre-existing condition of
+  the 11 unverified parent-branch commits, now made visible rather than hidden behind a
+  misdiagnosed skip.
+- The owner must decide the publish-contract question in tests 16/17, and whether tests 13/14 are a
+  payment regression or a stale journey, before this can merge.
