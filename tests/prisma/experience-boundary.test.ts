@@ -1,5 +1,6 @@
 /** Real Prisma/PostgreSQL tenant, draft, publication and restore boundaries. No DB or tenant mocks. */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Prisma } from "@prisma/client";
 import { realPrismaConfigured, sharedPrisma } from "../helpers/prisma-client";
 import { seedBusiness, seedProduct, uid } from "../helpers/prisma-fixtures";
 import { createExperienceDocument } from "@/lib/experience/document";
@@ -27,7 +28,11 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: Website Studio foundation b
   let document: ReturnType<typeof createExperienceDocument>;
 
   beforeEach(async () => {
-    ({ business, owner } = await seedBusiness(p, { isPublished: false, status: "DRAFT", logoUrl: "/fixture-logo.jpg" }));
+    // BusinessStatus and ExperienceStatus are separate enums; an unpublished business
+    // is PENDING, while its experience is DRAFT. Keep this fixture schema-type-checked.
+    const draftBusiness = { isPublished: false, status: "PENDING", logoUrl: "/fixture-logo.jpg" } satisfies
+      Pick<Prisma.BusinessUncheckedCreateInput, "isPublished" | "status" | "logoUrl">;
+    ({ business, owner } = await seedBusiness(p, draftBusiness));
     document = createExperienceDocument({ categoryKey: "food", businessName: business.name, phone: business.phone });
     document.brand.heroImageUrl = "/fixture-hero.jpg";
     await p.businessExperience.update({ where: { businessId: business.id }, data: {

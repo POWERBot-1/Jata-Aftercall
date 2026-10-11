@@ -12,7 +12,7 @@ Updated 2026-10-11 UTC. **IN PROGRESS — full product NOT COMPLETE. Production 
 - Inherited 17 commits / 156 changed files vs main must be reviewed; not already merged.
 - Final implementation SHA: not recorded yet. Final documentation SHA will be recorded on the PR/handoff because a commit cannot contain its own SHA.
 - M0 committed and pushed: `23726edb94d8734b26cac0ea1c9f145c2dd6f3c6`; `git rev-parse HEAD` matched `git ls-remote origin refs/heads/arena/7b28a123-jata-aftercall` after push. Later milestones must independently verify their own SHA.
-- PR: NOT YET OPENED. No merge authorized.
+- Draft PR: https://github.com/POWERBot-1/Jata-Aftercall/pull/41 (proposed base main; no merge authorized).
 - Merged / resulting target SHA: NOT MERGED / not applicable.
 - Production: **NOT DEPLOYED**; no deployment approved or invoked. Vercel may automatically produce GitHub previews; those are not production authorization.
 
@@ -88,4 +88,11 @@ Source and documents are committed on the session branch; ignored tool caches ar
 - CI now sets **both** DATABASE_URL and PRISMA_TEST_DATABASE_URL to its disposable Postgres 16 service, adds lint/types and production-build gates, and preserves the no-skips gate. CI has not run for M1 yet. Native-Prisma instructions corrected to set the migration URL separately.
 - Audit correction: later direct reads of homepage/pricing revealed price-sorted **Monthly → AI → Annual → Interactive Business**, despite the earlier assumption of required branding/order. The required **Monthly → Annual → AI Front Desk → Website Studio → separate POS** display is still OPEN at this milestone; stable `INTERACTIVE_BUSINESS` IDs/prices/payment policies will be preserved.
 - `npm audit --json`: **19 advisories (3 moderate, 16 high)**, including suggested Next 15.5.27 patch and unrelated major-upgrade recommendations. No broad audit fix or dependency upgrade applied; triage remains a release blocker.
-- Foundation staged diff/whitespace reviewed before commit. Its actual commit/remote SHA and real CI result must be added in the subsequent milestone/PR evidence, not guessed. Full product remains **NOT COMPLETE**, production **NOT DEPLOYED**.
+- Foundation commit / verified remote SHA: `c0818d6b22e097f0b9cc1bdce9572a507e9f95ce`. Gzip app entry totals unchanged: business 115,794 B, design 144,384 B, home 106,682 B. Full product remains **NOT COMPLETE**, production **NOT DEPLOYED**.
+
+### M1.1 — real CI fixture correction (not a weakened test)
+
+- First real PostgreSQL CI run: https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38142480919 on M1 head `c0818d6b22e097f0b9cc1bdce9572a507e9f95ce`, **FAILED**. Pinned native Prisma generate, lint/types, all 15 migration deploys and seed **PASSED**. Full suite failed; journey/POS/build steps **NOT RUN** after that failure.
+- CI revealed an invalid new fixture assumption: BusinessStatus has PENDING/ACTIVE/SUSPENDED, not DRAFT (ExperienceStatus has DRAFT). Eight foundation cases failed in fixture setup. Corrected to unpublished PENDING Business + DRAFT experience, with a Prisma `satisfies Pick<...>` compile-time check. Kept all security/publication/restore assertions unchanged. Do not count the failed run as acceptance.
+- Direct runner log download is blocked by outbound policy (`results-receiver.actions.githubusercontent.com`); failure/migration evidence obtained through the workflow's actual GitHub PR comment (ID 6109434184). CI output truncation cannot establish an exact full passing count for this failed run. Vercel automatic M1 preview reports Ready; production remains **NOT DEPLOYED**.
+- Corrected native test requires a fresh CI run; local engine-less collection remains eight skipped tests, not native execution.
