@@ -55,7 +55,7 @@ With the pinned Prisma CLI and generator, `PRISMA_QUERY_ENGINE_LIBRARY=/usr/bin/
 | AI Front Desk / ASK JATA | `lib/ai-front-desk.ts`, `ai-grounding.ts`, `ai-business-brain.ts`, tools and entitlements; `/api/ai/chat`, `/b/[slug]/ai`. Tenant-scoped products, stock, FAQs, hours and commerce actions. Preserve and regression-test; do not rewrite. |
 | Payments / subscription | `lib/paystack.ts`, `paymentVerification.ts`, `/api/paystack/{verify,webhook}`, `lib/experience/payments.ts`; server validates reference/amount/currency/status, signatures and idempotent settlement. Website Studio gate in `experience/publish` plus `experience/entitlement`. Preserve test/live separation and established sale/cancel/refund policies. |
 | POS | Existing `lib/pos/*`, `/dashboard/pos/[businessId]`, `/api/pos/[businessId]/*` with role/entitlement/transaction checks. Existing integration and real-DB journey. No new payment logic in visual components. |
-| Plans | **Corrected audit:** required prices exist, but actual homepage price-sorts Monthly → AI → Annual → Interactive Business and retains old branding. Required Monthly → Annual → AI Front Desk → Website Studio → separate POS order/name is OPEN at M1. Preserve stable `INTERACTIVE_BUSINESS` IDs and server prices/policies. |
+| Plans | **Corrected baseline audit:** price-sorted AI before Annual and showed Interactive Business. M2 fixes DOM/mobile order Monthly → Annual → AI Front Desk → Website Studio → separate POS and canonical customer-facing Studio brand. IDs, server prices/durations and checkout policies unchanged; database/fallback ordering and POS isolation tests pass. |
 
 ## 3. Confirmed defects and dependency risks
 
@@ -125,7 +125,7 @@ Status entries are conservative audit/delivery assessments. The original text re
 | 2 | CORE ARCHITECTURE | NOT COMPLETE | Requested behavior remains required in the staged product vision. |
 | 3 | THREE RENDERING MODES | PARTIAL / OPEN | Lite/CSS Motion exist; public Immersive is not implemented. |
 | 4 | CAPABILITY DETECTION | PARTIAL / OPEN | Existing hardware/network score is advisory, not measured runtime capability. |
-| 5 | BUSINESS EXPERIENCE SCHEMA | PARTIAL / OPEN | M1 raw v1 validator and explicit version/legacy restore gates tested locally; asset ownership/native DB proof still pending. |
+| 5 | BUSINESS EXPERIENCE SCHEMA | PARTIAL / OPEN | M1 raw v1/version/restore gates pass local tests and eight native PostgreSQL CI cases after fixture correction; asset ownership/full journey remain open. |
 | 6 | EXPERIENCE RECIPE ENGINE | NOT COMPLETE | 19 section types do not satisfy all requested recipes. |
 | 7 | CRITICAL UNIQUENESS REQUIREMENT | NOT COMPLETE | Theme/shuffle variants are not the required structural uniqueness. |
 | 8 | TEMPLATE FAMILIES | NOT COMPLETE | All 20 compositional families remain mandatory, not implemented. |

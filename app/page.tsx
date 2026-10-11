@@ -3,7 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { formatKES } from "@/lib/format";
-import { FALLBACK_PLANS, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
+import { FALLBACK_PLANS, orderHomepagePlans, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
 // The Business POS price is a server-side constant, never a number written into this page (§45).
 import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
 
@@ -17,15 +17,15 @@ export default async function HomePage() {
     // private plan out of them (POS spec §67). The POS has one dedicated entry of its own further
     // down this page — a product decision recorded in BUSINESS_POS_IMPLEMENTATION.md §7 on
     // 2026-10-03 — and its price is read from the server constant, so this page can never set it.
-    plans = publiclyListedPlans(await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } }));
+    plans = orderHomepagePlans(publiclyListedPlans(await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } })));
   } catch {
     plans = [];
   }
   // Fallback if DB not seeded
   if (plans.length === 0) {
     // Every advertised AFTERCALL product, not just the original two: a database blip must not make
-    // the AI Business Front Desk and Interactive Business cards disappear from the public page.
-    plans = publiclyListedPlans([...FALLBACK_PLANS]).sort((a, b) => a.priceKES - b.priceKES);
+    // the AI Business Front Desk and Website Studio cards disappear from the public page.
+    plans = orderHomepagePlans(publiclyListedPlans(FALLBACK_PLANS));
   }
 
   return (
@@ -131,6 +131,7 @@ export default async function HomePage() {
           {plans.map((p) => (
             <div key={p.key} className="rounded-2xl border border-zinc-200 p-6">
               <p className="text-sm font-semibold">{planDisplayName(p)}</p>
+              {p.key === "INTERACTIVE_BUSINESS" ? <p className="mt-2 text-sm text-zinc-600">Build, edit and preview your interactive business website.</p> : null}
               <p className="mt-1 text-3xl font-bold">KES {p.priceKES.toLocaleString()}</p>
               <p className="text-xs text-zinc-500">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
               <Link href="/register" className="mt-4 inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">Get my business page</Link>
