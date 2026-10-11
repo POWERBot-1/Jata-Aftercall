@@ -271,6 +271,7 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
       method: "PATCH",
       body: {
         businessId: ctx.owner.businessId,
+        expectedDraftVersion: (await prisma.businessExperience.findUnique({ where: { businessId: ctx.owner.businessId } }))?.draftVersion,
         brand: { tagline: "Coastal flavour, every day", heroImageUrl: ctx.imageUrl },
       },
     });
