@@ -15,7 +15,7 @@ describe("supported safe experience schema", () => {
     }
   });
 
-  it.each([0, 2, -1, 100000, "1", null, 1.2])("refuses explicit unsupported version %s instead of clamping/guessing", (version) => {
+  it.each([0, 3, -1, 100000, "1", null, 1.2])("refuses explicit unsupported version %s instead of clamping/guessing", (version) => {
     expect(codes({ ...base(), version })).toContain("unsupported_version");
     expect(() => normalizeExperienceDocument({ ...base(), version })).toThrow(/unsupported experience format/);
   });

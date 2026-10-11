@@ -162,6 +162,7 @@ jobs:
           WAIT_FOR_SERVER=1 npm run test:browser:motion 2>&1 | tee /tmp/step-motion-browser.log
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
+          npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
 
       # Publish real successful summaries too; direct Actions log downloads may be inaccessible.
       - name: Record successful verification evidence on the pull request
@@ -184,10 +185,11 @@ jobs:
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
+              ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
             const bundles = fs.readFileSync('/tmp/step-studio-bundles.log', 'utf8').slice(-2500);
             const head = context.payload.pull_request.head.sha;
-            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
+            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.pull_request.number, body });
 
       # Failing output is posted to the pull request so a broken journey can be triaged
@@ -210,9 +212,9 @@ jobs:
               } catch (e) { return '(no output captured)'; }
             };
             const body = [
-              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 12000],
-              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 12000],
-              ['npm run test:e2e', '/tmp/step-journey.log', 12000],
+              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
+              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
+              ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
               ['prisma generate', '/tmp/step-generate.log', 1500],
               ['npm run build', '/tmp/step-build.log', 3000],
@@ -221,6 +223,7 @@ jobs:
               ['Motion browser', '/tmp/step-motion-browser.log', 4000],
               ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
               ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
+              ['Family browser', '/tmp/step-family-browser.log', 2500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');

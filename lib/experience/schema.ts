@@ -8,11 +8,12 @@
  * never in client-authored executable code or client-authoritative catalogue copies.
  */
 import { normalizeExperienceDocument, safeUrl } from "./document";
-import { isCategoryKey } from "./categories";
+import { isCategoryKey, getExperienceProfile } from "./categories";
 import { isSectionType } from "./sections";
 import { isValidThemeKey } from "./themes";
 import { isRenderPreference } from "./renderMode";
-import { EXPERIENCE_SCHEMA_VERSION } from "./schemaVersion";
+import { isSupportedExperienceVersion } from "./schemaVersion";
+import { isTemplateFamily, templateFamily, DESIGN_GOALS, DESIGN_PERSONALITIES, DESIGN_AUDIENCES, DESIGN_DENSITIES, CATALOGUE_LAYOUT_KEYS, GALLERY_LAYOUT_KEYS } from "./templateFamilies";
 import { PHOTOGRAPHY_STYLE_KEYS, type ExperienceDocument } from "./types";
 
 export type ExperienceSchemaIssue = { path: string; code: string; message: string };
@@ -74,8 +75,22 @@ export function validateExperienceDocument(input: unknown, options: { allowLegac
   };
 
   const raw = record(input, "$" );
-  keys(raw, ROOT_KEYS, "$");
-  if (raw.version !== EXPERIENCE_SCHEMA_VERSION && !(options.allowLegacy === true && raw.version === undefined)) {
+  keys(raw, raw.version === 2 ? [...ROOT_KEYS, "artDirection"] : ROOT_KEYS, "$");
+  if (raw.version === 2) {
+    const direction = record(raw.artDirection, "artDirection");
+    keys(direction, ["version", "family", "goal", "personality", "audience", "density"], "artDirection");
+    if (direction.version !== 1) issue("artDirection.version", "unsupported_recipe_version", "This art-direction recipe version is not supported.");
+    if (!isTemplateFamily(direction.family)) issue("artDirection.family", "unsupported_family", "Choose an implemented template composition.");
+    else if (!templateFamily(direction.family).goals.includes(direction.goal as never)) issue("artDirection.goal", "incompatible_family_goal", "This family does not support the selected customer flow.");
+    for (const [key, allowed] of [["goal", DESIGN_GOALS], ["personality", DESIGN_PERSONALITIES], ["audience", DESIGN_AUDIENCES], ["density", DESIGN_DENSITIES]] as const) {
+      if (!allowed.includes(direction[key] as never)) issue(`artDirection.${key}`, "unsupported_value", "Choose a supported art-direction option.");
+    }
+    const capabilities = getExperienceProfile(typeof raw.categoryKey === "string" ? raw.categoryKey : options.fallbackCategory).capabilities;
+    if ((direction.goal === "sell" && !capabilities.includes("commerce")) || (direction.goal === "book" && !capabilities.includes("booking"))) {
+      issue("artDirection.goal", "incompatible_goal", "This goal does not match the business's supported customer flow.");
+    }
+  }
+  if (!isSupportedExperienceVersion(raw.version) && !(options.allowLegacy === true && raw.version === undefined)) {
     issue("version", "unsupported_version", "This experience format is not supported. Nothing was published or changed.");
   }
   if (!isCategoryKey(raw.categoryKey) && !(options.allowLegacy && raw.categoryKey === undefined && isCategoryKey(options.fallbackCategory))) {
@@ -133,6 +148,9 @@ export function validateExperienceDocument(input: unknown, options: { allowLegac
     if (!isSectionType(section.type)) issue(`${path}.type`, "unsupported_section", "This section is not supported by the renderer.");
     enumValue(section.visible, [true, false], `${path}.visible`);
     for (const [key, max] of Object.entries({ title: 90, subtitle: 200, body: 900, layout: 20, filter: 60 })) text(section[key], `${path}.${key}`, max);
+    if (raw.version === 2 && section.layout !== undefined) {
+      enumValue(section.layout, section.type === "gallery" ? GALLERY_LAYOUT_KEYS : CATALOGUE_LAYOUT_KEYS, `${path}.layout`);
+    }
     number(section.limit, `${path}.limit`, 1, 24, true);
     url(section.imageUrl, `${path}.imageUrl`, true);
     // There are no executable interactions/scenes in v1. An empty legacy config is harmless.

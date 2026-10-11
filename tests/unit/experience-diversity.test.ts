@@ -64,11 +64,12 @@ describe("diversity gate", () => {
     expect(report.maxSimilarity).toBe(1);
   });
 
-  it("accepts a candidate with a different structure from every recent experience", () => {
+  it("rejects a palette-only theme alternative with identical rendered structure", () => {
     const candidate = docFor("food", "A", 2);
     const recent = [docFor("food", "A", 0)];
     const report = diversityReport(candidate, recent);
-    expect(report.maxSimilarity).toBeLessThan(1);
+    expect(report.maxSimilarity).toBe(1);
+    expect(report.ok).toBe(false);
   });
 });
 

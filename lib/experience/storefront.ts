@@ -8,7 +8,7 @@
 
 import prisma from "../db";
 import { getExperienceProfile } from "./categories";
-import { normalizeExperienceDocument } from "./document";
+import { normalizeExperienceDocument, themeOf } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
@@ -327,7 +327,7 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
   return {
     business,
     document,
-    theme: resolveExperienceTheme(document.themeKey),
+    theme: themeOf(document),
     profile: getExperienceProfile(document.categoryKey),
     items,
     services: mappedServices,

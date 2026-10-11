@@ -1,5 +1,7 @@
 /** Synthetic renderer fixture only — no database, tenant authorization, payment or provider proof. */
-import { createExperienceDocument } from "@/lib/experience/document";
+import { buildArtDirectedCandidate } from "@/lib/experience/artDirector";
+import type { TemplateFamilyKey } from "@/lib/experience/templateFamilies";
+import { createExperienceDocument, themeOf } from "@/lib/experience/document";
 import { getExperienceProfile } from "@/lib/experience/categories";
 import { resolveExperienceTheme } from "@/lib/experience/themes";
 import type { RenderPreference } from "@/lib/experience/renderMode";
@@ -35,4 +37,16 @@ export function motionFixture(preference: RenderPreference = "motion", noMotion 
     document, theme, profile: getExperienceProfile("food"), items: [product], services: [], offer: null,
     categories: ["Lunch"], isPreview: true, publishedVersion: 0,
   };
+}
+
+/** Larger fixed catalogue for structural browser checks; no original ingestion or generated media. */
+export function familyFixture(family: TemplateFamilyKey, preference: RenderPreference = "lite"): StorefrontData {
+  const data = motionFixture(preference);
+  data.document.themeKey = data.theme.key;
+  data.items = Array.from({ length: 6 }, (_, index) => ({ ...data.items[0], id: `fixture-product-${index + 1}`, name: `Coastal selection ${index + 1} (fixture)`, price: 149 + index * 10, isFeatured: index < 3 }));
+  data.document.sections.find((section) => section.type === "gallery")!.images = Array.from({ length: 6 }, (_, index) => ({ url: `/dev/motion-asset.svg?slot=${index}`, alt: `Synthetic illustration ${index + 1}` }));
+  data.document.sections.find((section) => section.type === "about")!.imageUrl = "/dev/motion-asset.svg";
+  data.document = buildArtDirectedCandidate(data.document, "fixture:family", { family, brief: { goal: "enquire" }, counts: { products: 6, services: 0 } }).document;
+  data.theme = themeOf(data.document);
+  return data;
 }

@@ -26,7 +26,8 @@ import {
   updateSection,
 } from "@/lib/experience/document";
 import { isValidThemeKey } from "@/lib/experience/themes";
-import { validateExperienceDocument } from "@/lib/experience/schema";
+import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
+import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
@@ -157,11 +158,6 @@ export async function POST(req: Request) {
 
     const existing = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (existing) {
-      const document = normalizeExperienceDocument(
-        { ...parseDocument(existing.draftJson, existing.categoryKey), categoryKey, themeKey: body?.themeKey || existing.themeKey },
-        categoryKey,
-      );
-      const profile = getExperienceProfile(categoryKey);
       // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
       // client that read version N must send N, and the write is a compare-and-swap on it.
       const expectedDraftVersion = Number(body?.expectedDraftVersion);
@@ -174,6 +170,15 @@ export async function POST(req: Request) {
       if (expectedDraftVersion !== Number(existing.draftVersion)) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
       }
+      const previous = validateExperienceJson(existing.draftJson || "{}", existing.categoryKey);
+      if (!previous.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
+      let document = normalizeExperienceDocument({ ...previous.document, categoryKey, themeKey: body?.themeKey || existing.themeKey }, categoryKey);
+      if (previous.document.version === 2 && previous.document.categoryKey !== categoryKey) {
+        document = buildArtDirectedCandidate(document, `${businessId}:category`, { brief: { goal: defaultDesignGoal({ ...document, artDirection: undefined }) } }).document;
+      }
+      const safeDocument = validateExperienceDocument(document);
+      if (!safeDocument.ok) return NextResponse.json({ error: "This business direction does not use a supported configuration.", code: "experience_schema_invalid" }, { status: 400 });
+      const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
       const updated = await prisma.businessExperience
         .update({

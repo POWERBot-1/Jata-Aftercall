@@ -16,6 +16,7 @@ import { addableSectionsFor, isSectionType, sectionDefinition } from "./sections
 import { PHOTOGRAPHY_STYLE_KEYS } from "./types";
 import { isRenderPreference } from "./renderMode";
 import { supportedExperienceVersion } from "./schemaVersion";
+import { parseArtDirection, templateForDocument } from "./templateFamilies";
 import type {
   CategoryKey,
   ExperienceDocument,
@@ -257,6 +258,9 @@ export function normalizeExperienceDocument(input: unknown, fallbackCategory?: C
     sections: sections.length > 0 ? sections : createExperienceDocument({ categoryKey: profile.key, businessName: fallbackName }).sections,
   };
 
+  if (document.version === 2) document.artDirection = parseArtDirection(raw.artDirection);
+  else if (raw.artDirection !== undefined) throw new Error("Art direction needs experience format 2. Nothing was changed.");
+
   if (typeof raw.photographyStyle === "string" && (PHOTOGRAPHY_STYLE_KEYS as readonly string[]).includes(raw.photographyStyle)) {
     document.photographyStyle = raw.photographyStyle;
   }
@@ -384,7 +388,13 @@ export function navigationFor(doc: ExperienceDocument): Array<{ id: string; labe
 }
 
 export function themeOf(doc: ExperienceDocument) {
-  return resolveExperienceTheme(doc.themeKey);
+  const theme = resolveExperienceTheme(doc.themeKey);
+  const family = templateForDocument(doc);
+  if (!family) return theme;
+  return { ...theme, treatment: { ...theme.treatment, heroStyle: family.hero, navStyle: family.navigation, cardStyle: family.cards,
+    mediaRatio: family.mediaRatio, sectionSpacing: doc.artDirection?.density === "compact" ? "3.5rem" : doc.artDirection?.density === "spacious" ? "7rem" : "5rem",
+    heroMinHeight: family.heroTreatment === "poster" ? "88svh" : family.hero === "band" ? "45vh" : "76vh",
+    motion: theme.treatment.motion === "none" ? "none" as const : family.motion } };
 }
 
 export function addableSections(doc: ExperienceDocument) {
