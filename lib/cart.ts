@@ -6,6 +6,7 @@
  */
 
 import { calculateCommerceTotal, type CommerceCalculation } from "./commerce-pricing";
+import { chargeableUnitPrice, type QuantityRule } from "./sale-pricing";
 
 export type CartLine = {
   productId?: string;
@@ -71,14 +72,20 @@ export function parseConversationalOrder(
     name: string;
     basePriceKES?: number | null;
     variantPriceKES?: number | null;
+    salePriceKES?: number | null;
+    salePriceStartsAt?: Date | string | null;
+    salePriceEndsAt?: Date | string | null;
     stockStatus?: string | null;
     quantity?: number | null;
     preOrderAllowed?: boolean | null;
   }>,
+  options: { now?: Date; rules?: QuantityRule[] | null } = {},
 ): {
   matchedLines: CartLine[];
   outOfStockItems: Array<{ productId: string; name: string; stockStatus: string; preOrderAllowed: boolean; priceKES: number }>;
 } {
+  // One instant for the whole parse, so every line is priced at the same moment.
+  const now = options.now ?? new Date();
   const matchedLines: CartLine[] = [];
   const outOfStockItems: Array<{ productId: string; name: string; stockStatus: string; preOrderAllowed: boolean; priceKES: number }> = [];
   const text = (message || "").toLowerCase();
@@ -123,7 +130,13 @@ export function parseConversationalOrder(
       }
     }
 
-    const authoritativePrice = Math.max(0, Math.round(Number(product.basePriceKES ?? product.variantPriceKES ?? 0)));
+    const authoritativePrice = chargeableUnitPrice({
+      product,
+      productName: product.name,
+      quantity,
+      now,
+      rules: options.rules,
+    }).unitPriceKES;
     const status = product.stockStatus || "IN_STOCK";
     const isUnavailable =
       status === "OUT_OF_STOCK" ||

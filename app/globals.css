@@ -1025,7 +1025,8 @@ button:focus-visible {
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-.eb-actionbar .eb-btn { flex: 1; }
+/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
+.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
 .eb-actionbar-spacer { height: 5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
@@ -1592,5 +1593,59 @@ button:focus-visible {
     bottom: 4.4rem;
     width: 26rem;
     border-radius: 1.25rem;
+  }
+}
+
+/* ── Immersive Website Engine: Motion mode (Phase 2) ───────────────────────────────────────
+   Only applies after the visitor's browser has chosen Motion (html[data-motion-ready]).
+   Lite pages carry no hidden state, so content is always visible without JavaScript.
+   Reduced-motion visitors never get the attribute, and the media query below is a second guard. */
+html[data-motion-ready] .eb-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  will-change: opacity, transform;
+}
+html[data-motion-ready] .eb-reveal--expressive {
+  transform: translateY(32px) scale(0.985);
+  transition-duration: 0.9s;
+}
+html[data-motion-ready] .eb-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-motion-ready] .eb-reveal,
+  html[data-motion-ready] .eb-reveal--expressive {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
+
+/* ── Immersive Website Engine: the JavaScript motion engine (Phase 2) ────────────────────────
+   `html[data-motion-engine="js"]` is written by MotionEngineMount only after the `motion` chunk
+   has actually loaded. Until that moment — and forever, if it never loads — the CSS rules above
+   are what the visitor sees. Once the engine is running it owns the entrance: the stylesheet
+   therefore leaves every reveal fully opaque here, and the engine hides only the elements it is
+   about to animate. A failed, blocked or slow chunk can never leave a section invisible (§54, §78). */
+html[data-motion-engine="js"] .eb-reveal,
+html[data-motion-engine="js"] .eb-reveal--expressive {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  will-change: auto;
+}
+
+/* The hover-driven call to action (§21 "magnetic"). Pointer-only by construction: the runtime
+   attaches it solely for a fine pointer, so a touch visitor gets the plain button (§27). */
+[data-eb-magnetic] {
+  transition: transform 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-eb-magnetic] {
+    transition: none;
   }
 }

@@ -41,6 +41,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ...state,
+      // The row's version. Undo, redo and open-a-version send it back so a stale window cannot roll back newer edits.
+      draftVersion: experience ? Number(experience.draftVersion) || null : null,
       revisions: revisionSummaries(revisions, cursor),
     });
   } catch {
@@ -66,12 +68,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Choose Undo, Redo or a version to go back to." }, { status: 400 });
     }
 
-    const result = await moveDraftHistory(prisma, { businessId, direction: direction ?? "undo", version });
+    const expectedDraftVersion = Number(body?.expectedDraftVersion);
+    const result = await moveDraftHistory(prisma, {
+      businessId,
+      direction: direction ?? "undo",
+      version,
+      expectedDraftVersion: Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0 ? expectedDraftVersion : null,
+    });
+    if (result.status === "conflict") {
+      return NextResponse.json({ error: result.reason, code: "draft_version_conflict", unchanged: true }, { status: 409 });
+    }
     if (result.status === "missing") return NextResponse.json({ error: result.reason }, { status: 409 });
     if (result.status === "unavailable") return NextResponse.json({ error: result.reason, unchanged: true }, { status: 409 });
 
     const revisions = await loadDraftHistory(prisma, businessId);
-    const state = historyState(revisions, result.draftVersion);
+    // The cursor, not the new draft version: the draft now equals the restored revision.
+    const state = historyState(revisions, result.cursor);
 
     await logAudit({
       actorId: session.userId,
@@ -88,7 +100,7 @@ export async function POST(req: Request) {
       message: result.message,
       unchanged: false,
       ...state,
-      revisions: revisionSummaries(revisions, result.draftVersion),
+      revisions: revisionSummaries(revisions, result.cursor),
     });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);

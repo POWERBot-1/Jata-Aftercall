@@ -23,6 +23,7 @@ import * as store from "./store";
 import { resolveTerminology } from "./terminology";
 import type { PermissionKey } from "./permissions";
 import type { PosClient } from "./store";
+import { effectiveUnitPrice } from "@/lib/sale-pricing";
 import type { ChannelKey, PosConfiguration, ReceiptDocument, SaleLineInput, SaleTotals } from "./types";
 
 /** Who is acting, resolved server-side by `guard.ts` — never taken from the request body (§5). */
@@ -157,6 +158,8 @@ async function resolveLines(params: {
 
   const products = await store.findProductsByIds(businessId, items.map((item) => item.productId ?? ""), client);
   const byId = new Map<string, any>(products.map((product: any) => [product.id, product] as [string, any]));
+  // One instant for the whole sale, so every line is priced at the same moment.
+  const saleNow = new Date();
 
   const lines: SaleLineInput[] = [];
   const variants: Record<string, string | null> = {};
@@ -199,7 +202,13 @@ async function resolveLines(params: {
     }
 
     // §56: the till price is the server's price. An override needs EDIT_PRICE.
-    let unitPrice = sanitizeAmountKES(product.priceKES);
+    // The POS sale window uses the shared rule (lib/sale-pricing.ts): the sale price applies only inside its
+    // [start, end) window, otherwise the list price. POS keeps its own catalogue and authorisation rules.
+    const listUnitPrice = effectiveUnitPrice(
+      { basePriceKES: product.priceKES, salePriceKES: product.salePriceKES, salePriceStartsAt: product.salePriceStartsAt, salePriceEndsAt: product.salePriceEndsAt },
+      saleNow,
+    ).unitPriceKES;
+    let unitPrice = listUnitPrice;
     const requestedPrice = item.unitPriceKES == null ? null : sanitizeAmountKES(item.unitPriceKES);
     if (requestedPrice != null && requestedPrice !== unitPrice) {
       if (actorCan(actor, "EDIT_PRICE")) {
@@ -210,7 +219,7 @@ async function resolveLines(params: {
     }
     // Wholesale price only when the configuration offers it (§8, §18).
     if (
-      unitPrice === sanitizeAmountKES(product.priceKES) &&
+      unitPrice === listUnitPrice &&
       configuration.sales.wholesalePricing &&
       product.wholesalePriceKES != null &&
       quantity >= 12

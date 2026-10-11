@@ -305,11 +305,26 @@ describe("failures are explained, recoverable, and never destroy the rest of the
   it("reports a decode failure when the bytes cannot become pixels", async () => {
     const restore = installBrowserEnvironment({ decode: async () => { throw new Error("decode_failed"); } });
     try {
-      const prepared = await prepareUpload(phoneFile(jpegBytes({ width: 900, height: 700 }), "broken.jpg", "image/jpeg"));
+      // A truncated JPEG (no end-of-image marker) cannot be salvaged by uploading the original.
+      const full = jpegBytes({ width: 900, height: 700 });
+      const prepared = await prepareUpload(phoneFile(full.slice(0, Math.floor(full.length / 2)), "broken.jpg", "image/jpeg"));
       expect(prepared.status).toBe("error");
       if (prepared.status !== "error") return;
       expect(prepared.issue.code).toBe("decode_failed");
       expect(prepared.issue.recoverable).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("uploads the original when a complete JPEG cannot be optimised (existing photos stay usable)", async () => {
+    const restore = installBrowserEnvironment({ decode: async () => { throw new Error("decode_failed"); } });
+    try {
+      const prepared = await prepareUpload(phoneFile(jpegBytes({ width: 900, height: 700 }), "ok-but-unoptimisable.jpg", "image/jpeg"));
+      expect(prepared.status).toBe("ok");
+      if (prepared.status !== "ok") return;
+      expect(prepared.upload.format).toBe("jpeg");
+      expect(prepared.upload.notes.join(" ")).toContain("uploaded the original");
     } finally {
       restore();
     }

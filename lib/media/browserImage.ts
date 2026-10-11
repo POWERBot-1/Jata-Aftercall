@@ -14,6 +14,8 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_CHARS,
   MAX_SOURCE_BYTES,
+  MIME_FOR_FORMAT,
+  WEB_SAFE_FORMATS,
   decodeFailureIssue,
   humanFileSize,
   parseImageDataUrl,
@@ -157,6 +159,27 @@ function sharpenCanvas(canvas: HTMLCanvasElement, strength: number): boolean {
   return true;
 }
 
+let webpEncodeSupport: boolean | null = null;
+
+/**
+ * Probes whether this browser really encodes WebP. Some browsers silently fall back to PNG when
+ * asked for WebP, so the probe checks the produced data-URL prefix rather than trusting the request.
+ * The result is cached for the page lifetime.
+ */
+export function browserCanEncodeWebp(): boolean {
+  if (webpEncodeSupport !== null) return webpEncodeSupport;
+  try {
+    if (typeof document === "undefined") return false;
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    webpEncodeSupport = probe.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch {
+    webpEncodeSupport = false;
+  }
+  return webpEncodeSupport;
+}
+
 async function canvasToDataUrl(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<string> {
   if (typeof canvas.toBlob === "function") {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((value) => resolve(value), mime, quality));
@@ -210,6 +233,67 @@ export type PrepareOptions = {
  * The mobile upload path: file → validated, rotated, resized, web-ready data URL.
  * This is what fixes the "photo never leaves the phone" failure (§19).
  */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * When the optional optimisation step fails for a photo the server already accepts as it is
+ * (JPEG, PNG, WebP or GIF), upload the original bytes instead of losing the photo. The bytes are
+ * re-checked by signature and size first. Anything else (HEIC, unknown, oversize) returns null and
+ * keeps its normal, specific error.
+ */
+/**
+ * A truncated file keeps a valid signature, so the signature check alone is not enough to upload it
+ * as-is. Each format must also end where it should: JPEG EOI, PNG IEND, WebP RIFF length, GIF trailer.
+ */
+function looksComplete(bytes: Uint8Array, format: ImageFormat): boolean {
+  const n = bytes.length;
+  if (format === "jpeg") {
+    for (let i = Math.max(0, n - 16); i < n - 1; i += 1) if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) return true;
+    return false;
+  }
+  if (format === "png") {
+    const tail = String.fromCharCode(...bytes.subarray(Math.max(0, n - 16)));
+    return tail.includes("IEND");
+  }
+  if (format === "webp") {
+    if (n < 12) return false;
+    const riffSize = bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24);
+    return riffSize + 8 === n;
+  }
+  if (format === "gif") return bytes[n - 1] === 0x3b;
+  return false;
+}
+
+function originalFallback(bytes: Uint8Array, format: ImageFormat, notes: string[]): PrepareResult | null {
+  if (!WEB_SAFE_FORMATS.includes(format)) return null;
+  if (!looksComplete(bytes, format)) return null;
+  const mime = MIME_FOR_FORMAT[format];
+  const verdict = validateImageBytes(bytes, { declaredMime: mime, maxBytes: MAX_UPLOAD_BYTES });
+  if (verdict.status !== "ok") return null;
+  const dataUrl = `data:${mime};base64,${bytesToBase64(bytes)}`;
+  if (dataUrl.length > MAX_UPLOAD_CHARS) return null;
+  return {
+    status: "ok",
+    upload: {
+      dataUrl,
+      mime,
+      format,
+      width: verdict.facts.width ?? 0,
+      height: verdict.facts.height ?? 0,
+      bytes: bytes.length,
+      sourceBytes: bytes.length,
+      notes: [...notes, "We couldn't optimise this photo, so we uploaded the original. It may load a little more slowly."],
+    },
+  };
+}
+
 export async function prepareUpload(file: File, options: PrepareOptions = {}): Promise<PrepareResult> {
   report(options.onProgress, "reading", 5);
   if (!file || file.size === 0) {
@@ -257,7 +341,7 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
   try {
     decoded = await decodeFile(file);
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return originalFallback(bytes, format, []) ?? { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
   }
 
   try {
@@ -310,7 +394,7 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
       resized: resize.scaled,
     });
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return originalFallback(bytes, format, []) ?? { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
   } finally {
     decoded.revoke?.();
   }
@@ -382,7 +466,11 @@ async function finish(
     height: canvas.height,
     pixelsSource: options.purpose ?? "upload",
   });
-  const { dataUrl, attempts } = await encodeWithinBudget(canvas, choice.mime, options.quality ?? choice.quality);
+  // Owner uploads go out as WebP when this browser can really encode it (smaller at similar quality).
+  // AI-generated and enhanced images keep JPEG. The server re-checks the bytes either way.
+  const useWebp = (options.purpose ?? "upload") === "upload" && browserCanEncodeWebp();
+  const mime = useWebp ? "image/webp" : choice.mime;
+  const { dataUrl, attempts } = await encodeWithinBudget(canvas, mime, options.quality ?? choice.quality);
   if (attempts > 1) notes.push("Compressed a little further to keep your site fast.");
   if (dataUrl.length > MAX_UPLOAD_CHARS) {
     // Never hand the API something it will refuse: the owner is told now, while their photo is

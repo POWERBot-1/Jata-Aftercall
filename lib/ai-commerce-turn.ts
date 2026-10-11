@@ -508,7 +508,7 @@ async function progressOrder(params: {
   }
 
   const products = brain.products.filter((product) => product.isActive !== false) as CatalogueProduct[];
-  const parsed = parseConversationalOrder(message, products);
+  const parsed = parseConversationalOrder(message, products, { rules: brain.extendedConfig.bulkPricing });
   let focusId: string | null = null;
   let productFocusPinned = Boolean(params.conv.productFocusPinned);
   const zoneNames = [

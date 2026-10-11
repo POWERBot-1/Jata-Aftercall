@@ -8,6 +8,7 @@
 import { getBaseUrl } from "../url";
 import { getExperienceProfile } from "./categories";
 import type { CategoryKey, ExperienceDocument } from "./types";
+import { displayPriceKES } from "../sale-pricing";
 
 type BusinessLike = {
   name: string;
@@ -21,7 +22,15 @@ type BusinessLike = {
   logoUrl?: string | null;
 };
 
-type ItemLike = { name: string; basePriceKES?: number | null; salePriceKES?: number | null; imageUrl?: string | null; description?: string | null };
+type ItemLike = {
+  name: string;
+  basePriceKES?: number | null;
+  salePriceKES?: number | null;
+  salePriceStartsAt?: Date | string | null;
+  salePriceEndsAt?: Date | string | null;
+  imageUrl?: string | null;
+  description?: string | null;
+};
 
 function absolute(path: string): string {
   return `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
@@ -74,7 +83,8 @@ export function structuredDataFor(params: {
   const items = params.items || [];
   if (items.length > 0 && (profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue"))) {
     base.makesOffer = items.slice(0, 30).map((item) => {
-      const price = item.salePriceKES ?? item.basePriceKES ?? null;
+      // The price shown is the price checkout charges right now (sale only inside its window).
+      const price = displayPriceKES(item).priceKES;
       return {
         "@type": "Offer",
         itemOffered: {
