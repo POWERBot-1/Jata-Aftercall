@@ -10,7 +10,7 @@ Updated 2026-10-11 UTC. **IN PROGRESS — full product NOT COMPLETE. Production 
 - Branch URL (exists after verified push): https://github.com/POWERBot-1/Jata-Aftercall/tree/arena/7b28a123-jata-aftercall
 - Proposed target: `main`; audit target/merge-base SHA `9c36bd1026e50a5ab6e66f7446ae730c71f5963a`.
 - Inherited 17 commits / 156 changed files vs main must be reviewed; not already merged.
-- Latest tested partial implementation SHA: **`2256add39b429c41a2bb7389f583641a3c7a49f5` (M5)**; independently verified remote equality after push. Full-engine final/released SHA: **NOT RELEASED**. Follow-up documentation commit SHA is recorded on the PR/handoff because a commit cannot contain its own SHA.
+- Latest tested partial implementation SHA: **`e9b1a1938c247eb54eb7cfd30fd8d47afc7c7be7` (M6)**. Verified documentation/checkpoint SHA **`f7bd361da2bbf868ef6dac6940ba1bb4879404fd`**, matching the remote at safe-pause entry; its fresh native/browser CI passed. Full-engine final/released SHA: **NOT RELEASED**. A subsequent documentation-only pause commit records its own delivery SHA on PR/handoff, not inside itself.
 - M0 committed and pushed: `23726edb94d8734b26cac0ea1c9f145c2dd6f3c6`; `git rev-parse HEAD` matched `git ls-remote origin refs/heads/arena/7b28a123-jata-aftercall` after push. Later milestones must independently verify their own SHA.
 - Draft PR: https://github.com/POWERBot-1/Jata-Aftercall/pull/41 (proposed base main; no merge authorized).
 - Merged / resulting target SHA: NOT MERGED / not applicable.
@@ -46,11 +46,11 @@ Baseline gzip entry-file totals: business home **115,794 B**, Studio design **14
 
 ## Implemented changes / acceptance / limitations
 
-IN PROGRESS. M0 installed the dependency and preserved the directive. M1 implements the strict configuration/restore/publication foundation and closes service-read and unpublished-storefront boundaries (below). The complete recipe library, AI art director, public immersive, persistent-original media, provider photo generation, full end-to-end journey and adaptive intelligence are not delivered by these milestones. Installed motion is not yet imported by application code.
+**ENGINE INCOMPLETE.** Verified subcomponents now include the v1/v2 configuration/tenant/publication/CAS/history foundation, canonical pricing presentation, installed and genuinely lazy/scoped Motion, 20 renderer-backed Lite compositions with deterministic art-direction policy, bounded development-only GLB safety, and local raster preparation. Full recipe/AI/provider/public immersive/physical-device/authenticated journey/adaptive-intelligence acceptance is not complete. Historical milestone observations below retain their original timing; the latest [safe-pause handover](#safe-pause-handover--f7bd361-evidence-only) is authoritative for this pause.
 
 ## Database / security / migration evidence
 
-No new migration or production data change. Existing schema validated; migrations not locally deployed. Service-read visibility and explicit schema-version/publication boundaries are now fixed with mock/unit tests; eight new real-Prisma tests are written but locally skipped. Media provenance/ownership gaps remain open. No asset-ownership proof is claimed from URL shape validation. Existing entitlements/payment gates, authentication, AI Front Desk, POS and M-PESA provider logic must be preserved. Old CI/test reports are not verification of this final branch.
+No new migration or production data change. At f7bd361, native generation, all 15 existing migrations/seed, tenant/configuration tests, no-skips gates and connected production compilation passed against disposable CI Postgres; no production database was used. Local DB skips are historical/local qualifications, not current CI skips. Media provenance/ownership and full persistent-original acceptance remain incomplete/BLOCKED. URL shape checks are not asset-ownership proof. Existing auth/tenant/entitlement/payment/ASK JATA/POS and M-PESA boundaries remain preserved. Exact source-specific evidence is recorded below.
 
 ## Required owner decisions / release blockers
 
@@ -315,3 +315,64 @@ The preparer does not store anything; original/derivative separation in durable 
 **BLOCKED by explicit owner decision:** durable original storage/preservation/CDN activation, real provider/upload/provisioning/spending operations and provider-dependent acceptance. Original/derivative object separation, tenant/auth/token/ACL/security, retention/deletion/backup, cost ceilings and configuration remain documented activation prerequisites. No limits/credentials/provider approval inferred.
 
 **Independent/outstanding (all mandatory):** full section/interaction recipe library; richer contextual AI/local structural scoring/platform-wide privacy-safe diversity; authorable commerce-bound scene/world/editor and all compression/textures/WebGPU; measured runtime/device adaptation/analytics/optimization/CWV; physical Android/HEIC/camera memory and full owner/customer authenticated journey; security/advisory/runner pinning and authorized retry-policy resolution; complete inherited diff review/originalA–X acceptance. No merge, production deployment or production-data mutation authorized/invoked. **IN PROGRESS / full vision NOT COMPLETE.**
+
+
+## Safe-pause handover — f7bd361 evidence only
+
+**Binding instruction:** pause the CURRENT session after documentation/checkpoint preservation. **ENGINE INCOMPLETE** until EVERY mandatory original acceptance gate passes. Storage **DEFERRED**; persistent-original/CDN/provider acceptance **BLOCKED**, not waived. No new implementation, service provisioning, provider activation/calls, real uploads, spending, PR merge, production deployment or production-data change is authorized by this pause. No additional owner decision is needed to complete these safe-pause tasks.
+
+### 1. Verified checkpoint and preservation
+
+- Local branch `arena/7b28a123-jata-aftercall`; local HEAD and `git ls-remote origin refs/heads/arena/7b28a123-jata-aftercall` both **`f7bd361da2bbf868ef6dac6940ba1bb4879404fd`** at entry. Latest implementation **`e9b1a1938c247eb54eb7cfd30fd8d47afc7c7be7`**; f7bd361 changes only release plan/report.
+- `git status --porcelain=v1 --untracked-files=all`, unstaged diff and staged diff were EMPTY. No uncommitted source/user work was found; no stash, reset, checkout, clean, deletion or history rewrite was needed/performed. Existing work remains in this verified Git history. Only this release-report documentation is changed for the pause.
+- PR [#41](https://github.com/POWERBot-1/Jata-Aftercall/pull/41) remains OPEN/DRAFT, existing source branch unchanged, proposed main NOT owner-confirmed for merge. Inherited 17 commits/156 files and the entire cumulative diff still require review. No merge/deploy operation is performed.
+- Full specification unchanged: all108 numbered blocks/directive, SHA256 **`3bae22f5e38e37b4b429cfc672818544a793457b6ac159de2cfd652429838e42`**. No code/configuration/lockfile/schema/migration/media binary changed in this safe pause.
+
+### 2. Requested five Website/POS non-passes — historical, NOT current failures
+
+**Evidence correction:** f7bd361 has **17 Website PASS +22 POS PASS, zero journey skips/failures**. There is no evidence for FIVE CURRENT failed Website/POS cases at this checkpoint. Five identifiable failures appear in the older truncated diagnostic [comment6109464792](https://github.com/POWERBot-1/Jata-Aftercall/pull/41#issuecomment-6109464792) for [run38142721026](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38142721026) at implementation203c78a. Full [check annotations](https://api.github.com/repos/POWERBot-1/Jata-Aftercall/check-runs/114479705398/annotations?per_page=100) independently confirm the cases below. They were WEBSITE cases; POS was conditionally NOT RUN after that failure, not reported as a failing POS test.
+
+| Historical Website case | Exact observed non-pass in run38142721026 | Status at verified f7bd361 |
+|---|---|---|
+|12 — customer's payment confirms and fulfils the order|Prisma `payment.findUnique` received `reference: undefined` (`lib/experience/payments.ts:329`); predecessor checkout had not supplied an accepted order/payment reference|PASS in the17-case Website suite; not live Paystack acceptance|
+|13 — owner receives the order and processes it|Expected an order to be truthy, received `undefined` (then line341); downstream missing-order symptom|PASS; server order/processing assertions retained|
+|14 — customer books a service and owner completes it|Availability returned `[]` instead of including11:00 (then line391)|PASS; availability/booking assertions retained; no production-date workaround claimed|
+|16 — unpaid business can build but never publish|Expected403/payment refusal; received428/reviewed draft version required (then line469)|PASS; test supplies actual reviewed CAS revision and retains payment refusal|
+|17 — lapsed entitlement hides site without deleting content|Expected403; received428/reviewed draft version required (then line494)|PASS; CAS/payment/content-survival assertions retained|
+
+**Do not treat the truncated five as an exhaustive old failure count.** Full annotations of that run also identify Website9 (draft edit428 rather than200),10 (publication409/primary visual missing),11 (checkout400 rather than201/missing checkout identity): **eight distinct historical Website failure annotations** in total. Later [run38143269483](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38143269483) at3d7192c reported10 PASS/7 FAIL; its first root was case9 missing CAS, with unpublished-site cascades. Those historical failures were resolved by guarded-contract fixture corrections3d7192c/a28c1a4; native recovery [38143573261](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38143573261) and current f7bd361 independently pass. No assertion/payment/tenant/publication guard was relaxed to obtain this classification. No new repair is attempted during pause.
+
+**One current unresolved expected failure, NOT five Website/POS failures:** `tests/prisma/subscription-payment.test.ts:87`, `it.fails("KNOWN GAP: a provider-verified success on a FAILED subscription payment should activate the subscription (fails until authorized)")`. Current characterization: a later successful subscription webhook is refused with503 and no activation; verify returns stored FAILED without querying Paystack. This policy gap remains outstanding, not fixed/waived by a green CI result. No payment-policy change is authorized here.
+
+### 3. Verified results at f7bd361 (read existing evidence; no new test execution claimed)
+
+Authoritative [run38168849078](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38168849078), job114556993468, SUCCESS2026-10-11T19:43:38Z; feature headf7bd361, runner synthetic checkout **`1978f92269928df0c679becca7d2575ca35210e1`**. Actual [bot6112974903](https://github.com/POWERBot-1/Jata-Aftercall/pull/41#issuecomment-6112974903) reports:
+
+| Status | Check/result | Qualification |
+|---|---|---|
+|PASS|Native non-E2E:164 files;1952 PASS +1 expected failure /1953 total;0 skipped|Known subscription retry gap above remains unresolved|
+|PASS|Website journey17; Business POS journey22;0 skipped|Real disposable Postgres/route handlers; mocked sessions/test settlement, not complete authenticated browser/live-provider journey|
+|PASS|Motion124, registered Lite families167, optional immersive22, layout7, local raster29, production isolation9 =358 checks;0 failed/skipped|Synthetic/local/intercepted inputs and simulated mobile/software-GPU/codec fallback, NOT physical-device/provider/public3D acceptance|
+|PASS|Native Prisma generation, lint/types,15 migrations/seed, connected production build, bundle/isolation gates|Isolated test database, not production migration/deployment|
+|PASS, limited measure|Gzip app-entry business116460/editor147687/home106724 B; lazymini4876 B absent initially|Not total journey payload/CWV/device memory or complete performance engine|
+|Previously verified locally|1885 PASS/108 native DB/e2e SKIP;1993 total|Those local skips are not current CI skips; no suite rerun during this documentation-only pause|
+|BLOCKED|Durable originals/object-CDN/provider activation and dependent acceptance|Explicit owner DEFERRED decision; not marked PASS, no provider upload/call/spend enabled|
+|NOT RUN / OUTSTANDING|Physical Android/HEIC/camera memory, live-provider acceptance, full authenticated owner/customer/immersive-to-commerce browser journey, production CWV|Not inferred from model fixtures, handler tests, emulation or successful compilation|
+
+Automatic f7bd361 Vercel BRANCH preview success is existing Git integration, not production release authorization. No deployment was manually invoked by this pause. Historical19 dependency advisories and Actions/runtime/runner drift remain unresolved; no fresh audit/upgrade is claimed.
+
+### 4. Completed subcomponents and remaining mandatory work
+
+**Verified subcomponents:** versioned v1/v2 config and tenant/publication/CAS/history boundaries; canonical plan presentation with stable financial IDs; actual installed/lazy/scoped Motion and visible finite fallbacks;20 real Lite compositions +deterministic semantic art-direction/own-history gate/editor review; responsive/cart checks; constrained embedded-GLB/dev-only viewer safety; local raster limits/EXIF1–8/cancel/resource/alpha preparation without inline-original failure substitution; deferred media activation policy documentation. These are subcomponents, NOT full-stage or engine certification.
+
+**BLOCKED:** immutable persistent originals/separate durable derivatives, object/CDN/provider activation, actual provider operations/ingestion/acceptance. Before activation, owner-approved tenant/auth/token/ACL/checksum/provenance/security, retention/deletion/backup, cost caps/overage behavior and configuration must be resolved as specified in WEBSITE_STUDIO_MEDIA_ACTIVATION_POLICY.md. Original bytes must not be put inline in Neon as a substitute. No provider selection, retention period, spending cap or activation approval is inferred.
+
+**OUTSTANDING independent requirements:** complete hero/product/content/service/location/commerce/immersive recipes and interactions; richer contextual AI and privacy-safe platform-wide diversity; authorable commercial scene graph/tenant SKU-asset binding/worlds/editor; compressed/texture/animation/WebGPU paths and tests; measured runtime/device adaptation/analytics/optimization/CWV; real target-device/full authenticated customer-owner journey evidence; security/advisory/runner-version review; authorized subscription retry-policy resolution; intended/inherited diff and all originalA–X acceptance. All original108 blocks remain mandatory. Current declared-check success does not certify these requirements.
+
+### 5. Exact next action and stop boundary
+
+**NOW:** commit/push only this documentation to the existing branch, verify new local/remote SHA and clean status, record the resulting documentation delivery SHA/any automatic CI status in the PR handover (a commit cannot contain its own hash), then STOP. No servers, provider/real upload operations, fresh implementation, manual CI dispatch, production mutation, merge or production deployment.
+
+**FIRST action only after an explicit future resume:** read-only acceptance-gap audit of the authenticated browser journeys, comparing `tests/e2e/interactive-business-journey.test.ts` and `tests/e2e/business-pos-journey.test.ts` with the original full-journey/A–X requirements. Write the missing browser/cookie/session/tenant/settlement/device evidence and a scoped test-only plan without executing live provider/payment/storage operations. Do not attempt to repair the historical five as current defects. Do not change the FAILED-subscription retry policy without separate explicit authorization. Storage remains DEFERRED and every provider-dependent gate remains BLOCKED.
+
+**STOPPED / ENGINE INCOMPLETE / NOT MERGED / production NOT DEPLOYED.** This handover preserves work and evidence; it does not waive any acceptance gate or authorize further work now.
