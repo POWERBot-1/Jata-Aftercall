@@ -86,8 +86,11 @@ function request(body: unknown) {
   });
 }
 
+const ORIGINAL_DRAFT = mocks.experience.draftJson;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.experience.draftJson = ORIGINAL_DRAFT;
   mocks.session = { userId: "user-a", role: "OWNER" };
   mocks.ownershipError = null;
   mocks.business.isPublished = false;
@@ -238,5 +241,22 @@ describe("POST /api/experience/publish", () => {
       const response = await POST(request({ businessId: "business-a", action: "unpublish" }));
       expect(response.status).toBe(200);
     });
+  });
+});
+
+
+describe("publish rejects malformed raw configuration before any publication write", () => {
+  it.each([
+    JSON.stringify({ version: 2, categoryKey: "food", sections: [] }),
+    "{broken",
+    JSON.stringify({ version: 1, categoryKey: "food", sections: [{ id: "x", type: "hero", config: { javascript: "alert(1)" } }] }),
+  ])("refuses unsafe or unsupported source JSON", async (draftJson) => {
+    mocks.experience.draftJson = draftJson;
+    const res = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).requires).toBe("SCHEMA");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.experienceUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.versionUpsert).not.toHaveBeenCalled();
   });
 });

@@ -9,8 +9,11 @@ passes. Use an **isolated test database only**, never production.
 
 ## Run (native Prisma engines, the release path)
 
-    PRISMA_TEST_DATABASE_URL=postgresql://... npx prisma migrate deploy   # migrations, in order, via Prisma
-    PRISMA_TEST_DATABASE_URL=postgresql://... npx vitest run tests/prisma
+    DATABASE_URL=postgresql://... npx prisma migrate deploy   # isolated DB, migrations via pinned Prisma
+    DATABASE_URL=postgresql://... PRISMA_TEST_DATABASE_URL=postgresql://... npx vitest run tests/prisma
+
+CI sets both URLs to its disposable PostgreSQL 16 service. The first is the schema datasource;
+the second explicitly opts into the real-Prisma suite. Neither may point at production.
 
 ## Run (WebAssembly build of the same Prisma query engine; used when native engine binaries cannot be downloaded)
 

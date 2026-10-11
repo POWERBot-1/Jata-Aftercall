@@ -267,13 +267,14 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
   });
   if (!business) return null;
   if (business.status === "SUSPENDED") return null;
+  if (!business.isPublished && options.allowDraft !== true) return null;
 
   const experience = await prisma.businessExperience.findUnique({
     where: { businessId: business.id },
     select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
   });
 
-  const published = experience?.publishedJson && experience.status === "PUBLISHED";
+  const published = business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED";
   const usingDraft = options.allowDraft === true && Boolean(experience?.draftJson);
   const preferDraft = options.preferDraft === true && usingDraft;
   const json = preferDraft
@@ -285,7 +286,14 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
         : null;
   if (!json) return null;
 
-  const document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+  let document: ExperienceDocument;
+  try {
+    document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+  } catch {
+    // An unreadable/newer format is not rendered as an older schema. The /b route retains
+    // its classic HTML business-page fallback; no published/draft data is modified here.
+    return null;
+  }
   // Contact details always come from the tenant's own stored business record (§45).
   document.settings.phone = document.settings.phone || business.phone || undefined;
   document.settings.whatsapp = document.settings.whatsapp || business.whatsapp || undefined;

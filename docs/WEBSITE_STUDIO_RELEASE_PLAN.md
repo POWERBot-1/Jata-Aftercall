@@ -43,7 +43,7 @@ With the pinned Prisma CLI and generator, `PRISMA_QUERY_ENGINE_LIBRARY=/usr/bin/
 | Website Studio | `/dashboard/studio`, `/dashboard/businesses/[id]/{sections,design,photos,theme,items,preview,orders,bookings,insights}`; `loadWorkspace` authorizes before loading drafts. `SectionEditor`, `DesignPanel`, `PhotoLab`, `LayoutVariantPanel`, `PreviewClient`, `PublishPanel`, `StudioHistory`. |
 | Renderer / public pages | `/b/[slug]` retains classic BusinessPage and calls `ExperienceSite`, `SectionRenderer`, `StorefrontShell` for experience sites. Core content server-rendered. `/shop`, `/item/[id]`, `/book`, `/checkout`, `/order/[reference]`, `/ai` exist. |
 | Preview / history | `?preview=draft` permitted only to owner/member/admin; draft/public JSON separate. Preview mobile/desktop iframe; undo/redo monotonic draft versions; publication snapshots and restore-to-draft on `/api/experience/versions`. No direct bypass of pay/verify/publish. |
-| Schema | `ExperienceDocument` v1, brand/settings/19 registered section types; normalization strips unrecognized config. Optional renderPreference and generation seed. Version is currently clamped, not compatibility-checked. |
+| Schema | `ExperienceDocument` v1, brand/settings/19 registered section types; normalization strips unrecognized config. Optional renderPreference and generation seed. Baseline clamped version; M1 now rejects explicit unsupported formats and validates raw publication/whole-document/restore boundaries. Legacy missing-version history gets explicit restore-only missing defaults; no general repair-before-publication. |
 | Database | Existing Business (tenant), BusinessMember, Product, ProductVariant, Service, Offer, BusinessExperience, ExperienceVersion, ExperienceDraftRevision, InteractiveBusinessEntitlement, MediaAsset, AiGeneration; Subscription/Payment/Order and POS/payment-wallet models. 15 migration directories through `20261010000200_checkout_idempotency`. Reuse these, do not duplicate tables merely to match conceptual names. |
 | Auth / tenancy | JWT HttpOnly/SameSite session cookies (`lib/auth.ts`); tenant/resource and business-role helpers (`lib/tenant.ts`). Owners/members/admin must be enforced by existing server guard, not browser tenantId. Read-only/member role semantics require continuing review. |
 | Media | `POST /api/media` takes dataUrl/url and validates bytes; `GET/PATCH/DELETE` media library; `lib/media/{browserImage,imageFormat,imagePlan}` resize/EXIF/format/output pipeline; PhotoLab/MediaPicker. Upload currently stores data URLs in Neon. |
@@ -55,7 +55,7 @@ With the pinned Prisma CLI and generator, `PRISMA_QUERY_ENGINE_LIBRARY=/usr/bin/
 | AI Front Desk / ASK JATA | `lib/ai-front-desk.ts`, `ai-grounding.ts`, `ai-business-brain.ts`, tools and entitlements; `/api/ai/chat`, `/b/[slug]/ai`. Tenant-scoped products, stock, FAQs, hours and commerce actions. Preserve and regression-test; do not rewrite. |
 | Payments / subscription | `lib/paystack.ts`, `paymentVerification.ts`, `/api/paystack/{verify,webhook}`, `lib/experience/payments.ts`; server validates reference/amount/currency/status, signatures and idempotent settlement. Website Studio gate in `experience/publish` plus `experience/entitlement`. Preserve test/live separation and established sale/cancel/refund policies. |
 | POS | Existing `lib/pos/*`, `/dashboard/pos/[businessId]`, `/api/pos/[businessId]/*` with role/entitlement/transaction checks. Existing integration and real-DB journey. No new payment logic in visual components. |
-| Plans | Homepage already uses Website Studio and ordering 149 monthly, 999 annual, AI Front Desk 499/month, Website Studio 999/month, POS 499/month. Keep stable `INTERACTIVE_BUSINESS` internal plan identifier. |
+| Plans | **Corrected audit:** required prices exist, but actual homepage price-sorts Monthly → AI → Annual → Interactive Business and retains old branding. Required Monthly → Annual → AI Front Desk → Website Studio → separate POS order/name is OPEN at M1. Preserve stable `INTERACTIVE_BUSINESS` IDs and server prices/policies. |
 
 ## 3. Confirmed defects and dependency risks
 
@@ -64,10 +64,12 @@ With the pinned Prisma CLI and generator, `PRISMA_QUERY_ENGINE_LIBRARY=/usr/bin/
 3. EXIF handling guesses rotation from landscape/portrait, risks double-rotating browser-corrected photos, handles only +90°, and does not release ImageBitmap memory. HEIC branch is unreachable because shared validation refuses it before decode.
 4. Media POST accepts arbitrary safe-shaped URLs and unverified `aiGenerationId`; dimensions can be client-preferred rather than binary-derived. Ownership/provenance needs further hardening. Do not silently delete existing assets.
 5. Unknown schema versions and malformed content are repaired by normalization rather than rejected at publication. Add a strict boundary while preserving v1 editing/legacy fallback.
-6. `GET /api/services` reads services before checking business publication and never enforces its own published-only comment; unauthenticated draft data can leak. Fix with tenant-isolation regression coverage.
-7. CI missing `PRISMA_TEST_DATABASE_URL` causes five native-Prisma suites to skip and the no-skips gate to fail. Wire isolated CI Postgres to both env vars; do not weaken tests.
+6. Baseline `GET /api/services` leaked draft services; M1 checks ownership/visibility before reads and limits non-owner reads to active services of published non-suspended businesses. Eight mock security tests pass; native database proof pending CI.
+7. Baseline CI missed `PRISMA_TEST_DATABASE_URL`; M1 wires disposable CI Postgres to both database variables, keeps the no-skips gate and adds lint/types/build. Actual execution still pending.
 8. Historical documentation contains obsolete verification and policy statuses. This release report is authoritative for this branch, not old reported test counts. Existing inherited subscription `it.fails` documents a real payment-lifecycle gap; do not count expected failure as resolved.
 9. Persistent image binaries/originals, vendor AI calls, physical Android validation and visitor-facing immersive delivery remain blocked/incomplete. Do not claim these done on interface or mock evidence.
+10. Direct homepage/pricing inspection corrected an earlier audit assumption: plan cards price-sort Monthly → AI → Annual → Interactive Business and retain the old name. Required display order/Website Studio branding remains OPEN at M1; keep stable internal IDs and server pricing.
+11. M1 also fixes a stale-snapshot publication leak: public storefront reads require business.isPublished even when the experience status says PUBLISHED; trusted owner draft preview remains separate.
 
 ## 4. Explicit conflicts / decisions
 
@@ -123,7 +125,7 @@ Status entries are conservative audit/delivery assessments. The original text re
 | 2 | CORE ARCHITECTURE | NOT COMPLETE | Requested behavior remains required in the staged product vision. |
 | 3 | THREE RENDERING MODES | PARTIAL / OPEN | Lite/CSS Motion exist; public Immersive is not implemented. |
 | 4 | CAPABILITY DETECTION | PARTIAL / OPEN | Existing hardware/network score is advisory, not measured runtime capability. |
-| 5 | BUSINESS EXPERIENCE SCHEMA | PARTIAL / OPEN | Existing v1 configuration; strict compatibility boundary pending. |
+| 5 | BUSINESS EXPERIENCE SCHEMA | PARTIAL / OPEN | M1 raw v1 validator and explicit version/legacy restore gates tested locally; asset ownership/native DB proof still pending. |
 | 6 | EXPERIENCE RECIPE ENGINE | NOT COMPLETE | 19 section types do not satisfy all requested recipes. |
 | 7 | CRITICAL UNIQUENESS REQUIREMENT | NOT COMPLETE | Theme/shuffle variants are not the required structural uniqueness. |
 | 8 | TEMPLATE FAMILIES | NOT COMPLETE | All 20 compositional families remain mandatory, not implemented. |
@@ -180,7 +182,7 @@ Status entries are conservative audit/delivery assessments. The original text re
 | 59 | SECURITY | PRESERVED / TEST GATED | Maintain this boundary; full real-world regression acceptance still required. |
 | 60 | AI SECURITY | PRESERVED / TEST GATED | Maintain this boundary; full real-world regression acceptance still required. |
 | 61 | EXISTING JATA LIFECYCLE MUST REMAIN | PRESERVED / TEST GATED | Maintain this boundary; full real-world regression acceptance still required. |
-| 62 | HOMEPAGE PLAN POSITIONING | PARTIAL / OPEN | Homepage requested labels/order/prices present; stable plan IDs preserved. |
+| 62 | HOMEPAGE PLAN POSITIONING | DEFECTS / OPEN | Actual price-sort/name defect confirmed after initial audit assumption; required order/Website Studio branding to be fixed without changing stable IDs or payment policy. |
 | 63 | WEBSITE STUDIO UX | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |
 | 64 | ONE-CLICK AI GENERATION | NOT COMPLETE | Existing onboarding/copilot is not full one-click AI orchestration. |
 | 65 | CATEGORY-SPECIFIC GENERATION | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |

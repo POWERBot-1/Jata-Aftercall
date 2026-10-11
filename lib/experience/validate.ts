@@ -16,8 +16,10 @@ import { safeUrl } from "./document";
 import type { EntitlementState } from "./entitlement";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
+import { validateExperienceDocument } from "./schema";
 
 export type PublishCheckId =
+  | "schema"
   | "business-name"
   | "business-category"
   | "contact"
@@ -74,6 +76,10 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
   const add = (id: PublishCheckId, label: string, passed: boolean, hint?: string, href?: string) => {
     checks.push({ id, label, status: passed ? "pass" : "fail", hint: passed ? undefined : hint, href: passed ? undefined : href });
   };
+
+  const schema = validateExperienceDocument(document);
+  add("schema", "Supported safe experience format", schema.ok,
+    schema.ok ? undefined : schema.issues[0]?.message, "/dashboard/website");
 
   add(
     "business-name",

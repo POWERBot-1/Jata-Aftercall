@@ -36,8 +36,13 @@ export async function loadPublishedShop(slug: string) {
     select: { publishedJson: true, categoryKey: true, status: true },
   });
   if (!experience?.publishedJson || experience.status !== "PUBLISHED") return null;
-  const document = normalizeExperienceDocument(JSON.parse(experience.publishedJson), experience.categoryKey);
-  return { business, document };
+  try {
+    const document = normalizeExperienceDocument(JSON.parse(experience.publishedJson), experience.categoryKey);
+    return { business, document };
+  } catch {
+    // Unsupported configuration cannot authorize a checkout using guessed settings.
+    return null;
+  }
 }
 
 export function parseRequestedItems(rawItems: unknown[]): RequestedItem[] {

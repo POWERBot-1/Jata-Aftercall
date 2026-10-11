@@ -46,7 +46,11 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      # The newer native-Prisma suites intentionally self-skip without this separate test-only URL.
+      # Both point ONLY at this job's disposable PostgreSQL service, never a deployment secret.
+      PRISMA_TEST_DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
       AUTH_SECRET: interactive-business-e2e-test-secret
+      NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +67,11 @@ jobs:
         run: |
           set -o pipefail
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
+
+      - name: Lint and TypeScript
+        run: |
+          npm run lint
+          npm run typecheck
 
       - name: Apply migrations
         run: |
@@ -118,6 +127,11 @@ jobs:
             exit 1
           fi
 
+      - name: Production build against the isolated test database
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/step-build.log
+
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.
       - name: Report failing output to the pull request
@@ -142,6 +156,7 @@ jobs:
               ['npm run test:e2e', '/tmp/step-journey.log', 4000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
               ['prisma generate', '/tmp/step-generate.log', 1500],
+              ['npm run build', '/tmp/step-build.log', 5000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;

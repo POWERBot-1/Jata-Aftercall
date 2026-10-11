@@ -11,7 +11,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { validateExperienceJson } from "@/lib/experience/schema";
 import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +77,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: CONFLICT_MESSAGE, code: "draft_version_conflict" }, { status: 409 });
     }
 
-    const document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), snapshot.categoryKey);
+    const schema = validateExperienceJson(snapshot.snapshotJson, snapshot.categoryKey, { migrateLegacyDefaults: true });
+    if (!schema.ok) {
+      return NextResponse.json({ error: "That version cannot be restored safely. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 409 });
+    }
+    const document = schema.document;
     const nextVersion = Math.max(1, existing.draftVersion) + 1;
     // Compare-and-swap on the version read above: a write that lands in between makes this a 409, never a silent overwrite.
     const experience = await prisma.businessExperience

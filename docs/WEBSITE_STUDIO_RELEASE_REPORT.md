@@ -11,7 +11,7 @@ Updated 2026-10-11 UTC. **IN PROGRESS — full product NOT COMPLETE. Production 
 - Proposed target: `main`; audit target/merge-base SHA `9c36bd1026e50a5ab6e66f7446ae730c71f5963a`.
 - Inherited 17 commits / 156 changed files vs main must be reviewed; not already merged.
 - Final implementation SHA: not recorded yet. Final documentation SHA will be recorded on the PR/handoff because a commit cannot contain its own SHA.
-- Feature pushed/remote verified: NOT YET.
+- M0 committed and pushed: `23726edb94d8734b26cac0ea1c9f145c2dd6f3c6`; `git rev-parse HEAD` matched `git ls-remote origin refs/heads/arena/7b28a123-jata-aftercall` after push. Later milestones must independently verify their own SHA.
 - PR: NOT YET OPENED. No merge authorized.
 - Merged / resulting target SHA: NOT MERGED / not applicable.
 - Production: **NOT DEPLOYED**; no deployment approved or invoked. Vercel may automatically produce GitHub previews; those are not production authorization.
@@ -46,11 +46,11 @@ Baseline gzip entry-file totals: business home **115,794 B**, Studio design **14
 
 ## Implemented changes / acceptance / limitations
 
-IN PROGRESS. Only the actual dependency install and preserved audit/specification are recorded so far. The complete recipe library, AI art director, public immersive, persistent-original media, provider photo generation, full end-to-end journey and adaptive intelligence are not delivered by this record.
+IN PROGRESS. M0 installed the dependency and preserved the directive. M1 implements the strict configuration/restore/publication foundation and closes service-read and unpublished-storefront boundaries (below). The complete recipe library, AI art director, public immersive, persistent-original media, provider photo generation, full end-to-end journey and adaptive intelligence are not delivered by these milestones. Installed motion is not yet imported by application code.
 
 ## Database / security / migration evidence
 
-No new migration or production data change. Existing schema validated; migrations not locally deployed. Known service read leak, schema-version weakness and media provenance/ownership gaps are recorded in the plan; fixes/tests pending. Existing entitlements/payment gates, authentication, AI Front Desk, POS and M-PESA provider logic must be preserved. Old CI/test reports are not verification of this final branch.
+No new migration or production data change. Existing schema validated; migrations not locally deployed. Service-read visibility and explicit schema-version/publication boundaries are now fixed with mock/unit tests; eight new real-Prisma tests are written but locally skipped. Media provenance/ownership gaps remain open. No asset-ownership proof is claimed from URL shape validation. Existing entitlements/payment gates, authentication, AI Front Desk, POS and M-PESA provider logic must be preserved. Old CI/test reports are not verification of this final branch.
 
 ## Required owner decisions / release blockers
 
@@ -70,7 +70,22 @@ No new migration or production data change. Existing schema validated; migration
 - After installation: full existing suite **1740 passed / 94 skipped**, lint passes with existing warning, typecheck passes with real generated schema types; offline repository build passes (business first-load JS still 116 kB; no motion import in app yet).
 - New `website-studio-master-spec.test.ts`: **4 passed**, verifies full source-spec SHA256, all 108 numbered blocks/register rows, execution directive and actual resolvable motion/mini + locked stack. Typecheck repeated after test addition passes.
 - Schema validation passed; native Prisma/DB/browser/provider/device gates still blocked or not run as above. No new migration.
-- `git diff --check` passes. Dependency lock inspection: no existing entries changed. Entire M0 staged diff will be reviewed before commit.
-- M0 commit and verified remote SHA are recorded in the next milestone's report and handoff, not guessed before creation.
+- `git diff --check` passed. Dependency lock inspection: no existing entries changed. Entire M0 staged diff was reviewed before commit.
+- M0 commit / verified remote SHA: `23726edb94d8734b26cac0ea1c9f145c2dd6f3c6`. No PR, merge or deployment occurred in M0.
 
 Source and documents are committed on the session branch; ignored tool caches are not release dependencies.
+
+### M1 — strict v1 foundation and tenant/public read boundaries
+
+- Raw configuration whitelist validates supported schema version, registered sections/themes/modes, plain text, safe URLs, approved config, finite ranges, duplicate IDs and bounded JSON before whole-document writes/publication/restore. Missing legacy format version is accepted explicitly; explicit unsupported versions are never clamped. Malformed stored JSON cannot be silently repaired and published. Existing CAS, publication/payment/entitlement and tenant authorization gates remain authoritative.
+- Legacy regression was exposed by the unchanged history test: category-only pre-v1 history initially returned 409 instead of 200. Fixed with an **explicit restore-only missing-default migration**, preserving supplied/unknown fields for strict validation. New writes, AI and publication do not opt in. Original 12-test history suite now passes unchanged.
+- Storefront readers refuse unreadable/unsupported formats (classic HTML fallback), and unpublished business flags override stale experience `PUBLISHED` status. Trusted server draft preview remains available only through existing authorized callers. Null/empty coordinates no longer become invented zeroes; protocol-relative/backslash/embedded-credential URLs refused.
+- Services visibility/ownership checked before catalogue queries. Owner may read draft/inactive services; all other visitors only active services of published non-suspended businesses. Public errors remain safe and result size capped.
+- New schema unit suite **26 passed**, service-read mock security suite **8 passed**; publication mock suite **16 passed** including three new schema-refusal checks; existing history mock suite **12 passed**. Focused four-suite result **62 passed**.
+- Full latest local suite: **149 files passed / 11 skipped; 1781 tests passed / 102 skipped / 1883 total; no failing tests**. Logs retained in ignored `.cache/verification/foundation-tests.log`. Native-Prisma foundation suite adds **8 tests, all locally SKIPPED**, not DB proof; its isolated synthetic PAID fixture is not a real Paystack verification or charge.
+- `npm run lint` PASSED with the existing CartProvider img warning and next-lint deprecation; `npm run typecheck` PASSED; pinned Prisma schema validation PASSED.
+- `npm run build` PASSED with no DATABASE_URL and the pinned engine-less generated client/downloader overrides used at baseline. Next reports `/b/[slug]` **5.41 kB / 116 kB first-load**, shared **103 kB**. This proves compilation, not native DB/migration or connected production runtime. No new migration.
+- CI now sets **both** DATABASE_URL and PRISMA_TEST_DATABASE_URL to its disposable Postgres 16 service, adds lint/types and production-build gates, and preserves the no-skips gate. CI has not run for M1 yet. Native-Prisma instructions corrected to set the migration URL separately.
+- Audit correction: later direct reads of homepage/pricing revealed price-sorted **Monthly → AI → Annual → Interactive Business**, despite the earlier assumption of required branding/order. The required **Monthly → Annual → AI Front Desk → Website Studio → separate POS** display is still OPEN at this milestone; stable `INTERACTIVE_BUSINESS` IDs/prices/payment policies will be preserved.
+- `npm audit --json`: **19 advisories (3 moderate, 16 high)**, including suggested Next 15.5.27 patch and unrelated major-upgrade recommendations. No broad audit fix or dependency upgrade applied; triage remains a release blocker.
+- Foundation staged diff/whitespace reviewed before commit. Its actual commit/remote SHA and real CI result must be added in the subsequent milestone/PR evidence, not guessed. Full product remains **NOT COMPLETE**, production **NOT DEPLOYED**.

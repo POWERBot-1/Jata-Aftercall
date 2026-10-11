@@ -26,6 +26,7 @@ import {
   updateSection,
 } from "@/lib/experience/document";
 import { isValidThemeKey } from "@/lib/experience/themes";
+import { validateExperienceDocument } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
@@ -310,7 +311,9 @@ export async function PATCH(req: Request) {
     }
 
     let document = parseDocument(experience.draftJson, experience.categoryKey);
-    if (!document) document = createExperienceDocument({ categoryKey: experience.categoryKey, businessName: "" });
+    if (!document) {
+      return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version before editing.", code: "experience_schema_invalid" }, { status: 409 });
+    }
     let summary: Record<string, unknown> | null = null;
 
     const op = typeof body?.op === "string" ? (body.op as SectionOp) : null;
@@ -380,7 +383,13 @@ export async function PATCH(req: Request) {
           return NextResponse.json({ error: "Unsupported edit." }, { status: 400 });
       }
     } else if (body?.document && typeof body.document === "object") {
-      document = normalizeExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, document.categoryKey);
+      const schema = validateExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, {
+        allowLegacy: true, fallbackCategory: document.categoryKey,
+      });
+      if (!schema.ok) {
+        return NextResponse.json({ error: "This experience configuration is not supported. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 400 });
+      }
+      document = schema.document;
     } else {
       // Partial updates: brand, settings, theme, category.
       const next = {
@@ -397,6 +406,11 @@ export async function PATCH(req: Request) {
       document = normalizeExperienceDocument(next, next.categoryKey);
     }
 
+    const checked = validateExperienceDocument(document);
+    if (!checked.ok) {
+      return NextResponse.json({ error: "This change would create an invalid experience. Nothing was saved.", code: "experience_schema_invalid", issues: checked.issues }, { status: 400 });
+    }
+    document = checked.document;
     document.updatedAt = new Date().toISOString();
     const nextVersion = Math.max(1, Number(experience.draftVersion) || 1) + 1;
     // Compare-and-swap on the version this edit was built from. If another write landed first, the
