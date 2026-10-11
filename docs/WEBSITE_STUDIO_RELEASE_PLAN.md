@@ -128,7 +128,7 @@ Status entries are conservative audit/delivery assessments. The original text re
 | 5 | BUSINESS EXPERIENCE SCHEMA | PARTIAL / OPEN | M1 raw v1/version/restore gates pass local tests and eight native PostgreSQL CI cases after fixture correction; asset ownership/full journey remain open. |
 | 6 | EXPERIENCE RECIPE ENGINE | NOT COMPLETE | 19 section types do not satisfy all requested recipes. |
 | 7 | CRITICAL UNIQUENESS REQUIREMENT | NOT COMPLETE | Theme/shuffle variants are not the required structural uniqueness. |
-| 8 | TEMPLATE FAMILIES | NOT COMPLETE | All 20 compositional families remain mandatory, not implemented. |
+| 8 | TEMPLATE FAMILIES | PARTIAL / OPEN | All20 named Lite compositions implemented/rendered/tested atM4; full immersive/recipe/library requirements remain mandatory. |
 | 9 | ANTI-SIMILARITY ENGINE | NOT COMPLETE | Fingerprint compares only tenant history, not full platform anti-similarity. |
 | 10 | AI ART DIRECTOR | NOT COMPLETE | Category direction recipes/copy exist; full AI art director absent. |
 | 11 | AI-GENERATED PHOTOGRAPHY ENGINE | BLOCKED / OPEN | Local representative artwork is not professional/product-consistent photography. |
@@ -186,8 +186,8 @@ Status entries are conservative audit/delivery assessments. The original text re
 | 63 | WEBSITE STUDIO UX | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |
 | 64 | ONE-CLICK AI GENERATION | NOT COMPLETE | Existing onboarding/copilot is not full one-click AI orchestration. |
 | 65 | CATEGORY-SPECIFIC GENERATION | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |
-| 66 | TEMPLATE RANDOMIZATION IS NOT ENOUGH | NOT COMPLETE | Current seeded theme selection/shuffle is explicitly insufficient. |
-| 67 | DESIGN DIRECTION OBJECT | PARTIAL / OPEN | Existing DesignDirection tokens; full reasoning/composition bridge open. |
+| 66 | TEMPLATE RANDOMIZATION IS NOT ENOUGH | PARTIAL / OPEN | Content/intent-led semantic reasoning + real geometry replaces palette/shuffle gate atM4; configured contextual AI/full goals remain open. |
+| 67 | DESIGN DIRECTION OBJECT | PARTIAL / OPEN | Validated v2 ArtDirection and renderer/brief/semantic reasoning bridge implemented; full recipe/scene/image/commerce-strategy context open. |
 | 68 | EXPERIENCE GENERATION SEED | PARTIAL / OPEN | Seed/version stored; complete deterministic recipe/direction generation pending. |
 | 69 | NO RANDOM BROKEN WEBSITES | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |
 | 70 | JATA EXPERIENCE DESIGN SYSTEM | PARTIAL / OPEN | Some existing components; full specification and phase acceptance remain required. |
@@ -261,3 +261,7 @@ Owner explicitly **DEFERRED provider approval**. No object/CDN provisioning/acti
 - Real headless Chrome family matrix**167 PASS**, all20 phone/desktop no-JS/core HTML/links/image/overflow/anchors; measured20/20 unique desktop DOM/layout signatures without palette/family-label scoring; three Lite touch-cart cases. Existing Motion124/immersive14/layout7 +production HTTP6 PASS. Mobile and data are synthetic/emulated; not physical/provider/commercial-world proof.
 - Lint/types/offline schema-derived build PASS; no new lint warnings (existing img/deprecation retained). Gzip initial entries business116460 (+666), design146164 (+1780 vs original baseline, +2472 vsM3), home106722 (+40); lazymini4876 B still excluded initially. Registry/composition is server-rendered; no customer entry cost increase vsM3. No lockfile/Prisma migration changes.
 - Fresh native/connected-build/family-browser CI pending first M4 verified push. Full recipe library, configured AI wording/image/providers, global diversity strategy, full spatial scenes/compression/WebGPU, Android/durable originals and measured adaptation/analytics still mandatory/open or BLOCKED. No merge/main confirmation/production mutation/deployment authorization.
+
+### M4 native update
+
+**`ced040844a28aa7e9de0e41d17e5cf0eb1d7df32`** /verified remote; [38154909298](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38154909298) PASS, actual [summaries](https://github.com/POWERBot-1/Jata-Aftercall/pull/41#issuecomment-6111096521): native1923 PASS +1 inherited policy-authorization expected failure,0 skipped; new6 native cases PASS; journeys17/22; family167/Motion124/immersive14/layout7/HTTP6 all PASS. Connected build/migrations/lint/types/bundles PASS. Previous pending text is historical. Provider deferral unchanged; remaining independent/blocked obligations and explicit merge/production permissions unchanged. Follow-up documentation identity/remote equality goes on PR/handoff; full release not complete.
