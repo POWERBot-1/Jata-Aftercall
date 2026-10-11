@@ -12,6 +12,7 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { loadWorkspace } from "@/lib/experience/workspace";
 import { loadStudioIntelligence } from "@/lib/studio/studioData";
 import { healthSummaryLine } from "@/lib/studio/health";
+import { experienceWeight, weightSummaryLine } from "@/lib/experience/weight";
 import { providerStatus } from "@/lib/ai/registry";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,9 @@ export async function GET(req: Request) {
       published: workspace.business.isPublished,
     });
     const provider = providerStatus();
+    // §83 — what this page will cost a visitor on a phone. Advisory only: it cannot block
+    // publishing, and it does not feed the readiness score above.
+    const weight = experienceWeight({ document: workspace.document });
     return NextResponse.json({
       // The draft version this report was computed from. A fix sends it back, so a stale report cannot fix a newer draft.
       draftVersion: workspace.experience?.draftVersion ?? null,
@@ -42,6 +46,20 @@ export async function GET(req: Request) {
       summary: healthSummaryLine(intelligence.health),
       counts: intelligence.counts,
       topSellingIds: intelligence.topSellingIds,
+      weight: {
+        verdict: weight.verdict,
+        imageCount: weight.imageCount,
+        imageBytes: weight.imageBytes,
+        largestImageBytes: weight.largestImageBytes,
+        modelCount: weight.modelCount,
+        modelBytes: weight.modelBytes,
+        initialRequests: weight.initialRequests,
+        unmeasuredCount: weight.unmeasuredCount,
+        overBudget: weight.overBudget,
+        fallbackAvailable: weight.fallbackAvailable,
+        recommendations: weight.recommendations,
+        summary: weightSummaryLine(weight),
+      },
       publishing: {
         entitled: workspace.entitlement.entitled,
         ready: workspace.validation.ready,

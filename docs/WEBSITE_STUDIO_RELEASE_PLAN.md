@@ -107,18 +107,241 @@ that migrations passed locally would be false.
 
 ---
 
-## 4. Conflicts found, and how they are resolved
+## 4. Decision register
 
-Recorded rather than silently decided.
+Each entry records the conflicting evidence, the risk, the decision owner and the exact approval
+needed. Nothing here has been changed in code, in tests, in pricing or in the database. Verified
+facts are marked **[verified]** with the command or page that produced them; everything else is
+marked **[estimate]** or **[unverified]**.
 
-| # | Conflict | Resolution |
+Cross-reference: C1 → Decision A, C2 → Decision B, C3 → resolved (motion only), C4 → Stage 5 open.
+
+### Decision A — Homepage plan order · **AWAITING OWNER APPROVAL**
+
+**Requested order.** Monthly 149 → Annual 999 → AI Business Front Desk 499 → Website Studio 999 →
+Business POS 499.
+
+**Recorded decision it appears to conflict with.** [verified] `BUSINESS_POS_IMPLEMENTATION.md` §7,
+"Security posture", contains a *Documented exception (product decision, 2026-10-03)*: the public
+landing page carries one dedicated **Business POS** entry, and "`publiclyListedPlans()` and
+`PRIVATE_PLAN_KEYS` are unchanged, so the plan cards, onboarding picker and AFTERCALL subscription
+screens still exclude the private POS plan".
+
+**What the code actually does.** [verified] `app/page.tsx:20` reads plans with
+`orderBy: { priceKES: "asc" }`, and the DB-failure fallback at `app/page.tsx:28` sorts by
+`priceKES` too. Rendered order today: Monthly 149 → AI Business Front Desk 499 → Annual 999 →
+Interactive Business 999. The POS is a **separate `<section>`** rendered after the cards
+(`app/page.tsx:148+`), not a plan card.
+
+**Finding that changes the risk assessment.** [verified] Neither `tests/unit/homepage-plan-cards.test.ts`
+nor `tests/unit/homepage-business-pos.test.ts` asserts *order*. A grep for order-sensitive patterns
+in both files returned only three hits, none of them order assertions
+(`not.toMatch(/\b499\b/)`, `not.toMatch(/POS is (now )?(live|active)/i)`,
+`toEqual(["/dashboard/pos"])`). Every plan-name assertion is `toContain`. **Reordering the four
+plan cards breaks no test.**
+
+**The real conflict is narrower than it looked.** Items 1–4 of the requested order are a pure
+presentation change. Item 5 (POS) is *already* rendered after the four cards, which matches the
+requested visual order, and moving it into the plan-card grid would be the change that breaks the
+recorded §67 decision and two test files.
+
+**Smallest consistent resolution (recommended, not applied).** Add an explicit display order to
+`lib/pricing.ts` — e.g. `PLAN_DISPLAY_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK",
+"INTERACTIVE_BUSINESS"]` — and apply it to both the DB path and the fallback path in
+`app/page.tsx`, replacing the price-ascending sort. Leave `PRIVATE_PLAN_KEYS`,
+`publiclyListedPlans()`, the POS section, every price and the §67 exception untouched. Unknown plan
+keys sort after the known ones, preserving today's behaviour for anything an operator adds.
+
+- **Risk.** Low. Customer-facing ordering only; no price, entitlement, checkout or POS change.
+- **Decision owner.** Product owner.
+- **Exact approval needed.** "Apply `PLAN_DISPLAY_ORDER` Monthly → Annual → AI Business Front Desk
+  → Website Studio to the public plan cards; keep Business POS as its own entry after them."
+
+### Decision B — "Interactive Business" → "Website Studio" · **AWAITING OWNER APPROVAL**
+
+**All 35 occurrences classified line by line.** [verified, `grep -rn "Interactive Business" app components lib`]
+
+| Class | Count | Where |
 | --- | --- | --- |
-| C1 | The directive requires the homepage order Monthly 149 → Annual 999 → AI Front Desk 499 → Website Studio 999 → POS 499. `app/page.tsx` orders plan cards by `priceKES asc`, which renders Monthly 149 → AI Front Desk 499 → Annual 999 → Interactive Business 999. The POS is a separate dedicated entry, deliberately excluded from the public plan cards by `PRIVATE_PLAN_KEYS` (documented POS §67 exception, recorded in `BUSINESS_POS_IMPLEMENTATION.md`). `tests/unit/homepage-plan-cards.test.ts` and `tests/unit/homepage-business-pos.test.ts` assert the current behaviour. | **Open — needs an owner decision.** Changing the order is a customer-facing pricing change that contradicts a recorded product decision and two passing test files. Not changed in this work. |
-| C2 | The directive says to use "Website Studio" instead of "Interactive Business" in customer-facing areas. 35 occurrences of "Interactive Business" exist across `app/`, `components/`, `lib/`, and the homepage tests assert the literal string `Interactive Business — KES 999/month`. `PlanConfig.name` is operator-editable database text. | **Open — needs an owner decision.** The safe change is display text plus tests together, keeping the `INTERACTIVE_BUSINESS` plan key, `InteractiveBusinessEntitlement` table and existing subscription rows untouched. Not changed in this work. |
-| C3 | §21/§3 of the specification name **GSAP** for Motion mode; the mandated installation is **`motion`**. | **Resolved: use `motion` only.** Neither library was present, so nothing is duplicated. GSAP is *not* added — the directive itself forbids two animation systems without a documented reason, and `motion` covers the same preset list plus scroll-driven work. |
-| C4 | §3 requires three rendering tiers. `IMPLEMENTED_RENDER_MODES = ["lite", "motion"]` in `lib/experience/renderMode.ts`; requesting `immersive` falls back to `motion`, then `lite`. Visitor-facing 3D additionally needs `JATA_IMMERSIVE_ENABLED` **and** a durable storage provider, neither of which is configured. | **Recorded as not delivered.** Stage 5 is open. The fallback chain is implemented and tested, which is why nothing breaks in the meantime. |
+| Comment / JSDoc only — no user-visible effect | **20** | `app/api/checkout/route.ts:39`, `app/api/offer/route.ts:19`, `app/b/[slug]/page.tsx:61,95`, `app/dashboard/page.tsx:33`, `app/page.tsx:27`, `components/DashboardClient.tsx:35`, `components/OnboardingForm.tsx:29`, `lib/ai/quota.ts:8`, `lib/analytics.ts:19`, `lib/experience/entitlement.ts:2`, `lib/experience/types.ts:2`, `lib/nextAction.ts:12,28,49`, `lib/pos/entitlement.ts:9`, `lib/pricing.ts:46,108`, `lib/statusLabels.ts:30`, `lib/validation.ts:28` |
+| Customer-facing copy | **12** | `components/dashboard/EntitlementBanner.tsx:26`, `components/dashboard/PublishPanel.tsx:127`, `components/dashboard/WebsiteHealth.tsx:233`, `lib/ai/quota.ts:37` (quota label), `lib/experience/entitlement.ts:54,61,71,87`, `lib/experience/validate.ts:185` (publication checklist item), `lib/nextAction.ts:58` (action title), `lib/statusLabels.ts:55` (help text), `lib/studio/copilot.ts:436` |
+| Developer-facing error text | **2** | `app/api/checkout/route.ts:42` (500 JSON), `lib/pricing.ts:117` (`throw new Error`) |
+| Canonical display name | **1** | `lib/pricing.ts:139` — `FALLBACK_PLANS` entry `name: "Interactive Business — KES 999/month"` |
 
----
+Separately, the **internal identifier** `INTERACTIVE_BUSINESS` appears **27 times** [verified] —
+plan key, `InteractiveBusinessEntitlement.packageKey`, analytics and API contracts. **None of
+these may change**: subscriptions, entitlements and payment records reference the key.
+
+**Critical finding that makes a code-only rename ineffective.** [verified, `lib/pricing.ts:50-56`]
+`planDisplayName()` returns the **stored** `PlanConfig.name` whenever it is present and free of
+`U+FFFD`, and falls back to `FALLBACK_PLANS` only when the stored name is corrupt or blank. So if
+the production `PlanConfig` row holds a healthy `"Interactive Business — KES 999/month"`, changing
+the code fallback alone will **not** change the homepage. Two ways forward:
+
+1. **Update the database row** — requires approval, and `PlanConfig.name` is operator-editable
+   text, so it is production data. **The current stored values cannot be inspected from this
+   environment** (no `DATABASE_URL`, no PostgreSQL, Prisma binaries unreachable).
+2. **Invert the precedence** so the canonical name wins for known plan keys — code-only, but it
+   makes JATA override operator-editable plan names, which is itself a policy change.
+
+**Tests asserting the literal string.** [verified, `grep -rn "Interactive Business" tests/`]
+`tests/unit/homepage-plan-cards.test.ts` (lines 4, 45, 63, 69, 81),
+`tests/unit/homepage-business-pos.test.ts` (28, 83), plus references in
+`tests/e2e/interactive-business-journey.test.ts`, `tests/integration/experience-publish.test.ts`,
+`tests/integration/ai-front-desk-order-stage-transitions.test.ts`,
+`tests/security/experience-tenant-isolation.test.ts`, `tests/unit/experience-categories.test.ts`,
+`tests/unit/experience-operations.test.ts`, `tests/unit/repair-guards.test.ts`.
+
+**Compatibility-safe change plan (recommended, not applied).**
+
+1. Introduce one label constant (e.g. `WEBSITE_STUDIO_LABEL = "Website Studio"`) and use it in the
+   **12** customer-facing strings and in the `FALLBACK_PLANS` display name.
+2. Leave the 20 comments alone in this change — they are internal and rewording them adds diff
+   noise to a customer-facing change. Optionally a follow-up.
+3. Preserve every `INTERACTIVE_BUSINESS` identifier, `InteractiveBusinessEntitlement`,
+   `packageKey`, analytics event names and API field names. **No migration.**
+4. Decide option 1 or 2 above for `PlanConfig.name` and record it here before touching anything.
+5. Update only the tests whose expected string is intentionally changing, and say so in the commit.
+
+- **Risk.** Medium. Customer-facing pricing copy, plus either a production data change or a
+  precedence change over operator-editable text.
+- **Decision owner.** Product owner.
+- **Exact approval needed.** (a) rename the 12 customer-facing strings and the fallback display
+  name to "Website Studio"; (b) choose DB-row update **or** canonical-precedence for
+  `PlanConfig.name`; (c) confirm `INTERACTIVE_BUSINESS` identifiers stay.
+
+### Decision C — Persistent object storage · **AWAITING OWNER APPROVAL**
+
+`STORAGE_DECISION.md` §7.5 lists five open decisions. Current state verified in code:
+[verified] `lib/storage/index.ts` implements only `inline-data-url`; `vercel-blob` throws
+`StorageNotConfiguredError`. `assertCanStore` has **no production call site** — grep finds only its
+definition and `tests/unit/storage-provider.test.ts`. `resolveStorageProvider` is called only from
+`lib/experience/immersive/policy.ts`, never from the upload path. So the storage contract exists
+and nothing in production writes through it.
+
+**Verified pricing and limits** — from Vercel's official page
+`https://vercel.com/docs/vercel-blob/usage-and-pricing`, fetched 2026-10-11:
+
+| Resource | Hobby included | On-demand rate |
+| --- | --- | --- |
+| Blob Storage Size | **1 GB / month** | $0.023 per GB |
+| Blob Simple Operations | **first 10,000** | $0.400 per 1M |
+| Blob Advanced Operations | **first 2,000** | $5.000 per 1M |
+| Blob Data Transfer | **first 10 GB** | $0.050 per GB |
+
+These **confirm `STORAGE_DECISION.md` §4 exactly**. A widely-circulated blog figure of "500 MB
+storage / 1 GB egress" for Hobby is **wrong** and should not be relied on.
+
+Also verified on the same and the sibling docs page (`/docs/vercel-blob`):
+
+- Blob is available on **all plans**, including Hobby.
+- **Hobby hard-stops rather than bills**: "you will not be able to access Vercel Blob if limits are
+  exceeded… you will have to wait until 30 days have passed." For a paid product this is an
+  availability risk, not a cost risk.
+- Maximum blob size **in cache is 512 MB**; anything larger is a cache MISS on every access.
+- **Private vs public store is chosen at creation and cannot be changed afterwards.** Private reads
+  require a token and stream through a Function; public reads are direct blob URLs.
+- **Authentication is now OIDC by default** — connecting a store injects `BLOB_STORE_ID`,
+  `VERCEL_OIDC_TOKEN` and `BLOB_WEBHOOK_PUBLIC_KEY`. `BLOB_READ_WRITE_TOKEN` is only needed for
+  code running outside Vercel or for browser client uploads. **This supersedes
+  `STORAGE_DECISION.md` §7.1, which names `BLOB_READ_WRITE_TOKEN` as the expected secret.**
+- Client (browser) uploads incur **no** data-transfer charge; server uploads incur Fast Data
+  Transfer. Blob Data Transfer is described as ~3× more cost-efficient than Fast Data Transfer.
+- `del()` is free. Browsing the store in the dashboard counts as Advanced Operations.
+- The region list includes **Cape Town, South Africa (cpt1)** — the nearest listed region to Kenya.
+  There is no Nairobi region. [verified from the region selector on the pricing page]
+
+**Options compared.**
+
+| Option | Fits existing stack | Persistence + delivery | Kenyan Android upload | Tenant isolation | Cost / growth | Credentials | Effort |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Vercel Blob (recommended)** | Same vendor as hosting; SDK-only, no infra | Durable + CDN; public store serves direct URLs | Client uploads avoid transfer charges; resumable SDK | All writes authenticated; key prefix `tenants/<businessId>/…` already implemented in `lib/storage/keys.ts` | 1 GB free then $0.023/GB-mo; **unbounded** usage billing on Pro; Hobby hard-stops | OIDC automatic on Vercel — **no long-lived secret to manage** | Small: one adapter behind the existing interface |
+| S3-compatible (R2, Wasabi, …) | Second vendor, own credentials and SDK | Durable + CDN | Equivalent | Same | **[estimate]** generally cheaper egress | Access key + secret, long-lived | Medium |
+| Neon (rejected) | — | **Violates the hard rule**: no binary media in Neon | — | — | — | — | — |
+| Vercel filesystem (rejected) | — | Ephemeral; lost on cold start | — | — | — | — | — |
+
+**Recommendation.** Vercel Blob. Create **one public store** for published website imagery — that
+content is public by definition, and a public store serves it straight from the CDN, which is what
+a Kenyan Android visitor needs. A **private** store would force every image through a Function,
+adding invocation and Fast Data Transfer cost to every page view; choose it only if the owner wants
+unpublished originals withheld from anyone holding the URL. **This choice is irreversible**, so it
+is an owner decision, not an engineering default.
+
+**Setup link.** https://vercel.com/dashboard → Storage → Create Database/Blob store; then connect
+the store to the project (this injects the OIDC variables automatically) and
+`npm install @vercel/blob`.
+
+**What is *not* verified.** No upload or retrieval has been performed. **Storage does not work
+until a real put/get round-trip passes** — that is the acceptance test, and it cannot run without
+the owner creating the store.
+
+**Exact approval needed.** (1) approve Vercel Blob as the durable store; (2) choose **public** or
+**private** store access mode (irreversible); (3) create the store and connect it to the Vercel
+project; (4) set a monthly spend ceiling and a per-tenant upload quota before the first real
+upload; (5) approve when 3D (`JATA_IMMERSIVE_ENABLED`) may be switched on — a separate decision.
+
+### Decision D — AI image-generation provider · **AWAITING OWNER APPROVAL**
+
+**The abstraction already exists.** [verified] `lib/ai/registry.ts` resolves
+`JATA_AI_IMAGE_PROVIDER = auto | openai | gemini | jata-local`; `auto` prefers a configured vendor
+and **always falls back to the built-in `jata-local` provider**, so a deployment with no key still
+works. Adapters: `lib/ai/providers/openai.ts` (`OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+`OPENAI_IMAGE_MODEL`, default `gpt-image-1`) and `lib/ai/providers/gemini.ts` (`GEMINI_API_KEY` or
+`GOOGLE_API_KEY`, `GEMINI_IMAGE_MODEL`, default `gemini-2.5-flash-image`, `GEMINI_TEXT_MODEL`).
+Interface: `lib/ai/provider.ts` (`AiProvider`, `ImageRequest`, `EnhanceRequest`,
+`providerErrorMessage`). **No new provider code is needed to add a vendor.**
+
+**Recommendation: Gemini**, through the existing adapter, because the key name and model override
+are already wired and documented in `.env.example`.
+
+- **Setup link.** https://aistudio.google.com/apikey
+- **Free tier — do not assume one exists.** [verified] A Google-hosted developer-forum answer
+  states plainly that "`gemini-2.5-flash-image` … is not available for use on the Free Tier",
+  citing Google's pricing page. Third-party blogs claiming ~500 free images/day **contradict**
+  this. Treat image generation as **paid** until a real key proves otherwise.
+- **The configured default model is on an older generation.** [verified] Google's official pricing
+  page lists the current image line-up as `gemini-nano-banana-2.1`, `gemini-3.1-flash-image`
+  (Nano Banana 2), `gemini-3.1-flash-lite-image` and `gemini-3-pro-image`; `gemini-2.5-flash-image`
+  is still listed. Set `GEMINI_IMAGE_MODEL` to a current model — `gemini-3.1-flash-lite-image` for
+  cost, or `gemini-nano-banana-2.1` for quality — rather than shipping the 2.5 default.
+- **[unverified]** Third-party claims of shutdown dates for `gemini-2.5-flash-image`. Not relied on;
+  the owner should confirm against https://ai.google.dev/gemini-api/docs/pricing.
+- **Cost.** **[estimate]** Third-party sources quote roughly $0.039 per image for the 2.5 Flash
+  Image model. Not verified against Google's page in this session. Assume paid, metered usage; the
+  existing `AiGeneration`-backed quota in `lib/ai/quota.ts` is the cost control.
+- **Test vs production credentials.** Separate Google Cloud project and separate API key for test;
+  set `GEMINI_API_KEY` per Vercel environment (Preview vs Production) so a test key can never reach
+  production. `.gitignore` already excludes `.env*` except `.env.example`; no key is committed.
+- **Safe validation test (the acceptance gate, not yet run).** A script that resolves the provider
+  through `lib/ai/registry.ts`, issues **one** generation against a throwaway business id, asserts
+  a non-empty raster with sane dimensions, asserts the `AiGeneration` row moves
+  `PENDING → SUCCEEDED`, and deletes what it created. It must read the key from the environment
+  only and must never log it. No such test has been executed, so **image generation is not claimed
+  to work.**
+
+**Exact approval needed.** Create a Gemini API key, confirm billing is linked, set
+`GEMINI_API_KEY` and `GEMINI_IMAGE_MODEL` in the Vercel Preview environment, then authorise the
+single-call validation run.
+
+### Decision E — Pull request · **AUTHORIZED, PR OPENED**
+
+[verified] `gh auth status` → logged in as `POWERBot-1` via `GH_TOKEN`.
+[verified] `gh api repos/POWERBot-1/Jata-Aftercall` →
+`permissions: { admin: true, maintain: true, push: true, pull: true, triage: true }`. Opening a PR
+from this branch is authorized.
+[verified] `gh pr list --head arena/a9a473f2-jata-aftercall` → `[]` before this change; no
+duplicate PR existed.
+[verified] Ancestry: `git rev-list --left-right --count origin/main...HEAD` → **0 behind, 20
+ahead**, so the branch contains all of `main` and the diff is a clean fast-forward shape.
+
+**Gate that could not be read.** [verified] `gh api repos/…/branches/main/protection` returns
+**403 "Resource not accessible by integration"** — this token lacks the scope to read branch
+protection. **Whether `main` has required status checks, and what they are, is therefore
+unverified.** The CI workflow in the repository triggers on `pull_request` to `main`, so a run
+should appear on the PR; its result is recorded in the release report once visible.
+
+**Consequence.** A PR may be opened. It must **not** be merged while required checks are
+unverifiable and while Decisions A–D remain open. Release status stays **BLOCKED**.
 
 ## 5. Release blockers
 
