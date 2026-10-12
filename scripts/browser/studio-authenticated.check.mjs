@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
+import { PROBE_PROPERTY, probeInstallSource, formatProbeDump } from "./hydration-mutation-probe.mjs";
 
 let target;
 try {
@@ -32,6 +33,9 @@ function check(name, ok, detail = "") {
 async function pageFor(context) {
   const page = await context.newPage();
   page.setDefaultTimeout(25000);
+  // Pre-hydration MutationObserver ring buffer (issue #418 diagnostic): installed before any
+  // document script in every frame of this page (dashboard chrome and same-origin preview iframe).
+  await page.evaluateOnNewDocument(probeInstallSource());
   await page.setRequestInterception(true);
   page.on("request", (request) => {
     if (!isAllowedStudioRequest(request.url(), origin, request.method())) {
@@ -46,32 +50,24 @@ async function pageFor(context) {
     const record = { path: new URL(page.url()).pathname, frames, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
     errors.push(record);
     console.error(`BROWSER RUNTIME ERROR ${JSON.stringify(record)}`);
-    // Evidence-only forensic snapshot for hydration-class errors (issue #418): capture each
-    // open frame's DOM and structural marker counts at the earliest possible moment, so the
-    // next recurrence identifies the diverging host node instead of only the React internals.
+    // Evidence-only hydration forensics (issue #418): read the pre-hydration MutationObserver
+    // ring buffer and its error-time frozen snapshot from every accessible frame. Each frame's
+    // probe freezes synchronously in its own window.onerror before React recovery can overwrite
+    // the mutation history. Cross-origin frames are reported, never bypassed.
     void Promise.all(page.frames().map(async (frame) => {
+      const path = (() => { try { return new URL(frame.url()).pathname; } catch { return "unknown"; } })();
       try {
-        const url = new URL(frame.url()).pathname;
-        const dom = await frame.evaluate(() => {
-          const counts = {
-            ready: document.readyState,
-            motionRecipe: document.querySelectorAll("[data-motion-recipe]").length,
-            motionStatic: document.querySelectorAll("[data-motion-static]").length,
-            motionProbe: document.querySelectorAll("[data-motion-probe]").length,
-            catalogueLayout: document.querySelectorAll("[data-catalogue-layout]").length,
-            scripts: document.querySelectorAll("script").length,
-          };
-          const clone = (document.body ?? document.documentElement).cloneNode(true);
-          clone.querySelectorAll("script, noscript").forEach((node) => node.remove());
-          return { counts, html: clone.outerHTML.replace(/\s+/g, " ").slice(0, 2500) };
-        }).catch(() => null);
-        if (dom) {
-          record.framesDom = record.framesDom ?? [];
-          record.framesDom.push({ url, ...dom });
-        }
-      } catch { /* forensics best-effort */ }
-    })).then(() => {
-      console.error(`BROWSER RUNTIME DOM SNAPSHOT ${JSON.stringify(record.framesDom ?? []).slice(0, 200)}`);
+        const probe = await frame.evaluate((key) => {
+          const instance = window[key];
+          return instance ? { state: instance.state(), snapshot: instance.snapshot(), tail: instance.tail(15) } : null;
+        }, PROBE_PROPERTY);
+        return { path, probe };
+      } catch (error) {
+        return { path, inaccessible: String(error).slice(0, 80) };
+      }
+    })).then((frameProbes) => {
+      record.probe = formatProbeDump(frameProbes);
+      console.error(`HYDRATION PROBE ${record.probe}`);
     });
   });
   return page;
