@@ -79,6 +79,47 @@ describe("publish validation", () => {
     expect(failingIds(result)).toContain("catalogue");
   });
 
+  it.each(["salon", "creative", "professional", "education", "technical"])("accepts a complete %s service catalogue without inventing products", (categoryKey) => {
+    const document = createExperienceDocument({ categoryKey, businessName: "Owned service business" });
+    const result = validateForPublication(baseInput({ document, productCount: 0, serviceCount: 1 }));
+    expect(result.ready).toBe(true);
+    const catalogue = result.checks.filter((check) => check.id === "catalogue");
+    expect(catalogue).toHaveLength(1);
+    expect(catalogue[0]).toMatchObject({ status: "pass", label: "Services added", href: undefined });
+  });
+
+  it.each(["salon", "creative", "professional", "education", "technical"])("still requires services for %s even when unrelated products exist", (categoryKey) => {
+    const document = createExperienceDocument({ categoryKey, businessName: "Owned service business" });
+    const result = validateForPublication(baseInput({ document, productCount: 1, serviceCount: 0 }));
+    expect(result.ready).toBe(false);
+    expect(result.checks.filter((check) => check.id === "catalogue" && check.status === "fail")).toEqual([
+      expect.objectContaining({ label: "Services added", href: "/dashboard/services" }),
+    ]);
+  });
+
+  it.each(["automotive", "fitness", "hospitality"])("retains both product and service requirements for mixed %s", (categoryKey) => {
+    const document = createExperienceDocument({ categoryKey, businessName: "Owned mixed business" });
+    expect(validateForPublication(baseInput({ document, productCount: 0, serviceCount: 1 })).ready).toBe(false);
+    expect(validateForPublication(baseInput({ document, productCount: 1, serviceCount: 0 })).ready).toBe(false);
+    expect(validateForPublication(baseInput({ document, productCount: 1, serviceCount: 1 })).ready).toBe(true);
+  });
+
+  it("retains product/listing requirements for catalogue-only non-booking businesses", () => {
+    const document = createExperienceDocument({ categoryKey: "realestate", businessName: "Owned listings" });
+    expect(validateForPublication(baseInput({ document, productCount: 0, serviceCount: 1 })).ready).toBe(false);
+    expect(validateForPublication(baseInput({ document, productCount: 1, serviceCount: 0 })).ready).toBe(true);
+  });
+
+  it("does not relax unpaid or expired entitlement gates for a complete service catalogue", () => {
+    const document = createExperienceDocument({ categoryKey: "salon", businessName: "Owned salon" });
+    const unpaid = validateForPublication(baseInput({ document, productCount: 0, serviceCount: 1, paidPayment: null, subscription: { status: "PENDING" }, entitlement: deriveEntitlement({ subscription: { status: "PENDING", plan: { key: INTERACTIVE_PLAN_KEY }, expiresAt: future } }) }));
+    expect(unpaid.ready).toBe(false);
+    expect(failingIds(unpaid)).toEqual(expect.arrayContaining(["payment", "subscription", "entitlement"]));
+    const expired = validateForPublication(baseInput({ document, productCount: 0, serviceCount: 1, entitlement: deriveEntitlement({ subscription: { status: "ACTIVE", plan: { key: INTERACTIVE_PLAN_KEY }, expiresAt: new Date(Date.now() - 86_400_000) }, paidPayment: { status: "PAID" } }) }));
+    expect(expired.ready).toBe(false);
+    expect(failingIds(expired)).toContain("entitlement");
+  });
+
   it("blocks publishing when a section links somewhere unsafe", () => {
     const document = createExperienceDocument({ categoryKey: "food", businessName: "Choma Place" });
     document.sections.push({ id: "broken", type: "gallery", visible: true, images: [{ url: "javascript:alert(1)" }] } as never);

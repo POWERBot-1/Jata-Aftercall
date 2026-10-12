@@ -131,9 +131,12 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
     "/dashboard/website",
   );
 
-  const needsCatalogue = profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue");
   const needsServices = profile.capabilities.includes("booking");
-  if (needsCatalogue) {
+  // Booking-only categories expose their Service rows as the catalogue. Requiring Product rows too
+  // prevents a complete salon/service business from publishing. Mixed commerce + booking still needs both.
+  const needsProductCatalogue = profile.capabilities.includes("commerce") ||
+    (profile.capabilities.includes("catalogue") && !needsServices);
+  if (needsProductCatalogue) {
     add(
       "catalogue",
       `${profile.itemNounPlural} added`,

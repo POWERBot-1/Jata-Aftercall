@@ -211,7 +211,8 @@ try {
       startAt: new Date(), expiresAt: new Date(Date.now() + 86400000 * 30), graceUntil: new Date(Date.now() + 86400000 * 33) } });
     await prisma.business.update({ where: { id: fixture.id }, data: { status: "ACTIVE" } });
     const entitled = await api(ownerPage, `/api/experience?businessId=${fixture.id}`);
-    check(`${category}: synthetic stored entitlement recognized`, entitled.body?.entitlement?.entitled === true && entitled.body?.validation?.ready === true);
+    check(`${category}: synthetic stored entitlement recognized`, entitled.body?.entitlement?.entitled === true && entitled.body?.validation?.ready === true,
+      `status=${entitled.status}, entitled=${Boolean(entitled.body?.entitlement?.entitled)}, failed=${(entitled.body?.validation?.checks ?? []).filter((item) => item.status === "fail").map((item) => item.id).join(",")}`);
     const published = await publishUI(ownerPage, fixture, 200);
     // The existing publication validator omits only the draft editing timestamp. Every content field must match.
     const reviewedDocument = JSON.parse(edited.draftJson);
