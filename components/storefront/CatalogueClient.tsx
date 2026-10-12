@@ -12,7 +12,6 @@ import { useMemo, useState } from "react";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { ItemCard } from "./ItemCard";
 import { trackEvent } from "./Track";
-import { formatKES } from "@/lib/format";
 
 export type CatalogueFilters = {
   categories: string[];
@@ -147,19 +146,4 @@ export function CatalogueClient({
       )}
     </div>
   );
-}
-
-/** Price bands are derived from the tenant's own catalogue, never hard-coded (§11). */
-export function priceBandsFor(items: StorefrontItem[]): Array<{ label: string; min: number; max: number }> {
-  const prices = items.map((item) => item.price).filter((price): price is number => typeof price === "number" && price > 0);
-  if (prices.length < 4) return [];
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  if (max <= min) return [];
-  const step = (max - min) / 3;
-  return [
-    { label: `Under ${formatKES(Math.round(min + step))}`, min: 0, max: Math.round(min + step) },
-    { label: `${formatKES(Math.round(min + step))} – ${formatKES(Math.round(min + step * 2))}`, min: Math.round(min + step), max: Math.round(min + step * 2) },
-    { label: `Over ${formatKES(Math.round(min + step * 2))}`, min: Math.round(min + step * 2), max: Number.MAX_SAFE_INTEGER },
-  ];
 }

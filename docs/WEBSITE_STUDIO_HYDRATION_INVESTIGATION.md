@@ -50,3 +50,10 @@ Added the initial SSR equality regressions before fixing application source: **4
 This fixes the **proven booking SSR clock/timezone defect**. Historical aggregate418 attribution remains OPEN unless more route-specific evidence identifies it; neither repeated green runs nor this similarity retroactively proves its source. Keep runtime failures mandatory and investigate any recurrence from its actual route/stack.
 
 After native verification, proceed to advisory-by-advisory compatible remediation, then reusable business recipes. All108 master blocks/A–X/all7 stages remain mandatory. Storage DEFERRED; persistent originals/providers BLOCKED; no uploads/provider activation/provisioning/spending/production data, merge or production deployment.
+
+
+## First native result / separate shop Server Component defect
+
+Phase2 source **b670cd9e496ed8a205d6783bf7f0da16d85f12dc**, CI38216557166/job114702549703 **FAILED**, actual bot6119577130. Native167files2046 PASS+1 expected/2047, Website17/POS22/connected build PASS. Nairobi customer actual booking201/persisted service/owner board PASS after calendar fix. Additional real SSR probe identified `/b/[slug]/shop`500, not a hydration error: server ShopPage called `priceBandsFor` imported from `CatalogueClient` marked `"use client"`. Next logged “Attempted to call priceBandsFor() from the server … on the client”, digest1930353472. Authenticated117 PASS/1 FAIL; remaining SSR probes/final checks/downstream browser steps NOT RUN; exact cleanup/stop PASS.
+
+Root cause established from actual route/server log BEFORE change. The pure existing price-band function is moved byte-for-byte to `lib/experience/catalogue.ts`; ShopPage imports it from the server-safe module, client component retains browsing behavior. No calculation/price authority/tenant/entitlement/commerce rule altered. New boundary regression fails before fix (1FAIL/3 arithmetic PASS), then all4 PASS; shared-module ownership/arithmetic/sparse/unpriced/input-immutability tests retained. Required shop SSR assertion is NOT removed. Fresh native correction-head required before Phase3 changes.

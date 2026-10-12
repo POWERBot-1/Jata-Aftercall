@@ -5,7 +5,8 @@ import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
-import { CatalogueClient, priceBandsFor } from "@/components/storefront/CatalogueClient";
+import { CatalogueClient } from "@/components/storefront/CatalogueClient";
+import { priceBandsFor } from "@/lib/experience/catalogue";
 
 export const dynamic = "force-dynamic";
 
