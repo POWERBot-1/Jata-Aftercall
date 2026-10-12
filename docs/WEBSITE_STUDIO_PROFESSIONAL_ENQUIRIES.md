@@ -58,3 +58,8 @@ Next independent category slice: technical services with owned Service-only quot
 ## First actual native run (not acceptance)
 
 c3c9563/CI38234955080/job114763230878/bot6122238721 FAILED at unpublished-enquiry expected404/no-write. Native2134+1expected/176files, Website17/POS22/connected build and5 real DB enquiry tests PASS; browser173+1, cleanup4/serverstop PASS. No response status/root guessed: preserve the check, add safe status/error/origin-host-protocol diagnostics. Live enquiry UI/owner/replay/consultation/4type final/downstream cases NOTRUN, not local-proof acceptance. No financial/publication/origin guard weakened.
+
+
+## Origin normalization regression (second native result)
+
+ec3af7f/CI38235794238/job114766020675/bot6122374037 FAIL173+1. Native diagnostic proves Next requestURL uses0.0.0.0 while browser Origin and incoming Host use localhost on the same dynamic port;403 erroneously precedes correct404publication guard. Added2 HTTP/HTTPSproxy regressions FAIL before change, foreign/spoofed-forwarded-host denial staysPASS. Exact origin check now derives browser-facing Host +validated transport protocol, never wildcard/external forwardedhost; incomingHost/proto is browser-facing proxy information, not tenant or payment authority. All20route cases/94focused/lint/types pass; latestlocal2065PASS113DBskip2178. Actual source-head native enquiry flow stillpending, no claim it passed yet.

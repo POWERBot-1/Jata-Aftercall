@@ -18,13 +18,28 @@ function throttled(ip: string): boolean {
   hits.set(key, { count: 1, until: now + 60000 }); return false;
 }
 function reply(body: unknown, status: number) { return NextResponse.json(body, { status, headers: noStore }); }
+function sameRequestOrigin(req: Request, origin: string): boolean {
+  try {
+    const url = new URL(req.url);
+    // Next may expose its 0.0.0.0 listen address in req.url. Host retains the actual browser-facing host.
+    // Never authorize against a caller's x-forwarded-host, PUBLIC_BASE_URL or a wildcard origin.
+    const host = req.headers.get("host") || url.host;
+    if (!/^[a-zA-Z0-9.:[\]-]+$/.test(host)) return false;
+    const forwarded = req.headers.get("x-forwarded-proto");
+    if (forwarded && !["http", "https"].includes(forwarded)) return false;
+    const protocol = forwarded ? `${forwarded}:` : url.protocol;
+    if (!["http:", "https:"].includes(protocol)) return false;
+    const candidate = new URL(origin);
+    return candidate.origin === origin && candidate.origin === new URL(`${protocol}//${host}`).origin;
+  } catch { return false; }
+}
 
 /** Public request-only intake. The stored slug/service/published document determines the tenant. */
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
   if (throttled(ip)) return reply({ error: "Too many requests. Please wait a minute before trying again." }, 429);
   const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) {
+  if (origin && !sameRequestOrigin(req, origin)) {
     // Origin/host only: no customer fields, query strings, cookies or replay keys in diagnostic logs.
     const safeOrigin = (value: string | null) => { try { return value ? new URL(value).origin.slice(0, 180) : null; } catch { return "invalid"; } };
     console.warn("Enquiry origin refused", JSON.stringify({ origin: safeOrigin(origin), requestOrigin: new URL(req.url).origin,
