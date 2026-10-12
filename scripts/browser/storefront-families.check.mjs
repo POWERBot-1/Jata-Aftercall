@@ -13,11 +13,20 @@ const families = ["cinematic", "editorial", "luxury", "minimal", "magazine", "ma
 const results = [], measurements = [];
 const check = (name, ok, detail = "") => { results.push({ name, ok, detail }); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
 const browser = await puppeteer.launch({ executablePath: CHROME_PATH, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+// One retry on a transient CDP transport failure at page creation (observed twice in CI,
+// e.g. runs 38231732932/38240649221); every scenario check still runs normally afterwards.
+async function newPage() {
+  try { return await browser.newPage(); }
+  catch {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return await browser.newPage();
+  }
+}
 const version = await browser.version();
 try {
   for (const mobile of [false, true]) for (const family of families) {
     const name = `${family}/${mobile ? "360px phone" : "1280px desktop"}/no-JS`;
-    const page = await browser.newPage();
+    const page = await newPage();
     try {
       await page.setViewport({ width: mobile ? 360 : 1280, height: mobile ? 740 : 800, isMobile: mobile, hasTouch: mobile });
       await page.setJavaScriptEnabled(false);
@@ -60,7 +69,7 @@ try {
   check("desktop geometry: all20 measured, substantially different structures", desktop.length === 20 && new Set(desktop).size === 20, `unique=${new Set(desktop).size}/20`);
   // Same cart context/actions under no motion and under a family carousel; no checkout/provider call.
   for (const family of ["marketplace", "interactive-showroom", "minimal"]) {
-    const page = await browser.newPage(); const errors = [];
+    const page = await newPage(); const errors = [];
     try {
       await page.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
       await page.evaluateOnNewDocument(() => { localStorage.clear(); });
