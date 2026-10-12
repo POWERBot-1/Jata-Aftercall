@@ -24,7 +24,18 @@ export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
   if (throttled(ip)) return reply({ error: "Too many requests. Please wait a minute before trying again." }, 429);
   const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) return reply({ error: "Send your enquiry from this business's website." }, 403);
+  if (origin) {
+    // Same-website CSRF check by host (host:port). Never compare serialized origins:
+    // a server bound to 0.0.0.0 and a browser on localhost are the same website, while
+    // foreign sites, sandboxed "null" origins and malformed values must refuse.
+    const requestHost = (req.headers.get("host") || new URL(req.url).host).toLowerCase();
+    let originHost = "";
+    try { originHost = new URL(origin).host.toLowerCase(); } catch { originHost = ""; }
+    if (!originHost || originHost !== requestHost) {
+      console.warn(`Enquiry origin refused: origin-host=${originHost || "invalid"} request-host=${requestHost}`);
+      return reply({ error: "Send your enquiry from this business's website." }, 403);
+    }
+  }
   if (!req.headers.get("content-type")?.startsWith("application/json")) return reply({ error: "We couldn't read that request." }, 400);
   let raw: unknown;
   try {

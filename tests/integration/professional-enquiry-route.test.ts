@@ -84,7 +84,16 @@ describe("durable request-only professional intake", () => {
   });
   it("refuses cross-origin and oversized bodies", async () => {
     expect((await POST(request(body, { origin: "https://foreign.test" }))).status).toBe(403);
+    expect((await POST(request(body, { origin: "null" }))).status).toBe(403);
+    expect((await POST(request(body, { origin: "not a url" }))).status).toBe(403);
     expect((await POST(request(body, { "content-length": "9000" }))).status).toBe(413); expect(h.create).not.toHaveBeenCalled();
+  });
+  it("accepts the same website's origin regardless of binding representation (0.0.0.0-bound server, localhost browser)", async () => {
+    // The request URL's serialized origin can be 0.0.0.0/localhost/IPv6 loopback while the
+    // browser sends its own host; the host (host:port) comparison must treat these as one site.
+    expect((await POST(request(body, { origin: "https://jata.test" }))).status).toBe(201);
+    expect((await POST(request({ ...body, idempotencyKey: "qa-origin-host-port-1" }, { origin: "http://jata.test" }))).status).toBe(201);
+    expect(h.create).toHaveBeenCalledTimes(2);
   });
 });
 
