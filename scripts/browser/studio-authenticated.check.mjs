@@ -177,7 +177,7 @@ try {
     fixture.itemId = category === "salon" ? item.body?.service?.id : item.body?.product?.id;
     check(`${category}: actual tenant catalogue write`, item.status === 201 && Boolean(fixture.itemId));
     const seeded = await api(ownerPage, "/api/experience", "POST", { businessId: fixture.id, categoryKey: category });
-    check(`${category}: safe structured generation through HTTP`, seeded.status === 200 && seeded.body?.document?.version === 2 && Boolean(seeded.body.document.artDirection));
+    check(`${category}: safe structured creation through HTTP (201)`, seeded.status === 201 && seeded.body?.document?.version === 2 && Boolean(seeded.body.document.artDirection), `status=${seeded.status}, format=${seeded.body?.document?.version ?? "missing"}`);
     await patch(ownerPage, fixture, { brand: { heroImageUrl: `${origin}/dev/motion-asset.svg`, tagline: `QA first ${category} ${runId}` },
       document: { ...seeded.body.document, renderPreference: "lite", brand: { ...seeded.body.document.brand, heroImageUrl: `${origin}/dev/motion-asset.svg`, tagline: `QA first ${category} ${runId}` } } });
     const before = await snapshot(fixture.id);
