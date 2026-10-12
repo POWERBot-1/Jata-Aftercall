@@ -5,10 +5,22 @@ import { PrismaClient } from "@prisma/client";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
 import { PROBE_PROPERTY, probeInstallSource, formatProbeDump } from "./hydration-mutation-probe.mjs";
+
+// Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
+// containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
+function probeEnabled() {
+  const flag = (process.env.HYDRATION_PROBE ?? "").trim().toLowerCase();
+  if (flag) return flag !== "off" && flag !== "0" && flag !== "false";
+  try {
+    return readFileSync(new URL("./hydration-probe.mode", import.meta.url), "utf8").trim().toLowerCase() !== "off";
+  } catch {
+    return true;
+  }
+}
 
 let target;
 try {
@@ -35,7 +47,7 @@ async function pageFor(context) {
   page.setDefaultTimeout(25000);
   // Pre-hydration MutationObserver ring buffer (issue #418 diagnostic): installed before any
   // document script in every frame of this page (dashboard chrome and same-origin preview iframe).
-  await page.evaluateOnNewDocument(probeInstallSource());
+  if (probeEnabled()) await page.evaluateOnNewDocument(probeInstallSource());
   await page.setRequestInterception(true);
   page.on("request", (request) => {
     if (!isAllowedStudioRequest(request.url(), origin, request.method())) {

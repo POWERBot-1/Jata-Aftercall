@@ -116,3 +116,4 @@ Two constraints keep the exact node unproven: (1) the pageerror handler snapshot
 | 2 | 35583e2 | 38268094019 | SUCCESS (427/0 journey) | not reproduced — passing run, not proof of fix |
 | 3 | e8150ee | 38269201254 | SUCCESS (427/0 journey) | not reproduced — passing run, not proof of fix |
 | 4 | 43a7226 | 38270264732 | SUCCESS (427/0 journey) | not reproduced — 4 consecutive passes vs ~50% historical rate; probe cost reduced (arms at readyState interactive, no parse-window overhead) before further sampling |
+| 5 | 43bd129 | 38271714437 | SUCCESS (427/0 journey) | not reproduced — 5 consecutive passes with the lighter probe; starting A/B control runs with the probe disabled (`scripts/browser/hydration-probe.mode` = off) to test whether the instrument itself suppresses the race |
