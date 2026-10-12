@@ -41,3 +41,19 @@ describe("professional requests are not forced into appointment assumptions", ()
     expect(html).not.toContain("Owned quote work");
   });
 });
+describe("technical services share request-only routing without product/appointment assumptions", () => {
+  it("routes technical quote work to enquiry and keeps real bookable visits on the appointment route", async () => {
+    h.data.document = createExperienceDocument({ categoryKey: "technical", businessName: "Owned repairs" });
+    h.data.profile = getExperienceProfile("technical");
+    await expect(BookPage(request("quote-service"))).rejects.toThrow("REDIRECT /b/owned-pro/enquire?service=quote-service");
+    const page = await BookPage(request("fixed-service"));
+    const html = renderToString(React.createElement(AppRouterContext.Provider, { value: router }, page));
+    expect(html).toContain("Choose a date"); expect(html).toContain("Owned consultation");
+    expect(html).not.toContain("Owned quote work");
+  });
+  it("never substitutes services for foreign technical request IDs", async () => {
+    h.data.document = createExperienceDocument({ categoryKey: "technical", businessName: "Owned repairs" });
+    h.data.profile = getExperienceProfile("technical");
+    await expect(BookPage(request("foreign-service"))).rejects.toThrow("NOT_FOUND");
+  });
+});

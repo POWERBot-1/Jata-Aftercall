@@ -10,6 +10,11 @@ import type { LeadRecord } from "../leads";
 
 export const ENQUIRY_CHANNEL = "website_studio_professional";
 export const ENQUIRY_EVENT = "LEAD_GENERAL_INQUIRY";
+/** Categories whose QUOTE services route to the durable request-only enquiry surface. Explicit set, never blanket authority. */
+export const ENQUIRY_CATEGORY_KEYS = ["professional", "technical"] as const;
+export function usesServiceEnquiries(categoryKey: string | null | undefined): boolean {
+  return (ENQUIRY_CATEGORY_KEYS as readonly string[]).includes(categoryKey ?? "");
+}
 export type EnquiryInput = {
   slug: string; serviceId: string; customerName: string; customerPhone: string;
   customerEmail: string | null; notes: string; idempotencyKey: string;

@@ -3,7 +3,7 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { guardTenantMutation } from "@/lib/tenant";
 import { validateExperienceJson } from "@/lib/experience/schema";
-import { validateEnquiryInput, saveProfessionalEnquiry, listProfessionalEnquiries, EnquiryReplayConflict } from "@/lib/experience/enquiries";
+import { validateEnquiryInput, saveProfessionalEnquiry, listProfessionalEnquiries, EnquiryReplayConflict, usesServiceEnquiries } from "@/lib/experience/enquiries";
 import { recordEvent, hashSession, hashIp } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const experience = await prisma.businessExperience.findUnique({ where: { businessId: business.id }, select: { status: true, publishedJson: true, categoryKey: true } });
     if (!experience || experience.status !== "PUBLISHED") return reply({ error: "This business is not accepting enquiries right now." }, 404);
     const validated = validateExperienceJson(experience.publishedJson || "", experience.categoryKey);
-    if (!validated.ok || validated.document.categoryKey !== "professional") {
+    if (!validated.ok || !usesServiceEnquiries(validated.document.categoryKey)) {
       return reply({ error: "This business is not accepting enquiries right now." }, 404);
     }
     const service = await prisma.service.findFirst({ where: { id: input.serviceId, businessId: business.id, isActive: true }, select: { id: true, title: true } });

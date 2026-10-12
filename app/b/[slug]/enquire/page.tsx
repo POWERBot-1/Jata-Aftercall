@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { EnquiryClient } from "@/components/storefront/EnquiryClient";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Service enquiry", robots: { index: false, follow: false } };
@@ -17,7 +18,7 @@ async function canPreview(slug: string): Promise<boolean> {
 export default async function EnquiryPage({ params, searchParams }: Props) {
   const { slug } = await params; const { service } = await searchParams;
   const data = await loadStorefront(slug, { allowDraft: await canPreview(slug) });
-  if (!data || data.document.categoryKey !== "professional") notFound();
+  if (!data || !usesServiceEnquiries(data.document.categoryKey)) notFound();
   const services = data.services.filter((entry) => entry.kind === "service");
   // Never silently substitute this business's first service for a foreign/stale query parameter.
   if (service && !services.some((entry) => entry.id === service)) notFound();

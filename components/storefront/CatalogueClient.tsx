@@ -13,7 +13,7 @@ import type { ItemCardData } from "@/lib/experience/catalogue";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { ItemCard } from "./ItemCard";
 import { BusinessCatalogue } from "./BusinessCatalogue";
-import { BUSINESS_RECIPES, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
+import { BUSINESS_RECIPES, isEnquiryRecipe, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { trackEvent } from "./Track";
 import { isBookableConsultation } from "@/lib/experience/professionalWorkflow";
 
@@ -105,9 +105,9 @@ export function CatalogueClient({
         ) : null}
       </div>
 
-      {definition?.key === "professional-enquiry" ? (
-        <div className="eb-chip-row" role="group" aria-label="Professional request type" style={{ marginBottom: "1rem" }}>
-          {([["ALL", "All services"], ["BOOK", "Book a consultation"], ["ENQUIRE", "Request a quote"]] as const).map(([value, label]) => (
+      {definition && isEnquiryRecipe(definition.key) ? (
+        <div className="eb-chip-row" role="group" aria-label={definition.key === "technical-enquiry" ? "Service request type" : "Professional request type"} style={{ marginBottom: "1rem" }}>
+          {([["ALL", "All services"], ["BOOK", definition.key === "technical-enquiry" ? "Book a visit" : "Book a consultation"], ["ENQUIRE", "Request a quote"]] as const).map(([value, label]) => (
             <button key={value} type="button" className={`eb-chip ${requestType === value ? "eb-chip--active" : ""}`} aria-pressed={requestType === value} onClick={() => setRequestType(value)}>{label}</button>
           ))}
         </div>

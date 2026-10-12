@@ -2,7 +2,7 @@
 import Link from "next/link";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import type { ItemCardData } from "@/lib/experience/catalogue";
-import { BUSINESS_RECIPES, recipeFacts, recipeLayoutFor, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
+import { BUSINESS_RECIPES, recipeFacts, recipeLayoutFor, isEnquiryRecipe, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
 import { professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
@@ -21,7 +21,7 @@ export function BusinessCatalogue({ items, data, config, layout }: { items: Stor
         const cart = recipe.source === "products" && item.kind === "product" && data.profile.capabilities.includes("commerce") &&
           item.pricingType !== "QUOTE" && item.price !== null && !unavailable && !options;
         const book = item.kind === "service" && item.bookingEnabled && data.profile.capabilities.includes("booking") && item.pricingType !== "QUOTE" && item.price !== null;
-        const professional = recipe.key === "professional-enquiry" && item.kind === "service";
+        const professional = isEnquiryRecipe(recipe.key) && item.kind === "service";
         const action = cart ? "cart" : book ? "book" : professional ? "enquire" : options && !unavailable ? "options" : item.pricingType === "QUOTE" ? "enquire" : "details";
         return (
           <li key={item.id}>

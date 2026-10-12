@@ -7,6 +7,7 @@ import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { BookingClient } from "@/components/storefront/BookingClient";
 import { bookingCalendar } from "@/lib/experience/bookingCalendar";
 import { isBookableConsultation, professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function BookPage({ params, searchParams }: Props) {
   const data = await loadStorefront(slug, { allowDraft: await canPreview(slug) });
   if (!data) notFound();
 
-  const professional = data.document.categoryKey === "professional";
+  const professional = usesServiceEnquiries(data.document.categoryKey);
   if (professional && item) notFound(); // this category's requests are tied to real Service rows, never dummy Products
   if (professional && service) {
     const selected = data.services.find((entry) => entry.id === service);

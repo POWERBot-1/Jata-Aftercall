@@ -95,6 +95,19 @@ describe("durable request-only professional intake", () => {
     expect((await POST(request({ ...body, idempotencyKey: "qa-origin-host-port-1" }, { origin: "http://jata.test" }))).status).toBe(201);
     expect(h.create).toHaveBeenCalledTimes(2);
   });
+  it("serves the registered technical category explicitly and still refuses unregistered categories", async () => {
+    // Technical services were added to the explicit enquiry-category set; blanket capability
+    // authority is never granted — any other category keeps refusing without a ledger write.
+    h.experience.publishedJson = JSON.stringify(createExperienceDocument({ categoryKey: "technical", businessName: "Owned repairs" }));
+    expect((await POST(request({ ...body, idempotencyKey: "qa-technical-request-1" }))).status).toBe(201);
+    expect(h.create).toHaveBeenCalledTimes(1);
+    h.create.mockClear();
+    for (const categoryKey of ["hospitality", "beauty", "other", "salon", "food", "retail"]) {
+      h.experience.publishedJson = JSON.stringify(createExperienceDocument({ categoryKey, businessName: "Owned business" }));
+      expect((await POST(request({ ...body, idempotencyKey: `qa-${categoryKey}-request-1` }))).status).toBe(404);
+    }
+    expect(h.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("owner ledger read", () => {

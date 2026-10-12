@@ -18,14 +18,14 @@ const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() 
 function dataFor(category: string): StorefrontData {
   const document = seedNewDocument(createExperienceDocument({ categoryKey: category, businessName: "Owned business" }), "QA-RECIPE").document;
   const profile = getExperienceProfile(category);
-  const item: StorefrontItem = { id: "owned-row", kind: ["salon", "professional"].includes(category) ? "service" : "product", name: "Owned catalogue fact", description: "Owned description",
+  const item: StorefrontItem = { id: "owned-row", kind: ["salon", "professional", "technical"].includes(category) ? "service" : "product", name: "Owned catalogue fact", description: "Owned description",
     price: 650, wasPrice: null, priceLabel: null, pricingType: "FIXED", imageUrl: "/favicon.svg", images: [], category: "Owned category", tags: [],
     brand: "Owned brand", portionSize: "Owned plate", ingredients: "Owned ingredients", prepMinutes: 15, durationMinutes: category === "salon" ? 60 : null,
     depositKES: 0, staffName: "Owned specialist", availability: null, bookingEnabled: category === "salon", stockStatus: "IN_STOCK", isFeatured: false,
     variants: [], variantOptions: {}, addOns: [] };
   return { business: { id: "owned-business", slug: "owned-slug", name: "Owned business", category, phone: "0712345678", whatsapp: null,
     location: null, lat: null, lng: null, description: null, logoUrl: null, isPublished: true, status: "ACTIVE" },
-    document, profile, theme: resolveExperienceTheme(profile.defaultThemeKey), items: ["salon", "professional"].includes(category) ? [] : [item], services: ["salon", "professional"].includes(category) ? [item] : [],
+    document, profile, theme: resolveExperienceTheme(profile.defaultThemeKey), items: ["salon", "professional", "technical"].includes(category) ? [] : [item], services: ["salon", "professional", "technical"].includes(category) ? [item] : [],
     offer: null, categories: ["Owned category"], isPreview: false, publishedVersion: 3 };
 }
 function render(child: React.ReactNode, data: StorefrontData) {
@@ -99,5 +99,16 @@ describe("professional enquiries are a functional fourth service recipe", () => 
     const html = render(React.createElement(ItemDetailClient, { item, slug: data.business.slug, businessId: data.business.id,
       capabilities: data.profile.capabilities, cta: data.profile.cta, itemNoun: "Service", related: [], professional: true }), data);
     expect(html).toContain("/enquire?service=owned-row"); expect(html).not.toContain("/book?service=owned-row"); expect(html).not.toContain("Add to basket");
+  });
+  it("technical recipe routes quote work to enquiries and real bookable visits to appointments, with owned technician facts", () => {
+    const data = dataFor("technical");
+    const config = documentBusinessRecipe(data.document)!;
+    const quoteHtml = render(React.createElement(BusinessCatalogue, { items: data.services, data: itemCardDataFor(data), config, layout: "list" }), data);
+    expect(quoteHtml).toContain('data-business-recipe="technical-enquiry"');
+    expect(quoteHtml).toContain("/enquire?service=owned-row"); expect(quoteHtml).toContain('data-recipe-action="enquire"');
+    expect(quoteHtml).toContain("Owned specialist"); expect(quoteHtml).not.toContain("In stock only"); expect(quoteHtml).not.toContain("Add to basket");
+    data.services[0].bookingEnabled = true;
+    const bookHtml = render(React.createElement(BusinessCatalogue, { items: data.services, data: itemCardDataFor(data), config, layout: "list" }), data);
+    expect(bookHtml).toContain("/book?service=owned-row"); expect(bookHtml).toContain('data-recipe-action="book"');
   });
 });

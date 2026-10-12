@@ -59,9 +59,9 @@ describe("registered recipe layouts", () => {
       const section = doc.sections.find((entry) => entry.type === recipe.primarySection)!;
       expect(recipeLayoutFor(config, recipe, section.layout)).toBe(recipe.category === "retail" ? "product-grid" : recipe.layout);
     }
-    expect(BUSINESS_RECIPES.map((recipe) => recipe.layout)).toEqual(["product-grid", "menu-list", "service-list", "service-list"]);
-    expect(BUSINESS_RECIPES.map((recipe) => recipe.layouts)).toEqual([["product-grid", "product-list"], ["menu-list", "menu-board"], ["service-list", "service-grid"], ["service-list", "service-grid"]]);
-    expect(BUSINESS_RECIPES.map((recipe) => recipe.listLayout)).toEqual(["product-list", "menu-list", "service-list", "service-list"]);
+    expect(BUSINESS_RECIPES.map((recipe) => recipe.layout)).toEqual(["product-grid", "menu-list", "service-list", "service-list", "service-list"]);
+    expect(BUSINESS_RECIPES.map((recipe) => recipe.layouts)).toEqual([["product-grid", "product-list"], ["menu-list", "menu-board"], ["service-list", "service-grid"], ["service-list", "service-grid"], ["service-list", "service-grid"]]);
+    expect(BUSINESS_RECIPES.map((recipe) => recipe.listLayout)).toEqual(["product-list", "menu-list", "service-list", "service-list", "service-list"]);
   });
 
   it("accepts only this recipe's registered layouts and never authority fields", () => {

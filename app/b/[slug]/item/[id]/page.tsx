@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { findItem, loadStorefront } from "@/lib/experience/storefront";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { ItemDetailClient, ItemViewTracker } from "@/components/storefront/ItemDetailClient";
@@ -64,7 +65,7 @@ export default async function ItemPage({ params }: Props) {
             capabilities={data.profile.capabilities}
             cta={data.profile.cta}
             itemNoun={data.profile.itemNoun}
-            professional={data.document.categoryKey === "professional"}
+            professional={usesServiceEnquiries(data.document.categoryKey)}
             related={related}
           />
         </div>

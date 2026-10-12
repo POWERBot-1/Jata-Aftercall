@@ -129,7 +129,7 @@ export const SalonExperienceProfile: ExperienceProfile = {
   searchPlaceholder: "Search services",
   orderStatuses: ["NEW", "ACCEPTED", "COMPLETED", "CANCELLED"],
   structuredDataType: "HealthAndBeautyBusiness",
-  analyticsEvents: ["PAGE_VIEW", "SERVICE_VIEW", "BOOKING_CREATED", "CALL_CLICK", "WHATSAPP_CLICK", "DIRECTIONS_CLICK"],
+  analyticsEvents: ["PAGE_VIEW", "SERVICE_VIEW", "BOOKING_CREATED", "ENQUIRY_SUBMITTED", "CALL_CLICK", "WHATSAPP_CLICK", "DIRECTIONS_CLICK"],
 };
 
 /** ── 4. Fashion & Clothing (§10) ─────────────────────────────────────────── */
