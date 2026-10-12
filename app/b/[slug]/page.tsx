@@ -8,6 +8,7 @@ import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from
 import { ensureReferralCode, referralPath } from "@/lib/referral";
 import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { loadStorefront } from "@/lib/experience/storefront";
+import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 
@@ -15,7 +16,10 @@ export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ preview?: string }> };
 
-async function getBusiness(slug: string) {
+// M11 #418: one per-request load shared by `generateMetadata` and the page body, so
+// the SSR root segment completes with the metadata and the hydration bootstrap
+// scripts are emitted after the content (see lib/request-cache.ts).
+const getBusiness = requestCache(async (slug: string) => {
   return prisma.business.findUnique({
     where: { slug },
     include: {
@@ -25,7 +29,7 @@ async function getBusiness(slug: string) {
       members: { select: { userId: true, role: true } },
     },
   });
-}
+});
 
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
   return {

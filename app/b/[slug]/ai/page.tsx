@@ -9,8 +9,31 @@ import { DEFAULT_SUGGESTED_ACTIONS } from "@/lib/ai-front-desk";
 import { generateAILinkQRCodeSvg, getShareableAILink } from "@/lib/qr";
 import AIFrontDeskCustomerClient from "@/components/AIFrontDeskCustomerClient";
 import { publicProductPrice } from "@/lib/ai-public-products";
+import { requestCache } from "@/lib/request-cache";
 
 export const dynamic = "force-dynamic";
+
+// M11 #418: one per-request business load shared by `generateMetadata` and the body
+// (see lib/request-cache.ts).
+const getAIBusiness = requestCache(async (slug: string) =>
+  prisma.business
+    .findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        category: true,
+        description: true,
+        location: true,
+        phone: true,
+        whatsapp: true,
+        openingHours: true,
+        isPublished: true,
+      },
+    })
+    .catch(() => null),
+);
 
 export async function generateMetadata({
   params,
@@ -18,12 +41,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const business = await prisma.business
-    .findUnique({
-      where: { slug },
-      select: { name: true, category: true, description: true },
-    })
-    .catch(() => null);
+  const business = await getAIBusiness(slug);
 
   if (!business) {
     return { title: "AI Business Front Desk — Not Found | JATA" };
@@ -45,23 +63,7 @@ export default async function PublicAIFrontDeskPage({
   const { slug } = await params;
   const sp = searchParams ? await searchParams : undefined;
 
-  const business = await prisma.business
-    .findUnique({
-      where: { slug },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        category: true,
-        description: true,
-        location: true,
-        phone: true,
-        whatsapp: true,
-        openingHours: true,
-        isPublished: true,
-      },
-    })
-    .catch(() => null);
+  const business = await getAIBusiness(slug);
 
   if (!business) {
     notFound();

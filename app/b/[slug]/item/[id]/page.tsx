@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { findItem, loadStorefront } from "@/lib/experience/storefront";
+import { requestCache } from "@/lib/request-cache";
 import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
@@ -12,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string; id: string }> };
 
-async function canPreview(slug: string): Promise<boolean> {
+// M11 #418: shared per-request with `generateMetadata` and the body (lib/request-cache.ts).
+const canPreview = requestCache(async (slug: string): Promise<boolean> => {
   const session = await getSession();
   if (!session) return false;
   if (session.role === "ADMIN") return true;
@@ -22,7 +24,7 @@ async function canPreview(slug: string): Promise<boolean> {
   });
   if (!business) return false;
   return business.ownerId === session.userId || business.members.some((member) => member.userId === session.userId);
-}
+});
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, id } = await params;

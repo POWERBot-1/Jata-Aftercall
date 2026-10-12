@@ -3,17 +3,25 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
+import { requestCache } from "@/lib/request-cache";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { EnquiryClient } from "@/components/storefront/EnquiryClient";
 import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Service enquiry", robots: { index: false, follow: false } };
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ service?: string }> };
-async function canPreview(slug: string): Promise<boolean> {
+// M11 #418: shared per-request with `generateMetadata` and the body (lib/request-cache.ts).
+const canPreview = requestCache(async (slug: string): Promise<boolean> => {
   const session = await getSession(); if (!session) return false; if (session.role === "ADMIN") return true;
   const business = await prisma.business.findUnique({ where: { slug }, select: { ownerId: true, members: { select: { userId: true } } } });
   return Boolean(business && (business.ownerId === session.userId || business.members.some((member) => member.userId === session.userId)));
+});
+// M11 #418: metadata shares the page's single storefront load so the SSR root segment
+// completes with the head — the hydration bootstrap scripts are emitted after the content.
+export async function generateMetadata({ params }: Pick<Props, "params">): Promise<Metadata> {
+  const { slug } = await params;
+  await loadStorefront(slug, { allowDraft: await canPreview(slug) });
+  return { title: "Service enquiry", robots: { index: false, follow: false } };
 }
 export default async function EnquiryPage({ params, searchParams }: Props) {
   const { slug } = await params; const { service } = await searchParams;

@@ -635,9 +635,10 @@ try {
   // during a fresh load of the owner draft preview (storefront iframe hydration) at an
   // intermittent per-load rate, so each journey samples the historically failing fixtures
   // several times under CPU throttle (low-end-device emulation widens the load-time race
-  // window). Purely observational: no assertion is added here — the existing pageerror gate
-  // below is the detector. Load timeouts under throttle skip the sample and never fail the
-  // journey. Every attempt is recorded in results.json.
+  // window). The existing pageerror gate below is the throw detector; the emission-order
+  // gate after the loop is the M11 regression check (scripts must never lead the body).
+  // Load timeouts under throttle skip the sample and never fail the journey.
+  // Every attempt is recorded in results.json.
   {
     const sampleFixtures = created; // all five representative business types
     const cdp = await first.ownerPage.createCDPSession().catch(() => null);
@@ -661,6 +662,15 @@ try {
       }
     }
     if (cdp) await cdp.detach().catch(() => {});
+    // M11 #418 regression gate: the root cause was Fizz emitting the `_R_`/Flight bootstrap
+    // scripts BEFORE the content divs when the root segment was still pending at first
+    // flush. React's body-level hydration walk cannot skip leading scripts (non-root
+    // context) and throws #418. The request-cache fix makes the emission order
+    // deterministic (content first); an inverted sample here means the defect class is back.
+    const invertedOrders = hydrationVisits.filter((entry) => String(entry.order ?? "").startsWith("script"));
+    check("SSR body order: hydration bootstrap scripts never lead the content (M11 #418 regression)",
+      invertedOrders.length === 0,
+      JSON.stringify(invertedOrders.slice(0, 3).map((entry) => ({ route: entry.route, attempt: entry.attempt, order: entry.order }))));
   }
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
   check("no external/provider/disallowed browser requests", denied.length === 0, JSON.stringify(denied));
