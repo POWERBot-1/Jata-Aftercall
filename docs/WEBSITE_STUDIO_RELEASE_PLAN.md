@@ -2,6 +2,8 @@
 
 Updated: 2026-10-12 (resume). **Long-term vision NOT COMPLETE; production NOT DEPLOYED.**
 
+Latest bounded M7 source5f0a298/CI38212669278 PASS (2034+1 expected,17/22,133 authenticated +358 fixture/HTTP). Earlier React418 remains unresolved repeatability risk; source-identical evidence-only follow-up CI is next, not a claimed fix. Current19 dependency advisories/2 production-tree findings also remain open. Full qualified evidence/failed diagnostics are in the release report.
+
 The full original requirement source is [WEBSITE_STUDIO_MASTER_SPECIFICATION.md](WEBSITE_STUDIO_MASTER_SPECIFICATION.md), including every numbered section 0–107 and the execution directive. The section register below is a delivery tracker, NOT a replacement for that specification. Later phases remain mandatory. A name, interface, schema or feature flag is not evidence of implementation.
 
 ## 1. Verified read-only baseline (completed before source edits)
@@ -304,3 +306,8 @@ Actual source-a956fd4 CI38209141677 (job114679180184/comment6118508905) failed o
 ### M7 last network contract correction / final CI pending
 
 Actual native flows now cover all3 types through booking/tenant/expiry/logout/login, but source2420b5f run38211455026 overallFAIL129+1 due21 legitimate read fetches incorrectly absent from new harness allowance (only owned GET history/health). Reviewed both server-owned, database/local diagnostic-only implementations; add only those exact GETs, forbid mutations/external and extend2 real cross-tenant negatives. Latest local1967 PASS/108 DB-e2e SKIP/2075,56 safety and115 focused checks PASS, lint/types/syntax PASS. Required final native/browser/all-network result pending. Current read-only npm audits FAIL:19 total16 high/3 moderate; production tree2 (Next15.5.26→reported patch15.5.27 moderate cache-poisoning, source-map-js1.2.1→1.2.2 high DoS). Narrow pin/lock/compatibility/call-site triage remains release gate; no broad/major dependency churn here. No storage/provider/financial-policy/merge/production approval changes. Master108/A–X/full7 stages remain mandatory.
+
+
+### M7 first native PASS / repeatability qualification
+
+Source5f0a298edbe5b0ec2a603157f9ed945aa696e3b5 matches remote; CI38212669278 attempt1/job114690152115/runner4292b89af85be0dd8594d52622ea3f3bda9e7274 SUCCESS, bot6119062617. Actual native2034 PASS+1 expected, Website17/POS22, authenticated133, existing fixture/HTTP358; native build/migrations/lint/types/seed PASS. New gate uses actual production-mode Next/cookies/native disposable DB; entitlement fixture remains synthetic NOT provider proof. No earlier failure retroactively passed: source d72c7bc's one React418 is unresolved despite diagnostics-only5f0a298 pass; require source-identical follow-up and actual path/SSR diagnosis on recurrence. CLI rerun was refused/no new attempt; planned documentation-only push triggers normal PR CI. Gzip116460/147687/106724 B; mini4876 B initially excluded. No package-lock/schema/migration/auth/payment-policy changes. After stable foundation/repeatability and narrow current production advisory triage, registered business recipes remain next engine slice, not already delivered by M7. All original7 stages/108 blocks/A–X remain open mandatory; storage DEFERRED/originals/providers BLOCKED/device/full-provider journey NOT RUN; NOT MERGED/production NOT DEPLOYED.

@@ -2,6 +2,8 @@
 
 Updated 2026-10-12. **ENGINE INCOMPLETE.** This is a scoped acceptance register, not a replacement for the unchanged 108-block master specification or A–X gates.
 
+First actual M7 execution PASS at source5f0a298/CI38212669278 (133 authenticated checks,2034 native +1 expected,17/22,358 fixture/HTTP). Earlier d72c7bc React418 remains an OPEN repeatability risk, NOT fixed by a logging-only pass. Latest qualified evidence and all failed diagnostics are retained in the release report.
+
 ## Read-only resume audit (reported before edits)
 
 - Repository POWERBot-1/Jata-Aftercall; branch `arena/7b28a123-jata-aftercall`; remote/PR head **`c3bf39f51a873e56c707637c14d5f6353e532b06`**, OPEN/DRAFT PR41. No newer remote feature commit at audit.
@@ -84,7 +86,7 @@ These are audit assessments, NOT final certification. M7 fresh CI evidence is re
 |U Neon not binary store|Legacy inline derivatives remain. Owner DEFERRED object/CDN approval; immutable originals/separate derivatives BLOCKED. No inline-original substitute allowed|
 |V Absolute isolation|Native/mock tenant/config/history/AI/POS tests; M7 real cookie/browser tenant slice. Asset/provider/public3D/complete all-role evidence open|
 |W Low-end Android usability|360px touch/no-JS/emulated browser checks only. Physical representative low/mid/modern phones, slow/average/fast networks, memory/CWV NOT RUN|
-|X Tested/pushed|Verified milestone SHAs/CI recorded; new M7 fresh checks required. Engine-wide mandatory acceptance and intended/inherited diff review not complete|
+|X Tested/pushed|Source5f0a298 actual M7 native133/2034+1 expected/17/22/358 PASS; earlier React418 repeatability still open. Engine-wide mandatory acceptance/security/inherited diff review not complete|
 
 ## Verification / reproduction / exact next action
 
@@ -92,4 +94,4 @@ CI `.github/workflows/interactive-business-e2e.yml` runs the required authentica
 
 Local lint/types/full unit/mocked suites/schema validation/offline production build and existing browser regressions are separate evidence. Local native/authenticated DB journey is BLOCKED in this sandbox (no configured native database; restricted engine-download host). Do not set a production URL or bypass the boundary to manufacture local results. CI uses only the existing disposable Postgres service, never Neon/Vercel deployment secrets.
 
-Exact next action: obtain and investigate M7's actual source-head CI (do not infer from c3bf39f); record SHA/results in release report. After it passes, implement the next small registered **category-specific recipe** slice through existing versioned schema/renderer/editor, starting restaurant/menu +salon/service +retail/catalogue reusable interactions, with failure/reduced-motion/touch/no-JS/tenant/price tests and this authenticated gate as regression. Do not conflate the M7 test gate with delivery of those missing recipes or all of Section80. Physical Android/provider/complete payment/ASK JATA/POS/immersive journey gates remain open. Storage stays DEFERRED; no merge/production deploy/data changes authorized.
+Exact next action: source-identical evidence-only follow-up native CI with retained page/stack diagnostics; an earlier React418 failure is unresolved despite the latest133/133 pass. On recurrence, diagnose/fix/regress actual SSR mismatch, not suppress it. Current production dependency advisory pin/lock/call-site triage remains mandatory. After stable foundation, implement the next small registered **category-specific recipe** slice through existing versioned schema/renderer/editor, starting restaurant/menu +salon/service +retail/catalogue reusable interactions, with failure/reduced-motion/touch/no-JS/tenant/price tests and this authenticated gate as regression. Do not conflate the M7 test gate with delivery of those missing recipes or all of Section80. Physical Android/provider/complete payment/ASK JATA/POS/immersive journey gates remain open. Storage stays DEFERRED; no merge/production deploy/data changes authorized.
