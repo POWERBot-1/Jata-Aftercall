@@ -22,7 +22,7 @@ const prisma = new PrismaClient({ datasources: { db: { url: target.databaseUrl }
 const require = createRequire(import.meta.url);
 const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
-const created = [], results = [], denied = [], errors = [], signatures = [];
+const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
 function check(name, ok, detail = "") {
   results.push({ name, ok: Boolean(ok), detail });
@@ -158,6 +158,7 @@ try {
   console.log(`Actual browser: ${await browser.version()}; real production Next HTTP/cookies, disposable native Prisma. No provider interception presented as payment proof.`);
   const visitorContext = await browser.createBrowserContext();
   const visitor = await pageFor(visitorContext);
+  await visitor.emulateTimezone("Africa/Nairobi");
   await visitor.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
   await visitor.goto(`${origin}/login`, { waitUntil: "networkidle0" });
   const anonymous = await api(visitor, "/api/experience?businessId=unknown");
@@ -314,6 +315,28 @@ try {
     Object.assign(created.at(-1), fixture);
   }
 
+  // Probe actual Next SSR/navigation across timezones using the same owned published fixtures.
+  // No intercepted data, auth override, calendar capacity change or ignored recoverable error.
+  for (const fixture of created) {
+    for (const timezone of ["UTC", "Africa/Nairobi", "America/New_York"]) {
+      await visitor.emulateTimezone(timezone);
+      for (const suffix of ["", `/item/${fixture.itemId}`, fixture.category === "salon" ? `/book?service=${fixture.itemId}` : "/shop"]) {
+        const path = `/b/${fixture.slug}${suffix}`;
+        const response = await visitor.goto(`${origin}${path}`, { waitUntil: "networkidle0" });
+        const record = { category: fixture.category, timezone, path: path.split("?")[0], status: response?.status() };
+        hydrationVisits.push(record);
+        check(`${fixture.category}: actual SSR ${timezone} ${suffix.split("?")[0] || "home"}`, record.status === 200);
+        if (suffix.startsWith("/book")) {
+          const html = await response.text();
+          const serverDates = [...html.matchAll(/<button[^>]*class="eb-chip[^\"]*"[^>]*>([^<]*)<\/button>/g)].map((match) => match[1]).slice(0, 10);
+          const clientDates = await visitor.$$eval("fieldset:first-of-type button", (buttons) => buttons.map((button) => button.textContent));
+          check(`salon: actual SSR/client calendar identical in ${timezone}`, serverDates.length === 10 && JSON.stringify(serverDates) === JSON.stringify(clientDates));
+        }
+      }
+    }
+  }
+  await visitor.emulateTimezone("Africa/Nairobi");
+
   const [first, second, salon] = created;
   const foreignBefore = await snapshot(second.id);
   for (const [path, method, body] of [
@@ -372,7 +395,7 @@ try {
   try { await cleanup(); } catch (error) { results.push({ name: "fixture cleanup", ok: false, detail: "Exact-id cleanup failed" }); console.error("FAIL fixture cleanup"); }
   await prisma.$disconnect();
   mkdirSync(".cache/verification/studio-authenticated", { recursive: true });
-  writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures,
+  writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures, hydrationVisits,
     journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyComplete && results.every((item) => item.ok) ? "PASS" : "FAIL",
     providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true }, null, 2));
 }

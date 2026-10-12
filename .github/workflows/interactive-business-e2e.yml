@@ -155,6 +155,12 @@ jobs:
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated 2>&1 | tee /tmp/step-authenticated-browser.log
 
+      - name: Booking SSR timezone and midnight hydration regression
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          npm run test:browser:studio-hydration 2>&1 | tee /tmp/step-hydration-browser.log
+
       - name: Actual storefront Motion and immersive browser regressions
         run: |
           set -o pipefail
@@ -192,6 +198,7 @@ jobs:
               ['Business POS journey', '/tmp/step-pos-journey.log'],
               ['Production HTTP isolation smoke', '/tmp/step-studio-smoke.log'],
               ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
+              ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
@@ -224,7 +231,8 @@ jobs:
             };
             const body = [
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
-              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 8000],
+              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
+              ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
               ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],

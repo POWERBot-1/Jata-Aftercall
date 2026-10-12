@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { BookingClient } from "@/components/storefront/BookingClient";
+import { bookingCalendar } from "@/lib/experience/bookingCalendar";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function BookPage({ params, searchParams }: Props) {
           <BookingClient
             slug={slug}
             businessId={data.business.id}
+            calendar={bookingCalendar(new Date())}
             bookables={bookables.map((entry) => ({
               id: entry.id,
               name: entry.name,

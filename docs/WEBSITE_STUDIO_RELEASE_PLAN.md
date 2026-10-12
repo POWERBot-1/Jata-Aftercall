@@ -316,3 +316,12 @@ Source5f0a298edbe5b0ec2a603157f9ed945aa696e3b5 matches remote; CI38212669278 att
 ### M7 source-equivalent repeat PASS / next dependency-safe tasks
 
 Evidence delivery58829dd6cb12a3e5f029b4712546959d39bf8b8e differs from app source5f0a298 ONLY3 docs; fresh CI38213614397/job114693146998/runner568aa21bf220dafec26e44e7b17056a45fc222a7 SUCCESS, actual bot6119192075. Native2034+1 expected/166files, Website17/POS22/authenticated133/fixtureHTTP358, native build/lint/types/15 migrations/seed PASS again; clean/equal verified remote; PR41OPEN/DRAFT, no merge/deploy. Repeat requested at previous checkpoint completed, not still pending. Two source-equivalent passes do NOT fix/waive earlier React418: prioritize controlled SSR/navigation/seed reproduction+targeted regression, narrow production advisory pins/call-site triage, then registered reusable business recipes. All7 stages/108 original blocks/A–X and blocked device/provider/full-financial journey obligations remain binding.
+
+
+## M8 user-ordered continuation (2026-10-12)
+
+1. Read-only45e537c/current remote/clean/PR41DRAFT/current native CI38214337060 verified and baseline reported before code.
+2. Proven actual booking SSR local-midnight/clock defect reproduced before edits (4unitFAIL, real ChromiumNairobi418); serialized server calendar fixes it without slot/payment/auth changes. Historical unlocalized418 not conclusively attributed.12 unit/25 isolated browser/local1979PASS+108DBskip; native +27 route/timezone/+3 calendar checks pending push. Detailed evidence: WEBSITE_STUDIO_HYDRATION_INVESTIGATION.md.
+3. After native verification, audit each19 finding/paths/compatible fixes, prioritize2 production-tree; no broad audit-fix/major churn. Native build/regressions mandatory.
+4. Only after Phases2/3 verified, registered functional retail/food/salon business recipes through existing renderer/editor/schema/commerce and current native/cookie gate; no superficial variants.
+5. All original108 blocks/all7 stages/A–X/full acceptance remain; provider/originals BLOCKED by storage DEFERRED, device/CWV/full-provider journeys NOT RUN. No merge/production/data/cost operation authorized.
