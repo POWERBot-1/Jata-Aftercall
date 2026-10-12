@@ -581,6 +581,36 @@ try {
   await first.ownerPage.waitForFunction(() => location.pathname.startsWith("/dashboard"));
   check("real cookie login restores only own workspace", (await api(first.ownerPage, `/api/experience?businessId=${first.id}`)).status === 200 &&
     (await api(first.ownerPage, `/api/experience?businessId=${second.id}`)).status === 403);
+  // M11: amplify the #418 reproduction window on the exact failing route. The defect fires
+  // during a fresh load of the owner draft preview (storefront iframe hydration) at an
+  // intermittent per-load rate, so each journey samples the historically failing fixtures
+  // several times under CPU throttle (low-end-device emulation widens the load-time race
+  // window). Purely observational: no assertion is added here — the existing pageerror gate
+  // below is the detector. Load timeouts under throttle skip the sample and never fail the
+  // journey. Every attempt is recorded in results.json.
+  {
+    const sampleFixtures = created.filter((fixture) => ["retail", "food", "salon"].includes(fixture.category));
+    const cdp = await first.ownerPage.createCDPSession().catch(() => null);
+    for (const fixture of sampleFixtures) {
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4 };
+        try {
+          if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+          await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+          await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
+          entry.ok = true;
+        } catch (error) {
+          entry.ok = false;
+          entry.error = String(error).slice(0, 120);
+        } finally {
+          if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
+        }
+        hydrationVisits.push(entry);
+        console.log(`HYDRATION SAMPLE ${JSON.stringify(entry)}`);
+      }
+    }
+    if (cdp) await cdp.detach().catch(() => {});
+  }
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
   check("no external/provider/disallowed browser requests", denied.length === 0, JSON.stringify(denied));
   check("no uncaught browser runtime errors", errors.length === 0, JSON.stringify(errors));
