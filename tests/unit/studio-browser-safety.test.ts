@@ -80,5 +80,8 @@ describe("authenticated Studio browser fixture boundaries (test-only, not applic
     expect(script).toContain('prisma.$queryRaw`SELECT 1`');
     expect(script).toContain('prisma.business.deleteMany({ where: { id: fixture.id, ownerId: fixture.ownerId } })');
     expect(script).not.toMatch(/deleteMany\(\s*\{\s*\}\s*\)/);
+    expect(script).toContain('journeyComplete = true');
+    expect(script).toContain('"NOT RUN: fail-fast remainder"');
+    expect(script).toContain('process.exitCode = failed || !journeyComplete ? 1 : 0');
   });
 });

@@ -23,7 +23,7 @@ const require = createRequire(import.meta.url);
 const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [];
-let browser, server, stopped, origin, serverLog = "";
+let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
 function check(name, ok, detail = "") {
   results.push({ name, ok: Boolean(ok), detail });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -55,7 +55,8 @@ async function api(page, path, method = "GET", body) {
 }
 async function clickText(page, selector, text, exact = true) {
   const element = await page.waitForFunction((selector, text, exact) => [...document.querySelectorAll(selector)]
-    .find((item) => exact ? item.textContent.trim() === text : item.textContent.includes(text)), {}, selector, text, exact);
+    .find((item) => exact ? item.textContent.trim() === text : item.textContent.includes(text)), {}, selector, text, exact)
+    .catch(() => { throw new Error(`Control unavailable within timeout: ${text} (${selector})`); });
   const handle = element.asElement();
   if (!handle) throw new Error(`Control unavailable: ${text}`);
   await handle.click();
@@ -272,12 +273,21 @@ try {
     } else {
       await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.itemId}`, { waitUntil: "networkidle0" });
       const dateButtons = await visitor.$$("fieldset:first-of-type button");
+      const availableResponse = visitor.waitForResponse((response) => new URL(response.url()).pathname === "/api/storefront/booking" && response.request().method() === "GET");
       await dateButtons[1].click(); // tomorrow, not a hard-coded date or past-time workaround
+      const availability = await availableResponse.catch(() => { throw new Error("salon: no actual availability GET after date selection"); });
+      const offeredSlots = await availability.json();
+      check("salon: actual server offers configured future slot", availability.status() === 200 && offeredSlots.slots?.includes("11:00"), `status=${availability.status()}, slots=${JSON.stringify(offeredSlots.slots ?? [])}`);
       await clickText(visitor, "fieldset button", "11:00");
       await visitor.type("#bk-name", "QA synthetic customer"); await visitor.type("#bk-phone", "0700111222");
+      const ready = await visitor.evaluate(() => ({ selectedTime: [...document.querySelectorAll('fieldset button[aria-pressed="true"]')].some((button) => button.textContent.trim() === "11:00"), namePresent: document.querySelector("#bk-name")?.value?.length >= 2, phonePresent: document.querySelector("#bk-phone")?.value?.replace(/\D/g, "").length >= 9 }));
+      check("salon: booking UI has actual selected slot/customer fields", ready.selectedTime && ready.namePresent && ready.phonePresent, JSON.stringify(ready));
       const bookedResponse = visitor.waitForResponse((response) => new URL(response.url()).pathname === "/api/storefront/booking" && response.request().method() === "POST");
-      await clickText(visitor, "button", "Book now");
-      const bookingResponse = await bookedResponse;
+      await clickText(visitor, "main button", "Book now");
+      const bookingResponse = await bookedResponse.catch(async () => {
+        const alert = await visitor.$eval('[role="alert"]', (element) => element.textContent).catch(() => "no form alert");
+        throw new Error(`salon: no booking POST after submit; ${alert}`);
+      });
       check("salon: actual browser booking (zero deposit, no provider)", bookingResponse.status() === 201);
       const booking = (await bookingResponse.json()).booking;
       const stored = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
@@ -329,6 +339,7 @@ try {
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
   check("no external/provider/disallowed browser requests", denied.length === 0);
   check("no uncaught browser runtime errors", errors.length === 0);
+  journeyComplete = true;
 } catch (error) {
   if (!results.at(-1) || results.at(-1).ok) results.push({ name: "journey execution", ok: false, detail: String(error.message).slice(0, 250) });
   console.error(`FAIL authenticated journey: ${error.message}`);
@@ -345,8 +356,10 @@ try {
   await prisma.$disconnect();
   mkdirSync(".cache/verification/studio-authenticated", { recursive: true });
   writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures,
+    journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyComplete && results.every((item) => item.ok) ? "PASS" : "FAIL",
     providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true }, null, 2));
 }
 const failed = results.filter((item) => !item.ok).length;
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
-process.exitCode = failed ? 1 : 0;
+if (!journeyComplete) console.log("NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance.");
+process.exitCode = failed || !journeyComplete ? 1 : 0;
