@@ -108,13 +108,26 @@ export function probeInstallSource(options = {}) {
         }
       }
     });
-    // Observe the document node itself so capture starts at document-start, before <html> exists.
-    observer.observe(document, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["hidden", "data-motion-static", "data-motion-engine", "data-motion-reason", "data-render-mode"],
+    // Arm at readyState "interactive": the parser's own node insertions are the server HTML
+    // itself (captured as the snapshot outline instead), while every script-injected change
+    // from interactive onward — still strictly before hydration completes — is recorded. This
+    // also keeps the diagnostic's own cost out of the parse window so load timing stays
+    // materially unchanged.
+    var armed = false;
+    function arm() {
+      if (armed) return;
+      armed = true;
+      observer.observe(document, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["hidden", "data-motion-static", "data-motion-engine", "data-motion-reason", "data-render-mode"],
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("readystatechange", function () {
+      if (document.readyState !== "loading") arm();
     });
+    else arm();
     function outline(root) {
       if (!root) return "";
       var out = [], stack = [[root, 0]];
@@ -159,7 +172,7 @@ export function probeInstallSource(options = {}) {
       version: 1,
       records: function () { return records; },
       snapshot: function () { return snapshot; },
-      state: function () { return { seq: seq, size: records.length, frozen: frozen, max: MAX, frame: frameInfo() }; },
+      state: function () { return { seq: seq, size: records.length, frozen: frozen, max: MAX, armed: armed, frame: frameInfo() }; },
       tail: function (count) { return records.slice(-(count || 15)); },
       freeze: function (reason) { freezeSnapshot(reason || "manual"); },
     };

@@ -82,6 +82,15 @@ class FakeDocument {
   body: FakeElement | null = null;
   documentElement: FakeElement | null = null;
   querySelectorAll = (selectorList: string) => collectMatches(this, selectorList);
+  private listeners = new Map<string, Array<() => void>>();
+  addEventListener(type: string, fn: () => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  /** Advance readyState and notify readystatechange listeners (parser done → interactive). */
+  reach(state: "interactive" | "complete") {
+    this.readyState = state;
+    this.listeners.get("readystatechange")?.forEach((fn) => fn());
+  }
 }
 
 class FakeMutationObserver {
@@ -103,9 +112,10 @@ class FakeMutationObserver {
   }
 }
 
-function installProbe(options: { maxRecords?: number; snapshotTail?: number; outlineLimit?: number } = {}) {
+function installProbe(options: { maxRecords?: number; snapshotTail?: number; outlineLimit?: number; readyState?: "loading" | "interactive" | "complete" } = {}) {
   FakeMutationObserver.last = null;
   const document = new FakeDocument();
+  if (options.readyState) document.readyState = options.readyState;
   const listeners = new Map<string, Array<(event: unknown) => void>>();
   const window: Record<string, unknown> = {
     self: null,
@@ -144,11 +154,15 @@ const recordSeqs = (window: Record<string, unknown>) =>
 describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => {
   it("installs before hydration and preserves ordered mutation history", () => {
     const { document, window, observer } = installProbe();
-    // Installation must start observing the document node immediately — before <html> exists.
+    // Installed at document-start: nothing is observed yet while the parser is still building
+    // the server HTML (parse mutations are noise, not divergence).
+    expect(observer.observed).toBeNull();
+    // The arm point is interactive — before deferred scripts and hydration run.
+    document.reach("interactive");
     expect(observer.observed?.root).toBe(document);
     expect(observer.observed?.options).toMatchObject({ childList: true, subtree: true, attributes: true });
 
-    // Simulated hydration: nodes appear in document order after install.
+    // Simulated hydration: nodes appear in document order after the arm point.
     const html = new FakeElement("html");
     document.documentElement = html;
     const body = html.append(new FakeElement("body", { class: "min-h-screen" }));
@@ -166,7 +180,8 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
   });
 
   it("bounds the ring buffer while keeping sequence continuity", () => {
-    const { window, observer } = installProbe({ maxRecords: 5 });
+    const { document, window, observer } = installProbe({ maxRecords: 5 });
+    document.reach("interactive");
     const target = new FakeElement("div");
     for (let i = 0; i < 12; i += 1) observer.trigger([childList(target, [new FakeElement("span")])]);
     const state = (window[PROBE_PROPERTY] as { state: () => { seq: number; size: number; max: number } }).state();
@@ -177,7 +192,8 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
   });
 
   it("freezes a bounded snapshot on the first error and stops recording recovery churn", () => {
-    const { window, observer, listeners } = installProbe({ maxRecords: 50, snapshotTail: 4 });
+    const { document, window, observer, listeners } = installProbe({ maxRecords: 50, snapshotTail: 4 });
+    document.reach("interactive");
     const body = new FakeElement("body");
     for (let i = 0; i < 6; i += 1) observer.trigger([childList(body, [new FakeElement("div")])]);
     // Error fires (window error capture runs before the runner's pageerror read).
@@ -197,7 +213,8 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
   });
 
   it("records only the narrow attribute filter and never mutates the DOM", () => {
-    const { window, observer } = installProbe();
+    const { document, window, observer } = installProbe();
+    document.reach("interactive");
     const target = new FakeElement("div", { "data-motion-recipe": "hero" });
     observer.trigger([attr(target, "class")]); // noise — ignored
     observer.trigger([attr(target, "data-motion-static")]); // candidate-cause marker — kept
@@ -213,12 +230,19 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
   });
 
   it("does not fail when the frame/top boundary is inaccessible (cross-origin iframe)", () => {
-    const { window, observer } = installProbe();
+    const { document, window, observer } = installProbe();
+    document.reach("interactive");
     Object.defineProperty(window, "top", { get: () => { throw new Error("Blocked a frame with origin"); } });
     const target = new FakeElement("div");
     expect(() => observer.trigger([childList(target, [new FakeElement("span")])])).not.toThrow();
     const state = (window[PROBE_PROPERTY] as { state: () => { frame: string } }).state();
     expect(state.frame).toBe("cross-origin:/b/qa-fixture?preview=draft");
+  });
+
+  it("arms immediately when the document is already past parsing", () => {
+    const { document, observer } = installProbe({ readyState: "complete" });
+    // readyState complete at install → observe() happens synchronously.
+    expect(observer.observed?.root).toBe(document);
   });
 
   it("formatProbeDump compacts frozen and live frames and reports inaccessible ones", () => {
