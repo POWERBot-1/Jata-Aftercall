@@ -61,7 +61,9 @@ async function pageFor(context) {
             catalogueLayout: document.querySelectorAll("[data-catalogue-layout]").length,
             scripts: document.querySelectorAll("script").length,
           };
-          return { counts, html: (document.body ?? document.documentElement).outerHTML.slice(0, 8000) };
+          const clone = (document.body ?? document.documentElement).cloneNode(true);
+          clone.querySelectorAll("script, noscript").forEach((node) => node.remove());
+          return { counts, html: clone.outerHTML.replace(/\s+/g, " ").slice(0, 2500) };
         }).catch(() => null);
         if (dom) {
           record.framesDom = record.framesDom ?? [];
