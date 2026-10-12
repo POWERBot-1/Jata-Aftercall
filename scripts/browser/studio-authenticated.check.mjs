@@ -90,10 +90,31 @@ async function pageFor(context) {
         return { path, inaccessible: String(error).slice(0, 80) };
       }
     })).then((frameProbes) => {
+      // Emit short, separately survivable evidence lines (the PR comment keeps only the head
+      // and tail of long logs): one line per frame, one for the expected fiber, one per
+      // server document. The bulky raw dump goes to the record for results.json only.
       record.probe = formatProbeDump(frameProbes);
-      record.server = JSON.stringify([...serverDigests.entries()].slice(0, 4));
-      console.error(`HYDRATION PROBE ${record.probe}`);
-      console.error(`HYDRATION SERVER ${record.server}`);
+      record.server = JSON.stringify([...serverDigests.entries()].slice(0, 4)).slice(0, 1500);
+      for (const entry of frameProbes) {
+        const probe = entry && entry.probe;
+        const expected = probe && probe.m418last;
+        if (expected) console.error(`M418 EXPECTED ${JSON.stringify(expected)}`);
+        const snap = probe && probe.snapshot;
+        if (snap) {
+          console.error(`M418 FRAME ${String(snap.frame || entry.path).slice(0, 48)} ready=${snap.ready} parseDropped=${snap.parseDropped} counts=${JSON.stringify(snap.counts)}`);
+          console.error(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-12))}`.slice(0, 900));
+          console.error(`M418 OUTLINE ${String(snap.outline || "").slice(0, 700)}`);
+          if (snap.parseSamples) console.error(`M418 PARSE ${JSON.stringify(snap.parseSamples)}`.slice(0, 500));
+        } else if (probe) {
+          console.error(`M418 LIVE ${String(probe.state && probe.state.frame || entry.path).slice(0, 48)} seq=${probe.state && probe.state.seq} parseDropped=${probe.state && probe.state.parseDropped}`);
+          console.error(`M418 TAIL ${JSON.stringify((probe.tail || []).slice(-8))}`.slice(0, 700));
+        } else if (entry && entry.inaccessible) {
+          console.error(`M418 FRAME-INACCESSIBLE ${String(entry.path).slice(0, 48)} ${entry.inaccessible}`);
+        }
+      }
+      for (const [path, info] of [...serverDigests.entries()].slice(0, 4)) {
+        console.error(`M418 SERVER ${path} len=${info.len} ${String(info.digest).slice(0, 600)}`);
+      }
     });
   });
   return page;
