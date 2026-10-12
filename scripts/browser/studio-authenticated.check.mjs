@@ -213,8 +213,16 @@ try {
     const entitled = await api(ownerPage, `/api/experience?businessId=${fixture.id}`);
     check(`${category}: synthetic stored entitlement recognized`, entitled.body?.entitlement?.entitled === true && entitled.body?.validation?.ready === true);
     const published = await publishUI(ownerPage, fixture, 200);
-    check(`${category}: reviewed draft published and snapshotted`, published.published === true &&
-      (await snapshot(fixture.id)).publishedJson === edited.draftJson && await prisma.experienceVersion.count({ where: { businessId: fixture.id } }) === 1);
+    // The existing publication validator omits only the draft editing timestamp. Every content field must match.
+    const reviewedDocument = JSON.parse(edited.draftJson);
+    delete reviewedDocument.updatedAt;
+    const savedPublication = await snapshot(fixture.id);
+    const savedVersion = await prisma.experienceVersion.findUnique({ where: { businessId_version: { businessId: fixture.id, version: edited.draftVersion } } });
+    check(`${category}: exact reviewed content/version published and snapshotted`, published.published === true &&
+      savedPublication.publishedJson === JSON.stringify(reviewedDocument) && savedPublication.draftJson === edited.draftJson &&
+      savedPublication.publishedVersion === edited.draftVersion && savedPublication.draftVersion === edited.draftVersion &&
+      savedVersion?.snapshotJson === savedPublication.publishedJson && await prisma.experienceVersion.count({ where: { businessId: fixture.id } }) === 1,
+      `review=${edited.draftVersion}, published=${savedPublication.publishedVersion}, history=${savedVersion?.version ?? "missing"}`);
     await publicState(visitor, fixture, `QA first ${category} ${runId}`, true);
     const lite = await visitor.evaluate(() => ({ mode: document.querySelector(".eb-scope")?.getAttribute("data-render-mode"),
       lazy: performance.getEntriesByType("resource").some((entry) => /motion.*mini|three-product-viewer/.test(entry.name)) }));

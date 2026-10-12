@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createExperienceDocument, normalizeExperienceDocument, safeUrl } from "@/lib/experience/document";
 import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
+import { seedNewDocument } from "@/lib/experience/variant";
 
 const base = () => createExperienceDocument({ categoryKey: "food", businessName: "Mama Njeri Kitchen", phone: "0712345678" });
 const codes = (input: unknown) => validateExperienceDocument(input).issues.map((issue) => issue.code);
@@ -80,6 +81,19 @@ describe("supported safe experience schema", () => {
     if (restored.ok) expect(restored.document.sections.length).toBeGreaterThan(0);
     expect(validateExperienceJson(JSON.stringify({ categoryKey: "food", version: 2 }), "food", { migrateLegacyDefaults: true }).ok).toBe(false);
     expect(validateExperienceJson(JSON.stringify({ categoryKey: "food", sql: "bad" }), "food", { migrateLegacyDefaults: true }).ok).toBe(false);
+  });
+
+  it.each(["retail", "food", "salon"])("publishes every reviewed v2 %s content field identically, omitting only draft updatedAt", (categoryKey) => {
+    const seeded = seedNewDocument(createExperienceDocument({ categoryKey, businessName: "Owner facts", phone: "0712345678", location: "Nairobi" }), "QA-REVIEW-SEED").document;
+    const reviewed = normalizeExperienceDocument({ ...seeded, renderPreference: "lite", brand: { ...seeded.brand, description: "Reviewed wording", heroImageUrl: "/favicon.svg" } });
+    const draftJson = JSON.stringify({ ...reviewed, updatedAt: "2026-10-12T05:35:00.000Z" });
+    const result = validateExperienceJson(draftJson, categoryKey);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Reviewed fixture must validate");
+    // Full serialized equality covers structure, ordering, settings, media, contact and SEO, not just one label.
+    expect(JSON.stringify(result.document)).toBe(JSON.stringify(reviewed));
+    expect(result.document.updatedAt).toBeUndefined();
+    expect(JSON.parse(draftJson).updatedAt).toBe("2026-10-12T05:35:00.000Z");
   });
 
   it("does not invent coordinates from null/empty settings", () => {
