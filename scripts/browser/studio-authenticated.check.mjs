@@ -315,11 +315,12 @@ try {
     const lite = await visitor.evaluate(() => ({ mode: document.querySelector(".eb-scope")?.getAttribute("data-render-mode"),
       lazy: performance.getEntriesByType("resource").some((entry) => /motion.*mini|three-product-viewer/.test(entry.name)) }));
     check(`${category}: explicit Lite customer page has no Motion/Three download`, lite.mode === "lite" && !lite.lazy);
-    signatures.push(await visitor.evaluate(() => ({
-      hero: document.querySelector(".eb-hero")?.className, body: document.querySelector(".eb-family-body")?.getAttribute("data-composition"),
+    signatures.push({ category, signature: await visitor.evaluate(() => ({
+      hero: (document.querySelector(".eb-hero")?.className ?? "").split(" ").filter(Boolean).sort().join(" "),
+      body: document.querySelector(".eb-family-body")?.getAttribute("data-composition"),
       catalogue: document.querySelector("[data-catalogue-layout]")?.getAttribute("data-catalogue-layout"),
-      headings: [...document.querySelectorAll("main h2")].map((heading) => heading.textContent),
-    })));
+      recipe: document.querySelector("[data-business-recipe]")?.getAttribute("data-business-recipe"),
+    })) });
     const noJS = await pageFor(visitorContext);
     await noJS.setViewport({ width: 360, height: 740 }); await noJS.setJavaScriptEnabled(false);
     await noJS.goto(`${origin}/b/${fixture.slug}/item/${fixture.itemId}`, { waitUntil: "networkidle0" });
@@ -519,7 +520,14 @@ try {
     design: Boolean(document.querySelector('input[type="color"]')), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
   check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.design);
   await publicState(first.ownerPage, second, `QA unpublished ${second.category} ${runId}`, false, "?preview=draft");
-  check("representative business types have distinct rendered information architectures (not palette/family labels)", new Set(signatures.map((entry) => JSON.stringify(entry))).size === signatures.length, `distinct=${new Set(signatures.map((entry) => JSON.stringify(entry))).size}/${signatures.length}`);
+  const archGroups = new Map();
+  for (const entry of signatures) {
+    const key = JSON.stringify(entry.signature);
+    archGroups.set(key, [...(archGroups.get(key) ?? []), entry.category]);
+  }
+  check("representative business types have distinct rendered information architectures (not palette/family labels)",
+    archGroups.size === signatures.length,
+    `distinct=${archGroups.size}/${signatures.length}; groups=${JSON.stringify([...archGroups.values()])}`);
 
   // Expiry must refuse publication without destroying drafts/history. No production lifecycle job is invoked.
   await prisma.subscription.update({ where: { businessId: first.id }, data: { status: "EXPIRED", expiresAt: new Date(Date.now() - 86400000 * 5), graceUntil: new Date(Date.now() - 86400000) } });
