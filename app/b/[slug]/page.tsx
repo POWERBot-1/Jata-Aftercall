@@ -39,11 +39,27 @@ function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>
   };
 }
 
-async function viewerFromSession(): Promise<PublicViewer> {
+async function viewerFromSessionUncached(): Promise<PublicViewer> {
   const session = await getSession();
   if (!session) return null;
   return { userId: session.userId, role: session.role };
 }
+
+// M11 #418: shared per-request with generateMetadata and the body (lib/request-cache.ts).
+const viewerFromSession = requestCache(viewerFromSessionUncached);
+
+// M11 #418: the classic-fallback tail (referral mint + AI entitlement) is part of the same
+// per-request data load metadata awaits — no body-only await may lag the root segment.
+const classicPageExtras = requestCache(async (businessId: string) => {
+  const code = await ensureReferralCode(businessId);
+  let aiFrontDeskLive = false;
+  try {
+    aiFrontDeskLive = (await getAIPackageStatus(businessId)).entitled === true;
+  } catch {
+    aiFrontDeskLive = false;
+  }
+  return { code, aiFrontDeskLive };
+});
 
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
   if (!viewer) return false;
@@ -77,6 +93,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
+  // Share the classic-fallback tail with the body (M11 #418): one per-request load total.
+  if (decision === "public") await classicPageExtras(business.id);
 
   const title = `${business.name} | ${business.location || business.category}`;
   const description =
@@ -147,22 +165,14 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   const theme = resolveTheme(business.theme);
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
-  // suspended) page. The code is minted lazily on first eligible use.
+  // suspended) page. The code is minted lazily on first eligible use. Shared with
+  // generateMetadata through the request cache (M11 #418).
   let referralHref: string | null = null;
-  if (decision === "public") {
-    const code = await ensureReferralCode(business.id);
-    if (code) referralHref = referralPath(code);
-  }
-
-  // The "Ask AI Front Desk" entry is offered only when the paid AI package is live for this
-  // business — the AI page itself answers 404 otherwise. Same server-side check, fails closed.
   let aiFrontDeskLive = false;
   if (decision === "public") {
-    try {
-      aiFrontDeskLive = (await getAIPackageStatus(business.id)).entitled === true;
-    } catch {
-      aiFrontDeskLive = false;
-    }
+    const extras = await classicPageExtras(business.id);
+    if (extras.code) referralHref = referralPath(extras.code);
+    aiFrontDeskLive = extras.aiFrontDeskLive;
   }
 
   return (

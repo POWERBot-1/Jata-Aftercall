@@ -112,7 +112,7 @@ describe("M11 #418 metadata gate: generateMetadata shares the body's data load",
     ["app/b/[slug]/book/page.tsx", "loadStorefront"],
     ["app/b/[slug]/enquire/page.tsx", "loadStorefront"],
     ["app/b/[slug]/checkout/page.tsx", "loadStorefront"],
-    ["app/b/[slug]/ai/page.tsx", "getAIBusiness"],
+    ["app/b/[slug]/ai/page.tsx", "loadAIPageData"],
     ["app/dashboard/businesses/[id]/page.tsx", "loadWorkspace"],
     ["app/dashboard/businesses/[id]/preview/page.tsx", "loadWorkspace"],
   ];

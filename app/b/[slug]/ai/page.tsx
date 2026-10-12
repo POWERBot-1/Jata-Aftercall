@@ -35,13 +35,41 @@ const getAIBusiness = requestCache(async (slug: string) =>
     .catch(() => null),
 );
 
+// M11 #418: the full per-request chain (business → preview access / entitlement → brain)
+// shared by generateMetadata and the body, so no body-only await lags the SSR root segment
+// behind the head (see lib/request-cache.ts). Access policy stays in the body as
+// redirect()/notFound(); the loader only reports flags.
+const loadAIPageData = requestCache(async (slug: string, isPreviewRequested: boolean) => {
+  const business = await getAIBusiness(slug);
+  if (!business) return { business: null, user: null, allowed: false, entitled: false, brain: null, blocked: "missing" as const };
+  if (isPreviewRequested) {
+    const user = await getCurrentUser().catch(() => null);
+    if (!user) return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "login" as const };
+    const allowed = await canAccessBusiness(user.id, business.id, user.role);
+    if (!allowed) return { business, user, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
+    return { business, user, allowed: true, entitled: false, brain: await getBusinessBrain(business.id), blocked: null };
+  }
+  if (!business.isPublished) return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
+  const entitlement = await getAIPackageStatus(business.id).catch(() => null);
+  if (!entitlement || entitlement.entitled !== true) {
+    return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
+  }
+  return { business, user: null, allowed: true, entitled: true, brain: await getBusinessBrain(business.id), blocked: null };
+});
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ preview?: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const business = await getAIBusiness(slug);
+  const sp = searchParams ? await searchParams : undefined;
+  const isPreviewRequested = sp?.preview === "true" || sp?.preview === "1";
+  // M11 #418: shares the body's full data chain via the request cache.
+  const data = await loadAIPageData(slug, isPreviewRequested);
+  const business = data.business;
 
   if (!business) {
     return { title: "AI Business Front Desk — Not Found | JATA" };
@@ -62,36 +90,24 @@ export default async function PublicAIFrontDeskPage({
 }) {
   const { slug } = await params;
   const sp = searchParams ? await searchParams : undefined;
+  const isPreviewRequested = sp?.preview === "true" || sp?.preview === "1";
 
-  const business = await getAIBusiness(slug);
-
+  // M11 #418: one shared per-request load (also awaited by generateMetadata).
+  const data = await loadAIPageData(slug, isPreviewRequested);
+  const business = data.business;
   if (!business) {
     notFound();
   }
-
-  const isPreviewRequested = sp?.preview === "true" || sp?.preview === "1";
-  if (isPreviewRequested) {
-    const user = await getCurrentUser().catch(() => null);
-    if (!user) {
-      redirect(`/login?callbackUrl=/b/${business.slug}/ai?preview=true`);
-    }
-    const allowed = await canAccessBusiness(user.id, business.id, user.role);
-    if (!allowed) {
-      notFound();
-    }
-  } else if (!business.isPublished) {
-    notFound();
-  } else {
+  if (data.blocked === "login") {
+    redirect(`/login?callbackUrl=/b/${business.slug}/ai?preview=true`);
+  }
+  if (data.blocked === "forbidden") {
     // A live AI Front Desk is the KES 499 / 30-day package: an unpublished/unpaid business
     // never gets a customer-facing AI, even though the wider business page may be published
     // under a different package (§2, §3, §49). The check is server-side and fails closed.
-    const entitlement = await getAIPackageStatus(business.id).catch(() => null);
-    if (!entitlement || entitlement.entitled !== true) {
-      notFound();
-    }
+    notFound();
   }
-
-  const brain = await getBusinessBrain(business.id);
+  const brain = data.brain!;
   const share = getShareableAILink(business.slug);
   const qrSvg = generateAILinkQRCodeSvg(share.url, 180);
   const greeting =
