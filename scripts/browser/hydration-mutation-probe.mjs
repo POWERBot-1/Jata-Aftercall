@@ -40,7 +40,7 @@ export function probeInstallSource(options = {}) {
   try {
     if (window.${PROBE_PROPERTY}) return;
     var MAX = ${maxRecords}, SNAPSHOT_TAIL = ${snapshotTail}, OUTLINE_LIMIT = ${outlineLimit};
-    var seq = 0, frozen = false, snapshot = null, records = [];
+    var seq = 0, frozen = false, snapshot = null, records = [], parseDropped = 0, parseSamples = [];
     var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
     function now() {
       return Math.round(((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()) - t0);
@@ -126,8 +126,13 @@ export function probeInstallSource(options = {}) {
         if (m.type === "childList") {
           // Parser insertions of ordinary markup are the server HTML itself; keep only
           // post-parse changes and anything touching React/Fizz boundary markers or holders
-          // (the $RC/$RV deferred swap), which run even mid-parse.
-          if (document.readyState === "loading" && !involvesBoundary(m)) continue;
+          // (the $RC/$RV deferred swap), which run even mid-parse. Parse-phase drops are
+          // counted and sampled so the timeline can still prove hydration-vs-parse order.
+          if (document.readyState === "loading" && !involvesBoundary(m)) {
+            parseDropped += 1;
+            if (parseSamples.length < 5) parseSamples.push("parse+" + parseDropped + ":" + summarize(m.target) + "+" + listSummary(m.addedNodes));
+            continue;
+          }
           var hint = m.addedNodes && m.addedNodes.length ? zoneOf(m.addedNodes[0]) : (m.removedNodes && m.removedNodes.length ? zoneOf(m.removedNodes[0]) : "");
           push("childList", m.target, listSummary(m.addedNodes), listSummary(m.removedNodes), hint);
         } else if (m.type === "attributes") {
@@ -140,6 +145,9 @@ export function probeInstallSource(options = {}) {
           }
         }
       }
+    });
+    document.addEventListener("readystatechange", function () {
+      if (!frozen && document.readyState !== "loading") push("rs:" + document.readyState, document.documentElement || document, "", "", "");
     });
     // Always armed from document-start (the install runs before any document script): the
     // Fizz $RC/$RV boundary swap mutates the DOM even mid-parse and must be captured in full.
@@ -184,6 +192,8 @@ export function probeInstallSource(options = {}) {
           reason: String(reason).slice(0, 140),
           at: now(),
           ready: document.readyState,
+          parseDropped: parseDropped,
+          parseSamples: parseSamples,
           frame: frameInfo(),
           counts: counts,
           outline: outline(document.body || document.documentElement),
@@ -201,7 +211,7 @@ export function probeInstallSource(options = {}) {
       version: 1,
       records: function () { return records; },
       snapshot: function () { return snapshot; },
-      state: function () { return { seq: seq, size: records.length, frozen: frozen, max: MAX, armed: armed, frame: frameInfo() }; },
+      state: function () { return { seq: seq, size: records.length, frozen: frozen, max: MAX, armed: armed, parseDropped: parseDropped, parseSamples: parseSamples, frame: frameInfo() }; },
       tail: function (count) { return records.slice(-(count || 15)); },
       freeze: function (reason) { freezeSnapshot(reason || "manual"); },
     };

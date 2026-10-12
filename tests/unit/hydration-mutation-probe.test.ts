@@ -173,10 +173,11 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     observer.trigger([childList(scope, [catalogue])]);
 
     const records = (window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records();
-    expect(records.map((r) => r[0])).toEqual([0, 1, 2]); // monotonic, insertion order
-    expect(records[0][2]).toBe("childList");
-    expect(records[1][3]).toBe("body.min-h-screen");
-    expect(records[2][6]).toBe("catalogue"); // zone classified from stable markers
+    expect(records.map((r) => r[0])).toEqual([0, 1, 2, 3]); // monotonic, insertion order
+    expect(records[0][2]).toBe("rs:interactive"); // readyState timeline marker
+    expect(records[1][2]).toBe("childList");
+    expect(records[2][3]).toBe("body.min-h-screen");
+    expect(records[3][6]).toBe("catalogue"); // zone classified from stable markers
   });
 
   it("bounds the ring buffer while keeping sequence continuity", () => {
@@ -187,8 +188,8 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     const state = (window[PROBE_PROPERTY] as { state: () => { seq: number; size: number; max: number } }).state();
     expect(state.size).toBe(5);
     expect(state.max).toBe(5);
-    expect(state.seq).toBe(12);
-    expect(recordSeqs(window)).toEqual([7, 8, 9, 10, 11]); // oldest dropped, no reuse
+    expect(state.seq).toBe(13); // 1 readyState marker + 12 mutations
+    expect(recordSeqs(window)).toEqual([8, 9, 10, 11, 12]); // oldest dropped, no reuse
   });
 
   it("freezes a bounded snapshot on the first error and stops recording recovery churn", () => {
@@ -209,7 +210,7 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     // React recovery mutations after the error must not overwrite history.
     observer.trigger([childList(body, [new FakeElement("div")])]);
     expect(probe.state().frozen).toBe(true);
-    expect(probe.state().size).toBe(6);
+    expect(probe.state().size).toBe(7); // 1 readyState marker + 6 mutations
   });
 
   it("records only the narrow attribute filter and never mutates the DOM", () => {
@@ -220,9 +221,9 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     observer.trigger([attr(target, "data-motion-static")]); // candidate-cause marker — kept
     observer.trigger([attr(target, "hidden")]);
     const records = (window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records();
-    expect(records).toHaveLength(2);
-    expect(records[0][2]).toBe("attr:data-motion-static");
-    expect(records[1][2]).toBe("attr:hidden");
+    expect(records).toHaveLength(3); // readyState marker + the two kept attribute changes
+    expect(records[1][2]).toBe("attr:data-motion-static");
+    expect(records[2][2]).toBe("attr:hidden");
     // The observer callback only reads: the target node is unchanged.
     expect(target.getAttribute("class")).toBe(null);
     expect(target.getAttribute("data-motion-static")).toBe(null);
@@ -250,10 +251,13 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     expect(afterParse).toHaveLength(2);
     expect(afterParse[0][4]).toContain("div#S:1");
     expect(afterParse[1][4]).toContain("template#B:1");
-    // Post-parse everything is recorded.
+    const probe = window[PROBE_PROPERTY] as { state: () => { parseDropped: number; parseSamples: string[] } };
+    expect(probe.state().parseDropped).toBe(1); // the ordinary insertion was counted, not recorded
+    expect(probe.state().parseSamples[0]).toContain("div.jata-page");
+    // Post-parse everything is recorded (plus the readyState timeline marker).
     document.reach("interactive");
     observer.trigger([childList(document, [new FakeElement("div")])]);
-    expect((window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records()).toHaveLength(3);
+    expect((window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records()).toHaveLength(4);
   });
 
   it("records comment-marker flips ($? to $~) and ignores text characterData", () => {
@@ -265,8 +269,8 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     const text = new FakeText("hello");
     observer.trigger([{ type: "characterData", target: text, oldValue: "hell" }]);
     const records = (window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records();
-    expect(records).toHaveLength(1); // text changes are page noise
-    expect(String(records[0][2])).toBe("cdata:$?>$~");
+    expect(records).toHaveLength(2); // readyState marker + the comment flip (text changes are noise)
+    expect(String(records[1][2])).toBe("cdata:$?>$~");
   });
 
   it("formatProbeDump compacts frozen and live frames and reports inaccessible ones", () => {
