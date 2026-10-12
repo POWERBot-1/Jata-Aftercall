@@ -1,6 +1,6 @@
 # Website Studio — release plan
 
-Updated: 2026-10-11 UTC. **Long-term vision NOT COMPLETE; production NOT DEPLOYED.**
+Updated: 2026-10-12 (resume). **Long-term vision NOT COMPLETE; production NOT DEPLOYED.**
 
 The full original requirement source is [WEBSITE_STUDIO_MASTER_SPECIFICATION.md](WEBSITE_STUDIO_MASTER_SPECIFICATION.md), including every numbered section 0–107 and the execution directive. The section register below is a delivery tracker, NOT a replacement for that specification. Later phases remain mandatory. A name, interface, schema or feature flag is not evidence of implementation.
 
@@ -283,3 +283,14 @@ Independent local-only hardening now includes SOURCE-vs-derivative byte limits, 
 
 
 M6 fresh-native update: **e9b1a1938c247eb54eb7cfd30fd8d47afc7c7be7**, remote equality verified, [38168162520](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38168162520) PASS;164 files1952 PASS +1 inherited expected failure,0 skipped; experience17/POS22 and358 actual browser/HTTP checks PASS. Native migrations/seed/connected build/gates PASS. Original/provider acceptance remains **BLOCKED by explicit owner DEFERRED decision**, physical Android NOT RUN; no provider/storage/new upload/spend activation. Later stages/recipes/scene/compression/WebGPU/measured adaptation/analytics/fullA–X are not waived. Follow-up documentation delivery SHA/current checks recorded on PR/handoff. No merge/production deployment/data change authorized.
+
+
+## M7 resume audit / authenticated acceptance dependency
+
+Current remote checkpoint at read-only audit **c3bf39f51a873e56c707637c14d5f6353e532b06**, freshCI38170669015 SUCCESS; native1952 PASS +1 expected failure, Website17/POS22,358 browser/HTTP, no journey skips. f7bd361 is documentation; latest application source e9b1a19. Restored working content matched all687 remote files exactly; local ref/index advanced to verified history without working-file loss after audit reporting. PR41 OPEN/DRAFT, no merge/production approval.
+
+The explicit resume overrides the historical safe-pause STOP, not storage/provider/release controls. [WEBSITE_STUDIO_BROWSER_ACCEPTANCE.md](WEBSITE_STUDIO_BROWSER_ACCEPTANCE.md) records all remaining stages/dependencies/acceptance gaps and all A–X gates. Existing route-handler E2Es use mocked sessions; native green is not a cookie/browser/full journey certification. Subscription FAILED-payment retry expected failure is investigated and preserved, not silently authorized/resolved.
+
+Selected next dependency-safe milestone: actual cookie-authenticated production-mode Next HTTP/browser/native-DB test gate (retail/food/salon), real edit/preview/publish/customer/cart/quote/zero-deposit booking/tenant/history/login flows, synthetic entitlement explicitly NOT provider evidence.54 runner-boundary tests PASS; local full1947 PASS/108 DB-e2e SKIP; lint/types/offline build/schema and358 existing actual browser/HTTP checks PASS. New native authenticated gate BLOCKED locally; fresh source-head CI still required before passing claims. Concrete authorized draft-metadata/noindex and failed-loader classic fallback fixed with8 unit cases; no auth/payment/tenant permission or dependency/schema/migration changes.
+
+Exact required fixture/write/network/native/prerequisite boundaries and evidence qualification are in the acceptance document. Missing native/Chrome/build configuration is BLOCKED/NOT RUN and fails the required CI gate, not an accepted green skip. Storage remains DEFERRED, durable originals/provider gates BLOCKED; no new real upload/call/provision/spend or original-inline substitute. Once actual M7 CI passes, next small implementation is the reusable registered business-recipe slice with this browser gate as regression. All recipe/AI/platform diversity/full scenes/compression/WebGPU/measured adaptation/analytics/optimization/physical-device/complete Section80/A–X acceptance, security/advisory/runner/inherited diff and payment-policy authorization obligations remain mandatory. **ENGINE INCOMPLETE; NOT MERGED; production NOT DEPLOYED.**

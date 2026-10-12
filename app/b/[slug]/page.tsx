@@ -48,7 +48,7 @@ function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusi
   return (business.members || []).some((member) => member.userId === viewer.userId);
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusiness(slug);
   if (!business) return { title: "Page not found", robots: { index: false, follow: false } };
@@ -58,8 +58,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Page not found", robots: { index: false, follow: false } };
   }
 
-  // Interactive Business websites own their metadata (§33).
-  const experience = await loadStorefront(slug, { allowDraft: canPreviewDraft(business, viewer) });
+  // Metadata must select the same authorized draft as the page, including after publication.
+  // A public/foreign preview query cannot select draft SEO or alter live indexing.
+  const draftAllowed = canPreviewDraft(business, viewer);
+  const preferDraft = draftAllowed && (await searchParams)?.preview === "draft";
+  // Interactive Business websites own their metadata (§33). Keep the same classic fallback
+  // as the renderer when experience loading fails; metadata must not blank an otherwise usable page.
+  let experience = null;
+  try {
+    experience = await loadStorefront(slug, { allowDraft: draftAllowed, preferDraft });
+  } catch {
+    experience = null;
+  }
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
@@ -81,7 +91,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
     alternates: { canonical: `/b/${business.slug}` },
-    robots: decision === "preview" ? { index: false, follow: false } : undefined,
+    robots: decision === "preview" || preferDraft ? { index: false, follow: false } : undefined,
   };
 }
 

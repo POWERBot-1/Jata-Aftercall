@@ -1,0 +1,95 @@
+# Website Studio — authenticated browser acceptance and resume audit
+
+Updated 2026-10-12. **ENGINE INCOMPLETE.** This is a scoped acceptance register, not a replacement for the unchanged 108-block master specification or A–X gates.
+
+## Read-only resume audit (reported before edits)
+
+- Repository POWERBot-1/Jata-Aftercall; branch `arena/7b28a123-jata-aftercall`; remote/PR head **`c3bf39f51a873e56c707637c14d5f6353e532b06`**, OPEN/DRAFT PR41. No newer remote feature commit at audit.
+- Restored local metadata initially pointed to baseline `77e35cec6a5726f569ab3febd3e7766300b14890`, with later tracked/untracked files appearing as changes. Direct SHA-1 Git-blob comparison of **all 687 remote files** found **zero differences/missing/extra visible files** against c3bf39f. After reporting the audit, fetched actual remote history, verified ancestry and advanced only the existing branch ref/index to c3bf39f. No working-file replacement, deletion, reset, stash, branch switch or user work loss.
+- `f7bd361da2bbf868ef6dac6940ba1bb4879404fd` is a documentation checkpoint, not a new application implementation. Latest application implementation is M6 **`e9b1a1938c247eb54eb7cfd30fd8d47afc7c7be7`**. c3bf39f adds only the safe-pause report.
+- Latest audit-time [CI38170669015](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38170669015) SUCCESS; feature c3bf39f, runner **`bdd344da234be57629604187cc9a3dc773d19742`**, completed2026-10-11T20:09:46Z. Actual [comment6113217586](https://github.com/POWERBot-1/Jata-Aftercall/pull/41#issuecomment-6113217586): native **1952 PASS +1 expected failure /1953**, Website **17/17**, POS **22/22**, browser/HTTP **358 PASS**, no CI journey skips. [f7bd361 run38168849078](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/38168849078) independently confirms the same totals. Automatic Vercel **branch preview** SUCCESS, not production deployment.
+- Release plan/report, all PR issue discussion (15 comments), PR body/review metadata and original Section80/A–X reviewed. Older M5 totals in the top PR body are historical; later M6 and c3bf39f summaries are authoritative for those commits. There is no current five-case Website/POS failure; the five/eight older failures and old conditional POS non-execution remain historical.
+- Subscription gap is real: `tests/prisma/subscription-payment.test.ts:87` remains `it.fails`. `charge.failed` changes PENDING→FAILED; `activateSubscriptionForPayment` rejects FAILED (`PAYMENT_NOT_PENDING`), with transactional PENDING-only update; webhook catches this as503. Subscription verify returns stored FAILED before provider verification. Characterizations and the expected failure are not resolution. Terminal/retry/refund/idempotency policy requires separate authorization; no change in this milestone.
+
+## Remaining mandatory stages and dependency-safe order
+
+| Stage | Existing verified subset | Remaining acceptance | Dependencies / evidence gap |
+|---|---|---|---|
+|1 Foundation/Lite|Safe v1/v2, CAS/history/publication/tenant boundaries; classic/Lite fallback|Authenticated cookie/browser isolation, complete edit/preview/rollback/archive lifecycle, asset ownership and measured publication budgets|M7 addresses only the browser slice below; durable asset proof needs approved storage, all lifecycle cases still mandatory|
+|2 Motion/recipes|Actual lazy Motion14.1.0; four finite primitives/live constraints;124 fixture browser checks|Complete reusable category-specific hero/product/content/service/gallery/location/commerce recipes, accessible touch/keyboard interactions, sliders/parallax/storytelling/choreography, full failures/budgets|Build on safe schema/renderer/owner approval; no duplicate GSAP without distinct reviewed need and payload proof; actual device evidence open|
+|3 AI/diversity|20 real Lite geometries; deterministic semantic direction and owned-history gate|Grounded richer content/design reasoning, creative/brand controls, privacy-safe platform diversity, real quality/uniqueness tests|Independent registered recipe/content work possible; actual external AI quality needs authorized configured calls. Palette/name shuffle is not diversity|
+|4 Image Studio|Local source/container/MIME/EXIF1–8/alpha/cancel preparation and29 pixel checks|Durable originals/separate derivatives/provenance/CDN, actual provider enhancement/consistency/role assignment, physical Android/HEIC/memory|Storage approval DEFERRED; provider-dependent acceptance BLOCKED. No new originals inline in Neon. Physical devices unavailable, not replaced by emulation|
+|5 Immersive|Bounded embedded/static GLB safety and optional dev-only viewer/manual controls/fallback22|Authorable commerce-bound scenes/SKU assets/worlds/editor, compression/textures/animation, supported and justified WebGPU path, public progressive enhancement|Configuration/editor safeguards can be independent; production ingestion/tenant assets/public activation depend on approved durable storage; real GPU/device/network measurements open|
+|6 Commerce/ASK JATA/POS|Real-DB handler Website17/POS22; payment/signature/amount/tenant tests|Actual authenticated browser owner/customer journeys across types, immersive→product/ASK JATA/order/booking/provider payment/POS; authorized retry policy|M7 proves a provider-free owner/customer slice only. No provider settlement, complete ASK JATA/POS browser or live-charge evidence|
+|7 Adaptation/analytics|Finite lazy fallbacks, bundle entry measures, existing analytics|Measured runtime/mobile adaptation, privacy-safe performance events/history, publication/optimization/quality budgets and real CWV/device/network evidence|Build on stable recipe/render/customer baseline, use measured feedback, not UA names/hardware-only scores. Physical low/mid/modern Android and network conditions NOT RUN|
+
+Cross-cutting: all original acceptance remains mandatory;19 historically reported advisories and Actions/runner drift need current triage; intended/inherited diff review and explicit merge/production authorization still required. No infrastructure/database replacement or paid service activation.
+
+## Why M7 is next
+
+Existing E2E files call handlers with mocked `getSession`/`next/headers`; customer payment uses non-production test settlement. They never navigate an authenticated Next browser, verify an actual HttpOnly cookie, load the dashboard/preview iframe, or operate the design/publish/booking UI. A green handler suite cannot close this gap. Proving the existing foundation through real HTTP/browser/native DB is independent of storage and a prerequisite for safely expanding category recipes.
+
+## M7 gate — functional scope
+
+`npm run test:browser:studio-authenticated` starts a temporary **production-mode Next HTTP server**, not a deployment. It uses actual register/login routes and server-issued cookies, actual APIs/UI and native Prisma against the disposable workflow database. No auth mocks, session-token signing/setCookie shortcuts, application QA endpoint or production payment bypass is introduced. The audit also reproduced/fixed home metadata selecting live SEO for an authorized published draft and throwing on experience-load failure: it now matches the existing renderer permission/draft preference and classic/noindex fallback, with8 focused unit cases; no permission/payment policy changes.
+
+Representative **retail, restaurant/food and salon** flows:
+
+1. Actual HTTP registration; HttpOnly/Secure/SameSite cookie and JS invisibility; anonymous refusal.
+2. Owned profile and catalogue writes through HTTP; safe structured v2 draft generation, registered composition, actual source IDs/prices.
+3. Local existing decorative SVG URL only; **no media upload API, original binary, storage/provider operation**. All fixtures explicitly QA/synthetic.
+4. Unpaid publish UI403/PAYMENT with no publication; real design UI edit/onBlur save and monotonic persisted revision; stale CAS409 with unchanged data.
+5. Actual same-origin authenticated draft iframe at390/1280px width caps (actual responsive iframe viewport checked), noindex/readable/non-overflow, preview isolation; anonymous/foreign `?preview=draft` cannot see draft.
+6. **Synthetic database entitlement fixture**, explicitly `providerVerified:false`, to exercise the server paid/entitlement/publish gate. NOT Paystack verification/settlement evidence. Reviewed UI publication, immutable version, actual live customer page, explicit Lite/no Motion/Three request and mobile no-JS catalogue/contact HTML.
+7. Post-publication draft changes remain invisible to customers; published-version restore only changes draft/monotonic revision, never live.
+8. Retail/food: actual mobile cart visibility and checkout navigation; real HTTP quote ignores forged client prices. **No order/payment initialization**, blocked by request allowlist; payment/provider acceptance NOT RUN.
+9. Salon: actual browser slot selection, zero-deposit booking, persisted tenant/service/unpaid data, owner booking board via authenticated HTTP. No deposit/provider payment.
+10. Cross-tenant read/edit/publish/history/booking refusal and unchanged foreign state; foreign dashboard not-found/noindex/no design leak; materially distinct rendered information architectures without palette/family-name scoring.
+11. Expired entitlement refuses publication while preserving content; logout removes cookie/access, actual password-login UI restores only owned access; exact-ID cleanup; uncaught browser errors or prohibited requests fail the gate.
+
+### Fail-closed test boundaries
+
+- Requires `STUDIO_BROWSER_TEST_WRITE=1`, BOTH database URLs equal, exact loopback `jata:jata` PostgreSQL5432 `/jata_e2e` with only optional `schema=public`, known workflow auth secret, native client and production BUILD_ID/Chrome.
+- Refuses remote/production/alternate databases, provider/storage credentials/configuration, `.env*` files (except non-loaded `.env.example`), native downloader/engine-less overrides. The harness chooses its own local origin/port; no caller-supplied deployment URL.
+- Browser allows only that origin and explicit auth/editor/catalogue/quote/zero-deposit booking/analytics API methods. Media/image providers/checkout initialization/payment verification/admin mutations/external requests refused and counted as failures. No intercepted provider response presented as genuine acceptance.
+- Tests do not alter application auth/payment/tenant policy. Direct Prisma writes are only labelled isolated entitlement fixtures and expiry; cleanup uses exact run-created IDs, never global/prefix deletion. Server/browser always stop; cleanup failure fails the gate.
+- Missing prerequisites exit2 **BLOCKED/NOT RUN**, not a passing/skipped browser suite; CI treats that as a failed required gate.54 unit tests cover unsafe targets/credentials/loaded files/request methods and test-only/no-session-bypass boundaries.
+
+## A–X acceptance register (no gate waived)
+
+These are audit assessments, NOT final certification. M7 fresh CI evidence is recorded in the release report after its source push.
+
+| Gate | Current evidence and remaining gap |
+|---|---|
+|A Existing functionality|1952 native passes +known expected failure; Website17/POS22 at c3bf39f. All products/full authenticated/device regressions still required|
+|B Structured experience|v1/v2/schema/API/20 Lite families verified; M7 tests real HTTP generation. Full recipe/business-type generation open|
+|C AI design direction|Deterministic semantic policy/artDirection and safe provider boundaries; richer contextual AI and actual provider quality open|
+|D AI appropriate composition|Content/intent-led20 families tested; full contextual AI and end-to-end semantic quality not certified|
+|E Material diversity|20 actual fixture geometries; own-history gate, M7 representative information architecture check. Platform-wide privacy-safe diversity and real customer variety open|
+|F Regeneration|Native API/editor preview/reviewed apply/history tested; richer controls and full authenticated regeneration UI cases remain|
+|G Lite|SSR/family/motion guards tested; M7 actual business customer/no-JS slice. Complete device/commerce acceptance open|
+|H Motion|124 real fixture checks/scoped lifecycle. Full recipe/choreography +actual authenticated Motion owner/device journey remains|
+|I Immersive supported|Dev-only GLB22, public gateOFF. Production asset/public scenes/support/measured capability BLOCKED/open|
+|J Immersive fallback|22 fixture context-loss/unsafe/preference tests; production and physical-device/world fallback still required|
+|K Android photo upload|Local29 real codec pixels +mock legacy flow; physical phones and durable-original end-to-end NOT RUN/BLOCKED|
+|L Image provider works|Abstraction/local representative artwork is not professional/product-consistent provider proof; actual configured calls BLOCKED|
+|M Assign generated image roles|Existing owner asset/edit controls; actual provider→accept/reject→assign durable tenant asset journey BLOCKED|
+|N Tenant real products|Native catalogue/price tests; M7 actual HTTP/browser/native IDs/prices. Full immersive SKU references/cross-asset proof open|
+|O ASK JATA grounding|Existing tenant retrieval/entitlement tests; full actual data/authenticated browser and provider-assisted path not certified|
+|P Commercial actions|Existing routes/contact links/order/booking tests; M7 actual cart/quote/zero-deposit booking and contact URLs. Live external intent/provider order/world journey open|
+|Q Payment authority|Existing HMAC/reference/amount/currency/status/idempotency tests; expected FAILED-subscription retry gap unresolved. M7 synthetic entitlement is NOT payment proof|
+|R POS intact|22 native handler cases +other POS suites; complete real browser/immersive/POS/provider journey open|
+|S Paid publication|Native refusal/CAS/expiry tests; M7 actual cookie/UI/foreign/unpaid/expired slice. Full plan/provider publication lifecycle still required|
+|T No giant mandatory download|Lazymini4876 B absent initially; measured entry sums only, real total payload/public asset/device budgets open|
+|U Neon not binary store|Legacy inline derivatives remain. Owner DEFERRED object/CDN approval; immutable originals/separate derivatives BLOCKED. No inline-original substitute allowed|
+|V Absolute isolation|Native/mock tenant/config/history/AI/POS tests; M7 real cookie/browser tenant slice. Asset/provider/public3D/complete all-role evidence open|
+|W Low-end Android usability|360px touch/no-JS/emulated browser checks only. Physical representative low/mid/modern phones, slow/average/fast networks, memory/CWV NOT RUN|
+|X Tested/pushed|Verified milestone SHAs/CI recorded; new M7 fresh checks required. Engine-wide mandatory acceptance and intended/inherited diff review not complete|
+
+## Verification / reproduction / exact next action
+
+CI `.github/workflows/interactive-business-e2e.yml` runs the required authenticated production browser gate after native migrations/seed/suites/connected build/isolation and before development fixture browsers. Success comments record actual counts and feature/runner SHAs; failure comments preserve its output. No workflow/fixture missing-dependency skip is accepted as green.
+
+Local lint/types/full unit/mocked suites/schema validation/offline production build and existing browser regressions are separate evidence. Local native/authenticated DB journey is BLOCKED in this sandbox (no configured native database; restricted engine-download host). Do not set a production URL or bypass the boundary to manufacture local results. CI uses only the existing disposable Postgres service, never Neon/Vercel deployment secrets.
+
+Exact next action: obtain and investigate M7's actual source-head CI (do not infer from c3bf39f); record SHA/results in release report. After it passes, implement the next small registered **category-specific recipe** slice through existing versioned schema/renderer/editor, starting restaurant/menu +salon/service +retail/catalogue reusable interactions, with failure/reduced-motion/touch/no-JS/tenant/price tests and this authenticated gate as regression. Do not conflate the M7 test gate with delivery of those missing recipes or all of Section80. Physical Android/provider/complete payment/ASK JATA/POS/immersive journey gates remain open. Storage stays DEFERRED; no merge/production deploy/data changes authorized.

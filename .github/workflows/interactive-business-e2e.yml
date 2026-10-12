@@ -147,6 +147,14 @@ jobs:
           npm run test:smoke:studio 2>&1 | tee /tmp/step-studio-smoke.log
           npm run measure:studio-bundles 2>&1 | tee /tmp/step-studio-bundles.log
 
+      # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
+      # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
+      - name: Authenticated production HTTP browser journey
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated 2>&1 | tee /tmp/step-authenticated-browser.log
+
       - name: Actual storefront Motion and immersive browser regressions
         run: |
           set -o pipefail
@@ -183,6 +191,7 @@ jobs:
               ['Experience journey', '/tmp/step-journey.log'],
               ['Business POS journey', '/tmp/step-pos-journey.log'],
               ['Production HTTP isolation smoke', '/tmp/step-studio-smoke.log'],
+              ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
@@ -191,7 +200,7 @@ jobs:
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
             const bundles = fs.readFileSync('/tmp/step-studio-bundles.log', 'utf8').slice(-2500);
             const head = context.payload.pull_request.head.sha;
-            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
+            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Authenticated browser uses real Next HTTP/JWT cookies and disposable DB; paid entitlement is a synthetic fixture, not provider verification. Other browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.pull_request.number, body });
 
       # Failing output is posted to the pull request so a broken journey can be triaged
@@ -215,6 +224,7 @@ jobs:
             };
             const body = [
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
+              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 8000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
               ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
