@@ -6,7 +6,7 @@ import { loadStorefront } from "@/lib/experience/storefront";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { CatalogueClient } from "@/components/storefront/CatalogueClient";
-import { priceBandsFor } from "@/lib/experience/catalogue";
+import { priceBandsFor, itemCardDataFor } from "@/lib/experience/catalogue";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,7 @@ export default async function ShopPage({ params, searchParams }: Props) {
           </header>
           <CatalogueClient
             items={catalogue}
-            data={{ business: { slug }, profile: data.profile }}
+            data={itemCardDataFor(data)}
             businessId={data.business.id}
             initialCategory={category}
             filters={{

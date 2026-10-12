@@ -7,7 +7,9 @@ const items = (prices: (number | null)[]) => prices.map((price, index) => ({ id:
 describe("catalogue server boundary", () => {
   it("computes server price bands outside the use-client component boundary", () => {
     const page = readFileSync("app/b/[slug]/shop/page.tsx", "utf8");
-    expect(page).toContain('import { priceBandsFor } from "@/lib/experience/catalogue"');
+    expect(page).toContain('from "@/lib/experience/catalogue"');
+    expect(page).toContain('data={itemCardDataFor(data)}');
+    expect(readFileSync('components/storefront/CatalogueClient.tsx', 'utf8')).not.toContain('data as never');
     expect(page).not.toMatch(/import\s*\{[^}]*priceBandsFor[^}]*\}\s*from\s*["']@\/components/);
   });
   it("does not invent price bands for sparse/equal/unpriced catalogues", () => {

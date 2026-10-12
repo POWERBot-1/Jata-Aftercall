@@ -9,6 +9,7 @@
  */
 
 import { useMemo, useState } from "react";
+import type { ItemCardData } from "@/lib/experience/catalogue";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { ItemCard } from "./ItemCard";
 import { trackEvent } from "./Track";
@@ -30,7 +31,7 @@ export function CatalogueClient({
   businessId,
 }: {
   items: StorefrontItem[];
-  data: { business: { slug: string }; profile: { capabilities: string[]; cta: { cart: string } } };
+  data: ItemCardData;
   filters: CatalogueFilters;
   initialCategory?: string;
   businessId: string;
@@ -140,7 +141,7 @@ export function CatalogueClient({
       ) : (
         <div className="eb-grid eb-grid--auto">
           {visible.map((item) => (
-            <ItemCard key={item.id} item={item} data={data as never} />
+            <ItemCard key={item.id} item={item} data={data} />
           ))}
         </div>
       )}
