@@ -159,7 +159,7 @@ The first fix commit (`caaf8ca`) was **not** sufficient: confirmation run 383118
 
 Amendment (this commit): every await on the render path is now inside one request-cached chain that `generateMetadata` also awaits — `getSession`/`getCurrentUser` cached at `lib/auth.ts`, `viewerFromSession` + `classicPageExtras` shared in `app/b/[slug]/page.tsx`, full `loadAIPageData` chain in `app/b/[slug]/ai/page.tsx`. Shop/item/book/enquire/checkout were already fully shared. With zero body-only awaits, the root segment completes in the same microtask window as the metadata; the head close and the root segment flush together; the bootstrap scripts are always emitted after the content. The failure of `caaf8ca` is itself evidence for the mechanism (inversion recurred exactly when a body-only await remained) and is preserved as the regression contrast for the emission-order gate.
 
-## Final status — hydration #418 RESOLVED (2026-10-12)
+## Final status — hydration #418 RESOLVED (2026-10-12) — REVERTED, see addendum below
 
 Closure rule (root cause demonstrated + regression + green final CI) is satisfied:
 
@@ -169,3 +169,18 @@ Closure rule (root cause demonstrated + regression + green final CI) is satisfie
 - **Natural contrast preserved:** confirmation run 38311897136 reproduced the inverted order against the *incomplete* first fix (`caaf8ca`) — evidence that the gate is sensitive and that the defect class needed complete load sharing, not just the main data load.
 
 A green run alone never proved a fix (reproductions: 38233198609, 38255056118, 38256987188, 38258619645, 38261060443, 38282359166, 38288247709, 38292874075, 38311897136). Any future `SSR body order` gate failure or #418 pageerror reopens this investigation with the probe and the throw patch.
+
+### Addendum — the RESOLVED verdict is reverted (run 38316983075); trigger still unpinned
+
+Run 38316983075 (docs-only commits on top of the completed sharing `2f469ad`) reproduced #418 again in the retail storefront iframe: `M418 EXPECTED {"ft":5,"ty":"div","pt":"DIV","pi":"","pk":[]}`, `ready=loading`, body outline `script#_R_| script×18| div| div.business-route-root`. The complete request-scoped sharing therefore does **not** close the emission race (the two preceding greens 38314097669/38315600425 were sampling luck at the historical rate). The sharing is retained as correct request hygiene but is not the fix.
+
+Local emission experiments (throwaway probe route, deleted; `next build && next start`, raw `_R_`-vs-content byte positions over ~100 sampled responses) could not produce the inverted order under: async delays 0–100 ms, `cookies()`, `generateMetadata` with its own await, 2k–120k-node client SSR trees, 50–200 KB props, 12-way request concurrency, and 6-core CPU starvation. Whatever interleaves the first flush ahead of the root segment in CI is not any of those ingredients alone. The failing shape is consistent with the Fizz pending-tasks/`completedBoundaries` block (`$RT` inline + `id="_R_"` webpack chunk + `S:`/`$RB`/`$RV` boundary-replay runtime + arrived flight chunks) flushing at body-start while the root segment (state-slot `div` + route content) is still pending — i.e., the same block that sits at the tail of every mono document (verified byte-for-byte on `/login`).
+
+**Next evidence step (registered):** the `M418 SRV` line now prints the failing document's raw server-byte body order first (survives PR-comment truncation) — if the response text leads with scripts the inversion is server emission; if it leads with the content divs, the DOM order was client-inserted and the root cause moves to the replay/mutation path.
+
+**Remaining fix options (need product-owner authorization — framework-change rule):**
+1. **Surgical patch on Next's vendored React DOM** (`canHydrateInstance`: skip hoistable candidates — `script`/`link`/`meta`/`style` — in non-root context, exactly as root context already does), shipped via `patch-package`. Closes the proven throw path regardless of emission timing; does not suppress warnings or weaken content mismatch checks; but it is a framework-internals patch with upgrade-maintenance cost and global hydration-semantics impact.
+2. **Continue the emission investigation** with the `M418 SRV` capture until the trigger is pinned, then fix it at the app level (e.g. a root-layout shell barrier if the trigger is render-suspension timing).
+3. **Accept and document** the residual intermittent #418 with the probe/order-gate as the early-warning system (not recommended for a P0 release blocker).
+
+Status: **OPEN**. Passing runs never prove the fix; the closure rule (demonstrated root cause + regression + green final CI with the defect class demonstrably dead) is not met.

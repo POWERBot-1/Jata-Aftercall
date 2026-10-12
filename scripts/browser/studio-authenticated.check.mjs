@@ -112,6 +112,15 @@ async function pageFor(context) {
           console.error(`M418 FRAME-INACCESSIBLE ${String(entry.path).slice(0, 48)} ${entry.inaccessible}`);
         }
       }
+      // Raw server-byte body order FIRST for the erroring frame's document: if the response
+      // text already leads with scripts, the inversion is server emission; if it leads with
+      // the content divs, the DOM order came from client-side insertion instead.
+      const errorPaths = frameProbes.filter((entry) => entry && entry.probe && entry.probe.m418last).map((entry) => entry.path);
+      const orderedDigests = [...serverDigests.entries()].sort((a, b) =>
+        (errorPaths.includes(b[0]) ? 1 : 0) - (errorPaths.includes(a[0]) ? 1 : 0));
+      for (const [path, info] of orderedDigests.slice(0, 3)) {
+        console.error(`M418 SRV ${path} len=${info.len} ${String(info.digest).slice(0, 140)}`);
+      }
       for (const [path, info] of [...serverDigests.entries()].slice(0, 4)) {
         console.error(`M418 SERVER ${path} len=${info.len} ${String(info.digest).slice(0, 600)}`);
       }
