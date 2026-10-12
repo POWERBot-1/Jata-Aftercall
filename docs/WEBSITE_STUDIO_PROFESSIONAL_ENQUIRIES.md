@@ -63,3 +63,8 @@ c3c9563/CI38234955080/job114763230878/bot6122238721 FAILED at unpublished-enquir
 ## Origin normalization regression (second native result)
 
 ec3af7f/CI38235794238/job114766020675/bot6122374037 FAIL173+1. Native diagnostic proves Next requestURL uses0.0.0.0 while browser Origin and incoming Host use localhost on the same dynamic port;403 erroneously precedes correct404publication guard. Added2 HTTP/HTTPSproxy regressions FAIL before change, foreign/spoofed-forwarded-host denial staysPASS. Exact origin check now derives browser-facing Host +validated transport protocol, never wildcard/external forwardedhost; incomingHost/proto is browser-facing proxy information, not tenant or payment authority. All20route cases/94focused/lint/types pass; latestlocal2065PASS113DBskip2178. Actual source-head native enquiry flow stillpending, no claim it passed yet.
+
+
+## Third native result / real link action pending
+
+4e8099d/CI38236701970/job114769047509/bot6122515825 FAIL217+1. Actual origin+unpublished/draft readonly checks, full owned professional edit/preview/publish/snapshot/noJS/source/facets allPASS; selected enquiry-link click did not reach form within25s. Keep target assertion; add safe href/viewport/hit target/path diagnostic and actual centered trusted click, no forced JS/goto/API/timeout workaround. Native5 ledger cases alreadyPASS, but browser enquiry submission/replay/owner/fixed/final/downstream remainNOTRUN until nextsource. No endpoint financial/tenant rule modified by this driver action.
