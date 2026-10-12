@@ -185,8 +185,10 @@ jobs:
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           npm run test:browser:studio-hydration 2>&1 | tee /tmp/step-hydration-browser.log
-      - name: Hydration #418 controlled race reproduction (widened $RC/$RV gap)
+      - name: "Hydration 418 controlled race reproduction (widened RC/RV gap)"
         run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           npm run test:browser:hydration-race 2>&1 | tee /tmp/step-hydration-race.log
 
       - name: Actual storefront Motion and immersive browser regressions
