@@ -25,7 +25,8 @@
     "test:smoke:studio": "node scripts/browser/studio-production.smoke.mjs",
     "measure:studio-bundles": "node scripts/measure-website-studio-bundles.mjs",
     "test:browser:studio-authenticated": "node scripts/browser/studio-authenticated.check.mjs",
-    "test:browser:studio-hydration": "tsx scripts/browser/studio-hydration.check.mts"
+    "test:browser:studio-hydration": "tsx scripts/browser/studio-hydration.check.mts",
+    "test:browser:hydration-race": "node scripts/browser/hydration-race.check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

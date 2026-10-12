@@ -185,6 +185,9 @@ jobs:
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           npm run test:browser:studio-hydration 2>&1 | tee /tmp/step-hydration-browser.log
+      - name: Hydration #418 controlled race reproduction (widened $RC/$RV gap)
+        run: |
+          npm run test:browser:hydration-race 2>&1 | tee /tmp/step-hydration-race.log
 
       - name: Actual storefront Motion and immersive browser regressions
         run: |
@@ -224,6 +227,7 @@ jobs:
               ['Production HTTP isolation smoke', '/tmp/step-studio-smoke.log'],
               ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
               ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
+              ['Hydration #418 controlled race reproduction (widened $RC/$RV gap)', '/tmp/step-hydration-race.log'],
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
@@ -260,6 +264,7 @@ jobs:
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
               ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
+              ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
               ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
