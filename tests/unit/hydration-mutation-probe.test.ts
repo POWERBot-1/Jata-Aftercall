@@ -11,6 +11,7 @@ import {
   probeInstallSource,
   formatProbeDump,
   serverHtmlDigest,
+  patchHydrationThrowDiagnostics,
   PROBE_MAX_RECORDS,
 } from "@/scripts/browser/hydration-mutation-probe.mjs";
 
@@ -312,6 +313,17 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     expect(digest).toContain("main#main");
     expect(digest).toContain("h2.eb-h3");
     expect(digest).not.toContain("noise"); // script bodies stripped
+  });
+
+  it("patchHydrationThrowDiagnostics instruments the throw site without altering behavior", () => {
+    const chunk = 'var x=1;function rD(e){var n=Error(i(418,1<arguments.length&&void 0!==arguments[1]&&arguments[1]?"text":"HTML",""));throw rU(rd(n,e)),rF}function rO(e){}';
+    const { patched, source } = patchHydrationThrowDiagnostics(chunk);
+    expect(patched).toBe(true);
+    expect(source).toContain("window.__m418last=");
+    expect(source).toContain('var n=Error(i(418'); // throw construction preserved
+    expect(source).toContain("throw rU(rd(n,e)),rF"); // throw preserved
+    expect(patchHydrationThrowDiagnostics("function rD(e){var n=Error(i(999))}").patched).toBe(false);
+    expect(patchHydrationThrowDiagnostics(chunk).source).toContain("function rO(e){}"); // neighbors untouched
   });
 
   it("the runner installs the probe via evaluateOnNewDocument and ships no app-side telemetry", () => {

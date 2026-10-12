@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
-import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest } from "./hydration-mutation-probe.mjs";
+import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest, patchHydrationThrowDiagnostics } from "./hydration-mutation-probe.mjs";
 
 // Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
 // containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
@@ -83,7 +83,7 @@ async function pageFor(context) {
       try {
         const probe = await frame.evaluate((key) => {
           const instance = window[key];
-          return instance ? { state: instance.state(), snapshot: instance.snapshot(), tail: instance.tail(15) } : null;
+          return instance ? { state: instance.state(), snapshot: instance.snapshot(), tail: instance.tail(15), m418last: window.__m418last || null } : null;
         }, PROBE_PROPERTY);
         return { path, probe };
       } catch (error) {
@@ -215,6 +215,21 @@ try {
   const port = socket.address().port;
   await new Promise((resolve) => socket.close(resolve));
   origin = `http://localhost:${port}`;
+  // M11 Stage D: record the fiber React expected at the #418 throw into window.__m418last
+  // (test-build chunk on disk only; diagnostics, no behavior change, never shipped).
+  {
+    const chunksDir = ".next/static/chunks";
+    let patchedCount = 0;
+    for (const name of readdirSync(chunksDir)) {
+      if (!name.endsWith(".js")) continue;
+      const file = `${chunksDir}/${name}`;
+      const source = readFileSync(file, "utf8");
+      if (!source.includes("Error(i(418")) continue;
+      const { patched, source: next } = patchHydrationThrowDiagnostics(source);
+      if (patched) { writeFileSync(file, next); patchedCount += 1; }
+    }
+    console.log(`M418 THROW DIAGNOSTIC PATCH applied to ${patchedCount} chunk(s)`);
+  }
   server = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-H", "0.0.0.0", "-p", String(port)], {
     env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PUBLIC_BASE_URL: origin, NEXTAUTH_URL: origin,
       VERCEL_ENV: "development", VERCEL_URL: "", VERCEL_PROJECT_PRODUCTION_URL: "" }, stdio: ["ignore", "pipe", "pipe"],

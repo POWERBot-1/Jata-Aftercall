@@ -224,7 +224,9 @@ export function formatProbeDump(frameProbes, options = {}) {
     // shape returned by frame.evaluate ({state, snapshot, tail}).
     const state = read(probe.state, {}) || {};
     const snap = read(probe.snapshot, null);
+    const expected = read(probe.m418last ?? probe.expected, null);
     const frame = { frame: String(state.frame || entry.path || "?").slice(0, 48), installed: true, seq: state.seq, size: state.size, frozen: Boolean(snap) };
+    if (expected) frame.expected = expected;
     if (snap) {
       frame.reason = snap.reason;
       frame.ready = snap.ready;
@@ -266,4 +268,24 @@ export function serverHtmlDigest(html, options = {}) {
     parts.push(`${tag}${id ? `#${id[1]}` : ""}${cls ? `.${cls[1].trim().split(/\s+/).slice(0, 2).join(".")}` : ""}${data.length ? `[${data.join(",")}]` : ""}`);
   }
   return parts.join("|").slice(0, limit);
+}
+
+/**
+ * Test-only build patch (M11 Stage D): records the fiber React expected when
+ * `throwOnHydrationMismatch` fires (hydration #418) into `window.__m418last`.
+ * The built chunk is byte-stable (4bd1b696-*.js across runs), so the throw site
+ * is addressable by its minified shape `function rD(e){var n=Error(i(418`.
+ * Diagnostics only: adds one guarded assignment before the Error construction;
+ * never suppresses the throw, never alters hydration behavior. Applied by the
+ * browser runner to the CI build's chunk on disk before `next start` — never
+ * part of the application source or a shipped bundle pipeline.
+ */
+export function patchHydrationThrowDiagnostics(source) {
+  const pattern = /function (\w+)\(e\)\{var n=Error\(i\(418/;
+  if (!pattern.test(source)) return { patched: false, source };
+  const injected = source.replace(
+    pattern,
+    'function $1(e){try{window.__m418last={ft:e&&e.tag,ty:typeof e==="object"&&e.type&&(e.type.name||e.type),cl:e&&e.memoizedProps&&String(e.memoizedProps.className||"").slice(0,96),rc:e&&e.memoizedProps&&e.memoizedProps.children?1:0};}catch(x){}var n=Error(i(418',
+  );
+  return { patched: injected !== source, source: injected };
 }
