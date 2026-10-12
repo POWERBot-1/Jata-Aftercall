@@ -295,7 +295,7 @@ export function patchHydrationThrowDiagnostics(source) {
   if (!pattern.test(source)) return { patched: false, source };
   const injected = source.replace(
     pattern,
-    'function $1(e){try{window.__m418last={ft:e&&e.tag,ty:typeof e==="object"&&e.type&&(e.type.name||e.type),cl:e&&e.memoizedProps&&String(e.memoizedProps.className||"").slice(0,96),rc:e&&e.memoizedProps&&e.memoizedProps.children?1:0};}catch(x){}var n=Error(i(418',
+    'function $1(e){try{var __pf=e&&e.return;while(__pf&&!__pf.stateNode)__pf=__pf.return;var __pn=__pf&&__pf.stateNode;window.__m418last={ft:e&&e.tag,ty:typeof e==="object"&&e.type&&(e.type.name||e.type),cl:e&&e.memoizedProps&&String(e.memoizedProps.className||"").slice(0,96),rc:e&&e.memoizedProps&&e.memoizedProps.children?1:0,pt:__pn&&__pn.nodeName,pi:__pn&&__pn.id||"",pk:__pn&&__pn.childNodes?[].slice.call(__pn.childNodes).slice(0,12).map(function(c){return c.nodeType+":"+(c.nodeName||"")+":"+(c.id||"")+":"+(typeof c.className==="string"?c.className.slice(0,24):"")}):[]};}catch(x){}var n=Error(i(418',
   );
   return { patched: injected !== source, source: injected };
 }

@@ -649,6 +649,7 @@ try {
           await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
           await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
           entry.ok = true;
+          entry.order = await first.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
         } catch (error) {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
