@@ -52,6 +52,13 @@ describe("authenticated Studio browser fixture boundaries (test-only, not applic
     expect(isAllowedStudioRequest(`${origin}/api/experience`, origin, "PATCH")).toBe(true);
     expect(isAllowedStudioRequest(`${origin}/api/experience/versions?businessId=qa`, origin)).toBe(true);
   });
+  it.each(["/api/experience/history", "/api/studio/health"])("allows only the reviewed read-only dashboard GET %s, never its mutations", (path) => {
+    expect(isAllowedStudioRequest(`${origin}${path}?businessId=qa`, origin, "GET")).toBe(true);
+    for (const method of ["POST", "PATCH", "DELETE", "PUT"]) {
+      expect(isAllowedStudioRequest(`${origin}${path}`, origin, method)).toBe(false);
+    }
+    expect(isAllowedStudioRequest(`https://external.example${path}`, origin, "GET")).toBe(false);
+  });
   it.each([
     ["https://api.paystack.co/transaction/initialize", "POST"], ["https://example.com/image.jpg", "GET"],
     [`${origin}/api/media`, "POST"], [`${origin}/api/studio/ai/image`, "POST"], [`${origin}/api/checkout`, "POST"],

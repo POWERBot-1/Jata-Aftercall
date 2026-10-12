@@ -3,6 +3,7 @@ const METHODS = {
   "/api/auth/register": ["POST"], "/api/auth/login": ["POST"], "/api/auth/logout": ["POST", "GET"],
   "/api/business": ["PATCH"], "/api/experience": ["GET", "POST", "PATCH"],
   "/api/experience/publish": ["POST"], "/api/experience/versions": ["GET", "POST"],
+  "/api/experience/history": ["GET"], "/api/studio/health": ["GET"],
   "/api/products": ["GET", "POST"], "/api/services": ["GET", "POST"],
   "/api/storefront/quote": ["POST"], "/api/storefront/booking": ["GET", "POST"],
   "/api/bookings": ["GET", "PATCH"], "/api/analytics/event": ["POST"],

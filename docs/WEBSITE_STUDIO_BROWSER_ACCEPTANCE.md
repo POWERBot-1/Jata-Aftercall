@@ -23,7 +23,7 @@ Updated 2026-10-12. **ENGINE INCOMPLETE.** This is a scoped acceptance register,
 |6 Commerce/ASK JATA/POS|Real-DB handler Website17/POS22; payment/signature/amount/tenant tests|Actual authenticated browser owner/customer journeys across types, immersive→product/ASK JATA/order/booking/provider payment/POS; authorized retry policy|M7 proves a provider-free owner/customer slice only. No provider settlement, complete ASK JATA/POS browser or live-charge evidence|
 |7 Adaptation/analytics|Finite lazy fallbacks, bundle entry measures, existing analytics|Measured runtime/mobile adaptation, privacy-safe performance events/history, publication/optimization/quality budgets and real CWV/device/network evidence|Build on stable recipe/render/customer baseline, use measured feedback, not UA names/hardware-only scores. Physical low/mid/modern Android and network conditions NOT RUN|
 
-Cross-cutting: all original acceptance remains mandatory;19 historically reported advisories and Actions/runner drift need current triage; intended/inherited diff review and explicit merge/production authorization still required. No infrastructure/database replacement or paid service activation.
+Cross-cutting: all original acceptance remains mandatory;Current2026-10-12 read-only audit reports19 advisories (16 high/3 moderate), including2 in the production dependency tree (source-map-js high/Next moderate); pinned narrow patches/call-site triage and Actions/runner drift remain mandatory; intended/inherited diff review and explicit merge/production authorization still required. No infrastructure/database replacement or paid service activation.
 
 ## Why M7 is next
 
@@ -53,7 +53,7 @@ Representative **retail, restaurant/food and salon** flows:
 - Refuses remote/production/alternate databases, provider/storage credentials/configuration, `.env*` files (except non-loaded `.env.example`), native downloader/engine-less overrides. The harness chooses its own local origin/port; no caller-supplied deployment URL.
 - Browser allows only that origin and explicit auth/editor/catalogue/quote/zero-deposit booking/analytics API methods. Media/image providers/checkout initialization/payment verification/admin mutations/external requests refused and counted as failures. No intercepted provider response presented as genuine acceptance.
 - Tests do not alter application auth/payment/tenant policy. Direct Prisma writes are only labelled isolated entitlement fixtures and expiry; cleanup uses exact run-created IDs, never global/prefix deletion. Server/browser always stop; cleanup failure fails the gate.
-- Missing prerequisites exit2 **BLOCKED/NOT RUN**, not a passing/skipped browser suite; CI treats that as a failed required gate.54 unit tests cover unsafe targets/credentials/loaded files/request methods and test-only/no-session-bypass boundaries.
+- Missing prerequisites exit2 **BLOCKED/NOT RUN**, not a passing/skipped browser suite; CI treats that as a failed required gate.56 unit tests cover unsafe targets/credentials/loaded files/request methods and test-only/no-session-bypass boundaries, including ONLY GET on the existing server-owned/local-only history/health diagnostics; all their mutations stay blocked. Real cross-tenant refusal cases cover both newly allowed reads.
 
 ## A–X acceptance register (no gate waived)
 

@@ -317,10 +317,12 @@ try {
     ["/api/experience", "PATCH", { businessId: second.id, expectedDraftVersion: foreignBefore.draftVersion, brand: { tagline: "FOREIGN MUST NEVER WIN" } }],
     ["/api/experience/publish", "POST", { businessId: second.id, expectedDraftVersion: foreignBefore.draftVersion }],
     [`/api/experience/versions?businessId=${second.id}`, "GET"],
+    [`/api/experience/history?businessId=${second.id}`, "GET"],
+    [`/api/studio/health?businessId=${second.id}`, "GET"],
     [`/api/bookings?businessId=${salon.id}`, "GET"],
   ]) {
     const response = await api(first.ownerPage, path, method, body);
-    check(`cross-tenant ${method} ${path.split("?")[0]} refused`, response.status === 403 && !response.body?.document && !response.body?.versions && !response.body?.bookings);
+    check(`cross-tenant ${method} ${path.split("?")[0]} refused`, response.status === 403 && !response.body?.document && !response.body?.versions && !response.body?.bookings && !response.body?.revisions && !response.body?.report);
   }
   check("cross-tenant attempts do not mutate foreign draft/live", JSON.stringify(await snapshot(second.id)) === JSON.stringify(foreignBefore));
   await first.ownerPage.goto(`${origin}/dashboard/businesses/${second.id}/design`, { waitUntil: "networkidle0" });
