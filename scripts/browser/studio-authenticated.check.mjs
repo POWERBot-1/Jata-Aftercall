@@ -228,7 +228,8 @@ try {
     check(`${category}: draft not automatically published`, before.publishedJson === null && before.status === "DRAFT");
     if (category === "professional") {
       const draftRequest = await api(visitor, "/api/storefront/enquiry", "POST", { slug: fixture.slug, serviceId: fixture.itemId, customerName: "QA Draft requester", customerPhone: "0700111222", idempotencyKey: `draft-${runId}-request-123` });
-      check("professional: anonymous unpublished enquiry refused without a ledger write", draftRequest.status === 404 && await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: "LEAD_GENERAL_INQUIRY" } }) === 0);
+      check("professional: anonymous unpublished enquiry refused without a ledger write", draftRequest.status === 404 && await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: "LEAD_GENERAL_INQUIRY" } }) === 0,
+        `status=${draftRequest.status}, error=${draftRequest.body?.error ?? "none"}`);
       await ownerPage.goto(`${origin}/b/${fixture.slug}/enquire?service=${fixture.itemId}`, { waitUntil: "networkidle0" });
       check("professional: owned draft enquiry form is readable/noindex but submission disabled", await ownerPage.$eval('form[data-enquiry-form] button[type="submit"]', (button) => button.disabled) && await ownerPage.$eval('meta[name="robots"]', (element) => element.content.includes("noindex")));
     }

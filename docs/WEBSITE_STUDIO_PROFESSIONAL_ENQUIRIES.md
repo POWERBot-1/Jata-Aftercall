@@ -53,3 +53,8 @@ This completes the **first professional catalogue +actual asynchronous request +
 Next independent category slice: technical services with owned Service-only quotation/contact/appointment semantics and same safe config/edit/preview/paid-publication/durable tenant request/runtime/native-cookie gates. Enquiry endpoint currently supports professional only; extend explicitly after category-specific tests, not blanket capability authority.
 
 10HIGHDEV dependency findings remainFAIL/OPEN with user-authorized independent development, not a risk waiver/broad migration. Historical unlocalized418 still not conclusively attributed; retain error diagnostics. FAILED-subscription retry/refund/cancel policy unapproved/unchanged. All108/all7stages/A–X, fullHero/AI/diversity/world/compression/justifiedWebGPU/adaptation/analytics/performance/device/verifiedprovider/payment/ASKJATA/POS/type acceptance mandatory/open. No merge/production/data/provider/storage activation/real uploads/provisioning/spending. **ENGINE INCOMPLETE; NOT MERGED; production NOT DEPLOYED.**
+
+
+## First actual native run (not acceptance)
+
+c3c9563/CI38234955080/job114763230878/bot6122238721 FAILED at unpublished-enquiry expected404/no-write. Native2134+1expected/176files, Website17/POS22/connected build and5 real DB enquiry tests PASS; browser173+1, cleanup4/serverstop PASS. No response status/root guessed: preserve the check, add safe status/error/origin-host-protocol diagnostics. Live enquiry UI/owner/replay/consultation/4type final/downstream cases NOTRUN, not local-proof acceptance. No financial/publication/origin guard weakened.

@@ -24,7 +24,14 @@ export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
   if (throttled(ip)) return reply({ error: "Too many requests. Please wait a minute before trying again." }, 429);
   const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) return reply({ error: "Send your enquiry from this business's website." }, 403);
+  if (origin && origin !== new URL(req.url).origin) {
+    // Origin/host only: no customer fields, query strings, cookies or replay keys in diagnostic logs.
+    const safeOrigin = (value: string | null) => { try { return value ? new URL(value).origin.slice(0, 180) : null; } catch { return "invalid"; } };
+    console.warn("Enquiry origin refused", JSON.stringify({ origin: safeOrigin(origin), requestOrigin: new URL(req.url).origin,
+      hostOrigin: safeOrigin(`http://${req.headers.get("host") || "invalid"}`),
+      forwardedProto: ["http", "https"].includes(req.headers.get("x-forwarded-proto") || "") ? req.headers.get("x-forwarded-proto") : "other" }));
+    return reply({ error: "Send your enquiry from this business's website." }, 403);
+  }
   if (!req.headers.get("content-type")?.startsWith("application/json")) return reply({ error: "We couldn't read that request." }, 400);
   let raw: unknown;
   try {
