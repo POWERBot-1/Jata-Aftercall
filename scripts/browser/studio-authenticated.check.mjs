@@ -139,7 +139,7 @@ async function preview(page, fixture, marker) {
         overflow: doc.documentElement.scrollWidth > doc.documentElement.clientWidth + 2 };
     });
     check(`${fixture.category}: ${device} authenticated draft iframe/readable/noindex`, state.notice && state.noindex && state.widthCap === width && state.width <= width &&
-      state.width >= (device === "Mobile" ? 380 : 1000) && Math.abs(state.width - state.frameWidth) <= 1 && !state.overflow);
+      state.width >= (device === "Mobile" ? 380 : 1000) && Math.abs(state.width - state.frameWidth) <= 1 && !state.overflow, JSON.stringify(state));
   }
 }
 async function recipeUI(page, fixture, label, detail, enabled) {
