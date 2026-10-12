@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
-import { PROBE_PROPERTY, probeInstallSource, formatProbeDump } from "./hydration-mutation-probe.mjs";
+import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest } from "./hydration-mutation-probe.mjs";
 
 // Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
 // containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
@@ -57,6 +57,18 @@ async function pageFor(context) {
     }
     return void request.continue();
   });
+  // Keep a bounded digest of every document's SERVER HTML (issue #418 evidence): at error
+  // time the server structure is diffed against the client outline to name the diverging node.
+  const serverDigests = new Map();
+  page.on("response", (response) => {
+    if (response.request().resourceType() !== "document") return;
+    let path;
+    try { path = new URL(response.url()).pathname; } catch { return; }
+    response.text().then((html) => {
+      serverDigests.set(path, { len: html.length, digest: serverHtmlDigest(html) });
+      if (serverDigests.size > 8) serverDigests.delete(serverDigests.keys().next().value);
+    }).catch(() => {});
+  });
   page.on("pageerror", (error) => {
     const frames = page.frames().map((frame) => new URL(frame.url()).pathname).slice(0, 6);
     const record = { path: new URL(page.url()).pathname, frames, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
@@ -79,7 +91,9 @@ async function pageFor(context) {
       }
     })).then((frameProbes) => {
       record.probe = formatProbeDump(frameProbes);
+      record.server = JSON.stringify([...serverDigests.entries()].slice(0, 4));
       console.error(`HYDRATION PROBE ${record.probe}`);
+      console.error(`HYDRATION SERVER ${record.server}`);
     });
   });
   return page;
@@ -589,10 +603,10 @@ try {
   // below is the detector. Load timeouts under throttle skip the sample and never fail the
   // journey. Every attempt is recorded in results.json.
   {
-    const sampleFixtures = created.filter((fixture) => ["retail", "food", "salon"].includes(fixture.category));
+    const sampleFixtures = created; // all five representative business types
     const cdp = await first.ownerPage.createCDPSession().catch(() => null);
     for (const fixture of sampleFixtures) {
-      for (let attempt = 1; attempt <= 4; attempt += 1) {
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
         const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4 };
         try {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });

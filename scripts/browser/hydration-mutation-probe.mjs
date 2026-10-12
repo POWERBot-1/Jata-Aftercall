@@ -157,13 +157,16 @@ export function probeInstallSource(options = {}) {
     function outline(root) {
       if (!root) return "";
       var out = [], stack = [[root, 0]];
-      while (stack.length && out.length < 40) {
+      while (stack.length && out.length < 70) {
         var pair = stack.pop(), node = pair[0], d = pair[1];
-        if (!node || node.nodeType !== 1) continue;
+        if (!node) continue;
+        if (node.nodeType === 8) { out.push(new Array(d + 1).join(" ") + "#c(" + String(node.data || "").slice(0, 6) + ")"); continue; }
+        if (node.nodeType !== 1) continue;
         out.push(new Array(d + 1).join(" ") + summarize(node));
-        if (d < 3) {
-          var kids = node.children || [];
+        if (d < 4) {
+          var kids = node.nodeName === "TEMPLATE" && node.content ? node.content.children : (node.children || []);
           for (var k = kids.length - 1; k >= 0; k--) stack.push([kids[k], d + 1]);
+          if (node.nodeName === "TEMPLATE") out.push(new Array(d + 2).join(" ") + "<template-content>");
         }
       }
       return out.join("|").slice(0, OUTLINE_LIMIT);
@@ -235,4 +238,32 @@ export function formatProbeDump(frameProbes, options = {}) {
     return frame;
   });
   return JSON.stringify({ frames });
+}
+
+/**
+ * Node-side structural digest of a server HTML document body: comments, tags with their id,
+ * class and stable data-* markers; script/style bodies stripped. Used to diff the server-
+ * rendered structure against the probe's client-side outline at error time (issue #418).
+ */
+export function serverHtmlDigest(html, options = {}) {
+  const limit = options.limit ?? 2000;
+  const bodyStart = html.search(/<body[\s>]/i);
+  let body = bodyStart >= 0 ? html.slice(bodyStart) : html;
+  body = body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "<script></script>");
+  body = body.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+  body = body.replace(/<!--[\s\S]*?-->/g, (comment) => `${comment.slice(0, 12)}~-->`);
+  const parts = [];
+  const tagPattern = /<\/?([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*'){0,220})>/g;
+  let match;
+  while ((match = tagPattern.exec(body)) && parts.join("|").length < limit) {
+    const closing = body[match.index + 1] === "/";
+    const tag = match[1].toLowerCase();
+    if (closing) continue;
+    const attrs = match[2] || "";
+    const id = /\bid="([^"]*)"/.exec(attrs);
+    const cls = /\bclass="([^"]*)"/.exec(attrs);
+    const data = [...attrs.matchAll(/\b(data-[\w-]+)="([^"]{0,16})"/g)].slice(0, 3).map((m) => `${m[1].slice(5)}=${m[2]}`);
+    parts.push(`${tag}${id ? `#${id[1]}` : ""}${cls ? `.${cls[1].trim().split(/\s+/).slice(0, 2).join(".")}` : ""}${data.length ? `[${data.join(",")}]` : ""}`);
+  }
+  return parts.join("|").slice(0, limit);
 }

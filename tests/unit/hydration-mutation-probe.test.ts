@@ -10,6 +10,7 @@ import {
   PROBE_PROPERTY,
   probeInstallSource,
   formatProbeDump,
+  serverHtmlDigest,
   PROBE_MAX_RECORDS,
 } from "@/scripts/browser/hydration-mutation-probe.mjs";
 
@@ -294,6 +295,23 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     expect(frozenDump.frames[0].counts.motionStatic).toBe(6);
     expect(frozenDump.frames[1].installed).toBe(false);
     expect(frozenDump.frames[2].inaccessible).toBe("cross-origin");
+  });
+
+  it("serverHtmlDigest summarizes the server body structure for the error-time diff", () => {
+    const html = `<!DOCTYPE html><html><head><title>t</title></head><body class="min-h-screen">
+      <div hidden id="S:0"></div>
+      <div class="business-route-root"><div class="eb-scope" data-template-family="marketplace">
+      <!--$?--><template id="B:0"></template><!--/$-->
+      <script>self.__next_f.push([1,"noise"])</script>
+      <main id="main"><h2 class="eb-h3">Services</h2></main></div></div></body></html>`;
+    const digest = serverHtmlDigest(html);
+    expect(digest).toContain("body.min-h-screen");
+    expect(digest).toContain("div#S:0");
+    expect(digest).toContain("div.business-route-root");
+    expect(digest).toContain("template#B:0");
+    expect(digest).toContain("main#main");
+    expect(digest).toContain("h2.eb-h3");
+    expect(digest).not.toContain("noise"); // script bodies stripped
   });
 
   it("the runner installs the probe via evaluateOnNewDocument and ships no app-side telemetry", () => {
