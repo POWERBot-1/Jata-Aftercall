@@ -4,23 +4,34 @@ import type { StorefrontData, StorefrontItem } from "./storefront";
 
 export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking";
 export type BusinessRecipeDetail = "brand" | "variants" | "stock" | "ingredients" | "portion" | "prep" | "options" | "duration" | "staff" | "deposit";
-export type BusinessRecipeConfig = { version: 1; key: BusinessRecipeKey; details: BusinessRecipeDetail[] };
+/** Registered structural presentations only. A layout is presentation geometry — never content, prices or capability. */
+export type BusinessRecipeLayout = "product-grid" | "product-list" | "menu-list" | "menu-board" | "service-list" | "service-grid";
+export type BusinessRecipeConfig = { version: 1; key: BusinessRecipeKey; details: BusinessRecipeDetail[]; layout?: BusinessRecipeLayout };
 export type BusinessRecipe = Readonly<{
   version: 1; key: BusinessRecipeKey; category: CategoryKey; label: string;
   primarySection: SectionType; sections: readonly SectionType[]; source: "products" | "services";
   layout: "product-grid" | "menu-list" | "service-list";
+  /** Presentation used for list/compact section layouts (legacy mapping). */
+  listLayout: BusinessRecipeLayout;
+  /** Every structural presentation this recipe accepts in its config. `layout` is the canonical default. */
+  layouts: readonly BusinessRecipeLayout[];
   details: readonly Readonly<{ key: BusinessRecipeDetail; label: string }>[];
   availabilityLabel?: string;
 }>;
+export const RECIPE_LAYOUT_LABELS: Readonly<Record<BusinessRecipeLayout, string>> = {
+  "product-grid": "Product grid", "product-list": "Product list",
+  "menu-list": "Menu list", "menu-board": "Menu board",
+  "service-list": "Service list", "service-grid": "Service grid",
+};
 export const BUSINESS_RECIPES: readonly BusinessRecipe[] = [
   { version: 1, key: "retail-stock", category: "retail", label: "Retail stock & options", primarySection: "featured", sections: ["featured"],
-    source: "products", layout: "product-grid", availabilityLabel: "In stock only",
+    source: "products", layout: "product-grid", listLayout: "product-list", layouts: ["product-grid", "product-list"], availabilityLabel: "In stock only",
     details: [{ key: "brand", label: "Brand" }, { key: "variants", label: "Product options" }, { key: "stock", label: "Availability" }] },
   { version: 1, key: "food-menu", category: "food", label: "Food menu & ordering", primarySection: "menu", sections: ["menu", "featured"],
-    source: "products", layout: "menu-list", availabilityLabel: "Available dishes only",
+    source: "products", layout: "menu-list", listLayout: "menu-list", layouts: ["menu-list", "menu-board"], availabilityLabel: "Available dishes only",
     details: [{ key: "ingredients", label: "Ingredients" }, { key: "portion", label: "Portion" }, { key: "prep", label: "Preparation time" }, { key: "options", label: "Extras" }] },
   { version: 1, key: "salon-booking", category: "salon", label: "Salon services & booking", primarySection: "services", sections: ["services", "featured"],
-    source: "services", layout: "service-list",
+    source: "services", layout: "service-list", listLayout: "service-list", layouts: ["service-list", "service-grid"],
     details: [{ key: "duration", label: "Duration" }, { key: "staff", label: "Specialist" }, { key: "deposit", label: "Deposit information" }] },
 ];
 export function businessRecipeFor(category: string, sectionType?: string): BusinessRecipe | undefined {
@@ -37,13 +48,22 @@ function plain(value: unknown): value is Record<string, unknown> {
 export function parseBusinessRecipeConfig(input: unknown, category: string, sectionType: string): BusinessRecipeConfig | null {
   if (!plain(input) || Object.keys(input).length !== 1 || !Object.hasOwn(input, "businessRecipe")) return null;
   const config = input.businessRecipe; const recipe = businessRecipeFor(category, sectionType);
-  if (!recipe || !plain(config) || Object.keys(config).some((key) => !["version", "key", "details"].includes(key)) ||
+  if (!recipe || !plain(config) || Object.keys(config).some((key) => !["version", "key", "details", "layout"].includes(key)) ||
     config.version !== 1 || config.key !== recipe.key || !Array.isArray(config.details) || config.details.length > recipe.details.length) return null;
   const allowed = recipe.details.map((detail) => detail.key);
   const details = config.details;
   if (config.details.some((key) => typeof key !== "string" || !allowed.includes(key as BusinessRecipeDetail)) || new Set(config.details).size !== config.details.length) return null;
+  // Optional registered presentation. Absent means the canonical default; an unregistered value fails closed.
+  if (config.layout !== undefined && (typeof config.layout !== "string" || !recipe.layouts.includes(config.layout as BusinessRecipeLayout))) return null;
   // Canonical field order makes preview, save, history and publication serialization faithful.
-  return { version: 1, key: recipe.key, details: allowed.filter((key) => details.includes(key)) };
+  return { version: 1, key: recipe.key, details: allowed.filter((key) => details.includes(key)), ...(typeof config.layout === "string" ? { layout: config.layout as BusinessRecipeLayout } : {}) };
+}
+/** Pure presentation resolution: explicit registered config first, then the unchanged legacy section-layout mapping. */
+export function recipeLayoutFor(config: BusinessRecipeConfig, recipe: BusinessRecipe, sectionLayout?: string): BusinessRecipeLayout {
+  if (config.layout && recipe.layouts.includes(config.layout)) return config.layout;
+  if (sectionLayout === "grid") return "product-grid";
+  if (sectionLayout === "list" || sectionLayout === "compact") return recipe.listLayout;
+  return recipe.layout;
 }
 export function sectionBusinessRecipe(section: ExperienceSection, document: Pick<ExperienceDocument, "version" | "categoryKey">): BusinessRecipeConfig | null {
   return document.version === 2 ? parseBusinessRecipeConfig(section.config, document.categoryKey, section.type) : null;

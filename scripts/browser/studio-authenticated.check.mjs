@@ -125,6 +125,18 @@ async function recipeUI(page, fixture, label, detail, enabled) {
   const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
   check(`${fixture.category}: recipe v1 detail persists without publication`, section.config.businessRecipe.version === 1 && section.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
 }
+async function recipeLayoutUI(page, fixture, label, layoutValue) {
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
+  await page.click(`button[aria-label="Edit ${label}"]`);
+  await page.waitForSelector('select[aria-label="Recipe layout"]');
+  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
+  await page.select('select[aria-label="Recipe layout"]', layoutValue);
+  check(`${fixture.category}: actual recipe layout UI save`, (await received).status() === 200);
+  const saved = await snapshot(fixture.id);
+  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 registered layout persists without publication`, section.config.businessRecipe.version === 1 &&
+    section.config.businessRecipe.layout === layoutValue && saved.publishedJson === null);
+}
 async function publicState(page, fixture, marker, visible, suffix = "") {
   await page.goto(`${origin}/b/${fixture.slug}${suffix}`, { waitUntil: "networkidle0" });
   const state = await page.evaluate((marker) => ({ found: document.body.textContent.includes(marker),
@@ -188,9 +200,9 @@ try {
     const business = await prisma.business.findFirst({ where: { owner: { email } } });
     if (business) created.push({ id: business.id, ownerId: business.ownerId, slug: business.slug, email, category });
     check(`${category}: actual HTTP registration`, registered.status === 200 && Boolean(business));
-    const recipeSpec = { retail: { key: "retail-stock", section: "featured", label: "Featured", field: "brand", detail: "Brand", fact: "QA owner brand" },
-      food: { key: "food-menu", section: "menu", label: "Menu", field: "ingredients", detail: "Ingredients", fact: "QA owner ingredients" },
-      salon: { key: "salon-booking", section: "services", label: "Services", field: "staff", detail: "Specialist", fact: "QA owner specialist" } }[category];
+    const recipeSpec = { retail: { key: "retail-stock", section: "featured", label: "Featured", field: "brand", detail: "Brand", fact: "QA owner brand", layout: "product-list" },
+      food: { key: "food-menu", section: "menu", label: "Menu", field: "ingredients", detail: "Ingredients", fact: "QA owner ingredients", layout: "menu-board" },
+      salon: { key: "salon-booking", section: "services", label: "Services", field: "staff", detail: "Specialist", fact: "QA owner specialist", layout: "service-grid" } }[category];
     const fixture = { ...created.at(-1), ownerPage, ownerContext, itemName, price, recipeKey: recipeSpec.key, recipeField: recipeSpec.field, recipeFact: recipeSpec.fact };
     const cookie = (await ownerPage.cookies()).find((entry) => entry.name === "jata_session");
     check(`${category}: server-issued HttpOnly/Secure/SameSite session`, cookie?.httpOnly && cookie?.secure && cookie?.sameSite === "Lax" && cookie?.path === "/");
@@ -246,6 +258,10 @@ try {
     await recipeUI(ownerPage, fixture, recipeSpec.label, recipeSpec.detail, true);
     await preview(ownerPage, fixture, `QA first ${category} ${runId}`);
     check(`${category}: private preview faithfully shows owner-enabled recipe fact`, (await ownerPage.$eval('iframe[title="Draft preview"]', (iframe) => iframe.contentDocument.body.textContent)).includes(recipeSpec.fact));
+    await recipeLayoutUI(ownerPage, fixture, recipeSpec.label, recipeSpec.layout);
+    await preview(ownerPage, fixture, `QA first ${category} ${runId}`);
+    check(`${category}: private preview faithfully applies owner-selected registered recipe layout`,
+      await ownerPage.$eval('iframe[title="Draft preview"]', (iframe, layout) => Boolean(iframe.contentDocument.querySelector(`[data-recipe-presentation="${layout}"]`)), recipeSpec.layout));
     edited = await snapshot(fixture.id); // the actually reviewed post-recipe UI revision, not the earlier design-only snapshot
     const persistedItem = category === "salon" ? await prisma.service.findUniqueOrThrow({ where: { id: fixture.itemId } }) : await prisma.product.findUniqueOrThrow({ where: { id: fixture.itemId } });
     check(`${category}: recipe editing does not alter authoritative prices or require dummy rows`, (category === "salon" ? persistedItem.priceFrom : persistedItem.basePriceKES) === price &&
@@ -293,6 +309,7 @@ try {
       key: document.querySelector('[data-business-recipe]')?.getAttribute('data-business-recipe'),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 }));
     check(`${category}: no-JS mobile recipe/correct facts readable without overflow`, recipeStatic.key === recipeSpec.key && recipeStatic.text?.includes(itemName) && recipeStatic.text?.includes(recipeSpec.fact) && !recipeStatic.overflow);
+    check(`${category}: no-JS mobile owner-selected recipe presentation`, await noJS.$eval('[data-recipe-presentation]', (element) => element.getAttribute('data-recipe-presentation')) === recipeSpec.layout);
     await noJS.close();
     const links = await visitor.evaluate(() => [...document.querySelectorAll("a")].map((link) => link.getAttribute("href")));
     check(`${category}: real tenant call/WhatsApp/directions paths`, links.some((link) => link?.startsWith("tel:")) && links.some((link) => link?.startsWith("https://wa.me/")) && links.some((link) => /maps|google.com/.test(link || "")));
@@ -300,6 +317,7 @@ try {
     await visitor.goto(`${origin}/b/${fixture.slug}/shop`, { waitUntil: "networkidle0" });
     check(`${category}: customer catalogue has functional category recipe and real fact`, await visitor.$eval('[data-business-recipe]', (element) => element.getAttribute('data-business-recipe')) === recipeSpec.key &&
       (await visitor.evaluate(() => document.querySelector("main").textContent)).includes(recipeSpec.fact));
+    check(`${category}: published owner-selected recipe presentation`, await visitor.$eval('[data-recipe-presentation]', (element) => element.getAttribute('data-recipe-presentation')) === recipeSpec.layout);
     if (category === "salon") {
       check("salon: no irrelevant stock/cart assumptions in service recipe", !(await visitor.evaluate(() => document.querySelector("main").textContent)).includes("In stock only") && await visitor.$('[data-recipe-action="book"] a'));
       await clickText(visitor, 'button', '30 min or less');

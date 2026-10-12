@@ -1707,3 +1707,13 @@ button:focus-visible {
 .eb-business-recipe--product-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
 .eb-business-recipe--product-list .eb-recipe-item__media { height: 100%; min-height: 7rem; aspect-ratio: auto; }
 .eb-business-recipe--product-list .eb-recipe-item__media img { object-fit: contain; }
+.eb-business-recipe--service-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.eb-business-recipe--service-grid .eb-recipe-item__action { border-top: 1px solid var(--eb-border); padding-top: .65rem; }
+.eb-business-recipe--menu-board { gap: 0; }
+.eb-business-recipe--menu-board .eb-recipe-item { border-bottom: 1px dotted var(--eb-border); }
+.eb-business-recipe--menu-board .eb-recipe-item__body { padding: .75rem 0; }
+.eb-recipe-item__line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem .75rem; }
+.eb-recipe-item__line .eb-card__title { margin: 0; }
+.eb-recipe-item__price { margin: 0; font-weight: 600; white-space: nowrap; }
+.eb-business-recipe--menu-board .eb-recipe-facts { margin: .45rem 0; }
+.eb-business-recipe--menu-board .eb-recipe-item__action { margin-top: .55rem; }

@@ -2,16 +2,17 @@
 import Link from "next/link";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import type { ItemCardData } from "@/lib/experience/catalogue";
-import { BUSINESS_RECIPES, recipeFacts, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
+import { BUSINESS_RECIPES, recipeFacts, recipeLayoutFor, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
 
 export function BusinessCatalogue({ items, data, config, layout }: { items: StorefrontItem[]; data: ItemCardData; config: BusinessRecipeConfig; layout?: string }) {
   const recipe = BUSINESS_RECIPES.find((entry) => entry.key === config.key);
   if (!recipe) return null;
-  const presentation = layout === "grid" ? "product-grid" : layout === "list" || layout === "compact" ? recipe.category === "salon" ? "service-list" : recipe.category === "food" ? "menu-list" : "product-list" : recipe.layout;
+  const presentation = recipeLayoutFor(config, recipe, layout);
+  const board = presentation === "menu-board";
   return (
-    <ul className={`eb-business-recipe eb-business-recipe--${presentation}`} data-business-recipe={recipe.key} data-recipe-version={config.version}>
+    <ul className={`eb-business-recipe eb-business-recipe--${presentation}`} data-business-recipe={recipe.key} data-recipe-version={config.version} data-recipe-presentation={presentation}>
       {items.map((item) => {
         const href = `/b/${data.business.slug}/item/${item.id}`;
         const unavailable = item.kind === "product" && ["OUT_OF_STOCK", "DISCONTINUED"].includes(item.stockStatus);
@@ -23,21 +24,30 @@ export function BusinessCatalogue({ items, data, config, layout }: { items: Stor
         return (
           <li key={item.id}>
             <article className={`eb-card eb-card--${data.theme.treatment.cardStyle} eb-recipe-item`} data-recipe-item={item.id}>
-              {item.imageUrl ? (
-                <Link href={href} className="eb-recipe-item__media" tabIndex={-1} aria-label={item.name}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.imageUrl} alt={item.name} loading="lazy" decoding="async" />
-                </Link>
-              ) : <div className="eb-recipe-item__media eb-recipe-item__placeholder" aria-hidden="true">No photo yet</div>}
+              {!board ? (
+                item.imageUrl ? (
+                  <Link href={href} className="eb-recipe-item__media" tabIndex={-1} aria-label={item.name}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.imageUrl} alt={item.name} loading="lazy" decoding="async" />
+                  </Link>
+                ) : <div className="eb-recipe-item__media eb-recipe-item__placeholder" aria-hidden="true">No photo yet</div>
+              ) : null}
               <div className="eb-recipe-item__body">
                 {item.category ? <p className="eb-eyebrow">{item.category}</p> : null}
-                <h3 className="eb-card__title"><Link href={href}>{item.name}</Link></h3>
+                {board ? (
+                  <div className="eb-recipe-item__line">
+                    <h3 className="eb-card__title"><Link href={href}>{item.name}</Link></h3>
+                    <p className="eb-recipe-item__price"><ItemPrice item={item} /></p>
+                  </div>
+                ) : (
+                  <h3 className="eb-card__title"><Link href={href}>{item.name}</Link></h3>
+                )}
                 {item.description ? <p className="eb-card__desc">{item.description}</p> : null}
                 <dl className="eb-recipe-facts">
                   {recipeFacts(item, config).map((fact) => <div key={fact.key} data-recipe-detail={fact.key}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
                 </dl>
                 <div className="eb-recipe-item__action" data-recipe-action={action}>
-                  <ItemPrice item={item} />
+                  {board ? null : <ItemPrice item={item} />}
                   {cart ? <AddToCartButton productId={item.id} name={item.name} unitPriceKES={item.price!} imageUrl={item.imageUrl} label={data.profile.cta.add} /> :
                     <Link className="eb-btn eb-btn--outline eb-btn--sm" href={book ? `/b/${data.business.slug}/book?service=${encodeURIComponent(item.id)}` : href}>
                       {book ? "Book this service" : action === "options" ? "Choose options" : action === "enquire" ? "Request a quote" : "View details"}

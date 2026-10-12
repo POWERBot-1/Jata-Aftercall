@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import type { ExperienceDocument, ExperienceSection } from "@/lib/experience/types";
 import { addableSectionsFor, sectionDefinition, sectionLabel, type SectionField } from "@/lib/experience/sections";
 import { MediaPicker } from "./MediaPicker";
-import { businessRecipeFor, defaultBusinessRecipe, sectionBusinessRecipe } from "@/lib/experience/businessRecipes";
+import { businessRecipeFor, defaultBusinessRecipe, sectionBusinessRecipe, RECIPE_LAYOUT_LABELS, type BusinessRecipeLayout } from "@/lib/experience/businessRecipes";
 
 type SaveState = { tone: "idle" | "saving" | "saved" | "error"; text?: string };
 
@@ -170,6 +170,17 @@ export function SectionEditor({
                       Use {recipe.label} recipe
                     </label>
                     <p className="jata-hint">Uses your real {recipe.source}. No facts, prices, stock or payment rules are generated. These details and the layout are shared with the catalogue preview.</p>
+                    {config ? (
+                      <div className="jata-field mt-2">
+                        <label className="jata-label" htmlFor={`recipe-layout-${editing.id}`}>Layout</label>
+                        <select id={`recipe-layout-${editing.id}`} className="jata-input" aria-label="Recipe layout" value={config.layout ?? recipe.layout}
+                          onChange={(event) => patchSection(editing.id, { config: { businessRecipe: { ...config, layout: event.target.value as BusinessRecipeLayout } } })}>
+                          {recipe.layouts.map((layout) => (
+                            <option key={layout} value={layout}>{RECIPE_LAYOUT_LABELS[layout]}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                     {config ? recipe.details.map((detail) => (
                       <label key={detail.key} className="mt-2 flex items-center gap-2 text-sm">
                         <input type="checkbox" aria-label={`Show ${detail.label}`} checked={config.details.includes(detail.key)}
