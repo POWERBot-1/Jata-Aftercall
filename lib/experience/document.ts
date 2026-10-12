@@ -17,6 +17,7 @@ import { PHOTOGRAPHY_STYLE_KEYS } from "./types";
 import { isRenderPreference } from "./renderMode";
 import { supportedExperienceVersion } from "./schemaVersion";
 import { parseArtDirection, templateForDocument } from "./templateFamilies";
+import { parseBusinessRecipeConfig } from "./businessRecipes";
 import type {
   CategoryKey,
   ExperienceDocument,
@@ -134,6 +135,10 @@ export function normalizeSection(input: unknown, profile: ExperienceProfile, ind
     const href = safeUrl(cta.href) || (typeof cta.href === "string" && cta.href.startsWith("#") ? `#${cta.href.replace(/[^a-zA-Z0-9-]/g, "")}` : "");
     if (label || href) section.cta = { label, href };
   }
+
+  // Only exact registered business recipe data survives normalization, never arbitrary executable config.
+  const recipe = parseBusinessRecipeConfig(raw.config, profile.key, section.type);
+  if (recipe) section.config = { businessRecipe: recipe };
 
   // Unknown section types for this category are kept but hidden if the category moved on.
   void profile;

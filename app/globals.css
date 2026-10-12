@@ -1681,3 +1681,29 @@ button:focus-visible {
   .eb-gallery--mosaic > :first-child { grid-column: span 2; grid-row: span 2; }
   .eb-gallery--mosaic > :first-child img { height: 100%; }
 }
+
+/* Versioned business recipes: structural/semantic layouts, not palette aliases. Static/no-JS first. */
+.eb-business-recipe { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.1rem; }
+.eb-business-recipe--product-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.eb-business-recipe .eb-recipe-item { min-width: 0; overflow: hidden; }
+.eb-recipe-item__media { display: block; aspect-ratio: 4/3; overflow: hidden; background: var(--eb-surface-muted); }
+.eb-recipe-item__media img { width: 100%; height: 100%; object-fit: cover; }
+.eb-business-recipe--product-grid .eb-recipe-item__media img { object-fit: contain; }
+.eb-recipe-item__placeholder { display: grid; place-items: center; color: var(--eb-muted); font-size: .85rem; }
+.eb-recipe-item__body { padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.eb-recipe-facts { margin: .8rem 0; display: grid; gap: .35rem; font-size: .9rem; }
+.eb-recipe-facts > div { display: flex; flex-wrap: wrap; gap: .25rem .5rem; }
+.eb-recipe-facts dt { color: var(--eb-muted); }
+.eb-recipe-facts dd { margin: 0; }
+.eb-recipe-item__action { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; justify-content: space-between; }
+.eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); }
+.eb-business-recipe--menu-list .eb-recipe-item__media, .eb-business-recipe--service-list .eb-recipe-item__media { aspect-ratio: auto; height: 100%; min-height: 8rem; }
+.eb-business-recipe--service-list .eb-recipe-item__action { border-top: 1px solid var(--eb-border); padding-top: .65rem; }
+@media (max-width: 440px) {
+  .eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { grid-template-columns: minmax(0, 5rem) minmax(0, 1fr); }
+  .eb-recipe-item__body { padding: .8rem; }
+  .eb-business-recipe .eb-btn { min-height: 44px; white-space: normal; text-align: center; }
+}
+.eb-business-recipe--product-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+.eb-business-recipe--product-list .eb-recipe-item__media { height: 100%; min-height: 7rem; aspect-ratio: auto; }
+.eb-business-recipe--product-list .eb-recipe-item__media img { object-fit: contain; }

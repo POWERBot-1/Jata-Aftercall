@@ -17,6 +17,7 @@
  */
 
 import { validateExperienceDocument } from "./schema";
+import { seedBusinessRecipe } from "./businessRecipes";
 import { themesForCategory } from "./themes";
 import { buildArtDirectedCandidate, type DesignBrief, type ArtDirectedCandidate } from "./artDirector";
 import type { TemplateFamilyKey } from "./templateFamilies";
@@ -144,7 +145,7 @@ export function seedNewDocument(
 ): { document: ExperienceDocument; diversity: { status: "no-history"; limitation: string; seed: string } } {
   const seed = `${businessId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40)}:1`;
   return {
-    document: { ...buildArtDirectedCandidate(doc, seed).document, generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: 0 } },
+    document: seedBusinessRecipe({ ...buildArtDirectedCandidate(doc, seed).document, generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: 0 } }),
     diversity: { status: "no-history", limitation: NO_PUBLISHED_HISTORY_LIMITATION, seed },
   };
 }

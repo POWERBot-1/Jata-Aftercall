@@ -13,6 +13,7 @@ import { isSectionType } from "./sections";
 import { isValidThemeKey } from "./themes";
 import { isRenderPreference } from "./renderMode";
 import { isSupportedExperienceVersion } from "./schemaVersion";
+import { parseBusinessRecipeConfig } from "./businessRecipes";
 import { isTemplateFamily, templateFamily, DESIGN_GOALS, DESIGN_PERSONALITIES, DESIGN_AUDIENCES, DESIGN_DENSITIES, CATALOGUE_LAYOUT_KEYS, GALLERY_LAYOUT_KEYS } from "./templateFamilies";
 import { PHOTOGRAPHY_STYLE_KEYS, type ExperienceDocument } from "./types";
 
@@ -153,9 +154,11 @@ export function validateExperienceDocument(input: unknown, options: { allowLegac
     }
     number(section.limit, `${path}.limit`, 1, 24, true);
     url(section.imageUrl, `${path}.imageUrl`, true);
-    // There are no executable interactions/scenes in v1. An empty legacy config is harmless.
+    // Legacy empty config remains valid. ONLY the implemented category/section-matched v2 recipe is accepted.
     if (section.config !== undefined && (!isRecord(section.config) || Object.keys(section.config).length > 0)) {
-      issue(`${path}.config`, "unsupported_config", "Only implemented, validated experience recipes may be configured.");
+      if (raw.version !== 2 || !parseBusinessRecipeConfig(section.config, String(raw.categoryKey), String(section.type))) {
+        issue(`${path}.config`, "unsupported_config", "Only implemented, versioned business recipes for this category and section may be configured.");
+      }
     }
     if (section.images !== undefined) {
       if (!Array.isArray(section.images) || section.images.length > 24) issue(`${path}.images`, "invalid_images", "Use at most twenty-four section images.");

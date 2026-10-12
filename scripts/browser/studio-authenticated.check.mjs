@@ -114,6 +114,17 @@ async function preview(page, fixture, marker) {
       state.width >= (device === "Mobile" ? 380 : 1000) && Math.abs(state.width - state.frameWidth) <= 1 && !state.overflow);
   }
 }
+async function recipeUI(page, fixture, label, detail, enabled) {
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
+  await page.click(`button[aria-label="Edit ${label}"]`);
+  const checkbox = await page.waitForSelector(`input[aria-label="Show ${detail}"]`);
+  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
+  await checkbox.click();
+  check(`${fixture.category}: actual recipe detail UI save ${enabled ? "on" : "off"}`, (await received).status() === 200);
+  const saved = await snapshot(fixture.id);
+  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 detail persists without publication`, section.config.businessRecipe.version === 1 && section.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
+}
 async function publicState(page, fixture, marker, visible, suffix = "") {
   await page.goto(`${origin}/b/${fixture.slug}${suffix}`, { waitUntil: "networkidle0" });
   const state = await page.evaluate((marker) => ({ found: document.body.textContent.includes(marker),
@@ -177,7 +188,10 @@ try {
     const business = await prisma.business.findFirst({ where: { owner: { email } } });
     if (business) created.push({ id: business.id, ownerId: business.ownerId, slug: business.slug, email, category });
     check(`${category}: actual HTTP registration`, registered.status === 200 && Boolean(business));
-    const fixture = { ...created.at(-1), ownerPage, ownerContext, itemName, price };
+    const recipeSpec = { retail: { key: "retail-stock", section: "featured", label: "Featured", field: "brand", detail: "Brand", fact: "QA owner brand" },
+      food: { key: "food-menu", section: "menu", label: "Menu", field: "ingredients", detail: "Ingredients", fact: "QA owner ingredients" },
+      salon: { key: "salon-booking", section: "services", label: "Services", field: "staff", detail: "Specialist", fact: "QA owner specialist" } }[category];
+    const fixture = { ...created.at(-1), ownerPage, ownerContext, itemName, price, recipeKey: recipeSpec.key, recipeField: recipeSpec.field, recipeFact: recipeSpec.fact };
     const cookie = (await ownerPage.cookies()).find((entry) => entry.name === "jata_session");
     check(`${category}: server-issued HttpOnly/Secure/SameSite session`, cookie?.httpOnly && cookie?.secure && cookie?.sameSite === "Lax" && cookie?.path === "/");
     check(`${category}: JWT not accessible to browser JS`, !(await ownerPage.evaluate(() => document.cookie)).includes("jata_session="));
@@ -188,13 +202,17 @@ try {
     check(`${category}: owner saves own business profile`, profile.status === 200);
     const item = category === "salon"
       ? await api(ownerPage, "/api/services", "POST", { businessId: fixture.id, title: itemName, pricingType: "FIXED", priceFrom: price,
-        durationMinutes: 60, depositKES: 0, bookingEnabled: true, isActive: true,
+        durationMinutes: 60, depositKES: 0, bookingEnabled: true, isActive: true, staffName: recipeSpec.fact,
         availability: JSON.stringify({ days: [0, 1, 2, 3, 4, 5, 6], slots: ["11:00", "14:00"], slotMinutes: 60, capacity: 1 }) })
-      : await api(ownerPage, "/api/products", "POST", { businessId: fixture.id, name: itemName, basePriceKES: price, quantity: 50, isActive: true });
+      : await api(ownerPage, "/api/products", "POST", { businessId: fixture.id, name: itemName, basePriceKES: price, quantity: 50, isActive: true,
+        ...(category === "food" ? { ingredients: recipeSpec.fact, portionSize: "QA owner plate", prepMinutes: 15 } : { brand: recipeSpec.fact }) });
     fixture.itemId = category === "salon" ? item.body?.service?.id : item.body?.product?.id;
     check(`${category}: actual tenant catalogue write`, item.status === 201 && Boolean(fixture.itemId));
     const seeded = await api(ownerPage, "/api/experience", "POST", { businessId: fixture.id, categoryKey: category });
     check(`${category}: safe structured creation through HTTP (201)`, seeded.status === 201 && seeded.body?.document?.version === 2 && Boolean(seeded.body.document.artDirection), `status=${seeded.status}, format=${seeded.body?.document?.version ?? "missing"}`);
+    const recipeSection = seeded.body.document?.sections.find((section) => section.type === recipeSpec.section);
+    fixture.recipeSectionId = recipeSection?.id;
+    check(`${category}: registered category recipe is seeded with real catalogue source`, recipeSection?.config?.businessRecipe?.key === recipeSpec.key && recipeSection.config.businessRecipe.version === 1);
     await patch(ownerPage, fixture, { brand: { heroImageUrl: `${origin}/dev/motion-asset.svg`, tagline: `QA first ${category} ${runId}` },
       document: { ...seeded.body.document, renderPreference: "lite", brand: { ...seeded.body.document.brand, heroImageUrl: `${origin}/dev/motion-asset.svg`, tagline: `QA first ${category} ${runId}` } } });
     const before = await snapshot(fixture.id);
@@ -214,11 +232,24 @@ try {
     const editResponse = ownerPage.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
     await input.press("Tab");
     check(`${category}: actual design UI save`, (await editResponse).status() === 200);
-    const edited = await snapshot(fixture.id);
+    let edited = await snapshot(fixture.id);
     check(`${category}: saved UI content and draft revision persist`, JSON.parse(edited.draftJson).brand.description === description && edited.draftVersion > before.draftVersion);
     const stale = await api(ownerPage, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: before.draftVersion, brand: { tagline: "STALE MUST NEVER WIN" } });
     check(`${category}: stale edit refused without overwrite`, stale.status === 409 && stale.body.code === "draft_version_conflict" && (await snapshot(fixture.id)).draftJson === edited.draftJson);
+    const invalidRecipeBefore = await snapshot(fixture.id);
+    const invalidRecipe = await api(ownerPage, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: invalidRecipeBefore.draftVersion,
+      op: "update", sectionId: fixture.recipeSectionId, patch: { config: { businessRecipe: { version: 99, key: recipeSpec.key, details: ["price"] } } } });
+    check(`${category}: raw unsupported recipe/authority config refused without overwrite`, invalidRecipe.status === 400 && (await snapshot(fixture.id)).draftJson === invalidRecipeBefore.draftJson);
+    await recipeUI(ownerPage, fixture, recipeSpec.label, recipeSpec.detail, false);
     await preview(ownerPage, fixture, `QA first ${category} ${runId}`);
+    check(`${category}: private preview faithfully hides owner-disabled recipe fact`, !(await ownerPage.$eval('iframe[title="Draft preview"]', (iframe) => iframe.contentDocument.body.textContent)).includes(recipeSpec.fact));
+    await recipeUI(ownerPage, fixture, recipeSpec.label, recipeSpec.detail, true);
+    await preview(ownerPage, fixture, `QA first ${category} ${runId}`);
+    check(`${category}: private preview faithfully shows owner-enabled recipe fact`, (await ownerPage.$eval('iframe[title="Draft preview"]', (iframe) => iframe.contentDocument.body.textContent)).includes(recipeSpec.fact));
+    edited = await snapshot(fixture.id); // the actually reviewed post-recipe UI revision, not the earlier design-only snapshot
+    const persistedItem = category === "salon" ? await prisma.service.findUniqueOrThrow({ where: { id: fixture.itemId } }) : await prisma.product.findUniqueOrThrow({ where: { id: fixture.itemId } });
+    check(`${category}: recipe editing does not alter authoritative prices or require dummy rows`, (category === "salon" ? persistedItem.priceFrom : persistedItem.basePriceKES) === price &&
+      (category !== "salon" || await prisma.product.count({ where: { businessId: fixture.id } }) === 0));
     check(`${category}: preview does not publish`, (await snapshot(fixture.id)).publishedJson === null);
 
     // Test-only database entitlement, explicitly NOT a Paystack verification/settlement claim.
@@ -257,9 +288,33 @@ try {
       contact: Boolean(document.querySelector('a[href^="tel:"]')),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 }));
     check(`${category}: no-JS mobile real catalogue/contact HTML`, staticPage.text?.includes(itemName) && staticPage.contact && !staticPage.overflow);
+    await noJS.goto(`${origin}/b/${fixture.slug}/shop`, { waitUntil: "networkidle0" });
+    const recipeStatic = await noJS.evaluate(() => ({ text: document.querySelector("main")?.textContent,
+      key: document.querySelector('[data-business-recipe]')?.getAttribute('data-business-recipe'),
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 }));
+    check(`${category}: no-JS mobile recipe/correct facts readable without overflow`, recipeStatic.key === recipeSpec.key && recipeStatic.text?.includes(itemName) && recipeStatic.text?.includes(recipeSpec.fact) && !recipeStatic.overflow);
     await noJS.close();
     const links = await visitor.evaluate(() => [...document.querySelectorAll("a")].map((link) => link.getAttribute("href")));
     check(`${category}: real tenant call/WhatsApp/directions paths`, links.some((link) => link?.startsWith("tel:")) && links.some((link) => link?.startsWith("https://wa.me/")) && links.some((link) => /maps|google.com/.test(link || "")));
+
+    await visitor.goto(`${origin}/b/${fixture.slug}/shop`, { waitUntil: "networkidle0" });
+    check(`${category}: customer catalogue has functional category recipe and real fact`, await visitor.$eval('[data-business-recipe]', (element) => element.getAttribute('data-business-recipe')) === recipeSpec.key &&
+      (await visitor.evaluate(() => document.querySelector("main").textContent)).includes(recipeSpec.fact));
+    if (category === "salon") {
+      check("salon: no irrelevant stock/cart assumptions in service recipe", !(await visitor.evaluate(() => document.querySelector("main").textContent)).includes("In stock only") && await visitor.$('[data-recipe-action="book"] a'));
+      await clickText(visitor, 'button', '30 min or less');
+      await visitor.waitForFunction(() => document.querySelector("main").textContent.includes("Nothing matches"));
+      await clickText(visitor, 'button', 'Any duration');
+      check("salon: actual duration filter restores owned service", Boolean(await visitor.waitForSelector('[data-recipe-item]')));
+    } else {
+      await clickText(visitor, 'button', category === "food" ? 'Available dishes only' : 'In stock only');
+      check(`${category}: actual category-appropriate availability filter`, Boolean(await visitor.$('[data-recipe-item]')));
+    }
+    await visitor.type('input[type="search"]', 'does-not-exist');
+    await visitor.waitForFunction(() => document.querySelector("main").textContent.includes("Nothing matches"));
+    await visitor.click('input[type="search"]'); await visitor.keyboard.down("Control"); await visitor.keyboard.press("A"); await visitor.keyboard.up("Control"); await visitor.keyboard.press("Backspace");
+    await visitor.waitForSelector('[data-recipe-item]');
+    check(`${category}: actual search/no-match/recovery preserves owned item and price`, (await visitor.evaluate(() => document.querySelector("main").textContent)).includes(itemName));
 
     // Editing and even owner preview cannot replace an already-live snapshot.
     const liveJson = (await snapshot(fixture.id)).publishedJson;
@@ -342,6 +397,8 @@ try {
   for (const [path, method, body] of [
     [`/api/experience?businessId=${second.id}`, "GET"],
     ["/api/experience", "PATCH", { businessId: second.id, expectedDraftVersion: foreignBefore.draftVersion, brand: { tagline: "FOREIGN MUST NEVER WIN" } }],
+    ["/api/experience", "PATCH", { businessId: second.id, expectedDraftVersion: foreignBefore.draftVersion, op: "update", sectionId: second.recipeSectionId,
+      patch: { config: { businessRecipe: { version: 1, key: second.recipeKey, details: [] } } } }],
     ["/api/experience/publish", "POST", { businessId: second.id, expectedDraftVersion: foreignBefore.draftVersion }],
     [`/api/experience/versions?businessId=${second.id}`, "GET"],
     [`/api/experience/history?businessId=${second.id}`, "GET"],

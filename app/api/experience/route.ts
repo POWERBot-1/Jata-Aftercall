@@ -29,6 +29,7 @@ import { isValidThemeKey } from "@/lib/experience/themes";
 import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
 import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { parseBusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
 import { applyStudioFix, STUDIO_FIX_IDS, type StudioFixId } from "@/lib/studio/fixes";
@@ -343,9 +344,19 @@ export async function PATCH(req: Request) {
           if (section) document = updateSection(document, sectionId, { visible: !section.visible });
           break;
         }
-        case "update":
-          document = updateSection(document, sectionId, body?.patch && typeof body.patch === "object" ? body.patch : {});
+        case "update": {
+          const patch = body?.patch && typeof body.patch === "object" ? body.patch as Record<string, unknown> : {};
+          const section = document.sections.find((entry) => entry.id === sectionId);
+          // Check raw nonempty config BEFORE normalizing. Unknown recipes must fail, not silently disappear.
+          if (patch.config !== undefined && patch.config !== null &&
+            (typeof patch.config !== "object" || Array.isArray(patch.config) || Object.keys(patch.config).length > 0) &&
+            (document.version !== 2 || !section || !parseBusinessRecipeConfig(patch.config, document.categoryKey, section.type))) {
+            return NextResponse.json({ error: "This business recipe configuration is not supported for this section." }, { status: 400 });
+          }
+          if (patch.config === null) return NextResponse.json({ error: "Use an empty or supported recipe configuration." }, { status: 400 });
+          document = updateSection(document, sectionId, patch);
           break;
+        }
         case "studio-fix": {
           // "Fix with JATA" (§36): a health-check remedy applied to the draft through this one
           // write path, so it is normalized, versioned and undoable exactly like a manual edit.

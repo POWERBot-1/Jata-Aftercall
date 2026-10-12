@@ -15,6 +15,9 @@ import { sectionLayout } from "@/lib/experience/templateFamilies";
 import { formatOpeningHours } from "@/lib/openingHours";
 import { getDirectionsUrl } from "@/lib/location";
 import { getWhatsAppUrl, normalizeKePhone } from "@/lib/phone";
+import { itemCardDataFor } from "@/lib/experience/catalogue";
+import { sectionBusinessRecipe, recipeCatalogue, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
+import { BusinessCatalogue } from "./BusinessCatalogue";
 import { ItemCard, ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
 import { ContactTracker } from "./Track";
@@ -105,7 +108,8 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 }
 
 /** Renderer-backed geometries. Prices, stock and links remain authoritative StorefrontData. */
-function Catalogue({ items, data, layout, label }: { items: StorefrontItem[]; data: StorefrontData; layout: string; label: string }) {
+function Catalogue({ items, data, layout, label, recipe }: { items: StorefrontItem[]; data: StorefrontData; layout: string; label: string; recipe?: BusinessRecipeConfig | null }) {
+  if (recipe) return <BusinessCatalogue items={items} data={itemCardDataFor(data)} config={recipe} layout={layout} />;
   if (layout === "list" || layout === "compact") return <div className="eb-grid eb-grid--list">{items.map((item) => <ItemRow key={item.id} item={item} data={data} />)}</div>;
   if (layout === "comparison") return <div className="eb-comparison" role="region" tabIndex={0} aria-label={`${label} comparison`}><table>
     <caption>{label} — compare current details</caption><thead><tr><th scope="col">Item</th><th scope="col">Price</th><th scope="col">Availability</th><th scope="col">Action</th></tr></thead>
@@ -120,14 +124,17 @@ function Catalogue({ items, data, layout, label }: { items: StorefrontItem[]; da
 export function SectionRenderer({ section, data }: { section: ExperienceSection; data: StorefrontData }) {
   const { profile } = data;
   const layout = sectionLayout(section, data.document.artDirection);
-  const catalogue = profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue") ? data.items : data.services;
+  const recipe = sectionBusinessRecipe(section, data.document);
+  const recipeItems = recipe ? recipeCatalogue(data, recipe) : null;
+  const catalogue = recipeItems || (profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue") ? data.items : data.services);
   const featured = (profile.capabilities.includes("booking") ? data.services : data.items).filter((item) => item.isFeatured);
   const base = featured.length > 0 ? featured : (profile.capabilities.includes("booking") ? data.services : data.items).slice(0, 6);
 
   switch (section.type) {
     case "featured": {
       const limit = Math.max(2, Math.min(12, section.limit || 6));
-      const items = base.slice(0, limit);
+      const preferred = recipeItems ? recipeItems.filter((item) => item.isFeatured) : null;
+      const items = (recipeItems ? preferred!.length ? preferred! : recipeItems : base).slice(0, limit);
       return (
         <SectionShell id={section.id} title={section.title} subtitle={section.subtitle}>
           {items.length === 0 ? (
@@ -136,7 +143,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
               body={`Add your first ${profile.itemNoun.toLowerCase()} in the dashboard and it shows up here instantly.`}
             />
           ) : (
-            <Catalogue items={items} data={data} layout={layout} label={section.title || profile.catalogueLabel} />
+            <Catalogue items={items} data={data} layout={layout} label={section.title || profile.catalogueLabel} recipe={recipe} />
           )}
         </SectionShell>
       );
@@ -167,7 +174,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
               id={`${section.id}-${category.replace(/\s+/g, "-").toLowerCase()}`}
               title={`${section.title || profile.catalogueLabel} — ${category}`}
             >
-              <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : "list"} label={`${section.title || profile.catalogueLabel} — ${category}`} />
+              <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : "list"} label={`${section.title || profile.catalogueLabel} — ${category}`} recipe={recipe} />
             </SectionShell>
           ))}
         </div>
@@ -175,13 +182,13 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
     }
 
     case "services": {
-      const items = data.services.filter((service) => !section.filter || service.category === section.filter);
+      const items = (recipeItems || data.services).filter((service) => !section.filter || service.category === section.filter);
       return (
         <SectionShell id={section.id} title={section.title} subtitle={section.subtitle} tone="muted">
           {items.length === 0 ? (
             <EmptyState title="No services listed yet" body="Add the services you offer, with prices or durations, so customers can book." />
           ) : (
-            <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : section.layout === "grid" ? "grid" : "list"} label={section.title || "Services"} />
+            <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : section.layout === "grid" ? "grid" : "list"} label={section.title || "Services"} recipe={recipe} />
           )}
         </SectionShell>
       );

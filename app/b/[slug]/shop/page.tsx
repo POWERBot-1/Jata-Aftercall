@@ -8,6 +8,8 @@ import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { CatalogueClient } from "@/components/storefront/CatalogueClient";
 import { priceBandsFor, itemCardDataFor } from "@/lib/experience/catalogue";
 
+import { documentBusinessRecipe, recipeCatalogue, BUSINESS_RECIPES, sectionBusinessRecipe } from "@/lib/experience/businessRecipes";
+
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ category?: string }> };
@@ -43,7 +45,9 @@ export default async function ShopPage({ params, searchParams }: Props) {
   if (!data) notFound();
 
   const booking = data.profile.capabilities.includes("booking");
-  const catalogue = booking && data.items.length === 0 ? data.services : data.profile.capabilities.includes("commerce") || data.profile.capabilities.includes("catalogue") ? data.items : data.services;
+  const recipe = documentBusinessRecipe(data.document);
+  const definition = BUSINESS_RECIPES.find((entry) => entry.key === recipe?.key);
+  const catalogue = recipe ? recipeCatalogue(data, recipe) : booking && data.items.length === 0 ? data.services : data.profile.capabilities.includes("commerce") || data.profile.capabilities.includes("catalogue") ? data.items : data.services;
   const prices = catalogue.map((item) => item.price).filter((price): price is number => typeof price === "number" && price > 0);
 
   return (
@@ -64,10 +68,12 @@ export default async function ShopPage({ params, searchParams }: Props) {
             data={itemCardDataFor(data)}
             businessId={data.business.id}
             initialCategory={category}
+            recipe={recipe}
+            recipeLayout={data.document.sections.find((section) => section.type === definition?.primarySection && sectionBusinessRecipe(section, data.document))?.layout}
             filters={{
-              categories: data.categories,
-              priceBands: booking ? [] : priceBandsFor(catalogue),
-              showStockFilter: !booking,
+              categories: recipe ? [...new Set(catalogue.map((item) => item.category).filter((value): value is string => Boolean(value)))] : data.categories,
+              priceBands: (definition?.source === "services" || booking) ? [] : priceBandsFor(catalogue),
+              showStockFilter: definition ? definition.source === "products" : !booking,
               searchPlaceholder: data.profile.searchPlaceholder,
               itemNoun: data.profile.itemNoun,
               itemNounPlural: data.profile.itemNounPlural,

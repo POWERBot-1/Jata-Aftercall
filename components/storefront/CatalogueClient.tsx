@@ -12,6 +12,8 @@ import { useMemo, useState } from "react";
 import type { ItemCardData } from "@/lib/experience/catalogue";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { ItemCard } from "./ItemCard";
+import { BusinessCatalogue } from "./BusinessCatalogue";
+import { BUSINESS_RECIPES, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { trackEvent } from "./Track";
 
 export type CatalogueFilters = {
@@ -29,16 +31,22 @@ export function CatalogueClient({
   filters,
   initialCategory,
   businessId,
+  recipe,
+  recipeLayout,
 }: {
   items: StorefrontItem[];
   data: ItemCardData;
   filters: CatalogueFilters;
   initialCategory?: string;
   businessId: string;
+  recipe?: BusinessRecipeConfig | null;
+  recipeLayout?: string;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory || "");
   const [priceBand, setPriceBand] = useState("");
+  const definition = BUSINESS_RECIPES.find((entry) => entry.key === recipe?.key);
+  const [duration, setDuration] = useState<"ALL" | "SHORT" | "LONG">("ALL");
   const [availability, setAvailability] = useState<"ALL" | "AVAILABLE">("ALL");
 
   const visible = useMemo(() => {
@@ -50,6 +58,8 @@ export function CatalogueClient({
       if (band) result = result.filter((item) => item.price !== null && item.price >= band.min && item.price <= band.max);
     }
     if (availability === "AVAILABLE") result = result.filter((item) => item.stockStatus !== "OUT_OF_STOCK" && item.stockStatus !== "DISCONTINUED");
+    if (duration === "SHORT") result = result.filter((item) => item.durationMinutes !== null && item.durationMinutes <= 30);
+    if (duration === "LONG") result = result.filter((item) => item.durationMinutes !== null && item.durationMinutes > 30);
     if (needle) {
       result = result.filter((item) =>
         [item.name, item.description, item.category, item.brand, ...(item.tags || [])]
@@ -60,7 +70,7 @@ export function CatalogueClient({
       );
     }
     return result;
-  }, [items, category, priceBand, availability, query, filters.priceBands]);
+  }, [items, category, priceBand, availability, query, duration, filters.priceBands]);
 
   return (
     <div>
@@ -86,10 +96,18 @@ export function CatalogueClient({
             aria-pressed={availability === "AVAILABLE"}
             onClick={() => setAvailability(availability === "AVAILABLE" ? "ALL" : "AVAILABLE")}
           >
-            In stock only
+            {definition?.availabilityLabel || "In stock only"}
           </button>
         ) : null}
       </div>
+
+      {definition?.source === "services" ? (
+        <div className="eb-chip-row" role="group" aria-label="Service duration" style={{ marginBottom: "1rem" }}>
+          {([["ALL", "Any duration"], ["SHORT", "30 min or less"], ["LONG", "Over 30 min"]] as const).map(([value, label]) => (
+            <button key={value} type="button" className={`eb-chip ${duration === value ? "eb-chip--active" : ""}`} aria-pressed={duration === value} onClick={() => setDuration(value)}>{label}</button>
+          ))}
+        </div>
+      ) : null}
 
       {filters.categories.length > 0 ? (
         <div className="eb-chip-row" style={{ marginBottom: "1.25rem" }}>
@@ -138,6 +156,8 @@ export function CatalogueClient({
           <h3 className="eb-h3">Nothing matches that yet</h3>
           <p>Try a different search, or clear the filters to see everything.</p>
         </div>
+      ) : recipe ? (
+        <BusinessCatalogue items={visible} data={data} config={recipe} layout={recipeLayout} />
       ) : (
         <div className="eb-grid eb-grid--auto">
           {visible.map((item) => (

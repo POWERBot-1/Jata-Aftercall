@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import type { ExperienceDocument, ExperienceSection } from "@/lib/experience/types";
 import { addableSectionsFor, sectionDefinition, sectionLabel, type SectionField } from "@/lib/experience/sections";
 import { MediaPicker } from "./MediaPicker";
+import { businessRecipeFor, defaultBusinessRecipe, sectionBusinessRecipe } from "@/lib/experience/businessRecipes";
 
 type SaveState = { tone: "idle" | "saving" | "saved" | "error"; text?: string };
 
@@ -157,6 +158,28 @@ export function SectionEditor({
             <p className="mt-1 text-sm text-zinc-600">{sectionDefinition(editing.type)?.description}</p>
 
             <div className="mt-4 space-y-3">
+              {document.version === 2 && businessRecipeFor(document.categoryKey, editing.type) ? (() => {
+                const recipe = businessRecipeFor(document.categoryKey, editing.type)!;
+                const config = sectionBusinessRecipe(editing, document);
+                return (
+                  <fieldset className="rounded-xl border border-zinc-200 p-3" disabled={state.tone === "saving"}>
+                    <legend className="jata-label">{recipe.label} · recipe v1</legend>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" aria-label={`Use ${recipe.label} recipe`} checked={Boolean(config)}
+                        onChange={(event) => patchSection(editing.id, { config: event.target.checked ? { businessRecipe: defaultBusinessRecipe(recipe) } : {} })} />
+                      Use {recipe.label} recipe
+                    </label>
+                    <p className="jata-hint">Uses your real {recipe.source}. No facts, prices, stock or payment rules are generated. These details and the layout are shared with the catalogue preview.</p>
+                    {config ? recipe.details.map((detail) => (
+                      <label key={detail.key} className="mt-2 flex items-center gap-2 text-sm">
+                        <input type="checkbox" aria-label={`Show ${detail.label}`} checked={config.details.includes(detail.key)}
+                          onChange={(event) => patchSection(editing.id, { config: { businessRecipe: { ...config, details: event.target.checked ? [...config.details, detail.key] : config.details.filter((key) => key !== detail.key) } } })} />
+                        Show {detail.label}
+                      </label>
+                    )) : null}
+                  </fieldset>
+                );
+              })() : null}
               <div className="jata-field">
                 <label className="jata-label" htmlFor={`section-title-${editing.id}`}>Heading</label>
                 <input

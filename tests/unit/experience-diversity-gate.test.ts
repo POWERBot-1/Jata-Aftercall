@@ -138,7 +138,11 @@ describe("new draft seeding", () => {
     for (const section of doc.sections) {
       const { layout, ...content } = section;
       const { layout: candidateLayout, ...candidateContent } = document.sections.find((entry) => entry.id === section.id)!;
-      expect(candidateContent).toEqual(content);
+      // The new food-menu recipe adds only this exact registered presentation config.
+      // All business/content fields and every other section must still be unchanged.
+      expect(candidateContent).toEqual(section.type === "menu" ? {
+        ...content, config: { businessRecipe: { version: 1, key: "food-menu", details: ["ingredients", "portion", "prep", "options"] } },
+      } : content);
     }
   });
 });
