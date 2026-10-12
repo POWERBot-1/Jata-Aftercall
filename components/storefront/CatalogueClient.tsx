@@ -15,6 +15,7 @@ import { ItemCard } from "./ItemCard";
 import { BusinessCatalogue } from "./BusinessCatalogue";
 import { BUSINESS_RECIPES, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { trackEvent } from "./Track";
+import { isBookableConsultation } from "@/lib/experience/professionalWorkflow";
 
 export type CatalogueFilters = {
   categories: string[];
@@ -47,6 +48,7 @@ export function CatalogueClient({
   const [priceBand, setPriceBand] = useState("");
   const definition = BUSINESS_RECIPES.find((entry) => entry.key === recipe?.key);
   const [duration, setDuration] = useState<"ALL" | "SHORT" | "LONG">("ALL");
+  const [requestType, setRequestType] = useState<"ALL" | "BOOK" | "ENQUIRE">("ALL");
   const [availability, setAvailability] = useState<"ALL" | "AVAILABLE">("ALL");
 
   const visible = useMemo(() => {
@@ -60,6 +62,8 @@ export function CatalogueClient({
     if (availability === "AVAILABLE") result = result.filter((item) => item.stockStatus !== "OUT_OF_STOCK" && item.stockStatus !== "DISCONTINUED");
     if (duration === "SHORT") result = result.filter((item) => item.durationMinutes !== null && item.durationMinutes <= 30);
     if (duration === "LONG") result = result.filter((item) => item.durationMinutes !== null && item.durationMinutes > 30);
+    if (requestType === "BOOK") result = result.filter(isBookableConsultation);
+    if (requestType === "ENQUIRE") result = result.filter((item) => !isBookableConsultation(item));
     if (needle) {
       result = result.filter((item) =>
         [item.name, item.description, item.category, item.brand, ...(item.tags || [])]
@@ -70,7 +74,7 @@ export function CatalogueClient({
       );
     }
     return result;
-  }, [items, category, priceBand, availability, query, duration, filters.priceBands]);
+  }, [items, category, priceBand, availability, query, duration, requestType, filters.priceBands]);
 
   return (
     <div>
@@ -101,6 +105,13 @@ export function CatalogueClient({
         ) : null}
       </div>
 
+      {definition?.key === "professional-enquiry" ? (
+        <div className="eb-chip-row" role="group" aria-label="Professional request type" style={{ marginBottom: "1rem" }}>
+          {([["ALL", "All services"], ["BOOK", "Book a consultation"], ["ENQUIRE", "Request a quote"]] as const).map(([value, label]) => (
+            <button key={value} type="button" className={`eb-chip ${requestType === value ? "eb-chip--active" : ""}`} aria-pressed={requestType === value} onClick={() => setRequestType(value)}>{label}</button>
+          ))}
+        </div>
+      ) : null}
       {definition?.source === "services" ? (
         <div className="eb-chip-row" role="group" aria-label="Service duration" style={{ marginBottom: "1rem" }}>
           {([["ALL", "Any duration"], ["SHORT", "30 min or less"], ["LONG", "Over 30 min"]] as const).map(([value, label]) => (

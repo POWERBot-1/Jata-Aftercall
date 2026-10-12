@@ -2,7 +2,7 @@
 import type { CategoryKey, ExperienceDocument, ExperienceSection, SectionType } from "./types";
 import type { StorefrontData, StorefrontItem } from "./storefront";
 
-export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking";
+export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking" | "professional-enquiry";
 export type BusinessRecipeDetail = "brand" | "variants" | "stock" | "ingredients" | "portion" | "prep" | "options" | "duration" | "staff" | "deposit";
 export type BusinessRecipeConfig = { version: 1; key: BusinessRecipeKey; details: BusinessRecipeDetail[] };
 export type BusinessRecipe = Readonly<{
@@ -22,6 +22,9 @@ export const BUSINESS_RECIPES: readonly BusinessRecipe[] = [
   { version: 1, key: "salon-booking", category: "salon", label: "Salon services & booking", primarySection: "services", sections: ["services", "featured"],
     source: "services", layout: "service-list",
     details: [{ key: "duration", label: "Duration" }, { key: "staff", label: "Specialist" }, { key: "deposit", label: "Deposit information" }] },
+  { version: 1, key: "professional-enquiry", category: "professional", label: "Professional services & enquiries", primarySection: "services", sections: ["services", "featured"],
+    source: "services", layout: "service-list",
+    details: [{ key: "staff", label: "Professional" }, { key: "duration", label: "Consultation length" }, { key: "deposit", label: "Booking deposit information" }] },
 ];
 export function businessRecipeFor(category: string, sectionType?: string): BusinessRecipe | undefined {
   return BUSINESS_RECIPES.find((recipe) => recipe.category === category && (sectionType === undefined || recipe.sections.includes(sectionType as SectionType)));

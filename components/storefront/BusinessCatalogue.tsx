@@ -5,11 +5,12 @@ import type { ItemCardData } from "@/lib/experience/catalogue";
 import { BUSINESS_RECIPES, recipeFacts, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
+import { professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
 
 export function BusinessCatalogue({ items, data, config, layout }: { items: StorefrontItem[]; data: ItemCardData; config: BusinessRecipeConfig; layout?: string }) {
   const recipe = BUSINESS_RECIPES.find((entry) => entry.key === config.key);
   if (!recipe) return null;
-  const presentation = layout === "grid" ? "product-grid" : layout === "list" || layout === "compact" ? recipe.category === "salon" ? "service-list" : recipe.category === "food" ? "menu-list" : "product-list" : recipe.layout;
+  const presentation = layout === "grid" ? "product-grid" : layout === "list" || layout === "compact" ? recipe.source === "services" ? "service-list" : recipe.category === "food" ? "menu-list" : "product-list" : recipe.layout;
   return (
     <ul className={`eb-business-recipe eb-business-recipe--${presentation}`} data-business-recipe={recipe.key} data-recipe-version={config.version}>
       {items.map((item) => {
@@ -19,7 +20,8 @@ export function BusinessCatalogue({ items, data, config, layout }: { items: Stor
         const cart = recipe.source === "products" && item.kind === "product" && data.profile.capabilities.includes("commerce") &&
           item.pricingType !== "QUOTE" && item.price !== null && !unavailable && !options;
         const book = item.kind === "service" && item.bookingEnabled && data.profile.capabilities.includes("booking") && item.pricingType !== "QUOTE" && item.price !== null;
-        const action = cart ? "cart" : book ? "book" : options && !unavailable ? "options" : item.pricingType === "QUOTE" ? "enquire" : "details";
+        const professional = recipe.key === "professional-enquiry" && item.kind === "service";
+        const action = cart ? "cart" : book ? "book" : professional ? "enquire" : options && !unavailable ? "options" : item.pricingType === "QUOTE" ? "enquire" : "details";
         return (
           <li key={item.id}>
             <article className={`eb-card eb-card--${data.theme.treatment.cardStyle} eb-recipe-item`} data-recipe-item={item.id}>
@@ -39,7 +41,7 @@ export function BusinessCatalogue({ items, data, config, layout }: { items: Stor
                 <div className="eb-recipe-item__action" data-recipe-action={action}>
                   <ItemPrice item={item} />
                   {cart ? <AddToCartButton productId={item.id} name={item.name} unitPriceKES={item.price!} imageUrl={item.imageUrl} label={data.profile.cta.add} /> :
-                    <Link className="eb-btn eb-btn--outline eb-btn--sm" href={book ? `/b/${data.business.slug}/book?service=${encodeURIComponent(item.id)}` : href}>
+                    <Link className="eb-btn eb-btn--outline eb-btn--sm" href={book ? `/b/${data.business.slug}/book?service=${encodeURIComponent(item.id)}` : professional ? professionalEnquiryHref(data.business.slug, item.id) : href}>
                       {book ? "Book this service" : action === "options" ? "Choose options" : action === "enquire" ? "Request a quote" : "View details"}
                     </Link>}
                 </div>

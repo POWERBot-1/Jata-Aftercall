@@ -8,6 +8,7 @@ import { PublishPanel } from "@/components/dashboard/PublishPanel";
 import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
 import { CreateExperienceForm } from "@/components/dashboard/CreateExperienceForm";
 import { WebsiteHealth } from "@/components/dashboard/WebsiteHealth";
+import { EnquiryBoard } from "@/components/dashboard/EnquiryBoard";
 
 export const metadata: Metadata = { title: "Website studio" };
 export const dynamic = "force-dynamic";
@@ -90,6 +91,7 @@ export default async function StudioHomePage({ params }: Props) {
       )}
 
       {experience ? <WebsiteHealth businessId={business.id} /> : null}
+      {experience && document.categoryKey === "professional" ? <EnquiryBoard businessId={business.id} /> : null}
 
       {experience ? (
         <section className="jata-card">

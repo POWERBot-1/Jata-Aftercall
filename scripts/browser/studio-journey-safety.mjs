@@ -7,6 +7,7 @@ const METHODS = {
   "/api/products": ["GET", "POST"], "/api/services": ["GET", "POST"],
   "/api/storefront/quote": ["POST"], "/api/storefront/booking": ["GET", "POST"],
   "/api/bookings": ["GET", "PATCH"], "/api/analytics/event": ["POST"],
+  "/api/storefront/enquiry": ["GET", "POST"],
 };
 
 /** An explicit opt-in AND the exact disposable workflow database are required before any write. */

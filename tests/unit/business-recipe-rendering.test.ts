@@ -5,6 +5,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { CartProvider } from "@/components/storefront/CartProvider";
 import { BusinessCatalogue } from "@/components/storefront/BusinessCatalogue";
 import { SectionRenderer } from "@/components/storefront/Sections";
+import { ItemDetailClient } from "@/components/storefront/ItemDetailClient";
 import { CatalogueClient } from "@/components/storefront/CatalogueClient";
 import { getExperienceProfile } from "@/lib/experience/categories";
 import { resolveExperienceTheme } from "@/lib/experience/themes";
@@ -17,14 +18,14 @@ const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() 
 function dataFor(category: string): StorefrontData {
   const document = seedNewDocument(createExperienceDocument({ categoryKey: category, businessName: "Owned business" }), "QA-RECIPE").document;
   const profile = getExperienceProfile(category);
-  const item: StorefrontItem = { id: "owned-row", kind: category === "salon" ? "service" : "product", name: "Owned catalogue fact", description: "Owned description",
+  const item: StorefrontItem = { id: "owned-row", kind: ["salon", "professional"].includes(category) ? "service" : "product", name: "Owned catalogue fact", description: "Owned description",
     price: 650, wasPrice: null, priceLabel: null, pricingType: "FIXED", imageUrl: "/favicon.svg", images: [], category: "Owned category", tags: [],
     brand: "Owned brand", portionSize: "Owned plate", ingredients: "Owned ingredients", prepMinutes: 15, durationMinutes: category === "salon" ? 60 : null,
     depositKES: 0, staffName: "Owned specialist", availability: null, bookingEnabled: category === "salon", stockStatus: "IN_STOCK", isFeatured: false,
     variants: [], variantOptions: {}, addOns: [] };
   return { business: { id: "owned-business", slug: "owned-slug", name: "Owned business", category, phone: "0712345678", whatsapp: null,
     location: null, lat: null, lng: null, description: null, logoUrl: null, isPublished: true, status: "ACTIVE" },
-    document, profile, theme: resolveExperienceTheme(profile.defaultThemeKey), items: category === "salon" ? [] : [item], services: category === "salon" ? [item] : [],
+    document, profile, theme: resolveExperienceTheme(profile.defaultThemeKey), items: ["salon", "professional"].includes(category) ? [] : [item], services: ["salon", "professional"].includes(category) ? [item] : [],
     offer: null, categories: ["Owned category"], isPreview: false, publishedVersion: 3 };
 }
 function render(child: React.ReactNode, data: StorefrontData) {
@@ -73,5 +74,30 @@ describe("functional category recipe SSR", () => {
     const data = dataFor("food"); const config = { ...defaultBusinessRecipe(businessRecipeFor("food")!), details: [] };
     const html = render(React.createElement(BusinessCatalogue, { items: data.items, data: itemCardDataFor(data), config, layout: "grid" }), data);
     expect(html).toContain("eb-business-recipe--product-grid"); expect(html).not.toContain("Owned ingredients"); expect(html).not.toContain("Owned plate"); expect(html).toContain("KES 650");
+  });
+});
+
+describe("professional enquiries are a functional fourth service recipe", () => {
+  it("renders real quote work with an asynchronous enquiry entry, no cart/stock/appointment assumptions", () => {
+    const data = dataFor("professional"); const item = data.services[0]; item.price = null; item.pricingType = "QUOTE"; item.bookingEnabled = false;
+    const config = documentBusinessRecipe(data.document)!;
+    const html = render(React.createElement(CatalogueClient, { items: data.services, data: itemCardDataFor(data), recipe: config,
+      recipeLayout: "list", businessId: data.business.id, filters: { categories: [], priceBands: [], showStockFilter: false,
+        searchPlaceholder: data.profile.searchPlaceholder, itemNoun: "Service", itemNounPlural: "Services" } }), data);
+    expect(html).toContain('data-business-recipe="professional-enquiry"'); expect(html).toContain("eb-business-recipe--service-list");
+    expect(html).toContain("/b/owned-slug/enquire?service=owned-row"); expect(html).toContain('aria-label="Professional request type"');
+    expect(html).not.toContain("In stock only"); expect(html).not.toContain('data-recipe-action="cart"'); expect(html).not.toContain("Book this service");
+    expect(item.price).toBeNull(); expect(data.items).toEqual([]);
+  });
+  it("keeps actual fixed bookable consultations on the existing booking/payment path", () => {
+    const data = dataFor("professional"); data.services[0].bookingEnabled = true;
+    const html = render(React.createElement(BusinessCatalogue, { items: data.services, data: itemCardDataFor(data), config: documentBusinessRecipe(data.document)!, layout: "list" }), data);
+    expect(html).toContain("/book?service=owned-row"); expect(html).toContain('data-recipe-action="book"'); expect(html).not.toContain('data-recipe-action="cart"');
+  });
+  it("professional detail shows only one appropriate request CTA, not duplicate broken booking links", () => {
+    const data = dataFor("professional"); const item = data.services[0]; item.pricingType = "QUOTE"; item.price = null; item.bookingEnabled = false;
+    const html = render(React.createElement(ItemDetailClient, { item, slug: data.business.slug, businessId: data.business.id,
+      capabilities: data.profile.capabilities, cta: data.profile.cta, itemNoun: "Service", related: [], professional: true }), data);
+    expect(html).toContain("/enquire?service=owned-row"); expect(html).not.toContain("/book?service=owned-row"); expect(html).not.toContain("Add to basket");
   });
 });

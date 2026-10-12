@@ -13,7 +13,7 @@ function item(kind: "product" | "service", id: string): StorefrontItem {
 }
 
 describe("registered business recipes", () => {
-  it.each(["retail", "food", "salon"])("seeds a validated versioned %s recipe without dummy records or changing business facts", (category) => {
+  it.each(["retail", "food", "salon", "professional"])("seeds a validated versioned %s recipe without dummy records or changing business facts", (category) => {
     const base = createExperienceDocument({ categoryKey: category, businessName: "Owner facts", phone: "0712345678" });
     const doc = seeded(category); const recipe = businessRecipeFor(category)!;
     expect(documentBusinessRecipe(doc)).toEqual(defaultBusinessRecipe(recipe));
@@ -28,7 +28,7 @@ describe("registered business recipes", () => {
     expect(seedBusinessRecipe(legacy)).toBe(legacy);
     const v2 = seeded("food"); v2.sections = v2.sections.map((section) => ({ ...section, config: undefined }));
     expect(documentBusinessRecipe(normalizeExperienceDocument(v2))).toBeNull();
-    expect(documentBusinessRecipe(seeded("professional"))).toBeNull();
+    expect(documentBusinessRecipe(seeded("technical"))).toBeNull();
   });
   it.each([
     { version: 2, key: "food-menu", details: [] },
@@ -82,6 +82,6 @@ describe("registered business recipes", () => {
     expect(recipeFacts(owned, { ...food, details: ["portion"] })).toEqual([{ key: "portion", label: "Portion", value: "Owned portion" }]);
     const empty = { ...owned, ingredients: null, portionSize: null, prepMinutes: null };
     expect(recipeFacts(empty, food)).toEqual([]);
-    expect(BUSINESS_RECIPES.map((recipe) => recipe.layout)).toEqual(["product-grid", "menu-list", "service-list"]);
+    expect(BUSINESS_RECIPES.map((recipe) => recipe.layout)).toEqual(["product-grid", "menu-list", "service-list", "service-list"]);
   });
 });
