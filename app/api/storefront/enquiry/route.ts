@@ -40,9 +40,12 @@ export async function POST(req: Request) {
   try {
     const business = await prisma.business.findUnique({ where: { slug: input.slug }, select: { id: true, isPublished: true, status: true } });
     if (!business || !business.isPublished || business.status === "SUSPENDED") return reply({ error: "This business is not accepting enquiries right now." }, 404);
+    // A DRAFT or missing experience must refuse before any document parsing: the published
+    // document alone determines the public tenant surface. Never write a ledger row on refusal.
     const experience = await prisma.businessExperience.findUnique({ where: { businessId: business.id }, select: { status: true, publishedJson: true, categoryKey: true } });
-    const validated = validateExperienceJson(experience?.publishedJson || "", experience?.categoryKey);
-    if (!experience || experience.status !== "PUBLISHED" || !validated.ok || validated.document.categoryKey !== "professional") {
+    if (!experience || experience.status !== "PUBLISHED") return reply({ error: "This business is not accepting enquiries right now." }, 404);
+    const validated = validateExperienceJson(experience.publishedJson || "", experience.categoryKey);
+    if (!validated.ok || validated.document.categoryKey !== "professional") {
       return reply({ error: "This business is not accepting enquiries right now." }, 404);
     }
     const service = await prisma.service.findFirst({ where: { id: input.serviceId, businessId: business.id, isActive: true }, select: { id: true, title: true } });

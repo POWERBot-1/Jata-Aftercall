@@ -42,7 +42,8 @@ async function pageFor(context) {
     return void request.continue();
   });
   page.on("pageerror", (error) => {
-    const record = { path: new URL(page.url()).pathname, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
+    const frames = page.frames().map((frame) => new URL(frame.url()).pathname).slice(0, 6);
+    const record = { path: new URL(page.url()).pathname, frames, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
     errors.push(record);
     console.error(`BROWSER RUNTIME ERROR ${JSON.stringify(record)}`);
   });
@@ -240,7 +241,10 @@ try {
     check(`${category}: draft not automatically published`, before.publishedJson === null && before.status === "DRAFT");
     if (category === "professional") {
       const draftRequest = await api(visitor, "/api/storefront/enquiry", "POST", { slug: fixture.slug, serviceId: fixture.itemId, customerName: "QA Draft requester", customerPhone: "0700111222", idempotencyKey: `draft-${runId}-request-123` });
-      check("professional: anonymous unpublished enquiry refused without a ledger write", draftRequest.status === 404 && await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: "LEAD_GENERAL_INQUIRY" } }) === 0);
+      const draftLeads = await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: "LEAD_GENERAL_INQUIRY" } });
+      check("professional: anonymous unpublished enquiry refused without a ledger write",
+        draftRequest.status === 404 && draftLeads === 0,
+        `status=${draftRequest.status}, leads=${draftLeads}, error=${JSON.stringify(draftRequest.body?.error ?? draftRequest.body ?? null)}`);
       await ownerPage.goto(`${origin}/b/${fixture.slug}/enquire?service=${fixture.itemId}`, { waitUntil: "networkidle0" });
       check("professional: owned draft enquiry form is readable/noindex but submission disabled", await ownerPage.$eval('form[data-enquiry-form] button[type="submit"]', (button) => button.disabled) && await ownerPage.$eval('meta[name="robots"]', (element) => element.content.includes("noindex")));
     }

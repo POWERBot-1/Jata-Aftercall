@@ -8,7 +8,7 @@
  * the experience profile decides which controls exist (§6, §17).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { useCart } from "./CartProvider";
@@ -312,7 +312,9 @@ export function ItemDetailClient({
 
 /** Fires a view event for the item when the customer lands on it (§31, §32). */
 export function ItemViewTracker({ businessId, itemId, kind }: { businessId: string; itemId: string; kind: "product" | "service" }) {
-  if (typeof window === "undefined") return null;
-  trackEvent(businessId, kind === "service" ? "SERVICE_VIEW" : "PRODUCT_VIEW", itemId);
+  // Effect-gated: never run side effects during render, and keep server/client render identical.
+  useEffect(() => {
+    trackEvent(businessId, kind === "service" ? "SERVICE_VIEW" : "PRODUCT_VIEW", itemId);
+  }, [businessId, itemId, kind]);
   return null;
 }

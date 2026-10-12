@@ -61,6 +61,13 @@ describe("durable request-only professional intake", () => {
     h.business.status = "ACTIVE"; h.experience.publishedJson = JSON.stringify(createExperienceDocument({ categoryKey: "salon", businessName: "Owned salon" })); expect((await POST(request())).status).toBe(404);
     h.experience.publishedJson = "{invalid"; expect((await POST(request())).status).toBe(404); expect(h.create).not.toHaveBeenCalled();
   });
+  it("refuses the exact runner draft state (DRAFT/null and empty documents) without a ledger write", async () => {
+    // Mirrors the authenticated runner: business live, experience seeded but never published.
+    h.experience.status = "DRAFT"; h.experience.publishedJson = null;
+    expect((await POST(request())).status).toBe(404); expect(h.create).not.toHaveBeenCalled();
+    h.experience.publishedJson = ""; expect((await POST(request())).status).toBe(404); expect(h.create).not.toHaveBeenCalled();
+    h.experience.status = "PUBLISHED"; h.experience.publishedJson = ""; expect((await POST(request())).status).toBe(404); expect(h.create).not.toHaveBeenCalled();
+  });
   it("refuses foreign/inactive/missing services with no write", async () => {
     h.service = null; expect((await POST(request())).status).toBe(404); expect(h.create).not.toHaveBeenCalled();
   });

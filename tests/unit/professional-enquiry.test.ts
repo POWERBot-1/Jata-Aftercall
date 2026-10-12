@@ -20,6 +20,14 @@ describe("professional service requests", () => {
     const parsed = validateEnquiryInput(valid); expect(parsed.kind).toBe("ok");
     if (parsed.kind === "ok") { expect(parsed.input.serviceId).toBe(quote.id); expect(parsed.input).not.toHaveProperty("date"); }
   });
+  it("locks the authenticated runner's exact payload shapes (slugify slug, runId idempotency key, cuid service)", () => {
+    // scripts/browser/studio-authenticated.check.mjs sends exactly these formats in production mode.
+    const runnerBody = { slug: "qa-professional-a1b2c3d4", serviceId: "cm0abc123def456ghi789jkl", customerName: "QA Draft requester",
+      customerPhone: "0700111222", idempotencyKey: "draft-a1b2c3d4-request-123" };
+    const parsed = validateEnquiryInput(runnerBody); expect(parsed.kind).toBe("ok");
+    expect(validateEnquiryInput({ ...runnerBody, idempotencyKey: "draft-a1b2c3d4.request.123" }).kind).toBe("error");
+    expect(validateEnquiryInput({ ...runnerBody, slug: "QA-Professional-2026" }).kind).toBe("error");
+  });
   it.each([{ customerName: "A" }, { customerPhone: "12" }, { customerEmail: "invalid" }, { notes: "x".repeat(1001) }, { serviceId: "../foreign" }, { idempotencyKey: "short" }, { customerPhone: "javascript:0712345678" }])("rejects invalid customer fields: %j", (patch) => {
     expect(validateEnquiryInput({ ...valid, ...patch }).kind).toBe("error");
   });
