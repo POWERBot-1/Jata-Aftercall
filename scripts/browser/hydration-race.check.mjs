@@ -38,6 +38,10 @@ const CONTROL_ITERATIONS = 3;
 const GAP_EXTENSION_MS = 400;
 const PATHS = ["/login"];
 
+// Synthetic mechanism arm (M11 Stage D): reproduces the observed failure shape directly —
+// React 19's document-level hydration expects Next's bare <div hidden> state slot as the
+// first body host child; the failing documents parsed leading <script> chunks before it.
+// Arm S hydrates the same tree over body DOM with leading scripts; arm C omits them.
 const delayHook = `(() => {
   try {
     var DELAY = ${GAP_EXTENSION_MS};
@@ -77,9 +81,53 @@ async function main() {
   });
 
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
-  const summary = { forced: { iterations: 0, errors418: 0, otherErrors: 0, details: [] }, control: { iterations: 0, errors418: 0, otherErrors: 0, details: [] } };
+  const summary = { synthetic: { arms: [] }, forced: { iterations: 0, errors418: 0, otherErrors: 0, details: [] }, control: { iterations: 0, errors418: 0, otherErrors: 0, details: [] } };
 
   try {
+    // Synthetic mechanism arms (M11 Stage D): the observed failure shape is React expecting
+    // Next's bare <div hidden> state slot as a body host child while the parsed DOM carries
+    // leading <script> chunks before it (stream flush order), or while the parse frontier has
+    // not reached the node yet (hydration racing the stream). Each arm hydrates the same tree;
+    // only the body DOM differs. Recovery errors are collected via onRecoverableError + pageerror.
+    const { build } = require(createRequire(require.resolve("tsx")).resolve("esbuild"));
+    const compiled = await build({
+      stdin: {
+        resolveDir: process.cwd(),
+        loader: "tsx",
+        contents: `
+          import React from "react";
+          import { hydrateRoot } from "react-dom/client";
+          window.hydrationErrors = [];
+          window.fixtureHydrated = false;
+          const tree = React.createElement(React.Fragment, null,
+            React.createElement("div", { hidden: true }),
+            React.createElement("div", { className: "business-route-root" },
+              React.createElement("main", { id: "main" }, React.createElement("p", null, "hello"))));
+          hydrateRoot(document.body, tree, { onRecoverableError(error) { window.hydrationErrors.push(String(error.message).slice(0, 160)); } });
+          requestAnimationFrame(() => requestAnimationFrame(() => { window.fixtureHydrated = true; }));
+        `,
+      },
+      bundle: true, write: false, platform: "browser", jsx: "automatic",
+      define: { "process.env.NODE_ENV": '"production"' },
+    });
+    const bundleSource = compiled.outputFiles[0].text;
+    const arms = [
+      ["synthetic-leading-scripts", `<script>void 0</script><script>void 0</script><div hidden></div><div class="business-route-root"><main id="main"><p>hello</p></main></div>`],
+      ["synthetic-parse-frontier", `<div hidden></div>`],
+      ["synthetic-control", `<div hidden></div><div class="business-route-root"><main id="main"><p>hello</p></main></div>`],
+    ];
+    for (const [label, bodyHtml] of arms) {
+      const page = await browser.newPage();
+      const errors = collectErrors(page);
+      await page.setContent(`<!DOCTYPE html><html><head><title>s</title></head><body>${bodyHtml}</body></html>`, { waitUntil: "networkidle0" });
+      await page.addScriptTag({ content: bundleSource });
+      await page.waitForFunction(() => window.fixtureHydrated === true, { timeout: 10000 }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const recovered = await page.evaluate(() => window.hydrationErrors || []);
+      const count418 = [...recovered, ...errors].filter((message) => /error #418/.test(String(message))).length;
+      summary.synthetic.arms.push({ arm: label, errors418: count418, recovered: recovered.slice(0, 2), uncaught: errors.slice(0, 2) });
+      await page.close();
+    }
     for (const arm of ["forced", "control"]) {
       const iterations = arm === "forced" ? FORCED_ITERATIONS : CONTROL_ITERATIONS;
       for (let i = 0; i < iterations; i += 1) {
