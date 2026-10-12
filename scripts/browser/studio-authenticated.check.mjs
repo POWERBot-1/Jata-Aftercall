@@ -59,6 +59,17 @@ async function clickText(page, selector, text, exact = true) {
     .catch(() => { throw new Error(`Control unavailable within timeout: ${text} (${selector})`); });
   const handle = element.asElement();
   if (!handle) throw new Error(`Control unavailable: ${text}`);
+  const before = text === "11:00" ? await handle.evaluate((element) => {
+    const box = element.getBoundingClientRect(); const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { top: box.top, bottom: box.bottom, viewportHeight: innerHeight, hit: hit?.tagName, hitClass: hit?.className, unobstructed: hit === element || element.contains(hit) };
+  }) : null;
+  // Real users scroll controls out from under fixed navigation/action bars. No DOM click/force action.
+  await handle.evaluate((element) => element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" }));
+  await page.waitForFunction((element) => {
+    const box = element.getBoundingClientRect(); const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return box.width > 0 && box.height > 0 && box.top >= 0 && box.bottom <= innerHeight && (hit === element || element.contains(hit));
+  }, {}, handle).catch(() => { throw new Error(`Control is obscured/non-interactable: ${text} (${selector})`); });
+  if (before) console.log(`Actual mobile slot target before centered scroll: ${JSON.stringify(before)}; trusted click target now unobstructed.`);
   await handle.click();
   await handle.dispose();
 }
