@@ -96,38 +96,64 @@ export function probeInstallSource(options = {}) {
       if (hint && hint !== "app" && hint !== "text" && hint !== "unknown") zone = hint;
       records.push([seq++, now(), type, summarize(target), added, removed, zone]);
     }
+    function involvesBoundary(m) {
+      try {
+        if (m.target && m.target.nodeType === 1) {
+          var id = String(m.target.id || "");
+          if (id.indexOf("B:") === 0 || id.indexOf("S:") === 0 || String(m.target.nodeName).toLowerCase() === "template") return true;
+        }
+        var lists = [m.addedNodes, m.removedNodes];
+        for (var li = 0; li < lists.length; li++) {
+          var list = lists[li];
+          for (var k = 0; list && k < list.length; k++) {
+            var node = list[k];
+            if (node.nodeType === 1) {
+              var nid = String(node.id || "");
+              if (nid.indexOf("B:") === 0 || nid.indexOf("S:") === 0 || String(node.nodeName).toLowerCase() === "template") return true;
+            } else if (node.nodeType === 8) {
+              var data = String(node.data || "");
+              if (data === "$" || data === "$?" || data === "$~" || data === "$!" || data === "/$" || data === "&" || data === "/&") return true;
+            }
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
     var observer = new MutationObserver(function (mutations) {
       if (frozen) return;
       for (var i = 0; i < mutations.length; i++) {
         var m = mutations[i];
         if (m.type === "childList") {
+          // Parser insertions of ordinary markup are the server HTML itself; keep only
+          // post-parse changes and anything touching React/Fizz boundary markers or holders
+          // (the $RC/$RV deferred swap), which run even mid-parse.
+          if (document.readyState === "loading" && !involvesBoundary(m)) continue;
           var hint = m.addedNodes && m.addedNodes.length ? zoneOf(m.addedNodes[0]) : (m.removedNodes && m.removedNodes.length ? zoneOf(m.removedNodes[0]) : "");
           push("childList", m.target, listSummary(m.addedNodes), listSummary(m.removedNodes), hint);
         } else if (m.type === "attributes") {
           push("attr:" + (m.attributeName || ""), m.target, "", "");
+        } else if (m.type === "characterData") {
+          // Comment-marker flips ($? → $~ in $RC, /$ moves, React retry markers) are the
+          // boundary-state channel; text-node data changes are page noise and are skipped.
+          if (m.target && m.target.nodeType === 8) {
+            push("cdata:" + String(m.oldValue ?? "").slice(0, 6) + ">" + String(m.target.data || "").slice(0, 6), m.target.parentNode || m.target, "", "");
+          }
         }
       }
     });
-    // Arm at readyState "interactive": the parser's own node insertions are the server HTML
-    // itself (captured as the snapshot outline instead), while every script-injected change
-    // from interactive onward — still strictly before hydration completes — is recorded. This
-    // also keeps the diagnostic's own cost out of the parse window so load timing stays
-    // materially unchanged.
-    var armed = false;
-    function arm() {
-      if (armed) return;
-      armed = true;
-      observer.observe(document, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["hidden", "data-motion-static", "data-motion-engine", "data-motion-reason", "data-render-mode"],
-      });
-    }
-    if (document.readyState === "loading") document.addEventListener("readystatechange", function () {
-      if (document.readyState !== "loading") arm();
+    // Always armed from document-start (the install runs before any document script): the
+    // Fizz $RC/$RV boundary swap mutates the DOM even mid-parse and must be captured in full.
+    // Ordinary parser insertions are filtered cheaply in the callback above, so the parse
+    // window stays low-cost while boundary-marker transitions are never missed.
+    var armed = true;
+    observer.observe(document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+      characterDataOldValue: true,
+      attributeFilter: ["hidden", "data-motion-static", "data-motion-engine", "data-motion-reason", "data-render-mode"],
     });
-    else arm();
     function outline(root) {
       if (!root) return "";
       var out = [], stack = [[root, 0]];

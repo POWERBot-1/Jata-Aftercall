@@ -154,15 +154,13 @@ const recordSeqs = (window: Record<string, unknown>) =>
 describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => {
   it("installs before hydration and preserves ordered mutation history", () => {
     const { document, window, observer } = installProbe();
-    // Installed at document-start: nothing is observed yet while the parser is still building
-    // the server HTML (parse mutations are noise, not divergence).
-    expect(observer.observed).toBeNull();
-    // The arm point is interactive — before deferred scripts and hydration run.
-    document.reach("interactive");
+    // Installed at document-start and armed immediately: the Fizz $RC/$RV boundary swap
+    // mutates the DOM even mid-parse and must never be missed.
     expect(observer.observed?.root).toBe(document);
-    expect(observer.observed?.options).toMatchObject({ childList: true, subtree: true, attributes: true });
+    expect(observer.observed?.options).toMatchObject({ childList: true, subtree: true, attributes: true, characterData: true });
 
-    // Simulated hydration: nodes appear in document order after the arm point.
+    // Simulated hydration: nodes appear in document order after parsing completes.
+    document.reach("interactive");
     const html = new FakeElement("html");
     document.documentElement = html;
     const body = html.append(new FakeElement("body", { class: "min-h-screen" }));
@@ -239,10 +237,34 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     expect(state.frame).toBe("cross-origin:/b/qa-fixture?preview=draft");
   });
 
-  it("arms immediately when the document is already past parsing", () => {
-    const { document, observer } = installProbe({ readyState: "complete" });
-    // readyState complete at install → observe() happens synchronously.
-    expect(observer.observed?.root).toBe(document);
+  it("records Fizz boundary swaps during parse but skips ordinary parse insertions", () => {
+    const { document, window, observer } = installProbe();
+    // readyState is "loading": plain parser insertions are the server HTML (noise).
+    observer.trigger([childList(document, [new FakeElement("div", { class: "jata-page" })])]);
+    // Boundary holders/slots and marker comments ARE recorded even mid-parse ($RC/$RV).
+    observer.trigger([childList(document, [new FakeElement("div", { hidden: "", id: "S:1" })])]);
+    observer.trigger([childList(document, [new FakeElement("template", { id: "B:1" })])]);
+    const afterParse = (window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records();
+    expect(afterParse).toHaveLength(2);
+    expect(afterParse[0][4]).toContain("div#S:1");
+    expect(afterParse[1][4]).toContain("template#B:1");
+    // Post-parse everything is recorded.
+    document.reach("interactive");
+    observer.trigger([childList(document, [new FakeElement("div")])]);
+    expect((window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records()).toHaveLength(3);
+  });
+
+  it("records comment-marker flips ($? to $~) and ignores text characterData", () => {
+    const { document, window, observer } = installProbe();
+    document.reach("interactive");
+    const boundaryComment = new FakeComment("$?");
+    boundaryComment.data = "$~";
+    observer.trigger([{ type: "characterData", target: boundaryComment, oldValue: "$?" }]);
+    const text = new FakeText("hello");
+    observer.trigger([{ type: "characterData", target: text, oldValue: "hell" }]);
+    const records = (window[PROBE_PROPERTY] as { records: () => Array<Array<unknown>> }).records();
+    expect(records).toHaveLength(1); // text changes are page noise
+    expect(String(records[0][2])).toBe("cdata:$?>$~");
   });
 
   it("formatProbeDump compacts frozen and live frames and reports inaccessible ones", () => {
