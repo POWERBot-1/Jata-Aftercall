@@ -36,7 +36,7 @@ async function pageFor(context) {
   page.on("request", (request) => {
     if (!isAllowedStudioRequest(request.url(), origin, request.method())) {
       // Store no query strings, payloads, JWTs or cookies in evidence.
-      denied.push({ method: request.method(), path: new URL(request.url()).pathname });
+      denied.push({ method: request.method(), path: new URL(request.url()).pathname, type: request.resourceType(), from: new URL(page.url()).pathname });
       return void request.abort();
     }
     return void request.continue();
@@ -348,8 +348,8 @@ try {
   check("real cookie login restores only own workspace", (await api(first.ownerPage, `/api/experience?businessId=${first.id}`)).status === 200 &&
     (await api(first.ownerPage, `/api/experience?businessId=${second.id}`)).status === 403);
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
-  check("no external/provider/disallowed browser requests", denied.length === 0);
-  check("no uncaught browser runtime errors", errors.length === 0);
+  check("no external/provider/disallowed browser requests", denied.length === 0, JSON.stringify(denied));
+  check("no uncaught browser runtime errors", errors.length === 0, JSON.stringify(errors));
   journeyComplete = true;
 } catch (error) {
   if (!results.at(-1) || results.at(-1).ok) results.push({ name: "journey execution", ok: false, detail: String(error.message).slice(0, 250) });
