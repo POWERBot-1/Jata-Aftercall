@@ -191,7 +191,9 @@ try {
     const description = `QA edited ${category} ${runId}`;
     const field = await ownerPage.waitForFunction(() => [...document.querySelectorAll("label")].find((label) => label.textContent.includes("One line about your business"))?.querySelector("input"));
     const input = field.asElement();
-    await input.click({ clickCount: 3 }); await input.press("Control+A"); await input.type(description);
+    await input.click({ clickCount: 3 });
+    await ownerPage.keyboard.down("Control"); await ownerPage.keyboard.press("A"); await ownerPage.keyboard.up("Control");
+    await input.type(description);
     const editResponse = ownerPage.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
     await input.press("Tab");
     check(`${category}: actual design UI save`, (await editResponse).status() === 200);
