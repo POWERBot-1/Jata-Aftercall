@@ -39,7 +39,10 @@ describe("Website Studio master directive preservation", () => {
     expect(pkg.dependencies.motion).toBeTruthy();
     expect(lock.packages[""].dependencies.motion).toBe(pkg.dependencies.motion);
     expect(lock.packages["node_modules/motion"].version).toBe("14.1.0");
-    expect(pkg.dependencies.next).toBe("15.5.26");
+    // Reviewed compatible security patch; keep an exact pin and matching lint/runtime lock entries.
+    expect(pkg.dependencies.next).toBe("15.5.27");
+    expect(pkg.devDependencies["eslint-config-next"]).toBe(pkg.dependencies.next);
+    expect(lock.packages["node_modules/next"].version).toBe(pkg.dependencies.next);
     expect(pkg.dependencies.react).toBe("18.3.1");
   });
 });

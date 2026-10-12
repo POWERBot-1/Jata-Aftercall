@@ -63,9 +63,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Production advisory gate and full-audit findings
+        run: |
+          set -o pipefail
+          # Required production gate: a nonzero audit exit fails this step. No ignored production advisory.
+          npm audit --omit=dev --json > /tmp/step-production-audit.json
+          # Full audit remains separately FAIL if development findings remain; this is diagnostic,
+          # not a waiver/green full-security gate. Network/malformed reports also fail the step.
+          set +e
+          npm audit --json > /tmp/step-full-audit.json
+          full_status=$?
+          set -e
+          FULL_AUDIT_STATUS="$full_status" node - <<'JS' | tee /tmp/step-dependency-audit.log
+          const fs = require('fs');
+          const production = JSON.parse(fs.readFileSync('/tmp/step-production-audit.json', 'utf8'));
+          const full = JSON.parse(fs.readFileSync('/tmp/step-full-audit.json', 'utf8'));
+          if (production.error || full.error || !production.metadata?.vulnerabilities || !full.metadata?.vulnerabilities) throw new Error('BLOCKED: advisory service/report unavailable');
+          if (production.metadata.vulnerabilities.total !== 0) throw new Error('Production advisories remain');
+          console.log('PASS production dependency audit: 0 findings');
+          const risk = full.metadata.vulnerabilities;
+          console.log(`${risk.total ? 'FAIL' : 'PASS'} full dependency audit: ${risk.total} findings (${risk.high} high, ${risk.moderate} moderate); exit=${process.env.FULL_AUDIT_STATUS}`);
+          console.log('Open package paths: ' + Object.keys(full.vulnerabilities || {}).sort().join(', '));
+          console.log('Full-security release acceptance stays OPEN while any finding remains; not provider/device/engine proof.');
+          JS
+
       - name: Generate Prisma client
         run: |
           set -o pipefail
+          npx prisma validate 2>&1 | tee /tmp/step-schema-validate.log
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
 
       - name: Lint and TypeScript
@@ -206,8 +231,9 @@ jobs:
               ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
             const bundles = fs.readFileSync('/tmp/step-studio-bundles.log', 'utf8').slice(-2500);
+            const dependencyAudit = fs.readFileSync('/tmp/step-dependency-audit.log', 'utf8').slice(-2500);
             const head = context.payload.pull_request.head.sha;
-            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Authenticated browser uses real Next HTTP/JWT cookies and disposable DB; paid entitlement is a synthetic fixture, not provider verification. Other browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
+            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Production gate / full dependency-audit status\n\n\`\`\`\n${dependencyAudit}\n\`\`\`\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Authenticated browser uses real Next HTTP/JWT cookies and disposable DB; paid entitlement is a synthetic fixture, not provider verification. Other browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.pull_request.number, body });
 
       # Failing output is posted to the pull request so a broken journey can be triaged
@@ -230,6 +256,7 @@ jobs:
               } catch (e) { return '(no output captured)'; }
             };
             const body = [
+              ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
               ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],

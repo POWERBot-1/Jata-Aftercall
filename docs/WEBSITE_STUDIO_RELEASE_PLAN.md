@@ -325,3 +325,8 @@ Evidence delivery58829dd6cb12a3e5f029b4712546959d39bf8b8e differs from app sourc
 3. After native verification, audit each19 finding/paths/compatible fixes, prioritize2 production-tree; no broad audit-fix/major churn. Native build/regressions mandatory.
 4. Only after Phases2/3 verified, registered functional retail/food/salon business recipes through existing renderer/editor/schema/commerce and current native/cookie gate; no superficial variants.
 5. All original108 blocks/all7 stages/A–X/full acceptance remain; provider/originals BLOCKED by storage DEFERRED, device/CWV/full-provider journeys NOT RUN. No merge/production/data/cost operation authorized.
+
+
+### M8 Phase2 PASS / Phase3 compatible fixes pending native
+
+ActualPhase2 db853d6/CI38218114522 SUCCESS (2054+1 expected,17/22,163 cookie/native,25isolatedSSR,358fixtures/HTTP). Booking timezone/midnight defect and2 discovered shop boundary/data-contract defects have regressions; historical aggregate418 stillunlocalized. Phase3 production Next15.5.27/source-map-js1.2.2 and scoped compatible dev fixes clear9/19 rows;0production PASS/full10highDEV FAIL. Matrix documents every package/advisory/path/mitigation; major Tailwind/Puppeteer/Node changes not silently accepted.13 new tests, CSS byte-equivalent, local2000PASS/108DBskip,lint/types/schema/offlinebuild separate; fresh native verification pending. Phase4 not implemented before this verification; remaining full-security gate not waived. Full108/all7/A–X, storageDEFERRED/originals+providersBLOCKED/physical-provider acceptance unchanged.
