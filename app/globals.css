@@ -711,7 +711,8 @@ button:focus-visible {
   color: var(--eb-header-text);
 }
 
-.eb-nav--sticky { position: sticky; top: 0; backdrop-filter: blur(10px); }
+/* Treatment classes live on the scope. Never filter/stick the entire page: fixed cart dialogs must use the viewport. */
+.eb-scope.eb-nav--sticky > .eb-nav { position: sticky; top: 0; backdrop-filter: blur(10px); }
 
 .eb-nav__inner {
   display: flex;
@@ -786,12 +787,13 @@ button:focus-visible {
 .eb-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .eb-btn:active:not(:disabled) { transform: translateY(1px); }
 .eb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.eb-btn--upper { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
+.eb-scope.eb-btn--upper .eb-btn { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
 .eb-btn--soft { background: var(--eb-surface-muted); color: var(--eb-text); }
 .eb-btn--outline { background: transparent; border-color: var(--eb-border); color: var(--eb-text); }
 .eb-btn--pill { border-radius: 999px; }
 .eb-btn--block { width: 100%; }
 .eb-btn--sm { min-height: 2.35rem; padding: 0.45rem 0.95rem; font-size: 0.85rem; }
+@media (pointer: coarse) { .eb-scope .eb-btn { min-width: 44px; min-height: 44px; } }
 .eb-btn--ghost { background: transparent; color: var(--eb-text); }
 
 /* ── Hero ── */
@@ -1025,7 +1027,8 @@ button:focus-visible {
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-.eb-actionbar .eb-btn { flex: 1; }
+/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
+.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
 .eb-actionbar-spacer { height: 5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
@@ -1594,3 +1597,113 @@ button:focus-visible {
     border-radius: 1.25rem;
   }
 }
+
+/* Website Studio Motion: readable SSR baseline and scoped, finite CSS fallback.
+   No global html flag, zero-opacity state, permanent will-change or scroll-jacking. */
+.eb-scope .eb-reveal { opacity: 1; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="slide"] { animation: eb-motion-slide 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="scale"] { animation: eb-motion-scale 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="reveal"] { animation: eb-motion-reveal 0.56s ease-out; }
+@keyframes eb-motion-fade { from { opacity: 0.94; } to { opacity: 1; } }
+@keyframes eb-motion-slide { from { opacity: 0.94; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-scale { from { opacity: 0.94; transform: scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-reveal { from { opacity: 0.92; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+/* Immediate guard even before preference/network event handlers run or a native cancel fails. */
+.eb-scope [data-motion-static="true"] {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .eb-scope [data-motion-recipe] {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Website Studio v2: registered compositional geometry, not generated CSS or palette shuffles.
+   One-column readable/touch baseline; desktop enhances hierarchy without changing DOM order. */
+.eb-family-body { min-width: 0; }
+.eb-composition-grid { min-width: 0; }
+.eb-composition-block { min-width: 0; }
+.eb-chapters { padding: 1.25rem; border-bottom: 1px solid var(--eb-border); }
+.eb-chapters ol { list-style: none; display: flex; gap: 1rem; overflow-x: auto; padding: 0; margin: 0; }
+.eb-chapters a { display: flex; align-items: center; gap: 0.65rem; min-height: 44px; white-space: nowrap; }
+.eb-chapters a span { color: var(--eb-muted); font-variant-numeric: tabular-nums; }
+.eb-place-context { padding: 2rem 1.25rem; background: var(--eb-surface-muted); }
+.eb-product-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; padding-block: 2rem; }
+.eb-catalog--carousel { grid-auto-flow: column; grid-auto-columns: minmax(230px, 85%); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 1rem; }
+.eb-catalog--carousel > * { scroll-snap-align: start; }
+.eb-catalog--editorial { grid-template-columns: minmax(0, 1fr); }
+.eb-catalog--spotlight { grid-template-columns: minmax(0, 1fr); }
+.eb-comparison { max-width: 100%; overflow-x: auto; }
+.eb-comparison table { border-collapse: collapse; min-width: 100%; }
+.eb-comparison caption { text-align: left; padding-bottom: 0.75rem; color: var(--eb-muted); }
+.eb-comparison th, .eb-comparison td { text-align: left; padding: 0.85rem; border-bottom: 1px solid var(--eb-border); vertical-align: top; }
+.eb-comparison th { min-width: 8rem; }
+.eb-gallery--paired { grid-template-columns: minmax(0, 1fr); }
+.eb-gallery--masonry { display: block; columns: 1; column-gap: 1.25rem; }
+.eb-gallery--masonry figure { break-inside: avoid; margin-bottom: 1.25rem; }
+.eb-gallery--masonry img { aspect-ratio: auto; min-height: 160px; }
+.eb-gallery--strip, .eb-gallery--panorama { grid-auto-flow: column; grid-auto-columns: minmax(230px, 85%); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 1rem; }
+.eb-gallery--strip figure, .eb-gallery--panorama figure { scroll-snap-align: start; }
+.eb-gallery--panorama img { aspect-ratio: 16 / 9; }
+.eb-gallery--mosaic { grid-template-columns: minmax(0, 1fr); }
+.eb-hero-treatment--poster { min-height: 88svh; }
+.eb-hero--text .eb-hero__content, .eb-hero--text .eb-h1, .eb-hero--text .eb-lede, .eb-hero--text .eb-eyebrow { color: var(--eb-text); }
+.eb-hero--has-media:not(.eb-hero--split) .eb-hero__content, .eb-hero--has-media:not(.eb-hero--split) .eb-h1, .eb-hero--has-media:not(.eb-hero--split) .eb-lede { color: #fff; }
+@media (min-width: 760px) {
+  .eb-product-stage { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-family-body--paired .eb-composition-grid, .eb-family-body--magazine .eb-composition-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eb-family-body--paired .eb-composition-block[data-wide="true"], .eb-family-body--magazine .eb-composition-block[data-wide="true"] { grid-column: 1 / -1; }
+  .eb-family-body--magazine .eb-composition-block:nth-child(3n):not([data-wide]) { grid-column: 1 / -1; }
+  .eb-family-body--chapters { display: grid; grid-template-columns: minmax(160px, 18%) minmax(0, 1fr); }
+  .eb-chapters { align-self: start; position: sticky; top: 5rem; border-bottom: 0; border-right: 1px solid var(--eb-border); }
+  .eb-chapters ol { display: flex; flex-direction: column; overflow: visible; }
+  .eb-chapters a { white-space: normal; }
+  .eb-family-body--location-led { display: grid; grid-template-columns: minmax(200px, 30%) minmax(0, 1fr); }
+  .eb-place-context { align-self: start; position: sticky; top: 5rem; }
+  .eb-family-body--stage .eb-section-head { max-width: 48rem; margin-inline: auto; text-align: center; }
+  .eb-catalog--editorial { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-catalog--editorial > :first-child { grid-column: span 2; }
+  .eb-catalog--spotlight { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .eb-catalog--spotlight > :first-child { grid-row: span 2; }
+  .eb-catalog--carousel { grid-auto-columns: minmax(260px, 32%); }
+  .eb-gallery--masonry { columns: 3; }
+  .eb-gallery--paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eb-gallery--strip { grid-auto-columns: minmax(260px, 35%); }
+  .eb-gallery--panorama { grid-auto-columns: minmax(450px, 85%); }
+  .eb-gallery--mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-gallery--mosaic > :first-child { grid-column: span 2; grid-row: span 2; }
+  .eb-gallery--mosaic > :first-child img { height: 100%; }
+}
+
+/* Versioned business recipes: structural/semantic layouts, not palette aliases. Static/no-JS first. */
+.eb-business-recipe { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.1rem; }
+.eb-business-recipe--product-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.eb-business-recipe .eb-recipe-item { min-width: 0; overflow: hidden; }
+.eb-recipe-item__media { display: block; aspect-ratio: 4/3; overflow: hidden; background: var(--eb-surface-muted); }
+.eb-recipe-item__media img { width: 100%; height: 100%; object-fit: cover; }
+.eb-business-recipe--product-grid .eb-recipe-item__media img { object-fit: contain; }
+.eb-recipe-item__placeholder { display: grid; place-items: center; color: var(--eb-muted); font-size: .85rem; }
+.eb-recipe-item__body { padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.eb-recipe-facts { margin: .8rem 0; display: grid; gap: .35rem; font-size: .9rem; }
+.eb-recipe-facts > div { display: flex; flex-wrap: wrap; gap: .25rem .5rem; }
+.eb-recipe-facts dt { color: var(--eb-muted); }
+.eb-recipe-facts dd { margin: 0; }
+.eb-recipe-item__action { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; justify-content: space-between; }
+.eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); }
+.eb-business-recipe--menu-list .eb-recipe-item__media, .eb-business-recipe--service-list .eb-recipe-item__media { aspect-ratio: auto; height: 100%; min-height: 8rem; }
+.eb-business-recipe--service-list .eb-recipe-item__action { border-top: 1px solid var(--eb-border); padding-top: .65rem; }
+@media (max-width: 440px) {
+  .eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { grid-template-columns: minmax(0, 5rem) minmax(0, 1fr); }
+  .eb-recipe-item__body { padding: .8rem; }
+  .eb-business-recipe .eb-btn { min-height: 44px; white-space: normal; text-align: center; }
+}
+.eb-business-recipe--product-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+.eb-business-recipe--product-list .eb-recipe-item__media { height: 100%; min-height: 7rem; aspect-ratio: auto; }
+.eb-business-recipe--product-list .eb-recipe-item__media img { object-fit: contain; }

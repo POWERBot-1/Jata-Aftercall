@@ -27,6 +27,7 @@ export const EVENT_TYPES = [
   "PAYMENT_SUCCESS",
   "ORDER_CREATED",
   "BOOKING_CREATED",
+  "ENQUIRY_SUBMITTED",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

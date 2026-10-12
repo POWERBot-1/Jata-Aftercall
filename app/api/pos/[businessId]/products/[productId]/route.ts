@@ -43,6 +43,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
       const input = sanitizeProductInput(body);
       if (!input.name) return fromOutcome({ ok: false, message: "Give the item a name." });
+      if (input.saleError) return fromOutcome({ ok: false, message: input.saleError });
       await updateProduct(businessId, productId, input);
       await logPosAudit({
         businessId,

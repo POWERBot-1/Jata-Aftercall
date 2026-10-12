@@ -64,6 +64,7 @@ export default async function ItemPage({ params }: Props) {
             capabilities={data.profile.capabilities}
             cta={data.profile.cta}
             itemNoun={data.profile.itemNoun}
+            professional={data.document.categoryKey === "professional"}
             related={related}
           />
         </div>

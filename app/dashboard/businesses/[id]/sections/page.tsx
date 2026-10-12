@@ -24,7 +24,7 @@ export default async function SectionsPage({ params }: { params: Promise<{ id: s
         </p>
       </header>
       <StudioTabs businessId={id} capabilities={workspace.profile.capabilities} />
-      <SectionEditor businessId={id} document={workspace.document} />
+      <SectionEditor businessId={id} document={workspace.document} draftVersion={workspace.experience?.draftVersion ?? null} />
     </div>
   );
 }

@@ -14,10 +14,10 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_CHARS,
   MAX_SOURCE_BYTES,
+  MIME_FOR_FORMAT,
   decodeFailureIssue,
   humanFileSize,
   parseImageDataUrl,
-  sniffImageFormat,
   validateImageBytes,
   type ImageFormat,
   type UploadIssue,
@@ -31,6 +31,8 @@ import {
   type AspectRatio,
   type EnhanceStrength,
 } from "./imagePlan";
+
+import { inspectLocalSource, jpegDecodeCopy, orientationMatrix, MAX_DERIVATIVE_EDGE } from "./sourceSafety";
 
 export type PipelineStep = "reading" | "checking" | "optimizing" | "uploading" | "saving" | "done";
 
@@ -70,25 +72,32 @@ export async function fileToBytes(file: File): Promise<Uint8Array> {
   return new Uint8Array(buffer);
 }
 
-/**
- * Decodes a file into something drawable.
- *
- * `createImageBitmap(..., { imageOrientation: "from-image" })` is the modern path and applies
- * the EXIF rotation. The `<img>` fallback covers older Android/WebView builds, where browsers
- * also honour EXIF when drawing — but if the decoded size proves the rotation was ignored, the
- * caller is told so it can correct the pixels explicitly.
+/** Decode an admitted local copy with native resize hints, finite wait and resource cleanup.
+ * JPEG metadata is removed only from the temporary copy; exact EXIF transforms follow below.
+ * Native decode cancellation cannot promise instant OS allocation release; late bitmaps are closed.
  */
-async function decodeFile(file: File | Blob): Promise<Decoded> {
-  const withOrientation = typeof createImageBitmap === "function";
-  if (withOrientation) {
+async function decodeFile(file: Blob, target: { width: number; height: number }, signal?: AbortSignal): Promise<Decoded> {
+  if (signal?.aborted) throw new Error("preparation_cancelled");
+  if (typeof createImageBitmap === "function") {
+    let stopped = false;
     try {
-      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-      return { bitmap, width: bitmap.width, height: bitmap.height };
+      const bitmap = await new Promise<ImageBitmap>((resolve, reject) => {
+        const finish = (error?: Error, value?: ImageBitmap) => {
+          if (stopped) { value?.close(); return; }
+          stopped = true; clearTimeout(timer); signal?.removeEventListener("abort", abort);
+          if (error) reject(error); else resolve(value!);
+        };
+        const abort = () => finish(new Error("preparation_cancelled"));
+        const timer = setTimeout(() => finish(new Error("decode_timeout")), 12000);
+        signal?.addEventListener("abort", abort, { once: true });
+        try {
+          createImageBitmap(file, { imageOrientation: "from-image", resizeWidth: target.width, resizeHeight: target.height, resizeQuality: "high" }).then(value => finish(undefined, value), error => finish(error));
+        } catch (error) { finish(error as Error); }
+      });
+      return { bitmap, width: bitmap.width, height: bitmap.height, revoke: () => bitmap.close() };
     } catch (error) {
-      const message = (error as Error)?.message || "";
-      if (/heic|heif/i.test(message)) throw error;
-      // Fall through to the <img> path: some browsers expose createImageBitmap but cannot take
-      // a File directly.
+      if (/cancelled|timeout/.test(String((error as Error)?.message))) throw error;
+      // Older WebViews can expose a partial bitmap API: use the bounded/admitted image fallback.
     }
   }
   if (!isBrowser()) throw new Error("no_dom");
@@ -96,21 +105,18 @@ async function decodeFile(file: File | Blob): Promise<Decoded> {
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("decode_failed"));
-      element.decoding = "sync";
-      element.src = url;
+      const finish = (error?: Error) => {
+        clearTimeout(timer); signal?.removeEventListener("abort", abort); element.onload = element.onerror = null;
+        if (error) { element.src = ""; reject(error); } else resolve(element);
+      };
+      const abort = () => finish(new Error("preparation_cancelled"));
+      const timer = setTimeout(() => finish(new Error("decode_timeout")), 12000);
+      signal?.addEventListener("abort", abort, { once: true });
+      element.onload = () => finish(); element.onerror = () => finish(new Error("decode_failed"));
+      element.decoding = "async"; element.src = url;
     });
-    return {
-      bitmap: image,
-      width: image.naturalWidth || image.width,
-      height: image.naturalHeight || image.height,
-      revoke: () => URL.revokeObjectURL(url),
-    };
-  } catch (error) {
-    URL.revokeObjectURL(url);
-    throw error;
-  }
+    return { bitmap: image, width: image.naturalWidth || image.width, height: image.naturalHeight || image.height, revoke: () => { image.src = ""; URL.revokeObjectURL(url); } };
+  } catch (error) { URL.revokeObjectURL(url); throw error; }
 }
 
 function createCanvas(width: number, height: number): HTMLCanvasElement {
@@ -155,6 +161,27 @@ function sharpenCanvas(canvas: HTMLCanvasElement, strength: number): boolean {
   }
   context.putImageData(image, 0, 0);
   return true;
+}
+
+let webpEncodeSupport: boolean | null = null;
+
+/**
+ * Probes whether this browser really encodes WebP. Some browsers silently fall back to PNG when
+ * asked for WebP, so the probe checks the produced data-URL prefix rather than trusting the request.
+ * The result is cached for the page lifetime.
+ */
+export function browserCanEncodeWebp(): boolean {
+  if (webpEncodeSupport !== null) return webpEncodeSupport;
+  try {
+    if (typeof document === "undefined") return false;
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    webpEncodeSupport = probe.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch {
+    webpEncodeSupport = false;
+  }
+  return webpEncodeSupport;
 }
 
 async function canvasToDataUrl(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<string> {
@@ -204,14 +231,30 @@ export type PrepareOptions = {
   focusX?: number;
   focusY?: number;
   onProgress?: (progress: PipelineProgress) => void;
+  /** Cancels local preparation; does not issue a provider request or authorize persistence. */
+  signal?: AbortSignal;
 };
 
 /**
  * The mobile upload path: file → validated, rotated, resized, web-ready data URL.
  * This is what fixes the "photo never leaves the phone" failure (§19).
  */
+/** Owner deferred original storage. Preparation failure must NEVER substitute original bytes inline. */
+function preparationIssue(error: unknown): PrepareResult {
+  const message = String((error as Error)?.message || error);
+  if (/cancelled/.test(message)) return { status: "error", issue: { code: "decode_failed", message: "Photo preparation was cancelled. Your original file has not been changed or uploaded.", recoverable: true } };
+  if (/timeout/.test(message)) return { status: "error", issue: { code: "decode_failed", message: "Opening this photo took too long. Retry with a smaller copy; your original file is unchanged.", recoverable: true } };
+  return { status: "error", issue: decodeFailureIssue(message) };
+}
+
 export async function prepareUpload(file: File, options: PrepareOptions = {}): Promise<PrepareResult> {
   report(options.onProgress, "reading", 5);
+  if (options.signal?.aborted) return preparationIssue(new Error("preparation_cancelled"));
+  if ((options.maxEdge !== undefined && (!Number.isFinite(options.maxEdge) || options.maxEdge < 64 || options.maxEdge > MAX_DERIVATIVE_EDGE)) ||
+      (typeof options.aspect === "number" && (!Number.isFinite(options.aspect) || options.aspect < 0.2 || options.aspect > 5)) ||
+      [options.focusX, options.focusY].some(value => value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1))) {
+    return { status: "error", issue: { code: "corrupt", message: "Choose a valid photo size and crop before retrying.", recoverable: true } };
+  }
   if (!file || file.size === 0) {
     return { status: "error", issue: { code: "empty", message: "That file is empty. Please choose the photo again.", recoverable: true } };
   }
@@ -234,40 +277,29 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
   }
 
   report(options.onProgress, "checking", 15);
-  const declaredMime = file.type || null;
-  const verdict = validateImageBytes(bytes, { declaredMime, filename: file.name });
+  const verdict = inspectLocalSource(bytes, { type: file.type, name: file.name });
   if (verdict.status !== "ok") return { status: "error", issue: verdict.issue };
 
-  // A HEIC file that the browser *can* decode (Safari) is fine: we are about to convert it.
-  const format = sniffImageFormat(bytes) as ImageFormat;
-  const isHeic = format === "heic";
-  if (isHeic && !browserCanDecodeHeic()) {
-    return {
-      status: "error",
-      issue: {
-        code: "heic_unsupported",
-        message:
-          "This iPhone HEIC photo can't be converted in this browser. Take a screenshot of it and upload that, or switch Settings › Camera › Formats to “Most Compatible”.",
-        recoverable: false,
-      },
-    };
-  }
+  const format = verdict.facts.format;
+  let source: { bytes: Uint8Array; orientation: number };
+  try { source = format === "jpeg" ? jpegDecodeCopy(bytes) : { bytes, orientation: 1 }; } catch (error) { return preparationIssue(error); }
+  const target = planResize({ width: verdict.facts.width!, height: verdict.facts.height! }, { maxEdge: options.maxEdge ?? DEFAULT_MAX_EDGE });
+  const decodeBlob = new Blob([blobPart(source.bytes)], { type: verdict.facts.mime });
 
   let decoded: Decoded;
   try {
-    decoded = await decodeFile(file);
+    decoded = await decodeFile(decodeBlob, target, options.signal);
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return preparationIssue(error);
   }
 
   try {
     report(options.onProgress, "optimizing", 35);
-    const resize = planResize(
-      { width: decoded.width, height: decoded.height, exifOrientation: verdict.facts.exifOrientation },
-      { maxEdge: options.maxEdge ?? DEFAULT_MAX_EDGE, format },
-    );
-    const rotated = alsoNeedsManualRotation(decoded, verdict.facts.exifOrientation, isHeic);
-    const canvas = createCanvas(rotated ? resize.height : resize.width, rotated ? resize.width : resize.height);
+    if (options.signal?.aborted) return preparationIssue(new Error("preparation_cancelled"));
+    if (decoded.width <= 0 || decoded.height <= 0 || decoded.width * decoded.height > 32_000_000) throw new Error("decode_pixel_budget");
+    const resize = planResize({ width: decoded.width, height: decoded.height }, { maxEdge: options.maxEdge ?? DEFAULT_MAX_EDGE, format });
+    const swap = source.orientation >= 5 && source.orientation <= 8;
+    const canvas = createCanvas(swap ? resize.height : resize.width, swap ? resize.width : resize.height);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("no_canvas");
     context.imageSmoothingEnabled = true;
@@ -277,59 +309,41 @@ export async function prepareUpload(file: File, options: PrepareOptions = {}): P
     if (enhancePlan) context.filter = enhancePlan.filter;
 
     const notes: string[] = [];
-    if (rotated) {
-      notes.push("Straightened the photo.");
-      context.translate(canvas.width / 2, canvas.height / 2);
-      context.rotate(Math.PI / 2);
-      context.drawImage(decoded.bitmap, -canvas.height / 2, -canvas.width / 2, canvas.height, canvas.width);
-    } else {
-      context.drawImage(decoded.bitmap, 0, 0, canvas.width, canvas.height);
-    }
+    if (source.orientation !== 1) notes.push("Corrected the photo orientation.");
+    context.setTransform(...orientationMatrix(source.orientation, resize.width, resize.height));
+    context.drawImage(decoded.bitmap, 0, 0, resize.width, resize.height);
+    context.setTransform(1, 0, 0, 1, 0, 0);
     context.filter = "none";
 
     if (options.aspect !== undefined && options.aspect !== "free") {
       const cropCanvas = cropToAspect(canvas, options.aspect, options.focusX, options.focusY);
       return await finish(cropCanvas, {
         source: bytes.length,
+        sourceFormat: format,
         notes,
         purpose: options.purpose,
         sharpen: enhancePlan?.sharpen ?? 0,
         quality: enhancePlan?.quality,
         onProgress: options.onProgress,
-        resized: resize.scaled,
+        resized: target.scaled || resize.scaled,
       });
     }
 
     return await finish(canvas, {
       source: bytes.length,
+      sourceFormat: format,
       notes,
       purpose: options.purpose,
       sharpen: enhancePlan?.sharpen ?? 0,
       quality: enhancePlan?.quality,
       onProgress: options.onProgress,
-      resized: resize.scaled,
+      resized: target.scaled || resize.scaled,
     });
   } catch (error) {
-    return { status: "error", issue: decodeFailureIssue((error as Error)?.message) };
+    return preparationIssue(error);
   } finally {
     decoded.revoke?.();
   }
-}
-
-function alsoNeedsManualRotation(decoded: Decoded, orientation: number | null, isHeic: boolean): boolean {
-  if (!orientation || isHeic) return false;
-  const swap = orientation === 5 || orientation === 6 || orientation === 7 || orientation === 8;
-  if (!swap) return false;
-  // If the browser applied EXIF, the decoded bitmap is already portrait. If the long edge is
-  // still on the wrong axis, we rotate the pixels ourselves.
-  return decoded.width > decoded.height;
-}
-
-function browserCanDecodeHeic(): boolean {
-  if (!isBrowser()) return false;
-  const ua = navigator.userAgent || "";
-  // Safari and iOS WebViews can decode HEIC; Chromium on Android cannot.
-  return /Safari/i.test(ua) && !/Chrome|CriOS|Edg|OPR/i.test(ua);
 }
 
 function cropToAspect(canvas: HTMLCanvasElement, aspect: AspectRatio | number, focusX?: number, focusY?: number): HTMLCanvasElement {
@@ -355,7 +369,8 @@ function cropToAspect(canvas: HTMLCanvasElement, aspect: AspectRatio | number, f
   const sy = Math.max(0, Math.round((height - sh) * (focusY ?? 0.5)));
   const target = createCanvas(sw, sh);
   const context = target.getContext("2d");
-  if (context) context.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  if (!context) throw new Error("no_canvas");
+  context.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
   return target;
 }
 
@@ -363,6 +378,7 @@ async function finish(
   canvas: HTMLCanvasElement,
   options: {
     source: number;
+    sourceFormat?: ImageFormat;
     notes: string[];
     purpose?: "upload" | "generated" | "enhanced";
     sharpen: number;
@@ -371,18 +387,23 @@ async function finish(
     onProgress?: (progress: PipelineProgress) => void;
   },
 ): Promise<PrepareResult> {
-  report(options.onProgress, "uploading", 70);
+  report(options.onProgress, "optimizing", 70);
   const notes = [...options.notes];
   if (options.sharpen > 0 && sharpenCanvas(canvas, options.sharpen)) {
     notes.push("Sharpened fine detail.");
   }
   const choice = chooseOutputFormat({
-    format: "jpeg",
+    format: options.sourceFormat === "jpeg" ? "jpeg" : "png",
+    hasAlpha: options.sourceFormat !== "jpeg",
     width: canvas.width,
     height: canvas.height,
     pixelsSource: options.purpose ?? "upload",
   });
-  const { dataUrl, attempts } = await encodeWithinBudget(canvas, choice.mime, options.quality ?? choice.quality);
+  // Owner uploads go out as WebP when this browser can really encode it (smaller at similar quality).
+  // AI-generated and enhanced images keep JPEG. The server re-checks the bytes either way.
+  const useWebp = (options.purpose ?? "upload") === "upload" && browserCanEncodeWebp();
+  const mime = useWebp ? "image/webp" : choice.mime;
+  const { dataUrl, attempts } = await encodeWithinBudget(canvas, mime, options.quality ?? choice.quality);
   if (attempts > 1) notes.push("Compressed a little further to keep your site fast.");
   if (dataUrl.length > MAX_UPLOAD_CHARS) {
     // Never hand the API something it will refuse: the owner is told now, while their photo is
@@ -407,7 +428,7 @@ async function finish(
   if (options.resized || parsed.bytes.length < options.source) {
     notes.unshift(`Optimized ${humanFileSize(options.source)} to ${humanFileSize(parsed.bytes.length)}.`);
   }
-  report(options.onProgress, "saving", 85);
+  report(options.onProgress, "optimizing", 85);
   return {
     status: "ok",
     upload: {
@@ -433,7 +454,7 @@ export async function enhanceDataUrl(
     return { status: "error", issue: { code: "corrupt", message: "This image can't be improved — it may be damaged. Try uploading it again.", recoverable: true } };
   }
   const blob = new Blob([blobPart(parsed.bytes)], { type: parsed.mime });
-  const file = new File([blob], "photo.jpg", { type: parsed.mime });
+  const file = new File([blob], `photo.${parsed.format === "jpeg" ? "jpg" : parsed.format}`, { type: parsed.mime });
   return prepareUpload(file, {
     maxEdge: options.maxEdge ?? DEFAULT_MAX_EDGE,
     purpose: "enhanced",
@@ -453,7 +474,7 @@ export async function cropDataUrl(
     return { status: "error", issue: { code: "corrupt", message: "This image can't be cropped — it may be damaged.", recoverable: true } };
   }
   const blob = new Blob([blobPart(parsed.bytes)], { type: parsed.mime });
-  const file = new File([blob], "photo.jpg", { type: parsed.mime });
+  const file = new File([blob], `photo.${parsed.format === "jpeg" ? "jpg" : parsed.format}`, { type: parsed.mime });
   return prepareUpload(file, {
     maxEdge: options.maxEdge ?? DEFAULT_MAX_EDGE,
     purpose: "upload",

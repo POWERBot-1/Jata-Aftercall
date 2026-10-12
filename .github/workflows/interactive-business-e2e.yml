@@ -46,7 +46,11 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      # The newer native-Prisma suites intentionally self-skip without this separate test-only URL.
+      # Both point ONLY at this job's disposable PostgreSQL service, never a deployment secret.
+      PRISMA_TEST_DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
       AUTH_SECRET: interactive-business-e2e-test-secret
+      NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -59,10 +63,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Production advisory gate and full-audit findings
+        run: |
+          set -o pipefail
+          # Required production gate: a nonzero audit exit fails this step. No ignored production advisory.
+          npm audit --omit=dev --json > /tmp/step-production-audit.json
+          # Full audit remains separately FAIL if development findings remain; this is diagnostic,
+          # not a waiver/green full-security gate. Network/malformed reports also fail the step.
+          set +e
+          npm audit --json > /tmp/step-full-audit.json
+          full_status=$?
+          set -e
+          FULL_AUDIT_STATUS="$full_status" node - <<'JS' | tee /tmp/step-dependency-audit.log
+          const fs = require('fs');
+          const production = JSON.parse(fs.readFileSync('/tmp/step-production-audit.json', 'utf8'));
+          const full = JSON.parse(fs.readFileSync('/tmp/step-full-audit.json', 'utf8'));
+          if (production.error || full.error || !production.metadata?.vulnerabilities || !full.metadata?.vulnerabilities) throw new Error('BLOCKED: advisory service/report unavailable');
+          if (production.metadata.vulnerabilities.total !== 0) throw new Error('Production advisories remain');
+          console.log('PASS production dependency audit: 0 findings');
+          const risk = full.metadata.vulnerabilities;
+          console.log(`${risk.total ? 'FAIL' : 'PASS'} full dependency audit: ${risk.total} findings (${risk.high} high, ${risk.moderate} moderate); exit=${process.env.FULL_AUDIT_STATUS}`);
+          console.log('Open package paths: ' + Object.keys(full.vulnerabilities || {}).sort().join(', '));
+          console.log('Full-security release acceptance stays OPEN while any finding remains; not provider/device/engine proof.');
+          JS
+
       - name: Generate Prisma client
         run: |
           set -o pipefail
+          npx prisma validate 2>&1 | tee /tmp/step-schema-validate.log
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
+
+      - name: Lint and TypeScript
+        run: |
+          npm run lint
+          npm run typecheck
 
       - name: Apply migrations
         run: |
@@ -100,6 +134,15 @@ jobs:
         run: |
           set -o pipefail
           npm run test:e2e 2>&1 | tee /tmp/step-journey.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-journey.log)
+          if printf '%s' "$plain" | grep -qE "[1-9][0-9]* skipped"; then
+            echo "Experience journey skipped — DATABASE_URL did not reach vitest." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE "[0-9]+ passed"; then
+            echo "The experience journey reported no passing steps." >&2
+            exit 1
+          fi
 
       # The Business POS journey (§4, §43, §75) runs against the same migrated, seeded database.
       - name: Run the Business POS journey
@@ -118,6 +161,81 @@ jobs:
             exit 1
           fi
 
+      - name: Production build against the isolated test database
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/step-build.log
+
+      - name: Production harness isolation and bundle evidence
+        run: |
+          set -o pipefail
+          npm run test:smoke:studio 2>&1 | tee /tmp/step-studio-smoke.log
+          npm run measure:studio-bundles 2>&1 | tee /tmp/step-studio-bundles.log
+
+      # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
+      # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
+      - name: Authenticated production HTTP browser journey
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated 2>&1 | tee /tmp/step-authenticated-browser.log
+
+      - name: Booking SSR timezone and midnight hydration regression
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          npm run test:browser:studio-hydration 2>&1 | tee /tmp/step-hydration-browser.log
+
+      - name: Actual storefront Motion and immersive browser regressions
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — browser checks NOT RUN, not passed." >&2
+            exit 1
+          fi
+          export BASE_URL=http://localhost:4100
+          ARENA_LIVE_PREVIEW=1 NEXT_TELEMETRY_DISABLED=1 npm run dev -- --port 4100 > /tmp/step-browser-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          WAIT_FOR_SERVER=1 npm run test:browser:motion 2>&1 | tee /tmp/step-motion-browser.log
+          npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
+          npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
+          npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
+          npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
+
+      # Publish real successful summaries too; direct Actions log downloads may be inaccessible.
+      - name: Record successful verification evidence on the pull request
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaries = (file) => {
+              try {
+                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$/gm) || []).join('\n').trim() || '(no summary captured)';
+              } catch { return '(no output captured)'; }
+            };
+            const sections = [
+              ['Full native DB suite', '/tmp/step-full-suite.log'],
+              ['Experience journey', '/tmp/step-journey.log'],
+              ['Business POS journey', '/tmp/step-pos-journey.log'],
+              ['Production HTTP isolation smoke', '/tmp/step-studio-smoke.log'],
+              ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
+              ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
+              ['Actual Motion browser', '/tmp/step-motion-browser.log'],
+              ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
+              ['Responsive layout regression', '/tmp/step-layout-browser.log'],
+              ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
+              ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
+            ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
+            const bundles = fs.readFileSync('/tmp/step-studio-bundles.log', 'utf8').slice(-2500);
+            const dependencyAudit = fs.readFileSync('/tmp/step-dependency-audit.log', 'utf8').slice(-2500);
+            const head = context.payload.pull_request.head.sha;
+            const body = `Verification passed for feature head \`${head}\` (runner checkout \`${context.sha}\`). [Run ${context.runId}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).\n\n${sections}\n\n### Production gate / full dependency-audit status\n\n\`\`\`\n${dependencyAudit}\n\`\`\`\n\n### Bundle evidence\n\n\`\`\`\n${bundles}\n\`\`\`\n\nNative Prisma, lint/types, migrations, seed and production build passed. No skips permitted in the DB suites. Inherited expected failure is preserved, not fixed. Authenticated browser uses real Next HTTP/JWT cookies and disposable DB; paid entitlement is a synthetic fixture, not provider verification. Other browser catalogue/model data is synthetic/intercepted; mobile signals are simulated. Persistent-original storage/provider acceptance BLOCKED by owner deferral. No new real uploads/provider calls/spending enabled. Physical Android, live provider/payment operations and production Core Web Vitals NOT RUN. Full engine NOT COMPLETE, NOT MERGED, production NOT DEPLOYED.`;
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.pull_request.number, body });
+
       # Failing output is posted to the pull request so a broken journey can be triaged
       # without digging through runner logs.
       - name: Report failing output to the pull request
@@ -130,18 +248,31 @@ jobs:
             // the end, so a long log needs both ends to be diagnosable from the comment alone.
             const read = (file, limit) => {
               try {
-                const text = fs.readFileSync(file, 'utf8');
+                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
                 if (text.length <= limit) return text;
                 const half = Math.floor(limit / 2);
-                return `${text.slice(0, half)}\n\n…[${text.length - limit} characters truncated]…\n\n${text.slice(-half)}`;
+                const summaries = (text.match(/^\s*(Test Files|Tests)\s+.+$/gm) || []).join("\n");
+                return `${summaries}\n\n${text.slice(0, half)}\n\n…[${text.length - limit} characters truncated]…\n\n${text.slice(-half)}`;
               } catch (e) { return '(no output captured)'; }
             };
             const body = [
-              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 20000],
-              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 20000],
-              ['npm run test:e2e', '/tmp/step-journey.log', 4000],
+              ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
+              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
+              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
+              ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
+              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
+              ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
               ['prisma generate', '/tmp/step-generate.log', 1500],
+              ['npm run build', '/tmp/step-build.log', 3000],
+              ['Production HTTP smoke', '/tmp/step-studio-smoke.log', 1500],
+              ['Bundle evidence', '/tmp/step-studio-bundles.log', 1500],
+              ['Motion browser', '/tmp/step-motion-browser.log', 4000],
+              ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
+              ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
+              ['Family browser', '/tmp/step-family-browser.log', 2500],
+              ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
+              ['Local browser server', '/tmp/step-browser-server.log', 1000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
             ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
@@ -150,7 +281,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue,
-                body: `Database journeys failed on \`${context.sha}\` (${context.runId}):\n\n${body}`.slice(0, 40000),
+                body: `Database journeys failed on \`${context.sha}\` (${context.runId}):\n\n${body}`.slice(0, 60000),
               });
             } catch (e) {
               console.log('comment failed:', String(e).slice(0, 300));

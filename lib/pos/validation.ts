@@ -1,3 +1,4 @@
+import { validateSaleWrite } from "../sale-pricing";
 /**
  * Route input handling (§56, §75)
  *
@@ -153,13 +154,33 @@ export function sanitizeRepayment(body: JsonBody) {
 // ── Catalogue, people and suppliers ────────────────────────────────────────────
 
 export function sanitizeProductInput(body: JsonBody): ProductInput {
+  const priceKES = positiveNumber(body, "priceKES");
+  // The POS sale uses the same window rule as the catalogue (lib/sale-pricing.ts). Only validated when sent.
+  const saleSent = body.salePriceKES !== undefined || body.salePriceStartsAt !== undefined || body.salePriceEndsAt !== undefined;
+  let sale: ProductInput["sale"];
+  let saleError: string | undefined;
+  if (saleSent) {
+    const result = validateSaleWrite({
+      basePriceKES: priceKES,
+      salePriceKES: body.salePriceKES == null || body.salePriceKES === "" ? null : Number(body.salePriceKES),
+      startsAt: body.salePriceStartsAt,
+      endsAt: body.salePriceEndsAt,
+    });
+    if (result.ok === true) {
+      sale = { salePriceKES: result.salePriceKES, salePriceStartsAt: result.salePriceStartsAt, salePriceEndsAt: result.salePriceEndsAt };
+    } else {
+      saleError = result.error;
+    }
+  }
   return {
+    saleError,
+    sale,
     name: text(body, "name", 160),
     kind: text(body, "kind", 12).toUpperCase() === "SERVICE" ? "SERVICE" : "PRODUCT",
     category: optionalText(body, "category", 80),
     description: optionalText(body, "description", 2000),
     unitKey: text(body, "unitKey", 24) || "piece",
-    priceKES: positiveNumber(body, "priceKES"),
+    priceKES,
     wholesalePriceKES: body.wholesalePriceKES == null ? null : positiveNumber(body, "wholesalePriceKES"),
     costKES: body.costKES == null ? null : positiveNumber(body, "costKES"),
     sku: optionalText(body, "sku", 64),
