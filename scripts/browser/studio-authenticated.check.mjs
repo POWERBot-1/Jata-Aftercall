@@ -46,6 +46,31 @@ async function pageFor(context) {
     const record = { path: new URL(page.url()).pathname, frames, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
     errors.push(record);
     console.error(`BROWSER RUNTIME ERROR ${JSON.stringify(record)}`);
+    // Evidence-only forensic snapshot for hydration-class errors (issue #418): capture each
+    // open frame's DOM and structural marker counts at the earliest possible moment, so the
+    // next recurrence identifies the diverging host node instead of only the React internals.
+    void Promise.all(page.frames().map(async (frame) => {
+      try {
+        const url = new URL(frame.url()).pathname;
+        const dom = await frame.evaluate(() => {
+          const counts = {
+            ready: document.readyState,
+            motionRecipe: document.querySelectorAll("[data-motion-recipe]").length,
+            motionStatic: document.querySelectorAll("[data-motion-static]").length,
+            motionProbe: document.querySelectorAll("[data-motion-probe]").length,
+            catalogueLayout: document.querySelectorAll("[data-catalogue-layout]").length,
+            scripts: document.querySelectorAll("script").length,
+          };
+          return { counts, html: (document.body ?? document.documentElement).outerHTML.slice(0, 8000) };
+        }).catch(() => null);
+        if (dom) {
+          record.framesDom = record.framesDom ?? [];
+          record.framesDom.push({ url, ...dom });
+        }
+      } catch { /* forensics best-effort */ }
+    })).then(() => {
+      console.error(`BROWSER RUNTIME DOM SNAPSHOT ${JSON.stringify(record.framesDom ?? []).slice(0, 200)}`);
+    });
   });
   return page;
 }
