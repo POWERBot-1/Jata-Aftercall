@@ -669,6 +669,11 @@ try {
 } catch (error) {
   if (!results.at(-1) || results.at(-1).ok) results.push({ name: "journey execution", ok: false, detail: String(error.message).slice(0, 250) });
   console.error(`FAIL authenticated journey: ${error.message}`);
+  // Fail-fast must still surface pageerror evidence: an earlier hydration recovery can
+  // explain a later DOM-state assertion (e.g., Float-managed head metas mid-regeneration).
+  if (errors.length) {
+    for (const record of errors.slice(0, 3)) console.error(`M418-RECORDED ${JSON.stringify(record).slice(0, 900)}`);
+  }
   // No cookies/payloads/credentials in diagnostics. Keep the actual server error context locally/CI only.
   console.error(serverLog.slice(-3500));
 } finally {
