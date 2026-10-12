@@ -519,7 +519,7 @@ try {
     design: Boolean(document.querySelector('input[type="color"]')), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
   check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.design);
   await publicState(first.ownerPage, second, `QA unpublished ${second.category} ${runId}`, false, "?preview=draft");
-  check("representative business types have distinct rendered information architectures (not palette/family labels)", new Set(signatures.map((entry) => JSON.stringify(entry))).size === 4);
+  check("representative business types have distinct rendered information architectures (not palette/family labels)", new Set(signatures.map((entry) => JSON.stringify(entry))).size === signatures.length, `distinct=${new Set(signatures.map((entry) => JSON.stringify(entry))).size}/${signatures.length}`);
 
   // Expiry must refuse publication without destroying drafts/history. No production lifecycle job is invoked.
   await prisma.subscription.update({ where: { businessId: first.id }, data: { status: "EXPIRED", expiresAt: new Date(Date.now() - 86400000 * 5), graceUntil: new Date(Date.now() - 86400000) } });
