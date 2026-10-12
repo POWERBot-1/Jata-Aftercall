@@ -448,7 +448,7 @@ try {
       const board = await api(ownerPage, `/api/storefront/enquiry?businessId=${fixture.id}`);
       check(`${category}: authenticated owner receives durable request, no raw replay metadata`, board.status === 200 && board.body.enquiries.some((enquiry) => enquiry.id === result.enquiry.id && enquiry.customerName === enquiryCustomer) && !JSON.stringify(board.body).includes('requestHash'));
       await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}`, { waitUntil: 'networkidle0' });
-      await ownerPage.waitForFunction(() => document.querySelector('[data-enquiry-board]')?.textContent.includes(enquiryCustomer));
+      await ownerPage.waitForFunction((name) => document.querySelector('[data-enquiry-board]')?.textContent.includes(name), {}, enquiryCustomer);
       check(`${category}: actual owner enquiry board receives browser request`, (await ownerPage.$eval('[data-enquiry-board]', (element) => element.textContent)).includes('QA actual scope enquiry'));
       check(`${category}: enquiry creates no booking/order/payment or dummy Product`, await prisma.booking.count({ where: { businessId: fixture.id } }) === bookingBefore && await prisma.order.count({ where: { businessId: fixture.id } }) === 0 && await prisma.payment.count({ where: { businessId: fixture.id } }) === 1 && await prisma.product.count({ where: { businessId: fixture.id } }) === 0);
       await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.itemId}`, { waitUntil: 'networkidle0' });
