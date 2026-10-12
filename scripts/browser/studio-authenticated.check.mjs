@@ -41,7 +41,11 @@ async function pageFor(context) {
     }
     return void request.continue();
   });
-  page.on("pageerror", (error) => errors.push(String(error.message).slice(0, 200)));
+  page.on("pageerror", (error) => {
+    const record = { path: new URL(page.url()).pathname, message: String(error.message).slice(0, 250), stack: String(error.stack ?? "").slice(0, 700) };
+    errors.push(record);
+    console.error(`BROWSER RUNTIME ERROR ${JSON.stringify(record)}`);
+  });
   return page;
 }
 async function api(page, path, method = "GET", body) {
