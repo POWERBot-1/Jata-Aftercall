@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { BookingClient } from "@/components/storefront/BookingClient";
 import { bookingCalendar } from "@/lib/experience/bookingCalendar";
+import { isBookableConsultation, professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,15 @@ export default async function BookPage({ params, searchParams }: Props) {
   const data = await loadStorefront(slug, { allowDraft: await canPreview(slug) });
   if (!data) notFound();
 
-  const bookables = data.services.length > 0 ? data.services : data.items;
+  const professional = data.document.categoryKey === "professional";
+  if (professional && item) notFound(); // this category's requests are tied to real Service rows, never dummy Products
+  if (professional && service) {
+    const selected = data.services.find((entry) => entry.id === service);
+    if (!selected) notFound();
+    if (!isBookableConsultation(selected)) redirect(professionalEnquiryHref(data.business.slug, selected.id));
+  }
+  const bookables = professional ? data.services.filter(isBookableConsultation) : data.services.length > 0 ? data.services : data.items;
+  if (professional && bookables.length === 0) redirect(professionalEnquiryHref(data.business.slug));
   const bookingEnabled = data.profile.capabilities.includes("booking");
   const enquiryItem = item ? data.items.find((entry) => entry.id === item) : null;
 

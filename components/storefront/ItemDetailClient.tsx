@@ -14,6 +14,7 @@ import type { StorefrontItem } from "@/lib/experience/storefront";
 import { useCart } from "./CartProvider";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
+import { isBookableConsultation, professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
 
 export function ItemDetailClient({
   item,
@@ -23,6 +24,7 @@ export function ItemDetailClient({
   cta,
   itemNoun,
   related,
+  professional = false,
 }: {
   item: StorefrontItem;
   slug: string;
@@ -30,6 +32,7 @@ export function ItemDetailClient({
   capabilities: string[];
   cta: { add: string; primary: string; enquire: string };
   itemNoun: string;
+  professional?: boolean;
   related: Array<{ id: string; name: string; price: number | null; imageUrl: string | null }>;
 }) {
   const cart = useCart();
@@ -252,7 +255,12 @@ export function ItemDetailClient({
               </>
             ) : null}
 
-            {booking && item.kind === "service" ? (
+            {professional && item.kind === "service" ? (
+              <Link href={isBookableConsultation(item) ? `/b/${slug}/book?service=${encodeURIComponent(item.id)}` : professionalEnquiryHref(slug, item.id)} className="eb-btn eb-btn--block">
+                {isBookableConsultation(item) ? "Book this consultation" : cta.enquire}
+              </Link>
+            ) : null}
+            {!professional && booking && item.kind === "service" ? (
               <Link href={`/b/${slug}/book?service=${item.id}`} className="eb-btn eb-btn--block">
                 {item.pricingType === "QUOTE" ? cta.enquire : "Book this"}
               </Link>
@@ -264,7 +272,7 @@ export function ItemDetailClient({
               </Link>
             ) : null}
 
-            {!commerce && item.kind === "service" ? (
+            {!professional && !commerce && item.kind === "service" ? (
               <Link href={`/b/${slug}/book?service=${item.id}`} className="eb-btn eb-btn--block">
                 {cta.enquire}
               </Link>

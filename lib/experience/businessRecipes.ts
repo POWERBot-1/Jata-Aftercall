@@ -2,7 +2,7 @@
 import type { CategoryKey, ExperienceDocument, ExperienceSection, SectionType } from "./types";
 import type { StorefrontData, StorefrontItem } from "./storefront";
 
-export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking";
+export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking" | "professional-enquiry";
 export type BusinessRecipeDetail = "brand" | "variants" | "stock" | "ingredients" | "portion" | "prep" | "options" | "duration" | "staff" | "deposit";
 /** Registered structural presentations only. A layout is presentation geometry — never content, prices or capability. */
 export type BusinessRecipeLayout = "product-grid" | "product-list" | "menu-list" | "menu-board" | "service-list" | "service-grid";
@@ -33,6 +33,9 @@ export const BUSINESS_RECIPES: readonly BusinessRecipe[] = [
   { version: 1, key: "salon-booking", category: "salon", label: "Salon services & booking", primarySection: "services", sections: ["services", "featured"],
     source: "services", layout: "service-list", listLayout: "service-list", layouts: ["service-list", "service-grid"],
     details: [{ key: "duration", label: "Duration" }, { key: "staff", label: "Specialist" }, { key: "deposit", label: "Deposit information" }] },
+  { version: 1, key: "professional-enquiry", category: "professional", label: "Professional services & enquiries", primarySection: "services", sections: ["services", "featured"],
+    source: "services", layout: "service-list", listLayout: "service-list", layouts: ["service-list", "service-grid"],
+    details: [{ key: "staff", label: "Professional" }, { key: "duration", label: "Consultation length" }, { key: "deposit", label: "Booking deposit information" }] },
 ];
 export function businessRecipeFor(category: string, sectionType?: string): BusinessRecipe | undefined {
   return BUSINESS_RECIPES.find((recipe) => recipe.category === category && (sectionType === undefined || recipe.sections.includes(sectionType as SectionType)));
