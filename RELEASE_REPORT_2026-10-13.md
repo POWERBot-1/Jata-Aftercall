@@ -20,7 +20,7 @@ installation, a document, or an older SHA.
 | Environment | node v22.22.3, npm 10.9.8. No `DATABASE_URL`, no Prisma engine, no Postgres/docker, no Chrome/Chromium **and no way to run one** (see Phase 4). npm registry and github.com reachable; `binaries.prisma.sh` is not |
 | Preview | Vercel Preview for `1b8167d`, deployment `7044323662`, state `success`, created 2026-10-13T16:40:53Z, **SSO-protected** |
 | Merged? Deployed? | **No.** No merge, no production deploy, no migration run, no env change, no provider activation, no spending, no production data touched |
-| Final status | **BLOCKED — owner-verification items only**; current gate table in **§G.13.3** (supersedes §G.10/§F.1). Every machine-verifiable gate is green at `fde6865` with CI run `38439687233` as evidence; what remains is the owner's Paystack verification, one live charge + refund authorization, and the development-advisory decision |
+| Final status | **BLOCKED — owner-verification and owner-decision items only**; gate table **§G.13.3**, current owner decision register **§H.11** (Directive 4, at the end of this document). Every machine-verifiable gate is green at `fde6865`/`d616ae6` with runs `38439687233` / `38445602486` as evidence; what remains is the owner's Paystack verification, the D-1/D-2/D-3 decisions, and explicit authorization for any live charge |
 
 ---
 
@@ -674,7 +674,7 @@ The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
 | Design system + published output | **PASS** | 21 design-system tests; categories × themes regression; family geometry 167/167 in CI | Agent/CI |
 | Integration/conflict resolution | **PASS** | candidate tree == merged tree; CI green on the merged SHA | Agent/CI |
 
-**Final status: BLOCKED — owner-verification items only.** Every machine-verifiable mandatory gate is
+**Final status: BLOCKED — owner-verification and owner-decision items only.** (Directive 4's register in §H.11 is the current one.) Every machine-verifiable mandatory gate is
 verified at `fde6865` with run `38439687233` as evidence (the database suite is green in both runs),
 and the one CI-side anomaly is recorded and closed as intermittent in §G.14: the authenticated
 browser step failed on one later Markdown-only commit, then passed 428/0 on the next run of the
@@ -723,9 +723,287 @@ journey **428 passed / 0 failed / 0 skipped**, booking SSR/midnight hydration **
 immersive 22, layout 7, families 167, raster 29 — all green. `git diff --name-only d5bd1eb 6a24c92`
 is this report file only, so the code, tests, lockfile and assets are the same as in the red run.
 Two of three runs on identical code are therefore fully green, and the single failure in run #2 is
-reclassified as an **intermittent CI-harness observation** rather than an unidentified defect. The
+reclassified as an **intermittent CI-harness observation** rather than an unidentified defect.
+> **Directive 4 update (§H.3):** *intermittent* describes the reproduction pattern, not an established
+> cause. The failing check could not be named from this environment (logs, artifacts, annotations and
+> re-runs are all blocked), so its status is **UNRESOLVED**, not "known flaky". The
 failing check's name is still unread from here (same log-host limitation); triage is recommended when
 convenient, but it is no longer an open release question, and the SHA-pinned green evidence at
 `fde6865` (run `38439687233`) and `6a24c92` (run `38443603926`) stands.
 
 **Smallest owner action:** in the repo's Actions tab, open run `38441832430` → job *Journey against a real database* → the failing step, and read the untruncated log (or use *Re-run failed jobs* and inspect the same step). One line — the failing check's name — is all that is needed to triage. The green evidence at `fde6865` (run `38439687233`, including the database suite and the booking-hydration browser step) stands on its own SHA and is unaffected.
+
+---
+
+## H. Release-gate closure and owner decision package (Directive 4, 2026-10-13 later)
+
+Audit, investigation, evidence and decision-preparation only. **No code, test, dependency, configuration
+or data change was made in this task.** No merge, no deploy, no live payment, no refund, no provider
+activation, no production data or configuration touched, no spending.
+
+### H.1 Verified repository and PR state (read from live GitHub, not assumed)
+
+| Fact | Value |
+| --- | --- |
+| Repository / branch | `POWERBot-1/Jata-Aftercall` / `arena/fac28f53-jata-aftercall` |
+| Task-branch tip (remote, verified) | `d616ae6b98642da3c22e306563164262f8b854da` — matches the reported HEAD |
+| `main` (remote, verified) | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — unchanged; last main-push CI run `38415386548` (2026-10-13T14:40Z, success) |
+| PR #45 | **OPEN**, not draft, base `main`, head `d616ae6…`, `mergeable: MERGEABLE`, `mergeStateStatus: CLEAN`, 15 commits, 65 changed files, label **NOT APPROVED FOR PRODUCTION DEPLOYMENT**, updated 2026-10-13T18:32:06Z |
+| PR checks | `Journey against a real database` **pass** (run `38445602486`), Vercel **pass**, Vercel Preview Comments **pass** |
+| Runs on this branch | `38439687233` success @ `fde6865` · `38441832430` failure @ `d5bd1eb` · `38443603926` success @ `6a24c92` · `38445602486` success @ `d616ae6` — no new runs, no new commits |
+| Candidate and report on the branch | `lib/dateFormat.ts`, `lib/designSystem.ts`, `lib/experience/bookingCalendar.ts`, `tests/integration/subscription-payment-revival.test.ts`, `RELEASE_REPORT_2026-10-13.md` all present at the tip |
+
+**Environment discrepancy, disclosed.** The execution sandbox was re-created at 19:41 UTC (its reflog
+shows a fresh `clone` and a checkout at the merge base `77e35ce`), so at the start of this task the local
+git history ended at the merge base while the persisted *files* were the tip's content — reported by git
+as 198 untracked/modified entries. Nothing was assumed or discarded: I staged everything and verified
+`git diff --cached origin/arena/fac28f53-jata-aftercall` was **empty** (byte-identical), then reconciled the
+local branch to its own published tip with a fast-forward `git reset --hard origin/arena/fac28f53-jata-aftercall`.
+No remote ref was written, no history rewritten, no branch created, no file changed.
+
+### H.2 Release evidence revalidated (verified now vs carried from the previous report)
+
+| Evidence | Reported | Status after re-verification |
+| --- | --- | --- |
+| Full native DB suite | 2,262 passed / 0 skipped | **VERIFIED, and stronger**: the same figures appear in **all four** runs' evidence comments (`6151667650`, `6151900209`, `6152180791`, `6152451962`), i.e. including in the failing run and on the current tip |
+| §66 experience journey | 17 passed | VERIFIED (all runs) |
+| Business POS journey | 22 passed | VERIFIED (all runs) |
+| Authenticated HTTP/browser/DB journey | 428 passed / 0 failed | VERIFIED in the three green runs (and on the tip `d616ae6`); the failed run reported 427/1 (see H.3) |
+| Booking SSR + Nairobi-midnight hydration (real browser) | 25 passed | VERIFIED in the three green runs, including the tip |
+| Hydration-race detector | works | VERIFIED: the synthetic arms reproduce #418/#423 by construction (2 and 1 errors) while the **real-app forced arm (8 iterations)** and **control arm (3 iterations)** show 0 #418 and 0 other errors |
+| Migrations, seed, lint, TypeScript, production build | pass in CI | VERIFIED in CI; locally `tsc` reports **1** error, identical to plain `main`'s baseline (**1**), i.e. the offline-Prisma artifact and nothing introduced; lint has 0 errors and the one pre-existing `<img>` warning |
+| Production audit | 0 findings | VERIFIED in CI and locally |
+| Development audit | 10 high | VERIFIED locally and printed by CI (`FAIL full dependency audit: 10 findings (10 high)`), by design |
+| Local re-run at the tip | — | targeted booking/timezone/payment/POS/publication suites **121 passed**; full suite **2188 passed / 114 skipped / 0 failed** |
+
+### H.3 The authenticated-browser failure — investigation result: **cause UNRESOLVED** (not called flaky)
+
+Every read-side avenue was attempted; each is blocked by a specific, recorded limit:
+
+| Avenue | Result |
+| --- | --- |
+| Runner logs (`/actions/runs/{id}/logs`, job logs) | Blocked: the API redirects to `results-receiver.actions.githubusercontent.com`, outside this sandbox's allowed network (exact failure recorded) |
+| Artifacts | The failed run has exactly one artifact, `hydration-raw-order-evidence` (19,526 B); downloading redirects to `productionresultssa5.blob.core.windows.net` — also outside the allowed network |
+| Check-run annotations | Only `Process completed with exit code 1` (line 560) plus the Node-20 deprecation warning — no check name |
+| The workflow's own failure comment | **Truncates itself**: the handler keeps the first and last 5,500 characters of each step log (source: `.github/workflows/interactive-business-e2e.yml`, `Report failing output to the pull request`). The failing check sits in the discarded middle — the comment even prints `…[47143 characters truncated]…` |
+| Re-run | `gh run rerun --failed` → "run … cannot be rerun; its workflow file may be broken"; REST `rerun-failed-jobs` → **403 Resource not accessible by integration** (token has no `actions:write`) |
+
+What the available evidence *does* narrow, without naming it:
+- The harness stops at the **first** failure and says so: *"NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance."*
+- The red run is the only one of four containing `Unique constraint failed on the fields: ('id')` from `AIQualityEvent.create()` (3 occurrences; **0** in all three green runs) — a lead, not a conclusion.
+- Code-identical comparison: the red run is at `d5bd1eb`; the green tips `6a24c92`/`d616ae6` differ from it **only in `RELEASE_REPORT_2026-10-13.md`** (`git diff --name-only d5bd1eb 6a24c92` = that one file).
+
+Verdict: **UNRESOLVED.** It is not labelled a flake merely because later runs passed, and it is not labelled
+a regression because no code differs. Evidence for the release candidate at `d616ae6` is green on that step.
+**Smallest owner action:** open run `38441832430` → job *Journey against a real database* → failing step
+`Authenticated production HTTP browser journey` and read the log (or use *Re-run failed jobs* in the UI);
+one line — the check's name — is what this package is missing. Optionally grant the integration token
+`actions:write` so future triage can be done from here.
+
+### H.4 D-1 — the booking date/time contract (decision required; nothing changed)
+
+**As implemented today** (file references are to the current branch tip):
+
+| Layer | Behaviour | Source |
+| --- | --- | --- |
+| Availability slots | naive `"HH:MM"` strings, default `09:00 … 17:00` | `lib/experience/booking.ts:45-59` |
+| Booking instant | `new Date(year, month-1, day, hours, minutes)` → **server-local = UTC on Vercel** | `lib/experience/booking.ts:167` |
+| Date chips | UTC date keys computed on the server from `now` | `lib/experience/bookingCalendar.ts`, `app/b/[slug]/book/page.tsx:68` |
+| Dashboard board | `formatDateTime` → **Africa/Nairobi** | `components/dashboard/BookingBoard.tsx:98` → `lib/dateFormat.ts:26` |
+| Customer booking page ("When") | `formatDateTime` → **Africa/Nairobi** | `app/b/[slug]/booking/[id]/page.tsx:33` |
+| In-app notification message | `startAt.toLocaleString("en-KE")` → server zone (**UTC**) | `lib/experience/payments.ts:474` |
+
+**Two behaviours demonstrated on this branch** (commands run, output verbatim):
+
+1. A customer taps **09:00 on 14 Oct** → stored `2026-10-14T09:00:00.000Z` → the dashboard and the
+   customer's booking page show **"14 Oct 2026, 12:00"**, while the owner's notification message says
+   **"… on 14/10/2026, 09:00:00."** One booking, two different times, on customer-visible surfaces.
+2. At `2026-10-12T21:30:00Z` (**00:30 on 13 Oct** in Nairobi) the first chip is **`2026-10-12 Mon, 12 Oct`**
+   — the *previous* Nairobi day — and because every slot on that day is already in the past in UTC, tapping
+   it yields "No times left on this day. Try another date." (The server correctly refuses; nothing wrong is
+   booked.)
+
+**Why this is a decision, not a bug report:** the stored instants are UTC-anchored *by construction*, so the
+Nairobi-pinned display added by this branch is a +3 h shift relative to the wall-clock time the customer
+tapped; before the branch, that page rendered UTC server-side and matched the tap by accident. Which clock
+is authoritative is a product decision.
+
+| Package | Content | Cost / risk | Tests required |
+| --- | --- | --- | --- |
+| **A — keep UTC-anchored bookings** (recommended interim) | Add a UTC-pinned booking wall-clock formatter (additive, next to the existing ones) and use it at the three booking display sites (dashboard board, customer booking page, notification message); keep the UTC-day chip list. Document "availability slots are UTC clock times" for owners | Presentation-only; no data change; existing bookings render exactly as they do today; leaves the underlying "12:00 EAT is the real appointment time" wart to be stated plainly | Instant construction under `TZ=UTC`/`Africa/Nairobi`; the three surfaces render the same string; chip list across the 21:00–24:00 UTC window; existing rows unchanged; EAT has no DST (assert the fixed +3 offset) |
+| **B — declare bookings Nairobi-anchored** (product-correct) | Build booking instants from Nairobi wall clock (09:00 EAT = 06:00Z) in `validateBookingRequest`, `freeSlotsFor`, `openDays` and the calendar, keep Nairobi display, and define an explicit rule for rows already stored (no silent rewrite) | Business-semantics change touching availability, capacity and "future" checks; needs a stated migration/interpretation policy and owner sign-off | All of A plus: slot round-trip 09:00 EAT ⇒ stored 06:00Z ⇒ displayed 09:00; availability/capacity unchanged against a real PostgreSQL run; legacy rows' meaning pinned by a test; the 21:00–24:00 UTC chip window |
+
+Nothing was implemented: per the directive, the product contract must be selected before implementation.
+
+### H.5 D-3 — ambient-time-zone formatting: findings supersede the previous statement
+
+- **Correction:** on the merged tip there is **no client component** that formats with `toLocale*` or
+  constructs an `Intl` formatter (exhaustive scan of every `"use client"` file under `components/` and
+  `app/`: zero hits). The earlier "8 client components" count was taken against `main`'s tree; those
+  components now use this branch's deterministic formatters.
+- **Residual:** **16 ambient-format call sites in 10 server components** —
+  `app/admin/customers/page.tsx:36`, `app/admin/payments/wallet/page.tsx:62,93,139,171`,
+  `app/admin/subscriptions/page.tsx:21,22`, `app/b/[slug]/shop/page.tsx:64`,
+  `app/dashboard/pos/[businessId]/credit/page.tsx:111`, `.../expenses/page.tsx:58`, `.../sales/page.tsx:49`,
+  `app/dashboard/subscription/page.tsx:81,99`, `app/receipt/[token]/page.tsx:92,93,104` — displaying
+  payment/order/subscription timestamps in the **server's** zone (UTC) to Nairobi staff and customers.
+- **Classification:** presentation-consistency, **not** a hydration risk (server components are rendered
+  once and are not re-rendered during hydration) and **not** a release blocker. It is not "8 confirmed
+  defects"; it is one display-convention gap, plus the booking-instant case in H.4.
+- **Minimal fix plan if authorised:** adopt the existing deterministic formatters at those 16 sites — for
+  true instants (payments, orders, subscriptions) the Nairobi-pinned ones; for **booking** instants, the
+  formatter chosen in D-1. No transaction timestamp, storage, settlement or business rule changes.
+  Regression list: the hydration parity/determinism suites (must stay green), the receipt/admin pages'
+  rendering, and a new test asserting the chosen convention at each of the three booking surfaces.
+- **Not implemented** — the booking-related sites depend on the D-1 decision, and the rest share the same
+  convention, so one decision covers both.
+
+### H.6 Preview-sample timeouts — classification and impact
+
+- **What the samples measure** (`scripts/browser/studio-authenticated.check.mjs`, ~line 680): the owner
+  *draft preview* page (storefront inside the dashboard iframe) is loaded for all five representative
+  categories, three attempts each, under `Emulation.setCPUThrottlingRate: 4`, waiting for the iframe body
+  to contain the fixture marker; the sample then feeds the **M11 emission-order gate** (`order` must never
+  start with `script`). The harness states its own tolerance: *"Load timeouts under throttle skip the sample
+  and never fail the journey."*
+- **Reproducibility:** identical in **all four runs** — 3 `ok:true` (retail) and 12 `ok:false`
+  (`TimeoutError: Waiting failed: 25000ms exceeded`, food/salon/professional/technical × 3 attempts). It is
+  not run-specific and not correlated with the one red run.
+- **Classification: harness/environment limitation with full reproducibility — not a customer-facing
+  performance or reliability signal.** The failure mode is a wait timeout on a throttled synthetic harness
+  against a dev server, not an HTTP error, exception or console error; the same job's other browser suites
+  (booking SSR/midnight 25/25, motion 124, families 167, layout 7, immersive 22) pass.
+- **Impact on the initial release:** limited evidence coverage, not a product defect — the M11 order gate is
+  exercised for only 1 of 5 categories in CI, while #418 itself is covered by the dedicated
+  booking-SSR/midnight and race-detector steps. Recommended as a follow-up, not a blocker.
+- **Next safe diagnostic (no timeout relaxation):** instrument the sample to report *which* wait failed and
+  the iframe URL/`body` head (harness-only change), and/or reproduce locally on a non-throttled browser. If
+  the marker genuinely never appears for those categories under throttle, investigate per-category preview
+  load. Raising the timeout to buy a green run is explicitly rejected.
+
+### H.7 D-2 — development-advisory decision (verified facts, no change made)
+
+Ten high-severity findings, all **development-only**: `npm audit --omit=dev` is **0** in CI and locally. Two
+root advisories, everything else is propagation:
+
+| Chain | Path | Root advisory | Patched release? |
+| --- | --- | --- | --- |
+| Tailwind 3 tooling | `tailwindcss@3.4.19` → `chokidar@3.6.0` → `braces@3.0.3`; `fast-glob@3.3.3` → `micromatch@4.0.8` → `braces@3.0.3` | `braces` GHSA-vfj7-8cjw-p6xm (stack-exhaustion DoS via deeply nested patterns) | **None exists**: `braces` latest = 3.0.3 = installed; npm reports the affected range as `*` |
+| ESLint/Next tooling | `eslint-config-next@15.5.27` → `@next/eslint-plugin-next@15.5.27` → `fast-glob@3.3.1` → `micromatch` → `braces` | same | **Cannot be cleared by upgrading**: the latest `@next/eslint-plugin-next` (**16.4.0**) *still* depends on `fast-glob@3.3.1` |
+| Puppeteer (dev browser tooling) | `puppeteer-core@23.11.1` → `@puppeteer/browsers@2.6.1` → `extract-zip@2.0.1` | `extract-zip` GHSA-jmr9-qjv8-65gv and GHSA-7pqw-9j4j-h8q3 (symlink traversal / arbitrary writes) | **None exists**: `extract-zip` latest = 2.0.1 = installed. **Removable**: `puppeteer-core@25.13.0` → `@puppeteer/browsers@3.2.4` → `{yargs, modern-tar}` (verified: no `extract-zip`) |
+
+- **Production exposure:** none of these packages is in the production dependency tree, and no production
+  build output is affected (Tailwind's chain is a build-time inputs concern; a malicious glob pattern in
+  config would have to be supplied by someone who can already edit the repository).
+- **Option A — documented risk acceptance:** retain the current pins (which are `main`'s ratified posture),
+  record severity/environment/no-fix status, a review date and continued monitoring; the CI production gate
+  stays at 0 and the full-audit FAIL stays visible in every run. Consequence of deferring: the two root
+  advisories remain permanently unfixable-by-upgrade until the tooling majors change; the risk is limited to
+  the development/build environment.
+- **Option B — staged, separately scoped remediation (two independent tracks):**
+  *B1 (small, verifiable):* move `puppeteer-core` 23 → 25, which removes `@puppeteer/browsers` + `extract-zip`
+  (3 findings) and restores the remediation this branch already validated. It **requires editing `main`'s
+  ratified lock test** (`tests/unit/dependency-security-compat.test.ts` pins `puppeteer-core 23.11.1` and
+  imports `basic-ftp`), so it needs owner approval as a deliberate re-ratification, plus confirmation that
+  the browser QA scripts still launch (13 API members were audited previously).
+  *B2 (larger, scheduled):* Tailwind 3 → 4 (`tailwindcss@4.3.3` has **no dependencies**, so it removes
+  `tailwindcss`, `chokidar`, `micromatch`, `fast-glob` and `braces` from this tree) with visual-regression
+  and bundle checks; the ESLint chain then remains until a stable Next/ESLint line drops `fast-glob` (only
+  16.5 canaries exist today).
+- **Recommendation:** Option B, track B1 first (cheap, restores a real security fix, independently
+  verifiable), B2 scheduled as a migration with rollback; otherwise Option A with a written acceptance and
+  review date. `npm audit fix --force` is not used and no ratified pin is changed without approval.
+
+### H.8 Paystack production-configuration checklist (owner-executed; no secret may enter Arena, GitHub, or any report)
+
+Facts from the code that the checklist verifies *against*: only `PAYSTACK_SECRET_KEY` (server-only) enables
+the connector and signature verification — `mode` is `LIVE` iff it starts with `sk_live_`, else `TEST`;
+`PAYSTACK_PUBLIC_KEY` is read for connector status; the Paystack base URL is hard-coded
+`https://api.paystack.co` (not environment-configurable); Paystack signs with the same secret, so there is no
+separate webhook secret; the test mock (`?mock=success`) is unreachable when `NODE_ENV === "production"` **or**
+a secret is present.
+
+1. **Project/environment:** confirm the Vercel project is the one attached to this repository and that you are
+   editing the **Production** environment (not Preview/Development) for the project that serves the live domain.
+2. **Key mode separation:** in Paystack's dashboard, confirm the **live** account/keys are the ones whose
+   public/secret pair is installed in Vercel Production, and that no test key sits in Production (or a live
+   key in Preview/Development).
+3. **Secret storage:** confirm `PAYSTACK_SECRET_KEY` is set as a server-side environment variable (not
+   `NEXT_PUBLIC_*`), is not exposed to the client bundle, and exists only in Vercel's encrypted env store.
+4. **Webhook endpoint:** confirm the Paystack webhook URL is `https://<live-domain>/api/paystack/webhook`,
+   delivered as POST with the raw JSON body, and that it is not behind an auth wall or rewrite.
+5. **Signature verification:** confirm Paystack's dashboard shows recent successful deliveries (2xx). The app
+   verifies `x-paystack-signature` with HMAC-SHA512 over the raw body and a constant-time compare; failures
+   are logged as the audit event `WEBHOOK_SIGNATURE_FAILED` (a spike there means the secret in Vercel does
+   not match the one signing the events).
+6. **Server-side verification:** confirm the response/callback flow reaches `/api/paystack/verify` and that
+   settlement requires provider evidence (`REFERENCE_MISMATCH` / `AMOUNT_MISMATCH` / `CURRENCY_MISMATCH`
+   audits appear only for genuine mismatches), never a client-supplied status.
+7. **Idempotency:** confirm the `processedWebhook` table is present in the production database and that a
+   replayed event yields `already_paid` (or an ignored duplicate) rather than a second activation.
+8. **State transitions:** confirm subscriptions activate on `charge.success`, POS payments settle the POS
+   entitlement, refunds move a payment to `REFUNDED` and suspend the entitlement, and that `REFUNDED` is never
+   revived (audit events: `SUBSCRIPTION_ACTIVATED`, `WEBHOOK_PARTIAL_REFUND_REVIEW_REQUIRED`).
+9. **Logging/redaction:** confirm no secret or full provider payload is written to logs or to audit metadata
+   (the code stores ids/status only). Never paste a key into chat, an issue, a PR, or this report.
+10. **Rollback/incident:** know the Vercel rollback path (`Deployments → Rollback`), the kill-switch
+    (remove/rotate `PAYSTACK_SECRET_KEY` stops verification and settlement), and how to review
+    `/health` + the audit events above. Configuration review alone is **not** evidence that a real
+    transaction succeeds — that is H.9, separately authorized.
+
+### H.9 Bounded live-payment test plan (proposed — **NOT executed**; BLOCKED pending explicit owner authorization)
+
+Marked **BLOCKED — EXPLICIT OWNER AUTHORIZATION REQUIRED** until the owner approves the exact scope. Nothing
+in this plan may be executed on the basis of earlier approvals to implement or test payment code.
+
+Owner must pre-agree, in writing: (1) the **test account** and environment (a test-mode first pass, then one
+live charge in the production environment only if the owner wants production proof); (2) the **amount** —
+the smallest amount Paystack's live rules permit for a card charge, with the fee schedule confirmed in the
+dashboard (not assumed here) and the exact amount recorded before the run; (3) the **payment method** and the
+**consenting participant** (owner's own card, owner present); (4) the **exact procedure** including the
+reference naming convention; (5) **duplicate prevention** — one reference, one attempt, no retry on a
+timeout without first checking the Paystack dashboard; (6) **refund** procedure and how it will be verified
+(provider dashboard + the app's `REFUNDED`/suspension path); (7) the **expected evidence** — receipt page,
+webhook delivery, audit events, notification, reconciliation row; (8) **failure handling, evidence capture
+and stopping conditions** (stop immediately on any unexpected status, any second settlement, or any
+deviation; capture timestamps and audit-event names, never keys or full payloads); (9) **production
+deployment approval remains a separate decision** and is not implied by approving this test.
+
+### H.10 Payment, POS and publishing invariants — confirmed preserved
+
+Local runs at the tip: targeted booking/timezone/payment/POS/publication suites **121 passed**; full suite
+**2188 passed / 114 skipped / 0 failed**; CI at the tip: DB suite 2262 / 0 skipped, POS journey 22, §66 17,
+authenticated journey 428/0. Verified in code and tests: payment status is only ever settled from verified
+provider evidence (`lib/paymentVerification.ts`, compare-and-set in `lib/paystack.ts`), tenant isolation and
+authorization suites are green (`tests/security/*`), webhook processing is idempotent
+(`processedWebhook` + CAS), receipts/reconciliation paths are unchanged, unpaid or unentitled businesses
+cannot publish (`experience-publish`, `ai-entitlement*`), publication still requires verified payment behind a
+valid subscription with the existing admin override, and **no new stale-order/refund behaviour was added** —
+the documented policy proposal is still the precondition for any such change.
+
+### H.11 Owner decision register (2026-10-13, Directive 4)
+
+| Gate | Required outcome | Evidence | Status | Owner action | Next safe step |
+| --- | --- | --- | --- | --- | --- |
+| Paystack production configuration | Owner verification recorded, without exposing secrets | H.8 checklist + code facts (H.8) | **BLOCKED** | Walk the 10 checks in the Vercel/Paystack dashboards; report only pass/fail per line | Record the outcome in this report's register; any mismatch → fix in the dashboards, not in code |
+| Live charge + refund exercise | Explicit scope approval; no transaction executed by this task | H.9 plan | **NOT AUTHORIZED** / BLOCKED | Approve the exact scope, amount, participant and stopping conditions | Execute only after approval, then record reference, receipt, webhook and audit evidence |
+| D-2 development advisories | Owner selects risk acceptance or staged remediation | H.7 (verified: no patched `braces`/`extract-zip` exist; `puppeteer-core@25` and `tailwindcss@4` are the only removals) | **BLOCKED (decision)** | Choose A, or B with B1 first | B1: separate scoped change that also re-ratifies `main`'s lock test; B2: scheduled migration with visual regression |
+| D-1 booking-date contract | Confirmed contract or explicit owner decision | H.4 (two demonstrated behaviours; three surfaces, two times) | **BLOCKED (decision)** | Choose Package A (keep UTC-anchored storage, align display) or Package B (Nairobi-anchored bookings) | Implement the chosen package with the listed tests; no silent semantics change |
+| D-3 timezone presentation | Confirmed findings, safe fix plan, or owner decision | H.5 (no client-side ambient formatting remains; 16 server-component sites) | **RESOLVED (findings)** — fix optional | Approve the small presentation-consistency fix, ideally together with D-1 | Apply the deterministic formatters at those sites; keep hydration suites green |
+| Preview-sample timeouts | Evidence-based classification or unresolved status | H.6 (identical in all four runs; harness-design tolerance; order gate covered 1/5) | **UNRESOLVED (cause of the timeouts) / harness limitation** | Allow a harness-only diagnostic change | Instrument which wait fails and the iframe URL/body head; do **not** raise the timeout |
+| Authenticated-browser failure (run `38441832430`) | Named failing check | H.3 (logs/artifacts/annotations/re-run all blocked) | **UNRESOLVED** | Read the failing step's log in the Actions UI (or grant `actions:write`) | Record the check name here; only then decide whether it is environment or product |
+| Media storage | Remains deferred | No storage code or provider in the branch | **NOT AUTHORIZED** (deferred) | — | Unchanged |
+| PR #45 merge | Not authorized | PR open, `CLEAN`, label retained | **NOT AUTHORIZED** | Owner decision, separate from this package | — |
+| Production deployment | Not authorized | No deploy performed | **NOT AUTHORIZED** | Owner decision after the gates above | — |
+
+### H.12 What this task did and did not do
+
+- **Did:** read-only verification of repository, remote refs, PR, checks and runs; a re-validated evidence
+  matrix; a documented investigation of the red run with every accessible avenue exhausted; two demonstrated
+  D-1 behaviours; a corrected D-3 inventory; a classification of the preview timeouts; verified dependency
+  facts for D-2; the Paystack checklist and the bounded live-test plan; local re-runs of the targeted and
+  full suites; this report section.
+- **Did not:** no code, test, dependency, workflow, lockfile or configuration change; no merge, deploy,
+  migration, provider activation, live payment, refund, spending or production data change; no new branch;
+  no history rewrite; no test weakened, skipped or relabelled; no timeout relaxed; no secret read, printed
+  or committed; no `npm audit fix --force`.
