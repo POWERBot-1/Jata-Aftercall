@@ -1364,3 +1364,26 @@ failure is **preserved, not fixed**.
 **No attempt was made to make this step green** by relaxing, skipping, retrying-around or reclassifying
 anything. The remediation paths are unchanged: owner reads the failing check, or the underlying #418
 mismatch is fixed under its own authorization.
+
+### I.10 Follow-up run for the §I.9 report commit — GREEN, and the intermittency statistic
+
+Run **`38472070001`** (head `fd8080286a2468e079ae6461ce9452fbaa413fff`, the §I.9 report commit; the code
+tree is byte-identical to `62b750b`) is **SUCCESS**:
+
+| Evidence | Value at `fd80802` |
+| --- | --- |
+| Full native DB suite | **187 files passed · 2277 tests passed · 0 skipped** (`2277 = 2268 + 9`: this change set's 8 new timezone tests plus the 1 new compatibility assertion — the new tests run and pass in CI, and **no skip was added**) |
+| §66 experience journey / Business POS journey | 17/17 · 22/22 |
+| Authenticated production HTTP/browser/native-DB journey | **`428 passed, 0 failed, 0 skipped`** |
+| Production HTTP isolation smoke | 9 passed, 0 failed, 0 skipped |
+| Dependency audit | production **0 findings**; full audit **7 findings, all high, all dev-only** (the residual set of §I.4) |
+| Booking SSR/hydration, #418 race, Motion/immersive/layout/family/media browser steps | ran (workflow reached the success path) |
+
+Branch run history for this workflow is now **7 green / 3 red**. The three reds are: `38441832430` (head
+`d5bd1eb`, puppeteer-core **23**, i.e. **before** this dependency change), `38463216815` (`Install
+dependencies`, infrastructure, §H.14) and `38470293452` (§I.9). Both browser-step reds carry the identical
+`427 passed, 1 failed, 0 skipped` summary and the same `NOT RUN` tail; the failing check's name is still
+inside the truncated middle of the log in both, and both predate or straddle the dependency change. **The
+failure is therefore intermittent in observation but remains UNRESOLVED as to cause — not a flake, and not
+attributed to this change set.** The workflow's own PR comment is the evidence channel for any later run on
+this branch; §I is not extended per push.
