@@ -396,3 +396,15 @@ describe("M12 raw server-response ordering evidence (serverHtmlOrder)", () => {
     expect(serverHtmlOrder(monoHtml).order).not.toBe(serverHtmlOrder(invertedHtml).order);
   });
 });
+
+describe("M12 parse-phase hoistable visibility", () => {
+  it("keeps parse-phase script insertions instead of dropping them into parseDropped", async () => {
+    // The probe keeps <script> insertions even while readyState is "loading": an inline
+    // script hoisting bootstrap scripts during parse must be visible in the ring buffer.
+    const source = probeInstallSource();
+    expect(source).toContain("involvesHoistable");
+    expect(source).toContain('name === "SCRIPT"');
+    // Ordinary parser markup insertions are still dropped (bounded noise).
+    expect(source).toContain("parseDropped += 1");
+  });
+});

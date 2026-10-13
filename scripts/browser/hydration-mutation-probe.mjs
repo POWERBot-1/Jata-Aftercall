@@ -119,6 +119,25 @@ export function probeInstallSource(options = {}) {
       } catch (e) {}
       return false;
     }
+    function involvesHoistable(m) {
+      // Parse-phase insertions of <script>/<link>/<meta>/<style> are kept: an inline script
+      // that hoists bootstrap scripts during parse would otherwise hide inside the dropped
+      // parser-insertion stream (M12 — the raw-vs-DOM divergence window).
+      try {
+        var lists = [m.addedNodes, m.removedNodes];
+        for (var li = 0; li < lists.length; li++) {
+          var list = lists[li] || [];
+          for (var n = 0; n < list.length; n++) {
+            var node = list[n];
+            if (node && node.nodeType === 1) {
+              var name = node.nodeName;
+              if (name === "SCRIPT" || name === "LINK" || name === "META" || name === "STYLE") return true;
+            }
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
     var observer = new MutationObserver(function (mutations) {
       if (frozen) return;
       for (var i = 0; i < mutations.length; i++) {
@@ -128,7 +147,7 @@ export function probeInstallSource(options = {}) {
           // post-parse changes and anything touching React/Fizz boundary markers or holders
           // (the $RC/$RV deferred swap), which run even mid-parse. Parse-phase drops are
           // counted and sampled so the timeline can still prove hydration-vs-parse order.
-          if (document.readyState === "loading" && !involvesBoundary(m)) {
+          if (document.readyState === "loading" && !involvesBoundary(m) && !involvesHoistable(m)) {
             parseDropped += 1;
             if (parseSamples.length < 5) parseSamples.push("parse+" + parseDropped + ":" + summarize(m.target) + "+" + listSummary(m.addedNodes));
             continue;
