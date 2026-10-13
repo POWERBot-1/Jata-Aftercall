@@ -28,6 +28,7 @@ import {
 type Plan = { id: string; name: string; priceKES: number; durationDays: number };
 // The sixteen Interactive Business categories (§5) — one shared list for the whole app.
 import { CATEGORIES } from "@/lib/validation";
+import { formatNumber } from "@/lib/dateFormat";
 
 /** Seven short steps, grouped into the four phases owners already know. */
 const PHASES = ["Business & location", "Services & offer", "Choose plan", "Publish"] as const;
@@ -393,7 +394,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
             {plans.length ? <div className="grid gap-3 sm:grid-cols-2">{plans.map((plan) => (
               <a key={plan.id} href={getCheckoutUrl(business.id, plan.id)} className="rounded-xl border bg-white p-4 hover:bg-zinc-50">
                 <p className="font-semibold">{plan.name}</p>
-                <p className="mt-1 text-sm text-zinc-600">KES {plan.priceKES.toLocaleString()} · {plan.durationDays} days</p>
+                <p className="mt-1 text-sm text-zinc-600">KES {formatNumber(plan.priceKES)} · {plan.durationDays} days</p>
                 <span className="mt-3 inline-flex rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Continue to secure checkout</span>
               </a>
             ))}</div> : <p className="rounded-lg bg-amber-50 p-3 text-sm">No active plans are available right now. Please try again later.</p>}

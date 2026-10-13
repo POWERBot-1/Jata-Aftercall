@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDateTime } from "@/lib/dateFormat";
 
 const DEVICES = [
   { id: "mobile", label: "Mobile", width: 390, height: 780 },
@@ -143,7 +144,7 @@ export function PreviewClient({
                 <div className="min-w-0 flex-1 text-sm">
                   <p className="font-semibold">Version {version.version}</p>
                   <p className="text-xs text-zinc-600">
-                    {version.publishedAt ? new Date(version.publishedAt).toLocaleString("en-KE") : "Not published"}
+                    {version.publishedAt ? formatDateTime(version.publishedAt) : "Not published"}
                   </p>
                 </div>
                 <button type="button" className="jata-btn jata-btn-secondary" disabled={restoring} onClick={() => restore(version.version)}>

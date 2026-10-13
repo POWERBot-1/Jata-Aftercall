@@ -1,15 +1,32 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ExternalLink, Eye, MessageCircle, Phone, Share2, TrendingUp } from "lucide-react";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { Card, CardBody, CardHead, CardTitle, SectionHeading } from "@/components/ui/Card";
+import { Metric, MetricGrid } from "@/components/ui/Metric";
+import { Alert, EmptyState, Skeleton } from "@/components/ui/StateBlocks";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { notify } from "@/components/ui/Toaster";
 import { LocationFields, locationError } from "@/components/LocationFields";
 import { SAFE_ERRORS } from "@/lib/safeError";
 import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
 import { nextActionFor } from "@/lib/nextAction";
-import { businessStatusLabel, subscriptionStatusLabel, toneClass } from "@/lib/statusLabels";
+import { businessStatusLabel, subscriptionStatusLabel } from "@/lib/statusLabels";
+import { formatDate, formatNumber } from "@/lib/dateFormat";
+import { Reveal } from "@/components/ui/Reveal";
 import ReferralShareCard from "@/components/ReferralShareCard";
+
+// Recharts is a large dependency and a chart is never on the critical path: it loads after the
+// owner can already read their numbers, and never blocks a payment or a publish.
+const AnalyticsChart = dynamic(() => import("@/components/ui/AnalyticsChart"), {
+  ssr: false,
+  loading: () => <Skeleton variant="block" className="h-52" />,
+});
 
 type Biz = {
   id: string;
@@ -42,28 +59,173 @@ type Biz = {
 type Metrics = { views: number; whatsapp: number; calls: number; directions: number; shares: number; serviceClicks?: number };
 type Notice = { kind: "success" | "error"; text: string } | null;
 
+export const EMPTY_METRICS: Metrics = { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 };
+
+function totalResponses(m: Metrics) {
+  return (m.views || 0) + (m.whatsapp || 0) + (m.calls || 0) + (m.directions || 0) + (m.shares || 0) + (m.serviceClicks || 0);
+}
+
+/**
+ * Inline result banner.
+ *
+ * Toasts are additive, never the only evidence: this element is next to the control that
+ * produced the result and is announced through a live region, so a customer who misses the
+ * toast — or uses a screen reader — still gets the outcome.
+ */
 function NoticeBar({ notice }: { notice: Notice }) {
   if (!notice) return <p role="status" aria-live="polite" className="sr-only" />;
-  if (notice.kind === "error") return <FormError>{notice.text}</FormError>;
-  return <p role="status" aria-live="polite" className="jata-status alert-success">{notice.text}</p>;
+  return (
+    <Alert tone={notice.kind === "error" ? "danger" : "success"} live>
+      {notice.text}
+    </Alert>
+  );
 }
 
 export default function DashboardClient({ businesses, metricsMap }: { businesses: Biz[]; metricsMap: Record<string, Metrics> }) {
+  const totals = useMemo(
+    () =>
+      businesses.reduce<Metrics>(
+        (sum, business) => {
+          const m = metricsMap[business.id] || EMPTY_METRICS;
+          return {
+            views: sum.views + (m.views || 0),
+            whatsapp: sum.whatsapp + (m.whatsapp || 0),
+            calls: sum.calls + (m.calls || 0),
+            directions: sum.directions + (m.directions || 0),
+            shares: sum.shares + (m.shares || 0),
+            serviceClicks: (sum.serviceClicks || 0) + (m.serviceClicks || 0),
+          };
+        },
+        { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 },
+      ),
+    [businesses, metricsMap],
+  );
+
   if (businesses.length === 0) {
     return (
-      <div className="jata-card mt-6 p-8 text-center">
-        <h2 className="text-base font-semibold">No business page yet</h2>
-        <p className="mt-1 text-sm text-zinc-600">Set one up in seven short steps. Your page goes live once your subscription payment is confirmed.</p>
-        <Button href="/onboarding" className="mt-4">Start setup</Button>
-      </div>
+      <Card className="mt-2" labelledBy="dashboard-empty-title">
+        <CardBody>
+          <EmptyState
+            title="No business page yet"
+            actions={
+              <>
+                <Button href="/onboarding">Start setup</Button>
+                <Button href="/dashboard/subscription" variant="secondary">
+                  See plans
+                </Button>
+              </>
+            }
+          >
+            <span id="dashboard-empty-title">Set one up in seven short steps. Your page goes live once your subscription payment is confirmed.</span>
+          </EmptyState>
+        </CardBody>
+      </Card>
     );
   }
+
+  const multiple = businesses.length > 1;
+
   return (
-    <div className="mt-6 space-y-6">
-      {businesses.map((b) => (
-        <BusinessCard key={b.id} b={b} m={metricsMap[b.id] || { views: 0, whatsapp: 0, calls: 0, directions: 0, shares: 0, serviceClicks: 0 }} />
-      ))}
+    <div className="space-y-6">
+      {multiple ? <PortfolioSummary totals={totals} count={businesses.length} /> : null}
+
+      {multiple ? <BusinessTable businesses={businesses} metricsMap={metricsMap} /> : null}
+
+      <div className="space-y-6">
+        {businesses.map((b, index) => (
+          <Reveal key={b.id} as="div" delay={index * 0.03}>
+            <BusinessCard b={b} m={metricsMap[b.id] || EMPTY_METRICS} />
+          </Reveal>
+        ))}
+      </div>
     </div>
+  );
+}
+
+/** Owner-level summary across every business, only shown when there is more than one. */
+function PortfolioSummary({ totals, count }: { totals: Metrics; count: number }) {
+  const total = totalResponses(totals);
+  return (
+    <Card labelledBy="portfolio-title">
+      <CardHead>
+        <CardTitle id="portfolio-title">All {count} businesses</CardTitle>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--jata-muted)]">
+          {total ? `${formatNumber(total)} customer responses` : "No responses yet"}
+        </p>
+      </CardHead>
+      <CardBody className="space-y-5">
+        <MetricGrid label="Customer responses across all businesses">
+          <Metric label="Page views" value={formatNumber(totals.views)} />
+          <Metric label="WhatsApp taps" value={formatNumber(totals.whatsapp)} />
+          <Metric label="Calls" value={formatNumber(totals.calls)} />
+          <Metric label="Directions" value={formatNumber(totals.directions)} />
+        </MetricGrid>
+        <div>
+          <SectionHeading title="Where customers respond" meta="Real data, all businesses" />
+          <AnalyticsChart
+            title="Responses"
+            series={[
+              { label: "Views", value: totals.views, colour: "var(--jata-accent)" },
+              { label: "WhatsApp", value: totals.whatsapp, colour: "var(--jata-live)" },
+              { label: "Calls", value: totals.calls, colour: "var(--jata-info)" },
+              { label: "Directions", value: totals.directions, colour: "#7c3aed" },
+              { label: "Shares", value: totals.shares, colour: "#0891b2" },
+            ]}
+          />
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** Sortable comparison table — useful only when there is more than one business. */
+function BusinessTable({ businesses, metricsMap }: { businesses: Biz[]; metricsMap: Record<string, Metrics> }) {
+  const rows = businesses.map((b) => {
+    const m = metricsMap[b.id] || EMPTY_METRICS;
+    const sub = subscriptionStatusLabel(b.subscription?.status);
+    return {
+      id: b.id,
+      name: b.name,
+      slug: b.slug,
+      state: b.isPublished ? "Live" : "Draft",
+      plan: sub.label,
+      responses: totalResponses(m),
+      views: m.views || 0,
+    };
+  });
+
+  const columns: DataTableColumn<(typeof rows)[number]>[] = [
+    {
+      id: "name",
+      header: "Business",
+      cell: (row) => (
+        <Link href={`/dashboard/businesses/${row.id}`} className="font-semibold hover:underline">
+          {row.name}
+        </Link>
+      ),
+      sortValue: (row) => row.name.toLowerCase(),
+    },
+    {
+      id: "state",
+      header: "Page",
+      cell: (row) => <StatusPill tone={row.state === "Live" ? "success" : "neutral"}>{row.state}</StatusPill>,
+      sortValue: (row) => row.state,
+    },
+    { id: "plan", header: "Plan", cell: (row) => row.plan, sortValue: (row) => row.plan },
+    { id: "views", header: "Views", cell: (row) => formatNumber(row.views), sortValue: (row) => row.views, align: "end" },
+    { id: "responses", header: "Responses", cell: (row) => formatNumber(row.responses), sortValue: (row) => row.responses, align: "end" },
+  ];
+
+  return (
+    <Card labelledBy="business-table-title">
+      <CardHead>
+        <CardTitle id="business-table-title">Compare your businesses</CardTitle>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--jata-muted)]">Sortable</p>
+      </CardHead>
+      <CardBody>
+        <DataTable rows={rows} columns={columns} initialSort={{ id: "views", desc: true }} caption="Your businesses by page activity" />
+      </CardBody>
+    </Card>
   );
 }
 
@@ -100,12 +262,19 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
         body: JSON.stringify({ businessId: b.id, ...body }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setNotice({ kind: "error", text: data.error || SAFE_ERRORS.saveFailed }); return false; }
+      if (!res.ok) {
+        const text = data.error || SAFE_ERRORS.saveFailed;
+        setNotice({ kind: "error", text });
+        notify.error("Change not saved", text);
+        return false;
+      }
       setNotice({ kind: "success", text: success });
+      notify.success(success);
       router.refresh();
       return true;
     } catch {
       setNotice({ kind: "error", text: SAFE_ERRORS.saveFailed });
+      notify.error("Change not saved", SAFE_ERRORS.saveFailed);
       return false;
     } finally {
       setBusy(false);
@@ -118,10 +287,14 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ businessId: b.id, eventType: "SHARE_CLICK" }),
     }).catch(() => {});
-    if (navigator.share) { navigator.share({ title: b.name, url: b.publicUrl }).catch(() => {}); return; }
+    if (navigator.share) {
+      navigator.share({ title: b.name, url: b.publicUrl }).catch(() => {});
+      return;
+    }
     try {
       await navigator.clipboard.writeText(b.publicUrl);
       setNotice({ kind: "success", text: "Link copied. Paste it into WhatsApp, SMS or social media." });
+      notify.success("Link copied", "Paste it into WhatsApp, SMS or social media.");
     } catch {
       setNotice({ kind: "success", text: `Copy your link: ${b.publicUrl}` });
     }
@@ -139,9 +312,13 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
       case "add-items":
         return <Button href={`/dashboard/businesses/${b.id}/items`}>Add what I sell</Button>;
       case "publish-changes":
-        return <Button href={`/dashboard/businesses/${b.id}/preview`}>Review & publish</Button>;
+        return <Button href={`/dashboard/businesses/${b.id}/preview`}>Review &amp; publish</Button>;
       case "publish":
-        return <Button disabled={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live.")}>Publish page</Button>;
+        return (
+          <Button loading={busy} onClick={() => patch({ isPublished: true }, "Published. Your page is live.")}>
+            Publish page
+          </Button>
+        );
       case "renew":
       case "subscribe":
         return <Button href={getSubscriptionPageUrl(b.id)}>{action.key === "renew" ? "Renew plan" : "Choose a plan"}</Button>;
@@ -150,96 +327,151 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     }
   }
 
+  const responseSeries = [
+    { label: "Views", value: m.views || 0, colour: "var(--jata-accent)" },
+    { label: "WhatsApp", value: m.whatsapp || 0, colour: "var(--jata-live)" },
+    { label: "Calls", value: m.calls || 0, colour: "var(--jata-info)" },
+    { label: "Directions", value: m.directions || 0, colour: "#7c3aed" },
+  ];
+
   return (
-    <article className="jata-card p-5" aria-labelledby={`biz-${b.id}-name`}>
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <Card as="article" labelledBy={`biz-${b.id}-name`} interactive>
+      <CardHead>
         <div className="min-w-0">
-          <h2 id={`biz-${b.id}-name`} className="text-xl font-bold [overflow-wrap:anywhere]">{b.name}</h2>
-          <p className="text-sm text-zinc-600 [overflow-wrap:anywhere]">{b.category} · /b/{b.slug}</p>
-          <p className="mt-2 flex flex-wrap gap-2">
-            <span className={b.isPublished ? "jata-live" : "jata-draft"}>{b.isPublished ? "Live" : "Draft"}</span>
-            <span className={`rounded-full px-2 py-0.5 text-sm font-semibold ${toneClass(sub.tone)}`}>Plan: {sub.label}</span>
-            {b.status === "SUSPENDED" && <span className={`rounded-full px-2 py-0.5 text-sm font-semibold ${toneClass(bizStatus.tone)}`}>{bizStatus.label}</span>}
+          <h2 id={`biz-${b.id}-name`} className="jata-surface__title [overflow-wrap:anywhere]">
+            {b.name}
+          </h2>
+          <p className="mt-0.5 text-[0.8rem] text-[color:var(--jata-muted)] [overflow-wrap:anywhere]">
+            {b.category} · /b/{b.slug}
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button href={`/dashboard/businesses/${b.id}`} variant="secondary">Website studio</Button>
-          <Button href={`/b/${b.slug}`} variant="secondary">{b.isPublished ? "View page" : "Preview"}</Button>
-          {action.key !== "share" && <Button variant="secondary" onClick={() => void share()}>{b.isPublished ? "Share" : "Copy link"}</Button>}
-        </div>
-      </header>
-
-      <div className="mt-3"><NoticeBar notice={notice} /></div>
-
-      <section className="mt-4 rounded-xl border border-dashed bg-zinc-50 p-4" aria-label="Next step">
-        <p className="text-sm font-bold uppercase tracking-widest text-zinc-600">Next step</p>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold">{action.title}</p>
-            <p className="text-sm text-zinc-600">{action.detail}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <StatusPill tone={b.isPublished ? "success" : "neutral"} icon={b.isPublished ? <Eye size={12} /> : undefined}>
+              {b.isPublished ? "Live" : "Draft"}
+            </StatusPill>
+            <StatusPill tone={sub.tone}>Plan: {sub.label}</StatusPill>
+            {b.status === "SUSPENDED" ? <StatusPill tone={bizStatus.tone}>{bizStatus.label}</StatusPill> : null}
+            {b.hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
           </div>
-          {actionControl()}
         </div>
-      </section>
+      </CardHead>
 
-      <section className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm" aria-label="Subscription">
-        <p>
-          <span className="font-semibold">Subscription:</span>{" "}
-          {b.subscription ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${new Date(b.subscription.expiresAt).toLocaleDateString("en-KE")}` : ""}` : "No plan yet. Choose a plan to unlock publishing."}
-          {sub.help ? ` ${sub.help}` : ""}
-        </p>
-        {action.key !== "renew" && action.key !== "subscribe" && (
-          <Link href={getSubscriptionPageUrl(b.id)} className="jata-btn jata-btn-ghost underline">Manage plan</Link>
-        )}
-      </section>
+      <CardBody className="space-y-5">
+        {notice ? <NoticeBar notice={notice} /> : null}
 
-      {b.referralUrl && <ReferralShareCard url={b.referralUrl} />}
-
-      <section className="mt-4" aria-labelledby={`biz-${b.id}-activity`}>
-        <h3 id={`biz-${b.id}-activity`} className="jata-section-title">Activity</h3>
-        <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-sm sm:grid-cols-6">
-          {([
-            ["Views", m.views],
-            ["WhatsApp", m.whatsapp],
-            ["Calls", m.calls],
-            ["Directions", m.directions],
-            ["Shares", m.shares],
-            ["Services", m.serviceClicks || 0],
-          ] as const).map(([label, val]) => (
-            <div key={label} className="flex flex-col-reverse rounded-xl bg-zinc-50 px-2 py-3">
-              <dt className="text-zinc-600">{label}</dt>
-              <dd className="text-lg font-bold">{val}</dd>
+        {/* Next step — exactly one, always the highest-priority action. */}
+        <section aria-label="Next step" className="jata-surface jata-surface--muted p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.72rem] font-bold uppercase tracking-wider text-[color:var(--jata-muted)]">Next step</p>
+              <p className="mt-0.5 font-semibold">{action.title}</p>
+              <p className="text-sm text-[color:var(--jata-muted)]">{action.detail}</p>
             </div>
-          ))}
-        </dl>
-      </section>
+            <div className="flex flex-wrap gap-2">
+              {actionControl()}
+              <Button href={`/dashboard/businesses/${b.id}`} variant="secondary" icon={<TrendingUp size={15} />}>
+                Open studio
+              </Button>
+            </div>
+          </div>
+        </section>
 
-      <div className="mt-4 space-y-2">
-        <EditSection title="Edit profile, contact & location" open={open === "profile"} onToggle={(o) => setOpen(o ? "profile" : null)}>
-          <EditForm business={b} busy={busy} onSave={(body) => patch(body, "Profile saved.")} />
-        </EditSection>
-        <EditSection title={`Services (${b.servicesCount} listed)`} open={open === "services"} onToggle={(o) => setOpen(o ? "services" : null)}>
-          <ServiceManager businessId={b.id} onSaved={() => router.refresh()} />
-        </EditSection>
-        <EditSection title={b.hasOffer ? "Offer (live)" : "Offer (none yet)"} open={open === "offer"} onToggle={(o) => setOpen(o ? "offer" : null)}>
-          <OfferManager businessId={b.id} onSaved={() => router.refresh()} />
-        </EditSection>
-      </div>
+        {/* Subscription */}
+        <section aria-label="Subscription" className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <p className="min-w-0">
+            <span className="font-semibold">Subscription:</span>{" "}
+            {b.subscription
+              ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${formatDate(b.subscription.expiresAt)}` : ""}`
+              : "No plan yet. Choose a plan to unlock publishing."}
+            {sub.help ? ` ${sub.help}` : ""}
+          </p>
+          {action.key !== "renew" && action.key !== "subscribe" ? (
+            <Link href={getSubscriptionPageUrl(b.id)} className="jata-btn jata-btn-ghost underline">
+              Manage plan
+            </Link>
+          ) : null}
+        </section>
 
-      {b.isPublished && (
-        <div className="mt-4 border-t pt-3">
-          <button type="button" disabled={busy} className="jata-btn jata-btn-ghost underline" onClick={() => patch({ isPublished: false }, "Unpublished. Your page is now a private draft.")}>Unpublish page</button>
+        {b.referralUrl ? <ReferralShareCard url={b.referralUrl} /> : null}
+
+        {/* Activity */}
+        <section aria-labelledby={`biz-${b.id}-activity`}>
+          <SectionHeading id={`biz-${b.id}-activity`} title="Activity" meta="Since your page went live" />
+          <MetricGrid label={`Activity for ${b.name}`}>
+            <Metric label="Views" value={formatNumber(m.views)} />
+            <Metric label="WhatsApp" value={formatNumber(m.whatsapp)} />
+            <Metric label="Calls" value={formatNumber(m.calls)} />
+            <Metric label="Directions" value={formatNumber(m.directions)} />
+          </MetricGrid>
+          <div className="mt-4">
+            <AnalyticsChart title="Responses" series={responseSeries} />
+          </div>
+        </section>
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          <Button href={`/dashboard/businesses/${b.id}`} variant="secondary" icon={<TrendingUp size={15} />}>
+            Website studio
+          </Button>
+          <Button href={`/b/${b.slug}`} variant="secondary" icon={<ExternalLink size={15} />}>
+            {b.isPublished ? "View page" : "Preview"}
+          </Button>
+          {action.key !== "share" ? (
+            <Button variant="secondary" onClick={() => void share()} icon={<Share2 size={15} />}>
+              {b.isPublished ? "Share" : "Copy link"}
+            </Button>
+          ) : null}
+          <Button href={`https://wa.me/${(b.whatsapp || b.phone || "").replace(/\D/g, "")}`} variant="ghost" icon={<MessageCircle size={15} />} ariaLabel={`Message ${b.name} on WhatsApp`}>
+            WhatsApp
+          </Button>
+          {b.phone ? (
+            <Button href={`tel:${b.phone}`} variant="ghost" icon={<Phone size={15} />} ariaLabel={`Call ${b.name}`}>
+              Call
+            </Button>
+          ) : null}
         </div>
-      )}
-    </article>
+
+        {/* Editing */}
+        <div className="space-y-2">
+          <EditSection title="Edit profile, contact &amp; location" open={open === "profile"} onToggle={(o) => setOpen(o ? "profile" : null)}>
+            <EditForm business={b} busy={busy} onSave={(body) => patch(body, "Profile saved.")} />
+          </EditSection>
+          <EditSection title={`Services (${b.servicesCount} listed)`} open={open === "services"} onToggle={(o) => setOpen(o ? "services" : null)}>
+            <ServiceManager businessId={b.id} onSaved={() => router.refresh()} />
+          </EditSection>
+          <EditSection title={b.hasOffer ? "Offer (live)" : "Offer (none yet)"} open={open === "offer"} onToggle={(o) => setOpen(o ? "offer" : null)}>
+            <OfferManager businessId={b.id} onSaved={() => router.refresh()} />
+          </EditSection>
+        </div>
+
+        {b.isPublished ? (
+          <div className="border-t border-[color:var(--jata-line)] pt-3">
+            <button
+              type="button"
+              disabled={busy}
+              className="jata-btn jata-btn-ghost underline"
+              onClick={() => patch({ isPublished: false }, "Unpublished. Your page is now a private draft.")}
+            >
+              Unpublish page
+            </button>
+          </div>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }
 
 function EditSection({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: React.ReactNode }) {
   return (
-    <details className="rounded-2xl border" open={open} onToggle={(e) => { const next = (e.currentTarget as HTMLDetailsElement).open; if (next !== open) onToggle(next); }}>
+    <details
+      className="jata-surface"
+      open={open}
+      onToggle={(e) => {
+        const next = (e.currentTarget as HTMLDetailsElement).open;
+        if (next !== open) onToggle(next);
+      }}
+    >
       <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">{title}</summary>
-      <div className="border-t px-4 pb-4">{children}</div>
+      <div className="border-t border-[color:var(--jata-line)] px-4 pb-4">{children}</div>
     </details>
   );
 }
@@ -291,7 +523,16 @@ function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; on
         </select>
       </Field>
       <FormError>{problem}</FormError>
-      <Button disabled={busy} onClick={() => { const p = locationError(form); setProblem(p); if (!p) void onSave({ ...form, whatsapp: form.whatsapp || form.phone }); }}>{busy ? "Saving…" : "Save profile"}</Button>
+      <Button
+        loading={busy}
+        onClick={() => {
+          const p = locationError(form);
+          setProblem(p);
+          if (!p) void onSave({ ...form, whatsapp: form.whatsapp || form.phone });
+        }}
+      >
+        Save profile
+      </Button>
     </div>
   );
 }
@@ -303,7 +544,10 @@ function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: 
   const [saving, setSaving] = useState(false);
   async function add() {
     if (saving) return;
-    if (title.trim().length < 2) { setMsg({ kind: "error", text: "Enter a service name (at least 2 characters)." }); return; }
+    if (title.trim().length < 2) {
+      setMsg({ kind: "error", text: "Enter a service name (at least 2 characters)." });
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/services", {
@@ -312,13 +556,19 @@ function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: 
         body: JSON.stringify({ businessId, title, priceLabel: price || undefined }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ kind: "error", text: data.error || SAFE_ERRORS.serviceFailed }); return; }
+      if (!res.ok) {
+        setMsg({ kind: "error", text: data.error || SAFE_ERRORS.serviceFailed });
+        notify.error("Service not saved", data.error || SAFE_ERRORS.serviceFailed);
+        return;
+      }
       setMsg({ kind: "success", text: "Service saved." });
+      notify.success("Service saved");
       setTitle("");
       setPrice("");
       onSaved();
     } catch {
       setMsg({ kind: "error", text: SAFE_ERRORS.serviceFailed });
+      notify.error("Service not saved", SAFE_ERRORS.serviceFailed);
     } finally {
       setSaving(false);
     }
@@ -331,7 +581,9 @@ function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: 
       <Field id={`${businessId}-service-price`} label="Price label" hint="For example From KES 1,500.">
         <input value={price} onChange={(e) => setPrice(e.target.value)} />
       </Field>
-      <Button disabled={saving} onClick={add}>{saving ? "Saving…" : "Add service"}</Button>
+      <Button loading={saving} onClick={add}>
+        Add service
+      </Button>
       <NoticeBar notice={msg} />
     </div>
   );
@@ -344,7 +596,10 @@ function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: ()
   const [saving, setSaving] = useState(false);
   async function save() {
     if (saving) return;
-    if (!title.trim()) { setMsg({ kind: "error", text: "Enter an offer title." }); return; }
+    if (!title.trim()) {
+      setMsg({ kind: "error", text: "Enter an offer title." });
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/offer", {
@@ -353,11 +608,17 @@ function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: ()
         body: JSON.stringify({ businessId, title, subtitle }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ kind: "error", text: data.error || SAFE_ERRORS.offerFailed }); return; }
+      if (!res.ok) {
+        setMsg({ kind: "error", text: data.error || SAFE_ERRORS.offerFailed });
+        notify.error("Offer not saved", data.error || SAFE_ERRORS.offerFailed);
+        return;
+      }
       setMsg({ kind: "success", text: "Offer saved." });
+      notify.success("Offer saved");
       onSaved();
     } catch {
       setMsg({ kind: "error", text: SAFE_ERRORS.offerFailed });
+      notify.error("Offer not saved", SAFE_ERRORS.offerFailed);
     } finally {
       setSaving(false);
     }
@@ -370,7 +631,9 @@ function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: ()
       <Field id={`${businessId}-offer-sub`} label="Offer detail">
         <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
       </Field>
-      <Button disabled={saving} onClick={save}>{saving ? "Saving…" : "Save offer"}</Button>
+      <Button loading={saving} onClick={save}>
+        Save offer
+      </Button>
       <NoticeBar notice={msg} />
     </div>
   );

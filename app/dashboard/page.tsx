@@ -3,7 +3,11 @@ import { getSession } from "@/lib/auth";
 import { getBusinessMetrics, EMPTY_METRICS } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
 import { ensureReferralCode, referralLink } from "@/lib/referral";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -12,7 +16,9 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const session = await getSession();
-  if (!session) return null;
+  // Only owners and members can see a dashboard; an anonymous request goes to sign-in rather
+  // than rendering a blank page (the shell performs the same check for every other route).
+  if (!session) redirect("/login");
 
   const businesses = await prisma.business.findMany({
     where: session.role === "ADMIN" ? {} : { ownerId: session.userId },
@@ -75,8 +81,18 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">{businesses.length > 1 ? "Your businesses" : "Your business"}</h1>
-      <p className="text-sm text-zinc-600">Your pages, the next thing to do, and how customers are responding. “Live” means customers can see your page.</p>
+      <PageHeader
+        title={businesses.length > 1 ? "Your businesses" : "Your business"}
+        subtitle="Your pages, the next thing to do, and how customers are responding. “Live” means customers can see your page."
+        actions={
+          <>
+            <Button href="/onboarding" variant="secondary">
+              Add a business
+            </Button>
+            {businesses.length === 1 ? <Button href={getSubscriptionPageUrl(businesses[0].id)}>Manage plan</Button> : null}
+          </>
+        }
+      />
       <DashboardClient
         businesses={businesses.map((b) => ({
           id: b.id,

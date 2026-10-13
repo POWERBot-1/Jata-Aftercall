@@ -4,6 +4,7 @@ import Link from "next/link";
 import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
 import { getDirectionsUrl } from "@/lib/location";
 import { formatOpeningHours } from "@/lib/openingHours";
+import { formatNumber } from "@/lib/dateFormat";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -232,7 +233,7 @@ export default function BusinessPage({
                   </div>
                   {(s.priceLabel || s.priceFrom) && (
                     <span className={`shrink-0 rounded-full border ${t.colors.border} ${t.colors.card} px-2.5 py-1 text-xs font-medium`}>
-                      {s.priceLabel || `From KES ${s.priceFrom?.toLocaleString()}`}
+                      {s.priceLabel || `From KES ${formatNumber(s.priceFrom)}`}
                     </span>
                   )}
                 </li>

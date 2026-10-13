@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { formatNumber } from "@/lib/dateFormat";
 
 export default function CheckoutForm({ businessId, planId, businessName, planName, priceKES }: {
   businessId: string; planId: string; businessName: string; planName: string; priceKES: number;
@@ -40,12 +41,12 @@ export default function CheckoutForm({ businessId, planId, businessName, planNam
     <div className="mt-5 rounded-xl border bg-white p-4 text-sm">
       <p><span className="text-zinc-500">Business:</span> <strong>{businessName}</strong></p>
       <p className="mt-1"><span className="text-zinc-500">Plan:</span> <strong>{planName}</strong></p>
-      <p className="mt-3 font-bold">Plan price: KES {priceKES.toLocaleString()}</p>
+      <p className="mt-3 font-bold">Plan price: KES {formatNumber(priceKES)}</p>
       <p className="mt-1 text-xs text-zinc-600">The amount you pay is set by our server from the current plan price, not by this page.</p>
-      {amountKes !== null && <p className="mt-3 font-bold">Amount to pay: KES {amountKes.toLocaleString()}</p>}
+      {amountKes !== null && <p className="mt-3 font-bold">Amount to pay: KES {formatNumber(amountKes)}</p>}
     </div>
     <button type="button" disabled={loading} aria-busy={loading} onClick={checkout} className="jata-btn jata-btn-primary mt-5 w-full">
-      {loading ? "Opening secure checkout…" : `Pay KES ${(amountKes ?? priceKES).toLocaleString()} with Paystack`}
+      {loading ? "Opening secure checkout…" : `Pay KES ${formatNumber(amountKes ?? priceKES)} with Paystack`}
     </button>
     {message && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{message}</p>}
     <p className="mt-4 text-xs text-zinc-600">Your subscription is activated only after Paystack confirms the payment to our server. If the payment is still processing, you’ll see that status — never a false “success”.</p>

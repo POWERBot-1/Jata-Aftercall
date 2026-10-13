@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { PreviewSandbox } from "@/lib/pos/preview";
+import { formatNumber } from "@/lib/dateFormat";
 
 /**
  * The preview sandbox (§23, §42, §44).
@@ -122,7 +123,7 @@ export function PreviewClient({
                   {sandbox.catalogue.map((item) => (
                     <button type="button" key={item.id} className="pos-item" onClick={() => add(item)}>
                       <strong>{item.name}</strong>
-                      <span>{item.priceKES.toLocaleString("en-KE")}</span>
+                      <span>{formatNumber(item.priceKES)}</span>
                       {item.stock !== undefined ? <small>{item.stock} in stock</small> : <small>{item.category ?? item.kind}</small>}
                     </button>
                   ))}
@@ -135,7 +136,7 @@ export function PreviewClient({
                   <div className="pos-line" key={line.id}>
                     <div className="pos-line-main">
                       <strong>{line.name}</strong>
-                      <small>{line.priceKES.toLocaleString("en-KE")} each</small>
+                      <small>{formatNumber(line.priceKES)} each</small>
                     </div>
                     <div className="pos-qty">
                       <button type="button" aria-label={`Remove one ${line.name}`} onClick={() => setCart((lines) => lines.flatMap((entry) => (entry.id === line.id ? (entry.quantity > 1 ? [{ ...entry, quantity: entry.quantity - 1 }] : []) : [entry])))}>−</button>
@@ -145,8 +146,8 @@ export function PreviewClient({
                   </div>
                 ))}
                 <div className="pos-totals">
-                  <div><span>Items</span><span>{cartTotal.toLocaleString("en-KE")}</span></div>
-                  <div className="pos-total-line"><span>Total</span><span>KES {cartTotal.toLocaleString("en-KE")}</span></div>
+                  <div><span>Items</span><span>{formatNumber(cartTotal)}</span></div>
+                  <div className="pos-total-line"><span>Total</span><span>KES {formatNumber(cartTotal)}</span></div>
                 </div>
                 <div className="pos-pay">
                   <p className="jata-kicker">How are they paying?</p>
@@ -193,7 +194,7 @@ export function PreviewClient({
                   </div>
                   <div className="pos-row-values">
                     <span>{customer.visits} visits</span>
-                    {customer.balanceKES > 0 ? <span className="pos-pill" data-tone="warn">Owes {customer.balanceKES.toLocaleString("en-KE")}</span> : null}
+                    {customer.balanceKES > 0 ? <span className="pos-pill" data-tone="warn">Owes {formatNumber(customer.balanceKES)}</span> : null}
                   </div>
                 </div>
               ))}

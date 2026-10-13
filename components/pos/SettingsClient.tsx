@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 /**
  * POS settings (§25, §26, §37, §48, §49).
@@ -98,7 +99,7 @@ export function SettingsClient({
             <p className="pos-note">
               {entitled
                 ? expiresAt
-                  ? `Active until ${new Date(expiresAt).toLocaleDateString("en-KE")}.`
+                  ? `Active until ${formatDate(expiresAt)}.`
                   : "Active."
                 : entitlementReason}
             </p>
@@ -171,7 +172,7 @@ export function SettingsClient({
                   <div className="pos-row-main">
                     <strong>Version {version.version}{version.version === publishedVersion ? " · live" : ""}</strong>
                     <small>
-                      {new Date(version.publishedAt).toLocaleString("en-KE")}
+                      {formatDateTime(version.publishedAt)}
                       {version.createdByName ? ` · ${version.createdByName}` : ""}
                       {version.note ? ` · ${version.note}` : ""}
                     </small>
@@ -276,7 +277,7 @@ export function SettingsClient({
                   <div className="pos-row" key={template.id}>
                     <div className="pos-row-main">
                       <strong>{template.name}</strong>
-                      <small>{template.description ?? "Your setup"} · saved {new Date(template.updatedAt).toLocaleDateString("en-KE")}</small>
+                      <small>{template.description ?? "Your setup"} · saved {formatDate(template.updatedAt)}</small>
                     </div>
                   </div>
                 ))}
@@ -313,7 +314,7 @@ export function SettingsClient({
                 <div className="pos-row" key={entry.id}>
                   <div className="pos-row-main">
                     <strong>{entry.label}</strong>
-                    <small>{entry.actor} · {new Date(entry.when).toLocaleString("en-KE")}</small>
+                    <small>{entry.actor} · {formatDateTime(entry.when)}</small>
                   </div>
                   <div className="pos-row-values">
                     {entry.targetType ? <span className="pos-chip">{entry.targetType.toLowerCase()}</span> : null}

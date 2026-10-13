@@ -1624,3 +1624,454 @@ html[data-motion-ready] .eb-reveal.is-visible {
     will-change: auto;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   JATA AFTERCALL — Global design system layer (2026-10-13)
+
+   One enforced design language for every customer-facing surface: the owner
+   dashboard, the AI Business Front Desk, Website Studio, Business POS,
+   subscriptions, analytics, authentication and every generated customer
+   product. Everything here is ADDITIVE: the pre-existing .jata-*, .eb-* and
+   .pos-* rules above are unchanged and stay authoritative for their screens.
+
+   Rules:
+     • Every colour, radius, shadow, duration and focus ring comes from a token.
+       No component may hard-code a hex value in this layer.
+     • Every interactive control keeps a visible :focus-visible ring and a
+       minimum 2.75rem (44px) touch target.
+     • Every state a customer can reach has a defined style: hover, focus,
+       pressed, disabled, loading, empty, error, success, offline.
+     • Motion is opt-in, short and never required to complete a transaction.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Spacing scale (4px base, kept in rem so it scales with user font size). */
+  --jata-space-1: 0.25rem;
+  --jata-space-2: 0.5rem;
+  --jata-space-3: 0.75rem;
+  --jata-space-4: 1rem;
+  --jata-space-5: 1.5rem;
+  --jata-space-6: 2rem;
+  --jata-space-7: 3rem;
+
+  /* Typography scale. */
+  --jata-text-meta: 0.72rem;
+  --jata-text-sm: 0.8125rem;
+  --jata-text-body: 0.9375rem;
+  --jata-text-lg: 1.125rem;
+  --jata-text-title: 1.5rem;
+  --jata-display: 1.75rem;
+  --jata-leading-tight: 1.2;
+  --jata-leading-body: 1.6;
+  --jata-measure: 68ch;
+
+  /* Shape and elevation. */
+  --jata-radius-sm: 0.5rem;
+  --jata-radius-md: 0.75rem;
+  --jata-radius-lg: 1rem;
+  --jata-radius-xl: 1.25rem;
+  --jata-radius-pill: 999px;
+  --jata-elevation-1: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --jata-elevation-2: 0 6px 18px rgba(24, 24, 27, 0.07);
+  --jata-elevation-3: 0 18px 40px rgba(24, 24, 27, 0.12);
+
+  /* Semantic status colours (readable on --jata-card). */
+  --jata-success: #047857;
+  --jata-success-surface: #ecfdf5;
+  --jata-warning: #92400e;
+  --jata-warning-surface: #fffbeb;
+  --jata-info: #1d4ed8;
+  --jata-info-surface: #eff6ff;
+  --jata-danger-surface: #fef2f2;
+
+  /* Interaction. */
+  --jata-focus-width: 2px;
+  --jata-focus-offset: 2px;
+  --jata-touch-target: 2.75rem;
+  --jata-dur-fast: 120ms;
+  --jata-dur-base: 180ms;
+  --jata-dur-slow: 260ms;
+  --jata-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Containers. */
+  --jata-container-md: 42rem;
+  --jata-container-lg: 64rem;
+}
+
+/* ── Page structure ─────────────────────────────────────────────────────── */
+
+.jata-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--jata-space-4);
+  margin-bottom: var(--jata-space-5);
+}
+
+.jata-page-head__copy { min-width: 0; }
+
+.jata-page-head__title {
+  margin: 0;
+  font-size: var(--jata-text-title);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: var(--jata-leading-tight);
+}
+
+.jata-page-head__sub {
+  margin: var(--jata-space-1) 0 0;
+  max-width: var(--jata-measure);
+  color: var(--jata-muted);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+
+.jata-page-head__actions { display: flex; flex-wrap: wrap; gap: var(--jata-space-2); }
+.jata-page-head__actions > * { min-height: var(--jata-touch-target); }
+
+.jata-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--jata-space-1);
+  margin: 0 0 var(--jata-space-2);
+  padding: 0;
+  list-style: none;
+  color: var(--jata-muted);
+  font-size: var(--jata-text-meta);
+  font-weight: 600;
+}
+.jata-breadcrumb a { color: var(--jata-muted); text-decoration: none; }
+.jata-breadcrumb a:hover { color: var(--jata-ink); text-decoration: underline; text-underline-offset: 4px; }
+.jata-breadcrumb__sep { opacity: 0.55; }
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+.jata-surface {
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  box-shadow: var(--jata-elevation-1);
+}
+
+.jata-surface--raised { box-shadow: var(--jata-elevation-2); }
+.jata-surface--muted { background: color-mix(in srgb, var(--jata-line) 22%, var(--jata-card)); }
+.jata-surface--interactive { transition: box-shadow var(--jata-dur-base) var(--jata-ease-out), transform var(--jata-dur-base) var(--jata-ease-out); }
+@media (hover: hover) {
+  .jata-surface--interactive:hover { box-shadow: var(--jata-elevation-2); transform: translateY(-1px); }
+}
+
+.jata-surface__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  padding: var(--jata-space-4) var(--jata-space-4) 0;
+}
+
+.jata-surface__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-surface__body { padding: var(--jata-space-4); }
+.jata-surface__foot {
+  border-top: 1px solid var(--jata-line);
+  padding: var(--jata-space-3) var(--jata-space-4);
+  font-size: var(--jata-text-sm);
+  color: var(--jata-muted);
+}
+
+/* ── Section headings ───────────────────────────────────────────────────── */
+
+.jata-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  margin-bottom: var(--jata-space-3);
+}
+.jata-section-head__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-section-head__meta { margin: 0; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Status pills ───────────────────────────────────────────────────────── */
+
+.jata-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--jata-radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.jata-pill[data-tone="neutral"] { background: color-mix(in srgb, var(--jata-line) 40%, var(--jata-card)); color: var(--jata-muted); border-color: var(--jata-line); }
+.jata-pill[data-tone="info"] { background: var(--jata-info-surface); color: var(--jata-info); border-color: color-mix(in srgb, var(--jata-info) 24%, transparent); }
+.jata-pill[data-tone="success"] { background: var(--jata-success-surface); color: var(--jata-success); border-color: color-mix(in srgb, var(--jata-success) 24%, transparent); }
+.jata-pill[data-tone="warning"] { background: var(--jata-warning-surface); color: var(--jata-warning); border-color: color-mix(in srgb, var(--jata-warning) 24%, transparent); }
+.jata-pill[data-tone="danger"] { background: var(--jata-danger-surface); color: var(--jata-danger); border-color: color-mix(in srgb, var(--jata-danger) 24%, transparent); }
+
+/* ── Metric tiles ───────────────────────────────────────────────────────── */
+
+.jata-metric-grid { display: grid; gap: var(--jata-space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 720px) { .jata-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.jata-metric {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.15rem;
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  padding: var(--jata-space-3) var(--jata-space-4);
+}
+.jata-metric__label { color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.jata-metric__value { font-size: var(--jata-display); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: var(--jata-leading-tight); }
+.jata-metric__hint { color: var(--jata-muted); font-size: var(--jata-text-meta); }
+
+/* ── Buttons (extends .jata-btn) ────────────────────────────────────────── */
+
+.jata-btn { transition: background-color var(--jata-dur-fast) var(--jata-ease-out), box-shadow var(--jata-dur-fast) var(--jata-ease-out), transform var(--jata-dur-fast) var(--jata-ease-out); }
+.jata-btn:active:not(:disabled) { transform: translateY(1px); }
+.jata-btn-sm { min-height: 2.25rem; padding: 0.3rem 0.7rem; font-size: var(--jata-text-sm); }
+.jata-btn-block { width: 100%; justify-content: center; }
+.jata-btn[aria-busy="true"] { cursor: progress; opacity: 0.85; }
+.jata-btn .jata-spinner { animation: jata-spin 900ms linear infinite; }
+@keyframes jata-spin { to { transform: rotate(360deg); } }
+
+/* ── Alerts / inline states ─────────────────────────────────────────────── */
+
+.jata-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--jata-space-2);
+  border: 1px solid var(--jata-line);
+  border-left-width: 3px;
+  border-radius: var(--jata-radius-md);
+  padding: var(--jata-space-3);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+.jata-alert[data-tone="neutral"] { background: var(--jata-card); }
+.jata-alert[data-tone="info"] { background: var(--jata-info-surface); border-color: color-mix(in srgb, var(--jata-info) 30%, transparent); }
+.jata-alert[data-tone="success"] { background: var(--jata-success-surface); border-color: color-mix(in srgb, var(--jata-success) 30%, transparent); }
+.jata-alert[data-tone="warning"] { background: var(--jata-warning-surface); border-color: color-mix(in srgb, var(--jata-warning) 30%, transparent); }
+.jata-alert[data-tone="danger"] { background: var(--jata-danger-surface); border-color: color-mix(in srgb, var(--jata-danger) 30%, transparent); color: var(--jata-danger); }
+
+/* ── Loading, empty and offline states ──────────────────────────────────── */
+
+.jata-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--jata-radius-md);
+  background: color-mix(in srgb, var(--jata-line) 45%, var(--jata-card));
+}
+.jata-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.jata-skeleton--text { height: 0.85rem; }
+.jata-skeleton--title { height: 1.4rem; width: 40%; }
+.jata-skeleton--tile { height: 5rem; }
+@keyframes jata-shimmer { to { transform: translateX(100%); } }
+
+.jata-empty__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; }
+.jata-empty__text { margin: var(--jata-space-1) auto 0; max-width: var(--jata-measure); color: var(--jata-muted); font-size: var(--jata-text-sm); line-height: var(--jata-leading-body); }
+.jata-empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--jata-space-2); margin-top: var(--jata-space-4); }
+
+.jata-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--jata-radius-pill);
+  background: var(--jata-warning-surface);
+  color: var(--jata-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+}
+
+/* ── Tables (TanStack Table renders into these) ─────────────────────────── */
+
+.jata-table-wrap { overflow-x: auto; border: 1px solid var(--jata-line); border-radius: var(--jata-radius-lg); background: var(--jata-card); }
+.jata-table { width: 100%; border-collapse: collapse; font-size: var(--jata-text-sm); }
+.jata-table caption { padding: var(--jata-space-3) var(--jata-space-4); text-align: left; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-table th, .jata-table td { padding: 0.6rem var(--jata-space-4); text-align: left; border-bottom: 1px solid var(--jata-line); vertical-align: middle; }
+.jata-table th { background: color-mix(in srgb, var(--jata-line) 18%, var(--jata-card)); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jata-muted); white-space: nowrap; }
+.jata-table tbody tr:last-child td { border-bottom: 0; }
+.jata-table tbody tr:hover { background: color-mix(in srgb, var(--jata-line) 14%, var(--jata-card)); }
+.jata-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.jata-table__sort[aria-sort="ascending"], .jata-table__sort[aria-sort="descending"] { color: var(--jata-ink); }
+
+/* ── Charts ─────────────────────────────────────────────────────────────── */
+
+.jata-chart-shell { width: 100%; min-height: 12rem; }
+.jata-chart-legend { display: flex; flex-wrap: wrap; gap: var(--jata-space-3); margin-top: var(--jata-space-2); color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-chart-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.jata-chart-legend i { width: 0.65rem; height: 0.65rem; border-radius: var(--jata-radius-sm); display: inline-block; }
+
+/* ── Toasts (sonner) ────────────────────────────────────────────────────── */
+
+.jata-toaster [data-sonner-toast] {
+  border-radius: var(--jata-radius-md);
+  border-color: var(--jata-line);
+  box-shadow: var(--jata-elevation-3);
+  font-family: var(--font-sans);
+}
+.jata-toaster [data-sonner-toast][data-type="success"] { border-left: 3px solid var(--jata-success); }
+.jata-toaster [data-sonner-toast][data-type="error"] { border-left: 3px solid var(--jata-danger); }
+
+/* ── Focus ring for every interactive element in this layer ─────────────── */
+
+.jata-surface a:focus-visible,
+.jata-pill a:focus-visible,
+.jata-btn:focus-visible,
+.jata-table__sort:focus-visible,
+.jata-breadcrumb a:focus-visible {
+  outline: var(--jata-focus-width) solid var(--jata-focus);
+  outline-offset: var(--jata-focus-offset);
+  border-radius: var(--jata-radius-sm);
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .jata-skeleton::after { animation: none; }
+  .jata-btn .jata-spinner { animation: none; }
+  .jata-surface--interactive { transition: none; }
+}
+
+/* ── Dashboard section navigation (extends .jata-nav) ───────────────────── */
+
+.jata-nav__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: var(--jata-container-lg);
+  margin: 0 auto;
+  padding: 0.35rem 1rem 0.5rem;
+}
+@media (min-width: 768px) {
+  .jata-nav__sections { flex-direction: row-reverse; align-items: center; justify-content: space-between; }
+}
+.jata-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  background: color-mix(in srgb, var(--jata-line) 30%, transparent);
+  border-radius: var(--jata-radius-pill);
+}
+
+/* ── Generated customer products: shared foundation ──────────────────────
+   The Theme Engine (lib/experience/themes.ts#themeCss) injects `--eb-*` foundation tokens on
+   the root of every published product, for every category and theme. These rules consume them,
+   so a single shared change reaches every business website, catalogue, storefront, restaurant
+   page, booking flow, service page and course page without touching a template.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.eb-scope :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--eb-focus-width, 2px) solid var(--eb-ring);
+  outline-offset: var(--eb-focus-offset, 2px);
+  border-radius: var(--eb-radius);
+}
+
+/* Touch targets: the primary controls of a generated product stay pressable on a phone. */
+.eb-scope .eb-btn,
+.eb-scope .eb-action,
+.eb-scope .eb-nav__links a,
+.eb-scope .eb-actionbar a,
+.eb-scope .eb-actionbar button {
+  min-height: var(--eb-touch-target, 2.75rem);
+}
+
+/* Status surfaces shared by every product type (order states, stock, booking, payment). */
+.eb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.eb-status[data-tone="success"] { color: var(--eb-status-success); background: var(--eb-status-success-surface); }
+.eb-status[data-tone="warning"] { color: var(--eb-status-warning); background: var(--eb-status-warning-surface); }
+.eb-status[data-tone="danger"] { color: var(--eb-status-error); background: var(--eb-status-error-surface); }
+.eb-status[data-tone="neutral"] { color: var(--eb-muted); background: var(--eb-surface-muted); }
+
+/* Loading and offline states, so a slow connection never looks like a broken page. */
+.eb-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--eb-radius);
+  background: var(--eb-surface-muted);
+  min-height: 1rem;
+}
+.eb-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.eb-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  background: var(--eb-status-warning-surface);
+  color: var(--eb-status-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eb-skeleton::after { animation: none; }
+}
+
+/* ── POS navigation icons (extends .pos-nav) ────────────────────────────── */
+
+.pos-nav-link svg { flex: 0 0 auto; }
+.pos-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, transparent);
+}
+
+/* ── Studio section tabs (extends .jata-*) ──────────────────────────────── */
+
+.jata-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--jata-radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--jata-text-sm);
+  font-weight: 650;
+  color: var(--jata-muted);
+}
+.jata-tab[aria-current="page"], .jata-tab[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, var(--jata-card));
+}

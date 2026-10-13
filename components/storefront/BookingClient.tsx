@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
+import { formatWeekdayDate, parseCalendarDay } from "@/lib/dateFormat";
 
 type Bookable = {
   id: string;
@@ -189,7 +190,7 @@ export function BookingClient({
                     aria-pressed={date === day}
                     onClick={() => { setDate(day); setTime(""); }}
                   >
-                    {new Date(`${day}T00:00:00`).toLocaleDateString("en-KE", { weekday: "short", day: "numeric", month: "short" })}
+                    {formatWeekdayDate(parseCalendarDay(day))}
                   </button>
                 ))}
               </div>
