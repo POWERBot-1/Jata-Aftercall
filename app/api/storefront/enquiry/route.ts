@@ -32,7 +32,13 @@ export async function POST(req: Request) {
     let originHost = "";
     try { originHost = new URL(origin).host.toLowerCase(); } catch { originHost = ""; }
     if (!originHost || originHost !== requestHost) {
-      console.warn(`Enquiry origin refused: origin-host=${originHost || "invalid"} request-host=${requestHost}`);
+      // Refusal diagnostics carry origin/host/protocol only — never customer fields, query
+      // strings, cookies or replay keys. The transport protocol is validated and reported for
+      // the "same website, different binding representation" class; it is never trusted for the
+      // accept/refuse decision, which stays bound to the incoming Host (host:port) alone.
+      const forwardedProto = req.headers.get("x-forwarded-proto");
+      const proto = forwardedProto && ["http", "https"].includes(forwardedProto) ? forwardedProto : "other";
+      console.warn(`Enquiry origin refused: origin-host=${originHost || "invalid"} request-host=${requestHost} proto=${proto}`);
       return reply({ error: "Send your enquiry from this business's website." }, 403);
     }
   }

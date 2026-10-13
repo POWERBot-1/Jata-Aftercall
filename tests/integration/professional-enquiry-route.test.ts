@@ -13,8 +13,8 @@ vi.mock("@/lib/analytics", () => ({ recordEvent: h.analytics, hashIp: (ip: strin
 import { GET, POST } from "@/app/api/storefront/enquiry/route";
 let sequence = 0;
 const body = { slug: "owned-pro", serviceId: "owned-service", customerName: "QA Customer", customerPhone: "0712345678", customerEmail: "qa@test.invalid", notes: "Owned request", idempotencyKey: "qa-replay-key-123456" };
-function request(input: unknown = body, headers: Record<string, string> = {}) {
-  return new Request("https://jata.test/api/storefront/enquiry", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${++sequence}`, ...headers }, body: JSON.stringify(input) });
+function request(input: unknown = body, headers: Record<string, string> = {}, url = "https://jata.test/api/storefront/enquiry") {
+  return new Request(url, { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${++sequence}`, ...headers }, body: JSON.stringify(input) });
 }
 beforeEach(() => {
   vi.stubEnv("DATABASE_URL", "postgresql://mock:mock@localhost:1/mock_only"); vi.clearAllMocks(); h.rows.clear();
@@ -94,6 +94,48 @@ describe("durable request-only professional intake", () => {
     expect((await POST(request(body, { origin: "https://jata.test" }))).status).toBe(201);
     expect((await POST(request({ ...body, idempotencyKey: "qa-origin-host-port-1" }, { origin: "http://jata.test" }))).status).toBe(201);
     expect(h.create).toHaveBeenCalledTimes(2);
+  });
+  it("binds the same-website check to the incoming Host, never to Next's internal listen URL", async () => {
+    // The erroneous-403 class: Next exposes its 0.0.0.0 listen address in req.url while the browser
+    // and the incoming Host agree on localhost. The origin guard must compare the browser-facing
+    // host it actually received, so a legitimate same-website request reaches the tenant route
+    // (here: the unchanged unpublished refusal) instead of being refused as cross-origin.
+    const internal = "http://0.0.0.0:43305/api/storefront/enquiry";
+    h.business.isPublished = false;
+    const draft = await POST(request(body, { host: "localhost:43305", origin: "http://localhost:43305", "x-forwarded-proto": "http" }, internal));
+    expect(draft.status).toBe(404); expect(h.create).not.toHaveBeenCalled();
+    h.business.isPublished = true;
+    expect((await POST(request({ ...body, idempotencyKey: "qa-incoming-host-1" }, { host: "localhost:43305", origin: "http://localhost:43305" }, internal))).status).toBe(201);
+    expect(h.create).toHaveBeenCalledTimes(1);
+  });
+  it("never accepts a foreign origin because x-forwarded-host or x-forwarded-proto claims otherwise", async () => {
+    // Forwarded headers describe the proxy hop; they are never authority for the same-website check.
+    expect((await POST(request(body, { host: "jata.test", origin: "https://foreign.test", "x-forwarded-host": "foreign.test", "x-forwarded-proto": "https" }))).status).toBe(403);
+    expect((await POST(request(body, { host: "localhost:43305", origin: "https://foreign.test" }, "http://0.0.0.0:43305/api/storefront/enquiry"))).status).toBe(403);
+    expect(h.create).not.toHaveBeenCalled();
+  });
+  it("logs a safe origin-refusal diagnostic with host and validated protocol but no customer data", async () => {
+    // Commit 791a435/ec3af7f evidence contract: the refusal must be diagnosable from the log alone,
+    // and the log must never carry customer fields, the replay key, or query-string material.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const secretBody = { ...body, customerName: "Distinctive Customer", customerPhone: "0799888777",
+        customerEmail: "distinctive@test.invalid", notes: "Distinctive private requirements", idempotencyKey: "qa-distinctive-key-1234" };
+      expect((await POST(request(secretBody, { origin: "https://foreign.test", "x-forwarded-proto": "https" }))).status).toBe(403);
+      expect((await POST(request(secretBody, { origin: "null" }))).status).toBe(403);
+      expect((await POST(request(secretBody, { origin: "not a url", "x-forwarded-proto": "javascript:alert(1)" }))).status).toBe(403);
+      expect(h.create).not.toHaveBeenCalled();
+      const lines = warn.mock.calls.map((call) => String(call[0]));
+      expect(lines).toHaveLength(3);
+      for (const line of lines) expect(line).toMatch(/^Enquiry origin refused: origin-host=.* request-host=.* proto=(http|https|other)$/);
+      expect(lines[0]).toBe("Enquiry origin refused: origin-host=foreign.test request-host=jata.test proto=https");
+      expect(lines[1]).toContain("origin-host=invalid");
+      expect(lines[2]).toContain("proto=other");
+      const joined = lines.join("\n");
+      for (const value of [secretBody.customerName, secretBody.customerPhone, secretBody.customerEmail, secretBody.notes, secretBody.idempotencyKey, "alert(1)"]) {
+        expect(joined).not.toContain(value);
+      }
+    } finally { warn.mockRestore(); }
   });
   it("serves the registered technical category explicitly and still refuses unregistered categories", async () => {
     // Technical services were added to the explicit enquiry-category set; blanket capability

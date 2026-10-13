@@ -535,8 +535,24 @@ try {
       await visitor.waitForFunction(() => !document.querySelector('main').textContent.includes('QA advisory request'));
       check(`${category}: booking facet selects actual fixed-price consultation`, (await visitor.$eval('main', (element) => element.textContent)).includes('QA fixed consultation'));
       await clickText(visitor, `[aria-label="${requestTypeLabel}"] button`, 'All services');
-      await visitor.click('[data-recipe-action="enquire"] a');
-      await visitor.waitForSelector('#eq-name');
+      // Actual customer navigation, trusted and unobstructed: on a 360x740 viewport the recipe
+      // action bar can cover the link's centre, so a raw ElementHandle click can be swallowed by the
+      // overlay instead of reaching the enquiry route. Record the href/viewport/hit-test first (real
+      // evidence for that class), then use the same centered unobstructed trusted click as the mobile
+      // slot correction. The #eq-name requirement is kept: never bypass the customer route with a
+      // goto/API shortcut and never relax the form assertion.
+      const enquiryTarget = await visitor.$eval('[data-recipe-action="enquire"] a', (element) => {
+        const box = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { path: new URL(element.href).pathname, top: box.top, bottom: box.bottom, viewport: innerHeight,
+          hit: hit?.tagName ?? null, hitClass: typeof hit?.className === "string" ? hit.className : null,
+          unobstructed: hit === element || element.contains(hit) };
+      }).catch(() => "absent");
+      console.log(`Actual ${category} enquiry link before centered trusted click: ${JSON.stringify(enquiryTarget)}`);
+      await clickText(visitor, '[data-recipe-action="enquire"] a', 'Request a quote');
+      await visitor.waitForSelector('#eq-name').catch(() => {
+        throw new Error(`${category}: enquiry form not reached after trusted link; path=${new URL(visitor.url()).pathname}, target=${JSON.stringify(enquiryTarget)}`);
+      });
       check(`${category}: actual request-only form has no fake date/slots/price and correct owned service`, await visitor.$eval('#eq-service', (select) => select.value) === fixture.itemId &&
         !await visitor.$('#bk-name') && (await visitor.$eval('main', (element) => element.textContent)).includes('not a confirmed booking'));
       const bookingBefore = await prisma.booking.count({ where: { businessId: fixture.id } });

@@ -644,3 +644,17 @@ Raw server-response ordering capture (`serverHtmlOrder` byte offsets + document-
 Local control experiments (throwaway probe route, deleted): no inversion under async delays 0–100 ms, `cookies()`, `generateMetadata`, 2k–120k-node SSR trees, 50–200 KB props, 12-way concurrency, or 6-core CPU starvation. Passing runs never prove the fix; the closure rule is not met.
 
 **Release gates unchanged:** PRs #41/#43 DRAFT and unmerged; no production deployment or production-data change; storage DEFERRED; persistent-original media BLOCKED; provider acceptance BLOCKED (synthetic entitlement only); 108 master blocks untouched; inherited subscription-retry expected failure preserved; production dependency audit 0 findings and full audit 10 HIGH dev-only reported separately (full-security gate BLOCKED pending owner decision).
+
+## M13 — PR #41 tail-commit reconciliation (2026-10-13)
+
+Audited PR #41 (`arena/7b28a123`, tip `791a435`, five tail commits `bb72507`, `c3c9563`, `ec3af7f`, `4e8099d`, `791a435`) read-only against this branch's M12 head `3e102ad`, file by file and code path by code path, before any edit.
+
+**Already present (no duplication added):** `bb72507` (M8 handoff/acceptance records — same record as 431d9ba/47f0f6e, this branch additionally carries the M9/M10 continuations) and `c3c9563` (durable professional enquiries + service-only request recipe — present as the 677b883 cherry-pick; this branch is strictly ahead via 36c55bb, 34932c6 and f2040f5). Their ec3af7f runner diagnostic (`status=/leads=/error=`) is also already present, and slightly richer.
+
+**Added (smallest compatible change + regression test each):**
+1. `791a435` — the authenticated runner's enquiry-link navigation was genuinely missing: `scripts/browser/studio-authenticated.check.mjs` clicked `[data-recipe-action="enquire"] a` with a raw ElementHandle click. It now emits the link's href/viewport/hit-test evidence and uses the branch's existing centered unobstructed trusted click. The `#eq-name` requirement, the `#eq-service` assertion and the no-shortcut rule are unchanged — the test was strengthened, not relaxed.
+2. `ec3af7f` — the refusal diagnostic's missing transport dimension: `app/api/storefront/enquiry/route.ts` now reports the validated `x-forwarded-proto` (`http|https|other`) on the existing single-line warning. **Decision logic byte-for-byte unchanged** (still 403, still bound to the incoming `Host`).
+
+**Conflicting, deliberately not merged:** `4e8099d`'s extra hardening. Its root-cause fix is already present (f2040f5); its protocol-bound `sameRequestOrigin` would replace this branch's documented host:port design and treat a caller-supplied `x-forwarded-proto` as an authorization input, so it is escalated as an unresolved conflict rather than adopted. The security-relevant half is regression-locked instead.
+
+**Local gates:** `tsc --noEmit` — only the pre-existing offline-Prisma-generated-types error (`tests/prisma/experience-boundary.test.ts:34`, unchanged from the pre-edit baseline; CI generates the client). `next lint` 0 errors. `npx vitest run --exclude tests/e2e` **2126 PASS / 74 DB-only SKIP / 180 files** (baseline 2122 PASS; +4 new tests). Both new regression tests fail before the corresponding change. Hydration #418 instrumentation, the investigation ledger, the 108 master blocks (SHA256 `3bae22f5…`) and the release-plan register are untouched.

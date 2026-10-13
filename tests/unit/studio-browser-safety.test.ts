@@ -97,4 +97,18 @@ describe("authenticated Studio browser fixture boundaries (test-only, not applic
     expect(script).toContain('"NOT RUN: fail-fast remainder"');
     expect(script).toContain('process.exitCode = failed || !journeyComplete ? 1 : 0');
   });
+  it("navigates the actual enquiry link with the trusted unobstructed click and keeps the form assertion", () => {
+    // Commit 791a435 evidence contract. A raw ElementHandle click can be swallowed by the recipe
+    // action bar that covers the enquiry link's centre on a mobile viewport, which reports a
+    // navigation failure without saying where the click landed. The check must use the same
+    // centered/unobstructed trusted click as the mobile slot correction and must keep requiring the
+    // real #eq-name form — never a goto/API shortcut and never a relaxed assertion.
+    const script = readFileSync("scripts/browser/studio-authenticated.check.mjs", "utf8");
+    expect(script).toContain("await clickText(visitor, '[data-recipe-action=\"enquire\"] a', 'Request a quote')");
+    expect(script).not.toContain("await visitor.click('[data-recipe-action=\"enquire\"] a')");
+    expect(script).toContain("enquiry link before centered trusted click");
+    expect(script).toContain("unobstructed: hit === element || element.contains(hit)");
+    expect(script).toContain("await visitor.waitForSelector('#eq-name')");
+    expect(script).toContain("enquiry form not reached after trusted link");
+  });
 });
