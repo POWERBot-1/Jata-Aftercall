@@ -40,7 +40,8 @@ let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
 // M12: buffered M418 evidence lines are reprinted at end-of-run so they land in the
 // CI summary comment's tail window (the generator elides long-log middles).
 const m418Lines = [];
-const serverDigests = new Map(); // path -> bounded raw-server-order evidence (M12 Stage B)
+const serverDigests = new Map(); // full URL -> bounded list of raw-server-order records (M12 Stage B)
+let serverResponseSeq = 0;
 function emitM418(line) { const bounded = String(line).slice(0, 900); m418Lines.push(bounded); console.error(bounded); }
 function check(name, ok, detail = "") {
   results.push({ name, ok: Boolean(ok), detail });
@@ -68,16 +69,19 @@ async function pageFor(context) {
   // catalogue markers) before any browser-side parse or hydration recovery can alter it.
   page.on("response", (response) => {
     if (response.request().resourceType() !== "document") return;
-    let path;
-    try { path = new URL(response.url()).pathname; } catch { return; }
+    const url = response.url();
     const status = response.status();
     const contentType = (response.headers()["content-type"] || "").slice(0, 60);
+    const seq = ++serverResponseSeq;
     response.text().then((html) => {
-      serverDigests.set(path, {
-        len: html.length, digest: serverHtmlDigest(html), status, contentType,
-        ...serverHtmlOrder(html),
-      });
-      if (serverDigests.size > 8) serverDigests.delete(serverDigests.keys().next().value);
+      const bodyAt = html.search(/<body[\s>]/i);
+      const bodyHead = bodyAt >= 0 ? html.slice(bodyAt, bodyAt + 160).replace(/[\r\n]+/g, " ") : "";
+      const list = serverDigests.get(url) || [];
+      list.push({ at: Date.now(), seq, status, contentType, len: html.length, bodyHead,
+        digest: serverHtmlDigest(html), ...serverHtmlOrder(html) });
+      while (list.length > 3) list.shift();
+      serverDigests.set(url, list);
+      if (serverDigests.size > 12) serverDigests.delete(serverDigests.keys().next().value);
     }).catch(() => {});
   });
   page.on("pageerror", (error) => {
@@ -90,15 +94,16 @@ async function pageFor(context) {
     // probe freezes synchronously in its own window.onerror before React recovery can overwrite
     // the mutation history. Cross-origin frames are reported, never bypassed.
     void Promise.all(page.frames().map(async (frame) => {
-      const path = (() => { try { return new URL(frame.url()).pathname; } catch { return "unknown"; } })();
+      const frameUrl = (() => { try { return frame.url(); } catch { return "unknown"; } })();
+      const path = (() => { try { return new URL(frameUrl).pathname; } catch { return "unknown"; } })();
       try {
         const probe = await frame.evaluate((key) => {
           const instance = window[key];
           return instance ? { state: instance.state(), snapshot: instance.snapshot(), tail: instance.tail(15), m418last: window.__m418last || null } : null;
         }, PROBE_PROPERTY);
-        return { path, probe };
+        return { path, url: frameUrl, probe };
       } catch (error) {
-        return { path, inaccessible: String(error).slice(0, 80) };
+        return { path, url: frameUrl, inaccessible: String(error).slice(0, 80) };
       }
     })).then((frameProbes) => {
       // Emit short, separately survivable evidence lines (the PR comment keeps only the head
@@ -126,14 +131,14 @@ async function pageFor(context) {
       // Raw server-byte body order FIRST for the erroring frame's document: if the response
       // text already leads with scripts, the inversion is server emission; if it leads with
       // the content divs, the DOM order came from client-side insertion instead.
-      const errorPaths = frameProbes.filter((entry) => entry && entry.probe && entry.probe.m418last).map((entry) => entry.path);
-      const orderedDigests = [...serverDigests.entries()].sort((a, b) =>
-        (errorPaths.includes(b[0]) ? 1 : 0) - (errorPaths.includes(a[0]) ? 1 : 0));
-      for (const [path, info] of orderedDigests.slice(0, 3)) {
-        emitM418(`M418 SRV ${path} len=${info.len} ${String(info.digest).slice(0, 140)}`);
-      }
-      for (const [path, info] of [...serverDigests.entries()].slice(0, 4)) {
-        emitM418(`M418 SERVER ${path} len=${info.len} ${String(info.digest).slice(0, 600)}`);
+      const errorUrls = frameProbes.filter((entry) => entry && entry.probe && entry.probe.m418last).map((entry) => String(entry.url || entry.path));
+      const ranked = [...serverDigests.entries()].sort((a, b) =>
+        (errorUrls.some((u) => a[0] === u) ? -1 : 0) - (errorUrls.some((u) => b[0] === u) ? -1 : 0));
+      for (const [url, list] of ranked.slice(0, 3)) {
+        for (const info of list.slice(-2)) {
+          emitM418(`M418 SRV seq=${info.seq} status=${info.status} len=${info.len} ${url.slice(0, 70)} :: ${info.order}`);
+          emitM418(`M418 SRVHEAD seq=${info.seq} ${String(info.bodyHead).slice(0, 150)}`);
+        }
       }
     });
   });
@@ -673,12 +678,18 @@ try {
           entry.order = await first.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
           // M12 Stage B: pair the pre-hydration DOM order with the RAW server response order
           // of the same document (byte-order markers captured before any browser-side parse).
-          const raw = [...serverDigests.entries()].find(([path]) => path.startsWith(`/b/${fixture.slug}`));
-          if (raw) {
-            entry.rawPath = raw[0];
-            entry.rawStatus = raw[1].status;
-            entry.rawOrder = raw[1].order;
-            entry.rawOffsets = raw[1].offsets;
+          const frameSrc = await first.ownerPage.evaluate(() => document.querySelector('iframe[title="Draft preview"]')?.getAttribute("src") || "").catch(() => "");
+          const absolute = frameSrc ? new URL(frameSrc, origin).href : "";
+          const rawList = absolute ? serverDigests.get(absolute) : null;
+          if (rawList && rawList.length) {
+            const info = rawList[rawList.length - 1];
+            entry.rawSeq = info.seq;
+            entry.rawStatus = info.status;
+            entry.rawOrder = info.order;
+            entry.rawOffsets = info.offsets;
+            entry.rawBodyHead = String(info.bodyHead).slice(0, 120);
+          } else {
+            entry.rawOrder = "no-response-captured";
           }
         } catch (error) {
           entry.ok = false;
@@ -687,7 +698,9 @@ try {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
         }
         hydrationVisits.push(entry);
-        console.log(`HYDRATION SAMPLE ${JSON.stringify(entry)}`);
+        const sampleLine = `HYDRATION SAMPLE ${JSON.stringify(entry)}`.slice(0, 880);
+        m418Lines.push(sampleLine);
+        console.log(sampleLine);
       }
     }
     if (cdp) await cdp.detach().catch(() => {});
@@ -738,9 +751,14 @@ try {
 const failed = results.filter((item) => !item.ok).length;
 // Reprint the buffered M418 evidence at end-of-run so it survives the CI summary
 // comment's middle-elision (its tail window keeps these lines).
-if (m418Lines.length) {
+if (m418Lines.length || hydrationVisits.length) {
   console.log(`M418E BEGIN ${m418Lines.length} buffered evidence lines`);
   for (const line of m418Lines.slice(-14)) console.log(line);
+  for (const entry of hydrationVisits.slice(-6)) {
+    if (entry && (entry.rawOrder || entry.order)) {
+      console.log(`M418E PAIR dom=${String(entry.order || "").slice(0, 46)} raw=${String(entry.rawOrder || "").slice(0, 46)} :: ${entry.category || ""} a${entry.attempt || ""}`);
+    }
+  }
   console.log("M418E END");
 }
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
