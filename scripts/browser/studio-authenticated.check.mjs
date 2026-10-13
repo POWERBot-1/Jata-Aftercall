@@ -760,6 +760,13 @@ if (m418Lines.length || hydrationVisits.length) {
       console.log(`M418E PAIR dom=${String(entry.order || "").slice(0, 46)} raw=${String(entry.rawOrder || "").slice(0, 46)} :: ${entry.category || ""} a${entry.attempt || ""}`);
     }
   }
+  // The failing load's own response often resolves AFTER the throw (mid-parse captures),
+  // so the complete per-URL response list is dumped here at end-of-run.
+  for (const [url, list] of [...serverDigests.entries()].slice(0, 12)) {
+    for (const info of list.slice(-2)) {
+      console.log(`M418E RESP seq=${info.seq} status=${info.status} len=${info.len} ${String(url).slice(-52)} :: ${String(info.order).slice(0, 90)}`);
+    }
+  }
   console.log("M418E END");
 }
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
