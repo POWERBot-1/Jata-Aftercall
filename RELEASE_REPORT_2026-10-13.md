@@ -1101,3 +1101,27 @@ passes `"en-KE"` explicitly, so they are locale-pinned and zone-independent.
 **Scope discipline:** this change touched no route that writes bookings or payments, no migration, no
 schema, no production configuration, no workflow file, and no dependency; `main` remains
 `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a`; the PR keeps its NOT APPROVED label.
+
+### H.14 Second red run (`38463216815`) — a different step, and clearly infrastructure
+
+The report-only commit `42d787f` triggered run `38463216815`, which **failed in `Install dependencies`**
+before any test, build or browser step ran (every later step is `skipped`, and the workflow's own failure
+comment recorded `(no output captured)` for all 19 log sections). Nothing about the branch was exercised;
+the same lockfile installed successfully minutes earlier in run `38461133757` and again later.
+
+Failure pattern across the branch's eight runs:
+
+| Step that failed | Runs |
+| --- | --- |
+| none (green) | `38439687233`, `38443603926`, `38445602486`, `38458008965`, `38461133757` |
+| `Authenticated production HTTP browser journey` (427 passed / 1 failed, later steps skipped) | `38441832430` |
+| `Install dependencies` (all later steps skipped) | `38463216815` |
+
+Both red runs are on Markdown-only commits and fail in **different** steps, neither of which can be
+attributed to a code difference (`git diff` between each red run and its neighbouring green run is the
+report file alone). Both are therefore recorded as **intermittent CI-environment failures** — an
+observation about this workflow's runner/registry stability, and explicitly **not** a claim that the
+earlier browser-step failure is understood: its failing check still has no name (§H.3), and the smallest
+owner action there is unchanged. `gh run rerun` / `rerun-failed-jobs` return **403** (the integration token
+has no `actions:write`), so recovery from here means pushing a commit — which is what this section's
+commit does; its run id and conclusion appear in the PR's comment thread.
