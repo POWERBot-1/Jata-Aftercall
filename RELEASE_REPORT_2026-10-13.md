@@ -20,7 +20,7 @@ installation, a document, or an older SHA.
 | Environment | node v22.22.3, npm 10.9.8. No `DATABASE_URL`, no Prisma engine, no Postgres/docker, no Chrome/Chromium **and no way to run one** (see Phase 4). npm registry and github.com reachable; `binaries.prisma.sh` is not |
 | Preview | Vercel Preview for `1b8167d`, deployment `7044323662`, state `success`, created 2026-10-13T16:40:53Z, **SSO-protected** |
 | Merged? Deployed? | **No.** No merge, no production deploy, no migration run, no env change, no provider activation, no spending, no production data touched |
-| Final status | **BLOCKED — owner-verification and owner-decision items only**; gate table **§G.13.3**, current owner decision register **§H.11** (Directive 4, at the end of this document). Every machine-verifiable gate is green at `fde6865`/`d616ae6` with runs `38439687233` / `38445602486` as evidence; what remains is the owner's Paystack verification, the D-1/D-2/D-3 decisions, and explicit authorization for any live charge |
+| Final status | **BLOCKED — owner-verification and owner-decision items only**; gate table **§G.13.3**, decision register **§H.11**, executed presentation fixes and the current held items **§H.13** (end of this document). Every machine-verifiable gate is green at `fde6865`/`d616ae6` with runs `38439687233` / `38445602486` as evidence; what remains is the owner's Paystack verification, the D-1/D-2/D-3 decisions, and explicit authorization for any live charge |
 
 ---
 
@@ -841,7 +841,7 @@ Nothing was implemented: per the directive, the product contract must be selecte
   constructs an `Intl` formatter (exhaustive scan of every `"use client"` file under `components/` and
   `app/`: zero hits). The earlier "8 client components" count was taken against `main`'s tree; those
   components now use this branch's deterministic formatters.
-- **Residual:** **16 ambient-format call sites in 10 server components** —
+- **Residual:** **16 ambient-format call sites in 10 server components** (the widened sweep in §H.13.1 later found 7 more in the same class — 23 across 14 files, all converted) —
   `app/admin/customers/page.tsx:36`, `app/admin/payments/wallet/page.tsx:62,93,139,171`,
   `app/admin/subscriptions/page.tsx:21,22`, `app/b/[slug]/shop/page.tsx:64`,
   `app/dashboard/pos/[businessId]/credit/page.tsx:111`, `.../expenses/page.tsx:58`, `.../sales/page.tsx:49`,
@@ -1007,3 +1007,97 @@ the documented policy proposal is still the precondition for any such change.
   migration, provider activation, live payment, refund, spending or production data change; no new branch;
   no history rewrite; no test weakened, skipped or relabelled; no timeout relaxed; no secret read, printed
   or committed; no `npm audit fix --force`.
+
+---
+
+## H.13 Execution: D-1 Package A (interim) and the complete D-3 sweep — and two items held for explicit approval
+
+The owner's "proceed" was applied to the two presentation-only items that §H.4/§H.5 pre-approved as
+implementable without changing business behaviour. The two items that change **what is stored**
+(booking anchoring) or a **ratified dependency pin** were deliberately **not** touched — see §H.13.4.
+
+| Item | State before | State now |
+| --- | --- | --- |
+| D-1 booking **display** | Dashboard board and the customer booking page showed a booking made at "09:00" as **12:00**; the owner's notification said **09:00** | All three use `formatBookingDateTime` (**09:00**) — the slot the customer chose. Storage, routes and validation unchanged |
+| D-1 booking **anchoring** (Package B) | undeclared | **still undeclared** — needs the owner (§H.13.4) |
+| D-3 ambient formatting | 23 call sites across 14 files under `app/`+`components/` (16 found by the first sweep, 7 more by the widened one) | **0** — enforced by a new test |
+| D-2 dependency posture | unchanged | **unchanged** — changing `main`'s ratified `puppeteer-core` pin needs explicit approval (§H.13.4) |
+
+### H.13.1 What changed (commit `7b01a9459c53c0be014d1c4e61c10c2297eded58`, 19 files)
+
+- **`lib/dateFormat.ts`** — added `JATA_BOOKING_TIME_ZONE = "UTC"` and `formatBookingDateTime`, the
+  booking wall clock (documented as the interim convention, with the open decision named). `manualDate`
+  gained an offset parameter (default unchanged) for the deterministic fallback.
+- **`lib/format.ts`** — added `formatBookingDateTime` and `formatNumber` delegates, so call sites keep
+  one import home.
+- **D-1 Package A (3 booking surfaces):** `components/dashboard/BookingBoard.tsx`,
+  `app/b/[slug]/booking/[id]/page.tsx`, and the owner notification in `lib/experience/payments.ts`
+  (`notifyNewBooking`) — the message no longer prints the server clock beside a differently-formatted board.
+- **D-3 (23 sites, 14 files):** `app/admin/page.tsx`, `app/admin/customers/page.tsx`,
+  `app/admin/payments/page.tsx`, `app/admin/payments/wallet/page.tsx` (5 sites),
+  `app/admin/subscriptions/page.tsx`, `app/b/[slug]/shop/page.tsx`,
+  `app/dashboard/pos/[businessId]/{credit,expenses,sales}/page.tsx`, `app/dashboard/subscription/page.tsx`
+  (4 sites), `app/page.tsx`, `app/receipt/[token]/page.tsx` (3 sites) — dates now use the
+  deterministic formatters, amounts use `formatNumber`.
+- **Tests:** new `tests/unit/booking-time-display.test.ts` (6 tests); the existing
+  `tests/unit/hydration-determinism.test.ts` guard was **refined, not weakened**: it still requires
+  every `Intl` date formatter in `lib/dateFormat.ts` to pin a declared zone constant, and it now also
+  pins the *set* of declared zones, so a third zone cannot appear unnoticed.
+
+### H.13.2 Verification (all commands run at this commit)
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | **1 error** — the pre-existing offline-Prisma artifact; `main`'s baseline is also 1, so **none introduced** |
+| `npm run lint` | **0 errors**, 1 pre-existing `<img>` warning |
+| Targeted (booking, hydration parity/determinism, booking-hydration, payment revival) | **49 passed** |
+| Full suite locally | **175 files passed \| 13 skipped; 2194 passed \| 114 skipped \| 0 failed** (+6 tests, +1 file versus the previous tip) |
+| Behaviour probe (3 server zones) | `formatBookingDateTime("2026-10-14T09:00:00Z")` → `14 Oct 2026, 09:00` under UTC, Africa/Nairobi and America/Los_Angeles; `formatDateTime` (payments) still `14 Oct 2026, 12:00` |
+| CI run `38461133757` at `7b01a94` | **SUCCESS** — native DB suite **2268 passed / 0 skipped** (2262 + the 6 new), §66 17, POS 22, authenticated browser/DB journey **428/0**, booking SSR+midnight hydration **25/25**, motion 124, layout 7, families 167, immersive 22, raster 29, migrations/seed/lint/types/build passed, production audit 0 |
+| Guard proof | `grep -rn "toLocale" app components` → **0 hits**; the new test fails if any returns |
+
+### H.13.3 New finding while completing the sweep (reported, not changed)
+
+The widened sweep exposed a class **outside** `app/`+`components/`: `lib/` helpers still format **dates**
+in the ambient (server = UTC) zone for user-visible output — `lib/pos/reporting.ts` (5 sites: report rows,
+daily closing, credit ageing, customer last-visit), `lib/pos/receipt.ts:142` (the printed/exported receipt's
+issue time), `lib/payments/wallet.ts:559` (wallet health label). Numbers in `lib/` are unaffected: every one
+passes `"en-KE"` explicitly, so they are locale-pinned and zone-independent.
+
+- **Why it was not changed here:** these are **financial documents** (printed receipts, report exports,
+  CSV-style reporting) rather than UI pages, and no test pins the current convention
+  (`tests/unit/pos-money.test.ts` uses `issuedAt` only as fixture data), so a change would silently alter
+  what a receipt prints and what a report row says about the day a sale belongs to. That deserves the
+  owner's decision, like D-1's anchoring question — not a sweep.
+- **Effect if left as-is:** a POS receipt printed for a 22:30 EAT sale shows `19:30` (UTC), and a report
+  row for a 00:30 EAT sale appears under the previous day.
+- **Recommended fix once approved:** the same one-line-per-site substitution with the business-zone
+  formatters (`formatDateTime`/`formatDate`) — receipts and reports should show the business's clock, and
+  unlike bookings there is no server-clock anchoring to preserve (POS rows are stored as true instants).
+- The new guard is deliberately scoped to `app/`+`components/`; extending it to `lib/` should accompany
+  the decision, since `lib/format.ts`'s own helpers legitimately call `toLocaleString` on numbers.
+
+### H.13.4 Held for explicit approval (unchanged, with the exact ask)
+
+| # | Held item | Exactly what approval would authorise |
+| --- | --- | --- |
+| **D-2** | Adopt `puppeteer-core@^25.13.0` (+ lockfile) and re-ratify `main`'s `tests/unit/dependency-security-compat.test.ts` (its `puppeteer-core 23.11.1` pin and its `basic-ftp` import section), removing the `extract-zip`/`@puppeteer/browsers` chain (3 of the 10 development findings). Verified: no patched `extract-zip` exists; `@puppeteer/browsers@3.2.4` uses `modern-tar`. This **changes a ratified pin**, which is why it is not done on a general "proceed" |
+| **D-1 B** | Anchoring bookings to the Nairobi wall clock in `validateBookingRequest`/`freeSlotsFor`/`openDays`/`bookingCalendar`, with an explicit rule for rows already stored (no silent rewrite) |
+| **D-3b** | §H.13.3 — POS receipt/report date convention |
+| **Paystack / live payment** | §H.8 checklist (owner-executed) and §H.9 plan (still **NOT AUTHORIZED**) |
+
+### H.13.5 Register rows updated (supersedes the corresponding rows of §H.11)
+
+| Gate | Status now | Evidence |
+| --- | --- | --- |
+| D-1 booking-date contract — **display** | **PASS (implemented)** | §H.13.1/§H.13.2; three surfaces agree; new tests |
+| D-1 booking-date contract — **anchoring (Package B)** | **BLOCKED (decision)** | §H.13.4 |
+| D-3 timezone presentation (`app/`+`components/`) | **PASS (implemented + enforced)** | 23 sites converted, 0 remaining, guard test |
+| D-3b `lib/` receipt/report dates | **UNRESOLVED (decision)** | §H.13.3 |
+| D-2 development advisories | **BLOCKED (decision)** — explicit pin approval required | §H.13.4 |
+| Paystack configuration | **BLOCKED** | §H.8 |
+| Live charge/refund, media storage, merge, deploy | **NOT AUTHORIZED** | unchanged |
+
+**Scope discipline:** this change touched no route that writes bookings or payments, no migration, no
+schema, no production configuration, no workflow file, and no dependency; `main` remains
+`8db6a9e4d0963241ad36e13cd9c946b76d1ef11a`; the PR keeps its NOT APPROVED label.
