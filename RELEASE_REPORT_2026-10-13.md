@@ -12,13 +12,14 @@ installation, a document, or an older SHA.
 | Code candidate SHA (pushed; the commit Vercel built and all code evidence below refers to) | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` |
 | Later commits on the same branch | `1b92182` (two lost-race tests) and the report-only commits that follow `1b8167d`; each is documentation or test-only, so the code evidence at `1b8167d` remains valid. Current tip: `git ls-remote origin refs/heads/arena/fac28f53-jata-aftercall`, or the PR's head SHA |
 | Remote branch tip | pushed and verified with `git ls-remote` at every push of this turn (no force, no history rewrite) |
-| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, base `main`, 8 commits, head `0fe55e4…`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; verification outcome posted as a comment) |
+| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, not draft, base `main`, **10 commits, 67 files, head `7ec72c66…`**, `mergeable_state: "dirty"`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; verification outcome posted as a comment `issuecomment-6150569400`) |
+| Isolated integration candidate (local, unpushed) | `b5f058bfee2b87e53923e947c19017ee9c27f558` = `main 8db6a9e4…` + `7ec72c66…` with the six conflicts resolved — see §G |
 | Branch vs `main` | 7 commits ahead, **107 behind**; `mergeable: false`, `mergeable_state: "dirty"` → **6 conflicting files** |
 | Recovery checkpoint | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` — present, never moved |
 | Environment | node v22.22.3, npm 10.9.8. No `DATABASE_URL`, no Prisma engine, no Postgres/docker, no Chrome/Chromium **and no way to run one** (see Phase 4). npm registry and github.com reachable; `binaries.prisma.sh` is not |
 | Preview | Vercel Preview for `1b8167d`, deployment `7044323662`, state `success`, created 2026-10-13T16:40:53Z, **SSO-protected** |
 | Merged? Deployed? | **No.** No merge, no production deploy, no migration run, no env change, no provider activation, no spending, no production data touched |
-| Final status | **BLOCKED** — see §F.1; blockers are verification-authority items, not known defects |
+| Final status | **BLOCKED** — current blockers and gate table in **§G.10/§G.11** (this section supersedes §F.1); blockers are verification-authority and owner-decision items, not known code defects |
 
 ---
 
@@ -321,7 +322,13 @@ no action needed); (5) authorization for a live payment test.
 
 ## F. Release decision
 
-### F.1 Status: **BLOCKED**
+### F.1 Status: **BLOCKED** (as of the original report)
+
+> **Superseded by §G.10.** After this section was written, `main`'s hydration programme was
+> read in full, the six conflicts were inventoried and resolved in an isolated candidate
+> (§G.2/§G.3), and the blocker list was reduced to four items with the CI mechanism
+> identified (§G.5). The table below is kept as the record of what was believed at that
+> time; the authoritative list is §G.10/§G.11.
 
 | # | Blocker | Evidence required | Responsible | Next action |
 | --- | --- | --- | --- | --- |
@@ -329,7 +336,7 @@ no action needed); (5) authorization for a live payment test.
 | 2 | Hydration #418 not confirmed in a real browser | Browser pass on a preview (or a CI browser job) with the console inspected around 21:00–24:00 UTC; deployment protection must permit access | Owner | Run the 10-minute script in Phase 4 on the preview URL, or authorize a Playwright/Puppeteer CI job |
 | 3 | Production payment configuration not verified | Owner confirmation of the Phase 5 table (live key mode, webhook URL, test-mode flag, scope separation) | Owner | Walk the 7-step checklist; no secret leaves the Vercel/Paystack dashboards |
 | 4 | Live payment path never exercised end-to-end | One small real charge + refund | Owner | Explicit authorization for spending/production transaction |
-| 5 | Branch is 107 commits behind `main` | Re-validation on top of current `main` | Owner | Decide merge/rebase strategy; the candidate was verified against its own base only |
+| 5 | Branch is 107 commits behind `main` | Re-validation on top of current `main` | Owner | **Addressed in §G**: the conflicts are resolved in candidate `b5f058b` (green type-check, 2188 tests, 0 failures) but it is unpushed; the remaining step is authorizing §G.4 option A or B |
 | 6 | Residual dev-only advisories | Assessment above (complete) → decision needed | Owner | Accept for this release and schedule Tailwind 4, or authorize that migration now |
 
 Items 1–5 are verification-authority blockers. **No in-scope gate fails**: the code-level gates
@@ -376,3 +383,221 @@ remaining uncertainty is exactly the evidence that cannot be produced from this 
   deleted or made lenient. Advisories were neither suppressed nor mislabelled.
 - **Nothing was pushed to `main`;** the only remote ref written is
   `refs/heads/arena/fac28f53-jata-aftercall`.
+
+---
+
+## G. Directive 3 — PR #45 currency audit, six-file conflict resolution and release-gate completion (2026-10-13, later same day)
+
+This section is the current state. It supersedes §F.1's blocker list and every earlier statement
+about the conflict that predates the resolution recorded here. Nothing in it changed `main`, the
+published branch, any deployment, or any production configuration.
+
+### G.1 Verified state, re-read from the remote before any file was touched
+
+| Fact | Value |
+| --- | --- |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — **unchanged** from the previous report (no new main-side commits) |
+| Task branch | `7ec72c6688fac596655c226fb621f837f015d61d` (10 commits), remote ref verified with `git ls-remote` |
+| Merge base | `77e35ce` (task branch HEAD == merge base at creation; `main` is 107 commits ahead) |
+| PR **#45** | open, not draft, base `main`, head `7ec72c66…`, 10 commits, 67 files, `mergeable: false`, `mergeable_state: "dirty"`, updated 2026-10-13T16:52:40Z |
+| PR #45 checks | Vercel ✓ and Vercel Preview Comments ✓ only — **no GitHub CI run exists for this branch**, because a `pull_request` run needs a buildable merge ref and the merge ref is conflicted |
+| Other open PRs overlapping these files | #42 (open, base `77e35ce`: `app/globals.css` +25−0, `package.json` motion) and #41 (draft, merge-base `a622a8c`: `app/b/[slug]/book/page.tsx` +11−2); #44 owns none of the six; #20/#16 unrelated. Both #41 and #42 still carry the line-87 `it.fails` marker, i.e. no parallel PR lands the payment fix |
+| Workflows on the default branch | `Interactive Business E2E` (present, active) and `Production smoke (read-only)` (active, but its file is absent from the repo). Branch-protection inspection returns 403 with this token |
+| Checkpoint | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` — present, unmoved |
+| Did any of the six files change on `main` since the last report? | **No.** `main`'s SHA is identical, so the conflict inventory below was already current |
+
+`main`'s 107 commits are an M11–M15 investigation programme into hydration #418 that *independently*
+touched the same booking code our branch fixed. That is why the same six files conflict, and why the
+resolution below is by mechanism, not by side.
+
+### G.2 Six-file conflict inventory — what each side did, and the resolution
+
+Read from the merge base (`77e35ce`), not from conflict markers. `+x−y` are lines changed since the base.
+
+| File | Ours | `main` | Overlap | Behaviour to preserve, both sides | Risk if mis-resolved | Resolution & verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| `app/b/[slug]/book/page.tsx` | +2−0 — pass the server's Nairobi day: `today={nairobiCalendarDay()}` | +25−5 — per-request shared load (`requestCache`, `generateMetadata` shares the storefront load), professional-workflow routing (enquiry redirects, `notFound()` on dummy products), `calendar={bookingCalendar(new Date())}` | **Semantic duplicate**: both remove the render-path clock from the booking page | main's enquiry/professional routing and single-load caching; the server-computed day list; `force-dynamic` | Keeping our two lines would drop main's routing + request-cache work and leave the page inconsistent with main's browser checks | **main's version.** Our guarantee survives as the adapted parity test (§G.3). Verified: candidate's `BookingClient` takes `calendar`; hydration test files 49/49 pass |
+| `components/storefront/BookingClient.tsx` | +14−11 — `today` prop + `calendarDayList()`; removes `new Date()`/`toISOString()` from render | +12−16 — `calendar: readonly BookingDay[]` prop + `calendar.slice(0,10)`, `key={day.date}` | **Semantic duplicate**: same defect, two contracts | No ambient clock in the render path; chip keys and labels identical server/browser | Two parallel clients would keep the ambient-clock bug or diverge in key/label formatting | **main's version** (`calendar` prop, `lib/experience/bookingCalendar.ts`). Verified: parity test asserts byte-identical HTML across `UTC`/`Africa/Nairobi`/`America/Los_Angeles`, unchanged across a fake Nairobi-midnight crossing, and no `new Date()` in the component. **Residual (owner decision D-1):** between 21:00–24:00 UTC main's first chip is the previous Nairobi day, whose slots are already past — cosmetic, since the server validates slots; recorded, not changed |
+| `app/globals.css` | +451−0 — one appended design-system block at EOF (tokens, status tones, skeletons, offline state, POS) | +119−26 — three in-file regions: focus-visible atoms, template-family recipe/density rules | **Textual** (EOF vs in-file) only | Both blocks | Taking one side silently deletes the other's styling | **main's file + our appended block.** Verified: 27 `eb-scope`+family/recipe markers and 11 `jata-surface`-family markers present; base had 7 duplicated top-level selectors, merged has 9 — the two new ones are `.jata-btn` (main sets geometry at line 191; ours adds a token transition at 1929 — later rule wins, additive) and `.pos-nav-link[data-active="true"]` (main 1264 vs ours 2146, ours wins with a token background). Recorded as a follow-up cleanup; not altered |
+| `components/BusinessPage.tsx` | +2−1 — `formatNumber(priceFrom)` from the deterministic formatter | +1−1 — `toLocaleString("en-KE")` | Same symptom (locale-dependent digits), different mechanisms | Deterministic price text on a hydration-relevant surface | Keeping the runtime-locale call re-opens the ICU-dependence this branch removed | **ours** (`formatNumber`). The file is a client component, so a runtime-locale call is exactly the defect class removed here, and the helper is the tested one used across the rebuilt surfaces. **Residual (D-3):** main still formats dates with ambient-time-zone `toLocaleString("en-KE")` in 8 client components (POS/preview/dashboard) — see §G.6. Verified: design-system 21/21, full suite green |
+| `package.json` | +16−4 — 4 UI libraries, `puppeteer-core ^25.13.0`, override reshape | +20−5 — three browser-check scripts, `motion ^14.1.0`, next/eslint-config-next 15.5.27, overrides (`source-map-js`, `brace-expansion@1`, `brace-expansion@5`, `basic-ftp`, `postcss-selector-parser`) | **Semantic conflict in dependency posture** | main's QA scripts, motion, Next/ESLint patches and override set; our four UI libraries (each imported by our components) | main's `tests/unit/dependency-security-compat.test.ts` pins `puppeteer-core 23.11.1` and imports `basic-ftp`; our v25 upgrade **removes** that module, so the file fails to load on the candidate if our bump wins | **main's version + our 4 UI deps** (`@tanstack/react-table ^9.3.1`, `lucide-react ^1.56.0`, `recharts ^3.10.1`, `sonner ^2.0.8`). Our `puppeteer-core` bump is *not* applied — see D-2. Verified: dependency-security test 13/13 on the candidate |
+| `package-lock.json` | +874−864 | +124−63 | Regenerated as a whole | A lock consistent with the resolved `package.json` | Hand-merging a lock is how silent version shifts happen | **main's lock + the 4 UI deps**, regenerated with `npm install` (not hand-edited). Verified invariants: next 15.5.27, eslint-config-next 15.5.27, motion 14.1.0, puppeteer-core 23.11.1, basic-ftp 6.2.3, source-map-js 1.2.2, postcss-selector-parser 7.1.6, brace-expansion 1.1.21 (nested 5.0.12) |
+
+Two files of **our own** test suite needed adaptation so that the merged contract is still guarded —
+both strengthen or preserve intent, neither deletes an assertion without replacement:
+
+- `tests/unit/hydration-render-parity.test.ts` — the prop changed from `today` to `calendar`; the
+  invariants are unchanged (identical HTML in three server time zones, identical across a fake
+  Nairobi-midnight crossing, the day list comes from the server, and the component contains no
+  `new Date()`).
+- `tests/unit/design-system.test.ts` — one substring now matches the merged shell's two-argument
+  `themeRootClassName(theme, familyClasses)` call; the contract itself (one stylesheet, tokens,
+  storefront root classes) is untouched.
+
+### G.3 Isolated integration candidate — created, green, and **not published**
+
+Because the directive forbids rewriting the published branch without authorization and forbids
+unilateral branch creation, the experiment ran in a **detached git worktree** (no branch, no push,
+`main` untouched):
+
+| Step | Value |
+| --- | --- |
+| Base | `main` = `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` |
+| Second parent | our branch tip = `7ec72c6688fac596655c226fb621f837f015d61d` |
+| Method | `git merge --no-commit` then resolutions per §G.2, then a detached commit — **no branch was created, nothing was pushed** |
+| Candidate SHA | `b5f058bfee2b87e53923e947c19017ee9c27f558` (local object only; reproducible from the two published SHAs plus this section) |
+| Integrity | our branch changed 67 files; the candidate's delta vs `main` is those 67 **minus two** — `app/b/[slug]/book/page.tsx` and `components/storefront/BookingClient.tsx`, where `main`'s later fix is the equivalent superset. No file beyond ours appears, i.e. no `main` work was overwritten |
+| Type check | `tsc --noEmit`: 1 error — main's pre-existing "Prisma client not generated (offline)" artifact. Baseline plain `main` on this machine: the same 1 error. **Zero merge-introduced type errors** |
+| Full suite | **174 files passed | 13 skipped, 2188 tests passed | 114 skipped | 0 failed** (green includes main's 107 commits of tests and our 65 changed files together) |
+| Payment suites on the candidate | `tests/integration/subscription-payment-revival.test.ts` 14/14; payment unit suites green |
+| Audits on the candidate | 10 high (all development-only), **0 production** — identical to `main`; our 4 UI libraries add no finding |
+| Not done | no branch, no push, no PR, no deploy, no migration, no production configuration, no spending |
+
+The 114 skips are ours (95, ledger §E.3) plus 19 that are main's own database-backed files
+(`experience-art-direction` 6, `experience-boundary` 8, `professional-enquiries` 5). Skipped is not
+passed; they are still **NOT TESTED** against a database.
+
+### G.4 Branch currency and integration strategy — recommendation
+
+The published branch is 107 commits behind and cannot produce CI in its current state. Three options:
+
+| Option | Effect | Authorization needed | Assessment |
+| --- | --- | --- | --- |
+| **A. Merge `main` into the published task branch** (ordinary merge commit, no force-push, no history rewrite) | PR #45's head updates to the integrated tree; GitHub can build the merge ref; `pull_request` CI starts (Postgres + Chrome) | Owner approval to change PR #45's contents by merging | **Recommended.** Preserves the published branch and its PR, avoids a duplicate PR, and is the only route that makes main's database and browser CI run against the integrated tree |
+| B. Separate integration branch from `main` with the same resolution | Isolated; a second PR would be needed | Owner approval to **create a new branch** | Adequate but creates a duplicate review surface; the directive already forbids creating a second PR |
+| C. Leave as-is | No CI can ever run on this work | none | Not viable |
+
+The candidate in §G.3 **is** the resolution option A would apply (identical content), so the decision
+is procedural, not technical.
+
+### G.5 Database-backed CI (Phase 5): **BLOCKED — no run performed** (limiting factor identified)
+
+- The mechanism exists on `main`: `Interactive Business E2E` runs on `pull_request → main`,
+  `push → main` and manual dispatch; the job provisions a disposable **`postgres:16` service**
+  (`DATABASE_URL` and `PRISMA_TEST_DATABASE_URL` point at it — no deployment secret), runs
+  `prisma migrate`, seeds plans, then `npx vitest run --exclude "tests/e2e/**"` and **fails the job
+  if any test was skipped**, then the §66 journey and the POS journey, a production build, and the
+  browser steps.
+- Limiting factor, exactly: **PR #45 is `dirty`**, so GitHub cannot build the merge ref and no
+  `pull_request` run exists. `gh workflow run --ref` returns **403** (the integration token has no
+  `actions:write`), and this environment has no `DATABASE_URL`, no Postgres and no docker
+  (`prisma generate` cannot even reach `binaries.prisma.sh`).
+- Consequence: all 95 previously skipped tests (names and reasons in §E.3) remain **NOT TESTED
+  against a database** on this work. No protection or permission was bypassed, and no skipped test
+  is presented as passing.
+- Smallest authorized action that unblocks it: approve option A or B in §G.4. After the push, the
+  run id, the tested SHA and the pass/fail/skip counts must be recorded here before the release gate
+  can close.
+
+### G.6 Real-browser hydration (Phase 6): **BLOCKED** (unchanged cause, new residual finding)
+
+- This sandbox has no Chrome/Chromium binary and no way to obtain the shared libraries (`apt-get`
+  is unavailable), so no real browser can be launched here; the Vercel preview is SSO-protected and
+  was not probed. jsdom evidence (§B1) stays jsdom evidence — it is **not** browser proof.
+- The real-browser checks that would settle it exist on `main` and run in CI
+  (`test:browser:studio-hydration`, `test:browser:hydration-race`, plus motion/immersive/layout/
+  families/media-local), and they will only run for this work through §G.4 → §G.5.
+- New residual risk found while resolving the conflicts: `main`'s remaining client components still
+  format dates with the ambient time zone — `toLocaleString("en-KE")` in 8 client components
+  (`components/dashboard/PreviewClient.tsx:146`, `components/pos/*Client.tsx`, …), which renders one
+  string on a UTC server and another in a Nairobi browser between 21:00–24:00 UTC. This is the same
+  class of divergence this branch removed for the surfaces it rebuilt. It was **not** changed in the
+  candidate (out of scope for conflict resolution) — owner decision **D-3**.
+- Smallest owner action: authorize §G.4 (CI then produces browser evidence on the candidate SHA), or
+  run the 10-minute script in "Phase 4" above between 21:00–24:00 UTC with 5–10 reloads.
+
+### G.7 Payment-provider (Paystack) gate — **BLOCKED — OWNER VERIFICATION REQUIRED** (unchanged)
+
+No authorized access exists from here, and no secret was requested, read, copied or logged. The
+7-step checklist in "Phase 5 — Paystack configuration review" is unchanged and still needs the owner:
+live vs test key mode in the correct Vercel environment and preview/test separation, the webhook URL
+`/api/paystack/webhook` with real signature verification, the base URLs (`PAYSTACK_BASE_URL`) used
+consistently by server-side verification, and one small real charge + refund before go-live
+(the last needs explicit spending authorization). The code-side guarantees are verified: HMAC-SHA512
+signature check with `WEBHOOK_SIGNATURE_FAILED` audit, evidence validation
+(`REFERENCE_MISMATCH`/`AMOUNT_MISMATCH`/`CURRENCY_MISMATCH`), `WEBHOOK_TRANSACTION_MISMATCH`, and a
+provider-independent reference so a forged callback cannot settle anything.
+
+### G.8 Dependency audits re-measured today (Phase 8)
+
+| Tree | All findings | Production (`--omit=dev`) |
+| --- | --- | --- |
+| `main` @ `8db6a9e4` | 10 high / 0 moderate / 0 critical | **0** |
+| Candidate @ `b5f058b` | 10 high / 0 moderate / 0 critical — same package set | **0** |
+| Our branch @ `7ec72c66` | 9 (7 high, 2 moderate) | **0** |
+
+Findings sit in these chains: `@puppeteer/browsers` + `extract-zip` + `puppeteer-core` (development
+browser tooling); `braces` + `micromatch` + `fast-glob` + `chokidar` + `tailwindcss` +
+`@next/eslint-plugin-next` + `eslint-config-next` (Tailwind 3 / ESLint tooling).
+
+Assessment (no automatic upgrade, per directive): our branch's only reduction lever is
+`puppeteer-core` 23 → 25, which deletes the `extract-zip`/`@puppeteer/browsers` chain entirely — but
+`main`'s ratified lock test pins `puppeteer-core` 23.11.1 *and* imports `basic-ftp`, so adopting our
+posture **requires editing that main-side test** ("puppeteer-core 23.11.1" pin + the whole
+`basic-ftp` API section). That is an owner decision (**D-2**), not a conflict-resolution action.
+For the other chain there is no narrow fix in range: `braces` has no patched release at any version,
+`eslint-config-next@14.2.35` is a downgrade incompatible with Next 15, and Tailwind 4 alone does not
+clear the findings. Recommendation: land the integration with `main`'s posture (production stays at
+zero) and schedule the Next/ESLint/Tailwind 4 evaluation as a separate authorized migration. Nothing
+was suppressed, downgraded, or reclassified.
+
+### G.9 Preservation checklist on the candidate (Phase 9)
+
+| Must be preserved | Evidence on `b5f058b` | Result |
+| --- | --- | --- |
+| Auth and tenant isolation | main's suites + our suites in the green full run | PASS (non-database suites) |
+| Payment verification, idempotency, reconciliation | `activateSubscriptionForPayment` (`lib/paystack.ts:160`) is a real compare-and-set guarded by the settleable states with a `changed.count !== 1` lost-race path; `settleOrderPayment`/`failOrderPayment` unchanged; revival suite 14/14 | PASS |
+| Entitlements and safe publication | `experience-publish`, `ai-entitlement*`, `published-product-design-system` suites green | PASS |
+| Website Studio, POS, customer-generated products | full suite green (main's 107 commits + our 65 files together) | PASS (non-browser) |
+| Shared design tokens + typed contract | `lib/designSystem.ts` `TEMPLATE_CONTRACT`; 21 design-system tests | PASS |
+| Published-output regression: categories × themes | `published-product-design-system.test.ts` asserts `CATEGORY_KEYS.length × EXPERIENCE_THEMES.length` renders | PASS |
+| Architecture (Next.js/Prisma/Neon/Vercel) | only 4 additive UI libraries; no framework, Tailwind, Next or ESLint upgrade applied | PASS |
+| Rollback / recovery | `DEPLOYMENT.md` §Rollback; per-commit `git revert`; nothing published by this phase | PASS |
+| Media storage stays deferred | no storage/upload/provider code in the candidate's delta | PASS |
+| No new cancellation/refund behaviour pre-policy | none appears in the candidate's delta | PASS |
+| No hydration suppression added | `suppressHydrationWarning` count identical to `main` (1, pre-existing in `app/layout.tsx:24`) | PASS |
+| Build success ≠ correct journeys | production build not run locally (offline Prisma engine); CI covers it | NOTE |
+
+### G.10 Current gate table and final status
+
+| Gate | Status | Evidence | Responsible |
+| --- | --- | --- | --- |
+| Hydration #418 — code | **PASS** | `calendar` contract on the candidate; parity/determinism/booking-hydration 49 tests; no suppression | Agent |
+| Hydration #418 — real browser | **BLOCKED** | no browser here; CI path exists (§G.4/§G.5); residual ambient-TZ formatting in main's client components (D-3) | Owner + CI |
+| Line-87 subscription payment gap | **PASS (code, offline)** / **NOT TESTED (Postgres)** | CAS at `lib/paystack.ts:160`; REFUNDED never settleable; revival 14/14; the database file itself self-skips here | CI |
+| Database CI, all 95 previously skipped tests | **BLOCKED** | merge ref unbuildable; dispatch 403; no local Postgres | Owner (authorize §G.4), then CI |
+| Dependency-security gate | **FAIL (development) / PASS (production)** | 10 high dev vs 0 production on the candidate; staged remediation | Owner (D-2) |
+| Payment-provider readiness | **BLOCKED — OWNER VERIFICATION REQUIRED** | §G.7 / "Phase 5" checklist | Owner |
+| Environment, secrets, monitoring, rollback | **PASS** | §B5 + `DEPLOYMENT.md` | Agent |
+| Database migration compatibility | **PASS** | no migration in this work; §B6 | Agent |
+| Design system + published output | **PASS** | 21 design-system tests; categories × themes regression | Agent |
+| Integration/conflict resolution | **PASS locally / NOT TESTED on CI** | green candidate `b5f058b` (§G.3) | Owner (authorize), then CI |
+
+**Final status: BLOCKED.** Four precise blockers, each with a ready next action:
+(1) no authorized integration push, so CI has never run (database and browser evidence);
+(2) production Paystack configuration unverified;
+(3) development-advisory posture needs an owner decision;
+(4) the live charge/refund path has never been exercised (owner, spending authorization).
+No in-scope code gate fails on the evidence available.
+
+### G.11 Owner decisions still required
+
+| # | Decision | Options | Why it matters |
+| --- | --- | --- | --- |
+| D-1 | First booking chip between 21:00–24:00 UTC | keep `main`'s UTC-day calendar (current candidate) **or** start the list on the Nairobi day | UX only; the server still validates slots. Changing it means altering `lib/experience/bookingCalendar.ts` + its browser test |
+| D-2 | Dependency posture | adopt our `puppeteer-core ^25` + override reshape **and edit main's lock test** (removes the `extract-zip`/`@puppeteer/browsers` chain: 10 → fewer dev findings) **or** keep `main`'s pins (10 dev findings, production 0) | Cannot be done inside conflict resolution; it changes a main-side ratified test |
+| D-3 | Ambient-time-zone date formatting in main's remaining client components (8 files) | fix now (touches POS/preview surfaces) **or** schedule with a browser check at 21:00–24:00 UTC | Same defect class as #418; today only detectable in a real browser |
+| D-4 | Integration path (§G.4) | A: merge `main` into PR #45's branch (recommended) **or** B: authorize a separate integration branch | Unlocks database + browser CI; the code content is identical either way |
+| D-5 | Live charge + refund exercise | authorize or defer | The only evidence that the production provider is wired end-to-end |
+| D-6 | Media storage | keep deferred | Unchanged; no provider, credentials or uploads |
+
+### G.12 What this phase did and did not do
+
+- **Did:** read-only remote/preflight verification; a full six-file conflict inventory from the merge
+  base; an **isolated, unpushed** integration candidate with type-check, full-suite and audit
+  evidence; re-verification of the payment fix; a fresh audit comparison; this report update.
+- **Did not:** no merge into `main`, no force-push, no history rewrite, no new branch, no second PR,
+  no push of the candidate, no deploy, no migration, no production env var, no provider activation,
+  no real transaction, no spending, no production data change, no dependency upgrade, no test
+  weakened (two of our tests adapted to the merged contract with their invariants kept), no advisory
+  suppressed, no secret read or logged.
