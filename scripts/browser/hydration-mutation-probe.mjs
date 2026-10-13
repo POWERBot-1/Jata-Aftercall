@@ -153,7 +153,21 @@ export function probeInstallSource(options = {}) {
             continue;
           }
           var hint = m.addedNodes && m.addedNodes.length ? zoneOf(m.addedNodes[0]) : (m.removedNodes && m.removedNodes.length ? zoneOf(m.removedNodes[0]) : "");
-          push("childList", m.target, listSummary(m.addedNodes), listSummary(m.removedNodes), hint);
+          var extra = "";
+          try {
+            if (involvesHoistable(m) && m.addedNodes && m.addedNodes.length) {
+              var node = m.addedNodes[0];
+              if (node && node.nodeType === 1) {
+                var src = node.getAttribute && node.getAttribute("src");
+                var nid = node.getAttribute && node.getAttribute("id");
+                var inline = node.nodeName === "SCRIPT" && !src ? String(node.textContent || "").slice(0, 24).replace(/[\\r\\n\\s]+/g, " ") : "";
+                var first = m.target && m.target.firstElementChild === node ? "prepend" : "append";
+                var next = node.nextElementSibling ? summarize(node.nextElementSibling) : "";
+                extra = " [" + first + (nid ? " id=" + nid : "") + (src ? " src=" + String(src).slice(-46) : "") + (inline ? " js=" + inline : "") + (next ? " next=" + next : "") + "]";
+              }
+            }
+          } catch (e) {}
+          push("childList", m.target, listSummary(m.addedNodes) + extra, listSummary(m.removedNodes), hint);
         } else if (m.type === "attributes") {
           push("attr:" + (m.attributeName || ""), m.target, "", "");
         } else if (m.type === "characterData") {
