@@ -90,6 +90,50 @@ export const PRODUCT_FOUNDATION_TOKENS = [
   "--eb-status-error-surface",
 ] as const;
 
+/**
+ * Tokens every JATA product-interface theme must define.
+ *
+ * The two product themes (Lime Spark, Emerald Ink) drifted apart: each was missing a branding
+ * token the other had, so anything reading `--color-brand-secondary` or `--color-brand-structure`
+ * silently fell back. The contract is declared here, once, and `lib/productThemes.ts` types each
+ * theme's token map against it — a theme that misses a token, or invents one, fails the
+ * typecheck rather than rendering an unresolved `var()`.
+ */
+export const PRODUCT_THEME_TOKENS = [
+  // Status tones (§ shared with the generated-product foundation).
+  "--color-success",
+  "--color-success-surface",
+  "--color-warning",
+  "--color-warning-surface",
+  "--color-error",
+  "--color-error-surface",
+  // Branding.
+  "--color-brand-primary",
+  "--color-brand-secondary",
+  "--color-brand-structure",
+  // Structure and surfaces.
+  "--color-structure",
+  "--color-on-dark",
+  "--color-background",
+  "--color-surface",
+  "--color-surface-muted",
+  "--color-border",
+  // Text.
+  "--color-text",
+  "--color-text-muted",
+  "--color-placeholder",
+  "--color-disabled",
+  // Actions.
+  "--color-primary",
+  "--color-primary-hover",
+  "--color-primary-active",
+  "--color-primary-contrast",
+  "--color-secondary",
+  "--color-focus",
+] as const;
+
+export type ProductThemeToken = (typeof PRODUCT_THEME_TOKENS)[number];
+
 /** Interaction states every interactive component in the design system must define. */
 export const REQUIRED_STATES = [
   "hover",
