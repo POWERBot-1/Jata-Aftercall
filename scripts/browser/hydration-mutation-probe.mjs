@@ -149,7 +149,9 @@ export function probeInstallSource(options = {}) {
           // counted and sampled so the timeline can still prove hydration-vs-parse order.
           if (document.readyState === "loading" && !involvesBoundary(m) && !involvesHoistable(m)) {
             parseDropped += 1;
-            if (parseSamples.length < 5) parseSamples.push("parse+" + parseDropped + ":" + summarize(m.target) + "+" + listSummary(m.addedNodes));
+            var sample = "parse+" + parseDropped + "@" + now() + ":" + summarize(m.target) + "+" + listSummary(m.addedNodes);
+            if (parseSamples.length < 3) parseSamples.push(sample);
+            else { if (parseSamples.length > 8) parseSamples.splice(3, 1); parseSamples.push(sample); }
             continue;
           }
           var hint = m.addedNodes && m.addedNodes.length ? zoneOf(m.addedNodes[0]) : (m.removedNodes && m.removedNodes.length ? zoneOf(m.removedNodes[0]) : "");
@@ -162,6 +164,12 @@ export function probeInstallSource(options = {}) {
                 var nid = node.getAttribute && node.getAttribute("id");
                 var inline = node.nodeName === "SCRIPT" && !src ? String(node.textContent || "").slice(0, 24).replace(/[\\r\\n\\s]+/g, " ") : "";
                 var first = m.target && m.target.firstElementChild === node ? "prepend" : "append";
+                try {
+                  var siblings = m.target ? (m.target.children || []) : [];
+                  for (var si = 0; si < siblings.length; si++) {
+                    if (siblings[si] === node) { first += "@" + si + "/" + siblings.length; break; }
+                  }
+                } catch (e) {}
                 var next = node.nextElementSibling ? summarize(node.nextElementSibling) : "";
                 extra = " [" + first + (nid ? " id=" + nid : "") + (src ? " src=" + String(src).slice(-46) : "") + (inline ? " js=" + inline : "") + (next ? " next=" + next : "") + "]";
               }
@@ -227,6 +235,7 @@ export function probeInstallSource(options = {}) {
           ready: document.readyState,
           parseDropped: parseDropped,
           parseSamples: parseSamples,
+          head: records.slice(0, 14),
           frame: frameInfo(),
           counts: counts,
           outline: outline(document.body || document.documentElement),
