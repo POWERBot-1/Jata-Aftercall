@@ -185,3 +185,67 @@ describe("the same rule holds for the Business POS subscription", () => {
     expect(fake().rows("subscription")).toHaveLength(0);
   });
 });
+
+/**
+ * The compare-and-set, from the loser's side.
+ *
+ * Two settlement attempts can reach the same payment at once (Paystack retries a webhook while
+ * the confirmation page is being verified). The write is a compare-and-set on the state that was
+ * read, so exactly one attempt can win; these tests drive the *losing* attempt deterministically by
+ * forcing its write to match nothing, which is what a concurrent winner looks like from here.
+ * True parallelism and row locking are only exercised by the database-backed suite.
+ */
+describe("losing the compare-and-set resolves idempotently", () => {
+  async function loseTheRace(to: string) {
+    const fakeDb = fake().db as unknown as { payment: { updateMany: (args: unknown) => Promise<{ count: number }> } };
+    const original = fakeDb.payment.updateMany;
+    let swallowed = false;
+    fakeDb.payment.updateMany = async (args: any) => {
+      if (!swallowed && args?.data?.status === "PAID") {
+        swallowed = true;
+        // The concurrent settlement committed first: the row has moved on, and this write now
+        // matches nothing. Nothing else about the call is special.
+        const row = fake().rows("payment")[0];
+        row.status = to;
+        if (to === "PAID") row.paystackId = "concurrent-winner";
+        return { count: 0 };
+      }
+      return original(args);
+    };
+    return () => { fakeDb.payment.updateMany = original; };
+  }
+
+  it("reports an already-settled payment instead of failing or extending twice", async () => {
+    const payment = seedPayment({ status: "PENDING" });
+    // The winner's subscription already exists.
+    fake().rows("subscription").push({
+      id: "sub_winner", businessId: "bizA", userId: "userA", planId: "plan_aftercall",
+      status: "ACTIVE", startAt: new Date(), expiresAt: new Date(Date.now() + 30 * 86400000), graceUntil: null,
+    });
+    const restore = await loseTheRace("PAID");
+    try {
+      const result = await activateSubscriptionForPayment(payment.id, "evt_loser", verification("9001"));
+      expect(result.alreadySettled).toBe(true);
+      expect(fake().rows("payment")[0].status).toBe("PAID");
+      // No second subscription and no second activation audit: the loser changed nothing.
+      expect(fake().rows("subscription")).toHaveLength(1);
+      expect(fake().rows("auditEvent").filter((row) => row.action === "SUBSCRIPTION_ACTIVATED")).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("refuses to clobber a payment that a concurrent transaction moved somewhere final", async () => {
+    const payment = seedPayment({ status: "PENDING" });
+    const restore = await loseTheRace("REFUNDED");
+    try {
+      await expect(activateSubscriptionForPayment(payment.id, "evt_loser_2", verification("9002")))
+        .rejects.toThrow("PAYMENT_STATE_CHANGED");
+      // The concurrent verdict stands: money was returned, so nothing activates.
+      expect(fake().rows("payment")[0].status).toBe("REFUNDED");
+      expect(fake().rows("subscription")).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+});
