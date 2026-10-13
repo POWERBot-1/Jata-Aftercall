@@ -38,6 +38,11 @@ class FakeElement {
     this.children.push(child);
     return child;
   }
+  appendChild(child: FakeElement) {
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
   closest(selectorList: string): FakeElement | null {
     let node: FakeElement | null = this;
     while (node) {
@@ -353,15 +358,9 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
 describe("M14 mutation-API stack capture (names the client mover; parser inserts carry no stack)", () => {
   class FakeScriptElement extends FakeElement {}
   const makeDom = () => {
-    // The install wraps these exact prototypes; instances must look methods up there.
+    // The install wraps these exact prototypes; instances look methods up there.
+    // FakeElement already defines appendChild (append semantics) for the wrap to delegate to.
     const nodeProto = FakeElement.prototype as unknown as Record<string, unknown>;
-    if (typeof nodeProto.appendChild !== "function") {
-      nodeProto.appendChild = function (this: FakeElement, child: FakeElement) {
-        child.parentNode = this;
-        this.children.push(child);
-        return child;
-      };
-    }
     const documentProto = FakeDocument.prototype as unknown as Record<string, unknown>;
     if (typeof documentProto.write !== "function") documentProto.write = () => {};
     return { nodeCtor: { prototype: nodeProto }, elementCtor: { prototype: {} }, documentCtor: { prototype: documentProto } };
