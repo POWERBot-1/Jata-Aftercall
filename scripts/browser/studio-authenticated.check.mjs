@@ -121,7 +121,10 @@ async function pageFor(context) {
           emitM418(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-10))}`.slice(0, 700));
           emitM418(`M418 OUTLINE ${String(snap.outline || "").slice(0, 420)}`);
           if (snap.parseSamples) emitM418(`M418 PARSE ${JSON.stringify(snap.parseSamples)}`.slice(0, 700));
-          if (snap.head) emitM418(`M418 HEAD ${JSON.stringify(snap.head)}`.slice(0, 900));
+          if (snap.head) {
+            const head = snap.head;
+            for (let hi = 0; hi < head.length; hi += 5) emitM418(`M418 HEAD${Math.floor(hi / 5)} ${JSON.stringify(head.slice(hi, hi + 5))}`.slice(0, 240));
+          }
         } else if (probe) {
           emitM418(`M418 LIVE ${String(probe.state && probe.state.frame || entry.path).slice(0, 48)} seq=${probe.state && probe.state.seq} parseDropped=${probe.state && probe.state.parseDropped}`);
           emitM418(`M418 TAIL ${JSON.stringify((probe.tail || []).slice(-8))}`.slice(0, 700));
