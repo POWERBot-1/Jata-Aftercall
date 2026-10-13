@@ -11,8 +11,8 @@ installation, a document, or an older SHA.
 | Work branch | `arena/fac28f53-jata-aftercall` |
 | Code candidate SHA (pushed, PR head when Vercel built it) | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` |
 | Additional commit pushed this turn | `1b92182` — two lost-race tests for the settlement compare-and-set (test-only) |
-| Remote branch SHA (verified with `git ls-remote`) | `1b92182…` after the push; `1b8167d…` before it |
-| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, base `main`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT) |
+| Remote branch tip (verified with `git ls-remote`) | `0fe55e4652a1f5dd1489634b04ffec937f081005` (this report's commit; head at PR creation was `1b8167d…`, then `1b92182…`) |
+| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, base `main`, 8 commits, head `0fe55e4…`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; verification outcome posted as a comment) |
 | Branch vs `main` | 7 commits ahead, **107 behind**; `mergeable: false`, `mergeable_state: "dirty"` → **6 conflicting files** |
 | Recovery checkpoint | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` — present, never moved |
 | Environment | node v22.22.3, npm 10.9.8. No `DATABASE_URL`, no Prisma engine, no Postgres/docker, no Chrome/Chromium **and no way to run one** (see Phase 4). npm registry and github.com reachable; `binaries.prisma.sh` is not |
@@ -156,7 +156,7 @@ installation, a document, or an older SHA.
 | Step | Result |
 | --- | --- |
 | Push | `git push -u origin arena/fac28f53-jata-aftercall` — new branch created, non-force, no history rewritten |
-| Remote SHA verified | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` immediately after the push (exact match with local HEAD at the time) |
+| Remote SHA verified | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` immediately after the push (exact match with local HEAD at the time); after this turn's two commits, `0fe55e4652a1f5dd1489634b04ffec937f081005` (also an exact match) |
 | Pull request | **#45** created: https://github.com/POWERBot-1/Jata-Aftercall/pull/45 — base `main`, labelled **NOT APPROVED FOR PRODUCTION DEPLOYMENT**, body covers the changes, verification, gates, security findings and rollback |
 | Merge performed | **No** |
 
