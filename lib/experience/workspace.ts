@@ -8,6 +8,7 @@
 
 import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { requestCache } from "@/lib/request-cache";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { createExperienceDocument, normalizeExperienceDocument } from "./document";
 import { getExperienceProfile } from "./categories";
@@ -79,7 +80,15 @@ function hasUnpublishedChanges(draftJson: string | null | undefined, publishedJs
  * (or administrates) the business. Returns `null` when the session or ownership fails, so
  * callers can 404 without leaking whether the business exists (§37).
  */
+// M11 #418: request-deduplicated so a route's `generateMetadata` and page body share one
+// ownership-checked load per request (see lib/request-cache.ts).
+const loadWorkspaceCached = requestCache(loadWorkspaceImpl);
+
 export async function loadWorkspace(businessId: string): Promise<Workspace | null> {
+  return loadWorkspaceCached(businessId);
+}
+
+async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> {
   const session = await getSession();
   if (!session) return null;
   try {

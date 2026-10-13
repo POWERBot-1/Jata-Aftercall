@@ -35,19 +35,41 @@ export function ImmersivePreview({ preference, enabled, asset, alt, fallbackImag
   const [decision, setDecision] = useState<Decision | null>(null);
 
   useEffect(() => {
-    let next: Decision;
-    try {
-      const signals = readCapabilitySignals(window);
-      if (preference !== "immersive") {
-        next = { use3d: false, reason: "not-opted-in", reducedMotion: signals.reducedMotion };
-      } else {
-        const result = immersiveEligibility({ enabled, signals, asset });
-        next = { use3d: result.eligible, reason: result.reason, reducedMotion: signals.reducedMotion };
-      }
-    } catch {
-      next = { use3d: false, reason: "probe-failed", reducedMotion: false };
+    if (preference !== "immersive" || !enabled) {
+      setDecision({ use3d: false, reason: preference !== "immersive" ? "not-opted-in" : "immersive-disabled", reducedMotion: true });
+      return;
     }
-    setDecision(next);
+    let media: MediaQueryList;
+    try { media = window.matchMedia("(prefers-reduced-motion: reduce)"); } catch {
+      setDecision({ use3d: false, reason: "preferences-unavailable", reducedMotion: true }); return;
+    }
+    let network: EventTarget & { saveData?: boolean; effectiveType?: string };
+    try { network = (navigator as Navigator & { connection?: typeof network }).connection; } catch {
+      setDecision({ use3d: false, reason: "preferences-unavailable", reducedMotion: true }); return;
+    }
+    let cached: ReturnType<typeof readCapabilitySignals> | null = null;
+    const update = () => {
+      try {
+        const guard = media.matches ? "reduced-motion" : network?.saveData ? "save-data" : ["slow-2g", "2g", "3g"].includes(network?.effectiveType || "") ? "slow-connection" : document.hidden ? "tab-hidden" : null;
+        if (guard) { setDecision({ use3d: false, reason: guard, reducedMotion: media.matches }); return; }
+        // No repeated canvas/WebGL probe on network/tab events; strict constraints are read live.
+        cached ??= readCapabilitySignals(window);
+        const signals = { ...cached, reducedMotion: media.matches, saveData: Boolean(network?.saveData), effectiveType: network?.effectiveType || cached.effectiveType };
+        const result = immersiveEligibility({ enabled, signals, asset });
+        setDecision({ use3d: result.eligible, reason: result.reason, reducedMotion: signals.reducedMotion });
+      } catch { setDecision({ use3d: false, reason: "probe-failed", reducedMotion: true }); }
+    };
+    const remove = () => {
+      try { if (media.removeEventListener) media.removeEventListener("change", update); else media.removeListener(update); } catch {}
+      try { network?.removeEventListener?.("change", update); } catch {}
+      document.removeEventListener("visibilitychange", update);
+    };
+    try {
+      if (media.addEventListener) media.addEventListener("change", update); else media.addListener(update);
+      network?.addEventListener?.("change", update); document.addEventListener("visibilitychange", update);
+    } catch { remove(); setDecision({ use3d: false, reason: "preferences-unavailable", reducedMotion: true }); return; }
+    update();
+    return remove;
   }, [preference, enabled, asset]);
 
   const staticView = fallbackImageUrl ? (
@@ -71,6 +93,7 @@ export function ImmersivePreview({ preference, enabled, asset, alt, fallbackImag
     <div data-immersive-reason={reason} data-immersive-mode={decision?.use3d ? "3d" : "static"}>
       {decision?.use3d && asset ? (
         <ImmersiveStage
+          key={asset.url}
           modelUrl={asset.url}
           alt={alt}
           fallbackImageUrl={fallbackImageUrl}

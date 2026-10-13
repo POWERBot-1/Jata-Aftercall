@@ -8,11 +8,11 @@
  * never take the same appointment.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
-import { calendarDayList, formatWeekdayDate, parseCalendarDay } from "@/lib/dateFormat";
+import type { BookingDay } from "@/lib/experience/bookingCalendar";
 
 type Bookable = {
   id: string;
@@ -30,17 +30,18 @@ export function BookingClient({
   slug,
   businessId,
   bookables,
+  calendar,
   preselectedId,
   enquiryItemId,
   enquiryItemName,
   ctaLabel,
   confirmationLabel,
   requireDate,
-  today,
 }: {
   slug: string;
   businessId: string;
   bookables: Bookable[];
+  calendar: readonly BookingDay[];
   preselectedId?: string;
   enquiryItemId?: string;
   enquiryItemName?: string;
@@ -48,15 +49,6 @@ export function BookingClient({
   confirmationLabel: string;
   /** Property enquiries and quote requests still ask when the customer is free. */
   requireDate: boolean;
-  /**
-   * Today's Nairobi calendar day (`YYYY-MM-DD`), computed on the server and passed in.
-   *
-   * The date chips must be identical in the server HTML and in the browser. Deriving "today"
-   * from the runtime clock here instead rendered the server's UTC day on the server and the
-   * customer's Nairobi day in the browser (React hydration error #418) whenever the two
-   * disagreed, and `toISOString()` on a local midnight named the previous day in UTC+3.
-   */
-  today: string;
 }) {
   const selected = bookables.find((entry) => entry.id === preselectedId) || bookables[0] || null;
   const [serviceId, setServiceId] = useState<string>(selected?.id || "");
@@ -96,8 +88,9 @@ export function BookingClient({
     };
   }, [serviceId, date, slug, requireDate]);
 
-  // Next 14 Nairobi days from the server-provided day; the server still validates the final choice.
-  const openDays = useMemo(() => calendarDayList(today, 14), [today]);
+  // Reuse the server snapshot even if the customer's timezone differs or hydration crosses midnight.
+  // Never suppress a hydration mismatch or replace the date choices with a client-only placeholder.
+  const openDays = calendar.slice(0, 10);
 
   async function submit() {
     setError(null);
@@ -186,13 +179,13 @@ export function BookingClient({
               <div className="eb-chip-row">
                 {openDays.slice(0, 10).map((day) => (
                   <button
-                    key={day}
+                    key={day.date}
                     type="button"
-                    className={`eb-chip ${date === day ? "eb-chip--active" : ""}`}
-                    aria-pressed={date === day}
-                    onClick={() => { setDate(day); setTime(""); }}
+                    className={`eb-chip ${date === day.date ? "eb-chip--active" : ""}`}
+                    aria-pressed={date === day.date}
+                    onClick={() => { setDate(day.date); setTime(""); }}
                   >
-                    {formatWeekdayDate(parseCalendarDay(day))}
+                    {day.label}
                   </button>
                 ))}
               </div>

@@ -1,13 +1,6 @@
-/**
- * Mobile upload, end to end: PHONE → BROWSER → VALIDATION → PROCESSING → STORAGE (§19–§21)
- *
- * The regression this suite exists for: an owner taps "Upload photo" on a phone and the photo
- * never arrives. Here the real browser pipeline (`prepareUpload`) runs against a stubbed DOM
- * with real image bytes, and what it produces is handed to the real `POST /api/media` handler
- * through a fetch shim — so the assertion is not "the function returned something", it is "a
- * phone photo becomes a stored asset the website can use".
- *
- * A valid Android photo must never be answered with "That image could not be read."
+/** Legacy processed-derivative route regression with DOM/Prisma/session/fetch doubles.
+ * Header/container fixtures below are not real raster pixels, durable originals or provider proof.
+ * Actual local codec/EXIF pixels run separately; provider/persistent-original acceptance BLOCKED.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,6 +68,7 @@ function installBrowserEnvironment(options: { decode?: (file: Blob) => Promise<D
       drawImage: vi.fn(),
       translate: vi.fn(),
       rotate: vi.fn(),
+      setTransform: vi.fn(),
       getImageData: (_x: number, _y: number, width: number, height: number) => ({
         data: new Uint8ClampedArray(Math.max(1, width * height * 4)),
         width,
@@ -86,8 +80,8 @@ function installBrowserEnvironment(options: { decode?: (file: Blob) => Promise<D
       width: 0,
       height: 0,
       getContext: () => context,
-      // The pipeline's own output is real PNG bytes, so the artifact it produces is a real image.
-      toDataURL: () => dataUrlFor(pngBytes({ width: canvas.width, height: canvas.height }), "image/png"),
+      // Synthetic container output for the mocked route contract, not a real PNG codec.
+      toDataURL: () => dataUrlFor(containerFixture(pngBytes({ width: canvas.width, height: canvas.height })), "image/png"),
     };
     return canvas;
   };
@@ -167,7 +161,28 @@ function installBrowserEnvironment(options: { decode?: (file: Blob) => Promise<D
   };
 }
 
+/** Make positive synthetic headers container-complete; preserve intentionally truncated negatives. */
+function containerFixture(bytes: Uint8Array): Uint8Array {
+  const join = (parts: Uint8Array[]) => { const result=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let offset=0;for(const part of parts){result.set(part,offset);offset+=part.length;}return result; };
+  const format=sniffImageFormat(bytes);
+  if(format==="jpeg" && bytes[bytes.length-2]===255 && bytes[bytes.length-1]===217){
+    let offset=2;
+    while(bytes[offset]===255 && bytes[offset+1]!==217 && bytes[offset+1]!==218){const size=(bytes[offset+2]<<8)|bytes[offset+3];offset+=size+2;}
+    return join([bytes.slice(0,offset),new Uint8Array([255,218,0,12,3,1,0,2,17,3,17,0,63,0]),bytes.slice(offset)]);
+  }
+  if(format==="png"){
+    const payload=bytes.slice(33),chunk=new Uint8Array(payload.length+12);new DataView(chunk.buffer).setUint32(0,payload.length);chunk.set([73,68,65,84],4);chunk.set(payload,8);
+    return join([bytes.slice(0,33),chunk,new Uint8Array([0,0,0,0,73,69,78,68,174,66,96,130])]);
+  }
+  if(format==="webp"){
+    const payload=bytes.slice(30),chunk=new Uint8Array(8+payload.length+(payload.length%2));chunk.set([86,80,56,32]);new DataView(chunk.buffer).setUint32(4,payload.length,true);chunk.set(payload,8);
+    const out=join([bytes.slice(0,30),chunk]);new DataView(out.buffer).setUint32(4,out.length-8,true);return out;
+  }
+  return bytes;
+}
+
 function phoneFile(bytes: Uint8Array, name: string, type: string): File {
+  bytes = containerFixture(bytes);
   return new File([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], name, { type });
 }
 
@@ -302,7 +317,7 @@ describe("failures are explained, recoverable, and never destroy the rest of the
     }
   });
 
-  it("reports a decode failure when the bytes cannot become pixels", async () => {
+  it("refuses a truncated container before the decoder can allocate pixels", async () => {
     const restore = installBrowserEnvironment({ decode: async () => { throw new Error("decode_failed"); } });
     try {
       // A truncated JPEG (no end-of-image marker) cannot be salvaged by uploading the original.
@@ -310,21 +325,22 @@ describe("failures are explained, recoverable, and never destroy the rest of the
       const prepared = await prepareUpload(phoneFile(full.slice(0, Math.floor(full.length / 2)), "broken.jpg", "image/jpeg"));
       expect(prepared.status).toBe("error");
       if (prepared.status !== "error") return;
-      expect(prepared.issue.code).toBe("decode_failed");
+      expect(prepared.issue.code).toBe("corrupt");
       expect(prepared.issue.recoverable).toBe(true);
     } finally {
       restore();
     }
   });
 
-  it("uploads the original when a complete JPEG cannot be optimised (existing photos stay usable)", async () => {
+  it("refuses inline-original substitution when a complete JPEG cannot be optimised (owner storage deferred)", async () => {
     const restore = installBrowserEnvironment({ decode: async () => { throw new Error("decode_failed"); } });
     try {
       const prepared = await prepareUpload(phoneFile(jpegBytes({ width: 900, height: 700 }), "ok-but-unoptimisable.jpg", "image/jpeg"));
-      expect(prepared.status).toBe("ok");
-      if (prepared.status !== "ok") return;
-      expect(prepared.upload.format).toBe("jpeg");
-      expect(prepared.upload.notes.join(" ")).toContain("uploaded the original");
+      expect(prepared.status).toBe("error");
+      if (prepared.status !== "error") return;
+      expect(prepared.issue.code).toBe("decode_failed");
+      expect(mocks.assets).toHaveLength(0);
+      expect(mocks.requests).toHaveLength(0);
     } finally {
       restore();
     }

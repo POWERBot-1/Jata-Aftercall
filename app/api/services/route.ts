@@ -126,13 +126,34 @@ export async function GET(req: Request) {
   const businessId = searchParams.get("businessId");
   if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
 
-  // Public reads are limited to services of a published business; the dashboard caller is
-  // additionally authenticated by the page that renders it (§37).
-  const services = await prisma.service.findMany({
-    where: { businessId },
-    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
-  });
-  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true, isPublished: true } });
-  const profile = getExperienceProfile(business?.category);
-  return NextResponse.json({ services, fields: profile.serviceFields, itemNoun: profile.itemNoun });
+  try {
+    // Check visibility BEFORE catalogue reads. A signed-in user from another tenant is
+    // still a public visitor here, never an owner merely because a session exists.
+    const business = await prisma.business.findUnique({
+      where: { id: businessId }, select: { category: true, isPublished: true, status: true },
+    });
+    if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+    const session = await getSession();
+    let owner = false;
+    if (session) {
+      try {
+        await assertBusinessOwnership(businessId, session);
+        owner = true;
+      } catch {
+        // Public access is checked separately; ownership failures do not grant draft access.
+      }
+    }
+    if (!owner && (!business.isPublished || business.status === "SUSPENDED")) {
+      return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+    }
+    const services = await prisma.service.findMany({
+      where: { businessId, ...(owner ? {} : { isActive: true }) },
+      orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
+      take: 200,
+    });
+    const profile = getExperienceProfile(business.category);
+    return NextResponse.json({ services, fields: profile.serviceFields, itemNoun: profile.itemNoun });
+  } catch {
+    return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+  }
 }

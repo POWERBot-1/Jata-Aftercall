@@ -214,7 +214,7 @@ function CartDrawer({
                     <p style={{ margin: 0, fontWeight: 600 }}>{line.name}</p>
                     {line.variantLabel ? <p className="eb-card__meta" style={{ margin: 0 }}>{line.variantLabel}</p> : null}
                     <p className="eb-card__meta" style={{ margin: 0 }}>{formatKES(line.unitPriceKES)} each</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
                       <button
                         type="button"
                         className="eb-btn eb-btn--outline eb-btn--sm"

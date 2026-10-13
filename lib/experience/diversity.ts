@@ -13,7 +13,8 @@
  * This module is pure. It does not call AI providers or write to the database.
  */
 
-import { resolveExperienceTheme } from "./themes";
+import { themeOf } from "./document";
+import { templateForDocument, sectionLayout } from "./templateFamilies";
 import type { ExperienceDocument, ExperienceSection } from "./types";
 
 /** Above this similarity a candidate is considered a near-duplicate. Tunable. */
@@ -28,10 +29,16 @@ export type ExperienceFingerprint = {
   /** Visible sections in page order, excluding navigation and hero (which are structural constants). */
   sectionOrder: string[];
   primaryCta: string;
+  bodyLayout: string;
+  catalogueLayouts: string[];
+  galleryLayouts: string[];
+  density: string;
+  heroTreatment: string;
 };
 
 export function fingerprintOf(doc: ExperienceDocument): ExperienceFingerprint {
-  const theme = resolveExperienceTheme(doc.themeKey);
+  const theme = themeOf(doc);
+  const family = templateForDocument(doc);
   const sectionOrder = doc.sections
     .filter((section: ExperienceSection) => section.visible && section.type !== "navigation" && section.type !== "hero")
     .map((section) => section.type);
@@ -43,6 +50,11 @@ export function fingerprintOf(doc: ExperienceDocument): ExperienceFingerprint {
     cardStyle: theme.treatment.cardStyle,
     sectionOrder,
     primaryCta: (doc.sections.find((section) => section.type === "hero")?.cta?.label || "").toLowerCase(),
+    bodyLayout: family?.body || "stack",
+    catalogueLayouts: doc.sections.filter((section) => section.visible && ["featured", "menu", "services", "properties"].includes(section.type)).map((section) => `${section.type}:${sectionLayout(section, doc.artDirection)}`),
+    galleryLayouts: doc.sections.filter((section) => section.visible && section.type === "gallery").map((section) => sectionLayout(section, doc.artDirection)),
+    density: doc.artDirection?.density || "balanced",
+    heroTreatment: family?.heroTreatment || "standard",
   };
 }
 
@@ -59,15 +71,9 @@ function lcsLength(a: readonly string[], b: readonly string[]): number {
   return previous[b.length];
 }
 
-const WEIGHTS = {
-  themeKey: 0.2,
-  heroStyle: 0.15,
-  navStyle: 0.1,
-  cardStyle: 0.1,
-  sectionOrder: 0.3,
-  sectionSet: 0.1,
-  primaryCta: 0.05,
-} as const;
+// Actual rendered geometry is the acceptance signal. Palette/theme labels cannot disguise a duplicate.
+const WEIGHTS = { heroStyle: 0.18, navStyle: 0.09, cardStyle: 0.07, bodyLayout: 0.18, catalogueLayouts: 0.15, galleryLayouts: 0.12,
+  density: 0.05, heroTreatment: 0.04, sectionOrder: 0.08, sectionSet: 0.03, primaryCta: 0.01 } as const;
 
 /** Weighted similarity of two fingerprints, 0 (unrelated) to 1 (identical structure). */
 export function similarity(a: ExperienceFingerprint, b: ExperienceFingerprint): number {
@@ -84,7 +90,11 @@ export function similarity(a: ExperienceFingerprint, b: ExperienceFingerprint): 
   const setScore = union === 0 ? 1 : intersection / union;
 
   const total =
-    WEIGHTS.themeKey * same(a.themeKey, b.themeKey) +
+    WEIGHTS.bodyLayout * same(a.bodyLayout, b.bodyLayout) +
+    WEIGHTS.catalogueLayouts * same(a.catalogueLayouts.join("|"), b.catalogueLayouts.join("|")) +
+    WEIGHTS.galleryLayouts * same(a.galleryLayouts.join("|"), b.galleryLayouts.join("|")) +
+    WEIGHTS.density * same(a.density, b.density) +
+    WEIGHTS.heroTreatment * same(a.heroTreatment, b.heroTreatment) +
     WEIGHTS.heroStyle * same(a.heroStyle, b.heroStyle) +
     WEIGHTS.navStyle * same(a.navStyle, b.navStyle) +
     WEIGHTS.cardStyle * same(a.cardStyle, b.cardStyle) +

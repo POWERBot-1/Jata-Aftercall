@@ -126,10 +126,23 @@ describe("new draft seeding", () => {
     expect(diversity.seed).toBe("biz1x:1");
   });
 
-  it("does not change the default layout of the new draft", () => {
+  it("uses a registered content-led new-draft composition without altering facts or adding sections", () => {
     const doc = base();
     const { document } = seedNewDocument(doc, "biz-keep");
     expect(document.themeKey).toBe(doc.themeKey);
-    expect(document.sections.map((s) => s.type)).toEqual(doc.sections.map((s) => s.type));
+    expect(document.version).toBe(2);
+    expect(document.artDirection?.family).toBeTruthy();
+    expect(document.brand).toEqual(doc.brand);
+    expect(document.settings).toEqual(doc.settings);
+    expect(document.sections.map((s) => s.id).sort()).toEqual(doc.sections.map((s) => s.id).sort());
+    for (const section of doc.sections) {
+      const { layout, ...content } = section;
+      const { layout: candidateLayout, ...candidateContent } = document.sections.find((entry) => entry.id === section.id)!;
+      // The new food-menu recipe adds only this exact registered presentation config.
+      // All business/content fields and every other section must still be unchanged.
+      expect(candidateContent).toEqual(section.type === "menu" ? {
+        ...content, config: { businessRecipe: { version: 1, key: "food-menu", details: ["ingredients", "portion", "prep", "options"] } },
+      } : content);
+    }
   });
 });

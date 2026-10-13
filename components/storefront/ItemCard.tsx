@@ -7,7 +7,8 @@
  */
 
 import Link from "next/link";
-import type { StorefrontData, StorefrontItem } from "@/lib/experience/storefront";
+import type { StorefrontItem } from "@/lib/experience/storefront";
+import type { ItemCardData } from "@/lib/experience/catalogue";
 import { formatDuration, formatKES } from "@/lib/format";
 import { AddToCartButton } from "./CartProvider";
 
@@ -24,7 +25,7 @@ export function ItemPrice({ item, showWas = true }: { item: StorefrontItem; show
   );
 }
 
-export function ItemCard({ item, data }: { item: StorefrontItem; data: StorefrontData }) {
+export function ItemCard({ item, data }: { item: StorefrontItem; data: ItemCardData }) {
   const href = `/b/${data.business.slug}/item/${item.id}`;
   const canAdd = data.profile.capabilities.includes("commerce") && item.kind === "product" && item.price !== null;
   const soldOut = item.kind === "product" && (item.stockStatus === "OUT_OF_STOCK" || item.stockStatus === "DISCONTINUED");

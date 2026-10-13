@@ -17,7 +17,7 @@
  */
 
 import type { ExperienceDocument } from "./types";
-import { normalizeExperienceDocument } from "./document";
+import { validateExperienceJson } from "./schema";
 
 /** How many revisions one business keeps. Older ones are pruned after every new revision. */
 export const DRAFT_HISTORY_LIMIT = 30;
@@ -322,7 +322,9 @@ export async function moveDraftHistory(
 
   let document: ExperienceDocument;
   try {
-    document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), experience.categoryKey);
+    const schema = validateExperienceJson(snapshot.snapshotJson, experience.categoryKey, { migrateLegacyDefaults: true });
+    if (!schema.ok) return { status: "unavailable", reason: "That version can no longer be opened safely." };
+    document = schema.document;
   } catch {
     return { status: "unavailable", reason: "That version can no longer be opened." };
   }

@@ -26,7 +26,10 @@ import {
   updateSection,
 } from "@/lib/experience/document";
 import { isValidThemeKey } from "@/lib/experience/themes";
+import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
+import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { parseBusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
 import { applyStudioFix, STUDIO_FIX_IDS, type StudioFixId } from "@/lib/studio/fixes";
@@ -156,11 +159,6 @@ export async function POST(req: Request) {
 
     const existing = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (existing) {
-      const document = normalizeExperienceDocument(
-        { ...parseDocument(existing.draftJson, existing.categoryKey), categoryKey, themeKey: body?.themeKey || existing.themeKey },
-        categoryKey,
-      );
-      const profile = getExperienceProfile(categoryKey);
       // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
       // client that read version N must send N, and the write is a compare-and-swap on it.
       const expectedDraftVersion = Number(body?.expectedDraftVersion);
@@ -173,6 +171,15 @@ export async function POST(req: Request) {
       if (expectedDraftVersion !== Number(existing.draftVersion)) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
       }
+      const previous = validateExperienceJson(existing.draftJson || "{}", existing.categoryKey);
+      if (!previous.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
+      let document = normalizeExperienceDocument({ ...previous.document, categoryKey, themeKey: body?.themeKey || existing.themeKey }, categoryKey);
+      if (previous.document.version === 2 && previous.document.categoryKey !== categoryKey) {
+        document = buildArtDirectedCandidate(document, `${businessId}:category`, { brief: { goal: defaultDesignGoal({ ...document, artDirection: undefined }) } }).document;
+      }
+      const safeDocument = validateExperienceDocument(document);
+      if (!safeDocument.ok) return NextResponse.json({ error: "This business direction does not use a supported configuration.", code: "experience_schema_invalid" }, { status: 400 });
+      const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
       const updated = await prisma.businessExperience
         .update({
@@ -310,7 +317,9 @@ export async function PATCH(req: Request) {
     }
 
     let document = parseDocument(experience.draftJson, experience.categoryKey);
-    if (!document) document = createExperienceDocument({ categoryKey: experience.categoryKey, businessName: "" });
+    if (!document) {
+      return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version before editing.", code: "experience_schema_invalid" }, { status: 409 });
+    }
     let summary: Record<string, unknown> | null = null;
 
     const op = typeof body?.op === "string" ? (body.op as SectionOp) : null;
@@ -335,9 +344,19 @@ export async function PATCH(req: Request) {
           if (section) document = updateSection(document, sectionId, { visible: !section.visible });
           break;
         }
-        case "update":
-          document = updateSection(document, sectionId, body?.patch && typeof body.patch === "object" ? body.patch : {});
+        case "update": {
+          const patch = body?.patch && typeof body.patch === "object" ? body.patch as Record<string, unknown> : {};
+          const section = document.sections.find((entry) => entry.id === sectionId);
+          // Check raw nonempty config BEFORE normalizing. Unknown recipes must fail, not silently disappear.
+          if (patch.config !== undefined && patch.config !== null &&
+            (typeof patch.config !== "object" || Array.isArray(patch.config) || Object.keys(patch.config).length > 0) &&
+            (document.version !== 2 || !section || !parseBusinessRecipeConfig(patch.config, document.categoryKey, section.type))) {
+            return NextResponse.json({ error: "This business recipe configuration is not supported for this section." }, { status: 400 });
+          }
+          if (patch.config === null) return NextResponse.json({ error: "Use an empty or supported recipe configuration." }, { status: 400 });
+          document = updateSection(document, sectionId, patch);
           break;
+        }
         case "studio-fix": {
           // "Fix with JATA" (§36): a health-check remedy applied to the draft through this one
           // write path, so it is normalized, versioned and undoable exactly like a manual edit.
@@ -380,7 +399,13 @@ export async function PATCH(req: Request) {
           return NextResponse.json({ error: "Unsupported edit." }, { status: 400 });
       }
     } else if (body?.document && typeof body.document === "object") {
-      document = normalizeExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, document.categoryKey);
+      const schema = validateExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, {
+        allowLegacy: true, fallbackCategory: document.categoryKey,
+      });
+      if (!schema.ok) {
+        return NextResponse.json({ error: "This experience configuration is not supported. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 400 });
+      }
+      document = schema.document;
     } else {
       // Partial updates: brand, settings, theme, category.
       const next = {
@@ -397,6 +422,11 @@ export async function PATCH(req: Request) {
       document = normalizeExperienceDocument(next, next.categoryKey);
     }
 
+    const checked = validateExperienceDocument(document);
+    if (!checked.ok) {
+      return NextResponse.json({ error: "This change would create an invalid experience. Nothing was saved.", code: "experience_schema_invalid", issues: checked.issues }, { status: 400 });
+    }
+    document = checked.document;
     document.updatedAt = new Date().toISOString();
     const nextVersion = Math.max(1, Number(experience.draftVersion) || 1) + 1;
     // Compare-and-swap on the version this edit was built from. If another write landed first, the

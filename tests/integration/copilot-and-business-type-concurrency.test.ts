@@ -87,7 +87,8 @@ beforeEach(() => {
   mocks.guardOk = true;
   mocks.workspace = workspaceFor(3);
   mocks.publishedJson = null;
-  mocks.experienceFindUnique.mockImplementation(async () => ({ publishedJson: mocks.publishedJson, draftVersion: 3 }));
+  // A real persisted reviewed draft, not a partial mock without its configuration.
+  mocks.experienceFindUnique.mockImplementation(async () => ({ publishedJson: mocks.publishedJson, draftVersion: 3, categoryKey: "food", themeKey: mocks.workspace.document.themeKey, draftJson: JSON.stringify(mocks.workspace.document) }));
   mocks.experienceUpdate.mockImplementation(async (args: any) => ({ id: "exp-a", draftVersion: args.data.draftVersion }));
   mocks.revision.mockResolvedValue({});
   mocks.audit.mockResolvedValue({});

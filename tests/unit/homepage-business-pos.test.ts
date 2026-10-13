@@ -73,14 +73,14 @@ describe("the homepage offers one Business POS entry (§67 exception, 2026-10-03
     expect(html).not.toMatch(/POS is (now )?(live|active)/i);
   });
 
-  it("leaves the AFTERCALL plan cards and their checkout exactly as they were", async () => {
+  it("preserves AFTERCALL prices and checkout while using the requested Website Studio brand", async () => {
     const html = await renderHome();
 
     for (const name of [
       "Monthly — KES 149/month",
       "Annual — KES 999/year",
       "AI Business Front Desk — KES 499/month",
-      "Interactive Business — KES 999/month",
+      "Website Studio — KES 999/month",
     ]) {
       expect(html, name).toContain(name);
     }

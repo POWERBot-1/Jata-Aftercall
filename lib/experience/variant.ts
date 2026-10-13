@@ -1,8 +1,8 @@
 /**
  * Seeded structural variants with a bounded diversity gate (Immersive Website Engine, Phase 3)
  *
- * A variant changes the things an owner can see as *structure*: the theme family chosen from
- * the business's own category and the order of its movable sections. It never changes business
+ * A variant changes the things an owner can see as *structure*: the content/intent-led compositional family, actual catalogue/gallery/body geometry
+ * and semantically ordered movable sections. Theme selection alone never counts as diversity. It never changes business
  * facts (name, prices, contact details, products, orders), and it never touches the hero or
  * navigation positions or the contact section, which are kept where they are so every variant
  * still has a clear first action and a clear way to reach the business.
@@ -16,38 +16,16 @@
  * the owner applies the candidate through the existing draft write path, which keeps undo history.
  */
 
+import { validateExperienceDocument } from "./schema";
+import { seedBusinessRecipe } from "./businessRecipes";
 import { themesForCategory } from "./themes";
+import { buildArtDirectedCandidate, type DesignBrief, type ArtDirectedCandidate } from "./artDirector";
+import type { TemplateFamilyKey } from "./templateFamilies";
 import { diversityReport, hashSeed, regenerationSeed, seededChoice, type DiversityReport } from "./diversity";
 import type { ExperienceDocument, ExperienceSection, SectionType } from "./types";
 
-export const VARIANT_GENERATION_VERSION = 1;
+export const VARIANT_GENERATION_VERSION = 2;
 export const MAX_VARIANT_ATTEMPTS = 5;
-
-/** Sections that keep their slot in every variant. */
-const PINNED_TYPES: ReadonlySet<SectionType> = new Set<SectionType>(["navigation", "hero", "contact"]);
-
-/** Small, fast, well-distributed PRNG (mulberry32). Seeded from the FNV-1a hash of a string. */
-function prng(seed: string): () => number {
-  let state = hashSeed(seed) || 1;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Deterministic Fisher–Yates shuffle of a copy of `items`. */
-function seededShuffle<T>(items: readonly T[], seed: string): T[] {
-  const next = prng(seed);
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(next() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
 
 export type VariantChange = { themeChanged: boolean; sectionOrderChanged: boolean };
 
@@ -59,38 +37,16 @@ export function buildVariant(
   doc: ExperienceDocument,
   seed: string,
   attempt = 0,
-): { document: ExperienceDocument; change: VariantChange } {
-  const themeOptions = themesForCategory(doc.categoryKey)
-    .map((theme) => theme.key)
-    .filter((key) => key !== doc.themeKey);
+  options: { brief?: DesignBrief; counts?: { products: number; services: number }; family?: TemplateFamilyKey } = {},
+): { document: ExperienceDocument; change: VariantChange; direction: Omit<ArtDirectedCandidate, "document"> } {
+  const directed = buildArtDirectedCandidate(doc, seed, { ...options, attempt });
+  const themeOptions = themesForCategory(doc.categoryKey).map((theme) => theme.key).filter((key) => key !== doc.themeKey);
   const themeKey = seededChoice(`${seed}|theme`, themeOptions) ?? doc.themeKey;
-
-  // Movable sections fill the movable slots in a new order; pinned sections keep their slot.
-  const movableIndexes: number[] = [];
-  doc.sections.forEach((section, index) => {
-    if (!PINNED_TYPES.has(section.type)) movableIndexes.push(index);
-  });
-  const movable = movableIndexes.map((index) => doc.sections[index]);
-  const shuffled = seededShuffle(movable, `${seed}|order`);
-  const sections: ExperienceSection[] = [...doc.sections];
-  movableIndexes.forEach((slot, position) => {
-    sections[slot] = shuffled[position];
-  });
-
-  const sectionOrderChanged = movable.some((section, position) => section.id !== shuffled[position].id);
-  const themeChanged = themeKey !== doc.themeKey;
-
-  const document: ExperienceDocument = {
-    ...doc,
-    themeKey,
-    sections,
-    generation: {
-      seed,
-      version: VARIANT_GENERATION_VERSION,
-      attempt: Math.max(0, Math.min(MAX_VARIANT_ATTEMPTS - 1, attempt)),
-    },
-  };
-  return { document, change: { themeChanged, sectionOrderChanged } };
+  const document: ExperienceDocument = { ...directed.document, themeKey,
+    generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: Math.max(0, Math.min(MAX_VARIANT_ATTEMPTS - 1, attempt)) } };
+  if (!validateExperienceDocument(document).ok) throw new Error("The generated layout is not safe supported configuration.");
+  const { document: ignored, ...direction } = directed; void ignored;
+  return { document, change: { themeChanged: themeKey !== doc.themeKey, sectionOrderChanged: doc.sections.some((section, index) => section.id !== document.sections[index]?.id) }, direction };
 }
 
 export type VariantAttemptRecord = { attempt: number; seed: string; maxSimilarity: number; ok: boolean };
@@ -120,6 +76,7 @@ export type VariantResult = {
   attempts: VariantAttemptRecord[];
   change: VariantChange;
   history: HistoryBasis;
+  direction: Omit<ArtDirectedCandidate, "document">;
 };
 
 /**
@@ -134,19 +91,24 @@ export function generateGatedVariant(params: {
   recent: readonly ExperienceDocument[];
   threshold?: number;
   maxAttempts?: number;
+  brief?: DesignBrief;
+  counts?: { products: number; services: number };
+  family?: TemplateFamilyKey;
 }): VariantResult {
-  const maxAttempts = Math.max(1, Math.min(MAX_VARIANT_ATTEMPTS, params.maxAttempts ?? MAX_VARIANT_ATTEMPTS));
+  const budget = Number.isFinite(params.maxAttempts) ? Math.floor(params.maxAttempts) : MAX_VARIANT_ATTEMPTS;
+  const maxAttempts = Math.max(1, Math.min(MAX_VARIANT_ATTEMPTS, budget));
+  const threshold = Number.isFinite(params.threshold) ? Math.max(0, Math.min(1, params.threshold)) : undefined;
   const compareWith = [params.document, ...params.recent];
   const attempts: VariantAttemptRecord[] = [];
   let best: { result: VariantResult; similarity: number } | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const seed = regenerationSeed(params.baseSeed, attempt);
-    const { document, change } = buildVariant(params.document, seed, attempt);
-    const report = diversityReport(document, compareWith, params.threshold);
+    const { document, change, direction } = buildVariant(params.document, seed, attempt, params);
+    const report = diversityReport(document, compareWith, threshold);
     attempts.push({ attempt, seed, maxSimilarity: report.maxSimilarity, ok: report.ok });
 
-    const candidate: VariantResult = { document, seed, accepted: report.ok, report, attempts, change, history: historyBasisFor(params.recent.length) };
+    const candidate: VariantResult = { document, seed, accepted: report.ok, report, attempts, change, direction, history: historyBasisFor(params.recent.length) };
     if (report.ok) {
       return { ...candidate, attempts: [...attempts] };
     }
@@ -174,8 +136,8 @@ export function layoutSummaryOf(doc: ExperienceDocument): string {
 
 /**
  * Seeds a brand-new draft so that later regenerations are reproducible. The default layout is
- * deliberately NOT randomised: a business with no history gets the standard structure, and the
- * seed only records provenance. The diversity status says plainly that nothing was compared.
+ * content/intent-led and reproducible, not a random colour/template shuffle. A new business
+ * has no historical comparison, so no global uniqueness guarantee is made. The diversity status says plainly that nothing was compared.
  */
 export function seedNewDocument(
   doc: ExperienceDocument,
@@ -183,7 +145,7 @@ export function seedNewDocument(
 ): { document: ExperienceDocument; diversity: { status: "no-history"; limitation: string; seed: string } } {
   const seed = `${businessId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40)}:1`;
   return {
-    document: { ...doc, generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: 0 } },
+    document: seedBusinessRecipe({ ...buildArtDirectedCandidate(doc, seed).document, generation: { seed, version: VARIANT_GENERATION_VERSION, attempt: 0 } }),
     diversity: { status: "no-history", limitation: NO_PUBLISHED_HISTORY_LIMITATION, seed },
   };
 }

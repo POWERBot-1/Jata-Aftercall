@@ -7,6 +7,7 @@
  */
 
 import Link from "next/link";
+import { templateForDocument } from "@/lib/experience/templateFamilies";
 import type { StorefrontData } from "@/lib/experience/storefront";
 import { navigationFor } from "@/lib/experience/document";
 import { themeRootClassName, themeStyleVars } from "@/lib/experience/themes";
@@ -27,12 +28,13 @@ export function StorefrontShell({
   children: React.ReactNode;
 }) {
   const { document, theme, profile, business } = data;
+  const family = templateForDocument(document);
   const nav = navigationFor(document);
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
 
   return (
-    <div className={themeRootClassName(theme)} style={themeStyleVars(theme, document.brand)}>
+    <div className={themeRootClassName(theme, family ? `eb-family-${family.key} eb-density-${document.artDirection!.density}` : "")} data-template-family={family?.key} style={themeStyleVars(theme, document.brand)}>
       <PageViewTracker businessId={business.id} />
       {structuredData ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />

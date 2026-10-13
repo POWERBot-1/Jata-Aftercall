@@ -171,7 +171,8 @@ describe("generated products inherit the design system", () => {
 
   it("renders a storefront root with the contract class and variables", () => {
     const shell = read("components/storefront/StorefrontShell.tsx");
-    expect(shell).toContain("themeRootClassName(theme)");
+    // Merged shell passes the template-family classes as the optional second argument (main M11+).
+    expect(shell).toContain("themeRootClassName(theme");
     expect(shell).toContain("themeStyleVars(theme");
     const { css: themeSheet } = themeCss(EXPERIENCE_THEMES[0]);
     expect(themeSheet).toContain(TEMPLATE_CONTRACT.rootClass);

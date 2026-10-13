@@ -15,7 +15,9 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { guardTenantMutation } from "@/lib/tenant";
 import { SAFE_ERRORS } from "@/lib/safeError";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { validateExperienceJson } from "@/lib/experience/schema";
+import { parseDesignBrief, rankTemplateFamilies, defaultDesignGoal } from "@/lib/experience/artDirector";
+import { isTemplateFamily, templateFamily } from "@/lib/experience/templateFamilies";
 import { generateGatedVariant } from "@/lib/experience/variant";
 import { DEFAULT_DIVERSITY_THRESHOLD } from "@/lib/experience/diversity";
 import type { ExperienceDocument } from "@/lib/experience/types";
@@ -46,7 +48,15 @@ export async function POST(req: Request) {
     });
     if (!experience) return NextResponse.json({ error: "Create your website before generating a layout." }, { status: 409 });
 
-    const current = normalizeExperienceDocument(JSON.parse(experience.draftJson || "{}"), experience.categoryKey);
+    const currentResult = validateExperienceJson(experience.draftJson || "{}", experience.categoryKey);
+    if (!currentResult.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
+    const current = currentResult.document;
+    let brief;
+    try { brief = parseDesignBrief(body.brief); rankTemplateFamilies(current, brief); } catch { return NextResponse.json({ error: "Choose supported design goals and preferences.", code: "unsupported_design_brief" }, { status: 400 }); }
+    if (body.family !== undefined && !isTemplateFamily(body.family)) return NextResponse.json({ error: "Choose a supported composition.", code: "unsupported_template_family" }, { status: 400 });
+    if (isTemplateFamily(body.family) && !templateFamily(body.family).goals.includes(brief.goal || current.artDirection?.goal || defaultDesignGoal(current))) {
+      return NextResponse.json({ error: "Choose a composition that supports this customer objective.", code: "incompatible_template_goal" }, { status: 400 });
+    }
 
     // The business's own published history only. Scoped by businessId, never by name or category.
     const versions = await prisma.experienceVersion.findMany({
@@ -58,7 +68,8 @@ export async function POST(req: Request) {
     // An unreadable snapshot is skipped, never counted as a comparison (so the history basis stays truthful).
     const recent: ExperienceDocument[] = versions.flatMap((row) => {
       try {
-        return [normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), current.categoryKey)];
+        const valid = validateExperienceJson(row.snapshotJson || "{}", current.categoryKey);
+        return valid.ok ? [valid.document] : [];
       } catch {
         return [];
       }
@@ -68,11 +79,18 @@ export async function POST(req: Request) {
     // derived from the draft version, so repeated calls for the same draft return the same candidate.
     const baseSeed = cleanSeed(body?.seed) ?? `${businessId}:${experience.draftVersion}`;
 
+    const [products, services] = await Promise.all([
+      prisma.product.count({ where: { businessId, isActive: true } }),
+      prisma.service.count({ where: { businessId, isActive: true } }),
+    ]);
     const result = generateGatedVariant({
       document: current,
       baseSeed,
       recent,
       threshold: DEFAULT_DIVERSITY_THRESHOLD,
+      brief,
+      counts: { products, services },
+      family: isTemplateFamily(body.family) ? body.family : undefined,
     });
 
     return NextResponse.json({
@@ -88,6 +106,9 @@ export async function POST(req: Request) {
       },
       attempts: result.attempts.map((attempt) => ({ attempt: attempt.attempt, maxSimilarity: attempt.maxSimilarity, ok: attempt.ok })),
       change: result.change,
+      direction: result.direction,
+      generationKind: "deterministic-content-art-direction",
+      providerCalled: false,
       comparedWith: recent.length,
       // The draft version this preview was built from. Applying sends it back, so a draft that
       // changed in the meantime is never overwritten silently (see PATCH expectedDraftVersion).

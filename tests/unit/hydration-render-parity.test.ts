@@ -27,6 +27,7 @@ import { renderToString } from "react-dom/server";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { bookingCalendar } from "@/lib/experience/bookingCalendar";
 
 const ORIGINAL_TZ = process.env.TZ;
 
@@ -56,13 +57,14 @@ const props = {
   ctaLabel: "Book now",
   confirmationLabel: "We will confirm shortly",
   requireDate: true,
-  today: "2026-10-12", // a Monday, in Africa/Nairobi
+  // The merged contract (main M11 #418): the server computes the day list, the client renders it.
+  calendar: bookingCalendar(new Date("2026-10-12T06:00:00.000Z")), // a Monday, in Africa/Nairobi
 };
 
-async function renderBooking(today = props.today): Promise<string> {
+async function renderBooking(calendar = props.calendar): Promise<string> {
   vi.resetModules();
   const { BookingClient } = await import("@/components/storefront/BookingClient");
-  return renderToString(createElement(BookingClient, { ...props, today }));
+  return renderToString(createElement(BookingClient, { ...props, calendar }));
 }
 
 /** The rendered chip labels, in order: `<button …>Mon, 12 Oct</button>` → `Mon, 12 Oct`. */
@@ -114,7 +116,7 @@ describe("the booking date chips are identical on every server", () => {
 
   it("takes the day from the prop, so a stale page still books the day it displayed", async () => {
     process.env.TZ = "UTC";
-    const html = await renderBooking("2026-12-31");
+    const html = await renderBooking(bookingCalendar(new Date("2026-12-31T06:00:00.000Z")));
     expect(chipLabels(html)[0]).toBe("Thu, 31 Dec");
     expect(chipLabels(html)[1]).toBe("Fri, 1 Jan");
   });
@@ -238,12 +240,12 @@ describe("no client component derives a calendar day from the runtime clock", ()
 
   it("keeps the runtime clock out of BookingClient's render path", () => {
     const source = readFileSync(path.join(root, "components/storefront/BookingClient.tsx"), "utf8");
-    expect(source, "BookingClient must receive `today` as a prop instead of reading the clock").not.toMatch(/new Date\(\s*\)/);
-    expect(source).toContain("today: string;");
-    expect(source).toContain("calendarDayList(today, 14)");
+    expect(source, "BookingClient must receive the day list as a prop instead of reading the clock").not.toMatch(/new Date\(\s*\)/);
+    expect(source).toContain("calendar: readonly BookingDay[];");
+    expect(source).toContain("const openDays = calendar.slice(0, 10);");
 
     const page = readFileSync(path.join(root, "app/b/[slug]/book/page.tsx"), "utf8");
-    expect(page).toContain("today={nairobiCalendarDay()}");
+    expect(page).toContain("calendar={bookingCalendar(new Date())}");
     expect(page).toContain('export const dynamic = "force-dynamic"');
   });
 });

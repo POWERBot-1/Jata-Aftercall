@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 const CHROME_PATH = process.env.CHROME_PATH;
 const BASE_URL = (process.env.BASE_URL || "http://localhost:3100").replace(/\/$/, "");
-const SHOTS = process.env.SHOTS_DIR || join(process.cwd(), "tmp-browser-evidence");
+const SHOTS = process.env.SHOTS_DIR || join(process.cwd(), ".cache", "verification", "immersive-browser");
 if (!CHROME_PATH) {
   console.error("CHROME_PATH is required (path to a Chrome/Chromium binary). Not run.");
   process.exit(2);
@@ -25,7 +25,7 @@ if (!CHROME_PATH) {
 mkdirSync(SHOTS, { recursive: true });
 
 /** Minimal valid GLB: one triangle. Built in code, so no binary is committed. */
-function triangleGlb() {
+function triangleGlb(patch) {
   const positions = Buffer.alloc(36);
   [0, 0.8, 0, -0.8, -0.8, 0, 0.8, -0.8, 0].forEach((v, i) => positions.writeFloatLE(v, i * 4));
   const json = {
@@ -38,6 +38,7 @@ function triangleGlb() {
     bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
     buffers: [{ byteLength: 36 }],
   };
+  patch?.(json);
   let jsonBytes = Buffer.from(JSON.stringify(json));
   while (jsonBytes.length % 4 !== 0) jsonBytes = Buffer.concat([jsonBytes, Buffer.from(" ")]);
   const header = Buffer.alloc(12);
@@ -54,6 +55,8 @@ function triangleGlb() {
   return Buffer.concat([header, jsonChunk, jsonBytes, binChunk, positions]);
 }
 const GLB = triangleGlb();
+const UNSAFE_GLB = triangleGlb((data) => { data.buffers[0].uri = "https://unapproved.preview.test/texture.bin"; });
+const COMPRESSED_GLB = triangleGlb((data) => { data.extensionsUsed = ["KHR_draco_mesh_compression"]; });
 const SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#e7d9c4"/><text x="20" y="130" font-size="22" fill="#333">Static product image</text></svg>',
 );
@@ -79,7 +82,13 @@ async function newPage(browser, opts) {
       };
       define("deviceMemory", deviceMemory);
       define("hardwareConcurrency", cores);
-      if (connection) define("connection", connection);
+      window.__qaNet = Object.assign(new EventTarget(), connection || { saveData: false, effectiveType: "4g" });
+      define("connection", window.__qaNet);
+      window.__qaDraws = 0;
+      for (const proto of [window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype]) {
+        if (!proto) continue;
+        for (const key of ["drawArrays", "drawElements"]) { const original = proto[key]; proto[key] = function(...args) { window.__qaDraws += 1; return original.apply(this, args); }; }
+      }
       if (noWebgl) {
         const original = HTMLCanvasElement.prototype.getContext;
         HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
@@ -97,6 +106,10 @@ async function newPage(browser, opts) {
     if (url === "https://models.preview.test/product-ok.glb") {
       counts.glbRequests += 1;
       return req.respond({ status: 200, headers: { ...CORS, "content-type": "model/gltf-binary" }, body: GLB });
+    }
+    if (url === "https://models.preview.test/product-unsafe.glb" || url === "https://models.preview.test/product-compressed.glb") {
+      counts.glbRequests += 1;
+      return req.respond({ status: 200, headers: { ...CORS, "content-type": "model/gltf-binary" }, body: url.includes("unsafe") ? UNSAFE_GLB : COMPRESSED_GLB });
     }
     if (url === "https://models.preview.test/product-missing.glb") {
       counts.glbRequests += 1;
@@ -243,6 +256,46 @@ try {
       check(`opt-in: preference ${preference} never shows 3D`, s.reason === "not-opted-in" && s.canvasCount === 0 && s.imageVisible, JSON.stringify(s));
     });
   }
+  for (const model of ["unsafe", "compressed"]) {
+    await scenario(browser, `bounded graph rejection (${model})`, {}, `/dev/immersive-preview?model=${model}`, async (page, errors) => {
+      await page.waitForFunction(() => document.querySelector("#product-preview [data-immersive-reason]")?.getAttribute("data-immersive-reason") === "model-load-failed", { timeout: 15000 });
+      const value = await state(page);
+      check(`${model}: unsupported/unsafe GLB graph retains image, no canvas or uncaught errors`, value.imageVisible && value.canvasCount === 0 && errors.length === 0, JSON.stringify(value));
+    });
+  }
+  for (const constraint of ["reduce", "save-data"]) {
+    await scenario(browser, `live constraint (${constraint})`, {}, "/dev/immersive-preview?model=ok", async (page, errors) => {
+      await page.waitForFunction(() => document.querySelector("#product-preview canvas") && !document.querySelector("#product-preview div[hidden]"), { timeout: 15000 });
+      if (constraint === "reduce") await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+      else await page.evaluate(() => { window.__qaNet.saveData = true; window.__qaNet.dispatchEvent(new Event("change")); });
+      await page.waitForFunction(() => document.querySelectorAll("#product-preview canvas").length === 0);
+      const value = await state(page);
+      check(`${constraint}: live change disposes3D and restores static immediately`, value.imageVisible && value.canvasCount === 0 && value.reason === (constraint === "reduce" ? "reduced-motion" : "save-data") && errors.length === 0, JSON.stringify(value));
+    });
+  }
+  await scenario(browser, "context lost", {}, "/dev/immersive-preview?model=ok", async (page, errors) => {
+    await page.waitForFunction(() => document.querySelector("#product-preview canvas") && !document.querySelector("#product-preview div[hidden]"));
+    await page.evaluate(() => document.querySelector("#product-preview canvas").dispatchEvent(new Event("webglcontextlost", { cancelable: true })));
+    await page.waitForFunction(() => document.querySelectorAll("#product-preview canvas").length === 0);
+    const value = await state(page);
+    check("context loss: static image, removed canvas, no uncaught exception", value.imageVisible && value.canvasCount === 0 && errors.length === 0, JSON.stringify(value));
+  });
+  await scenario(browser, "finite renderer and manual controls", { mobile: true, viewport: { width: 390, height: 844 } }, "/dev/immersive-preview?model=ok", async (page, errors) => {
+    await page.waitForFunction(() => document.querySelector("#product-preview canvas") && !document.querySelector("#product-preview div[hidden]"));
+    await new Promise((resolve) => setTimeout(resolve, 9000));
+    const before = await page.evaluate(() => window.__qaDraws);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const after = await page.evaluate(() => window.__qaDraws);
+    check("turntable: finite8-second budget stops actual GPU draws", before > 0 && after === before, `draws=${before}->${after}`);
+    const canvas = await page.$("#product-preview canvas"); await canvas.focus(); await page.keyboard.press("ArrowRight");
+    const keyboard = await page.evaluate(() => window.__qaDraws);
+    check("manual keyboard: orbit renders on demand after automatic budget", keyboard > after, `draws=${after}->${keyboard}`);
+    const rect = await canvas.boundingBox();
+    await page.touchscreen.touchStart(rect.x + rect.width * 0.3, rect.y + rect.height * 0.5);
+    await page.touchscreen.touchMove(rect.x + rect.width * 0.6, rect.y + rect.height * 0.5); await page.touchscreen.touchEnd();
+    const touched = await page.evaluate(() => window.__qaDraws);
+    check("manual touch: orbit works without hover/keyboard", touched > keyboard && errors.length === 0, `draws=${keyboard}->${touched}`);
+  });
 } finally {
   await browser.close();
 }

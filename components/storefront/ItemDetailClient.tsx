@@ -8,12 +8,13 @@
  * the experience profile decides which controls exist (§6, §17).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { StorefrontItem } from "@/lib/experience/storefront";
 import { useCart } from "./CartProvider";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
+import { isBookableConsultation, professionalEnquiryHref } from "@/lib/experience/professionalWorkflow";
 
 export function ItemDetailClient({
   item,
@@ -23,6 +24,7 @@ export function ItemDetailClient({
   cta,
   itemNoun,
   related,
+  professional = false,
 }: {
   item: StorefrontItem;
   slug: string;
@@ -30,6 +32,7 @@ export function ItemDetailClient({
   capabilities: string[];
   cta: { add: string; primary: string; enquire: string };
   itemNoun: string;
+  professional?: boolean;
   related: Array<{ id: string; name: string; price: number | null; imageUrl: string | null }>;
 }) {
   const cart = useCart();
@@ -252,7 +255,12 @@ export function ItemDetailClient({
               </>
             ) : null}
 
-            {booking && item.kind === "service" ? (
+            {professional && item.kind === "service" ? (
+              <Link href={isBookableConsultation(item) ? `/b/${slug}/book?service=${encodeURIComponent(item.id)}` : professionalEnquiryHref(slug, item.id)} className="eb-btn eb-btn--block">
+                {isBookableConsultation(item) ? "Book this consultation" : cta.enquire}
+              </Link>
+            ) : null}
+            {!professional && booking && item.kind === "service" ? (
               <Link href={`/b/${slug}/book?service=${item.id}`} className="eb-btn eb-btn--block">
                 {item.pricingType === "QUOTE" ? cta.enquire : "Book this"}
               </Link>
@@ -264,7 +272,7 @@ export function ItemDetailClient({
               </Link>
             ) : null}
 
-            {!commerce && item.kind === "service" ? (
+            {!professional && !commerce && item.kind === "service" ? (
               <Link href={`/b/${slug}/book?service=${item.id}`} className="eb-btn eb-btn--block">
                 {cta.enquire}
               </Link>
@@ -304,7 +312,9 @@ export function ItemDetailClient({
 
 /** Fires a view event for the item when the customer lands on it (§31, §32). */
 export function ItemViewTracker({ businessId, itemId, kind }: { businessId: string; itemId: string; kind: "product" | "service" }) {
-  if (typeof window === "undefined") return null;
-  trackEvent(businessId, kind === "service" ? "SERVICE_VIEW" : "PRODUCT_VIEW", itemId);
+  // Effect-gated: never run side effects during render, and keep server/client render identical.
+  useEffect(() => {
+    trackEvent(businessId, kind === "service" ? "SERVICE_VIEW" : "PRODUCT_VIEW", itemId);
+  }, [businessId, itemId, kind]);
   return null;
 }

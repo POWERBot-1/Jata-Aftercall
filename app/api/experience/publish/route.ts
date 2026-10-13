@@ -16,7 +16,7 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
 import { getBusinessUrl } from "@/lib/url";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
 
@@ -100,7 +100,14 @@ export async function POST(req: Request) {
 
     const isAdmin = session.role === "ADMIN";
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(experience.draftJson), experience.categoryKey);
+    const schema = validateExperienceJson(experience.draftJson, experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        error: "Your website configuration needs attention before publishing.",
+        code: "experience_schema_invalid", requires: "SCHEMA", published: false, issues: schema.issues,
+      }, { status: 409 });
+    }
+    const document = schema.document;
 
     const validation = validateForPublication({
       document,
@@ -232,7 +239,15 @@ export async function GET(req: Request) {
     if (!context.business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     if (!context.experience) return NextResponse.json({ ready: false, checks: [] });
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(context.experience.draftJson), context.experience.categoryKey);
+    const schema = validateExperienceJson(context.experience.draftJson, context.experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        ready: false, failedCount: 1, entitlement, version: context.experience.draftVersion,
+        publishedVersion: context.experience.publishedVersion, code: "experience_schema_invalid", issues: schema.issues,
+        checks: [{ id: "schema", label: "Supported safe experience format", status: "fail", hint: schema.issues[0]?.message }],
+      });
+    }
+    const document = schema.document;
     const validation = validateForPublication({
       document,
       business: context.business,
