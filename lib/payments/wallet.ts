@@ -10,6 +10,7 @@
  * confirmation, a reason and an audit record (§62). Nothing here is ever silently changed.
  */
 
+import { formatDateTime } from "@/lib/format";
 import prisma from "@/lib/db";
 import { logPaymentAudit } from "./audit";
 import { isOk } from "./result";
@@ -556,7 +557,7 @@ export function paymentHealthRows(health: PaymentHealth): {
     },
     {
       label: "Last payment",
-      value: health.lastPayment.at ? new Date(health.lastPayment.at).toLocaleString("en-KE") : health.lastPayment.label,
+      value: health.lastPayment.at ? formatDateTime(health.lastPayment.at) : health.lastPayment.label,
       tone: "neutral",
       detail: "Only a confirmation from the provider counts as a payment.",
     },

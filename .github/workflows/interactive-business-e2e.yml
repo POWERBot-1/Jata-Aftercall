@@ -57,7 +57,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # puppeteer-core@25 (the only line free of the extract-zip advisories) requires
+          # Node >= 22.12.0, and Node 22 is inside the range package.json already declares.
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies

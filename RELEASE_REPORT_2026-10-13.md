@@ -1125,3 +1125,199 @@ earlier browser-step failure is understood: its failing check still has no name 
 owner action there is unchanged. `gh run rerun` / `rerun-failed-jobs` return **403** (the integration token
 has no `actions:write`), so recovery from here means pushing a commit — which is what this section's
 commit does; its run id and conclusion appear in the PR's comment thread.
+
+## I. Directive 5 execution — owner decision on booking time (D-1 Package B, proposal only), the financial timezone policy split (D-3b), and the dependency decision (D-2)
+**Date: 2026-10-14.** Branch `arena/fac28f53-jata-aftercall`, parent `d50ea2331c54710f2c961cc708e3cfdd43df7d42`.
+Nothing in this section merges PR #45, deploys, changes production configuration or data, activates a
+provider or storage, or performs a live charge or refund. §A–§H are unchanged and remain in force; where a
+row of §H.11/§H.13.5 is superseded, the new value is stated here and the old row is left in place.
+
+### I.1 D-1 Package B — what a booking time means (PROPOSAL ONLY; no storage or semantic change)
+
+**Status: BLOCKED — OWNER DECISION REQUIRED.** No booking record, API contract or stored value was
+touched. The display half (Package A) shipped earlier in `7b01a94`; this is the storage/contract half.
+
+**What the code does today (verified by inspection).** `Booking.startAt`/`endAt` are `DateTime` in
+PostgreSQL and are written from `new Date(\`${date}T00:00:00\`)`-style construction plus minute offsets
+(`lib/experience/booking.ts:107`, `app/api/storefront/booking/route.ts:52,143`). A string with no zone
+designator is parsed as the **host's ambient local time**, so the instant a customer books depends on the
+zone the server process happens to run in (UTC on Vercel today, but nothing declares that). The wall-clock
+intent ("10:00 on the 20th") is therefore stored only implicitly, and existing rows carry no record of
+which zone produced them.
+
+**The exact decision required.** Which of the following is the product contract for a booking time?
+
+| Option | Meaning | Stored value | Note |
+| --- | --- | --- | --- |
+| **B1 (recommended)** | The business booking clock is **Africa/Nairobi** wall time, always | Convert the chosen wall time to an unambiguous UTC instant and store the instant | Kenya has a fixed +03:00 offset with no DST, so no ambiguous or nonexistent local times exist — no rejection rules are needed |
+| **B2** | Bookings are UTC wall time | Store as today | Customers in Nairobi read 10:00 as 13:00; dashboards/notifications stay consistent because nothing shifts |
+| **B3** | Per-business timezone column | Instant + a `timeZone` column on `Business` | Needed only if customers outside EAT are intended; larger migration (new column, backfill, UI, per-business conversion) |
+
+**Ambiguous / nonexistent local times.** Under B1 this is a non-issue: `Africa/Nairobi` has been +03:00
+year-round since 1940 (no DST), so every wall time maps to exactly one instant and vice versa. Under B3 the
+chosen `timeZone` may have DST, and the contract must then state which rule applies (earlier/later offset for
+ambiguous times; shift-to-next-valid for nonexistent ones). This can be decided later without re-deciding B1.
+
+**Legacy rows — the proposed rule (do not silently rewrite).** Existing rows are **not** migrated. Proposal:
+add a nullable `bookingTimeZone` marker (or equivalent documented constant) meaning "all bookings created
+from date X onward are anchored per the decision above"; rows without it continue to be read exactly as they
+are stored today. Interpretation of legacy rows: because production runs UTC and the offset is a constant
++03:00, an existing `10:00Z` row represents `13:00` Nairobi wall time — a fact to be **disclosed** to the
+owner, not rewritten. If the owner prefers legacy rows to be re-anchored, that is a separate, explicitly
+authorized data migration with a dry-run count and a rollback statement; it must never be silent.
+
+**Safest migration strategy (if B1 is approved).** (1) Introduce one shared helper that converts
+`(business-local date, time) → UTC instant` and its inverse, in a single module, with the zone as an explicit
+constant; (2) switch write sites (`lib/experience/booking.ts`, `app/api/storefront/booking/route.ts`) and
+read sites (booking dashboard, `app/b/[slug]/book/page.tsx:68`, notifications, rescheduling, cancellations,
+reports) to the helper in the same change so no surface is half-converted; (3) add the marking rule for new
+rows; (4) leave historical rows untouched and disclose them. No slot-generation logic,
+availability windows, deposits or pricing semantics change — only the instant a wall time resolves to.
+
+**Affected files.** `lib/experience/booking.ts` (107, 167), `lib/experience/bookingCalendar.ts`,
+`app/api/storefront/booking/route.ts` (52, 143), `app/b/[slug]/book/page.tsx` (68), the booking dashboard
+surface, and the notification/reschedule/cancel paths that read `startAt`.
+
+**Regression tests to add with the implementation (not before the decision).** Wall time → instant → wall
+time round-trip across the EAT midnight boundary; a server process forced to `UTC`, `Africa/Nairobi`,
+`America/Los_Angeles` and `Pacific/Kiritimati` producing identical stored instants; `freeSlotsFor` and
+`validateBookingRequest` unchanged for a given wall time; a legacy row read back verbatim; dashboard,
+customer page and notification labels agreeing with each other.
+
+### I.2 D-3b — financial-document timezone policy, split by field class
+
+**Classification first, then action.** Every candidate site was classified as (a) event instant,
+(b) business-local calendar date, (c) settlement/reconciliation date, or (d) canonical DB value. Class (d)
+and all money, transaction-ID, provider-reference, payment-verification, settlement and reconciliation logic
+were left untouched; the changed sites are all **(a)/(b) presentation labels only**.
+
+**Implemented (presentation-only; commit in this section).**
+
+| File | Site | Before | After |
+| --- | --- | --- | --- |
+| `lib/pos/receipt.ts` | 142, printed receipt issue time | `toLocaleString("en-KE", …)` — ambient zone | `formatDateTime` from `lib/dateFormat` — pinned zone |
+| `lib/pos/reporting.ts` | 193, 215, 487 report row timestamps | `toLocaleString("en-KE")` — ambient | `formatDateTime` from `lib/format` — pinned zone |
+| `lib/pos/reporting.ts` | 275 credit ageing date, 401 last-visit date | `toLocaleDateString("en-KE")` — ambient | `formatDate` from `lib/format` — pinned zone |
+| `lib/payments/wallet.ts` | 559 "Last payment" label | `toLocaleString("en-KE")` — ambient | `formatDateTime` from `lib/format` — pinned zone |
+
+The receipt keeps `lib/dateFormat`'s comma form ("14 Oct 2026, 22:30"); UI rows and tiles keep
+`lib/format`'s middot form ("14 Oct 2026 · 22:30"). The two shapes were **not** unified — that is a
+deliberate presentation choice, not a defect. No test parses a label back into a value (verified), so no
+logic depended on the old strings. The ambient-zone hazard was real: the same stored instant printed a
+different time depending on the server's zone.
+
+**STOPPED — D-3b-2, accounting grouping (OWNER DECISION REQUIRED).** `lib/pos/reports.ts` derives report
+period boundaries and daily buckets from the **ambient server day**: `dayRange` (51), `weekRange` (57),
+`monthRange` (64), `dailySeries` (295). Under UTC these run `00:00:00Z`–`23:59:59.999Z`, so a sale at
+**00:30 EAT on the 14th** (`2026-10-13T21:30:00Z`) falls in the **13th's** bucket. Making this Nairobi-local
+would move sales between accounting days and between report periods — an accounting-semantics change
+explicitly outside the presentation-only authority. Nothing in these functions was changed; the current
+grouping is documented and pinned by the new test so the behaviour is explicit.
+
+Exact decision required: **keep the ambient/UTC boundaries** (labels still read Nairobi, buckets stay UTC)
+or **move calendar-day grouping and period boundaries to Africa/Nairobi** (a deliberate accounting change,
+with the affected reports listed and an owner-visible cutover date).
+
+**Evidence that transaction accounting is unchanged (suite run in this section):** POS money, POS engine,
+POS schema, refund integrity, wallet-refund-stock, STK receipt (PostgreSQL), tenant isolation and booking
+display suites — **149 passed / 2 skipped**; the new timezone suite — **8 passed**; full local suite —
+**2203 passed / 114 skipped / 0 failed**.
+
+### I.3 New test: `tests/unit/pos-financial-timezone.test.ts` (8 tests)
+
+Pins the policy rather than describing it: `2026-10-14T19:30:00Z` must read **22:30 EAT** and
+`2026-10-13T21:30:00Z` must read **00:30 EAT on the 14th**; both must render **byte-identically** when the
+test process is forced to `UTC`, `Africa/Nairobi`, `America/Los_Angeles` and `Pacific/Kiritimati`
+(`vi.resetModules` + dynamic import per zone); the UTC date differing from the Nairobi date must not change
+the label; KES amounts, receipt numbers and provider references must pass through untouched; and the
+current UTC-day grouping of `dayRange`/`summarizeSales`/`dailySeries` is asserted **as it is** so a future
+grouping change cannot happen unnoticed.
+
+### I.4 D-2 — puppeteer-core upgrade under the authorized scope (implemented on the task branch)
+
+| Measure | Before | After |
+| --- | --- | --- |
+| `puppeteer-core` declaration | `^23.11.1` | `^25.13.0` |
+| `basic-ftp` override | pinned `6.2.3` | removed (its consumer no longer exists) |
+| `npm audit` high | **10** (all dev-only) | **7** (all dev-only) |
+| `npm audit` production | 0 | 0 |
+| Advisory chain (`extract-zip` 2.0.1 via `@puppeteer/browsers` 2.6.1, plus `basic-ftp`/`get-uri`/`pac-proxy-agent`/`proxy-agent`) | present | **absent** |
+| Lockfile effect | — | 14 packages added, 55 removed, 10 changed |
+
+**Why v25 and not a patched 23.x:** `extract-zip`'s latest release is still **2.0.1 (2023-03-04)** — no fixed
+version exists on the 23.x line, so the advisory cannot be resolved by a patch bump; v25 is the only line
+that drops the chain. **Node requirement:** v25 declares `engines >= 22.12.0`, so the e2e workflow's runner
+moved `20 → 22` in the same change (the app's own `engines` field is untouched, and Node 22 is already inside
+`^20.19.0 || >=22.12.0`). **API compatibility:** all consumed Puppeteer APIs are standard in v25; the scripts
+pass an explicit `executablePath`, and `puppeteer.launch()` without one reports the expected
+"`executablePath` or `channel` must be specified" — i.e. the module loads and reaches Chrome discovery. All
+ten `scripts/browser/*.mjs` files pass `node --check`, and `tsc --noEmit` (which type-checks the browser
+script against v25 types) reports **1 error — the same pre-existing `Prisma.BusinessUncheckedCreateInput`**
+error present on `main`, no new ones.
+
+**Compatibility test re-ratified (not weakened).** `tests/unit/dependency-security-compat.test.ts`:
+the `basic-ftp` assertions were replaced, with a documented before/after header, by assertions that the whole
+advisory chain is **absent** from the tree and that the replacement path is installed and loadable at the
+declared major; the original security purpose (no unpatched advisory chain, dependencies loadable at the
+declared contract) is preserved. **6 tests, 14 assertions passing.** The removed lines are exactly the
+basic-ftp import assertions whose module no longer exists — nothing else was deleted, and no test was
+skipped, weakened or reclassified. `npm audit fix --force` was not run, and no unrelated major was touched.
+
+**Remaining decision.** The residual **7 high** are all **dev-only** (`braces` 3.0.3, `chokidar`,
+`fast-glob`, `micromatch`, `tailwindcss` 3.4.19, `@next/eslint-plugin-next`/`eslint-config-next`) and all
+have no patched release on their current line; clearing them requires a Tailwind 4 major or a downgrade of
+the Next lint stack. Recommendation: **accept and document** the residual dev-only set, revisit with the
+separately-staged Tailwind major. Owner decision required.
+
+### I.5 The 114 skipped tests — what they are
+
+Every one of the **114** is a suite gated by a declared environment flag, all in the same family, and none
+is a failure or a silenced test:
+
+| Skipped count | Files | Gate |
+| --- | --- | --- |
+| 22, 17 | `tests/e2e/business-pos-journey.test.ts`, `tests/e2e/interactive-business-journey.test.ts` | `skipIf(!enabled)` — `enabled = Boolean(process.env.DATABASE_URL?.trim())` |
+| 15, 12, 8, 6, 6, 6, 5, 5 | `tests/prisma/*.test.ts` (storefront-checkout, payment-settlement, experience-boundary, checkout-commit, experience-art-direction, schema-constraints, professional-enquiries, subscription-payment) | `skipIf(!realPrismaConfigured)` — `realPrismaConfigured = Boolean(PRISMA_TEST_DATABASE_URL)` |
+| 5, 4, 2, 1 | `tests/integration/*-postgres.test.ts` (AI front-desk entitlement, wallet refunds, wallet STK receipt, POS refund race) | `skipIf(!postgresEnabled)` — `Boolean(process.env.DATABASE_URL?.trim())` |
+
+The local sandbox has no PostgreSQL, no `psql` and no Docker, so these suites cannot run here — they are
+the **real-database** suites, and skipping is the honest outcome rather than a pass. In CI, where a database
+is provisioned, the database workflow reports **2268 passed / 0 skipped** — i.e. the same suites run and
+pass there, which is why the CI database run, not the local skip count, is the release-confidence evidence.
+The **2,268** (CI, database provisioned) and the **114** (local, no database) are therefore **not**
+contradictory and not an overlap: they describe the same suites under two environments. No test was removed
+or weakened to reduce any count.
+
+### I.6 CI anomalies (unchanged, UNRESOLVED)
+
+Run `38441832430`: failure inside `Authenticated production HTTP browser journey` (427 passed / 1 failed).
+The failing check still has **no name** — logs, artifacts and annotations remain inaccessible from here and
+`gh run rerun` returns **403**. **UNRESOLVED; it is explicitly not recorded as a flake**, and the smallest
+owner action (reading the failing step in the Actions UI) is unchanged. Run `38463216815` failed in
+`Install dependencies` before any test on a Markdown-only commit — intermittent CI-environment behaviour
+(§H.14), and it explains neither the browser-step failure nor any code. Green runs stand as listed in §H.14.
+
+### I.7 Verification (commands and outcomes at this change set)
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run tests/unit/pos-financial-timezone.test.ts` | **8 passed** |
+| Related regression (POS money/engine/schema, refund integrity, wallet-refund-stock, STK receipt pg, tenant isolation, booking display) | **149 passed / 2 skipped** |
+| `npx vitest run tests/unit/dependency-security-compat.test.ts` | **14 passed** (6 tests) |
+| Full local suite `npx vitest run` | **2203 passed / 114 skipped / 0 failed** (176 files; delta vs `d50ea23` is exactly the 8 new + 1 new compat assertion) |
+| `npm run lint` | **0 errors**, 1 pre-existing `<img>` warning |
+| `npx tsc --noEmit` | **1 error — the pre-existing `Prisma.BusinessUncheckedCreateInput` error that also exists on `main`**; no new errors |
+| `npm run build` | **Build completed successfully** |
+| `npm audit` | **7 high (dev-only) / 0 production** — before: 10 high (dev-only) / 0 production |
+| Diff review | 7 modified files + 1 new test file; **no secret or DSN appears in the diff**; no new `skip`/`only`; the only deleted test lines are the documented `basic-ftp` assertions |
+
+### I.8 What this section did and did not do
+
+**Did:** implemented D-3b presentation labels; upgraded `puppeteer-core` and its lockfile under the
+authorized scope; re-ratified the compatibility test; added and ran the timezone test suite; verified at
+full-suite, lint, type-check and production-build level; recorded the skip explanation and the CI anomalies.
+
+**Did not:** change stored booking semantics, any existing booking record, report grouping/period
+boundaries, settlement or reconciliation logic, provider timestamps, transaction IDs or payment
+verification; merge PR #45; deploy; change production configuration or data; activate media storage;
+incur provider cost; or perform a live charge or refund.

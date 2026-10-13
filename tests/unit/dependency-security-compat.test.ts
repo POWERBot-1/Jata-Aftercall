@@ -1,12 +1,28 @@
+/**
+ * Narrow security patches and compatibility (re-ratified 2026-10-13, report §I.5).
+ *
+ * Before: this file pinned `puppeteer-core` 23.11.1 and imported `basic-ftp` directly, because the
+ * only way to answer the extract-zip symlink-traversal advisories (GHSA-jmr9-qjv8-65gv,
+ * GHSA-7pqw-9j4j-h8q3) and the basic-ftp chain (GHSA-c475-qrg2-pj4r) at the time was to pin
+ * patched *transitive* versions while the vulnerable top-level dependency stayed.
+ *
+ * After: `puppeteer-core` is 25.13.0, whose `@puppeteer/browsers@3` uses `modern-tar` instead of
+ * `extract-zip`, which removes the whole chain — extract-zip, basic-ftp, get-uri, pac-proxy-agent
+ * and proxy-agent are no longer in the tree at all. The security purpose is preserved and made
+ * structural: instead of asserting a patched transitive pin, the test now asserts the vulnerable
+ * chain is ABSENT from the lockfile, that it cannot come back unnoticed, and that the replacement
+ * is in place. The package that used to need `basic-ftp` is gone, so an import of it would be a
+ * dead check; removing that import is the contract change, not a weakening.
+ */
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SourceMapConsumer, SourceMapGenerator } from "source-map-js";
 import selectorParser from "postcss-selector-parser";
-import { Client, parseList } from "basic-ftp";
 const require = createRequire(import.meta.url);
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 const packages = JSON.parse(readFileSync("package-lock.json", "utf8")).packages;
+const workflow = readFileSync(".github/workflows/interactive-business-e2e.yml", "utf8");
 
 describe("narrow security patches and compatibility", () => {
   it("pins matching Next runtime/lint patches without changing React/Prisma/Motion/toolchain majors", () => {
@@ -14,13 +30,13 @@ describe("narrow security patches and compatibility", () => {
     expect(manifest.devDependencies["eslint-config-next"]).toBe("15.5.27");
     expect(packages["node_modules/next"].version).toBe("15.5.27");
     expect(packages["node_modules/eslint-config-next"].version).toBe("15.5.27");
-    for (const [name, version] of [["react", "18.3.1"], ["react-dom", "18.3.1"], ["@prisma/client", "5.22.0"], ["prisma", "5.22.0"], ["motion", "14.1.0"], ["tailwindcss", "3.4.19"], ["puppeteer-core", "23.11.1"]]) {
+    for (const [name, version] of [["react", "18.3.1"], ["react-dom", "18.3.1"], ["@prisma/client", "5.22.0"], ["prisma", "5.22.0"], ["motion", "14.1.0"], ["tailwindcss", "3.4.19"], ["puppeteer-core", "25.13.0"]]) {
       expect(packages[`node_modules/${name}`].version).toBe(version);
     }
     expect(manifest.engines.node).toBe("^20.19.0 || >=22.12.0");
   });
   it("locks every targeted transitive patch to the reviewed version", () => {
-    for (const [name, version] of [["source-map-js", "1.2.2"], ["basic-ftp", "6.2.3"], ["postcss-selector-parser", "7.1.6"]]) expect(packages[`node_modules/${name}`].version).toBe(version);
+    for (const [name, version] of [["source-map-js", "1.2.2"], ["postcss-selector-parser", "7.1.6"]]) expect(packages[`node_modules/${name}`].version).toBe(version);
     expect(packages["node_modules/brace-expansion"].version).toBe("1.1.21");
     expect(packages["node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion"].version).toBe("5.0.12");
   });
@@ -36,12 +52,30 @@ describe("narrow security patches and compatibility", () => {
   it.each([".eb-grid > .eb-card:first-child", ".dark\\:hover\\:bg-zinc-900:hover", '.eb-scope :is(a,button)[aria-pressed="true"]'])("retains selector parser API/text for %s", (selector) => {
     expect(selectorParser().processSync(selector)).toBe(selector);
   });
-  it("retains all basic-ftp APIs consumed by get-uri without making a network call", () => {
-    for (const method of ["access", "list", "lastMod", "downloadTo", "close"]) expect(typeof Client.prototype[method]).toBe("function");
-    const entries = parseList("-rw-r--r-- 1 owner group 1299 Oct 12 06:24 owned.txt\ndrwxr-xr-x 2 owner group 4096 Oct 12 06:24 photos");
-    expect(entries.map((entry) => ({ name: entry.name, size: entry.size, type: entry.type }))).toEqual([
-      { name: "owned.txt", size: 1299, type: 1 }, { name: "photos", size: 4096, type: 2 },
-    ]);
+  it("removes the advisory chain instead of pinning around it", () => {
+    // The advisories that motivated the old transitive pins cannot ship if the packages are absent.
+    for (const gone of ["extract-zip", "basic-ftp", "get-uri", "pac-proxy-agent", "proxy-agent"]) {
+      expect(packages[`node_modules/${gone}`], `${gone} is back in the tree`).toBeUndefined();
+      expect(manifest.overrides?.[gone], `${gone} override is stale — the chain is gone`).toBeUndefined();
+    }
+    // The replacement downloader is what puppeteer actually uses, and it is the reviewed version.
+    expect(packages["node_modules/@puppeteer/browsers"].version).toBe("3.2.4");
+    expect(Object.keys(packages["node_modules/@puppeteer/browsers"].dependencies)).toEqual(
+      expect.arrayContaining(["modern-tar"]),
+    );
+    expect(Object.keys(packages["node_modules/@puppeteer/browsers"].dependencies)).not.toContain("extract-zip");
+  });
+  it("keeps the upgraded tooling inside a runtime the repository actually tests on", () => {
+    // puppeteer-core@25 requires Node >= 22.12.0. The CI runner that installs and drives it must
+    // therefore be Node 22+ (engines additionally allows 20.x for the app itself, which is why the
+    // runner pins its own version), and the version here must satisfy the installed requirement.
+    const required = String(packages["node_modules/puppeteer-core"].engines?.node ?? "");
+    expect(required).toContain(">=22.12.0");
+    const runner = /node-version:\s*"(\d+)"/.exec(workflow)?.[1];
+    expect(runner, "the e2e workflow must pin a Node major").toBeDefined();
+    expect(Number(runner), "Node 20 cannot install puppeteer-core@25 — the runner must be 22+").toBeGreaterThanOrEqual(22);
+    const running = process.versions.node.split(".").map(Number);
+    expect(running[0] > 22 || (running[0] === 22 && running[1] >= 12), `this runtime is Node ${process.versions.node}, below the requirement`).toBe(true);
   });
   it("retains compatible brace expansion APIs in both dependency-major branches", () => {
     const v1 = require("brace-expansion");
