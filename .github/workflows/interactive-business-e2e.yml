@@ -209,6 +209,18 @@ jobs:
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
+      # M12 Stage B: bounded raw-order evidence artifacts (redacted — tags/offsets only).
+      - name: Upload hydration raw-order evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hydration-raw-order-evidence
+          path: |
+            .cache/verification/studio-authenticated/m418-evidence.json
+            .cache/verification/studio-authenticated/results.json
+          retention-days: 14
+          if-no-files-found: ignore
+
       # Publish real successful summaries too; direct Actions log downloads may be inaccessible.
       - name: Record successful verification evidence on the pull request
         if: success() && github.event_name == 'pull_request'
@@ -219,7 +231,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [

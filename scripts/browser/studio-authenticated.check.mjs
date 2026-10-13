@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
-import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest, patchHydrationThrowDiagnostics } from "./hydration-mutation-probe.mjs";
+import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest, serverHtmlOrder, patchHydrationThrowDiagnostics } from "./hydration-mutation-probe.mjs";
 
 // Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
 // containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
@@ -37,6 +37,11 @@ const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
+// M12: buffered M418 evidence lines are reprinted at end-of-run so they land in the
+// CI summary comment's tail window (the generator elides long-log middles).
+const m418Lines = [];
+const serverDigests = new Map(); // path -> bounded raw-server-order evidence (M12 Stage B)
+function emitM418(line) { const bounded = String(line).slice(0, 900); m418Lines.push(bounded); console.error(bounded); }
 function check(name, ok, detail = "") {
   results.push({ name, ok: Boolean(ok), detail });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
@@ -59,13 +64,19 @@ async function pageFor(context) {
   });
   // Keep a bounded digest of every document's SERVER HTML (issue #418 evidence): at error
   // time the server structure is diffed against the client outline to name the diverging node.
-  const serverDigests = new Map();
+  // M12 Stage B: also record the RAW response ordering (byte offsets of the bootstrap/shell/
+  // catalogue markers) before any browser-side parse or hydration recovery can alter it.
   page.on("response", (response) => {
     if (response.request().resourceType() !== "document") return;
     let path;
     try { path = new URL(response.url()).pathname; } catch { return; }
+    const status = response.status();
+    const contentType = (response.headers()["content-type"] || "").slice(0, 60);
     response.text().then((html) => {
-      serverDigests.set(path, { len: html.length, digest: serverHtmlDigest(html) });
+      serverDigests.set(path, {
+        len: html.length, digest: serverHtmlDigest(html), status, contentType,
+        ...serverHtmlOrder(html),
+      });
       if (serverDigests.size > 8) serverDigests.delete(serverDigests.keys().next().value);
     }).catch(() => {});
   });
@@ -98,18 +109,18 @@ async function pageFor(context) {
       for (const entry of frameProbes) {
         const probe = entry && entry.probe;
         const expected = probe && probe.m418last;
-        if (expected) console.error(`M418 EXPECTED ${JSON.stringify(expected)}`);
+        if (expected) emitM418(`M418 EXPECTED ${JSON.stringify(expected)}`);
         const snap = probe && probe.snapshot;
         if (snap) {
-          console.error(`M418 FRAME ${String(snap.frame || entry.path).slice(0, 48)} ready=${snap.ready} parseDropped=${snap.parseDropped} counts=${JSON.stringify(snap.counts)}`);
-          console.error(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-12))}`.slice(0, 900));
-          console.error(`M418 OUTLINE ${String(snap.outline || "").slice(0, 700)}`);
-          if (snap.parseSamples) console.error(`M418 PARSE ${JSON.stringify(snap.parseSamples)}`.slice(0, 500));
+          emitM418(`M418 FRAME ${String(snap.frame || entry.path).slice(0, 48)} ready=${snap.ready} parseDropped=${snap.parseDropped} counts=${JSON.stringify(snap.counts)}`);
+          emitM418(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-12))}`.slice(0, 900));
+          emitM418(`M418 OUTLINE ${String(snap.outline || "").slice(0, 700)}`);
+          if (snap.parseSamples) emitM418(`M418 PARSE ${JSON.stringify(snap.parseSamples)}`.slice(0, 500));
         } else if (probe) {
-          console.error(`M418 LIVE ${String(probe.state && probe.state.frame || entry.path).slice(0, 48)} seq=${probe.state && probe.state.seq} parseDropped=${probe.state && probe.state.parseDropped}`);
-          console.error(`M418 TAIL ${JSON.stringify((probe.tail || []).slice(-8))}`.slice(0, 700));
+          emitM418(`M418 LIVE ${String(probe.state && probe.state.frame || entry.path).slice(0, 48)} seq=${probe.state && probe.state.seq} parseDropped=${probe.state && probe.state.parseDropped}`);
+          emitM418(`M418 TAIL ${JSON.stringify((probe.tail || []).slice(-8))}`.slice(0, 700));
         } else if (entry && entry.inaccessible) {
-          console.error(`M418 FRAME-INACCESSIBLE ${String(entry.path).slice(0, 48)} ${entry.inaccessible}`);
+          emitM418(`M418 FRAME-INACCESSIBLE ${String(entry.path).slice(0, 48)} ${entry.inaccessible}`);
         }
       }
       // Raw server-byte body order FIRST for the erroring frame's document: if the response
@@ -119,10 +130,10 @@ async function pageFor(context) {
       const orderedDigests = [...serverDigests.entries()].sort((a, b) =>
         (errorPaths.includes(b[0]) ? 1 : 0) - (errorPaths.includes(a[0]) ? 1 : 0));
       for (const [path, info] of orderedDigests.slice(0, 3)) {
-        console.error(`M418 SRV ${path} len=${info.len} ${String(info.digest).slice(0, 140)}`);
+        emitM418(`M418 SRV ${path} len=${info.len} ${String(info.digest).slice(0, 140)}`);
       }
       for (const [path, info] of [...serverDigests.entries()].slice(0, 4)) {
-        console.error(`M418 SERVER ${path} len=${info.len} ${String(info.digest).slice(0, 600)}`);
+        emitM418(`M418 SERVER ${path} len=${info.len} ${String(info.digest).slice(0, 600)}`);
       }
     });
   });
@@ -660,6 +671,15 @@ try {
           await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
           entry.ok = true;
           entry.order = await first.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
+          // M12 Stage B: pair the pre-hydration DOM order with the RAW server response order
+          // of the same document (byte-order markers captured before any browser-side parse).
+          const raw = [...serverDigests.entries()].find(([path]) => path.startsWith(`/b/${fixture.slug}`));
+          if (raw) {
+            entry.rawPath = raw[0];
+            entry.rawStatus = raw[1].status;
+            entry.rawOrder = raw[1].order;
+            entry.rawOffsets = raw[1].offsets;
+          }
         } catch (error) {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
@@ -691,7 +711,7 @@ try {
   // Fail-fast must still surface pageerror evidence: an earlier hydration recovery can
   // explain a later DOM-state assertion (e.g., Float-managed head metas mid-regeneration).
   if (errors.length) {
-    for (const record of errors.slice(0, 3)) console.error(`M418-RECORDED ${JSON.stringify(record).slice(0, 900)}`);
+    for (const record of errors.slice(0, 3)) emitM418(`M418-RECORDED ${JSON.stringify(record).slice(0, 900)}`);
   }
   // No cookies/payloads/credentials in diagnostics. Keep the actual server error context locally/CI only.
   console.error(serverLog.slice(-3500));
@@ -705,11 +725,24 @@ try {
   try { await cleanup(); } catch (error) { results.push({ name: "fixture cleanup", ok: false, detail: "Exact-id cleanup failed" }); console.error("FAIL fixture cleanup"); }
   await prisma.$disconnect();
   mkdirSync(".cache/verification/studio-authenticated", { recursive: true });
+  // M12 Stage B: bounded raw-order evidence artifact (redacted — tags/offsets only).
+  const serverSnapshots = [...serverDigests.entries()].slice(0, 8).map(([path, info]) => ({ path, ...info }));
+  writeFileSync(".cache/verification/studio-authenticated/m418-evidence.json", JSON.stringify({
+    m418Lines: m418Lines.slice(0, 40), serverSnapshots, hydrationVisits: hydrationVisits.slice(0, 40),
+    errors: errors.slice(0, 6), journeyComplete,
+  }, null, 2));
   writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures, hydrationVisits,
     journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyComplete && results.every((item) => item.ok) ? "PASS" : "FAIL",
-    providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true }, null, 2));
+    providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true, serverSnapshots }, null, 2));
 }
 const failed = results.filter((item) => !item.ok).length;
+// Reprint the buffered M418 evidence at end-of-run so it survives the CI summary
+// comment's middle-elision (its tail window keeps these lines).
+if (m418Lines.length) {
+  console.log(`M418E BEGIN ${m418Lines.length} buffered evidence lines`);
+  for (const line of m418Lines.slice(-14)) console.log(line);
+  console.log("M418E END");
+}
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
 if (!journeyComplete) console.log("NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance.");
 process.exitCode = failed || !journeyComplete ? 1 : 0;

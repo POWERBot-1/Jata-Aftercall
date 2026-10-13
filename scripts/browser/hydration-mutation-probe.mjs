@@ -257,6 +257,49 @@ export function formatProbeDump(frameProbes, options = {}) {
  * class and stable data-* markers; script/style bodies stripped. Used to diff the server-
  * rendered structure against the probe's client-side outline at error time (issue #418).
  */
+/**
+ * M12 Stage B: raw server-response ordering evidence (issue #418).
+ *
+ * Extracts byte offsets of the structural markers that decide the body-level
+ * hydration walk from the RAW response text — before any browser parsing, DOM
+ * recovery, or React mutation can reorder anything — plus the marker names in
+ * document (= byte) order. Tags and stable identifying attributes only: no
+ * cookies, auth headers, secrets, or customer content. Bounded output.
+ */
+export function serverHtmlOrder(html, options = {}) {
+  const limit = options.maxMarkers ?? 16;
+  const patterns = [
+    ["body", /<body[\s>]/gi],
+    ["state-div", /<div hidden=""/gi],
+    ["cmt-$?", /<!--\$\?-->/gi],
+    ["cmt-$", /<!--\$-->/gi],
+    ["tpl-B", /<template id="B:/gi],
+    ["seg-S", /<div hidden id="S:/gi],
+    ["nextF", /self\.__next_f/gi],
+    ["rt-inline", /\$RT=/gi],
+    ["rb-replay", /\$RB=/gi],
+    ["r-script", /id="_R_"/gi],
+    ["theme-root", /product-theme-root/gi],
+    ["route-root", /business-route-root/gi],
+    ["catalogue", /data-catalogue-layout/gi],
+    ["main", /<main[\s>]/gi],
+  ];
+  const found = [];
+  for (const [name, pattern] of patterns) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(html)) && found.length < limit * 2) {
+      found.push({ name, at: match.index });
+    }
+  }
+  found.sort((a, b) => a.at - b.at || a.name.localeCompare(b.name));
+  const trimmed = found.slice(0, limit);
+  return {
+    order: trimmed.map((entry) => entry.name).join(","),
+    offsets: trimmed.map((entry) => `${entry.name}@${entry.at}`).join(" "),
+  };
+}
+
 export function serverHtmlDigest(html, options = {}) {
   const limit = options.limit ?? 2000;
   const bodyStart = html.search(/<body[\s>]/i);

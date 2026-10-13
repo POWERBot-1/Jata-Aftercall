@@ -11,6 +11,7 @@ import {
   probeInstallSource,
   formatProbeDump,
   serverHtmlDigest,
+  serverHtmlOrder,
   patchHydrationThrowDiagnostics,
   PROBE_MAX_RECORDS,
 } from "@/scripts/browser/hydration-mutation-probe.mjs";
@@ -340,5 +341,58 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     expect(source).not.toContain("appendChild");
     expect(source).not.toContain("setAttribute");
     expect(PROBE_MAX_RECORDS).toBeGreaterThan(100);
+  });
+});
+
+describe("M12 raw server-response ordering evidence (serverHtmlOrder)", () => {
+  const monoHtml = [
+    "<html><head><title>T</title></head>",
+    '<body class="min-h-screen">',
+    '<div hidden=""><!--$?--><template id="B:0"></template><!--/$--></div>',
+    '<div class="product-theme-root"><div class="business-route-root" data-catalogue-layout="grid"><main>ok</main></div></div>',
+    '<script>requestAnimationFrame(function(){$RT=performance.now()});</script>',
+    '<script src="/_next/static/chunks/webpack-x.js" id="_R_" async=""></script>',
+    "<script>self.__next_f.push([1,\"x\"])</script>",
+    "</body></html>",
+  ].join("");
+  const invertedHtml = [
+    "<html><head><title>T</title></head>",
+    '<body class="min-h-screen">',
+    '<script>requestAnimationFrame(function(){$RT=performance.now()});</script>',
+    '<script src="/_next/static/chunks/webpack-x.js" id="_R_" async=""></script>',
+    "<script>self.__next_f.push([1,\"x\"])</script>",
+    '<div hidden=""><!--$?--><template id="B:0"></template><!--/$--></div>',
+    '<div class="product-theme-root"><div class="business-route-root" data-catalogue-layout="grid"><main>ok</main></div></div>',
+    "</body></html>",
+  ].join("");
+
+  it("records marker byte-order for a content-first (mono) response", () => {
+    const { order, offsets } = serverHtmlOrder(monoHtml);
+    const names = order.split(",");
+    expect(names[0]).toBe("body");
+    expect(names.indexOf("route-root")).toBeLessThan(names.indexOf("r-script"));
+    expect(names.indexOf("r-script")).toBeLessThan(names.indexOf("nextF"));
+    for (const pair of offsets.split(" ")) {
+      expect(pair).toMatch(/^[a-z$?@-]+@-?\d+$/i);
+    }
+  });
+
+  it("records the inverted order when the bootstrap scripts lead the body (issue #418 signature)", () => {
+    const { order } = serverHtmlOrder(invertedHtml);
+    const names = order.split(",");
+    expect(names.indexOf("r-script")).toBeLessThan(names.indexOf("state-div"));
+    expect(names.indexOf("nextF")).toBeLessThan(names.indexOf("route-root"));
+  });
+
+  it("is bounded and leaks no element content", () => {
+    const noisy = monoHtml.replace("<main>ok</main>", "<main>SECRET-CUSTOMER-TEXT</main>");
+    const { order, offsets } = serverHtmlOrder(noisy, { maxMarkers: 4 });
+    expect(order.split(",").length).toBeLessThanOrEqual(4);
+    expect(offsets).not.toContain("SECRET");
+    expect(order).not.toContain("SECRET");
+  });
+
+  it("distinguishes the two orders without inspecting the DOM", () => {
+    expect(serverHtmlOrder(monoHtml).order).not.toBe(serverHtmlOrder(invertedHtml).order);
   });
 });
