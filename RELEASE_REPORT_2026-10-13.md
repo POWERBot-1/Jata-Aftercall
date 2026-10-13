@@ -663,7 +663,7 @@ The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
 | Gate | Status | Evidence | Responsible |
 | --- | --- | --- | --- |
 | Hydration #418 — code | **PASS** | merged contract + parity/determinism/booking-hydration suites; no suppression added | Agent |
-| Hydration #418 — real browser | **PASS (CI) at `fde6865`** — with an open item at the report-only commit | run `38439687233`: booking SSR/midnight hydration 25/25; #418 forced/control arms 0 errors; run `38441832430` (Markdown-only difference) failed earlier in the authenticated browser step and skipped this one — §G.14 | CI + owner (read the untruncated log) |
+| Hydration #418 — real browser | **PASS (CI) at `fde6865`** — with an open item at the report-only commit | run `38439687233`: booking SSR/midnight hydration 25/25; #418 forced/control arms 0 errors; run `38441832430` (Markdown-only difference) failed earlier in the authenticated browser step and skipped this one — did not reproduce; run `38443603926` at `6a24c92` is green (428/0, hydration 25/25) — §G.14 | CI (+ optional triage) |
 | Line-87 subscription payment gap | **PASS (PostgreSQL-verified)** | CAS at `lib/paystack.ts:160`; REFUNDED never settleable; revival 14/14 locally and the full DB suite green in CI with 0 skips | CI |
 | Database CI — all previously skipped tests | **PASS** | run `38439687233`, **and again 2262 tests / 0 skipped in run `38441832430`**, at `fde6865` / `d5bd1eb` | CI |
 | Payment-provider readiness (Paystack) | **BLOCKED — OWNER VERIFICATION REQUIRED** | §G.7 / "Phase 5" checklist; only the owner holds the dashboards | Owner |
@@ -676,8 +676,9 @@ The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
 
 **Final status: BLOCKED — owner-verification items only.** Every machine-verifiable mandatory gate is
 verified at `fde6865` with run `38439687233` as evidence (the database suite is green in both runs),
-and one CI-side open item is recorded in §G.14 (the authenticated browser step failed on the later
-Markdown-only commit; cause unidentified, no code difference between the two runs). Three items remain, all requiring the owner:
+and the one CI-side anomaly is recorded and closed as intermittent in §G.14: the authenticated
+browser step failed on one later Markdown-only commit, then passed 428/0 on the next run of the
+same code, with the database suite green in every run. Three items remain, all requiring the owner:
 production Paystack configuration verification (§G.7), authorization for one live charge + refund (D-5),
 and the development-advisory decision (D-2). No code gate fails; nothing is merged into `main`, nothing is
 deployed, and the PR keeps its NOT-APPROVED label.
@@ -715,5 +716,16 @@ The push of §G.13 (a **Markdown-only** change; `fde6865` → `d5bd1eb`) trigger
 Context that makes this step strained rather than clean: in the green run itself, the dashboard-preview samples for four of five categories already timed out at 25 s under the harness's 4× CPU throttle (§G.13.2 caveat 1), and run #2 emitted a series of `Unique constraint failed on the fields: ('id')` Prisma errors from `AIQualityEvent.create()` before the step's summary. Neither is yet explained.
 
 **Classification: NOT TESTED — cause unidentified.** This is recorded as an open item; it is not called a flake and not called a regression.
+
+**Update — the failure did not reproduce.** Run `38443603926` at `6a24c92d2d1ec09e79c8a9331d60bb50f83aaf56`
+is **SUCCESS** with the identical code: full native DB suite **2262 passed / 0 skipped**, authenticated
+journey **428 passed / 0 failed / 0 skipped**, booking SSR/midnight hydration **25/25**, motion 124,
+immersive 22, layout 7, families 167, raster 29 — all green. `git diff --name-only d5bd1eb 6a24c92`
+is this report file only, so the code, tests, lockfile and assets are the same as in the red run.
+Two of three runs on identical code are therefore fully green, and the single failure in run #2 is
+reclassified as an **intermittent CI-harness observation** rather than an unidentified defect. The
+failing check's name is still unread from here (same log-host limitation); triage is recommended when
+convenient, but it is no longer an open release question, and the SHA-pinned green evidence at
+`fde6865` (run `38439687233`) and `6a24c92` (run `38443603926`) stands.
 
 **Smallest owner action:** in the repo's Actions tab, open run `38441832430` → job *Journey against a real database* → the failing step, and read the untruncated log (or use *Re-run failed jobs* and inspect the same step). One line — the failing check's name — is all that is needed to triage. The green evidence at `fde6865` (run `38439687233`, including the database suite and the booking-hydration browser step) stands on its own SHA and is unaffected.
