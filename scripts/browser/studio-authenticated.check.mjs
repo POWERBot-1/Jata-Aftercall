@@ -118,8 +118,8 @@ async function pageFor(context) {
         const snap = probe && probe.snapshot;
         if (snap) {
           emitM418(`M418 FRAME ${String(snap.frame || entry.path).slice(0, 48)} ready=${snap.ready} parseDropped=${snap.parseDropped} counts=${JSON.stringify(snap.counts)}`);
-          emitM418(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-12))}`.slice(0, 900));
-          emitM418(`M418 OUTLINE ${String(snap.outline || "").slice(0, 700)}`);
+          emitM418(`M418 TAIL ${JSON.stringify((snap.tail || []).slice(-10))}`.slice(0, 700));
+          emitM418(`M418 OUTLINE ${String(snap.outline || "").slice(0, 420)}`);
           if (snap.parseSamples) emitM418(`M418 PARSE ${JSON.stringify(snap.parseSamples)}`.slice(0, 700));
           if (snap.head) emitM418(`M418 HEAD ${JSON.stringify(snap.head)}`.slice(0, 900));
         } else if (probe) {
@@ -137,8 +137,8 @@ async function pageFor(context) {
         (errorUrls.some((u) => a[0] === u) ? -1 : 0) - (errorUrls.some((u) => b[0] === u) ? -1 : 0));
       for (const [url, list] of ranked.slice(0, 3)) {
         for (const info of list.slice(-2)) {
-          emitM418(`M418 SRV seq=${info.seq} status=${info.status} len=${info.len} ${url.slice(0, 70)} :: ${info.order}`);
-          emitM418(`M418 SRVHEAD seq=${info.seq} ${String(info.bodyHead).slice(0, 150)}`);
+          emitM418(`M418 SRV seq=${info.seq} len=${info.len} ${url.slice(-58)} :: ${String(info.order).slice(0, 88)}`);
+          emitM418(`M418 SRVHEAD seq=${info.seq} ${String(info.bodyHead).slice(0, 100)}`);
         }
       }
     });
@@ -755,7 +755,9 @@ const failed = results.filter((item) => !item.ok).length;
 if (m418Lines.length || hydrationVisits.length) {
   console.log(`M418E BEGIN ${m418Lines.length} buffered evidence lines`);
   const priority = m418Lines.filter((line) => !line.startsWith("HYDRATION SAMPLE"));
-  for (const line of priority.slice(-20)) console.log(line);
+  const rank = (line) => (line.includes("EXPECTED") || line.includes("M418 HEAD") || line.includes("M418 PARSE") ? 0 : 1);
+  const ordered = [...priority].sort((a, b) => rank(a) - rank(b));
+  for (const line of ordered.slice(0, 30)) console.log(String(line).slice(0, 190));
   for (const entry of hydrationVisits.slice(-6)) {
     if (entry && (entry.rawOrder || entry.order)) {
       console.log(`M418E PAIR dom=${String(entry.order || "").slice(0, 46)} raw=${String(entry.rawOrder || "").slice(0, 46)} :: ${entry.category || ""} a${entry.attempt || ""}`);
