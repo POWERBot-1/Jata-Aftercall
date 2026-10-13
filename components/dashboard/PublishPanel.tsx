@@ -45,9 +45,15 @@ export function PublishPanel({
       const response = await fetch("/api/experience/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, action }),
+        // Publish exactly the draft version shown above. If it changed in another window, the server refuses (409).
+        body: JSON.stringify(action === "publish" ? { businessId, action, expectedDraftVersion: draftVersion } : { businessId, action }),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.code === "draft_version_conflict") {
+        setMessage({ tone: "error", text: data.error || "Your website changed in another window. Nothing was published." });
+        router.refresh();
+        return;
+      }
       if (data.published) {
         setMessage({ tone: "ok", text: `${data.message || "You’re live 🎉"} ${data.url || publicUrl}` });
         router.refresh();

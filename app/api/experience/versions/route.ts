@@ -11,8 +11,8 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
-import { recordDraftRevision } from "@/lib/experience/history";
+import { validateExperienceJson } from "@/lib/experience/schema";
+import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,8 @@ export async function GET(req: Request) {
   }
 }
 
+const CONFLICT_MESSAGE = "Your website changed in another window, so nothing was restored. Reload to see the latest draft, then try again.";
+
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
@@ -65,26 +67,44 @@ export async function POST(req: Request) {
     if (!snapshot) return NextResponse.json({ error: "That version is no longer available." }, { status: 404 });
     const existing = await prisma.businessExperience.findUnique({
       where: { businessId },
-      select: { draftVersion: true },
+      select: { draftVersion: true, historyCursor: true },
     });
     if (!existing) return NextResponse.json({ error: "Create your website before restoring a version." }, { status: 409 });
 
-    const document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), snapshot.categoryKey);
+    // A restore replaces the whole draft. If the client named a version and the draft has moved on, refuse.
+    const expected = Number(body?.expectedDraftVersion);
+    if (Number.isInteger(expected) && expected > 0 && expected !== Number(existing.draftVersion)) {
+      return NextResponse.json({ error: CONFLICT_MESSAGE, code: "draft_version_conflict" }, { status: 409 });
+    }
+
+    const schema = validateExperienceJson(snapshot.snapshotJson, snapshot.categoryKey, { migrateLegacyDefaults: true });
+    if (!schema.ok) {
+      return NextResponse.json({ error: "That version cannot be restored safely. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 409 });
+    }
+    const document = schema.document;
     const nextVersion = Math.max(1, existing.draftVersion) + 1;
-    const experience = await prisma.businessExperience.update({
-      where: { businessId },
-      data: {
-        draftJson: JSON.stringify(document),
-        draftVersion: nextVersion,
-        historyCursor: nextVersion,
-        categoryKey: snapshot.categoryKey,
-        themeKey: snapshot.themeKey,
-      },
-      select: { id: true, draftVersion: true },
-    });
+    // Compare-and-swap on the version read above: a write that lands in between makes this a 409, never a silent overwrite.
+    const experience = await prisma.businessExperience
+      .update({
+        where: { businessId, draftVersion: existing.draftVersion },
+        data: {
+          draftJson: JSON.stringify(document),
+          draftVersion: nextVersion,
+          historyCursor: nextVersion,
+          categoryKey: snapshot.categoryKey,
+          themeKey: snapshot.themeKey,
+        },
+        select: { id: true, draftVersion: true },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2025") return null;
+        throw error;
+      });
+    if (!experience) return NextResponse.json({ error: CONFLICT_MESSAGE, code: "draft_version_conflict" }, { status: 409 });
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,
+      discardAfter: draftCursorOf(existing),
       document,
       label: `Restored your published version ${version}`,
       source: "RESTORE",

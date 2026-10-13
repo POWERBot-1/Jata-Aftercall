@@ -16,11 +16,16 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
 import { getBusinessUrl } from "@/lib/url";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
 
 export const dynamic = "force-dynamic";
+
+const DRAFT_CHANGED_CODE = "draft_version_conflict";
+const DRAFT_CHANGED_MESSAGE = "Your website changed in another window. Reload to see the latest version, then publish again. Nothing was published.";
+const VERSION_REQUIRED_CODE = "draft_version_required";
+const VERSION_REQUIRED_MESSAGE = "Reload the page and publish again so we know which version you reviewed.";
 
 type Loaded = Awaited<ReturnType<typeof loadPublishContext>>;
 
@@ -33,7 +38,7 @@ async function loadPublishContext(businessId: string) {
     prisma.businessExperience.findUnique({ where: { businessId } }),
     prisma.product.count({ where: { businessId, isActive: true } }),
     prisma.service.count({ where: { businessId, isActive: true } }),
-    prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+    prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
     prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
     prisma.subscription.findUnique({
       where: { businessId },
@@ -49,10 +54,12 @@ export async function POST(req: Request) {
 
   let businessId = "";
   let action = "publish";
+  let expectedDraftVersion = 0;
   try {
     const body = await req.json();
     businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
     if (body?.action === "unpublish") action = "unpublish";
+    expectedDraftVersion = Number(body?.expectedDraftVersion);
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
@@ -85,9 +92,22 @@ export async function POST(req: Request) {
 
     if (!experience) return NextResponse.json({ error: "Create your website before publishing it." }, { status: 409 });
 
+    // A publish publishes exactly the draft the owner reviewed. That draft is named by its version, so a
+    // stale window cannot publish a newer edit it never saw. Missing version: 428 (a precondition), not 409.
+    if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+      return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+    }
+
     const isAdmin = session.role === "ADMIN";
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(experience.draftJson), experience.categoryKey);
+    const schema = validateExperienceJson(experience.draftJson, experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        error: "Your website configuration needs attention before publishing.",
+        code: "experience_schema_invalid", requires: "SCHEMA", published: false, issues: schema.issues,
+      }, { status: 409 });
+    }
+    const document = schema.document;
 
     const validation = validateForPublication({
       document,
@@ -127,12 +147,19 @@ export async function POST(req: Request) {
       }, { status: 409 });
     }
 
+    // Fast path: a stale window is refused before any write. The compare-and-swap below is what makes it safe.
+    if (expectedDraftVersion !== Number(experience.draftVersion)) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
+    }
+
     const nextVersion = Math.max(1, experience.draftVersion || experience.publishedVersion + 1);
     const publishedAt = new Date();
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.businessExperience.update({
-        where: { businessId },
+    // Compare-and-swap: the write applies only if the stored draft is still the one that was validated (same
+    // version AND same content). A newer edit in between makes this match no row, and nothing is published.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.businessExperience.updateMany({
+        where: { businessId, draftVersion: expectedDraftVersion, draftJson: experience.draftJson },
         data: {
           status: "PUBLISHED",
           publishedJson: JSON.stringify(document),
@@ -141,8 +168,13 @@ export async function POST(req: Request) {
           publishedAt,
           publishedById: session.userId,
         },
+      });
+      if (claimed.count !== 1) return null;
+      const updated = await tx.businessExperience.findUnique({
+        where: { businessId },
         select: { id: true, status: true, publishedVersion: true, publishedAt: true },
       });
+      if (!updated) return null;
       await tx.experienceVersion.upsert({
         where: { businessId_version: { businessId, version: nextVersion } },
         update: { snapshotJson: JSON.stringify(document), themeKey: document.themeKey, categoryKey: document.categoryKey, publishedAt, publishedById: session.userId },
@@ -168,6 +200,10 @@ export async function POST(req: Request) {
       });
       return updated;
     });
+    if (!outcome) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
+    const result = outcome;
 
     await syncInteractiveEntitlement(businessId);
 
@@ -203,7 +239,15 @@ export async function GET(req: Request) {
     if (!context.business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     if (!context.experience) return NextResponse.json({ ready: false, checks: [] });
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(context.experience.draftJson), context.experience.categoryKey);
+    const schema = validateExperienceJson(context.experience.draftJson, context.experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        ready: false, failedCount: 1, entitlement, version: context.experience.draftVersion,
+        publishedVersion: context.experience.publishedVersion, code: "experience_schema_invalid", issues: schema.issues,
+        checks: [{ id: "schema", label: "Supported safe experience format", status: "fail", hint: schema.issues[0]?.message }],
+      });
+    }
+    const document = schema.document;
     const validation = validateForPublication({
       document,
       business: context.business,

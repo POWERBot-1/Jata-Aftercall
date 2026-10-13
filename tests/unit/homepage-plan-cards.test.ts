@@ -30,11 +30,17 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import HomePage from "@/app/page";
-import { planDisplayName } from "@/lib/pricing";
+import { orderHomepagePlans, planDisplayName } from "@/lib/pricing";
 
 const render = async () => renderToStaticMarkup(await HomePage());
 
 describe("planDisplayName", () => {
+  it("brands the stable INTERACTIVE_BUSINESS product as Website Studio even for healthy legacy stored names", () => {
+    expect(planDisplayName({ key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month" }))
+      .toBe("Website Studio — KES 999/month");
+    expect(planDisplayName({ key: "INTERACTIVE_BUSINESS", name: "Old marketing name" }))
+      .toBe("Website Studio — KES 999/month");
+  });
   it("shows a healthy stored name exactly as written", () => {
     expect(planDisplayName({ key: "MONTHLY", name: "Monthly — KES 149/month" })).toBe("Monthly — KES 149/month");
     expect(planDisplayName({ key: "PROMO", name: "Promo — KES 499/year" })).toBe("Promo — KES 499/year");
@@ -42,7 +48,7 @@ describe("planDisplayName", () => {
 
   it("falls back to the canonical name when the stored one is corrupt or blank", () => {
     expect(planDisplayName({ key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk \uFFFD KES 499/month" })).toBe("AI Business Front Desk — KES 499/month");
-    expect(planDisplayName({ key: "INTERACTIVE_BUSINESS", name: "Interactive Business \uFFFD KES 999/month" })).toBe("Interactive Business — KES 999/month");
+    expect(planDisplayName({ key: "INTERACTIVE_BUSINESS", name: "Interactive Business \uFFFD KES 999/month" })).toBe("Website Studio — KES 999/month");
     expect(planDisplayName({ key: "ANNUAL", name: "" })).toBe("Annual — KES 999/year");
   });
 
@@ -54,6 +60,42 @@ describe("planDisplayName", () => {
 });
 
 describe("homepage plan cards", () => {
+  const expectedOrder = ["Monthly — KES 149/month", "Annual — KES 999/year", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month"];
+  const assertOrder = (html: string) => {
+    const positions = expectedOrder.map((name) => html.indexOf(name));
+    expect(positions.every((index) => index >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(html.indexOf('id="business-pos-heading"')).toBeGreaterThan(positions[3]);
+    expect(html).not.toContain("Interactive Business");
+  };
+
+  it("orders database-backed cards Monthly → Annual → AI Front Desk → Website Studio, before the separate POS entry", async () => {
+    state.fail = false;
+    state.rows = [
+      { key: "AI_BUSINESS_FRONT_DESK", name: expectedOrder[2], priceKES: 499, durationDays: 30 },
+      { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30 },
+      { key: "MONTHLY", name: expectedOrder[0], priceKES: 149, durationDays: 30 },
+      { key: "ANNUAL", name: expectedOrder[1], priceKES: 999, durationDays: 365 },
+    ];
+    assertOrder(await render());
+  });
+
+  it("keeps the same required order on a database failure", async () => {
+    state.fail = true;
+    try { assertOrder(await render()); } finally { state.fail = false; }
+  });
+
+  it("marketing sorting does not mutate input or replace server-derived IDs/prices/durations", () => {
+    const input = [
+      { id: "annual-stored", key: "ANNUAL", priceKES: 999, durationDays: 365 },
+      { id: "monthly-stored", key: "MONTHLY", priceKES: 149, durationDays: 30 },
+    ];
+    const before = structuredClone(input);
+    const sorted = orderHomepagePlans(input);
+    expect(input).toEqual(before);
+    expect(sorted).toEqual([input[1], input[0]]);
+    expect(sorted[0]).toBe(input[1]);
+  });
   it("renders no replacement characters and keeps every price when stored names are corrupt", async () => {
     state.fail = false;
     state.rows = [
@@ -66,7 +108,7 @@ describe("homepage plan cards", () => {
     const html = await render();
     expect(html).not.toContain("\uFFFD");
     expect(html).toContain("AI Business Front Desk — KES 499/month");
-    expect(html).toContain("Interactive Business — KES 999/month");
+    expect(html).toContain("Website Studio — KES 999/month");
     expect(html).toContain("Monthly — KES 149/month");
     expect(html).toContain("Annual — KES 999/year");
     // The price shown is always the stored price, never the name's text.
@@ -78,7 +120,7 @@ describe("homepage plan cards", () => {
     state.fail = true;
     const html = await render();
     state.fail = false;
-    for (const name of ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Annual — KES 999/year", "Interactive Business — KES 999/month"]) {
+    for (const name of ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Annual — KES 999/year", "Website Studio — KES 999/month"]) {
       expect(html, name).toContain(name);
     }
     expect(html).not.toContain("JATA AFTERCALL — Business POS — KES");

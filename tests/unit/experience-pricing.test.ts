@@ -50,7 +50,9 @@ beforeEach(() => {
 
 describe("unit price resolution", () => {
   it("prefers a sale price, then a variant price, then the base price", () => {
-    expect(unitPriceFor({ basePriceKES: 1000, salePriceKES: 800 })).toBe(800);
+    // A sale only counts inside a valid window; with no window the base price is charged.
+    expect(unitPriceFor({ basePriceKES: 1000, salePriceKES: 800 })).toBe(1000);
+    expect(unitPriceFor({ basePriceKES: 1000, salePriceKES: 800, salePriceStartsAt: new Date("2026-01-01T00:00:00Z"), salePriceEndsAt: new Date("2026-02-01T00:00:00Z") }, null, new Date("2026-01-15T00:00:00Z"))).toBe(800);
     expect(unitPriceFor({ basePriceKES: 1000, salePriceKES: null }, { priceKES: 1200 })).toBe(1200);
     expect(unitPriceFor({ basePriceKES: 1000, salePriceKES: 0 }, null)).toBe(1000);
     expect(unitPriceFor({ basePriceKES: null }, null)).toBe(0);

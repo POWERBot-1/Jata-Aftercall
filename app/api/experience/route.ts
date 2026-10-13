@@ -7,6 +7,8 @@
  */
 
 import { NextResponse } from "next/server";
+import { historyBasisFor, seedNewDocument } from "@/lib/experience/variant";
+import { diversityReport } from "@/lib/experience/diversity";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
@@ -24,11 +26,14 @@ import {
   updateSection,
 } from "@/lib/experience/document";
 import { isValidThemeKey } from "@/lib/experience/themes";
+import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
+import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { parseBusinessRecipeConfig } from "@/lib/experience/businessRecipes";
 import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experience/validate";
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
 import { applyStudioFix, STUDIO_FIX_IDS, type StudioFixId } from "@/lib/studio/fixes";
-import { describeDraftChange, recordDraftRevision } from "@/lib/experience/history";
+import { describeDraftChange, recordDraftRevision, draftCursorOf } from "@/lib/experience/history";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +47,11 @@ function parseDocument(json: string | null | undefined, fallbackCategory?: strin
     return null;
   }
 }
+
+const DRAFT_CHANGED_CODE = "draft_version_conflict";
+const DRAFT_CHANGED_MESSAGE = "Your website changed in another window. Reload to see the latest draft, then try again. Nothing was overwritten.";
+const VERSION_REQUIRED_CODE = "draft_version_required";
+const VERSION_REQUIRED_MESSAGE = "This change needs the draft version it was made from. Reload the page and try again. Nothing was changed.";
 
 /** Load everything the editor and the publish gate need, scoped to one tenant. */
 export async function GET(req: Request) {
@@ -67,7 +77,7 @@ export async function GET(req: Request) {
       prisma.businessExperience.findUnique({ where: { businessId } }),
       prisma.product.count({ where: { businessId, isActive: true } }),
       prisma.service.count({ where: { businessId, isActive: true } }),
-      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
     ]);
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
@@ -149,25 +159,50 @@ export async function POST(req: Request) {
 
     const existing = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (existing) {
-      const document = normalizeExperienceDocument(
-        { ...parseDocument(existing.draftJson, existing.categoryKey), categoryKey, themeKey: body?.themeKey || existing.themeKey },
-        categoryKey,
-      );
+      // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
+      // client that read version N must send N, and the write is a compare-and-swap on it.
+      const expectedDraftVersion = Number(body?.expectedDraftVersion);
+      // Creating a website is the only thing this form does for a business with no draft. For a business
+      // that already has one, a change must name the version it was made from, so a stale window that
+      // still shows "create" cannot silently rewrite a newer draft.
+      if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+        return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+      }
+      if (expectedDraftVersion !== Number(existing.draftVersion)) {
+        return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
+      }
+      const previous = validateExperienceJson(existing.draftJson || "{}", existing.categoryKey);
+      if (!previous.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
+      let document = normalizeExperienceDocument({ ...previous.document, categoryKey, themeKey: body?.themeKey || existing.themeKey }, categoryKey);
+      if (previous.document.version === 2 && previous.document.categoryKey !== categoryKey) {
+        document = buildArtDirectedCandidate(document, `${businessId}:category`, { brief: { goal: defaultDesignGoal({ ...document, artDirection: undefined }) } }).document;
+      }
+      const safeDocument = validateExperienceDocument(document);
+      if (!safeDocument.ok) return NextResponse.json({ error: "This business direction does not use a supported configuration.", code: "experience_schema_invalid" }, { status: 400 });
       const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
-      const updated = await prisma.businessExperience.update({
-        where: { businessId },
-        data: {
-          categoryKey,
-          themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
-          draftJson: JSON.stringify(document),
-          draftVersion: nextVersion,
-          historyCursor: nextVersion,
-        },
-      });
+      const updated = await prisma.businessExperience
+        .update({
+          where: { businessId, draftVersion: existing.draftVersion },
+          data: {
+            categoryKey,
+            themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
+            draftJson: JSON.stringify(document),
+            draftVersion: nextVersion,
+            historyCursor: nextVersion,
+          },
+        })
+        .catch((error: unknown) => {
+          if ((error as { code?: string })?.code === "P2025") return null;
+          throw error;
+        });
+      if (!updated) {
+        return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+      }
       await recordDraftRevision(prisma, {
         businessId,
         draftVersion: nextVersion,
+        discardAfter: draftCursorOf(existing),
         document,
         label: `Changed your business type to ${profile.label}`,
         source: "EDIT",
@@ -182,7 +217,10 @@ export async function POST(req: Request) {
     });
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
-    const document = createExperienceDocument({
+    // The new draft is seeded so later regenerations are reproducible. A brand-new business has no
+    // published history to compare against, so the diversity status says so instead of claiming a check.
+    const seeded = seedNewDocument(
+      createExperienceDocument({
       categoryKey,
       businessName: business.name,
       description: business.description,
@@ -190,7 +228,10 @@ export async function POST(req: Request) {
       whatsapp: business.whatsapp,
       location: business.location,
       themeKey: typeof body?.themeKey === "string" ? body.themeKey : null,
-    });
+      }),
+      businessId,
+    );
+    const document = seeded.document;
 
     const experience = await prisma.businessExperience.create({
       data: {
@@ -206,13 +247,38 @@ export async function POST(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: 1,
+      discardAfter: 0,
       document,
       label: "Created your website",
       source: "SYSTEM",
       createdById: session.userId,
     });
 
-    return NextResponse.json({ experience, document }, { status: 201 });
+    // Informational only. The default layout is deterministic (nothing is generated to choose from), so
+    // nothing is blocked. If this business has published versions, the new draft is compared with them.
+    let publishedDocuments: ReturnType<typeof normalizeExperienceDocument>[] = [];
+    try {
+      const versions = await prisma.experienceVersion.findMany({
+        where: { businessId },
+        orderBy: { version: "desc" },
+        take: 5,
+        select: { snapshotJson: true },
+      });
+      publishedDocuments = versions.flatMap((row) => {
+        try {
+          return [normalizeExperienceDocument(JSON.parse(row.snapshotJson || "{}"), document.categoryKey)];
+        } catch {
+          return [];
+        }
+      });
+    } catch {
+      publishedDocuments = [];
+    }
+    const diversity = publishedDocuments.length > 0
+      ? { ...diversityReport(document, publishedDocuments), ...historyBasisFor(publishedDocuments.length), seed: seeded.diversity.seed }
+      : seeded.diversity;
+
+    return NextResponse.json({ experience, document, diversity }, { status: 201 });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.saveFailed);
     if (mapped.status === 500) console.error("experience create failed");
@@ -237,8 +303,23 @@ export async function PATCH(req: Request) {
     const experience = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (!experience) return NextResponse.json({ error: "Create your website before editing it." }, { status: 409 });
 
+    // Optimistic concurrency, mandatory for every draft write (section ops, studio fixes, theme and brand
+    // edits, and whole-document saves). A client sends the draft version it read. Missing or malformed: 428
+    // (a precondition is missing; nothing was changed). Stale: 409 (the draft has moved on). The write below
+    // is also a compare-and-swap on that version, so a write that lands between this check and the update is
+    // refused too.
+    const expectedDraftVersion = Number(body?.expectedDraftVersion);
+    if (!(Number.isInteger(expectedDraftVersion) && expectedDraftVersion > 0)) {
+      return NextResponse.json({ error: VERSION_REQUIRED_MESSAGE, code: VERSION_REQUIRED_CODE }, { status: 428 });
+    }
+    if (expectedDraftVersion !== Number(experience.draftVersion)) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: experience.draftVersion }, { status: 409 });
+    }
+
     let document = parseDocument(experience.draftJson, experience.categoryKey);
-    if (!document) document = createExperienceDocument({ categoryKey: experience.categoryKey, businessName: "" });
+    if (!document) {
+      return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version before editing.", code: "experience_schema_invalid" }, { status: 409 });
+    }
     let summary: Record<string, unknown> | null = null;
 
     const op = typeof body?.op === "string" ? (body.op as SectionOp) : null;
@@ -263,9 +344,19 @@ export async function PATCH(req: Request) {
           if (section) document = updateSection(document, sectionId, { visible: !section.visible });
           break;
         }
-        case "update":
-          document = updateSection(document, sectionId, body?.patch && typeof body.patch === "object" ? body.patch : {});
+        case "update": {
+          const patch = body?.patch && typeof body.patch === "object" ? body.patch as Record<string, unknown> : {};
+          const section = document.sections.find((entry) => entry.id === sectionId);
+          // Check raw nonempty config BEFORE normalizing. Unknown recipes must fail, not silently disappear.
+          if (patch.config !== undefined && patch.config !== null &&
+            (typeof patch.config !== "object" || Array.isArray(patch.config) || Object.keys(patch.config).length > 0) &&
+            (document.version !== 2 || !section || !parseBusinessRecipeConfig(patch.config, document.categoryKey, section.type))) {
+            return NextResponse.json({ error: "This business recipe configuration is not supported for this section." }, { status: 400 });
+          }
+          if (patch.config === null) return NextResponse.json({ error: "Use an empty or supported recipe configuration." }, { status: 400 });
+          document = updateSection(document, sectionId, patch);
           break;
+        }
         case "studio-fix": {
           // "Fix with JATA" (§36): a health-check remedy applied to the draft through this one
           // write path, so it is normalized, versioned and undoable exactly like a manual edit.
@@ -308,7 +399,13 @@ export async function PATCH(req: Request) {
           return NextResponse.json({ error: "Unsupported edit." }, { status: 400 });
       }
     } else if (body?.document && typeof body.document === "object") {
-      document = normalizeExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, document.categoryKey);
+      const schema = validateExperienceDocument({ ...body.document, categoryKey: document.categoryKey }, {
+        allowLegacy: true, fallbackCategory: document.categoryKey,
+      });
+      if (!schema.ok) {
+        return NextResponse.json({ error: "This experience configuration is not supported. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 400 });
+      }
+      document = schema.document;
     } else {
       // Partial updates: brand, settings, theme, category.
       const next = {
@@ -325,19 +422,34 @@ export async function PATCH(req: Request) {
       document = normalizeExperienceDocument(next, next.categoryKey);
     }
 
+    const checked = validateExperienceDocument(document);
+    if (!checked.ok) {
+      return NextResponse.json({ error: "This change would create an invalid experience. Nothing was saved.", code: "experience_schema_invalid", issues: checked.issues }, { status: 400 });
+    }
+    document = checked.document;
     document.updatedAt = new Date().toISOString();
     const nextVersion = Math.max(1, Number(experience.draftVersion) || 1) + 1;
-    const updated = await prisma.businessExperience.update({
-      where: { businessId },
-      data: {
-        categoryKey: document.categoryKey,
-        themeKey: document.themeKey,
-        draftJson: JSON.stringify(document),
-        draftVersion: nextVersion,
-        historyCursor: nextVersion,
-      },
-      select: { id: true, draftVersion: true, publishedVersion: true, status: true, updatedAt: true },
-    });
+    // Compare-and-swap on the version this edit was built from. If another write landed first, the
+    // row no longer matches, Prisma reports P2025, and the owner gets a conflict instead of an overwrite.
+    const updated = await prisma.businessExperience
+      .update({
+        where: { businessId, draftVersion: experience.draftVersion },
+        data: {
+          categoryKey: document.categoryKey,
+          themeKey: document.themeKey,
+          draftJson: JSON.stringify(document),
+          draftVersion: nextVersion,
+          historyCursor: nextVersion,
+        },
+        select: { id: true, draftVersion: true, publishedVersion: true, status: true, updatedAt: true },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2025") return null;
+        throw error;
+      });
+    if (!updated) {
+      return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
+    }
 
     // One revision per owner-visible change — the single mechanism behind Undo and Redo for
     // sections, design, photos, catalogue edits and AI copy alike (§45). Recording can fail
@@ -356,6 +468,7 @@ export async function PATCH(req: Request) {
     await recordDraftRevision(prisma, {
       businessId,
       draftVersion: nextVersion,
+      discardAfter: draftCursorOf(experience),
       document,
       label: describeDraftChange(changeKind, {
         type: affectedType || undefined,

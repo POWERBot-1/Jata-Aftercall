@@ -7,10 +7,12 @@
  */
 
 import prisma from "../db";
+import { requestCache } from "../request-cache";
 import { getExperienceProfile } from "./categories";
-import { normalizeExperienceDocument } from "./document";
+import { normalizeExperienceDocument, themeOf } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
+import { displayPriceKES } from "../sale-pricing";
 
 export type StorefrontVariant = { id: string; label: string; priceKES: number | null; stockStatus: string; options: Record<string, string> };
 export type StorefrontAddOn = { id: string; name: string; priceKES: number };
@@ -138,6 +140,8 @@ function mapProduct(product: {
   description: string | null;
   basePriceKES: number | null;
   salePriceKES: number | null;
+  salePriceStartsAt?: Date | string | null;
+  salePriceEndsAt?: Date | string | null;
   imageUrl: string | null;
   images: string | null;
   category: string | null;
@@ -152,14 +156,16 @@ function mapProduct(product: {
   variantOptions: string | null;
   variants?: Array<{ id: string; label: string; priceKES: number | null; stockStatus: string; options: string | null }>;
 }): StorefrontItem {
-  const price = product.salePriceKES && product.salePriceKES > 0 ? product.salePriceKES : product.basePriceKES;
+  // Shown exactly as checkout charges it: the sale only inside its window (lib/sale-pricing.ts).
+  const shown = displayPriceKES(product);
+  const price = shown.priceKES;
   return {
     id: product.id,
     kind: "product",
     name: product.name,
     description: product.description,
     price,
-    wasPrice: product.salePriceKES && product.salePriceKES > 0 && product.basePriceKES ? product.basePriceKES : null,
+    wasPrice: shown.wasPriceKES,
     priceLabel: null,
     pricingType: "FIXED",
     imageUrl: product.imageUrl || parseJsonArray(product.images)[0] || null,
@@ -250,8 +256,13 @@ export type LoadStorefrontOptions = {
 /**
  * Load a published storefront. Returns null when the business is missing, unpublished, or
  * has no published experience — the caller renders not-found (§37).
+ *
+ * Request-deduplicated (M11 #418): `generateMetadata` and the page body call this
+ * through one shared per-request cache entry (primitive cache key), so each request
+ * performs a single load and the SSR root segment completes with the metadata —
+ * keeping the hydration bootstrap scripts behind the content in the emitted HTML.
  */
-export async function loadStorefront(slug: string, options: LoadStorefrontOptions = {}): Promise<StorefrontData | null> {
+async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft: boolean): Promise<StorefrontData | null> {
   const business = await prisma.business.findUnique({
     where: { slug },
     select: {
@@ -262,16 +273,17 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
   });
   if (!business) return null;
   if (business.status === "SUSPENDED") return null;
+  if (!business.isPublished && !allowDraft) return null;
 
   const experience = await prisma.businessExperience.findUnique({
     where: { businessId: business.id },
     select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
   });
 
-  const published = experience?.publishedJson && experience.status === "PUBLISHED";
-  const usingDraft = options.allowDraft === true && Boolean(experience?.draftJson);
-  const preferDraft = options.preferDraft === true && usingDraft;
-  const json = preferDraft
+  const published = business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED";
+  const usingDraft = allowDraft && Boolean(experience?.draftJson);
+  const usePreferredDraft = preferDraft && usingDraft;
+  const json = usePreferredDraft
     ? experience!.draftJson
     : published
       ? experience!.publishedJson
@@ -280,7 +292,14 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
         : null;
   if (!json) return null;
 
-  const document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+  let document: ExperienceDocument;
+  try {
+    document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+  } catch {
+    // An unreadable/newer format is not rendered as an older schema. The /b route retains
+    // its classic HTML business-page fallback; no published/draft data is modified here.
+    return null;
+  }
   // Contact details always come from the tenant's own stored business record (§45).
   document.settings.phone = document.settings.phone || business.phone || undefined;
   document.settings.whatsapp = document.settings.whatsapp || business.whatsapp || undefined;
@@ -314,7 +333,7 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
   return {
     business,
     document,
-    theme: resolveExperienceTheme(document.themeKey),
+    theme: themeOf(document),
     profile: getExperienceProfile(document.categoryKey),
     items,
     services: mappedServices,
@@ -322,9 +341,15 @@ export async function loadStorefront(slug: string, options: LoadStorefrontOption
       ? { title: offer.title, subtitle: offer.subtitle, imageUrl: offer.imageUrl, ctaLabel: offer.ctaLabel, badge: offer.badge }
       : null,
     categories,
-    isPreview: preferDraft || (usingDraft && !published),
+    isPreview: usePreferredDraft || (usingDraft && !published),
     publishedVersion: experience?.publishedVersion ?? 0,
   };
+}
+
+const loadStorefrontCached = requestCache(loadStorefrontImpl);
+
+export function loadStorefront(slug: string, options: LoadStorefrontOptions = {}): Promise<StorefrontData | null> {
+  return loadStorefrontCached(slug, options.allowDraft === true, options.preferDraft === true);
 }
 
 export function findItem(data: StorefrontData, id: string): StorefrontItem | null {

@@ -80,6 +80,12 @@ Object.assign(dbMock, {
   order: { findMany: vi.fn(async () => []) },
   notification: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({ id: "n1" })) },
   auditEvent: { create: vi.fn(async () => ({ id: "a1" })) },
+  // A cart is looked up by its id alone; the route must scope it to a business before returning it.
+  cart: {
+    findUnique: vi.fn(async () => ({
+      id: "cart_a", businessId: "biz_tenant_a", customerId: "cust_private", status: "ACTIVE", items: [],
+    })),
+  },
 });
 
 vi.mock("@/lib/db", () => ({ default: hoisted.dbMock }));
@@ -92,6 +98,8 @@ import {
 } from "@/app/api/intelligence/questions/route";
 import { GET as notificationsGet, POST as notificationsPost } from "@/app/api/notifications/route";
 import { POST as preordersPost } from "@/app/api/preorders/route";
+import { GET as cartGet } from "@/app/api/cart/route";
+import { POST as leadsPost } from "@/app/api/ai/leads/route";
 import { GET as merchantPaymentGet } from "@/app/api/merchant-payment/route";
 import { POST as aiChatPost } from "@/app/api/ai/chat/route";
 
@@ -148,6 +156,38 @@ const anonymousWrites: Array<[string, () => Promise<Response>]> = [
     () => preordersPost(jsonPost({ businessId: TENANT_A, productName: "Cake", quantity: 1, fullPriceKES: 2500 })),
   ],
 ];
+
+describe("anonymous writes and id-only reads are tenant-scoped (§5, §54)", () => {
+  beforeEach(() => {
+    state.currentUser = null;
+    state.businesses.clear();
+    state.businesses.set("biz_tenant_a", {
+      id: "biz_tenant_a", slug: "tenant-a-shop", name: "Tenant A Shop", ownerId: "user_tenant_a",
+      category: "Retail Shop", isPublished: true, status: "PUBLISHED",
+    });
+    state.businesses.set("biz_unpublished", {
+      id: "biz_unpublished", slug: "unpublished-shop", name: "Unpublished Shop", ownerId: "user_unpub",
+      category: "Retail Shop", isPublished: false, status: "DRAFT",
+    });
+  });
+
+  it("an anonymous caller cannot read a cart by id without naming the business that owns it", async () => {
+    const res = await cartGet(get("/api/cart?cartId=cart_a"));
+    expect(res.status, "cart lookup must name its business").toBe(400);
+    const body = JSON.stringify(await res.json());
+    expect(body).not.toContain("cust_private");
+  });
+
+  it("an anonymous caller cannot record a question into another tenant's unanswered queue (401)", async () => {
+    const res = await questionsPost(jsonPost({ businessId: "biz_tenant_a", question: "Do you deliver?" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("an anonymous caller cannot capture a lead for an unpublished business (403)", async () => {
+    const res = await leadsPost(jsonPost({ businessId: "biz_unpublished", classification: "GENERAL_INQUIRY", summary: "hi" }));
+    expect(res.status).toBe(403);
+  });
+});
 
 describe("AI Front Desk route authorization matrix (§5, §54)", () => {
   beforeEach(() => {

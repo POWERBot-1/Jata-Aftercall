@@ -10,6 +10,9 @@
  * consumes one normalized experience document, and a single editor edits it.
  */
 
+import type { RenderPreference } from "./renderMode";
+import type { ArtDirection } from "./templateFamilies";
+
 /** Photography languages a website can use (§8, §30, §44). Shared so the document, the AI
  *  design context and the Studio picker cannot drift apart. */
 export const PHOTOGRAPHY_STYLE_KEYS = [
@@ -212,6 +215,8 @@ export type ExperienceSettings = {
 /** The full versioned document. Stored as JSON; edited by the section editor (§15). */
 export type ExperienceDocument = {
   version: number;
+  /** Explicit v2 registered composition; absent in unchanged legacy/v1 documents. */
+  artDirection?: ArtDirection;
   categoryKey: CategoryKey;
   themeKey: string;
   brand: ExperienceBrand;
@@ -224,6 +229,10 @@ export type ExperienceDocument = {
   };
   /** The photography language JATA uses when it creates or improves images for this website. */
   photographyStyle?: PhotographyStyleKey | string;
+  /** Owner's rendering preference. Absent in v1 documents, which behave as "auto" (Immersive Website Engine, Phase 1). */
+  renderPreference?: RenderPreference;
+  /** Provenance of a seeded structural variant (Phase 3). Absent for hand-built documents. */
+  generation?: { seed: string; version: number; attempt: number };
   /** The design direction the owner chose, kept for the Studio's "current direction" state. */
   designDirectionKey?: string;
   updatedAt?: string;

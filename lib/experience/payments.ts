@@ -17,6 +17,7 @@ import { PAYMENT_CURRENCY } from "../paymentCurrency";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
+import { classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
 import { formatKES } from "../format";
 
 export const PAYMENT_PURPOSE = {
@@ -39,6 +40,9 @@ export function paymentStateOf(payment: { status?: string | null } | null | unde
       return "CANCELLED";
     case "EXPIRED":
       return "EXPIRED";
+    case "CANCELLED":
+      // Paystack reported the customer abandoned the payment. Without this case it was shown as "Started".
+      return "CANCELLED";
     case "PENDING":
       return "PENDING";
     default:
@@ -76,18 +80,26 @@ export type InitializeResult =
  * Create the payment row first, then ask Paystack to initialize. The amount always comes
  * from the server-priced order — never from the browser (§26).
  */
-export async function initializeOrderPayment(input: InitializeOrderPaymentInput): Promise<InitializeResult> {
+export type OrderPaymentRecord =
+  | { kind: "error"; error: string; status: number }
+  | { kind: "record"; paymentId: string; reference: string; amount: number; ownerId: string };
+
+/**
+ * Database step only: create the PENDING payment row for an order. No network call, so it can run inside the
+ * checkout transaction. The provider call is separate (startOrderPayment) and must run after commit.
+ */
+export async function createOrderPaymentRecord(input: InitializeOrderPaymentInput, client: any = prisma): Promise<OrderPaymentRecord> {
   const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
   if (amountKES <= 0) return { kind: "error", error: "This order has nothing to pay.", status: 400 };
 
-  const business = await prisma.business.findUnique({
+  const business = await client.business.findUnique({
     where: { id: input.businessId },
     select: { id: true, ownerId: true, slug: true },
   });
   if (!business) return { kind: "error", error: "Business not found.", status: 404 };
 
   const reference = generatePaymentReference();
-  const payment = await prisma.payment.create({
+  const payment = await client.payment.create({
     data: {
       reference,
       businessId: business.id,
@@ -102,6 +114,20 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
     },
     select: { id: true, reference: true, amount: true },
   });
+  return { kind: "record", paymentId: payment.id, reference: payment.reference, amount: payment.amount, ownerId: business.ownerId };
+}
+
+/**
+ * Provider step: ask Paystack to start the payment for a row created by createOrderPaymentRecord. Makes a network
+ * call, so it must never run while a database transaction is open.
+ */
+export async function startOrderPayment(
+  record: Extract<OrderPaymentRecord, { kind: "record" }>,
+  input: InitializeOrderPaymentInput,
+): Promise<InitializeResult> {
+  const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
+  const payment = { id: record.paymentId, reference: record.reference, amount: record.amount };
+  const business = { id: input.businessId, ownerId: record.ownerId };
 
   const callbackUrl = `${getBaseUrl()}${input.callbackPath.startsWith("/") ? input.callbackPath : `/${input.callbackPath}`}`;
 
@@ -143,8 +169,17 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
   }
 }
 
+/** Create the payment row, then ask Paystack to initialize (kept for existing callers). */
+export async function initializeOrderPayment(input: InitializeOrderPaymentInput): Promise<InitializeResult> {
+  const record = await createOrderPaymentRecord(input);
+  if (record.kind === "error") return record;
+  return startOrderPayment(record, input);
+}
+
+const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
+
 /**
- * Settle a verified order/deposit payment. Idempotent: the compare-and-set on PENDING means
+ * Settle a verified order/deposit payment. Idempotent: the compare-and-set on a settleable state means
  * concurrent webhook retries can only ever settle once (§27).
  */
 export async function settleOrderPayment(
@@ -163,10 +198,15 @@ export async function settleOrderPayment(
       if (options.eventId) await tx.processedWebhook.create({ data: { id: options.eventId } });
       return { alreadySettled: true, orderId: payment.orderId, bookingId: payment.bookingId };
     }
-    if (payment.status !== "PENDING") throw new Error("PAYMENT_NOT_PENDING");
+    // A provider-verified success settles the payment even if an earlier attempt on the same reference was marked
+    // failed, cancelled or expired (Paystack can report a failed card attempt and then a successful one). PAID and
+    // REFUNDED stay terminal. The caller has already verified the transaction with the provider.
+    if (!SETTLEABLE_PAYMENT_STATES.includes(payment.status as (typeof SETTLEABLE_PAYMENT_STATES)[number])) {
+      throw new Error("PAYMENT_NOT_PENDING");
+    }
 
     const changed = await tx.payment.updateMany({
-      where: { id: payment.id, status: "PENDING" },
+      where: { id: payment.id, status: { in: [...SETTLEABLE_PAYMENT_STATES] } },
       data: {
         status: "PAID",
         ...(options.verification?.paystackId ? { paystackId: options.verification.paystackId } : {}),
@@ -183,8 +223,30 @@ export async function settleOrderPayment(
     }
 
     if (payment.orderId) {
-      const order = await tx.order.findUnique({ where: { id: payment.orderId }, select: { id: true, businessId: true, orderReference: true, totalKES: true, status: true, customerName: true } });
-      if (order) {
+      const order = await tx.order.findUnique({ where: { id: payment.orderId }, select: { id: true, businessId: true, orderReference: true, totalKES: true, status: true, paymentStatus: true, customerName: true } });
+      if (order && order.paymentStatus === "PAID") {
+        // Business rule: an order is paid once. A second successful payment (for example, an earlier link that Paystack
+        // completed after a newer attempt was paid) is recorded as money received, but it does not re-confirm the order
+        // and it is not refunded automatically. The owner is asked to review a refund.
+        await tx.notification.create({
+          data: {
+            businessId: order.businessId,
+            eventType: "PAYMENT_DUPLICATE_ON_ORDER",
+            title: `Duplicate payment on order — ${order.orderReference}`,
+            message: `${order.customerName || "A customer"} paid ${formatKES(payment.amount)} on a second payment attempt for order ${order.orderReference}, which is already paid. Refund the duplicate payment.`,
+            channel: "WHATSAPP",
+            status: "PENDING",
+            referenceId: order.id,
+            maxRetries: 3,
+          },
+        });
+        await tx.auditEvent.create({
+          data: { action: "ORDER_DUPLICATE_PAYMENT", targetType: "PAYMENT", targetId: payment.id, metadata: JSON.stringify({ reference: payment.reference, orderId: order.id }) },
+        });
+      } else if (order) {
+        // Business rule: money received for a CANCELLED order is recorded (payment PAID, order paymentStatus PAID) but
+        // the order is NOT reopened and nothing is refunded automatically. The owner decides: refund, or reinstate.
+        const cancelled = order.status === "CANCELLED";
         await tx.order.update({
           where: { id: order.id },
           data: {
@@ -195,21 +257,36 @@ export async function settleOrderPayment(
               : {}),
           },
         });
-        await tx.analyticsEvent.create({
-          data: { businessId: order.businessId, eventType: "PAYMENT_SUCCESS", subjectId: order.id },
-        });
-        await tx.notification.create({
-          data: {
-            businessId: order.businessId,
-            eventType: "PAYMENT_VERIFIED",
-            title: `Payment received — ${order.orderReference}`,
-            message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)}. Order ${order.orderReference}.`,
-            channel: "WHATSAPP",
-            status: "PENDING",
-            referenceId: order.id,
-            maxRetries: 3,
-          },
-        });
+        if (cancelled) {
+          await tx.notification.create({
+            data: {
+              businessId: order.businessId,
+              eventType: "PAYMENT_ON_CANCELLED_ORDER",
+              title: `Payment on a cancelled order — ${order.orderReference}`,
+              message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)} for order ${order.orderReference}, which is cancelled. Refund the payment or reinstate the order.`,
+              channel: "WHATSAPP",
+              status: "PENDING",
+              referenceId: order.id,
+              maxRetries: 3,
+            },
+          });
+        } else {
+          await tx.analyticsEvent.create({
+            data: { businessId: order.businessId, eventType: "PAYMENT_SUCCESS", subjectId: order.id },
+          });
+          await tx.notification.create({
+            data: {
+              businessId: order.businessId,
+              eventType: "PAYMENT_VERIFIED",
+              title: `Payment received — ${order.orderReference}`,
+              message: `${order.customerName || "A customer"} paid ${formatKES(order.totalKES)}. Order ${order.orderReference}.`,
+              channel: "WHATSAPP",
+              status: "PENDING",
+              referenceId: order.id,
+              maxRetries: 3,
+            },
+          });
+        }
       }
     }
 
@@ -224,6 +301,14 @@ export async function settleOrderPayment(
     await tx.auditEvent.create({
       data: { action: "ORDER_PAYMENT_SETTLED", targetType: "PAYMENT", targetId: payment.id, metadata: JSON.stringify({ reference: payment.reference, orderId: payment.orderId, bookingId: payment.bookingId }) },
     });
+    if (payment.orderId) {
+      const cancelledOrder = await tx.order.findUnique({ where: { id: payment.orderId }, select: { status: true } });
+      if (cancelledOrder?.status === "CANCELLED") {
+        await tx.auditEvent.create({
+          data: { action: "ORDER_PAID_AFTER_CANCELLATION", targetType: "PAYMENT", targetId: payment.id, metadata: JSON.stringify({ reference: payment.reference, orderId: payment.orderId }) },
+        });
+      }
+    }
 
     return { alreadySettled: false, orderId: payment.orderId, bookingId: payment.bookingId };
   });
@@ -238,28 +323,119 @@ export async function failOrderPayment(paymentId: string): Promise<void> {
  * Verify a customer's order payment directly with Paystack (used by the confirmation page).
  * Returns the explicit state — never assumes success.
  */
-export async function verifyOrderPayment(reference: string): Promise<{ state: PaymentState; orderId?: string | null }> {
-  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, amount: true, purpose: true } });
-  if (!payment) return { state: "NOT_STARTED" };
-  if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId };
-  if (payment.status !== "PENDING") return { state: paymentStateOf(payment), orderId: payment.orderId };
+export type OrderPaymentVerdict = { state: PaymentState; orderId?: string | null; providerChecked: boolean };
 
-  if (process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
-    // Test/demo confirmation path.
+export async function verifyOrderPayment(reference: string): Promise<OrderPaymentVerdict> {
+  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
+  if (!payment) return { state: "NOT_STARTED", providerChecked: false };
+  if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
+  if (payment.status === "REFUNDED") return { state: "CANCELLED", orderId: payment.orderId, providerChecked: false };
+
+  if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+    // Test/demo confirmation path (no provider configured). Never reachable in production.
     await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${reference}`, raw: { testMock: true } } });
-    return { state: "SUCCESS", orderId: payment.orderId };
+    return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   }
 
+  // PENDING, FAILED, CANCELLED and EXPIRED are all re-checked with the provider. A local FAILED can be stale: Paystack can
+  // report a failed card attempt and then a successful one on the same reference. The provider's verified answer decides.
   try {
     const transaction = await verifyTransaction(reference);
-    if (transaction.status !== "success" || transaction.amount !== payment.amount || transaction.reference !== reference) {
-      return { state: "PENDING", orderId: payment.orderId };
+    const evidence = validatePaymentEvidence(payment, transaction);
+    if (evidence.ok === false) return { state: paymentStateOf(payment), orderId: payment.orderId, providerChecked: true };
+    const outcome = classifyProviderStatus(transaction.status);
+    if (outcome.kind === "in_progress") return { state: "PENDING", orderId: payment.orderId, providerChecked: true };
+    if (outcome.kind === "final_failure") {
+      // Record the terminal outcome only from PENDING; a payment that already failed keeps its state.
+      if (payment.status === "PENDING") {
+        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: outcome.status } });
+      }
+      return { state: paymentStateOf({ status: payment.status === "PENDING" ? outcome.status : payment.status }), orderId: payment.orderId, providerChecked: true };
     }
     const settled = await settleOrderPayment(payment.id, { verification: { paystackId: String(transaction.id), raw: transaction } });
-    return { state: "SUCCESS", orderId: settled.orderId };
+    return { state: "SUCCESS", orderId: settled.orderId, providerChecked: true };
   } catch {
-    return { state: "PENDING", orderId: payment.orderId };
+    // The provider did not answer. This is NOT a verdict: callers must not treat it as a failed payment.
+    return { state: paymentStateOf(payment), orderId: payment.orderId, providerChecked: false };
   }
+}
+
+/** A PENDING attempt younger than this is never replaced: the customer may still be paying on it. */
+export const UNRESOLVED_ATTEMPT_MS = 30 * 60 * 1000;
+/** No second payment link is started within this window of the last attempt (stops double-clicks and spam). */
+export const ATTEMPT_COOLDOWN_MS = 60 * 1000;
+
+export type ResumeOrderResult =
+  | { kind: "PAID" }
+  | { kind: "REDIRECT"; authorizationUrl: string; paymentReference: string; orderReference: string }
+  | { kind: "PROCESSING"; message: string }
+  | { kind: "NOT_FOUND" }
+  | { kind: "NOT_PAYABLE"; message: string }
+  | { kind: "ERROR"; message: string };
+
+/**
+ * Recovery for an unpaid order. A stored Paystack authorization URL is never reused on its own: its lifetime is not
+ * something we can rely on. Instead:
+ *  1. The latest attempt is checked with Paystack (the authority).
+ *  2. Success settles the order and returns PAID.
+ *  3. A provider-reported final failure (failed, abandoned, expired) or a PENDING attempt older than
+ *     UNRESOLVED_ATTEMPT_MS that Paystack still reports as in progress starts a NEW attempt with a new reference.
+ *  4. Anything else (in progress, recent, provider unreachable, or a second request within the cooldown) returns PROCESSING
+ *     and starts nothing. A provider outage is never treated as a failure.
+ * A late success on an old attempt is then handled by the duplicate-payment guard in settleOrderPayment.
+ */
+export async function resumeOrderPayment(params: { businessId: string; orderReference: string; now?: Date }): Promise<ResumeOrderResult> {
+  const now = params.now ?? new Date();
+  const order = await prisma.order.findFirst({
+    where: { orderReference: params.orderReference, businessId: params.businessId },
+    select: { id: true, orderReference: true, businessId: true, totalKES: true, status: true, paymentStatus: true, customerName: true, customerPhone: true, customerEmail: true, business: { select: { slug: true } } },
+  });
+  if (!order) return { kind: "NOT_FOUND" };
+  if (order.paymentStatus === "PAID") return { kind: "PAID" };
+  if (order.status !== "PENDING_PAYMENT" || order.paymentStatus !== "UNPAID") {
+    return { kind: "NOT_PAYABLE", message: "This order can no longer be paid. Contact the shop if you need help." };
+  }
+
+  const latest = await prisma.payment.findFirst({ where: { orderId: order.id }, orderBy: { createdAt: "desc" }, select: { reference: true, status: true, createdAt: true } });
+  if (latest) {
+    if (now.getTime() - new Date(latest.createdAt).getTime() < ATTEMPT_COOLDOWN_MS) {
+      return { kind: "PROCESSING", message: "We are already preparing your payment. Wait a moment, then try again." };
+    }
+    const verdict = await verifyOrderPayment(latest.reference);
+    if (verdict.state === "SUCCESS") return { kind: "PAID" };
+    if (!verdict.providerChecked) return { kind: "PROCESSING", message: "We could not confirm your last payment attempt with the payment provider. Try again shortly." };
+    const stillOpen = verdict.state === "PENDING";
+    const age = now.getTime() - new Date(latest.createdAt).getTime();
+    if (stillOpen && age < UNRESOLVED_ATTEMPT_MS) {
+      return { kind: "PROCESSING", message: "Your last payment is still being processed. Check again in a few minutes." };
+    }
+  }
+
+  const email = order.customerEmail || `${order.customerPhone.replace(/\D/g, "")}@customer.jata.local`;
+  const callbackPath = `/b/${order.business.slug}/order/${order.orderReference}`;
+  const record = await createOrderPaymentRecord({
+    businessId: order.businessId,
+    orderId: order.id,
+    amountKES: order.totalKES,
+    email,
+    customerName: order.customerName || undefined,
+    purpose: "ORDER",
+    callbackPath,
+    metadata: { orderReference: order.orderReference, resumed: true },
+  });
+  if (record.kind === "error") return { kind: "ERROR", message: record.error };
+  const started = await startOrderPayment(record, {
+    businessId: order.businessId,
+    orderId: order.id,
+    amountKES: order.totalKES,
+    email,
+    customerName: order.customerName || undefined,
+    purpose: "ORDER",
+    callbackPath,
+    metadata: { orderReference: order.orderReference, resumed: true },
+  });
+  if (started.kind === "error") return { kind: "ERROR", message: started.error };
+  return { kind: "REDIRECT", authorizationUrl: started.authorizationUrl, paymentReference: started.reference, orderReference: order.orderReference };
 }
 
 /** Notify the business that a new order or booking arrived (§30). */

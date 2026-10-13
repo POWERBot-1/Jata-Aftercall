@@ -2,19 +2,21 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
-import { createPreOrderSummary } from "@/lib/preorder";
+import { createPreOrderSummary, resolvePreorderPricing } from "@/lib/preorder";
+import { getExtendedAIConfig } from "@/lib/ai-config";
 import { createNotification } from "@/lib/notification";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // Only the catalogue decides the price and the product name. The request may choose the product,
+    // the quantity, an optional deposit term (checked below), and free-text notes. A `fullPriceKES` sent by
+    // the client is ignored.
     const {
       businessId,
       productId,
-      productName,
       variantDesc,
       quantity,
-      fullPriceKES,
       depositRequiredKES,
       customerPhone,
       customerName,
@@ -23,29 +25,52 @@ export async function POST(req: Request) {
       preview,
     } = body || {};
 
-    if (!businessId || !productName || !quantity || fullPriceKES === undefined) {
-      return NextResponse.json(
-        { error: "businessId, productName, quantity, fullPriceKES required." },
-        { status: 400 },
-      );
-    }
-
     const user = await getCurrentUser().catch(() => null);
     // Tenant data is never served to an anonymous caller: the session is mandatory here.
     if (!user) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
     const allowed = await canAccessBusiness(user.id, businessId, user.role);
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
+    if (typeof productId !== "string" || !productId.trim() || !quantity) {
+      return NextResponse.json({ error: "productId and quantity required. Pre-orders are for items in your catalogue." }, { status: 400 });
+    }
+    // Found only inside this business. Another tenant's product, or a made-up item, gets the same answer.
+    const product = await prisma.product.findFirst({ where: { id: productId.trim(), businessId } }).catch(() => null);
+    if (!product) {
+      return NextResponse.json({ error: "Item is not in this business catalogue." }, { status: 400 });
+    }
+
+    const bulkRules = await getExtendedAIConfig(businessId)
+      .then((config) => config.bulkPricing)
+      .catch(() => []);
+    const pricing = resolvePreorderPricing({ product, quantity: Number(quantity), bulkRules });
+    if (pricing.ok === false) {
+      return NextResponse.json({ error: pricing.error }, { status: pricing.status });
+    }
+
+    const totalKES = pricing.unitPriceKES * pricing.quantity;
+    let depositTerm: number | undefined;
+    if (depositRequiredKES !== undefined && depositRequiredKES !== null && depositRequiredKES !== "") {
+      const deposit = Number(depositRequiredKES);
+      if (!Number.isInteger(deposit) || deposit < 0 || deposit > totalKES) {
+        return NextResponse.json({ error: "The deposit must be a whole amount between 0 and the pre-order total." }, { status: 400 });
+      }
+      depositTerm = deposit;
+    }
+
     const summary = createPreOrderSummary({
-      productName,
-      variantDesc,
-      quantity: Number(quantity),
-      fullPriceKES: Number(fullPriceKES),
-      depositRequiredKES: depositRequiredKES !== undefined ? Number(depositRequiredKES) : undefined,
+      productName: product.name,
+      variantDesc: typeof variantDesc === "string" ? variantDesc : undefined,
+      quantity: pricing.quantity,
+      fullPriceKES: pricing.unitPriceKES,
+      depositRequiredKES: depositTerm,
       expectedDate: expectedDate ? new Date(expectedDate) : undefined,
       fulfilmentNotes,
     });
@@ -56,8 +81,8 @@ export async function POST(req: Request) {
           id: `preview_preorder_${Date.now()}`,
           preOrderRef: `JATA-PRE-PREVIEW-${Date.now()}`,
           businessId,
-          productId: productId || null,
-          productName,
+          productId: product.id,
+          productName: product.name,
           variantDesc: variantDesc || null,
           quantity: summary.quantity,
           depositRequiredKES: summary.depositRequiredKES,
@@ -80,8 +105,8 @@ export async function POST(req: Request) {
         businessId,
         customerPhone: customerPhone || null,
         customerName: customerName || null,
-        productId: typeof productId === "string" && productId.trim() ? productId.trim() : "unlisted",
-        productName,
+        productId: product.id,
+        productName: product.name,
         variantDesc: variantDesc || null,
         quantity: summary.quantity,
         depositRequiredKES: summary.depositRequiredKES,

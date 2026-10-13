@@ -10,13 +10,17 @@
 import prisma from "../db";
 import { buildHealthReport, type HealthInput, type HealthReport } from "./health";
 import type { ExperienceDocument } from "../experience/types";
+import { displayPriceKES } from "../sale-pricing";
 
 export type StudioCatalogueItem = {
   id: string;
   name: string;
   imageUrl: string | null;
   isFeatured: boolean;
+  /** Price the customer pays right now (the sale price only inside its window). */
   priceKes: number | null;
+  /** The original price, shown struck through, only while a sale is running. */
+  wasPriceKes: number | null;
 };
 
 export type StudioIntelligence = {
@@ -56,11 +60,11 @@ export async function loadStudioIntelligence(input: {
     safe(
       prisma.product.findMany({
         where: { businessId, isActive: true },
-        select: { id: true, name: true, imageUrl: true, images: true, isFeatured: true, basePriceKES: true, salePriceKES: true },
+        select: { id: true, name: true, imageUrl: true, images: true, isFeatured: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         take: 300,
       }),
-      [] as Array<{ id: string; name: string; imageUrl: string | null; images: string | null; isFeatured: boolean; basePriceKES: number | null; salePriceKES: number | null }>,
+      [] as Array<{ id: string; name: string; imageUrl: string | null; images: string | null; isFeatured: boolean; basePriceKES: number | null; salePriceKES: number | null; salePriceStartsAt: Date | null; salePriceEndsAt: Date | null }>,
     ),
     safe(
       prisma.service.findMany({
@@ -83,7 +87,8 @@ export async function loadStudioIntelligence(input: {
       name: product.name,
       imageUrl: product.imageUrl || firstImageUrl(product.images),
       isFeatured: Boolean(product.isFeatured),
-      priceKes: product.salePriceKES ?? product.basePriceKES ?? null,
+      priceKes: displayPriceKES(product).priceKES,
+      wasPriceKes: displayPriceKES(product).wasPriceKES,
     })),
     ...services.map((service) => ({
       id: service.id,
@@ -91,6 +96,7 @@ export async function loadStudioIntelligence(input: {
       imageUrl: service.imageUrl,
       isFeatured: Boolean(service.isFeatured),
       priceKes: service.priceFrom ?? null,
+      wasPriceKes: null,
     })),
   ];
 

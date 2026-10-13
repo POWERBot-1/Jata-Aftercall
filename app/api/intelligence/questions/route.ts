@@ -48,6 +48,11 @@ export async function POST(req: Request) {
     if (!businessId) {
       return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
+    // Every write to a business's question queue is tenant business activity. Anonymous callers may not write
+    // into another tenant's queue (the storefront records questions through the AI Front Desk turn, not here).
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
 
     if (action === "approve") {
       if (!questionId || !approvedAnswer) {
@@ -88,6 +93,10 @@ export async function POST(req: Request) {
 
     if (!question) {
       return NextResponse.json({ error: "question required." }, { status: 400 });
+    }
+    const allowedToRecord = await canAccessBusiness(user.id, businessId, user.role);
+    if (!allowedToRecord) {
+      return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
     const recorded = await recordUnansweredQuestion(businessId, question);

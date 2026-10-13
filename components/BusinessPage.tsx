@@ -232,7 +232,7 @@ export default function BusinessPage({
                   </div>
                   {(s.priceLabel || s.priceFrom) && (
                     <span className={`shrink-0 rounded-full border ${t.colors.border} ${t.colors.card} px-2.5 py-1 text-xs font-medium`}>
-                      {s.priceLabel || `From KES ${s.priceFrom?.toLocaleString()}`}
+                      {s.priceLabel || `From KES ${s.priceFrom?.toLocaleString("en-KE")}`}
                     </span>
                   )}
                 </li>

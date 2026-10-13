@@ -5,8 +5,16 @@ import { StudioTabs } from "@/components/dashboard/StudioTabs";
 import { PreviewClient } from "@/components/dashboard/PreviewClient";
 import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
 
-export const metadata: Metadata = { title: "Preview" };
 export const dynamic = "force-dynamic";
+
+// M11 #418: metadata shares the page's single per-request workspace load, so the SSR
+// root segment completes with the head and the hydration bootstrap scripts are emitted
+// after the content (see lib/request-cache.ts).
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  await loadWorkspace(id);
+  return { title: "Preview" };
+}
 
 export default async function PreviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

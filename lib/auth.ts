@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { requestCache } from "./request-cache";
 
 const SESSION_COOKIE = "jata_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -60,14 +61,18 @@ export async function clearSessionCookie() {
   cookieStore.set(SESSION_COOKIE, "", { maxAge: 0, path: "/" });
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+async function getSessionUncached(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   return verifySession(token);
 }
 
-export async function getCurrentUser(): Promise<(SessionPayload & { id: string }) | null> {
+// M11 #418: one session read per request, shared by generateMetadata and page bodies so
+// no uncached await lags the SSR root segment behind the head (see lib/request-cache.ts).
+export const getSession = requestCache(getSessionUncached);
+
+async function getCurrentUserUncached(): Promise<(SessionPayload & { id: string }) | null> {
   try {
     const session = await getSession();
     if (!session) return null;
@@ -79,6 +84,8 @@ export async function getCurrentUser(): Promise<(SessionPayload & { id: string }
     return null;
   }
 }
+
+export const getCurrentUser = requestCache(getCurrentUserUncached);
 
 export async function requireSession(): Promise<SessionPayload> {
   const session = await getSession();

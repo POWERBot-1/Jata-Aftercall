@@ -104,6 +104,7 @@ describe("experience editing is tenant-scoped", () => {
       businessId: OWNED,
       op: "toggle",
       sectionId: "s1",
+      expectedDraftVersion: 3,
     }));
     expect(response.status).toBe(200);
     expect(mocks.experienceUpdate).toHaveBeenCalled();
@@ -120,7 +121,7 @@ describe("resource ids are re-checked against the stored row", () => {
     }));
     expect(response.status).toBe(404);
     expect(mocks.productUpdate).not.toHaveBeenCalled();
-    expect(mocks.productFindFirst).toHaveBeenCalledWith({ where: { id: "product-of-b", businessId: OWNED }, select: { id: true } });
+    expect(mocks.productFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "product-of-b", businessId: OWNED } }));
   });
 
   it("refuses to move an order from another tenant", async () => {

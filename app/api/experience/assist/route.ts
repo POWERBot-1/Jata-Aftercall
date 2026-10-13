@@ -24,6 +24,8 @@ import {
   type AssistRequest,
 } from "@/lib/experience/contentAssist";
 import { writeStudioCopy } from "@/lib/ai/copyLab";
+import { designContextFromDraftJson } from "@/lib/ai/designContext";
+import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +53,21 @@ export async function POST(req: Request) {
   }
 
   try {
+    // The business's own draft supplies the brand, category and layout seed. Scoped by the
+    // authorised businessId, so no other tenant's draft can influence the suggestions.
+    const experience = await prisma.businessExperience.findUnique({
+      where: { businessId },
+      select: { draftJson: true, categoryKey: true },
+    }).catch(() => null);
+    const designContext = designContextFromDraftJson(experience?.draftJson, {
+      businessName: typeof body.businessName === "string" ? body.businessName.slice(0, 120) : "",
+      categoryKey: experience?.categoryKey ?? null,
+    });
+
     const outcome = await writeStudioCopy({
       businessId,
       userId: session.userId,
+      designContext,
       kind: body.kind,
       categoryKey: isCategoryKey(body.categoryKey) ? body.categoryKey : null,
       businessName: typeof body.businessName === "string" ? body.businessName.slice(0, 120) : null,

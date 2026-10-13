@@ -8,6 +8,7 @@
 
 import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { requestCache } from "@/lib/request-cache";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { createExperienceDocument, normalizeExperienceDocument } from "./document";
 import { getExperienceProfile } from "./categories";
@@ -41,6 +42,7 @@ export type Workspace = {
     categoryKey: string;
     themeKey: string;
     draftVersion: number;
+    historyCursor?: number;
     publishedVersion: number;
     publishedAt: Date | null;
     updatedAt: Date;
@@ -78,7 +80,15 @@ function hasUnpublishedChanges(draftJson: string | null | undefined, publishedJs
  * (or administrates) the business. Returns `null` when the session or ownership fails, so
  * callers can 404 without leaking whether the business exists (§37).
  */
+// M11 #418: request-deduplicated so a route's `generateMetadata` and page body share one
+// ownership-checked load per request (see lib/request-cache.ts).
+const loadWorkspaceCached = requestCache(loadWorkspaceImpl);
+
 export async function loadWorkspace(businessId: string): Promise<Workspace | null> {
+  return loadWorkspaceCached(businessId);
+}
+
+async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> {
   const session = await getSession();
   if (!session) return null;
   try {
@@ -106,7 +116,7 @@ export async function loadWorkspace(businessId: string): Promise<Workspace | nul
       prisma.mediaAsset.count({ where: { businessId } }),
       prisma.booking.count({ where: { businessId } }),
       prisma.order.count({ where: { businessId } }),
-      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true } }),
+      prisma.product.findMany({ where: { businessId, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
       getInteractiveEntitlement(businessId),
       prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
       prisma.subscription.findUnique({
@@ -155,6 +165,7 @@ export async function loadWorkspace(businessId: string): Promise<Workspace | nul
           categoryKey: experience.categoryKey,
           themeKey: experience.themeKey,
           draftVersion: experience.draftVersion,
+          historyCursor: experience.historyCursor,
           publishedVersion: experience.publishedVersion,
           publishedAt: experience.publishedAt,
           updatedAt: experience.updatedAt,

@@ -17,8 +17,8 @@ const mockState = vi.hoisted(() => ({
   notifications: [] as any[],
 }));
 
-vi.mock("@/lib/db", () => ({
-  default: {
+vi.mock("@/lib/db", () => {
+  const db: any = {
     business: {
       findUnique: vi.fn(async ({ where }: any) => mockState.businesses.get(where.id) || null),
       update: vi.fn(async ({ where, data }: any) => {
@@ -68,8 +68,17 @@ vi.mock("@/lib/db", () => ({
       }),
     },
     auditEvent: { create: vi.fn(async ({ data }: any) => data) },
-  },
-}));
+    checkoutIdempotencyRecord: {
+      create: vi.fn(async ({ data }: any) => ({ id: `rec_${Math.random().toString(36).slice(2)}`, ...data })),
+      findUnique: vi.fn(async () => null),
+      update: vi.fn(async ({ data }: any) => data),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+  };
+  // Transactions run in the same fake: the mock keeps the order and stock writes, it does not roll them back.
+  db.$transaction = vi.fn(async (fn: any) => fn(db));
+  return { default: db };
+});
 
 import { handleAIFrontDeskTurn } from "@/lib/ai-front-desk";
 import { saveExtendedAIConfig, resetExtendedAIConfigForTests } from "@/lib/ai-config";
@@ -147,6 +156,27 @@ describe("AI Business Front Desk — business-anchored behavior", () => {
       escalationRules: "Call the owner for complaints.",
       delivery: { pickupEnabled: true, deliveryEnabled: true, zones: [{ name: "South B", feeKES: 100, estimatedTime: "30–45 mins" }] },
     });
+  });
+
+  it("quotes the sale price inside its window and the base price after it (single-product answer)", async () => {
+    const window = { salePriceKES: 700, salePriceStartsAt: new Date("2026-10-01T00:00:00Z"), salePriceEndsAt: new Date("2026-10-31T00:00:00Z") };
+    mockState.products.set(hardware, [
+      { id: "p32", businessId: hardware, name: "Bamburi 32.5", category: "Cement", portionSize: "bag", basePriceKES: 750, ...window, stockStatus: "IN_STOCK", quantity: 200, isActive: true },
+    ]);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-10T09:00:00Z"));
+      const during = await handleAIFrontDeskTurn({ businessId: hardware, message: "How much is Bamburi 32.5?" });
+      expect(during.reply).toContain("KES 700");
+      expect(during.reply).not.toContain("KES 750");
+
+      vi.setSystemTime(new Date("2026-10-31T00:00:00Z")); // the end instant is outside the window
+      const after = await handleAIFrontDeskTurn({ businessId: hardware, message: "How much is Bamburi 32.5?" });
+      expect(after.reply).toContain("KES 750");
+      expect(after.reply).not.toContain("KES 700");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("quotes both configured Bamburi prices and does not invent a third", async () => {

@@ -8,6 +8,7 @@ import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from
 import { ensureReferralCode, referralPath } from "@/lib/referral";
 import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { loadStorefront } from "@/lib/experience/storefront";
+import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 
@@ -15,7 +16,10 @@ export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ preview?: string }> };
 
-async function getBusiness(slug: string) {
+// M11 #418: one per-request load shared by `generateMetadata` and the page body, so
+// the SSR root segment completes with the metadata and the hydration bootstrap
+// scripts are emitted after the content (see lib/request-cache.ts).
+const getBusiness = requestCache(async (slug: string) => {
   return prisma.business.findUnique({
     where: { slug },
     include: {
@@ -25,7 +29,7 @@ async function getBusiness(slug: string) {
       members: { select: { userId: true, role: true } },
     },
   });
-}
+});
 
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
   return {
@@ -35,11 +39,27 @@ function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>
   };
 }
 
-async function viewerFromSession(): Promise<PublicViewer> {
+async function viewerFromSessionUncached(): Promise<PublicViewer> {
   const session = await getSession();
   if (!session) return null;
   return { userId: session.userId, role: session.role };
 }
+
+// M11 #418: shared per-request with generateMetadata and the body (lib/request-cache.ts).
+const viewerFromSession = requestCache(viewerFromSessionUncached);
+
+// M11 #418: the classic-fallback tail (referral mint + AI entitlement) is part of the same
+// per-request data load metadata awaits — no body-only await may lag the root segment.
+const classicPageExtras = requestCache(async (businessId: string) => {
+  const code = await ensureReferralCode(businessId);
+  let aiFrontDeskLive = false;
+  try {
+    aiFrontDeskLive = (await getAIPackageStatus(businessId)).entitled === true;
+  } catch {
+    aiFrontDeskLive = false;
+  }
+  return { code, aiFrontDeskLive };
+});
 
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
   if (!viewer) return false;
@@ -48,7 +68,7 @@ function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusi
   return (business.members || []).some((member) => member.userId === viewer.userId);
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusiness(slug);
   if (!business) return { title: "Page not found", robots: { index: false, follow: false } };
@@ -58,11 +78,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Page not found", robots: { index: false, follow: false } };
   }
 
-  // Interactive Business websites own their metadata (§33).
-  const experience = await loadStorefront(slug, { allowDraft: canPreviewDraft(business, viewer) });
+  // Metadata must select the same authorized draft as the page, including after publication.
+  // A public/foreign preview query cannot select draft SEO or alter live indexing.
+  const draftAllowed = canPreviewDraft(business, viewer);
+  const preferDraft = draftAllowed && (await searchParams)?.preview === "draft";
+  // Interactive Business websites own their metadata (§33). Keep the same classic fallback
+  // as the renderer when experience loading fails; metadata must not blank an otherwise usable page.
+  let experience = null;
+  try {
+    experience = await loadStorefront(slug, { allowDraft: draftAllowed, preferDraft });
+  } catch {
+    experience = null;
+  }
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
+  // Share the classic-fallback tail with the body (M11 #418): one per-request load total.
+  if (decision === "public") await classicPageExtras(business.id);
 
   const title = `${business.name} | ${business.location || business.category}`;
   const description =
@@ -81,7 +113,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
     alternates: { canonical: `/b/${business.slug}` },
-    robots: decision === "preview" ? { index: false, follow: false } : undefined,
+    robots: decision === "preview" || preferDraft ? { index: false, follow: false } : undefined,
   };
 }
 
@@ -133,22 +165,14 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   const theme = resolveTheme(business.theme);
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
-  // suspended) page. The code is minted lazily on first eligible use.
+  // suspended) page. The code is minted lazily on first eligible use. Shared with
+  // generateMetadata through the request cache (M11 #418).
   let referralHref: string | null = null;
-  if (decision === "public") {
-    const code = await ensureReferralCode(business.id);
-    if (code) referralHref = referralPath(code);
-  }
-
-  // The "Ask AI Front Desk" entry is offered only when the paid AI package is live for this
-  // business — the AI page itself answers 404 otherwise. Same server-side check, fails closed.
   let aiFrontDeskLive = false;
   if (decision === "public") {
-    try {
-      aiFrontDeskLive = (await getAIPackageStatus(business.id)).entitled === true;
-    } catch {
-      aiFrontDeskLive = false;
-    }
+    const extras = await classicPageExtras(business.id);
+    if (extras.code) referralHref = referralPath(extras.code);
+    aiFrontDeskLive = extras.aiFrontDeskLive;
   }
 
   return (

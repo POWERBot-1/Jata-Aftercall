@@ -37,6 +37,8 @@ type Reply = {
   skippedChanges?: string[];
   previousDocument?: unknown;
   health?: { score: number; bandLabel: string };
+  draftVersion?: number | null;
+  diversity?: { limitation?: string | null; maxSimilarity?: number | null };
 };
 
 type Turn = { role: "owner" | "jata"; text: string; reply?: Reply };
@@ -51,6 +53,7 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [pending, setPending] = useState<Reply | null>(null);
   const [undoSnapshot, setUndoSnapshot] = useState<unknown | null>(null);
+  const [undoVersion, setUndoVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [health, setHealth] = useState<{ score: number; bandLabel: string } | null>(null);
@@ -87,7 +90,7 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
     if (open && suggestions.length === 0) void loadSuggestions();
   }, [open, suggestions.length, loadSuggestions]);
 
-  async function send(message: string, apply = false) {
+  async function send(message: string, apply = false, expectedDraftVersion: number | null = null) {
     if (!message.trim() || busy) return;
     setBusy(true);
     setError(null);
@@ -96,7 +99,7 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
       const response = await fetch("/api/studio/copilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, message, apply }),
+        body: JSON.stringify({ businessId, message, apply, ...(apply && expectedDraftVersion ? { expectedDraftVersion } : {}) }),
       });
       const data = (await response.json().catch(() => ({}))) as Reply & { error?: string };
       if (!response.ok) {
@@ -116,6 +119,10 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
         ]);
         if (data.applied) {
           setUndoSnapshot(data.previousDocument ?? null);
+          setUndoVersion(typeof data.draftVersion === "number" ? data.draftVersion : null);
+          if (data.diversity?.limitation) {
+            setTurns((current) => [...current, { role: "jata", text: String(data.diversity?.limitation) }]);
+          }
           if (data.health) setHealth({ score: Number(data.health.score), bandLabel: String(data.health.bandLabel || "") });
           setPending(null);
           router.refresh();
@@ -144,7 +151,9 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
       const response = await fetch("/api/experience", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, document: undoSnapshot }),
+        // Undo only applies if the draft is still the version JATA produced. Otherwise the server
+        // refuses (409) and the newer edits are kept.
+        body: JSON.stringify({ businessId, document: undoSnapshot, expectedDraftVersion: undoVersion }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -152,6 +161,7 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
         return;
       }
       setUndoSnapshot(null);
+      setUndoVersion(null);
       setTurns((current) => [...current, { role: "jata", text: "Undone — your website is back exactly as it was." }]);
       router.refresh();
     } catch {
@@ -239,7 +249,7 @@ export function StudioCopilot({ businessId }: { businessId: string }) {
             <div className="mt-2 rounded-xl border bg-zinc-50 p-2">
               <p className="text-sm font-semibold">Apply “{pending.proposal.title}”?</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="jata-btn jata-btn-primary" disabled={busy} onClick={() => void send(lastOwnerMessage(turns) || input, true)}>
+                <button type="button" className="jata-btn jata-btn-primary" disabled={busy} onClick={() => void send(lastOwnerMessage(turns) || input, true, pending.draftVersion ?? null)}>
                   {busy ? "Applying…" : "Apply"}
                 </button>
                 <a className="jata-btn jata-btn-secondary" href={`/dashboard/businesses/${businessId}/preview`} target="_blank" rel="noopener noreferrer">

@@ -17,7 +17,9 @@ import { calculateCommerceTotal } from "./commerce-pricing";
 import { evaluateProductAvailability } from "./inventory";
 import { captureLead, type LeadClassification } from "./leads";
 import { createAuthoritativeOrder, hasServerVerifiedOrderPayment } from "./order";
-import { createPreOrderSummary } from "./preorder";
+import { createPreOrderSummary, resolvePreorderPricing } from "./preorder";
+import { chargeableUnitPrice } from "./sale-pricing";
+import { requestHashOf } from "./checkout-transaction";
 import { createNotification } from "./notification";
 import { initializeOrderPayment, PAYMENT_PURPOSE } from "./experience/payments";
 import prisma from "./db";
@@ -291,11 +293,19 @@ export async function executeBusinessTool(
             (typeof item.name === "string" && p.name.toLowerCase() === item.name.toLowerCase()),
         );
         if (prod) {
+          // Same server rule as createAuthoritativeOrder: sale window first, then the owner's quantity rule.
+          const unitPriceKES = chargeableUnitPrice({
+            product: prod,
+            productName: prod.name,
+            quantity: qty,
+            now: new Date(),
+            rules: brain.extendedConfig?.bulkPricing ?? [],
+          }).unitPriceKES;
           lineItems.push({
             productId: prod.id,
             name: prod.name,
             quantity: qty,
-            unitPriceKES: Math.max(0, Math.round(Number(prod.basePriceKES ?? prod.variantPriceKES ?? 0))),
+            unitPriceKES,
             variantDesc: typeof item.variantDesc === "string" ? item.variantDesc : undefined,
           });
         }
@@ -433,7 +443,13 @@ export async function executeBusinessTool(
         discountKES: 0,
         fulfilmentType,
         deliveryLocation,
-        idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey : undefined,
+        // A retried or repeated create_order in the same conversation for the same request returns the first order.
+        idempotencyKey:
+          typeof args.idempotencyKey === "string" && args.idempotencyKey.trim()
+            ? args.idempotencyKey
+            : context.conversationId
+              ? `conv:${context.conversationId}:${requestHashOf({ items, customerPhone, fulfilmentType, deliveryLocation }).slice(0, 32)}`
+              : undefined,
         confirmedByCustomer: args.confirmedByCustomer === true,
         preview,
       });
@@ -457,17 +473,39 @@ export async function executeBusinessTool(
           error: "Pre-orders are not enabled for this business.",
         };
       }
-      const productName = typeof args.productName === "string" ? args.productName.trim() : "Item";
-      const quantity = Math.max(1, Math.round(Number(args.quantity) || 1));
+      // The price comes only from the catalogue (same rule as the HTTP pre-order route). A customer-supplied
+      // price or an item that is not in the catalogue is refused, never priced from the request.
+      const productName = typeof args.productName === "string" ? args.productName.trim() : "";
       const matched = brain.products.find((p) => p.name.toLowerCase() === productName.toLowerCase());
-      const fullPriceKES = matched ? matched.basePriceKES ?? matched.variantPriceKES ?? 0 : Number(args.fullPriceKES) || 0;
-      const summary = createPreOrderSummary({
-        productName: matched?.name || productName,
-        variantDesc: typeof args.variantDesc === "string" ? args.variantDesc : undefined,
-        quantity,
-        fullPriceKES,
-        depositRequiredKES: typeof args.depositRequiredKES === "number" ? args.depositRequiredKES : undefined,
+      if (!matched) {
+        return {
+          ok: false,
+          tool,
+          category: "WRITE",
+          status: "ACTION_REQUIRED",
+          error: "That item is not in this business catalogue, so it cannot be pre-ordered here.",
+        };
+      }
+      const pricing = resolvePreorderPricing({
+        product: matched,
+        quantity: Number(args.quantity) || 1,
+        bulkRules: brain.extendedConfig?.bulkPricing ?? [],
       });
+      if (pricing.ok === false) {
+        return { ok: false, tool, category: "WRITE", status: "ACTION_REQUIRED", error: pricing.error };
+      }
+      const totalKES = pricing.unitPriceKES * pricing.quantity;
+      const requestedDeposit = Number(args.depositRequiredKES);
+      const depositRequiredKES =
+        Number.isInteger(requestedDeposit) && requestedDeposit >= 0 && requestedDeposit <= totalKES ? requestedDeposit : undefined;
+      const summary = createPreOrderSummary({
+        productName: matched.name,
+        variantDesc: typeof args.variantDesc === "string" ? args.variantDesc : undefined,
+        quantity: pricing.quantity,
+        fullPriceKES: pricing.unitPriceKES,
+        depositRequiredKES,
+      });
+      const quantity = pricing.quantity;
       if (!preview) {
         await createNotification({
           businessId: context.businessId,

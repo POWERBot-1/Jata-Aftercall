@@ -53,6 +53,7 @@ export async function POST(request: Request, context: RouteContext) {
     handler: async ({ ctx, actor, body }) => {
       const input = sanitizeProductInput(body);
       if (!input.name) return fromOutcome({ ok: false, message: "Give the item a name." });
+      if (input.saleError) return fromOutcome({ ok: false, message: input.saleError });
       const product = await createProduct(businessId, input);
       await logPosAudit({
         businessId,
