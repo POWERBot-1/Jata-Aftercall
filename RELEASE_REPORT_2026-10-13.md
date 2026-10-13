@@ -1321,3 +1321,46 @@ full-suite, lint, type-check and production-build level; recorded the skip expla
 boundaries, settlement or reconciliation logic, provider timestamps, transaction IDs or payment
 verification; merge PR #45; deploy; change production configuration or data; activate media storage;
 incur provider cost; or perform a live charge or refund.
+
+### I.9 CI evidence for this change set (run `38470293452`, head `62b750b`) — RED, same pre-existing signature
+
+The run is **not green**, and the failure is not in any gate this change set touches:
+
+| Step | Outcome in `38470293452` |
+| --- | --- |
+| Install dependencies · Prisma generate · Lint and TypeScript · Apply migrations · Seed plans | passed (Node 22) |
+| Full native DB suite (`npx vitest run --exclude tests/e2e`) | **187 files passed, 0 skipped** |
+| §66 experience journey / Business POS journey | **17/17** · **22/22** |
+| Production build · Production HTTP smoke · Bundle evidence | passed (bundle within baseline deltas) |
+| **Authenticated production HTTP browser journey** | **`427 passed, 1 failed, 0 skipped.` — then `NOT RUN: remaining required provider-free scenarios after first failure`** |
+| Booking SSR/hydration · Hydration #418 race · Motion/immersive/layout/family/media browser | not run (skipped after the failure) |
+
+**This is the same signature as the earlier unresolved red run** (`38441832430`, whose checkout predates
+this change set and still carried `puppeteer-core@23`): the same step, the same `427 passed, 1 failed,
+0 skipped` line, the same `NOT RUN` tail. The step also passed **six** times in this branch's history, so
+this remains intermittent in the same way §H.3/§H.14 describe.
+
+**What the visible part of this run's log adds — and what it still cannot say.** The log window (the PR
+comment carries the first and last ~5.5 k characters; the middle ~46.5 k is truncated) shows a real
+`BROWSER RUNTIME ERROR … Minified React error #418 …` raised on the authenticated retail preview
+(`/dashboard/businesses/cmv76yzwj000369hup2m83zid/preview` with the `/b/qa-retail-17e622e4` iframe),
+immediately followed by the script's `M418 LIVE / TAIL / FRAME / OUTLINE / PARSE` diagnostic bundle, and
+near the tail the same `prisma.aIQualityEvent.create()` unique-constraint error block the earlier red run
+also carried. **The name of the one failing check sits inside the truncated middle**, so it still cannot be
+stated. Log download, artifact download (`hydration-raw-order-evidence`, 19 KB, unexpired) and the
+step-level jobs API all remain inaccessible from here (text/zip `EOF` from storage; `gh run rerun` 403),
+and the two check-run annotation sets are empty. **Status: UNRESOLVED — explicitly not a flake**, and the
+smallest owner action is unchanged: read the failing check in the Actions UI.
+
+**Why this change set is not on that render path (evidence, not proof).** The three changed modules
+(`lib/pos/receipt.ts`, `lib/pos/reporting.ts`, `lib/payments/wallet.ts`) are imported only by POS/payments
+routes and components; the failing route's page imports `lib/experience/workspace`,
+`components/dashboard/StudioTabs`, `components/dashboard/PreviewClient` and
+`components/dashboard/EntitlementBanner` — none of which reach the changed modules — and the hydration
+guard test that pins every date formatter to a declared zone passes locally. React #418 is the hydration
+mismatch class this project has tracked since §H, and its own workflow comment states the inherited expected
+failure is **preserved, not fixed**.
+
+**No attempt was made to make this step green** by relaxing, skipping, retrying-around or reclassifying
+anything. The remediation paths are unchanged: owner reads the failing check, or the underlying #418
+mismatch is fixed under its own authorization.
