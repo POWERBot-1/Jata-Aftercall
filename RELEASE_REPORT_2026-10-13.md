@@ -663,9 +663,9 @@ The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
 | Gate | Status | Evidence | Responsible |
 | --- | --- | --- | --- |
 | Hydration #418 — code | **PASS** | merged contract + parity/determinism/booking-hydration suites; no suppression added | Agent |
-| Hydration #418 — real browser | **PASS (CI)** | run `38439687233`: booking SSR/midnight hydration 25/25; #418 forced/control arms 0 errors; caveats in §G.13.2 | CI |
+| Hydration #418 — real browser | **PASS (CI) at `fde6865`** — with an open item at the report-only commit | run `38439687233`: booking SSR/midnight hydration 25/25; #418 forced/control arms 0 errors; run `38441832430` (Markdown-only difference) failed earlier in the authenticated browser step and skipped this one — §G.14 | CI + owner (read the untruncated log) |
 | Line-87 subscription payment gap | **PASS (PostgreSQL-verified)** | CAS at `lib/paystack.ts:160`; REFUNDED never settleable; revival 14/14 locally and the full DB suite green in CI with 0 skips | CI |
-| Database CI — all previously skipped tests | **PASS** | run `38439687233`, 2262 tests, 0 skipped, at `fde6865` | CI |
+| Database CI — all previously skipped tests | **PASS** | run `38439687233`, **and again 2262 tests / 0 skipped in run `38441832430`**, at `fde6865` / `d5bd1eb` | CI |
 | Payment-provider readiness (Paystack) | **BLOCKED — OWNER VERIFICATION REQUIRED** | §G.7 / "Phase 5" checklist; only the owner holds the dashboards | Owner |
 | Live charge + refund exercise | **BLOCKED — OWNER AUTHORIZATION** | D-5; explicit spending authorization required | Owner |
 | Dependency-security gate | **PASS (production) / FAIL (development, by design of main's gate)** | production 0 in CI and locally; 10 high development findings with staged remediation (D-2) | Owner (decision) |
@@ -674,8 +674,10 @@ The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
 | Design system + published output | **PASS** | 21 design-system tests; categories × themes regression; family geometry 167/167 in CI | Agent/CI |
 | Integration/conflict resolution | **PASS** | candidate tree == merged tree; CI green on the merged SHA | Agent/CI |
 
-**Final status: BLOCKED — owner-verification items only.** Every machine-verifiable mandatory gate is now
-green at `fde6865` with run `38439687233` as evidence. Three items remain, all requiring the owner:
+**Final status: BLOCKED — owner-verification items only.** Every machine-verifiable mandatory gate is
+verified at `fde6865` with run `38439687233` as evidence (the database suite is green in both runs),
+and one CI-side open item is recorded in §G.14 (the authenticated browser step failed on the later
+Markdown-only commit; cause unidentified, no code difference between the two runs). Three items remain, all requiring the owner:
 production Paystack configuration verification (§G.7), authorization for one live charge + refund (D-5),
 and the development-advisory decision (D-2). No code gate fails; nothing is merged into `main`, nothing is
 deployed, and the PR keeps its NOT-APPROVED label.
@@ -690,3 +692,28 @@ deployed, and the PR keeps its NOT-APPROVED label.
 | D-4 | Integration path | **EXECUTED — option A** (§G.13); PR #45 is now `mergeable: true` |
 | D-5 | Live charge + refund exercise | open (owner authorization) |
 | D-6 | Media storage | unchanged: deferred |
+
+
+---
+
+## G.14 Report-only follow-up run — `38441832430` FAILED in the authenticated browser step (open item)
+
+The push of §G.13 (a **Markdown-only** change; `fde6865` → `d5bd1eb`) triggered one further CI run, exactly as §G.13.2 caveat 4 anticipated.
+
+| Item | Run `38439687233` (green) | Run `38441832430` (red) |
+| --- | --- | --- |
+| Head | `fde686559f681ddad690ac66d023c7718554797c` | `d5bd1eb5cc58753ae5ef305502ecb991382f8f2f` |
+| Tree difference | — | only `RELEASE_REPORT_2026-10-13.md` |
+| Full native DB suite | 2262 passed / 0 skipped | 2262 passed / 0 skipped |
+| §66 + POS journeys | 17 + 22 passed | see note 1 |
+| Authenticated production HTTP/browser/DB journey | **428 passed, 0 failed** | **427 passed, 1 failed** — step failed, so the steps after it were skipped |
+| Booking SSR/midnight hydration (real browser) | **25 passed, 0 failed** | **skipped** (blocked by the step above) |
+| #418 controlled race reproduction | 0 #418 in forced/control arms | skipped |
+
+**What can be stated from evidence:** the two runs differ by **one Markdown file**, so the failure is **not attributable to any code change in this branch**; it originates inside the authenticated browser step's own harness/environment. **What cannot be stated:** the identity and cause of the failing check. The workflow's failure report truncates the middle of its comment (the per-check `FAIL` line fell inside the truncated region), and the CI log/artifact host is not reachable from this environment (a sandbox network-policy limit, not a repo limit). `gh run rerun --failed` was refused: *"run 38441832430 cannot be rerun; its workflow file may be broken"*.
+
+Context that makes this step strained rather than clean: in the green run itself, the dashboard-preview samples for four of five categories already timed out at 25 s under the harness's 4× CPU throttle (§G.13.2 caveat 1), and run #2 emitted a series of `Unique constraint failed on the fields: ('id')` Prisma errors from `AIQualityEvent.create()` before the step's summary. Neither is yet explained.
+
+**Classification: NOT TESTED — cause unidentified.** This is recorded as an open item; it is not called a flake and not called a regression.
+
+**Smallest owner action:** in the repo's Actions tab, open run `38441832430` → job *Journey against a real database* → the failing step, and read the untruncated log (or use *Re-run failed jobs* and inspect the same step). One line — the failing check's name — is all that is needed to triage. The green evidence at `fde6865` (run `38439687233`, including the database suite and the booking-hydration browser step) stands on its own SHA and is unaffected.
