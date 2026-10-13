@@ -96,6 +96,80 @@ export function probeInstallSource(options = {}) {
       if (hint && hint !== "app" && hint !== "text" && hint !== "unknown") zone = hint;
       records.push([seq++, now(), type, summarize(target), added, removed, zone]);
     }
+    // M14: mutation-API stack capture. Wraps the DOM insertion APIs so every hoistable
+    // insert/move records the client call site (compact stack) and its API name. Parser
+    // insertions never pass through these APIs — a recorded stack therefore PROVES
+    // client-side manipulation and names the responsible source. Read-only: each wrapper
+    // only delegates to the original method and then logs; the probe never writes to the
+    // observed DOM. Guarded so environments without these constructors still get the observer.
+    var calls = { firstScriptInsert: "", firstScriptMove: "", firstBodyReorder: "", firstWrite: "", api: {} };
+    function compactStack() {
+      try {
+        var raw = String(new Error().stack || "").split("\\n");
+        var out = [];
+        for (var i = 1; i < raw.length && out.length < 3; i++) {
+          var frame = raw[i].replace(/^\\s+at\\s+/, "").replace(/\\s+/g, " ").slice(0, 110);
+          if (frame.indexOf("compactStack") > -1 || frame.indexOf("noteCall") > -1) continue;
+          out.push(frame);
+        }
+        return out.join(" | ").slice(0, 200);
+      } catch (e) { return ""; }
+    }
+    function noteCall(api, node, target, move) {
+      try {
+        if (frozen) return;
+        calls.api[api] = (calls.api[api] || 0) + 1;
+        var name = node && node.nodeName ? String(node.nodeName) : "-";
+        if (name !== "SCRIPT" && name !== "LINK" && !move) return;
+        var stack = compactStack();
+        if (name === "SCRIPT") {
+          if (move) { if (!calls.firstScriptMove) calls.firstScriptMove = api + " " + stack; }
+          else if (!calls.firstScriptInsert) calls.firstScriptInsert = api + " " + stack;
+        }
+        if (move && target && target.nodeName === "BODY" && !calls.firstBodyReorder) calls.firstBodyReorder = api + " " + stack;
+        push("api:" + api + (move ? ":move" : ""), target || node, summarize(node), "", zoneOf(node));
+      } catch (e) {}
+    }
+    function wrapInsert(proto, method) {
+      try {
+        if (!proto || typeof proto[method] !== "function") return;
+        var orig = proto[method];
+        proto[method] = function () {
+          var move = false, first = arguments[0];
+          try { move = !!(first && first.nodeType === 1 && first.parentNode); } catch (e) {}
+          var out = orig.apply(this, arguments);
+          noteCall(method, first, this, move);
+          return out;
+        };
+      } catch (e) {}
+    }
+    try {
+      if (typeof Node !== "undefined") {
+        wrapInsert(Node.prototype, "appendChild");
+        wrapInsert(Node.prototype, "insertBefore");
+        wrapInsert(Node.prototype, "replaceChild");
+      }
+      if (typeof Element !== "undefined") {
+        wrapInsert(Element.prototype, "append");
+        wrapInsert(Element.prototype, "prepend");
+        wrapInsert(Element.prototype, "replaceChildren");
+        wrapInsert(Element.prototype, "insertAdjacentElement");
+      }
+      if (typeof Document !== "undefined" && Document.prototype) {
+        for (var dm = ["write", "writeln"], dk = 0; dk < dm.length; dk++) {
+          (function (m) {
+            if (typeof Document.prototype[m] !== "function") return;
+            var orig = Document.prototype[m];
+            Document.prototype[m] = function () {
+              if (!calls.firstWrite) calls.firstWrite = m + " " + compactStack();
+              calls.api["document." + m] = (calls.api["document." + m] || 0) + 1;
+              push("api:document." + m, document.body || document.documentElement || document, "", "", "app");
+              return orig.apply(this, arguments);
+            };
+          })(dm[dk]);
+        }
+      }
+    } catch (e) {}
     function involvesBoundary(m) {
       try {
         if (m.target && m.target.nodeType === 1) {
@@ -238,6 +312,7 @@ export function probeInstallSource(options = {}) {
           head: records.slice(0, 14),
           frame: frameInfo(),
           counts: counts,
+          calls: calls,
           outline: outline(document.body || document.documentElement),
           tail: records.slice(-SNAPSHOT_TAIL),
         };
@@ -253,6 +328,7 @@ export function probeInstallSource(options = {}) {
       version: 1,
       records: function () { return records; },
       snapshot: function () { return snapshot; },
+      calls: function () { return calls; },
       state: function () { return { seq: seq, size: records.length, frozen: frozen, max: MAX, armed: armed, parseDropped: parseDropped, parseSamples: parseSamples, frame: frameInfo() }; },
       tail: function (count) { return records.slice(-(count || 15)); },
       freeze: function (reason) { freezeSnapshot(reason || "manual"); },
@@ -279,10 +355,13 @@ export function formatProbeDump(frameProbes, options = {}) {
     const expected = read(probe.m418last ?? probe.expected, null);
     const frame = { frame: String(state.frame || entry.path || "?").slice(0, 48), installed: true, seq: state.seq, size: state.size, frozen: Boolean(snap) };
     if (expected) frame.expected = expected;
+    const liveCalls = read(probe.calls, null);
+    if (liveCalls) frame.calls = liveCalls;
     if (snap) {
       frame.reason = snap.reason;
       frame.ready = snap.ready;
       frame.counts = snap.counts;
+      if (snap.calls) frame.calls = snap.calls;
       frame.outline = snap.outline;
       frame.tail = snap.tail;
     } else {

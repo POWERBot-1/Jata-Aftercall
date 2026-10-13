@@ -115,7 +115,7 @@ class FakeMutationObserver {
   }
 }
 
-function installProbe(options: { maxRecords?: number; snapshotTail?: number; outlineLimit?: number; readyState?: "loading" | "interactive" | "complete" } = {}) {
+function installProbe(options: { maxRecords?: number; snapshotTail?: number; outlineLimit?: number; readyState?: "loading" | "interactive" | "complete"; nodeCtor?: unknown; elementCtor?: unknown; documentCtor?: unknown } = {}) {
   FakeMutationObserver.last = null;
   const document = new FakeDocument();
   if (options.readyState) document.readyState = options.readyState;
@@ -133,12 +133,15 @@ function installProbe(options: { maxRecords?: number; snapshotTail?: number; out
   const performance = { now: () => 1234.5 };
   const source = probeInstallSource(options);
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  new Function("window", "document", "MutationObserver", "performance", "location", source)(
+  new Function("window", "document", "MutationObserver", "performance", "location", "Node", "Element", "Document", source)(
     window,
     document,
     FakeMutationObserver,
     performance,
     location,
+    options.nodeCtor,
+    options.elementCtor,
+    options.documentCtor,
   );
   return { document, window, listeners, observer: FakeMutationObserver.last! };
 }
@@ -337,10 +340,81 @@ describe("hydration MutationObserver ring-buffer probe (M11 diagnostic)", () => 
     const source = probeInstallSource();
     expect(source).toContain("MutationObserver");
     expect(source).toContain('addEventListener("error"');
-    // The probe must never write to the DOM it observes.
-    expect(source).not.toContain("appendChild");
+    // The probe must never write to the DOM it observes: it creates nothing, sets no
+    // attributes, and every wrapped mutation API only delegates to the original method.
+    expect(source).not.toContain("createElement");
     expect(source).not.toContain("setAttribute");
+    expect(source).not.toMatch(/document\.write\(/);
+    expect(source).toContain("orig.apply(this, arguments)");
     expect(PROBE_MAX_RECORDS).toBeGreaterThan(100);
+  });
+});
+
+describe("M14 mutation-API stack capture (names the client mover; parser inserts carry no stack)", () => {
+  class FakeScriptElement extends FakeElement {}
+  const makeDom = () => {
+    // The install wraps these exact prototypes; instances must look methods up there.
+    const nodeProto = FakeElement.prototype as unknown as Record<string, unknown>;
+    if (typeof nodeProto.appendChild !== "function") {
+      nodeProto.appendChild = function (this: FakeElement, child: FakeElement) {
+        child.parentNode = this;
+        this.children.push(child);
+        return child;
+      };
+    }
+    const documentProto = FakeDocument.prototype as unknown as Record<string, unknown>;
+    if (typeof documentProto.write !== "function") documentProto.write = () => {};
+    return { nodeCtor: { prototype: nodeProto }, elementCtor: { prototype: {} }, documentCtor: { prototype: documentProto } };
+  };
+  const probeCalls = (window: Record<string, unknown>) =>
+    (window[PROBE_PROPERTY] as { calls: () => Record<string, unknown> }).calls();
+
+  it("wraps the insertion APIs and records a bounded stack for the first script insert", () => {
+    const dom = makeDom();
+    const { window, document } = installProbe({ nodeCtor: dom.nodeCtor, elementCtor: dom.elementCtor, documentCtor: dom.documentCtor });
+    const body = new FakeElement("BODY");
+    document.body = body;
+    const script = new FakeScriptElement("SCRIPT");
+    body.appendChild(script);
+    const calls = probeCalls(window);
+    expect(String(calls.firstScriptInsert)).toContain("appendChild");
+    expect(String(calls.firstScriptInsert)).toContain("|"); // at least one captured frame
+    expect((calls.api as Record<string, number>).appendChild).toBe(1);
+  });
+
+  it("distinguishes moves from inserts and names the first body-level reorder", () => {
+    const dom = makeDom();
+    const { window, document } = installProbe({ nodeCtor: dom.nodeCtor, elementCtor: dom.elementCtor, documentCtor: dom.documentCtor });
+    const body = new FakeElement("BODY");
+    document.body = body;
+    const script = new FakeScriptElement("SCRIPT");
+    body.appendChild(script); // insert
+    body.appendChild(script); // re-append of an attached node = move
+    const calls = probeCalls(window);
+    expect(String(calls.firstScriptInsert)).toContain("appendChild");
+    expect(String(calls.firstScriptMove)).toContain("appendChild");
+    expect(String(calls.firstBodyReorder)).toContain("appendChild");
+  });
+
+  it("records document.write as a first-write signature with its stack", () => {
+    const dom = makeDom();
+    const { window, document } = installProbe({ nodeCtor: dom.nodeCtor, elementCtor: dom.elementCtor, documentCtor: dom.documentCtor });
+    const body = new FakeElement("BODY");
+    document.body = body;
+    (document as unknown as { write: (s: string) => void }).write("x");
+    const calls = probeCalls(window);
+    expect(String(calls.firstWrite)).toContain("write");
+  });
+
+  it("snapshots the call signatures at freeze and formatProbeDump surfaces them", () => {
+    const dom = makeDom();
+    const { window, document, listeners } = installProbe({ nodeCtor: dom.nodeCtor, elementCtor: dom.elementCtor, documentCtor: dom.documentCtor });
+    const body = new FakeElement("BODY");
+    document.body = body;
+    body.appendChild(new FakeScriptElement("SCRIPT"));
+    listeners.get("error")?.forEach((fn) => fn({ message: "Minified React error #418" }));
+    const dump = JSON.parse(formatProbeDump([{ path: "/b/qa", probe: window[PROBE_PROPERTY] }]));
+    expect(dump.frames[0].calls.firstScriptInsert).toContain("appendChild");
   });
 });
 
