@@ -184,3 +184,27 @@ Local emission experiments (throwaway probe route, deleted; `next build && next 
 3. **Accept and document** the residual intermittent #418 with the probe/order-gate as the early-warning system (not recommended for a P0 release blocker).
 
 Status: **OPEN**. Passing runs never prove the fix; the closure rule (demonstrated root cause + regression + green final CI with the defect class demonstrably dead) is not met.
+
+## M12 — server-emission forensics (raw response order capture)
+
+**Stage B instrumentation (`30fa03f` → `09198de`):** `serverHtmlOrder()` records byte offsets + document order of the body/state-slot/boundary/`_R_`/`__next_f`/route-root/catalogue markers from the RAW response text (before any browser parse); the journey records URL/status/len/order/offsets/raw body-head per document response (full-URL keyed, up to 4 timed records each), pairs raw-vs-DOM per amplification attempt, keeps parse-phase hoistable insertions with prepend/append `@i/n` positions, keeps the first 14 kept mutation records (parse window) + timestamped dropped-parse samples, and reprints ranked evidence + all storefront response records in the `M418E` tail block (survives CI comment truncation). Bounded `m418-evidence.json`/`results.json` artifacts upload via `actions/upload-artifact`. 16 probe unit tests (incl. 4 `serverHtmlOrder` cases).
+
+**Stage C/D evidence ledger (runs 38340360316 … 38353316083):**
+
+| run | commit | result | raw response order (M418 SRV/RESP) | DOM order at throw | verdict |
+|-----|--------|--------|------------------------------------|--------------------|---------|
+| 38340360316 | 30fa03f | #418 retail | `body,div,div.business-route-root,…` (mono, but pathname-keyed capture — may be a prior load) | `script#_R_, script×18, div, div.business-route-root` (inverted) | divergence seen, capture unhardened |
+| 38342272527 | 69ea209 | PASS | mono (`body,state-div,cmt-$,…,r-script,nextF…`) ×3 retail samples | mono (`div,div,script#_R_…`) | passing raw ≡ DOM |
+| 38343554484 | 15086dd | #418 professional | (evidence crowded out by samples) | inverted | reproduction |
+| 38344718832 | 2145a51 | #418 salon | mono ×4 (seq 65/68/50/51, exact iframe URL incl. `?preview=draft&v=0`) | inverted; `M418 TAIL`: `childList body + script [append js=self.__next_f.push…]` at t=18–44ms | **raw mono vs DOM inverted + insert records** |
+| 38346012839 | a3c7f6e | #418 food | prior loads mono (failing load's `text()` not yet resolved at dump) | inverted; throw at `ready=loading`; tail = consecutive `self.__next_f` script appends into body | parser saw scripts first mid-parse (capture raced) |
+| 38347104696 | b2013f9 | PASS | all responses mono (13 records incl. 404 shapes) | n/a | passing raw ≡ mono |
+| 38348551822 | 575661d | PASS | mono | n/a | passing raw ≡ mono |
+| 38349776678 | a6ae959 | #418 retail | **failing URL's own completed response mono (seq 210/212 `body,state-div,…,r-script,nextF…`)** | inverted (`script#_R_` + scripts leading) | **same-load raw mono vs DOM inverted** |
+| 38350949443 | eed8919 | #418 food | all `/b/` records mono | (HEAD/PARSE truncated out of reprint) | reproduction |
+| 38352046027 | 09198de | PASS | mono | n/a | — |
+| 38353316083 | cdfab98 | PASS | mono | n/a | — |
+
+**Stage D finding (demonstrated divergence; mechanism name pending):** every completed storefront response captured across 6 runs is **content-first (mono)** — `body,state-div,cmt-$,…,r-script,nextF…` with the raw body head `<body…><div hidden=""><!--$--><!--/$--></div><div class="business-route-root">…`. Every failing document's DOM at throw leads with `script#_R_` + the inline `self.__next_f.push` flight scripts, with recorded `childList` insertions of exactly those `<script>` nodes into `<body>` (t=18–44 ms; `js=self.__next_f.push([1,…` identity captured). The throw is React's proven body-level candidate miss (expected bare `div`, `pt:"DIV"`). **The emission-order anomaly is a DOM-order divergence: the flight scripts end up ahead of the content in the live DOM although the served HTML has them at the tail.** What remains unnamed is the exact mover: (a) the parser consuming an in-flight response whose early bytes differ from the completed `response.text()` body (chunk-order/stream-capture artifact), or (b) a client-side hoist/re-insert of the flight scripts before hydration. The next bounded diagnostic is the `M418 HEAD` parse-window record set (first 14 kept mutations with `@i/n` positions vs timestamped dropped-parse samples) — now ranked first in the evidence reprint so it survives comment truncation.
+
+**Local reproduction attempts (Stage C control experiments, no framework change):** a throwaway probe route (deleted; never committed) could not produce the inversion under async delays 0–100 ms, `cookies()`, `generateMetadata`, 2k–120k-node client SSR trees, 50–200 KB props, 12-way concurrency, or 6-core CPU starvation (~100 sampled responses, all mono). The divergence needs the studio journey's conditions (authenticated draft-preview iframe + warm chunk cache + the real flight payload).
