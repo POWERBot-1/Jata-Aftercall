@@ -12,14 +12,15 @@ installation, a document, or an older SHA.
 | Code candidate SHA (pushed; the commit Vercel built and all code evidence below refers to) | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` |
 | Later commits on the same branch | `1b92182` (two lost-race tests) and the report-only commits that follow `1b8167d`; each is documentation or test-only, so the code evidence at `1b8167d` remains valid. Current tip: `git ls-remote origin refs/heads/arena/fac28f53-jata-aftercall`, or the PR's head SHA |
 | Remote branch tip | pushed and verified with `git ls-remote` at every push of this turn (no force, no history rewrite) |
-| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, not draft, base `main`, **10 commits, 67 files, head `7ec72c66…`**, `mergeable_state: "dirty"`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; verification outcome posted as a comment `issuecomment-6150569400`) |
-| Isolated integration candidate (local, unpushed) | `b5f058bfee2b87e53923e947c19017ee9c27f558` = `main 8db6a9e4…` + `7ec72c66…` with the six conflicts resolved — see §G |
-| Branch vs `main` | 7 commits ahead, **107 behind**; `mergeable: false`, `mergeable_state: "dirty"` → **6 conflicting files** |
+| Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, not draft, base `main`, **12 commits, 65 changed files, head `fde6865…`, `mergeable: true`** after `main` was merged in under owner authorization — §G.13; labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; CI evidence comment `issuecomment-6151667650`) |
+| CI on this branch | **`Interactive Business E2E` run `38439687233` — SUCCESS** at `fde686559f681ddad690ac66d023c7718554797c`: full native DB suite 2262 passed / 0 skipped, §66 journey 17, POS journey 22, booking SSR+midnight hydration 25, authenticated journey 428, motion 124, families 167, layout 7, immersive 22, raster 29, production audit 0 — §G.13.1 |
+| Isolated integration candidate | `b5f058bfee2b87e53923e947c19017ee9c27f558` = `main 8db6a9e4…` + `7ec72c66…` with the six conflicts resolved; verified byte-identical (apart from this report) to the merge `fde6865` that was then applied to the branch and passed CI — §G.3/§G.13 |
+| Branch vs `main` | **merged up to `main` on 2026-10-13** (merge `fde6865`, no force-push); the six conflicts were resolved and the merge target is now `mergeable: true` — §G.2/§G.13 |
 | Recovery checkpoint | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` — present, never moved |
 | Environment | node v22.22.3, npm 10.9.8. No `DATABASE_URL`, no Prisma engine, no Postgres/docker, no Chrome/Chromium **and no way to run one** (see Phase 4). npm registry and github.com reachable; `binaries.prisma.sh` is not |
 | Preview | Vercel Preview for `1b8167d`, deployment `7044323662`, state `success`, created 2026-10-13T16:40:53Z, **SSO-protected** |
 | Merged? Deployed? | **No.** No merge, no production deploy, no migration run, no env change, no provider activation, no spending, no production data touched |
-| Final status | **BLOCKED** — current blockers and gate table in **§G.10/§G.11** (this section supersedes §F.1); blockers are verification-authority and owner-decision items, not known code defects |
+| Final status | **BLOCKED — owner-verification items only**; current gate table in **§G.13.3** (supersedes §G.10/§F.1). Every machine-verifiable gate is green at `fde6865` with CI run `38439687233` as evidence; what remains is the owner's Paystack verification, one live charge + refund authorization, and the development-advisory decision |
 
 ---
 
@@ -434,7 +435,11 @@ both strengthen or preserve intent, neither deletes an assertion without replace
   `themeRootClassName(theme, familyClasses)` call; the contract itself (one stylesheet, tokens,
   storefront root classes) is untouched.
 
-### G.3 Isolated integration candidate — created, green, and **not published**
+### G.3 Isolated integration candidate — created, green, and (at the time) not published
+
+> **Update:** the candidate was applied to the published branch on 2026-10-13 under the owner's
+> "proceed" authorization, as merge `fde6865` — see **§G.13**. The text below describes the state
+> before that push.
 
 Because the directive forbids rewriting the published branch without authorization and forbids
 unilateral branch creation, the experiment ran in a **detached git worktree** (no branch, no push,
@@ -470,7 +475,7 @@ The published branch is 107 commits behind and cannot produce CI in its current 
 The candidate in §G.3 **is** the resolution option A would apply (identical content), so the decision
 is procedural, not technical.
 
-### G.5 Database-backed CI (Phase 5): **BLOCKED — no run performed** (limiting factor identified)
+### G.5 Database-backed CI (Phase 5): **BLOCKED at the time — RESOLVED in §G.13** (run `38439687233`, 2262 passed / 0 skipped)
 
 - The mechanism exists on `main`: `Interactive Business E2E` runs on `pull_request → main`,
   `push → main` and manual dispatch; the job provisions a disposable **`postgres:16` service**
@@ -489,7 +494,7 @@ is procedural, not technical.
   run id, the tested SHA and the pass/fail/skip counts must be recorded here before the release gate
   can close.
 
-### G.6 Real-browser hydration (Phase 6): **BLOCKED** (unchanged cause, new residual finding)
+### G.6 Real-browser hydration (Phase 6): **BLOCKED at the time — RESOLVED in §G.13** (booking SSR/midnight hydration 25/25 in run `38439687233`)
 
 - This sandbox has no Chrome/Chromium binary and no way to obtain the shared libraries (`apt-get`
   is unavailable), so no real browser can be launched here; the Vercel preview is SSO-protected and
@@ -558,7 +563,7 @@ was suppressed, downgraded, or reclassified.
 | No hydration suppression added | `suppressHydrationWarning` count identical to `main` (1, pre-existing in `app/layout.tsx:24`) | PASS |
 | Build success ≠ correct journeys | production build not run locally (offline Prisma engine); CI covers it | NOTE |
 
-### G.10 Current gate table and final status
+### G.10 Gate table and final status (as of the pre-integration audit — **superseded by §G.13.3**)
 
 | Gate | Status | Evidence | Responsible |
 | --- | --- | --- | --- |
@@ -580,7 +585,7 @@ was suppressed, downgraded, or reclassified.
 (4) the live charge/refund path has never been exercised (owner, spending authorization).
 No in-scope code gate fails on the evidence available.
 
-### G.11 Owner decisions still required
+### G.11 Owner decisions still required (as of the pre-integration audit — **superseded by §G.13.4**)
 
 | # | Decision | Options | Why it matters |
 | --- | --- | --- | --- |
@@ -601,3 +606,87 @@ No in-scope code gate fails on the evidence available.
   no real transaction, no spending, no production data change, no dependency upgrade, no test
   weakened (two of our tests adapted to the merged contract with their invariants kept), no advisory
   suppressed, no secret read or logged.
+
+---
+
+## G.13 Integration executed on the published branch — and the database/browser CI evidence (2026-10-13, same day)
+
+**Authorization.** The owner replied "proceed" to the request in §G.4/§G.11 D-4, i.e. **option A**: merge
+`main` into the published task branch. Executed exactly as recommended; nothing else was authorized or done.
+
+| Item | Value |
+| --- | --- |
+| Merge commit | `fde686559f681ddad690ac66d023c7718554797c` — parents `8714f8ff` (branch tip) + `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` (`main`). Ordinary merge commit: **no force-push, no history rewrite, no branch created** |
+| Resolution provenance | Before the commit existed, the staged index was verified **byte-identical to the already-tested candidate `b5f058b` except `RELEASE_REPORT_2026-10-13.md`** (`git diff --cached b5f058b` = 1 file). So the tested candidate *is* the merge that was pushed |
+| Push | `8714f8f..fde6865 arena/fac28f53-jata-aftercall` (non-force); the remote ref was re-read and confirmed afterwards |
+| PR #45 after the push | `mergeable: true`, `mergeable_state: "unstable"`, 12 commits, 65 changed files, head `fde6865…`, label **NOT APPROVED FOR PRODUCTION DEPLOYMENT** retained |
+| Local re-verification on the branch itself | `tsc`: 1 error = main's pre-existing offline-Prisma artifact (identical to main's baseline, **0 introduced**). `vitest`: **174 files passed / 2188 tests passed / 114 skipped / 0 failed** (skips are the DB files that self-skip without `DATABASE_URL`) |
+
+### G.13.1 CI run `38439687233` — `Interactive Business E2E`, `SUCCESS`
+
+Event `pull_request`, head `fde686559f681ddad690ac66d023c7718554797c`, job "Journey against a real database",
+all steps green (the only skipped step is the failure-reporting step, which correctly did not run).
+The workflow published its own evidence to PR #45 as `issuecomment-6151667650`:
+
+| Step | Evidence |
+| --- | --- |
+| Full native DB suite (`npx vitest run --exclude "tests/e2e/**"`) against the disposable `postgres:16` | **185 files / 2262 tests passed, 0 failed, 0 skipped.** The step fails the job if any test is skipped, so the 95 previously skipped tests of §E.3 — including `tests/prisma/subscription-payment.test.ts` and the line-87 case — genuinely executed against real PostgreSQL |
+| §66 experience journey | 17 passed |
+| Business POS journey | 22 passed (plus the 1 non-DB case in that file, matching the local ledger) |
+| Production HTTP isolation smoke | 9 passed |
+| Authenticated production HTTP/browser/DB journey | 428 passed |
+| **Booking SSR timezone + midnight hydration regression (real browser)** | **25 passed, 0 failed, 0 skipped** — the browser evidence that §G.6/Phase 4 could not produce from this machine |
+| Hydration #418 controlled race reproduction | The synthetic arms reproduce #418/#423 **by construction** (positive control — the detector works); the **forced arm (8 iterations) and control arm (3 iterations) show 0 #418 and 0 other errors** on the real app |
+| Motion / immersive / layout / registered-family / raster browser regressions | 124 / 22 / 7 / 167 / 29 passed, 0 skipped |
+| Migrations, seed, lint, types, production build on the isolated DB | passed |
+| Lint and TypeScript | passed |
+| Production dependency audit | **PASS — 0 production findings**; full audit still **FAIL — 10 findings (10 high)**, exactly as measured locally in §G.8 (decision D-2 unchanged) |
+
+### G.13.2 Caveats recorded, not hidden
+
+1. **Dashboard-preview samples timed out for 4 of 5 categories** in the authenticated browser journey:
+   `food`, `salon`, `professional`, `technical` returned `ok:false — TimeoutError: Waiting failed: 25000ms
+   exceeded` on all three attempts each (retail succeeded). The step passes because it does not require
+   those samples, and **no #418 appears in them**. This is an unresolved triage item (throttled 4× preview
+   load latency), reported as an observation — not presented as a pass and not evidence for or against #418.
+2. CI's browser harness is Chrome-on-Linux with synthetic fixtures and a disposable database; it is **not**
+   a physical-device, provider-payment, storage or production-Core-Web-Vitals proof.
+3. The workflow's closing sentence "Inherited expected failure is preserved, not fixed" is **boilerplate in
+   the workflow's comment template**, not a computed fact. On this head it is inaccurate: the repository
+   now contains **zero** `it.fails`/`.fails(` markers (only a comment quoting the removed marker). Flagged
+   for the owner; main's workflow file was not edited.
+4. This report-only push triggers exactly one further run on an identical tree; its id and result appear in
+   the PR's comment thread and in the hand-off summary. A green result there re-verifies the same tree.
+
+### G.13.3 Current gate table (supersedes §G.10)
+
+| Gate | Status | Evidence | Responsible |
+| --- | --- | --- | --- |
+| Hydration #418 — code | **PASS** | merged contract + parity/determinism/booking-hydration suites; no suppression added | Agent |
+| Hydration #418 — real browser | **PASS (CI)** | run `38439687233`: booking SSR/midnight hydration 25/25; #418 forced/control arms 0 errors; caveats in §G.13.2 | CI |
+| Line-87 subscription payment gap | **PASS (PostgreSQL-verified)** | CAS at `lib/paystack.ts:160`; REFUNDED never settleable; revival 14/14 locally and the full DB suite green in CI with 0 skips | CI |
+| Database CI — all previously skipped tests | **PASS** | run `38439687233`, 2262 tests, 0 skipped, at `fde6865` | CI |
+| Payment-provider readiness (Paystack) | **BLOCKED — OWNER VERIFICATION REQUIRED** | §G.7 / "Phase 5" checklist; only the owner holds the dashboards | Owner |
+| Live charge + refund exercise | **BLOCKED — OWNER AUTHORIZATION** | D-5; explicit spending authorization required | Owner |
+| Dependency-security gate | **PASS (production) / FAIL (development, by design of main's gate)** | production 0 in CI and locally; 10 high development findings with staged remediation (D-2) | Owner (decision) |
+| Environment, secrets, monitoring, rollback | **PASS** | §B5 + `DEPLOYMENT.md` §Rollback | Agent |
+| Database migration compatibility | **PASS** | CI applied migrations to the disposable DB at this SHA; no migration in the branch | CI |
+| Design system + published output | **PASS** | 21 design-system tests; categories × themes regression; family geometry 167/167 in CI | Agent/CI |
+| Integration/conflict resolution | **PASS** | candidate tree == merged tree; CI green on the merged SHA | Agent/CI |
+
+**Final status: BLOCKED — owner-verification items only.** Every machine-verifiable mandatory gate is now
+green at `fde6865` with run `38439687233` as evidence. Three items remain, all requiring the owner:
+production Paystack configuration verification (§G.7), authorization for one live charge + refund (D-5),
+and the development-advisory decision (D-2). No code gate fails; nothing is merged into `main`, nothing is
+deployed, and the PR keeps its NOT-APPROVED label.
+
+### G.13.4 Owner decisions — update (supersedes §G.11 where noted)
+
+| # | Decision | State |
+| --- | --- | --- |
+| D-1 | First booking chip between 21:00–24:00 UTC | open (cosmetic; unchanged) |
+| D-2 | Dependency posture (our `puppeteer-core ^25` vs main's pin + 10 dev findings) | open; CI now confirms production 0 and the 10 development findings |
+| D-3 | Ambient-time-zone date formatting in main's remaining client components | open; the browser regression suites pass, so no failure is observed today |
+| D-4 | Integration path | **EXECUTED — option A** (§G.13); PR #45 is now `mergeable: true` |
+| D-5 | Live charge + refund exercise | open (owner authorization) |
+| D-6 | Media storage | unchanged: deferred |
