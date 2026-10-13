@@ -753,7 +753,8 @@ const failed = results.filter((item) => !item.ok).length;
 // comment's middle-elision (its tail window keeps these lines).
 if (m418Lines.length || hydrationVisits.length) {
   console.log(`M418E BEGIN ${m418Lines.length} buffered evidence lines`);
-  for (const line of m418Lines.slice(-14)) console.log(line);
+  const priority = m418Lines.filter((line) => !line.startsWith("HYDRATION SAMPLE"));
+  for (const line of priority.slice(-20)) console.log(line);
   for (const entry of hydrationVisits.slice(-6)) {
     if (entry && (entry.rawOrder || entry.order)) {
       console.log(`M418E PAIR dom=${String(entry.order || "").slice(0, 46)} raw=${String(entry.rawOrder || "").slice(0, 46)} :: ${entry.category || ""} a${entry.attempt || ""}`);
