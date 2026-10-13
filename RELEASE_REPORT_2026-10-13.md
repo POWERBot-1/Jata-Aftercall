@@ -9,9 +9,9 @@ installation, a document, or an older SHA.
 | --- | --- |
 | Canonical baseline (untouched) | `main` = `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` (tip: "Merge pull request #43", 2026-10-13T14:40:24Z) |
 | Work branch | `arena/fac28f53-jata-aftercall` |
-| Code candidate SHA (pushed, PR head when Vercel built it) | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` |
-| Additional commit pushed this turn | `1b92182` — two lost-race tests for the settlement compare-and-set (test-only) |
-| Remote branch tip (verified with `git ls-remote`) | `0fe55e4652a1f5dd1489634b04ffec937f081005` (this report's commit; head at PR creation was `1b8167d…`, then `1b92182…`) |
+| Code candidate SHA (pushed; the commit Vercel built and all code evidence below refers to) | `1b8167dcc1df50e9af049f364cb6990b2fe756a4` |
+| Later commits on the same branch | `1b92182` (two lost-race tests) and the report-only commits that follow `1b8167d`; each is documentation or test-only, so the code evidence at `1b8167d` remains valid. Current tip: `git ls-remote origin refs/heads/arena/fac28f53-jata-aftercall`, or the PR's head SHA |
+| Remote branch tip | pushed and verified with `git ls-remote` at every push of this turn (no force, no history rewrite) |
 | Pull request | **#45** — https://github.com/POWERBot-1/Jata-Aftercall/pull/45 (open, base `main`, 8 commits, head `0fe55e4…`, labelled NOT APPROVED FOR PRODUCTION DEPLOYMENT; verification outcome posted as a comment) |
 | Branch vs `main` | 7 commits ahead, **107 behind**; `mergeable: false`, `mergeable_state: "dirty"` → **6 conflicting files** |
 | Recovery checkpoint | `9c36bd1026e50a5ab6e66f7446ae730c71f5963a` — present, never moved |
