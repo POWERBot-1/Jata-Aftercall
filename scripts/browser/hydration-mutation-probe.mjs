@@ -107,12 +107,13 @@ export function probeInstallSource(options = {}) {
       try {
         var raw = String(new Error().stack || "").split("\\n");
         var out = [];
-        for (var i = 1; i < raw.length && out.length < 3; i++) {
-          var frame = raw[i].replace(/^\\s+at\\s+/, "").replace(/\\s+/g, " ").slice(0, 110);
+        for (var i = 1; i < raw.length && out.length < 2; i++) {
+          var frame = raw[i].replace(/^\\s+at\\s+/, "").replace(/\\s+/g, " ").slice(0, 130);
           if (frame.indexOf("compactStack") > -1 || frame.indexOf("noteCall") > -1) continue;
+          if (frame.indexOf("proto.") > -1 || frame.indexOf("[as ") > -1) continue;
           out.push(frame);
         }
-        return out.join(" | ").slice(0, 200);
+        return out.join(" | ").slice(0, 280);
       } catch (e) { return ""; }
     }
     function noteCall(api, node, target, move) {
@@ -245,7 +246,9 @@ export function probeInstallSource(options = {}) {
                   }
                 } catch (e) {}
                 var next = node.nextElementSibling ? summarize(node.nextElementSibling) : "";
-                extra = " [" + first + (nid ? " id=" + nid : "") + (src ? " src=" + String(src).slice(-46) : "") + (inline ? " js=" + inline : "") + (next ? " next=" + next : "") + "]";
+                var prev = node.previousElementSibling ? summarize(node.previousElementSibling) : "";
+                var firstEl = m.target && m.target.firstElementChild ? summarize(m.target.firstElementChild) : "";
+                extra = " [" + first + (nid ? " id=" + nid : "") + (src ? " src=" + String(src).slice(-46) : "") + (inline ? " js=" + inline : "") + (next ? " next=" + next : "") + (prev ? " prev=" + prev : "") + (firstEl ? " 1st=" + firstEl : "") + "]";
               }
             }
           } catch (e) {}
@@ -303,6 +306,22 @@ export function probeInstallSource(options = {}) {
         counts.catalogue = catalogues.length;
         counts.motionRecipe = document.querySelectorAll("[data-motion-recipe]").length;
         counts.motionStatic = document.querySelectorAll("[data-motion-static]").length;
+        var nav = null;
+        try {
+          var entries = (typeof performance !== "undefined" && performance.getEntriesByType) ? performance.getEntriesByType("navigation") : [];
+          var e = entries && entries[0];
+          if (e) nav = { size: e.encodedBodySize, decoded: e.decodedBodySize, transfer: e.transferSize, ttfb: Math.round(e.responseStart || 0) };
+        } catch (e2) {}
+        var bodyFirst = "", bodyLast = "";
+        try {
+          var kids = (document.body && document.body.children) || [];
+          var parts = [];
+          for (var bi = 0; bi < kids.length && bi < 3; bi++) parts.push(summarize(kids[bi]));
+          bodyFirst = parts.join(",");
+          parts = [];
+          for (var bj = Math.max(0, kids.length - 3); bj < kids.length; bj++) parts.push(summarize(kids[bj]));
+          bodyLast = parts.join(",");
+        } catch (e3) {}
         snapshot = {
           reason: String(reason).slice(0, 140),
           at: now(),
@@ -313,6 +332,9 @@ export function probeInstallSource(options = {}) {
           frame: frameInfo(),
           counts: counts,
           calls: calls,
+          nav: nav,
+          bodyFirst: bodyFirst,
+          bodyLast: bodyLast,
           outline: outline(document.body || document.documentElement),
           tail: records.slice(-SNAPSHOT_TAIL),
         };
@@ -362,6 +384,9 @@ export function formatProbeDump(frameProbes, options = {}) {
       frame.ready = snap.ready;
       frame.counts = snap.counts;
       if (snap.calls) frame.calls = snap.calls;
+      if (snap.nav) frame.nav = snap.nav;
+      if (snap.bodyFirst !== undefined) frame.bodyFirst = snap.bodyFirst;
+      if (snap.bodyLast !== undefined) frame.bodyLast = snap.bodyLast;
       frame.outline = snap.outline;
       frame.tail = snap.tail;
     } else {

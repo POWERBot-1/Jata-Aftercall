@@ -125,11 +125,20 @@ async function pageFor(context) {
             const head = snap.head;
             for (let hi = 0; hi < head.length; hi += 5) emitM418(`M418 HEAD${Math.floor(hi / 5)} ${JSON.stringify(head.slice(hi, hi + 5))}`.slice(0, 240));
           }
-          if (snap.calls) emitM418(`M418E STK ${JSON.stringify(snap.calls)}`.slice(0, 600));
+          if (snap.calls) {
+            const c = snap.calls;
+            emitM418(`M418E STKI ${String(c.firstScriptInsert || "-").slice(0, 240)}`);
+            emitM418(`M418E STKM ${String(c.firstScriptMove || "-").slice(0, 240)}`);
+            emitM418(`M418E STKR ${String(c.firstBodyReorder || "-").slice(0, 240)}`);
+            emitM418(`M418E STKW ${String(c.firstWrite || "-").slice(0, 240)}`);
+            emitM418(`M418E STKA ${JSON.stringify(c.api || {}).slice(0, 200)}`);
+          }
+          if (snap.nav || snap.bodyFirst !== undefined) {
+            emitM418(`M418E NAV ready=${snap.ready} size=${snap.nav && snap.nav.size} decoded=${snap.nav && snap.nav.decoded} 1st=${String(snap.bodyFirst || "").slice(0, 80)} last=${String(snap.bodyLast || "").slice(0, 80)}`);
+          }
         } else if (probe) {
           emitM418(`M418 LIVE ${String(probe.state && probe.state.frame || entry.path).slice(0, 48)} seq=${probe.state && probe.state.seq} parseDropped=${probe.state && probe.state.parseDropped}`);
           emitM418(`M418 TAIL ${JSON.stringify((probe.tail || []).slice(-8))}`.slice(0, 700));
-          if (probe.calls) emitM418(`M418E STK ${JSON.stringify(probe.calls)}`.slice(0, 600));
         } else if (entry && entry.inaccessible) {
           emitM418(`M418 FRAME-INACCESSIBLE ${String(entry.path).slice(0, 48)} ${entry.inaccessible}`);
         }
@@ -765,7 +774,7 @@ const failed = results.filter((item) => !item.ok).length;
 if (m418Lines.length || hydrationVisits.length) {
   console.log(`M418E BEGIN ${m418Lines.length} buffered evidence lines`);
   const priority = m418Lines.filter((line) => !line.startsWith("HYDRATION SAMPLE"));
-  const rank = (line) => (line.includes("EXPECTED") || line.includes("M418 HEAD") || line.includes("M418 PARSE") || line.includes("M418E STK") ? 0 : 1);
+  const rank = (line) => (line.includes("EXPECTED") || line.includes("M418 HEAD") || line.includes("M418 PARSE") || line.includes("M418E STK") || line.includes("M418E NAV") ? 0 : 1);
   const ordered = [...priority].sort((a, b) => rank(a) - rank(b));
   for (const line of ordered.slice(0, 18)) console.log(String(line).slice(0, 175));
   for (const entry of hydrationVisits.slice(-4)) {

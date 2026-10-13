@@ -377,7 +377,8 @@ describe("M14 mutation-API stack capture (names the client mover; parser inserts
     body.appendChild(script);
     const calls = probeCalls(window);
     expect(String(calls.firstScriptInsert)).toContain("appendChild");
-    expect(String(calls.firstScriptInsert)).toContain("|"); // at least one captured frame
+    // The probe's own wrapper frames are filtered out; the real caller (this test file) survives.
+    expect(String(calls.firstScriptInsert)).toContain("hydration-mutation-probe.test");
     expect((calls.api as Record<string, number>).appendChild).toBe(1);
   });
 
@@ -414,6 +415,10 @@ describe("M14 mutation-API stack capture (names the client mover; parser inserts
     listeners.get("error")?.forEach((fn) => fn({ message: "Minified React error #418" }));
     const dump = JSON.parse(formatProbeDump([{ path: "/b/qa", probe: window[PROBE_PROPERTY] }]));
     expect(dump.frames[0].calls.firstScriptInsert).toContain("appendChild");
+    // Freeze snapshot also carries the document's own navigation size and body edges,
+    // which tie the failing load to its captured response and show who led the body.
+    expect(dump.frames[0].bodyFirst).toContain("script");
+    expect(dump.frames[0].bodyLast).toContain("script");
   });
 });
 
