@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
+import { nairobiCalendarDay } from "@/lib/dateFormat";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
 import { BookingClient } from "@/components/storefront/BookingClient";
 
@@ -63,6 +64,7 @@ export default async function BookPage({ params, searchParams }: Props) {
             ctaLabel={bookingEnabled ? "Book now" : data.profile.cta.enquire}
             confirmationLabel={data.profile.cta.confirmation}
             requireDate
+            today={nairobiCalendarDay()}
           />
         </div>
       </section>

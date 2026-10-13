@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { StorefrontData } from "@/lib/experience/storefront";
 import { navigationFor } from "@/lib/experience/document";
 import { themeRootClassName, themeStyleVars } from "@/lib/experience/themes";
+import { nairobiCalendarDay } from "@/lib/dateFormat";
 import { CartProvider } from "./CartProvider";
 import { ActionBar } from "./ActionBar";
 import { PageViewTracker } from "./Track";
@@ -111,7 +112,7 @@ export function StorefrontShell({
             </div>
           </div>
           <div className="eb-container eb-footer__note">
-            © {new Date().getFullYear()} {business.name}. Powered by JATA AFTERCALL.
+            © {nairobiCalendarDay().slice(0, 4)} {business.name}. Powered by JATA AFTERCALL.
           </div>
         </footer>
 

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
-import { formatWeekdayDate, parseCalendarDay } from "@/lib/dateFormat";
+import { calendarDayList, formatWeekdayDate, parseCalendarDay } from "@/lib/dateFormat";
 
 type Bookable = {
   id: string;
@@ -36,6 +36,7 @@ export function BookingClient({
   ctaLabel,
   confirmationLabel,
   requireDate,
+  today,
 }: {
   slug: string;
   businessId: string;
@@ -47,6 +48,15 @@ export function BookingClient({
   confirmationLabel: string;
   /** Property enquiries and quote requests still ask when the customer is free. */
   requireDate: boolean;
+  /**
+   * Today's Nairobi calendar day (`YYYY-MM-DD`), computed on the server and passed in.
+   *
+   * The date chips must be identical in the server HTML and in the browser. Deriving "today"
+   * from the runtime clock here instead rendered the server's UTC day on the server and the
+   * customer's Nairobi day in the browser (React hydration error #418) whenever the two
+   * disagreed, and `toISOString()` on a local midnight named the previous day in UTC+3.
+   */
+  today: string;
 }) {
   const selected = bookables.find((entry) => entry.id === preselectedId) || bookables[0] || null;
   const [serviceId, setServiceId] = useState<string>(selected?.id || "");
@@ -86,16 +96,8 @@ export function BookingClient({
     };
   }, [serviceId, date, slug, requireDate]);
 
-  const openDays = useMemo(() => {
-    // Next 14 days; the server still validates the final choice.
-    const days: string[] = [];
-    const today = new Date();
-    for (let offset = 0; offset < 21 && days.length < 14; offset += 1) {
-      const candidate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-      days.push(candidate.toISOString().slice(0, 10));
-    }
-    return days;
-  }, []);
+  // Next 14 Nairobi days from the server-provided day; the server still validates the final choice.
+  const openDays = useMemo(() => calendarDayList(today, 14), [today]);
 
   async function submit() {
     setError(null);

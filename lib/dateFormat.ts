@@ -25,6 +25,18 @@
 export const JATA_LOCALE = "en-KE";
 export const JATA_TIME_ZONE = "Africa/Nairobi";
 
+/**
+ * Africa/Nairobi is UTC+3 all year (no daylight saving), so Nairobi calendar arithmetic is a
+ * fixed shift away from UTC. Used to derive a calendar day from an instant without a time-zone
+ * database — the same value in Node (UTC) and in the browser (UTC+3).
+ */
+const NAIROBI_OFFSET_MS = 3 * 60 * 60 * 1000;
+const DAY_MS = 86_400_000;
+
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
 type DateInput = Date | string | number | null | undefined;
 
 function toDate(value: DateInput): Date | null {
@@ -91,11 +103,43 @@ export function parseCalendarDay(day: string): Date | null {
 
 /** Manual fallback used when `Intl` is unavailable or rejects the locale. */
 function manualDate(date: Date, withTime: boolean): string {
-  const shifted = new Date(date.getTime() + 3 * 60 * 60 * 1000); // Africa/Nairobi (UTC+3, no DST)
-  const pad = (value: number) => String(value).padStart(2, "0");
+  const shifted = new Date(date.getTime() + NAIROBI_OFFSET_MS); // Africa/Nairobi (UTC+3, no DST)
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const day = `${pad(shifted.getUTCDate())} ${months[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}`;
   return withTime ? `${day}, ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}` : day;
+}
+
+/**
+ * The `YYYY-MM-DD` Nairobi calendar day containing `instant` (default: now).
+ *
+ * This is the *server's* answer to "what day is it for the customer", and the value hydration
+ * must agree on: a server in UTC calling `new Date().toISOString().slice(0, 10)` at 21:30 reports
+ * yesterday's Nairobi date, which is exactly the class of mismatch (#418) this module exists to
+ * remove. Callers that render a day-dependent list compute it once on the server and pass it
+ * down, so the browser renders from the same input instead of from its own clock.
+ */
+export function nairobiCalendarDay(instant: Date | number = new Date()): string {
+  const shifted = new Date((instant instanceof Date ? instant.getTime() : instant) + NAIROBI_OFFSET_MS);
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+}
+
+/**
+ * `count` consecutive Nairobi calendar days starting at `from` (`YYYY-MM-DD`).
+ *
+ * Each day is the Nairobi day itself, never a UTC conversion of local midnight: the previous
+ * implementation built days from browser-local midnights and serialized them with
+ * `toISOString()`, which in UTC+3 named the day *before* the one it displayed — a customer
+ * tapping "Mon, 12 Oct" booked the 11th. Nairobi has no daylight saving, so adding whole days to
+ * a Nairobi-midnight instant is exact.
+ */
+export function calendarDayList(from: string, count: number): string[] {
+  const start = parseCalendarDay(from);
+  if (!start || !Number.isFinite(count) || count <= 0) return [];
+  const days: string[] = [];
+  for (let offset = 0; offset < count; offset += 1) {
+    days.push(nairobiCalendarDay(start.getTime() + offset * DAY_MS));
+  }
+  return days;
 }
 
 /** `12 Oct 2026`, in Africa/Nairobi. Returns `fallback` for missing or invalid input. */
