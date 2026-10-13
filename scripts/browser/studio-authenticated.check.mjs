@@ -79,7 +79,7 @@ async function pageFor(context) {
       const list = serverDigests.get(url) || [];
       list.push({ at: Date.now(), seq, status, contentType, len: html.length, bodyHead,
         digest: serverHtmlDigest(html), ...serverHtmlOrder(html) });
-      while (list.length > 3) list.shift();
+      while (list.length > 4) list.shift();
       serverDigests.set(url, list);
       if (serverDigests.size > 12) serverDigests.delete(serverDigests.keys().next().value);
     }).catch(() => {});
@@ -757,17 +757,17 @@ if (m418Lines.length || hydrationVisits.length) {
   const priority = m418Lines.filter((line) => !line.startsWith("HYDRATION SAMPLE"));
   const rank = (line) => (line.includes("EXPECTED") || line.includes("M418 HEAD") || line.includes("M418 PARSE") ? 0 : 1);
   const ordered = [...priority].sort((a, b) => rank(a) - rank(b));
-  for (const line of ordered.slice(0, 30)) console.log(String(line).slice(0, 190));
-  for (const entry of hydrationVisits.slice(-6)) {
+  for (const line of ordered.slice(0, 18)) console.log(String(line).slice(0, 175));
+  for (const entry of hydrationVisits.slice(-4)) {
     if (entry && (entry.rawOrder || entry.order)) {
       console.log(`M418E PAIR dom=${String(entry.order || "").slice(0, 46)} raw=${String(entry.rawOrder || "").slice(0, 46)} :: ${entry.category || ""} a${entry.attempt || ""}`);
     }
   }
   // The failing load's own response often resolves AFTER the throw (mid-parse captures),
-  // so the complete per-URL response list is dumped here at end-of-run.
-  for (const [url, list] of [...serverDigests.entries()].slice(0, 12)) {
-    for (const info of list.slice(-2)) {
-      console.log(`M418E RESP seq=${info.seq} status=${info.status} len=${info.len} ${String(url).slice(-52)} :: ${String(info.order).slice(0, 90)}`);
+  // so every captured storefront response record is dumped here at end-of-run.
+  for (const [url, list] of [...serverDigests.entries()].filter(([u]) => u.includes("/b/")).slice(0, 6)) {
+    for (const info of list) {
+      console.log(`M418E RESP seq=${info.seq} len=${info.len} ${String(url).slice(-46)} :: ${String(info.order).slice(0, 84)}`);
     }
   }
   console.log("M418E END");
