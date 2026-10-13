@@ -81,9 +81,12 @@ describe("atomic, idempotent payment settlement", () => {
     expect(state.upsertCount).toBe(0);
   });
 
-  it("does not activate a failed/cancelled payment", async () => {
+  it("does not activate a failed/cancelled payment on a bare call with no provider evidence", async () => {
     state.payment.status = "CANCELLED";
-    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_NOT_PENDING");
+    // A verified success may revive a CANCELLED payment, but only with the Paystack transaction id
+    // from the caller's own verification. Without it, nothing activates — the control is intact and
+    // the error now names the missing evidence instead of the old state-only guard.
+    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
     expect(state.subscription).toBeNull();
     expect(state.upsertCount).toBe(0);
   });

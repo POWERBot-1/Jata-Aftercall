@@ -368,7 +368,10 @@ describe("the POS subscription never disturbs the AFTERCALL plan (§80)", () => 
     expect(paystack.split("settlePosPayment(tx,").length - 1).toBe(1);
     // The POS branch returns before the generic subscription path, which is left untouched:
     // the same guards, the same window arithmetic, the same platform Subscription row (§80).
-    expect(paystack).toContain('if (payment.status !== "PENDING" && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_PENDING");');
+    // The settlement guards themselves: only settleable states, and anything other than PENDING
+    // requires provider evidence from the caller's own verification (2026-10-13 revival rule).
+    expect(paystack).toContain('if (!isSettleablePaymentStatus(payment.status) && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_SETTLEABLE");');
+    expect(paystack).toContain('if (payment.status !== "PENDING" && !repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");');
     expect(paystack).toContain("subscriptionWindow(now, plan.durationDays, current)");
     expect(paystack).toContain("activateSubscriptionForPayment");
     const branchIndex = paystack.indexOf("if (plan.key === POS_PLAN_KEY) {");

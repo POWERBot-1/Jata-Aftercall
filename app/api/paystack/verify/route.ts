@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { activateSubscriptionForPayment, verifyTransaction } from "@/lib/paystack";
 import { logAudit } from "@/lib/audit";
-import { classifyProviderStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
+import { classifyProviderStatus, isSettleablePaymentStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 import { getPlanById } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { verifyOrderPayment } from "@/lib/experience/payments";
@@ -66,10 +66,20 @@ export async function GET(req: Request) {
     }
     return NextResponse.json({ status: "PAID", subscriptionStatus: subscription?.status ?? null, idempotent: true, ...posReturn });
   }
-  if (payment.status !== "PENDING") return NextResponse.json({ status: payment.status, ...posReturn });
+  /*
+   * A stored terminal state is re-checked with the provider instead of being repeated back.
+   *
+   * The confirmation page is often the customer's first look after a slow or interrupted
+   * payment: a charge that Paystack later confirms as successful must settle here even though our
+   * row still says FAILED/CANCELLED/EXPIRED — the same rule the order/booking path already
+   * applies (verifyOrderPayment). REFUNDED (money returned) and anything else non-settleable is
+   * reported as stored, and a verified failure below still ends as a failure.
+   */
+  const storedSettleable = isSettleablePaymentStatus(payment.status);
+  if (payment.status !== "PENDING" && !storedSettleable) return NextResponse.json({ status: payment.status, ...posReturn });
 
   const mockRequested = searchParams.get("mock") === "success";
-  if (mockRequested && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+  if (payment.status === "PENDING" && mockRequested && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
     try {
       const result = await activateSubscriptionForPayment(payment.id, undefined, { raw: { testMock: true }, paystackId: `mock_${payment.reference}` });
       await logAudit({ actorId: payment.userId, action: "PAYMENT_TEST_MOCK_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
@@ -84,7 +94,7 @@ export async function GET(req: Request) {
     const evidence = validatePaymentEvidence(payment, transaction);
     if (evidence.ok === false) {
       if (evidence.reason !== "REFERENCE_MISMATCH") {
-        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } });
+        await prisma.payment.updateMany({ where: { id: payment.id, status: payment.status }, data: { status: "FAILED" } });
       }
       const action = evidence.reason === "AMOUNT_MISMATCH" ? "PAYMENT_AMOUNT_MISMATCH" : evidence.reason === "CURRENCY_MISMATCH" ? "PAYMENT_CURRENCY_MISMATCH" : "PAYMENT_REFERENCE_MISMATCH";
       await logAudit({ actorId: payment.userId, action, targetType: "PAYMENT", targetId: payment.id });
@@ -97,7 +107,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ status: "PENDING", message: "Paystack is still processing this payment. Your subscription is not active yet.", ...posReturn });
     }
     if (outcome.kind === "final_failure") {
-      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: outcome.status } });
+      await prisma.payment.updateMany({ where: { id: payment.id, status: payment.status }, data: { status: outcome.status } });
       return NextResponse.json({ status: outcome.status, message: outcome.status === "CANCELLED" ? "Payment was cancelled." : "Payment was not completed.", ...posReturn });
     }
 

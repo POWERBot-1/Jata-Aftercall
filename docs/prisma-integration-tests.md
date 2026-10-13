@@ -32,8 +32,10 @@ Its results are reported as engine `wasm-query-engine+adapter-pg`, which is not 
   `/api/paystack/verify` on an order payment (no subscription created).
 
 - `subscription-payment` (real webhook route, real HMAC signatures): PENDING subscription activates (regression);
-  KNOWN GAP (current behaviour recorded): a charge.success after charge.failed is refused with 503 and never activates.
-  The gap test is `it.fails`: it passes while the gap exists and must be flipped when the gap is closed.
+  a provider-verified charge.success after charge.failed settles the payment and activates the subscription (gap
+  closed 2026-10-13 — the settlement now accepts the same provider-verified states as the order path: PENDING,
+  FAILED, CANCELLED, EXPIRED, never REFUNDED); the verify route re-checks a stored FAILED with Paystack and
+  activates on a verified success, while a still-failing provider verdict changes nothing.
 
 ## Not covered here
 

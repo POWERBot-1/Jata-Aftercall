@@ -11,6 +11,25 @@ export function validatePaymentEvidence(expected: PaymentExpectation, evidence: 
   return { ok: true };
 }
 
+/**
+ * Payment states a *provider-verified* success may settle.
+ *
+ * One rule for the whole payment stack (§25): once Paystack independently confirms that a charge
+ * succeeded — matching reference, amount, currency and transaction id — a local
+ * FAILED/CANCELLED/EXPIRED record is the stale side of the disagreement, and the money is with
+ * the business. Refusing the settlement does not protect anyone: it leaves a paying customer
+ * without what they bought while the provider retries the same webhook.
+ *
+ * REFUNDED is deliberately absent: money already returned is not money received, and no provider
+ * success may reactivate it. Every caller reaches a settlement only after verification evidence
+ * has been checked, and each one still writes through a compare-and-set inside a transaction.
+ */
+export const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
+
+export function isSettleablePaymentStatus(status: unknown): boolean {
+  return typeof status === "string" && (SETTLEABLE_PAYMENT_STATES as readonly string[]).includes(status);
+}
+
 export function subscriptionWindow(
   now: Date,
   durationDays: number,

@@ -2,8 +2,12 @@
  * Subscription payments through the real webhook and verify routes against real Prisma + PostgreSQL.
  * Only the Paystack HTTP call (verifyTransaction) is replaced. Signatures are real HMAC-SHA512 over the raw body.
  *
- * Tests marked KNOWN GAP use it.fails: they pass while the gap exists and FAIL once it is fixed, at which point the
- * marker must be removed. This keeps the gap visible in the report instead of hidden.
+ * The previously recorded KNOWN GAP (line 87 — a provider-verified success on a FAILED subscription
+ * payment was refused with 503 and never activated) was closed on 2026-10-13: the subscription
+ * settlement now accepts the same provider-verified states the order/booking path always accepted
+ * (PENDING, FAILED, CANCELLED, EXPIRED — never REFUNDED). The `it.fails` marker was therefore
+ * removed, as the marker's own contract required, and the former characterization tests now assert
+ * the corrected behaviour. A no-verdict provider answer still changes nothing.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";
@@ -64,27 +68,42 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: subscription payments", () 
     expect((await p.subscription.findUnique({ where: { businessId: biz.id }, select: { status: true } }))?.status).toBeTruthy();
   });
 
-  it("CURRENT BEHAVIOUR (characterization): after charge.failed, a later charge.success is refused with 503 and nothing activates", async () => {
+  it("a verified charge.success after charge.failed settles the payment and activates the subscription", async () => {
     const { biz, payment, reference } = await subscriptionPayment("PENDING");
     const failed = await webhook(signedWebhook("charge.failed", { reference, id: 7002, amount: payment.amount, currency: "KES", status: "failed" }));
     expect(failed.status).toBe(200);
     expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("FAILED");
     mocks.verifyTransaction.mockResolvedValue(success(reference, payment.amount, 7003));
     const later = await webhook(signedWebhook("charge.success", { reference, id: 7003, amount: payment.amount, currency: "KES", status: "success" }));
-    expect(later.status).toBe(503);
+    // Paystack independently confirms the money arrived, so the stale local FAILED record must not
+    // keep a paying customer's subscription off (the same rule the order path already applies).
+    expect(later.status).toBe(200);
+    expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("PAID");
+    expect(await p.subscription.count({ where: { businessId: biz.id } })).toBe(1);
+  });
+
+  it("the verify route re-checks a stored FAILED with Paystack and activates on a verified success", async () => {
+    const { biz, payment, own, reference } = await subscriptionPayment("FAILED");
+    mocks.session.current = { userId: own.id, role: "CUSTOMER" };
+    mocks.verifyTransaction.mockResolvedValue(success(reference, payment.amount, 7004));
+    const res = await verifyRoute(new Request(`https://jata.test/api/paystack/verify?reference=${payment.reference}`));
+    expect(mocks.verifyTransaction).toHaveBeenCalledWith(reference);
+    expect(await res.json()).toMatchObject({ status: "PAID" });
+    expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("PAID");
+    expect(await p.subscription.count({ where: { businessId: biz.id } })).toBe(1);
+  });
+
+  it("a provider verdict that is still a failure leaves a FAILED payment failed and activates nothing", async () => {
+    const { biz, payment, own, reference } = await subscriptionPayment("FAILED");
+    mocks.session.current = { userId: own.id, role: "CUSTOMER" };
+    mocks.verifyTransaction.mockResolvedValue({ id: 7005, status: "failed", reference, amount: payment.amount, currency: "KES" });
+    const res = await verifyRoute(new Request(`https://jata.test/api/paystack/verify?reference=${payment.reference}`));
+    expect(await res.json()).toMatchObject({ status: "FAILED" });
     expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("FAILED");
     expect(await p.subscription.count({ where: { businessId: biz.id } })).toBe(0);
   });
 
-  it("CURRENT BEHAVIOUR (characterization): the subscription verify route reports a stored FAILED without asking Paystack", async () => {
-    const { payment, own } = await subscriptionPayment("FAILED");
-    mocks.session.current = { userId: own.id, role: "CUSTOMER" };
-    const res = await verifyRoute(new Request(`https://jata.test/api/paystack/verify?reference=${payment.reference}`));
-    expect(await res.json()).toMatchObject({ status: "FAILED" });
-    expect(mocks.verifyTransaction).not.toHaveBeenCalled();
-  });
-
-  it.fails("KNOWN GAP: a provider-verified success on a FAILED subscription payment should activate the subscription (fails until authorized)", async () => {
+  it("GAP CLOSED: a provider-verified success on a FAILED subscription payment activates the subscription", async () => {
     const { biz, payment, reference } = await subscriptionPayment("FAILED");
     mocks.verifyTransaction.mockResolvedValue(success(reference, payment.amount, 7010));
     const res = await webhook(signedWebhook("charge.success", { reference, id: 7010, amount: payment.amount, currency: "KES", status: "success" }));
