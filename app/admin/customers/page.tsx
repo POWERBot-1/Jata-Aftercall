@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export default async function AdminCustomers({ searchParams }: { searchParams: P
           <div key={u.id} className="rounded-2xl border bg-white p-4">
             <p className="text-sm font-bold">{u.name || "—"} — {u.email}</p>
             <p className="text-xs text-zinc-500">Phone: {u.phone || "—"} • Role: {u.role} • Businesses: {u.bizCount}</p>
-            <p className="text-xs">Subscription: {u.sub ? `${u.sub.status} • ${u.sub.plan.name} • exp ${u.sub.expiresAt ? new Date(u.sub.expiresAt).toLocaleDateString() : "—"}` : "None"}</p>
+            <p className="text-xs">Subscription: {u.sub ? `${u.sub.status} • ${u.sub.plan.name} • exp ${u.sub.expiresAt ? formatDate(u.sub.expiresAt) : "—"}` : "None"}</p>
             <p className="text-xs">Last payment: {u.lastPayment ? `${u.lastPayment.reference} • ${u.lastPayment.status} • KES ${u.lastPayment.amount / 100}` : "None"}</p>
           </div>
         ))}

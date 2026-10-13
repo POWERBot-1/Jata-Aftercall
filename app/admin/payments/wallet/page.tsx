@@ -1,5 +1,6 @@
 import Link from "next/link";
 import prisma from "@/lib/db";
+import { formatDateTime } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import { RecheckPaymentButton } from "@/components/admin/RecheckPaymentButton";
 
@@ -59,7 +60,7 @@ export default async function AdminPaymentWalletPage() {
                 <span>{row.provider}</span>
                 <span className="text-zinc-500">{row.providerReference ?? "no reference"}</span>
                 <span>expected {row.expectedAmountMinor ?? "—"} · received {row.receivedAmountMinor ?? "—"}</span>
-                <span className="text-zinc-500">{new Date(row.createdAt).toLocaleString("en-KE")}</span>
+                <span className="text-zinc-500">{formatDateTime(row.createdAt)}</span>
                 <span className="text-zinc-500">business {row.businessId ?? "—"}</span>
               </li>
             ))}
@@ -90,7 +91,7 @@ export default async function AdminPaymentWalletPage() {
             <tbody>
               {(events as any[]).map((event) => (
                 <tr key={event.id} className="border-t">
-                  <td className="px-2 py-1">{new Date(event.receivedAt ?? event.createdAt).toLocaleString("en-KE")}</td>
+                  <td className="px-2 py-1">{formatDateTime(event.receivedAt ?? event.createdAt)}</td>
                   <td className="px-2 py-1">{event.provider}</td>
                   <td className="px-2 py-1 font-mono">{String(event.providerEventId).slice(0, 28)}</td>
                   <td className="px-2 py-1">{event.status}{event.errorCode ? ` · ${event.errorCode}` : ""}</td>
@@ -136,7 +137,7 @@ export default async function AdminPaymentWalletPage() {
                   <td className="px-2 py-1">{row.status}</td>
                   <td className="px-2 py-1 text-right">{row.amountMinor}</td>
                   <td className="px-2 py-1 font-mono">{row.providerReference ?? "—"}</td>
-                  <td className="px-2 py-1">{new Date(row.createdAt).toLocaleString("en-KE")}</td>
+                  <td className="px-2 py-1">{formatDateTime(row.createdAt)}</td>
                   <td className="px-2 py-1">
                     {["CREATED", "PAYMENT_REQUESTED", "PENDING", "PROCESSING"].includes(String(row.status)) ? (
                       <RecheckPaymentButton transactionId={row.id} />
@@ -168,7 +169,7 @@ export default async function AdminPaymentWalletPage() {
               <span className="text-zinc-500">{row.kind}</span>
               <span>{row.status}</span>
               <span className="text-zinc-500">verified: {row.verificationSource ?? "none"}</span>
-              <span className="text-zinc-500">{new Date(row.updatedAt).toLocaleString("en-KE")}</span>
+              <span className="text-zinc-500">{formatDateTime(row.updatedAt)}</span>
             </li>
           ))}
           {(destinations as any[]).length === 0 ? <li className="text-zinc-500">No destinations configured.</li> : null}

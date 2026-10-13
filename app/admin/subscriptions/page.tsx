@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
@@ -18,8 +19,8 @@ export default async function AdminSubscriptions() {
                 <td className="px-3 py-2 text-xs">{s.user.email}</td>
                 <td className="px-3 py-2 text-center text-xs">{s.plan.name}</td>
                 <td className="px-3 py-2 text-center"><span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold">{s.status}</span></td>
-                <td className="px-3 py-2 text-xs">{s.startAt ? new Date(s.startAt).toLocaleDateString() : "—"}</td>
-                <td className="px-3 py-2 text-xs">{s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : "—"}</td>
+                <td className="px-3 py-2 text-xs">{s.startAt ? formatDate(s.startAt) : "—"}</td>
+                <td className="px-3 py-2 text-xs">{s.expiresAt ? formatDate(s.expiresAt) : "—"}</td>
               </tr>
             ))}
           </tbody>

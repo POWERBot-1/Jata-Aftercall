@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export default async function AdminOverview() {
           ["WhatsApp clicks", waClicks],
           ["Call clicks", callClicks],
           ["Direction clicks", dirClicks],
-          ["Revenue (KES)", revenuePaid._sum.amount ? (revenuePaid._sum.amount! / 100).toLocaleString() : "0"],
+          ["Revenue (KES)", revenuePaid._sum.amount ? formatNumber(revenuePaid._sum.amount! / 100) : "0"],
         ].map(([label, val]) => (
           <div key={String(label)} className="rounded-2xl border bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{label as string}</p>

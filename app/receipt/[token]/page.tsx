@@ -1,5 +1,6 @@
 import Link from "next/link";
 import prisma from "@/lib/db";
+import { formatDateTime, formatNumber } from "@/lib/format";
 import { maskDestination, minorToKes } from "@/lib/payments/money";
 import { PROVIDER_LABELS } from "@/lib/payments/types";
 
@@ -89,8 +90,8 @@ export default async function ReceiptVerificationPage({ params }: Props) {
         </div>
 
         <dl className="jata-stat-grid">
-          <div className="jata-stat"><dt>Amount</dt><dd>KES {amountKES.toLocaleString("en-KE")}</dd></div>
-          <div className="jata-stat"><dt>Paid on</dt><dd>{new Date(confirmedAt ?? Date.now()).toLocaleString("en-KE")}</dd></div>
+          <div className="jata-stat"><dt>Amount</dt><dd>KES {formatNumber(amountKES)}</dd></div>
+          <div className="jata-stat"><dt>Paid on</dt><dd>{formatDateTime(confirmedAt ?? new Date())}</dd></div>
           <div className="jata-stat"><dt>Method</dt><dd>{providerLabel}</dd></div>
           <div className="jata-stat"><dt>Reference</dt><dd>{transaction.jataPaymentId}</dd></div>
         </dl>
@@ -101,7 +102,7 @@ export default async function ReceiptVerificationPage({ params }: Props) {
             {destination.kind === "MPESA_TILL" ? " (M-PESA till)" : destination.kind === "MPESA_PAYBILL" ? " (M-PESA PayBill)" : ""}
           </p>
         ) : null}
-        {refundedKES > 0 ? <p className="pos-note">Refunded: KES {refundedKES.toLocaleString("en-KE")}</p> : null}
+        {refundedKES > 0 ? <p className="pos-note">Refunded: KES {formatNumber(refundedKES)}</p> : null}
 
         <p className="pos-note" data-receipt-statement="true">
           This payment was confirmed by {providerLabel} and recorded by JATA. Only a confirmation from the provider can

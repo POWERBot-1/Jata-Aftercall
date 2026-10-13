@@ -26,6 +26,19 @@ export const JATA_LOCALE = "en-KE";
 export const JATA_TIME_ZONE = "Africa/Nairobi";
 
 /**
+ * The clock booking instants are stored against.
+ *
+ * `validateBookingRequest` builds every booking from the availability slot string in the
+ * *server's* zone, and the server is UTC on Vercel, so a customer who taps "09:00" is stored as
+ * 09:00Z. Booking instants are therefore displayed on that same clock — showing them in
+ * Africa/Nairobi would move every appointment three hours and disagree with the slot the
+ * customer chose. This is an interim, semantics-preserving convention: whether bookings should
+ * be *anchored* to the Nairobi wall clock instead is an open product decision (release report
+ * §H.4) and is deliberately not decided by a display helper.
+ */
+export const JATA_BOOKING_TIME_ZONE = "UTC";
+
+/**
  * Africa/Nairobi is UTC+3 all year (no daylight saving), so Nairobi calendar arithmetic is a
  * fixed shift away from UTC. Used to derive a calendar day from an instant without a time-zone
  * database — the same value in Node (UTC) and in the browser (UTC+3).
@@ -102,8 +115,8 @@ export function parseCalendarDay(day: string): Date | null {
 }
 
 /** Manual fallback used when `Intl` is unavailable or rejects the locale. */
-function manualDate(date: Date, withTime: boolean): string {
-  const shifted = new Date(date.getTime() + NAIROBI_OFFSET_MS); // Africa/Nairobi (UTC+3, no DST)
+function manualDate(date: Date, withTime: boolean, offsetMs: number = NAIROBI_OFFSET_MS): string {
+  const shifted = new Date(date.getTime() + offsetMs); // Africa/Nairobi (UTC+3, no DST) unless told otherwise
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const day = `${pad(shifted.getUTCDate())} ${months[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}`;
   return withTime ? `${day}, ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}` : day;
@@ -154,6 +167,26 @@ export function formatDate(value: DateInput, fallback = "—"): string {
 }
 
 /** `12 Oct 2026, 14:05`, in Africa/Nairobi. Returns `fallback` for missing or invalid input. */
+const bookingFormatter = new Intl.DateTimeFormat(JATA_LOCALE, {
+  timeZone: JATA_BOOKING_TIME_ZONE,
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/**
+ * A booking instant on the clock it was booked against (see JATA_BOOKING_TIME_ZONE).
+ * Deterministic: no ambient time zone, so the server and the browser always agree.
+ */
+export function formatBookingDateTime(value: DateInput, fallback = "—"): string {
+  const date = toDate(value);
+  if (!date) return fallback;
+  try {
+    return bookingFormatter.format(date);
+  } catch {
+    return manualDate(date, true, 0);
+  }
+}
+
 export function formatDateTime(value: DateInput, fallback = "—"): string {
   const date = toDate(value);
   if (!date) return fallback;

@@ -18,7 +18,7 @@ import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
 import { SETTLEABLE_PAYMENT_STATES, classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
-import { formatKES } from "../format";
+import { formatBookingDateTime, formatKES } from "../format";
 
 export const PAYMENT_PURPOSE = {
   SUBSCRIPTION: "SUBSCRIPTION",
@@ -471,7 +471,7 @@ export async function notifyNewBooking(params: {
       businessId: params.businessId,
       eventType: "BOOKING",
       title: "New booking",
-      message: `${params.customerName} booked ${params.serviceName} on ${params.startAt.toLocaleString("en-KE")}.`,
+      message: `${params.customerName} booked ${params.serviceName} on ${formatBookingDateTime(params.startAt)}.`,
       referenceId: params.bookingId,
     });
   } catch {

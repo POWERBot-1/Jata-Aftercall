@@ -48,13 +48,19 @@ describe("date formatting is environment-independent", () => {
     const source = readFileSync("lib/dateFormat.ts", "utf8");
     expect(source).toContain('export const JATA_LOCALE = "en-KE"');
     expect(source).toContain('export const JATA_TIME_ZONE = "Africa/Nairobi"');
-    // Every Intl formatter in the module must take the pinned time zone.
+    // Booking instants are shown on the clock they were booked against (JATA_BOOKING_TIME_ZONE,
+    // documented in the module) and everything else on the business zone. Every Intl date
+    // formatter must pin one of those declared constants — never the ambient time zone — and the
+    // set of declared zones is itself pinned here, so a third zone cannot appear unnoticed.
+    expect(source).toContain('export const JATA_BOOKING_TIME_ZONE = "UTC"');
     const formatters = source.match(/new Intl\.[A-Za-z]+\([^)]*\)/g) ?? [];
     expect(formatters.length).toBeGreaterThan(4);
     for (const formatter of formatters) {
       if (formatter.startsWith("new Intl.NumberFormat")) continue;
-      expect(formatter, formatter).toContain("timeZone: JATA_TIME_ZONE");
+      expect(formatter, formatter).toMatch(/timeZone: JATA_(BOOKING_)?TIME_ZONE/);
     }
+    const declaredZones = new Set((source.match(/timeZone: (JATA_[A-Z_]+)/g) ?? []).map((entry) => entry.split(" ")[1]));
+    expect(declaredZones).toEqual(new Set(["JATA_TIME_ZONE", "JATA_BOOKING_TIME_ZONE"]));
   });
 
   it("formats numbers identically to the pinned locale", async () => {

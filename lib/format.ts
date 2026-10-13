@@ -8,7 +8,7 @@
  * displayed it, and a wrong time on receipts, reports and notification messages everywhere else.
  * The presentation shape ("12 Oct 2026", "14:30", joined with " · ") is unchanged.
  */
-import { formatDate as pinnedDate, formatTime as pinnedTime } from "./dateFormat";
+import { formatBookingDateTime as pinnedBookingDateTime, formatDate as pinnedDate, formatNumber as pinnedNumber, formatTime as pinnedTime } from "./dateFormat";
 
 
 export function formatKES(amount: number | null | undefined): string {
@@ -61,6 +61,24 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   const date = formatDate(value);
   const time = formatTime(value);
   return [date, time].filter(Boolean).join(" · ");
+}
+
+/**
+ * Booking instants render on the clock they were booked against, not the Nairobi clock — the
+ * storage rule and the reasoning are in `lib/dateFormat.ts` (JATA_BOOKING_TIME_ZONE). Payments,
+ * orders and subscriptions keep the Nairobi-pinned helpers above.
+ */
+export function formatBookingDateTime(value: string | Date | null | undefined): string {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  return pinnedBookingDateTime(date, "");
+}
+
+/** Deterministic grouping for counts and money amounts (en-KE, no ambient locale). */
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return pinnedNumber(value);
 }
 
 /** Mask a customer phone for display: 0712•••••• (§28). */

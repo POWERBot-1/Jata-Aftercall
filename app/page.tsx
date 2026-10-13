@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { formatKES } from "@/lib/format";
+import { formatKES, formatNumber } from "@/lib/format";
 import { FALLBACK_PLANS, orderHomepagePlans, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
 // The Business POS price is a server-side constant, never a number written into this page (§45).
 import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
@@ -132,7 +132,7 @@ export default async function HomePage() {
             <div key={p.key} className="rounded-2xl border border-zinc-200 p-6">
               <p className="text-sm font-semibold">{planDisplayName(p)}</p>
               {p.key === "INTERACTIVE_BUSINESS" ? <p className="mt-2 text-sm text-zinc-600">Build, edit and preview your interactive business website.</p> : null}
-              <p className="mt-1 text-3xl font-bold">KES {p.priceKES.toLocaleString()}</p>
+              <p className="mt-1 text-3xl font-bold">KES {formatNumber(p.priceKES)}</p>
               <p className="text-xs text-zinc-500">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
               <Link href="/register" className="mt-4 inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">Get my business page</Link>
               <p className="mt-2 text-center text-xs text-zinc-600">Secure Paystack checkout. Your plan starts once payment is confirmed.</p>
