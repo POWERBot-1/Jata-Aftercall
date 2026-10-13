@@ -97,4 +97,13 @@ describe("authenticated Studio browser fixture boundaries (test-only, not applic
     expect(script).toContain('"NOT RUN: fail-fast remainder"');
     expect(script).toContain('process.exitCode = failed || !journeyComplete ? 1 : 0');
   });
+  it("reaches the enquiry form only through the trusted unobstructed link click, with failure evidence (PR #41 791a435)", () => {
+    const script = readFileSync("scripts/browser/studio-authenticated.check.mjs", "utf8");
+    // Raw element clicks can be intercepted by overlays; the journey must use the
+    // centered, hit-tested clickText path and must retain the obstruction probe.
+    expect(script).not.toMatch(/visitor\.click\('\[data-recipe-action="enquire"\]/);
+    expect(script).toContain(`clickText(visitor, '[data-recipe-action="enquire"] a', 'Request a quote')`);
+    expect(script).toContain("Actual enquiry link before centered trusted click");
+    expect(script).toContain("enquiry form not reached after trusted link");
+  });
 });

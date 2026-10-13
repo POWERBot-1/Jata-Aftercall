@@ -88,6 +88,26 @@ describe("durable request-only professional intake", () => {
     expect((await POST(request(body, { origin: "not a url" }))).status).toBe(403);
     expect((await POST(request(body, { "content-length": "9000" }))).status).toBe(413); expect(h.create).not.toHaveBeenCalled();
   });
+  it.each([
+    { host: "localhost:43305", origin: "http://localhost:43305", protocol: "http" },
+    { host: "43305-preview.e2b.app", origin: "https://43305-preview.e2b.app", protocol: "https" },
+  ])("binds same-origin requests to the incoming host/protocol, not Next's internal listen URL: %j", async ({ host, origin, protocol }) => {
+    h.business.isPublished = false;
+    const req = new Request("http://0.0.0.0:43305/api/storefront/enquiry", { method: "POST", headers: { "content-type": "application/json", host, origin,
+      "x-forwarded-proto": protocol, "x-forwarded-for": `192.0.2.${++sequence}` }, body: JSON.stringify(body) });
+    expect((await POST(req)).status).toBe(404); // reaches the unchanged unpublished refusal, NOT an erroneous origin 403
+    expect(h.create).not.toHaveBeenCalled();
+  });
+  it("does not accept a foreign origin merely because x-forwarded-host claims it", async () => {
+    expect((await POST(request(body, { host: "jata.test", origin: "https://foreign.test", "x-forwarded-host": "foreign.test", "x-forwarded-proto": "https" }))).status).toBe(403);
+    expect(h.create).not.toHaveBeenCalled();
+  });
+  it("refuses non-http(s) origin schemes and malformed forwarded protocols with no write", async () => {
+    expect((await POST(request(body, { origin: "ftp://jata.test" }))).status).toBe(403);
+    expect((await POST(request(body, { origin: "https://jata.test", "x-forwarded-proto": "javascript" }))).status).toBe(403);
+    expect((await POST(request(body, { origin: "https://jata.test", host: "jata.test<script>" }))).status).toBe(403);
+    expect(h.create).not.toHaveBeenCalled();
+  });
   it("accepts the same website's origin regardless of binding representation (0.0.0.0-bound server, localhost browser)", async () => {
     // The request URL's serialized origin can be 0.0.0.0/localhost/IPv6 loopback while the
     // browser sends its own host; the host (host:port) comparison must treat these as one site.

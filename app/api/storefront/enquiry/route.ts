@@ -28,10 +28,20 @@ export async function POST(req: Request) {
     // Same-website CSRF check by host (host:port). Never compare serialized origins:
     // a server bound to 0.0.0.0 and a browser on localhost are the same website, while
     // foreign sites, sandboxed "null" origins and malformed values must refuse.
-    const requestHost = (req.headers.get("host") || new URL(req.url).host).toLowerCase();
-    let originHost = "";
-    try { originHost = new URL(origin).host.toLowerCase(); } catch { originHost = ""; }
-    if (!originHost || originHost !== requestHost) {
+    // Reconciled from PR #41 (4e8099d): allowlist the forwarded protocol, require a
+    // well-formed Host header, and only accept http(s) origin schemes. Protocol binding
+    // itself stays host-based on purpose — a TLS-terminating proxy without x-forwarded-proto
+    // must not turn a same-site request into a false 403.
+    const forwardedProto = req.headers.get("x-forwarded-proto");
+    const hostHeader = req.headers.get("host");
+    if ((forwardedProto && !["http", "https"].includes(forwardedProto)) || (hostHeader && !/^[a-zA-Z0-9.:[\]-]+$/.test(hostHeader))) {
+      console.warn("Enquiry origin refused: malformed host or forwarded protocol");
+      return reply({ error: "Send your enquiry from this business's website." }, 403);
+    }
+    const requestHost = (hostHeader || new URL(req.url).host).toLowerCase();
+    let originHost = ""; let originProtocol = "";
+    try { const parsed = new URL(origin); originHost = parsed.host.toLowerCase(); originProtocol = parsed.protocol; } catch { originHost = ""; }
+    if (!originHost || !["http:", "https:"].includes(originProtocol) || originHost !== requestHost) {
       console.warn(`Enquiry origin refused: origin-host=${originHost || "invalid"} request-host=${requestHost}`);
       return reply({ error: "Send your enquiry from this business's website." }, 403);
     }

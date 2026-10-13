@@ -535,8 +535,13 @@ try {
       await visitor.waitForFunction(() => !document.querySelector('main').textContent.includes('QA advisory request'));
       check(`${category}: booking facet selects actual fixed-price consultation`, (await visitor.$eval('main', (element) => element.textContent)).includes('QA fixed consultation'));
       await clickText(visitor, `[aria-label="${requestTypeLabel}"] button`, 'All services');
-      await visitor.click('[data-recipe-action="enquire"] a');
-      await visitor.waitForSelector('#eq-name');
+      const enquiryTarget = await visitor.$eval('[data-recipe-action="enquire"] a', (element) => {
+        const box = element.getBoundingClientRect(); const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { path: new URL(element.href).pathname, top: box.top, bottom: box.bottom, viewport: innerHeight, hit: hit?.tagName, hitClass: typeof hit?.className === 'string' ? hit.className : null, unobstructed: hit === element || element.contains(hit) };
+      });
+      console.log(`Actual enquiry link before centered trusted click: ${JSON.stringify(enquiryTarget)}`);
+      await clickText(visitor, '[data-recipe-action="enquire"] a', 'Request a quote');
+      await visitor.waitForSelector('#eq-name').catch(() => { throw new Error(`${category}: enquiry form not reached after trusted link; path=${new URL(visitor.url()).pathname}`); });
       check(`${category}: actual request-only form has no fake date/slots/price and correct owned service`, await visitor.$eval('#eq-service', (select) => select.value) === fixture.itemId &&
         !await visitor.$('#bk-name') && (await visitor.$eval('main', (element) => element.textContent)).includes('not a confirmed booking'));
       const bookingBefore = await prisma.booking.count({ where: { businessId: fixture.id } });
