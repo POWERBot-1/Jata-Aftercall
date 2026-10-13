@@ -8,11 +8,21 @@ import { PublishPanel } from "@/components/dashboard/PublishPanel";
 import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
 import { CreateExperienceForm } from "@/components/dashboard/CreateExperienceForm";
 import { WebsiteHealth } from "@/components/dashboard/WebsiteHealth";
+import { EnquiryBoard } from "@/components/dashboard/EnquiryBoard";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
-export const metadata: Metadata = { title: "Website studio" };
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }> };
+
+// M11 #418: metadata shares the page's single per-request workspace load so the SSR root
+// segment completes with the head — the hydration bootstrap scripts are emitted after the
+// content (see lib/request-cache.ts).
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  await loadWorkspace(id);
+  return { title: "Website studio" };
+}
 
 export default async function StudioHomePage({ params }: Props) {
   const { id } = await params;
@@ -90,6 +100,7 @@ export default async function StudioHomePage({ params }: Props) {
       )}
 
       {experience ? <WebsiteHealth businessId={business.id} /> : null}
+      {experience && usesServiceEnquiries(document.categoryKey) ? <EnquiryBoard businessId={business.id} /> : null}
 
       {experience ? (
         <section className="jata-card">

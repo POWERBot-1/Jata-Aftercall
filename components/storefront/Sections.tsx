@@ -11,9 +11,13 @@ import Link from "next/link";
 import type { ExperienceSection } from "@/lib/experience/types";
 import type { StorefrontData, StorefrontItem } from "@/lib/experience/storefront";
 import { formatDuration } from "@/lib/format";
+import { sectionLayout } from "@/lib/experience/templateFamilies";
 import { formatOpeningHours } from "@/lib/openingHours";
 import { getDirectionsUrl } from "@/lib/location";
 import { getWhatsAppUrl, normalizeKePhone } from "@/lib/phone";
+import { itemCardDataFor } from "@/lib/experience/catalogue";
+import { sectionBusinessRecipe, recipeCatalogue, type BusinessRecipeConfig } from "@/lib/experience/businessRecipes";
+import { BusinessCatalogue } from "./BusinessCatalogue";
 import { ItemCard, ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
 import { ContactTracker } from "./Track";
@@ -103,16 +107,34 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   );
 }
 
+/** Renderer-backed geometries. Prices, stock and links remain authoritative StorefrontData. */
+function Catalogue({ items, data, layout, label, recipe }: { items: StorefrontItem[]; data: StorefrontData; layout: string; label: string; recipe?: BusinessRecipeConfig | null }) {
+  if (recipe) return <BusinessCatalogue items={items} data={itemCardDataFor(data)} config={recipe} layout={layout} />;
+  if (layout === "list" || layout === "compact") return <div className="eb-grid eb-grid--list">{items.map((item) => <ItemRow key={item.id} item={item} data={data} />)}</div>;
+  if (layout === "comparison") return <div className="eb-comparison" role="region" tabIndex={0} aria-label={`${label} comparison`}><table>
+    <caption>{label} — compare current details</caption><thead><tr><th scope="col">Item</th><th scope="col">Price</th><th scope="col">Availability</th><th scope="col">Action</th></tr></thead>
+    <tbody>{items.map((item) => <tr key={item.id}><th scope="row">{item.name}</th><td><ItemPrice item={item} /></td><td>{item.kind === "service" ? item.bookingEnabled ? "Bookable" : "Enquire" : item.stockStatus === "OUT_OF_STOCK" || item.stockStatus === "DISCONTINUED" ? "Unavailable" : "Available"}</td><td><Link className="eb-btn eb-btn--outline eb-btn--sm" href={`/b/${data.business.slug}/item/${item.id}`}>View details</Link></td></tr>)}</tbody>
+  </table></div>;
+  const known = ["editorial", "carousel", "spotlight"].includes(layout) ? layout : "grid";
+  return <div className={`eb-grid eb-grid--auto eb-catalog--${known}`} data-catalogue-layout={known} {...(known === "carousel" ? { role: "region", tabIndex: 0, "aria-label": `${label} — swipe or scroll to browse` } : {})}>
+    {items.map((item) => <ItemCard key={item.id} item={item} data={data} />)}
+  </div>;
+}
+
 export function SectionRenderer({ section, data }: { section: ExperienceSection; data: StorefrontData }) {
   const { profile } = data;
-  const catalogue = profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue") ? data.items : data.services;
+  const layout = sectionLayout(section, data.document.artDirection);
+  const recipe = sectionBusinessRecipe(section, data.document);
+  const recipeItems = recipe ? recipeCatalogue(data, recipe) : null;
+  const catalogue = recipeItems || (profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue") ? data.items : data.services);
   const featured = (profile.capabilities.includes("booking") ? data.services : data.items).filter((item) => item.isFeatured);
   const base = featured.length > 0 ? featured : (profile.capabilities.includes("booking") ? data.services : data.items).slice(0, 6);
 
   switch (section.type) {
     case "featured": {
       const limit = Math.max(2, Math.min(12, section.limit || 6));
-      const items = base.slice(0, limit);
+      const preferred = recipeItems ? recipeItems.filter((item) => item.isFeatured) : null;
+      const items = (recipeItems ? preferred!.length ? preferred! : recipeItems : base).slice(0, limit);
       return (
         <SectionShell id={section.id} title={section.title} subtitle={section.subtitle}>
           {items.length === 0 ? (
@@ -121,11 +143,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
               body={`Add your first ${profile.itemNoun.toLowerCase()} in the dashboard and it shows up here instantly.`}
             />
           ) : (
-            <div className={`eb-grid ${section.layout === "list" ? "eb-grid--list" : "eb-grid--auto"}`}>
-              {section.layout === "list"
-                ? items.map((item) => <ItemRow key={item.id} item={item} data={data} />)
-                : items.map((item) => <ItemCard key={item.id} item={item} data={data} />)}
-            </div>
+            <Catalogue items={items} data={data} layout={layout} label={section.title || profile.catalogueLabel} recipe={recipe} />
           )}
         </SectionShell>
       );
@@ -149,36 +167,28 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
         );
       }
       return (
-        <>
+        <div id={section.id}>
           {Array.from(grouped.entries()).map(([category, items]) => (
             <SectionShell
               key={category}
               id={`${section.id}-${category.replace(/\s+/g, "-").toLowerCase()}`}
               title={`${section.title || profile.catalogueLabel} — ${category}`}
             >
-              <div className="eb-grid eb-grid--list">
-                {items.map((item) => (
-                  <ItemRow key={item.id} item={item} data={data} />
-                ))}
-              </div>
+              <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : "list"} label={`${section.title || profile.catalogueLabel} — ${category}`} recipe={recipe} />
             </SectionShell>
           ))}
-        </>
+        </div>
       );
     }
 
     case "services": {
-      const items = data.services.filter((service) => !section.filter || service.category === section.filter);
+      const items = (recipeItems || data.services).filter((service) => !section.filter || service.category === section.filter);
       return (
         <SectionShell id={section.id} title={section.title} subtitle={section.subtitle} tone="muted">
           {items.length === 0 ? (
             <EmptyState title="No services listed yet" body="Add the services you offer, with prices or durations, so customers can book." />
           ) : (
-            <div className={section.layout === "grid" ? "eb-grid eb-grid--auto" : "eb-grid eb-grid--list"}>
-              {section.layout === "grid"
-                ? items.map((item) => <ItemCard key={item.id} item={item} data={data} />)
-                : items.map((item) => <ItemRow key={item.id} item={item} data={data} />)}
-            </div>
+            <Catalogue items={items} data={data} layout={data.document.version === 2 ? layout : section.layout === "grid" ? "grid" : "list"} label={section.title || "Services"} recipe={recipe} />
           )}
         </SectionShell>
       );
@@ -239,11 +249,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
           {listings.length === 0 ? (
             <EmptyState title="No listings yet" body="Add a property with photos, price and location to start receiving enquiries." />
           ) : (
-            <div className="eb-grid eb-grid--3">
-              {listings.map((item) => (
-                <ItemCard key={item.id} item={item} data={data} />
-              ))}
-            </div>
+            data.document.version === 2 ? <Catalogue items={listings} data={data} layout={layout} label={section.title || "Listings"} /> : <div className="eb-grid eb-grid--3">{listings.map((item) => <ItemCard key={item.id} item={item} data={data} />)}</div>
           )}
         </SectionShell>
       );
@@ -304,7 +310,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
       if (images.length === 0) return null;
       return (
         <SectionShell id={section.id} title={section.title || "Gallery"}>
-          <div className="eb-gallery">
+          <div className={`eb-gallery eb-gallery--${["masonry", "strip", "panorama", "paired", "mosaic"].includes(layout) ? layout : "grid"}`} data-gallery-layout={layout}>
             {images.map((image, index) => (
               <figure key={`${image.url}-${index}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}

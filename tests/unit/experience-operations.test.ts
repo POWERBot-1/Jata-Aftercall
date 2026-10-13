@@ -150,6 +150,7 @@ describe("payment states", () => {
     expect(paymentStateOf({ status: "PAID" })).toBe("SUCCESS");
     expect(paymentStateOf({ status: "FAILED" })).toBe("FAILED");
     expect(paymentStateOf({ status: "EXPIRED" })).toBe("EXPIRED");
+    expect(paymentStateOf({ status: "CANCELLED" })).toBe("CANCELLED");
     expect(paymentStateOf({ status: "REFUNDED" })).toBe("CANCELLED");
   });
 });

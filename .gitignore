@@ -48,3 +48,6 @@ Thumbs.db
 *.key
 .env*
 !.env.example
+
+# Local verification logs, browser binaries and bundle reports (not release source)
+.cache/

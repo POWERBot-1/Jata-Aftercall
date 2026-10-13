@@ -7,6 +7,7 @@
  * money has moved, and an unpaid order is never presented as a completed sale.
  */
 
+import { ResumePaymentButton } from "./ResumePaymentButton";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { getWhatsAppUrl, normalizeKePhone } from "@/lib/phone";
@@ -94,8 +95,9 @@ export function OrderStatusPanel({
       </div>
 
       {!paid ? (
-        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <Link href={`/b/${slug}/order/${reference}?verify=1`} className="eb-btn">
+        <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+          {status === "PENDING_PAYMENT" ? <ResumePaymentButton slug={slug} reference={reference} /> : null}
+          <Link href={`/b/${slug}/order/${reference}?verify=1`} className="eb-btn eb-btn--outline">
             Check payment status
           </Link>
           {wa ? (

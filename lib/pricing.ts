@@ -38,6 +38,17 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
   return plans.filter((plan) => isPubliclyListedPlan(plan.key));
 }
 
+/** Marketing order only; never changes stored IDs, prices, durations or checkout selection. */
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"] as const;
+
+export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[]): T[] {
+  const rank = (key: string) => {
+    const index = (HOMEPAGE_PLAN_ORDER as readonly string[]).indexOf(key);
+    return index < 0 ? HOMEPAGE_PLAN_ORDER.length : index;
+  };
+  return [...plans].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
 /**
  * The name a customer-facing surface shows for a plan.
  *
@@ -45,9 +56,13 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
  * client with the wrong encoding it holds U+FFFD ("�") — which is what the public
  * homepage was observed rendering for the AI Business Front Desk and Interactive Business cards.
  * A known plan then shows its canonical name instead of a corrupted or blank one; any other
- * stored name is shown exactly as the operator wrote it.
+ * stored name is shown exactly as the operator wrote it, except the Website Studio product
+ * whose stable INTERACTIVE_BUSINESS key always uses the requested customer-facing brand.
  */
 export function planDisplayName(plan: { key: string; name?: string | null }): string {
+  if (plan.key === "INTERACTIVE_BUSINESS") {
+    return FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)!.name;
+  }
   const stored = typeof plan.name === "string" ? plan.name.trim() : "";
   if (stored && !stored.includes("\uFFFD")) return stored;
   const canonical = FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)?.name;
@@ -56,7 +71,10 @@ export function planDisplayName(plan: { key: string; name?: string | null }): st
 }
 
 export async function getPlanByKey(key: string): Promise<Plan | null> {
-  return (await prisma.planConfig?.findUnique?.({ where: { key } })) ?? null;
+  // A database error reads as "no stored plan", so callers use the canonical fallback (as getPlanConfig does)
+  // instead of failing the pricing lookup.
+  const plan = await prisma.planConfig?.findUnique?.({ where: { key } }).catch(() => null);
+  return plan ?? null;
 }
 
 export async function getPlanConfig(
@@ -133,7 +151,7 @@ export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
   { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
   { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
-  { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
+  { key: "INTERACTIVE_BUSINESS", name: "Website Studio — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
   // Private plan: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
   { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
 ];

@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { guardTenantMutation } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
+import { publicProductPrice } from "@/lib/ai-public-products";
+import { displayPriceKES } from "@/lib/sale-pricing";
 
 /**
  * Business Brain (§7) — structured, authoritative business data retrieval.
@@ -41,6 +43,11 @@ export async function GET(req: Request) {
         category: p.category,
         basePriceKES: p.basePriceKES,
         variantPriceKES: p.variantPriceKES,
+        // The price charged now (sale only inside its window), and the original while a sale runs.
+        ...publicProductPrice(p),
+        // Owner-only route: the end of a sale that is running now, so the owner's AI view matches the storefront.
+        // Null outside an active window (never shows a window that has not started or has ended).
+        saleEndsAt: displayPriceKES(p).saleState === "ACTIVE" && p.salePriceEndsAt ? new Date(p.salePriceEndsAt).toISOString() : null,
         currency: p.currency,
         stockStatus: p.stockStatus,
         preOrderAllowed: p.preOrderAllowed,

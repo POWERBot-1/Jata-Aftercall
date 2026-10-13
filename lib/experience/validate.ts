@@ -15,8 +15,11 @@ import { isValidThemeKey } from "./themes";
 import { safeUrl } from "./document";
 import type { EntitlementState } from "./entitlement";
 import type { ExperienceDocument } from "./types";
+import { displayPriceKES } from "../sale-pricing";
+import { validateExperienceDocument } from "./schema";
 
 export type PublishCheckId =
+  | "schema"
   | "business-name"
   | "business-category"
   | "contact"
@@ -74,6 +77,10 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
     checks.push({ id, label, status: passed ? "pass" : "fail", hint: passed ? undefined : hint, href: passed ? undefined : href });
   };
 
+  const schema = validateExperienceDocument(document);
+  add("schema", "Supported safe experience format", schema.ok,
+    schema.ok ? undefined : schema.issues[0]?.message, "/dashboard/website");
+
   add(
     "business-name",
     "Business name",
@@ -124,9 +131,12 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
     "/dashboard/website",
   );
 
-  const needsCatalogue = profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue");
   const needsServices = profile.capabilities.includes("booking");
-  if (needsCatalogue) {
+  // Booking-only categories expose their Service rows as the catalogue. Requiring Product rows too
+  // prevents a complete salon/service business from publishing. Mixed commerce + booking still needs both.
+  const needsProductCatalogue = profile.capabilities.includes("commerce") ||
+    (profile.capabilities.includes("catalogue") && !needsServices);
+  if (needsProductCatalogue) {
     add(
       "catalogue",
       `${profile.itemNounPlural} added`,
@@ -205,14 +215,20 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
 }
 
 /** Catalogue rows that cannot be shown to customers (bad price or missing name). */
-export function findInvalidCatalogueItems(items: Array<{ id: string; name?: string | null; basePriceKES?: number | null; salePriceKES?: number | null }>) {
+export function findInvalidCatalogueItems(items: Array<{ id: string; name?: string | null; basePriceKES?: number | null; salePriceKES?: number | null; salePriceStartsAt?: Date | string | null; salePriceEndsAt?: Date | string | null }>) {
   const invalid: Array<{ id: string; name?: string | null; reason: string }> = [];
   for (const item of items) {
     if (!item.name || item.name.trim().length < 2) {
       invalid.push({ id: item.id, name: item.name, reason: "Every item needs a name." });
       continue;
     }
-    const price = item.salePriceKES ?? item.basePriceKES ?? null;
+    // A stored base price that is negative or not a whole KES amount is invalid, even though it is not a price.
+    const rawBase = item.basePriceKES;
+    if (rawBase !== null && rawBase !== undefined && (!Number.isSafeInteger(Number(rawBase)) || Number(rawBase) < 0)) {
+      invalid.push({ id: item.id, name: item.name, reason: `${item.name} has an invalid price.` });
+      continue;
+    }
+    const price = displayPriceKES(item).priceKES;
     if (price === null) continue;
     if (!Number.isSafeInteger(Number(price)) || Number(price) < 0) {
       invalid.push({ id: item.id, name: item.name, reason: `${item.name} has an invalid price.` });

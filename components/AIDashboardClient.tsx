@@ -491,7 +491,8 @@ export default function AIDashboardClient({
                   <span className="rounded bg-slate-800 px-2 py-0.5 text-emerald-300">{p.stockStatus}</span>
                 </div>
                 <p className="text-slate-200">
-                  Price: KES {p.basePriceKES ?? p.variantPriceKES ?? 0}
+                  Price: {p.priceKES != null ? `KES ${p.priceKES}` : "Price on request"}
+                  {p.wasPriceKES != null ? ` (was KES ${p.wasPriceKES}, sale running)` : ""}
                   {typeof p.quantity === "number" ? ` • Qty: ${p.quantity}` : ""}
                 </p>
                 {p.preOrderAllowed && <p className="text-indigo-300">Pre-Order Enabled</p>}
