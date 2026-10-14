@@ -9,6 +9,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
 import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest, serverHtmlOrder, patchHydrationThrowDiagnostics } from "./hydration-mutation-probe.mjs";
+// Gate integrity: required hydration samples are part of the verdict, via a pure, unit-tested
+// module (scripts/browser/m418-gate.mjs, tests/unit/m418-gate.test.ts).
+import { REQUIRED_ATTEMPTS, REQUIRED_CATEGORIES, evaluateGate, evaluateM11, exitCodeFor, gateLine, journeyStatusFor, sampleTallyLine } from "./m418-gate.mjs";
 
 // Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
 // containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
@@ -20,6 +23,33 @@ function probeEnabled() {
   } catch {
     return true;
   }
+}
+
+/**
+ * E3 (timeout instrumentation): what does the predicate actually see when the wait expires?
+ * "The frame never parsed" and "the frame parsed without the marker" produce the same
+ * TimeoutError and the same `ok:false` today, so both are examined explicitly.
+ */
+async function sampleFrameDiagnostics(page) {
+  return page.evaluate(() => {
+    const iframe = document.querySelector('iframe[title="Draft preview"]');
+    if (!iframe) return { iframePresent: false };
+    const out = { iframePresent: true, src: String(iframe.getAttribute("src") || "").slice(0, 140) };
+    let doc = null;
+    try { doc = iframe.contentDocument; } catch (error) { out.docError = String(error).slice(0, 80); }
+    if (!doc) { out.doc = false; return out; }
+    out.doc = true;
+    out.readyState = String(doc.readyState || "");
+    out.body = Boolean(doc.body);
+    if (doc.body) {
+      const text = String(doc.body.textContent || "").replace(/\s+/g, " ").trim();
+      out.bodyTextLength = text.length;
+      out.bodyTextHead = text.slice(0, 120);
+      out.bodyChildren = doc.body.children.length;
+    }
+    try { out.href = String(iframe.contentWindow.location.href).slice(0, 160); } catch { out.href = "cross-origin"; }
+    return out;
+  });
 }
 
 let target;
@@ -36,6 +66,10 @@ const require = createRequire(import.meta.url);
 const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
+// Diagnostic-arm measurements (E1/E2/E4) are recorded separately and never satisfy a required sample.
+const m418Diagnostics = [];
+let m11Evidence = { status: "INSUFFICIENT", checked: 0, required: REQUIRED_CATEGORIES.length * REQUIRED_ATTEMPTS, inverted: [] };
+let gateSummary = null;
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
 // The failing check's name, printed with the end-of-run summary so a CI comment that elides the
 // middle of the log still names the check that failed (see the workflow's failure reporter).
@@ -727,6 +761,11 @@ try {
         } catch (error) {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
+          // E3: record what the timed-out predicate saw, in the artifact and in the log.
+          entry.diag = await sampleFrameDiagnostics(first.ownerPage).catch(() => ({ diagError: "capture failed" }));
+          const diagLine = `M418 DIAG TIMEOUT ${JSON.stringify({ category: entry.category, attempt: entry.attempt, ...entry.diag })}`.slice(0, 880);
+          m418Lines.push(diagLine);
+          console.log(diagLine);
         } finally {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
         }
@@ -742,10 +781,50 @@ try {
     // flush. React's body-level hydration walk cannot skip leading scripts (non-root
     // context) and throws #418. The request-cache fix makes the emission order
     // deterministic (content first); an inverted sample here means the defect class is back.
-    const invertedOrders = hydrationVisits.filter((entry) => String(entry.order ?? "").startsWith("script"));
+    // A gate asserting "no sample has scripts leading the body" is vacuous when no sample
+    // produced an order at all, so completeness travels with the result and the verdict
+    // treats INSUFFICIENT as BLOCKED — never PASS.
+    m11Evidence = evaluateM11(hydrationVisits, sampleFixtures.length * REQUIRED_ATTEMPTS);
+    const invertedOrders = m11Evidence.inverted;
     check("SSR body order: hydration bootstrap scripts never lead the content (M11 #418 regression)",
-      invertedOrders.length === 0,
-      JSON.stringify(invertedOrders.slice(0, 3).map((entry) => ({ route: entry.route, attempt: entry.attempt, order: entry.order }))));
+      m11Evidence.status !== "FAIL",
+      JSON.stringify({ status: m11Evidence.status, checked: m11Evidence.checked, required: m11Evidence.required,
+        inverted: invertedOrders.slice(0, 3).map((entry) => ({ route: entry.route, attempt: entry.attempt, order: entry.order })) }));
+
+    // E1/E2/E4 diagnostic arms — test-only and default OFF, so normal runs are unchanged.
+    // Each arm holds every other condition constant and labels its own measurements; no arm
+    // contributes to the required sample set.
+    if (process.env.M418_DIAG_ARMS === "1") {
+      const arms = [
+        { arm: "E1-no-throttle", throttle: false, fixtures: sampleFixtures, waitMs: 25000 },
+        { arm: "E1-control-retrottled", throttle: true, fixtures: sampleFixtures, waitMs: 25000 },
+        { arm: "E2-reversed-order", throttle: true, fixtures: [...sampleFixtures].reverse(), waitMs: 25000 },
+        { arm: "E4-wait-60s", throttle: true, fixtures: sampleFixtures.filter((fixture) => fixture.category !== "retail"), waitMs: Number(process.env.M418_DIAG_WAIT_MS || 60000) },
+      ];
+      for (const arm of arms) {
+        for (const fixture of arm.fixtures) {
+          const startedAt = Date.now();
+          const entry = { arm: arm.arm, category: fixture.category, attempt: 1, throttle: arm.throttle ? 4 : 1, waitMs: arm.waitMs, route: `/dashboard/businesses/${fixture.id}/preview` };
+          try {
+            if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: arm.throttle ? 4 : 1 });
+            await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+            await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), { timeout: arm.waitMs }, `QA first ${fixture.category} ${runId}`);
+            entry.ok = true;
+          } catch (error) {
+            entry.ok = false;
+            entry.error = String(error).slice(0, 120);
+            entry.diag = await sampleFrameDiagnostics(first.ownerPage).catch(() => ({ diagError: "capture failed" }));
+          } finally {
+            if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
+          }
+          entry.ms = Date.now() - startedAt;
+          m418Diagnostics.push(entry);
+          const line = `M418 DIAG ${JSON.stringify(entry)}`.slice(0, 880);
+          m418Lines.push(line);
+          console.log(line);
+        }
+      }
+    }
   }
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
   check("no external/provider/disallowed browser requests", denied.length === 0, JSON.stringify(denied));
@@ -774,12 +853,19 @@ try {
   mkdirSync(".cache/verification/studio-authenticated", { recursive: true });
   // M12 Stage B: bounded raw-order evidence artifact (redacted — tags/offsets only).
   const serverSnapshots = [...serverDigests.entries()].slice(0, 8).map(([path, info]) => ({ path, ...info }));
+  // The verdict is computed once, from checks AND required samples, and is the only source of
+  // `journeyStatus` and the exit code. Missing/unresolved evidence cannot report PASS.
+  gateSummary = evaluateGate({ results, samples: hydrationVisits, journeyComplete, m11: m11Evidence });
+  m418Lines.push(gateLine(gateSummary));
   writeFileSync(".cache/verification/studio-authenticated/m418-evidence.json", JSON.stringify({
     m418Lines: m418Lines.slice(0, 40), serverSnapshots, hydrationVisits: hydrationVisits.slice(0, 40),
-    errors: errors.slice(0, 6), journeyComplete,
+    errors: errors.slice(0, 6), journeyComplete, m418Diagnostics: m418Diagnostics.slice(0, 40),
+    gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11 },
   }, null, 2));
   writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures, hydrationVisits,
-    journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyComplete && results.every((item) => item.ok) ? "PASS" : "FAIL",
+    journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyStatusFor(gateSummary.status),
+    gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11, problems: gateSummary.problems },
+    m418Diagnostics,
     providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true, serverSnapshots }, null, 2));
 }
 const failed = results.filter((item) => !item.ok).length;
@@ -808,4 +894,9 @@ if (m418Lines.length || hydrationVisits.length) {
 if (failureName) console.log(`FAILED CHECK: ${failureName}`);
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
 if (!journeyComplete) console.log("NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance.");
-process.exitCode = failed || !journeyComplete ? 1 : 0;
+// Functional check results (above) and hydration/preview evidence (below) are reported
+// separately, so a green check count can never stand in for unresolved sample evidence.
+const summary = gateSummary ?? evaluateGate({ results, samples: hydrationVisits, journeyComplete, m11: m11Evidence });
+console.log(sampleTallyLine(summary));
+console.log(gateLine(summary));
+process.exitCode = exitCodeFor(summary.status);

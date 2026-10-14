@@ -255,7 +255,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
@@ -314,7 +314,7 @@ jobs:
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
                 for (const line of text.split('\n')) {
-                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED)/.test(line.trim())) {
+                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED|M418 GATE|HYDRATION SAMPLES)/.test(line.trim())) {
                     signatureLines.push(`${file.split('/').pop()}: ${line.trim()}`);
                   }
                 }
