@@ -2250,3 +2250,287 @@ found one pre-existing defect and no migration regression. The hydration gate is
 honest summary of this directive is that Workstream B succeeded, Workstream C confirmed an upstream dead
 end, and Workstream A produced the exact cause of #418 together with the framework decision that now
 belongs to the owner.
+
+## M. Directive 9 execution — #418 decision package, DEF-1 fixed with browser evidence, advisory register re-verified (2026-10-14, later)
+
+Appended to §A–§L. Nothing earlier is rewritten; where a number or claim below differs from an
+earlier section, the earlier section stays as written and this one says so explicitly.
+
+### M.1 Verified starting state, and one environment fact that matters for reproducing this work
+
+| Item | Verified value |
+| --- | --- |
+| Branch | `arena/fac28f53-jata-aftercall` |
+| Expected checkpoint SHA | `c9a2ca83baacc7d8dc452dbaf287fe1e400273a0` — **matched** local HEAD and remote HEAD before any edit |
+| Working tree | clean, and re-verified byte-for-byte against `c9a2ca8`: **all 754 files identical** (blob-hash sweep, 0 different, 0 missing) |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — **unchanged, local and remote** |
+| PR #45 | **OPEN**, `MERGEABLE`, labels `NOT APPROVED FOR PRODUCTION DEPLOYMENT` retained |
+| Branch CI history | **21 runs: 13 green, 8 red** (API-verified; the §L.2 figure of 19 runs was recorded before the third run landed) |
+
+**Environment note (recorded because it changes how this work is reproduced).** The sandbox re-cloned
+the git history between directives: the branch ref sat at the session's base commit `77e35ce` while the
+working tree still held the pushed content. Nothing was lost and no history was rewritten — the tree was
+verified to match `c9a2ca8` file-by-file *before* `git fetch` + `git reset --hard origin/arena/fac28f53-jata-aftercall`
+restored the ref. The practical consequence: **`node_modules` and `/tmp` are not preserved** between
+directives, so `npm ci` and the local browser harness (below) have to be rebuilt each time. Only files
+committed to the repository survive.
+
+### M.2 #418 — the third CI run, and the offset mapping that ties CI's stack to the local bundle
+
+Run **`38526232961`** (head `c9a2ca8`) **failed at step 16, "Authenticated production HTTP browser
+journey"**, with `FAILED CHECK: no uncaught browser runtime errors` and a single `BROWSER RUNTIME ERROR
+… Minified React error #418 … args[]=HTML`. That is the **third consecutive step-16 failure** on this
+branch (`70628ffe`, `20f23dfe`, `c9a2ca8`), and steps 17–19 were again **skipped**, so they contributed
+no coverage.
+
+**The artifact exists but is unreachable, and that is now a proven structural limit, not a transient
+error.** `hydration-raw-order-evidence` is present for that run (19,009 bytes, not expired, id
+`11876576810`), but its download host `productionresultssa14.blob.core.windows.net` fails with
+`SSL_ERROR_SYSCALL` and the bare `blob.core.windows.net` does not resolve. No retry can succeed here.
+
+**Offset mapping.** The local production build reproduces CI's framework chunk exactly —
+`4bd1b696-100b9d70ed4e49c1.js`, 173,025 bytes, same content hash as the one named in all three failing
+stacks. Mapping the CI stack offsets onto that identical file (the bundles differ from each other by a
+constant 594-character prefix, which the mapping confirms independently at two definition points):
+
+| CI stack frame | CI offset | Local offset | Resolves to |
+| --- | --- | --- | --- |
+| leaf, `rD` | 35634 | 35040 | `function rD(e){var n=Error(i(418,…"HTML"…));throw rU(rd(n,e)),rF}` — **`throwOnHydrationMismatch`**, exactly the throwing frame the error names |
+| `oq` | 85138 | 84544 (+55) | the HostComponent hydration site: `…?(n.stateNode=t,rP=n,rN=null,e=!0):e=!1),e||rD(n))` — the call that throws when the node at the cursor is not the expected element |
+| `iw`/`ik` | 115533 / 115254 | 114939 / 114660 | next to the `id`/`ik` region (react-dom's work-loop helpers) |
+| `iu` (×2) | 110894, 111403 | 110300, 110809 | inside `function iu(` — the work-loop driver |
+| **probe `firstScriptInsert`** | **104399** | **103805** | inside the commit-phase placement code, at `(t=9===r.nodeType?r.body:"HTML"===r.nodeName?r.ownerDocument.body:r).appendChild(n)` / `insertBefore(n,t)` in the `case 3: case 4` container branch |
+
+So the "mover" M14 named by stack capture is now **identified in shipped code**: react-dom's own
+commit-phase DOM placement appends/inserts nodes into `<body>` at the exact offset the mutation probe
+recorded, and the walk then meets a node that is not the one it expected and calls
+`throwOnHydrationMismatch` — the two frames in CI's stack. Consistent with that, the two CI runs captured
+on this branch name **different elements** (`main` expected under a `DIV` on the dashboard; a `div` in the
+iframe), which is the signature of an off-by-one cursor rather than a specific bad component.
+
+### M.3 Root cause — confirmed independently in three places
+
+1. **Shipped bytes.** Next 15.5.27 vendors `react-dom` peer `19.2.0-canary-0bdb9206-20250818`; Next
+   16.4.0 (`latest`) vendors `19.3.0-canary-278794d7-20261002`. In the replay branch (`case 5: resetHooksOnUnwind(next);`)
+   the newer build continues `var fiber = next; fiber === hydrationParentFiber && (isHydrating ?
+   (popToNextHostParent(fiber), 5 === fiber.tag && null != fiber.stateNode && (nextHydratableInstance =
+   fiber.stateNode)) : …)` — i.e. it **restores the hydration cursor on replay**. The 15.5.27 build goes
+   straight to `default:` and restores nothing. The same restoration is present in **released
+   `react-dom@19.3.0`** (published 2026-09-09) and absent in the 19.2 build we ship.
+2. **Upstream release record.** The React 19.3.0 changelog lists, verbatim, "Correctly handle replaying
+   when hydrating (@gnoff #35494)" and "Fix useId tracking on replay (@gnoff #35518)". Both fixes are
+   **React 19.3.0 and later only** — no 19.2.x patch carries them, and Next 15.5.x vendors the pinned
+   19.2 canary, so **Next 15.5.27 (the tip of its line: `npm view next dist-tags` reports
+   `backport: 15.5.27`) will never receive it**.
+3. **Independent reproductions of the same defect at the same version boundary.** A production app
+   reports the identical cause on Next 15.5 ("the bug is in the React that Next 15.5 vendors
+   (19.2.0-canary-0bdb9206, unchanged through 15.5.27)"), attributes it to the same two PRs, measures
+   **14/72 failing loads unpatched → 0/96 after backporting both**, and notes that the cursor fix alone
+   leaves 9/96 `useId` mismatches — i.e. **both** upstream fixes are required. A second app reports the
+   same class and states 19.3.0 "is the first release with the fix; 19.2.7 and 19.2.8 do not carry it".
+   Their description also explains our own observation exactly: "The replay doesn't rewind the hydration
+   cursor, so the element matches its own first child and every later node is off by one. **The error
+   then names whatever element comes next**, which is why the diffs pointed at different places."
+
+**Application-level correction — investigated and rejected, with reasons (Directive §2.4).** The app
+uses `next/dynamic` in exactly two places: `components/storefront/immersive/ImmersiveStage.tsx:17`, whose
+laziness is required by the approved lite-mode/motion policy (a heavy 3D bundle must not ship to every
+visitor), and `components/DashboardClient.tsx:3`, which is not on the failing
+`/dashboard/businesses/[id]/preview` route at all. More decisively, the trigger is *client-chunk
+resolution timing during hydration*, not a particular lazy call: a Suspense wrapper or the removal of one
+lazy boundary would cover one spot while the same runtime takes the same path on a slow network. It
+would not remove the defect class, so **no application-level change was made for #418**.
+
+**A negative result, recorded as such.** A new diagnostic,
+`scripts/browser/hydration-delayed-chunk.check.mjs` (npm: `diagnose:browser:replay-delay`), holds back
+Next's client chunks by 0/60/120/200 ms against the **production** `/login` and `/register` documents —
+the same timing condition the upstream reports describe — and measures hydration errors. It reproduced
+**0 in 16 loads**. That is an honest negative: those public routes do not take the replay path, which is
+consistent with every observed failure being on the authenticated dashboard/preview routes. The probe is
+committed as a diagnostic and is deliberately **not** wired into CI, because as a gate it would pass
+trivially on routes that never replay and would imply coverage it does not provide.
+
+### M.4 The three options (verified facts vs hypotheses kept separate)
+
+| | **Option A — Next.js 16.x upgrade** | **Option B — narrowly scoped framework patch** | **Option C — accept + upstream** |
+| --- | --- | --- | --- |
+| What it is | Move to `next@16.4.0` (`latest`), which vendors React 19.3.0-canary | Backport react#35494 + #35518 into the vendored `react-dom` client builds via `patch-package` | Do not change the runtime; keep the gate open, monitor, and use the upstream issue |
+| Verified facts | Engine `node >=20.9.0` (CI runs Node 22 ✓); peers `react ^18.2 \|\| ^19`; vendored React 19.3.0-canary contains the cursor restoration; `next lint` **does not ship in 16** (our `lint` script and CI step 8 call it) | Patch surface in this repo: `next/dist/compiled/react-dom/cjs/` has **4 client builds** (client/profiling × dev/prod) plus the `react-dom-experimental` channel; **both** upstream fixes are needed, not one; `patch-package` is **not** currently a dependency; the patch is keyed to the exact Next version and must be re-ported on every bump | Upstream issue react#35210 ("random hydration mismatches in Next") already exists; our own analysis is written up in `docs/WEBSITE_STUDIO_HYDRATION_UPSTREAM_ISSUE.md` (prepared, not submitted) |
+| Demonstrated / measured | The fix is **present in the target's shipped code** (read-only comparison). *Not* demonstrated: that the failing journey passes on 16.4.0 — that requires actually running the upgrade | An independent production app backported exactly these two fixes into exactly these vendored builds and measured **14/72 → 0/96** failing loads, with a deterministic regression test that fails on pristine Next and passes with the patch | This is **not a fix**. Under it the gate stays failed: intermittent `#418` continues on authenticated preview/storefront loads |
+| Unknown / hypothesis | The full migration surface for *this* app (Next 16 changes beyond `next lint`; Turbopack defaults; ESLint config move to 16.x, which would also change the advisory set) — needs a staged compatibility audit | Whether a hand-ported minified reconciler patch is correct across every path we exercise; the independent app itself did **not** run a production build for it | The failure rate under our own traffic is unknown; our CI shows 3 consecutive failures then greens, so "rare" cannot be assumed |
+| Risk | Major-version migration: needs its own plan, staged verification and rollback | Medium: version-keyed to `next@15.5.27`, touches core rendering, adds a supply-chain/patch-maintenance obligation | Reliability risk continues for customers; release stays blocked |
+| Rollback | Revert `package.json`/lockfile and redeploy the previous build | Delete the patch and reinstall (or revert the commit) | n/a |
+| Authorisation | **Required** (framework major) | **Required** (framework internals) | Owner acceptance decision |
+
+### M.5 Recommendation, and the exact decision required
+
+**Recommended: Option A (Next 16.x), planned and verified as its own scoped piece of work.** It is the
+only option where the fix is *supported upstream and stays applied* — no version-keyed patch to re-port on
+every Next bump, no hand-ported reconciler code in production, and the same move lets the ESLint stack
+follow to 16.x (which is also the only route to clearing the five dev advisories, §M.8). The
+compatibility signs in this repository are favourable: async `params`/`searchParams` in 94 files (already
+the Next 15+ form), no `useFormState`/`propTypes`/`defaultProps`/legacy-React-API usage, and a small
+`next.config.js`. It is nevertheless a **major migration** and is not authorised, so it is proposed, not
+started.
+
+**Option B is the fallback if the owner prefers to hold Next 15.5.27**, and it is the only option with a
+*measured* end-to-end result elsewhere. It must be planned as **both** upstream fixes across all vendored
+client builds, with a deterministic regression test, and it carries a standing re-port obligation on
+every Next patch release.
+
+**Option C does not close the gate.** If chosen, it should be recorded as a knowingly accepted,
+release-blocking defect with monitoring, not as a fix.
+
+**The single decision required now: A, B, or C.** On that decision the work is: (A) a staged Next 16
+upgrade plan with its own baseline/verification/rollback, or (B) a scoped patch with the regression test
+and the re-port policy, or (C) a written acceptance with the customer impact and monitoring stated.
+**Until then the gate is BLOCKED — OWNER DECISION REQUIRED**, and no `suppressHydrationWarning`, test
+skip, error filter or framework patch has been applied.
+
+### M.6 DEF-1 fixed — mobile quick-action bar, with before/after browser evidence
+
+**The defect, measured before the fix** (`test:browser:actionbar`, 360 px): the "WhatsApp" label was
+83 px inside a 74 px button and "Directions" 87 px, so the text painted **17.1 px** and **21.8 px** past
+its own control on each side; `overflow: visible` meant it crossed into the neighbouring button rather
+than clipping. Because the *elements* never overlapped and the page never scrolled, none of the existing
+overflow checks could see it. Full pre-fix result: **30 passed, 7 failed** — label bleed at 360/375/390/430 px
+(never at 320 px, where the bar already wrapped), the reduced-motion pass, and the expanded-label pass.
+
+**The fix** (`app/globals.css`, the only production file changed): the bar now lays its actions out **two
+per row** (`flex: 1 1 45%`, `flex-wrap: wrap`, `row-gap`), and a label that still cannot fit inside its
+own pill breaks *within* the pill (`overflow-wrap: anywhere`) instead of bleeding. The spacer grows from
+`5rem` to `9.5rem` so the two-row bar cannot cover page content. Unchanged: every label, its font size,
+weight, letter-spacing, padding, colour, radius, the 44 px touch target, focus ring, reduced-motion
+behaviour, and the desktop contract (bar hidden at ≥900 px).
+
+Why two rows rather than shrinking anything: four actions cannot share one 320–430 px row at this
+typography — their labels need ≈420 px inside a 401 px bar at 430 px, so the old rule was only ever
+"working" by painting outside the buttons.
+
+**Verified after the fix:** `test:browser:actionbar` — **37 passed, 0 failed, 0 skipped**, at 320, 360,
+375, 390 and 430 px plus reduced-motion, expanded-label ("Benachrichtigungen") and 1280 px checks, with
+every label contained, `scrollOverflowX = 0`, no overlap, no escape from the bar, no page overflow, 44 px
+touch targets, `:focus-visible` ring present, and the bar hidden on desktop. Fourteen screenshots were
+captured (`SHOT_DIR=.cache/verification/actionbar-before|actionbar-after`, gitignored) and the 360 px
+before/after pair and the expanded-label case were inspected visually: before, "WHATSAPP" and
+"DIRECTIONS" spill out of their circles and collide with neighbours; after, each label sits inside its own
+pill and the expanded label wraps inside its button at unchanged size. **No baseline invented and no
+pixel-parity claim made** — the two screenshots come from the same script at the same viewport.
+
+**Guardrails added:** `scripts/browser/actionbar-layout.check.mjs` (npm `test:browser:actionbar`) is
+wired into CI step 19, and `/tmp/step-actionbar-browser.log` is added to the failure reporter's
+never-elided signature list. No existing test asserts these CSS rules (checked), so nothing was weakened
+to make the fix pass; all four pre-existing fixture suites still pass unchanged (§M.9).
+
+### M.7 Authenticated browser QA — what actually runs, and what remains NOT PERFORMED
+
+**The existing CI job is the authorized environment, and it does run authenticated browser coverage.** In
+the failing run `38526232961` the journey reached **427 passed / 1 failed**; the single failure is the
+final `no uncaught browser runtime errors` gate, i.e. the #418 above — every other authenticated check
+passed. Its 18 checks cover: isolated seeded Website Studio plan; anonymous private API refused; salon
+availability offered on the server; booking UI with selected slot/customer fields; an actual browser
+booking (zero deposit, no provider); the booking persisted with real tenant/service in unpaid state;
+the authenticated owner receiving that booking; cross-tenant attempts not mutating a foreign draft/live;
+a foreign owner's workspace returning not-found/noindex without leaking its design; representative
+business types rendering distinct information architectures; expired entitlement refusing publish while
+preserving content; logout removing the server cookie and private API access; real UI password login;
+real cookie login restoring only the owner's workspace; the M11 SSR-body-order #418 regression check; no
+original uploads/media writes; no external/provider/disallowed browser requests; and the runtime-error
+gate.
+
+**NOT PERFORMED here, and why.** This sandbox cannot provision the prerequisites: no `DATABASE_URL`, no
+reachable PostgreSQL, and therefore no seeded authenticated session (`binaries.prisma.sh` is also
+unreachable, so `prisma generate` uses the checked-in fallback). Its browser coverage is therefore
+**exactly the six fixture suites in §M.9** — 386 checks — and nothing about authenticated surfaces is
+claimed from it.
+
+**Surfaces the CI journey does not cover either, stated plainly:** POS till and record-board browsing,
+checkout and payment-status journeys, subscription selection, receipts, analytics, inventory and reports
+are exercised in CI as **server/API and database suites**, not as authenticated browser journeys. The
+dashboard home, Website Studio create/edit/preview/publish, AI Business Front Desk, auth/registration,
+onboarding, analytics and representative generated business pages are covered as browser journeys to the
+extent the 18 checks above reach them. No production customer data or production credentials were used or
+requested; the CI job uses a disposable database and its own seeded fixtures.
+
+### M.8 Advisory register — re-verified this directive, before any conclusion
+
+Production (`npm audit --omit=dev`): **0 findings of every severity.** Development-inclusive
+(`npm audit`): **5 high, 0 moderate, 0 low, 0 critical** — one chain, verified end-to-end:
+
+```
+eslint-config-next@15.5.27 → @next/eslint-plugin-next@15.5.27 → fast-glob@3.3.1 → micromatch@4.0.8 → braces@3.0.3
+```
+
+| Finding | Path | Environment | Upstream fix status (live) |
+| --- | --- | --- | --- |
+| `braces` 3.0.3 — `GHSA-vfj7-8cjw-p6xm`, HIGH, stack-exhaustion DoS on deeply nested patterns | leaf | dev only (ESLint matching developer-controlled globs) | **`firstPatchedVersion: NONE PUBLISHED`** — re-confirmed from the GitHub advisory API this directive (range `<= 3.0.3`, not withdrawn, updated 2026-10-02); npm registry `braces` latest is still **3.0.3**, last modified 2024-09-18 |
+| `micromatch` 4.0.8 | via `braces` | dev only | same — no independent patch |
+| `fast-glob` 3.3.1 | via `micromatch` | dev only | same |
+| `@next/eslint-plugin-next` 15.5.27 | via `fast-glob` | dev only | only offered fix is `eslint-config-next@14.2.35` — a **semver-major downgrade**, refused |
+| `eslint-config-next` 15.5.27 | root of the chain | dev only | as above |
+
+**Disposition: explicitly UNRESOLVED, individually demonstrated, not suppressed.** There is no supported
+patched version to move to. `npm audit fix --force` was not run, no incompatible downgrade was applied,
+no advisory was filtered, and no security test was removed or loosened. Interim controls are unchanged:
+the ESLint globs are static and committed, no untrusted glob source exists, and the package is absent
+from the production graph. **The realistic remediation is Option A in §M.4** — `eslint-config-next` 16.x
+would move this chain — which is another reason the same owner decision resolves both this register and
+the hydration gate.
+
+### M.9 Verification record (this directive)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Full local suite | `npx vitest run` | **179 files passed, 13 skipped (192); 2234 passed, 114 skipped (2348); 0 failed; exit 0** |
+| Fixture layout | `npm run test:browser:layout` | 7 passed, 0 failed, 0 skipped |
+| **Action bar (new)** | `npm run test:browser:actionbar` | **37 passed, 0 failed, 0 skipped** (pre-fix: 30 passed / **7 failed**) |
+| Generated-page families | `npm run test:browser:families` | 167 passed, 0 failed, 0 skipped |
+| Motion / reduced motion | `npm run test:browser:motion` | 124 passed, 0 failed, 0 skipped |
+| Local media pipeline | `npm run test:browser:media-local` | 29 passed, 0 failed, 0 skipped |
+| Immersive 3D | `npm run test:browser:immersive` | 22 passed, 0 failed, 0 skipped |
+| Production build | `npx next build` | exit 0; CSS `82ba46d22769aa83.css` = **100,732 B** (was 100,688 B; +44 B for the new rules); framework chunk still `4bd1b696-100b9d70ed4e49c1.js`, unchanged |
+| Lint | `npx next lint` | exit 0; one pre-existing `<img>` warning (`components/storefront/CartProvider.tsx:210`) |
+| TypeScript | `npx tsc --noEmit` | exactly one pre-existing error: `tests/prisma/experience-boundary.test.ts(34,19) TS2694` (offline Prisma stub; `prisma generate` cannot run here; CI generates successfully) |
+| Production audit | `npm audit --omit=dev` | 0 findings |
+| Development audit | `npm audit` | 5 high, dev-only (§M.8) |
+| Replay diagnostic | `npm run diagnose:browser:replay-delay` | 0/16 reproductions on public routes — recorded as a negative, not a pass |
+| CI | run **`38526232961`** @ `c9a2ca8` | **FAILED at step 16** (the #418 above); steps 1–15 passed; **steps 17, 18, 19 skipped** |
+
+Local browser total this directive: **386 checks, 0 failed, 0 skipped** across six committed scripts.
+The 114 local skips remain **entirely the database gate** (97 across 13 fully DB-gated files plus 17
+inside `tests/e2e/interactive-business-journey.test.ts`); CI runs those with a provisioned PostgreSQL and
+0 skips. Local results are local: **a green unit suite or a green build does not override the failing
+authenticated browser journey**, which stays failed.
+
+Reproducing the browser work locally requires a harness that is not committed (third-party binaries) and
+not preserved between directives: Chromium from npm `@sparticuz/chromium@153.0.0` (extracts to
+`/tmp/chromium`), its three missing libraries from `chrome-aws-lambda@10.1.0`'s brotli `bin/aws.tar.br`
+(the 2018 NSS set, which provides `NSS_3.39`) plus only the NSPR trio from `@achingbrain/nss@0.0.1`, run
+with `LD_LIBRARY_PATH` pointing at the combined `lib/`, and `CHROME_PATH=/tmp/chromium`. `next dev` and
+`next build` share `.next`, so the fixture suites (which 404 under `NODE_ENV=production`) and the
+production-mode probes have to be run in separate passes.
+
+### M.10 Not performed, and not authorised
+
+No merge into `main`, no deployment, no production configuration or environment-variable change, no
+production data change or migration, no media-storage activation, and no live financial transaction of
+any kind. No framework major upgrade and no framework patch was applied — both remain owner decisions.
+No credential was requested, printed or committed. `main` is unchanged (§M.1) and PR #45 remains open
+with its label.
+
+### M.11 Final state of this directive
+
+| Item | Value |
+| --- | --- |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — **unchanged** |
+| PR #45 | **OPEN**, `MERGEABLE`, `NOT APPROVED FOR PRODUCTION DEPLOYMENT` retained |
+| Hydration #418 | cause confirmed at code level in three independent places (§M.3); **gate BLOCKED — OWNER DECISION REQUIRED** between Options A, B and C (§M.4–M.5) |
+| DEF-1 (action bar) | **FIXED**, with browser regression test wired into CI and before/after evidence (§M.6) |
+| Authenticated browser QA | executed by CI in the authorized environment (427/428 checks, §M.7); **NOT PERFORMED locally** — no database or authenticated session here |
+| Dependency audit | production **0**; development **5 high, dev-only**, explicitly unresolved (§M.8) |
+| Local suites | 2234 passed / 114 skipped / 0 failed; 386 browser checks passed; build, lint and types at their pre-existing baseline |
+| Merge · deploy · production config or data · media activation · live transaction · framework upgrade/patch | **none performed, none authorised** |
+
+**Stopping at the authorization boundary, as directed.** A completed investigation is not a resolved
+release gate: the #418 gate stays failed and blocked on the owner's A/B/C decision, and that decision is
+also the only route to clearing the five development advisories.
