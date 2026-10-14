@@ -4156,3 +4156,54 @@ no published patch, documented as unresolved).
 Last recorded state of the branch: gate integrity delivered, M418 cause explained and repaired at
 the sampling level, one full green run (`38606768667`), and one run in which only step 20 failed
 intermittently. No merge, deployment, release or production change was performed.
+
+#### §V.16.8 Restoration of cross-tenant preview isolation as an explicit check (run `38611386184`, `96641ee`)
+
+The repaired sampling no longer opens another tenant's draft preview, so nothing measured that
+route-level behaviour any more. It is now measured deliberately, and **not** labelled as a hydration
+sample:
+
+- **Cross-tenant probe** (per non-retail business): retail's session opens that business's preview
+  route, observes for 10 s and records the response status, whether the other tenant's marker ever
+  became readable, and the E3-style page state. The check requires `markerSeen === false`; an unknown
+  outcome (any error that is not a timeout) **fails** the check instead of passing it.
+- **Positive control** (same business, owning session): the marker must be readable within 15 s, so an
+  application that rendered nothing at all could not satisfy the pair.
+- Cost: roughly 55 s per run. Probes are recorded as `M418 DIAG XTENANT` lines and in both artifacts
+  as `isolationProbes`; they are auxiliary evidence and can neither satisfy nor block a required
+  hydration sample.
+
+Verified in run `38611386184` (`96641ee`, success, step 23 correctly skipped):
+
+| Business | Cross-tenant session | Owning session (control) |
+| --- | --- | --- |
+| food | status 200, `markerSeen:false` | marker readable |
+| salon | status 200, `markerSeen:false` | marker readable |
+| professional | status 200, `markerSeen:false` | marker readable |
+| technical | status 200, `markerSeen:false` | marker readable |
+
+```
+PASS food: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
+PASS food: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
+… salon / professional / technical identical
+436 passed, 0 failed, 0 skipped
+HYDRATION SAMPLES required=15 ok=15 failed=0 unresolved=0 missing=0 malformed=0 auxiliary=57 duplicates=0
+M418 GATE PASS: all required samples and checks passed
+```
+
+Observation recorded, not raised as a defect: the page route answers **200** with a shell rather than a
+403/404 for the foreign session, while the API correctly answers 403 (`:743-744`). The unpublished
+draft content is not served in either case, so isolation holds; if the owner wants the page route to
+signal refusal in its status code, that is a product decision outside this authorization.
+
+Journey check count rises 428 → 436. No application code changed; the required sample definition,
+the gate verdict model and every existing assertion are untouched. This commit is reversible on its
+own.
+
+#### §V.16.9 Remaining open item
+
+The only outstanding M418 work is the one an owner must decide: re-accumulating the §T.2 observation
+ledger under the repaired harness (≥12 qualifying runs, ≥3 h elapsed, ≤2 concurrency), or recording
+that streak as permanently interrupted by the repair. Cost of the former, stated for the decision: 12
+sequential marker runs, roughly 2.5–3.5 hours of wall clock, concurrency 1 (within the ≤2 bound),
+using the same mechanism as §T. Nothing in §V depends on that choice.
