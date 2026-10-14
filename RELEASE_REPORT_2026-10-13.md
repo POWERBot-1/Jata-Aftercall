@@ -2924,9 +2924,10 @@ Same tree, same four arms, same controls, 5 loads per arm, Chromium, `NODE_ENV=p
 | `19.2.8` + `react-dom@19.2.8` | npm release (the version the upstream reference measures) | **5/5 · 5/5** | clean | same |
 | `19.3.0-canary-278794d7-20261002` | **next@16.4.0 vendored — the runtime the app ships now** | **0/5 · 0/5** | clean | — |
 
-The `args[]=HTML` argument matches the failures recorded in CI (§M.2), and the controls behave as the
-upstream reference documents (`resolved-before` never suspends; `late-50ms` lets React unwind to the root
-instead of replaying). This is the "defensible reproduction and causal explanation" Directive 9 §2 asked
+The `args[]=HTML` argument matches the failures recorded in CI (§M.2), and both control arms stay clean
+on every runtime — they are our own anti-vacuity controls, not ports of the reference's `?transition=0`
+and `?resolve=late` variants (see §Q.1 for that distinction): `resolved-before` never suspends at all,
+and `late-50ms` fulfils after the concurrent yield. This is the "defensible reproduction and causal explanation" Directive 9 §2 asked
 for, on the exact two runtimes that bracket the change.
 
 ### O.3 The gate, and why it cannot pass vacuously
@@ -3079,10 +3080,13 @@ throughout, browser-side runtime asserted at 19.2.8/react-dom 19.2.8 in every ro
 | **patched** by the reference's own script | **0/5 · 0/5** | clean | `PASS: no reproducing arm reproduced …` |
 | **restored** from `.orig` (`cmp` byte-identical) | **5/5 · 5/5** (discards 5/5) | clean | `PASS (positive control) … reproduces the defect in 10 load(s)` |
 
-Same runtime, one variable, flipped in both directions. This closes the last cell of the reference's
-documented matrix with our own instrument; the other three cells were already covered (§O.2's reproducing
-arms and the two control arms, which correspond to the reference's `?transition=0` and `?resolve=late`
-cells). The chain is now closed end to end: measured on the runtime we shipped before → reproduced in
+Same runtime, one variable, flipped in both directions. This is the reference's *patched* cell, measured
+on our instrument; our reproducing arms are the same cell as its unpatched production measurement. I want
+to be exact about what it does **not** reproduce: our two control arms are our own, and they are not the
+reference's `?transition=0` and `?resolve=late` cells — ours cover different confounds (nothing suspends
+at all, versus a fulfilment late enough not to be replayed), and only the second is the same *kind* of
+temporal control as `?resolve=late`. The reference's two clean cells are its own evidence; ours exist to
+show this harness is not blind. The chain is now closed end to end: measured on the runtime we shipped before → reproduced in
 isolation → removed by the rewind alone → absent from the runtime we ship after, which vendors the same
 rewind.
 
