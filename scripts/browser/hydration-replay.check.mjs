@@ -30,31 +30,39 @@
  *   4. Hydration runs inside **`React.startTransition`**, as Next.js does, because
  *      `replaySuspendedUnitOfWork` only exists in the concurrent render path.
  *
- * MEASURED RESULT — READ THIS BEFORE TRUSTING THE SCRIPT (2026-10-14)
+ * MEASURED RESULT — TWO HARNESS BUGS FOUND AND FIXED, THEN IT REPRODUCES (2026-10-14)
  *
- * As committed, this harness does NOT reproduce the defect, on either runtime, and therefore says
- * **nothing** about whether the runtime has the bug:
+ * As first committed this harness reproduced nothing and said so. Two bugs were behind that, and both
+ * are worth recording because each one produced a *silently clean* result:
  *
- *   vendored React 19.2.0-canary-0bdb9206 (what the app shipped before the Next 16 upgrade)
- *                                                microtask/timeout-0: 0/5 mismatches
- *     …and it discards the server DOM in those arms, i.e. React takes the "unwind to the root" path
- *   released react 19.2.8 + react-dom 19.2.8                    microtask/timeout-0: 0/3 mismatches,
- *   (the version the upstream reference repro reports as 20/20) no discard at all
+ *   1. `run()` returned its error array synchronously, immediately after `hydrateRoot`. Hydration
+ *      errors are raised in a later scheduler slice, so the array was always empty when read. Errors
+ *      are now stashed on `window` and read by `snapshot()` after the page settles.
+ *   2. In `REPLAY_REACT_DIR` mode the entry imported the bare specifier `"react"`, which esbuild
+ *      resolved against this repo — react@18.3.1 — while react-dom came from the external directory.
+ *      The mismatched pair aborted on a version check, so nothing hydrated at all. The entry now
+ *      imports absolute paths, and the harness prints the runtime the *browser* loaded and refuses to
+ *      report a result if it is not the one intended.
  *
- * That the released 19.2.8 pair — which the reference repro measures at 20/20 — reproduces nothing
- * here is the decisive control: the remaining difference is in **this file**, not in the runtime.
- * The reference tree was ported by hand from its README; the most likely missing ingredients are
- * (a) it serves the document through `renderToPipeableStream` rather than `renderToStaticMarkup`,
- * so the served HTML carries the streaming/Flight boundary machinery React's hydration expects, and
- * (b) its `src/App.jsx` `pendingChunk` helper, which this file approximates. The next attempt should
- * port `src/App.jsx`, `src/server.jsx` and `src/client.jsx` from
- * github.com/dreamerhyde/react-hydration-replay-repro verbatim instead of reconstructing them.
+ * With both fixed, the same tree, arms and controls give (5 iterations per arm, Chromium):
  *
- * Until that reproduces, treat this file as a diagnostic scaffold, NOT as evidence for or against
- * any runtime, and do not wire it into CI — it would pass trivially and imply coverage it lacks.
- * Note after the Next 16 upgrade: the vendored runtime now *has* the fix, so this harness could not
- * distinguish fixed from unfixed even if it did reproduce. It is kept only as the starting point for
- * the verbatim re-port described above (a faithful port would fail on 19.2 and pass on 19.3).
+ *   runtime the app shipped BEFORE the upgrade   19.2.0-canary-0bdb9206-20250818
+ *     (next@15.5.27 vendored)                    microtask 5/5, timeout-0 5/5 reproducing,
+ *                                                both controls clean, #418 args[]=HTML
+ *   released react/react-dom 19.2.8              microtask 5/5, timeout-0 5/5, controls clean
+ *   runtime the app ships NOW                    19.3.0-canary-278794d7-20261002
+ *     (next@16.4.0 vendored)                     microtask 0/5, timeout-0 0/5, controls clean
+ *
+ * That is a deterministic reproduction of the defect on the exact runtime that produced the CI
+ * failures, and its absence on the runtime the Next 16 upgrade installed. `REPLAY_EXPECT=reproduce`
+ * runs a runtime as a POSITIVE CONTROL: it fails if the runtime does *not* reproduce, so a clean
+ * result elsewhere can never be vacuous — if the harness stops exercising the replay path, the control
+ * goes red instead.
+ *
+ * SCOPE, STATED PLAINLY: this is a mechanism-level reproduction of the #418 cause, not the
+ * application's authenticated journey. It does not replace CI step 16 and does not by itself close the
+ * release gate; it is the evidence that the cause is understood, reproducible and remedied in the
+ * runtime the app now ships.
  *
  * WHAT IT IS NOT
  *
@@ -91,10 +99,13 @@ const ASSERT_CLEAN = process.env.REPLAY_ASSERT === "clean";
  * identical tree against it — which is how the report separates "our tree is wrong" from "this
  * runtime build behaves differently".
  */
-const EXTERNAL_REACT_DIR = process.env.REPLAY_REACT_DIR || null;
-const VENDORED_REACT = EXTERNAL_REACT_DIR ? "react" : "next/dist/compiled/react/index.js";
-const VENDORED_REACT_DOM_CLIENT = EXTERNAL_REACT_DIR ? "react-dom/client" : "next/dist/compiled/react-dom/client.js";
-const VENDORED_REACT_DOM_SERVER = EXTERNAL_REACT_DIR ? "react-dom/server" : "next/dist/compiled/react-dom/server.node.js";
+const EXTERNAL_REACT_DIR = process.env.REPLAY_REACT_DIR ? process.env.REPLAY_REACT_DIR.replace(/\/$/, "") : null;
+// Absolute paths in external mode. A bare "react" specifier resolves against this repo's cwd, i.e.
+// the repo's react@18.3.1 — which produced a react-18 + react-dom-19 pair whose hydrateRoot aborted
+// on a version check, so nothing hydrated and the harness looked "clean". Resolve to files.
+const VENDORED_REACT = EXTERNAL_REACT_DIR ? `${EXTERNAL_REACT_DIR}/react/index.js` : "next/dist/compiled/react/index.js";
+const VENDORED_REACT_DOM_CLIENT = EXTERNAL_REACT_DIR ? `${EXTERNAL_REACT_DIR}/react-dom/client.js` : "next/dist/compiled/react-dom/client.js";
+const VENDORED_REACT_DOM_SERVER = EXTERNAL_REACT_DIR ? `${EXTERNAL_REACT_DIR}/react-dom/server.node.js` : "next/dist/compiled/react-dom/server.node.js";
 
 const externalRequire = EXTERNAL_REACT_DIR
   ? createRequire(`${EXTERNAL_REACT_DIR.replace(/\/$/, "")}/package.json`)
@@ -124,6 +135,7 @@ function serverMarkup() {
 
 const ENTRY = `
 import * as React from "${VENDORED_REACT}";
+import * as ReactDOM from "${VENDORED_REACT_DOM_CLIENT}";
 import { hydrateRoot } from "${VENDORED_REACT_DOM_CLIENT}";
 
 // A thenable in React's own status/value protocol (condition 2). Flight chunks look like this:
@@ -156,10 +168,19 @@ function makeChunk(value, mode) {
   return thenable;
 }
 
-window.__replayArms = {};
+window.__replayArms = {
+  // Reported from inside the bundle, so the run proves which runtime the browser executed rather
+  // than trusting what the Node-side harness intended to bundle.
+  version: React.version,
+  domVersion: (ReactDOM && ReactDOM.version) || null,
+};
 
 window.__replayArms.run = function run(mode) {
-  const errors = [];
+  // NOTE: this returns BEFORE the mismatch can happen. Hydration errors are raised in a later
+  // scheduler slice than the one hydrateRoot() returns in, so collecting them in a local array and
+  // returning it made every previous run look clean while the DOM-discard signal showed the defect
+  // reproducing. Errors are stashed on window and read by snapshot() after the page has settled.
+  window.__replayErrors = [];
   const lazyChild = React.lazy(function () {                       // condition 1: used as a child node
     return makeChunk({ default: React.createElement("section", { id: "child" }, "lazy child") }, mode);
   });
@@ -179,7 +200,7 @@ window.__replayArms.run = function run(mode) {
   });
 
   const onRecoverableError = function (error) {
-    errors.push(String((error && error.message) || error).slice(0, 240));
+    window.__replayErrors.push(String((error && error.message) || error).slice(0, 240));
   };
 
   // condition 4: Next hydrates inside startTransition, which puts the initial render on a
@@ -188,7 +209,7 @@ window.__replayArms.run = function run(mode) {
     hydrateRoot(document.getElementById("container"), tree, { onRecoverableError });
   });
 
-  return { mark: mark, errors: errors };
+  return { mark: mark };
 };
 
 window.__replayArms.snapshot = function snapshot() {
@@ -197,6 +218,7 @@ window.__replayArms.snapshot = function snapshot() {
     if (el.__serverRendered) kept.push(el.id);
   });
   return {
+    errors: window.__replayErrors || [],
     serverNodesKept: kept,
     // The bug discards the server DOM at the root (no Suspense boundary above the lazy).
     serverDomDiscarded: !kept.includes("child") || !kept.includes("target"),
@@ -236,6 +258,9 @@ const REPRODUCING_ARMS = ["microtask", "timeout-0"];
 const CONTROL_ARMS = ["resolved-before", "late-50ms"];
 const ITERATIONS = Number(process.env.REPLAY_ITERATIONS || 5);
 const results = [];
+// Declared outside the try: the summary and the assertion verdict below both read it, and a
+// block-scoped declaration made both modes exit 1 without printing anything.
+let browserRuntime = null;
 
 try {
   for (const mode of [...REPRODUCING_ARMS, ...CONTROL_ARMS]) {
@@ -248,20 +273,30 @@ try {
       page.on("pageerror", (error) => pageErrors.push(String(error.message).slice(0, 240)));
       await page.setContent(serverHtml, { waitUntil: "domcontentloaded" });
       await page.addScriptTag({ content: bundleSource });
-      const outcome = await page.evaluate((m) => window.__replayArms.run(m), mode);
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      if (!browserRuntime) {
+        browserRuntime = await page.evaluate(() => ({ react: window.__replayArms.version, reactDom: window.__replayArms.domVersion }));
+        console.log(`browser-side runtime: react ${browserRuntime.react} / react-dom ${browserRuntime.reactDom}`);
+        if (browserRuntime.react !== version) {
+          console.error(`BLOCKED: the browser bundle loaded react ${browserRuntime.react} but ${version} was intended. Fix resolution before reading any result.`);
+          await page.close();
+          process.exit(2);
+        }
+      }
+      await page.evaluate((m) => window.__replayArms.run(m), mode);
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const snapshot = await page.evaluate(() => window.__replayArms.snapshot());
-      const all = [...outcome.errors, ...pageErrors];
+      const all = [...(snapshot.errors || []), ...pageErrors];
       const mismatch = all.filter((message) =>
         /#418|#423|#419|Hydration failed|did not match|server rendered HTML|Minified React error/i.test(String(message)));
-      if (mismatch.length) mismatched += 1;
+      const reproducedHere = mismatch.length > 0 || snapshot.serverDomDiscarded;
+      if (reproducedHere) mismatched += 1;
       if (snapshot.serverDomDiscarded) discarded += 1;
-      if (mismatch.length && !sample) sample = { error: mismatch[0], snapshot };
+      if (reproducedHere && !sample) sample = { error: mismatch[0] || "(server DOM discarded; no error text)", snapshot };
       await page.close();
     }
     results.push({ mode, iterations: ITERATIONS, mismatched, discarded, expected: REPRODUCING_ARMS.includes(mode) ? "reproduce" : "clean", sample });
     console.log(
-      `${mode.padEnd(15)} hydration mismatches ${mismatched}/${ITERATIONS}   server DOM discarded ${discarded}/${ITERATIONS}` +
+      `${mode.padEnd(15)} reproducing loads ${mismatched}/${ITERATIONS}   server DOM discarded ${discarded}/${ITERATIONS}` +
         (sample ? `\n                first: ${String(sample.error).slice(0, 140)}` : ""),
     );
   }
@@ -275,16 +310,28 @@ const reproducedTotal = reproducing.reduce((sum, r) => sum + r.mismatched, 0);
 const controlClean = controls.every((r) => r.mismatched === 0);
 
 console.log(`\nREPLAY HYDRATION: ${reproducedTotal} mismatch(es) in the ${REPRODUCING_ARMS.join("/")} arms; controls (${CONTROL_ARMS.join("/")}) ${controlClean ? "clean" : "NOT clean"}.`);
-console.log(JSON.stringify({ runtime: version, external: EXTERNAL_REACT_DIR, results }, null, 1));
+console.log(JSON.stringify({ runtime: version, browserRuntime, external: EXTERNAL_REACT_DIR, results }, null, 1));
 
-if (ASSERT_CLEAN) {
+const EXPECT_REPRODUCE = process.env.REPLAY_EXPECT === "reproduce";
+
+if (ASSERT_CLEAN || EXPECT_REPRODUCE) {
   if (!controlClean) {
     console.error("\nBLOCKED: a control arm misbehaved, so this run cannot judge the runtime. Investigate the harness before reading the result.");
     process.exit(2);
   }
-  if (reproducedTotal > 0) {
-    console.error(`\nFAIL: the vendored React (${version}) still replays a host fiber without rewinding the hydration cursor — ${reproducedTotal} reproducing load(s). This is the #418 mechanism; it is fixed in React 19.3.0 (react#35494 + react#35518), which Next 16.x vendors.`);
-    process.exit(1);
+  if (EXPECT_REPRODUCE) {
+    // Positive control: run against a runtime known to carry the defect. If this does NOT reproduce,
+    // the harness has stopped exercising the replay path and a clean result elsewhere means nothing.
+    if (reproducedTotal === 0) {
+      console.error(`\nFAIL (positive control): ${version} was expected to reproduce the replay-cursor defect and did not. The harness is no longer exercising the replay path, so any "clean" result it reports is meaningless.`);
+      process.exit(1);
+    }
+    console.log(`\nPASS (positive control): ${version} reproduces the defect in ${reproducedTotal} load(s), so the harness still exercises the replay path.`);
+  } else {
+    if (reproducedTotal > 0) {
+      console.error(`\nFAIL: the shipped runtime (${version}) still replays a host fiber without rewinding the hydration cursor — ${reproducedTotal} reproducing load(s). This is the #418 mechanism; it is fixed in React 19.3.0 (react#35494 + react#35518), which Next 16.x vendors.`);
+      process.exit(1);
+    }
+    console.log(`\nPASS: no reproducing arm reproduced and both controls stayed clean on ${version}.`);
   }
-  console.log(`\nPASS: no reproducing arm mismatched and both controls stayed clean on ${version}.`);
 }

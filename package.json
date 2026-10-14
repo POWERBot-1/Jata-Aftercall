@@ -27,9 +27,10 @@
     "test:browser:studio-authenticated": "node scripts/browser/studio-authenticated.check.mjs",
     "test:browser:studio-hydration": "tsx scripts/browser/studio-hydration.check.mts",
     "test:browser:hydration-race": "node scripts/browser/hydration-race.check.mjs",
+    "test:browser:hydration-replay": "REPLAY_ASSERT=clean node scripts/browser/hydration-replay.check.mjs",
+    "test:browser:hydration-replay:control": "REPLAY_EXPECT=reproduce node scripts/browser/hydration-replay.check.mjs",
     "test:browser:actionbar": "node scripts/browser/actionbar-layout.check.mjs",
-    "diagnose:browser:replay-delay": "node scripts/browser/hydration-delayed-chunk.check.mjs",
-    "diagnose:browser:replay-shape": "node scripts/browser/hydration-replay.check.mjs"
+    "diagnose:browser:replay-delay": "node scripts/browser/hydration-delayed-chunk.check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

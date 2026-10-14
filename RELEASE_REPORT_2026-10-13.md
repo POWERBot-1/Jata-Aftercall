@@ -2892,3 +2892,93 @@ close it.
 Branch history after this directive: **26 runs — 18 green, 8 red.** The addendum you are reading was
 committed on top of `47c1c20`; that final report-only commit carries its own run, which is reported in the
 session handoff rather than here, because a section cannot record the result of the run that contains it.
+
+## §O Directive 9 (continued) — #418 finally has a deterministic reproduction, and the fix is proven against it
+
+### O.1 Two bugs in my own harness, both of which produced a *silently clean* result
+
+§M.13 reported an honest negative: a hand-ported replay harness that reproduced nothing and therefore
+proved nothing. It said the most likely cause was an unfaithful port. It was, and now precisely why:
+
+1. **The error list was read too early.** `run()` returned its `errors` array synchronously, immediately
+   after `hydrateRoot`. Hydration errors are raised in a *later scheduler slice*, so that array was
+   always empty when serialised — every arm looked clean no matter what React did. Errors are now kept
+   on `window` and read by `snapshot()` after the page settles.
+2. **External-runtime mode silently mixed two React versions.** With `REPLAY_REACT_DIR` set, the entry
+   imported the bare specifier `"react"`, which esbuild resolved against this repository —
+   `react@18.3.1` — while `react-dom` came from the external directory. The mismatched pair aborted on
+   react-dom's version check, so *nothing hydrated at all* and the harness again looked clean. The entry
+   now imports absolute paths, and the harness prints the runtime the **browser** actually loaded and
+   refuses to report a result if it is not the one intended.
+
+Both bugs were in the direction of false reassurance, which is exactly the failure mode §M.13's header
+warned about. The lesson is recorded in the script itself, not just here.
+
+### O.2 The measured chain (browser-side runtime verified in every row)
+
+Same tree, same four arms, same controls, 5 loads per arm, Chromium, `NODE_ENV=production` bundle:
+
+| Runtime under test | Provenance | `microtask` / `timeout-0` | controls | first error |
+| --- | --- | --- | --- | --- |
+| `19.2.0-canary-0bdb9206-20250818` | **next@15.5.27 vendored — the runtime the app shipped before this directive** | **5/5 · 5/5** | clean | `Minified React error #418 … args[]=HTML` |
+| `19.2.8` + `react-dom@19.2.8` | npm release (the version the upstream reference measures) | **5/5 · 5/5** | clean | same |
+| `19.3.0-canary-278794d7-20261002` | **next@16.4.0 vendored — the runtime the app ships now** | **0/5 · 0/5** | clean | — |
+
+The `args[]=HTML` argument matches the failures recorded in CI (§M.2), and the controls behave as the
+upstream reference documents (`resolved-before` never suspends; `late-50ms` lets React unwind to the root
+instead of replaying). This is the "defensible reproduction and causal explanation" Directive 9 §2 asked
+for, on the exact two runtimes that bracket the change.
+
+### O.3 The gate, and why it cannot pass vacuously
+
+Two npm scripts, both run by a new CI step (`Hydration replay-cursor regression`, workflow step 17 —
+steps after it shift by one in the YAML):
+
+- `test:browser:hydration-replay` — `REPLAY_ASSERT=clean`: the **shipped** runtime must not reproduce.
+- `test:browser:hydration-replay:control` — `REPLAY_EXPECT=reproduce`: a runtime known to carry the
+  defect **must** reproduce, or the run fails. The control is installed by CI into `/tmp/replay-control`
+  (`npm install --prefix … react@19.2.8 react-dom@19.2.8`), outside the project, so it cannot touch
+  `package.json`, `package-lock.json` or the shipped tree.
+
+A clean result can therefore never be vacuous: if the harness stops exercising the replay path, the
+control arm goes red instead of the gate going quietly green. All five behaviours were verified locally,
+exit codes included:
+
+| # | Configuration | Expected | Observed |
+| --- | --- | --- | --- |
+| 1 | control 19.2.8 + `REPLAY_EXPECT=reproduce` | exit 0 | **exit 0** — `PASS (positive control) … reproduces the defect in 6 load(s)` |
+| 2 | shipped + `REPLAY_ASSERT=clean` | exit 0 | **exit 0** — `PASS … both controls stayed clean on 19.3.0-canary-…` |
+| 3 | shipped + `REPLAY_EXPECT=reproduce` (negative) | exit 1 | **exit 1** — `FAIL (positive control) … did not reproduce` |
+| 4 | control 19.2.8 + `REPLAY_ASSERT=clean` (negative) | exit 1 | **exit 1** — `FAIL: … 6 reproducing load(s)` |
+| 5 | no flag (diagnostic) | exit 0 | **exit 0** |
+
+### O.4 Scope — exactly what this does and does not establish
+
+**Establishes:** the #418 cause is understood, is *deterministically reproducible* on a runtime that
+behaved exactly as the observed CI failures did, and is absent from the runtime the Next 16 upgrade now
+ships. That is a mechanism-level result, verified in the shipped bytes both ways.
+
+**Does not establish:** that the authenticated journey is free of hydration errors. This is not the
+application's authenticated journey, and no unit test, build or harness result overrides a failing
+authenticated browser journey (Directive 9 §8). The release gate stays exactly where §N.12 left it —
+**owner's decision** — and this section is evidence for that decision, not a substitute for it.
+
+### O.5 Corrections to earlier statements
+
+- §M.13's "unfaithful port" conclusion was right but incomplete: the port was unfaithful **and** carried
+  two additional defects (§O.1). §M.13 is left in place as written, with this section superseding its
+  result.
+- §M.13 and §N.8 both said this harness was deliberately kept **out of CI** because as a gate it would
+  "pass trivially and imply coverage it lacks". That reasoning is now reversed on evidence: with the
+  positive-control arm a trivial pass is impossible, so the harness is wired into CI rather than left as
+  a local diagnostic. The reversal is recorded rather than quietly applied.
+- The old `diagnose:browser:replay-shape` script name is gone; it is replaced by the two `test:*` scripts
+  above.
+
+### O.6 Verification for this section
+
+`npx vitest run` → **179 files passed / 13 skipped; 2234 passed / 114 skipped / 0 failed**;
+`npm run lint` → exit 0 (0 errors); `js-yaml` parse of the workflow → **21 steps, structurally valid**;
+the harness itself → the five exit codes in §O.3. The control install left `package.json` and
+`package-lock.json` untouched (`git diff` on both shows only the intended script additions), and the
+control is never bundled into the application.

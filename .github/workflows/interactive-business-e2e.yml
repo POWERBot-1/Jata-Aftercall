@@ -193,6 +193,26 @@ jobs:
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           npm run test:browser:hydration-race 2>&1 | tee /tmp/step-hydration-race.log
 
+      # Report N.13: the same harness runs twice - once against a runtime known to carry the defect
+      # (positive control, must reproduce) and once against the runtime this application now ships
+      # (must be clean). The control is installed under /tmp so it cannot touch package.json,
+      # package-lock.json or the shipped dependency tree, and it is never bundled into the app.
+      - name: "Hydration replay-cursor regression (shipped clean, 19.2 positive control)"
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing - replay-cursor regression NOT RUN, not passed." >&2
+            exit 1
+          fi
+          npm install --prefix /tmp/replay-control --no-save --no-audit --no-fund react@19.2.8 react-dom@19.2.8 > /tmp/step-replay-control-install.log 2>&1
+          {
+            echo "--- positive control: react 19.2.8 (the harness must reproduce the defect here) ---"
+            REPLAY_REACT_DIR=/tmp/replay-control/node_modules npm run test:browser:hydration-replay:control
+            echo "--- shipped runtime (the defect must NOT reproduce here) ---"
+            npm run test:browser:hydration-replay
+          } 2>&1 | tee /tmp/step-replay-hydration.log
+
       - name: Actual storefront Motion and immersive browser regressions
         run: |
           set -o pipefail
@@ -235,7 +255,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
