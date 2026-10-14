@@ -3135,3 +3135,53 @@ The three measurement runs above (`REPLAY_REACT_DIR=/tmp/refrepo/node_modules`, 
 reference's own `status`/`restore` reporting `unpatched` and byte-exact afterwards, the marker searches
 (0 occurrences in both app React directories), and the step-mapping derivation from git. No application
 code changed in this section; the branch remains green at the heads named in §P.3.
+
+## §R Directive 9 — final verified state and the honest ledger
+
+Written against head `ffac62b`; at that moment `git rev-parse HEAD` and
+`git ls-remote origin refs/heads/arena/fac28f53-jata-aftercall` both returned
+`ffac62b04184ed83600af338471607e15ae908d2` and the working tree was clean. `main` remained
+`8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — untouched by this directive.
+
+### R.1 Continuous integration on this branch
+
+Five consecutive green runs, each with the same shape — **27 entries = 26 successes + the
+failure-reporting entry skipped by design**, zero failures:
+
+| Run | Head | Result |
+| --- | --- | --- |
+| `38544367514` | `13f4ad1` | success — first execution of the new gate (step 19) |
+| `38546102874` | `97dc0ef` | success — gate evidence posted to the PR comment |
+| `38548038306` | `d23fcc0` | success |
+| `38550321695` | `fa1a105` | success |
+| `38550362207` | `ffac62b` | success — step 16 authenticated journey, step 19 gate, steps 21/22 evidence |
+
+The step outcomes of `38550362207` also confirm §Q.2's correction independently of my reading of the
+file: the API numbers the gate 19, the artifacts upload 21, the PR-evidence step 22 and the failure
+reporter 23, with the last skipped because the run passed.
+
+### R.2 Ledger — what is done, what is not, and whose call it is
+
+| Item | Status |
+| --- | --- |
+| #418 reproduction, causal explanation, regression test | **DONE** — §O (two harness bugs fixed, defect measured on the pre-upgrade runtime and on 19.2.8), §Q (the reference's own cursor rewind flips the same runtime 10→0→10 loads) |
+| #418 fix verified in the shipped runtime | **DONE** — 0/5 reproducing on the vendored 19.3.0-canary, asserted by the browser-side version check |
+| Standing gate so it cannot silently regress | **DONE** — CI step 19, positive control required, cannot pass vacuously |
+| DEF-1 mobile action-bar | **FIXED** — 37/0/0, CI step 20 |
+| Next 16.x staged upgrade (Option A) | **DELIVERED** — `165b873`, evidence §N, four-plus green runs |
+| Authenticated journey on the upgraded runtime | **PASSING IN CI** — 428/0/0 each run; **NOT PERFORMED locally** (no `DATABASE_URL`/PostgreSQL/seed; unchanged prerequisite) |
+| Dev advisories (5 high, one chain to `braces`, no patch published) | **UNRESOLVED** — prod 0; no `--force`, no suppression, no downgrade attempted |
+| **Closing the #418 release gate** | **THE OWNER'S CALL** — §N.12 governs; green runs cannot disprove an intermittent defect, and one intermittency datum exists (§N.11) |
+| Option B (patching the app's vendored React) | **NOT AUTHORIZED, NOT NEEDED** — no longer justified on this evidence |
+| Merge, deploy, media activation, production config/data, live financial transactions | **NOT PERFORMED, NOT AUTHORIZED** |
+
+### R.3 What I would tell a reviewer who reads only one paragraph
+
+The defect named in this release gate is now understood mechanically, reproduced deterministically on
+the exact runtime this application shipped before the upgrade, shown to disappear when a single 17-line
+cursor rewind is applied to that runtime, shown to return when it is reverted, and shown to be absent
+from the runtime the application ships today — all measured by the same harness, in the same browser,
+with the runtime version asserted inside the bundle rather than assumed. That is as far as evidence
+can take this gate. What evidence cannot do is prove the absence of an intermittent failure in the
+authenticated journey, which is why the gate remains open and closes by your decision, not by a green
+run.
