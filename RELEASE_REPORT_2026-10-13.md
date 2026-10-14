@@ -3755,3 +3755,262 @@ configuration, data, storage or financial action was taken by any directive in t
 | **Owner approval** | **OPEN** — three decisions outstanding (§U.7/U.8), label still `NOT APPROVED FOR PRODUCTION DEPLOYMENT` |
 | **Production deployment authorization** | **NOT GRANTED and NOT PERFORMED** — no merge, no deploy, nothing in production changed |
 | **#418 hydration gate** | **OPEN / BLOCKED — OBSERVATION INSUFFICIENT** (§T), unchanged by this section |
+
+## §V. M418 limited-authorization completion report (2026-10-14)
+
+Authorized scope: **test harness + regression tests only** — Part A gate integrity, then Part B
+diagnostics (E1/E3 first, then E2/E4 separately, plus E6), Part C preservation, Part D this report.
+No application code, configuration, data or assertion strength was changed, and no merge, deploy,
+publish or provider action was taken. §A–§U are unchanged.
+
+### §V.1 Branch, commits and changed files
+
+Branch `arena/fac28f53-jata-aftercall`, base `392083d3caef58e7ba11593bbd8a76281b0af8d4`
+(the commit the forensic report identified). Remote head after this work:
+`78b4f0b7accb552ded1440031cdf1e8e1b8ff8be`. `main` remains `8db6a9e4…`, untouched.
+
+| Commit | Subject |
+| --- | --- |
+| `d49b5ba` | gate integrity: verdict from checks AND required samples; E3 instrumentation; default-OFF arms; CI never-elide patterns |
+| `e0d7824` | fix: classify only required-key records as sample evidence (found in run `38588457143`) |
+| `9b1bbb0` | fix: declare `auxiliary`/`duplicates` in the gate module's type contract (found by CI step 8 in run `38590637907`) |
+| `799bd07` | E3 page-level context; arm selection by configuration |
+| `4b01cb5` | fix: give the arms their own CPU-throttling lifecycle (found in run `38593320641`) |
+| `3777d21` | E2 + E4 configuration; record top-document text head |
+| `78b4f0b` | return the journey step to its permanent diagnostic-off configuration |
+
+Changed files vs `392083d` (+694 / −9, five files, **no application code**):
+
+| File | Change |
+| --- | --- |
+| `scripts/browser/m418-gate.mjs` | new (228 lines): pure verdict model `PASS=0 / FAIL=1 / BLOCKED=2` |
+| `tests/unit/m418-gate.test.ts` | new (300 lines): 23 regression cases |
+| `scripts/browser/studio-authenticated.check.mjs` | +161: gate wiring, M11 completeness, E3 diagnostics, default-OFF arms |
+| `tests/unit/studio-browser-safety.test.ts` | 1 pin updated (see §V.5) |
+| `.github/workflows/interactive-business-e2e.yml` | never-elide/comment patterns; diagnostic arm configuration (now unset) |
+
+### §V.2 Part A — gate integrity (delivered)
+
+Before this work, required hydration samples were recorded into `hydrationVisits` but never
+consulted: `const failed = results.filter(...)` and `process.exitCode` ignored them, so 12 of 15
+required samples could fail while the run printed `0 failed`, `journeyStatus: "PASS"` and exited 0.
+The verdict now derives from checks AND samples AND journey completeness:
+
+- Any required sample `ok:false` ⇒ `FAIL`, naming category, attempt and reason.
+- Required key with no record ⇒ `missing`; with a non-boolean `ok` ⇒ `malformed`; both ⇒ `BLOCKED`.
+- A record with a category/attempt outside the required set is **auxiliary**: counted, reported,
+  never counted as a pass, never blocking (§V.5 explains why this distinction had to be made).
+- Inverted SSR body order ⇒ `FAIL`; server-order evidence that is incomplete ⇒ `BLOCKED`
+  (M11 can no longer pass vacuously because failed samples produced no `order`).
+- `journeyStatus` and the exit code come from the verdict; no non-PASS status maps to exit 0.
+
+Regression cases (23 in `tests/unit/m418-gate.test.ts`, `npx vitest run` exit 0; the six required
+cases plus exit-code, artifact-status, M11-vacuity, duplicate and real-world-shape cases):
+
+| Required case | Assertion |
+| --- | --- |
+| complete passing set ⇒ PASS | `PASS`, exit 0, artifact status `PASS`, counts all-ok |
+| one failed sample ⇒ FAIL | names `salon a2` and its reason; exit non-zero |
+| multiple failed samples ⇒ FAIL | reports every affected category |
+| missing samples ⇒ BLOCKED | `missing=1`, names `technical a3` |
+| malformed required sample ⇒ BLOCKED | non-boolean `ok` on a required key |
+| incomplete journey ⇒ FAIL | `journeyComplete:false` blocks PASS even with all samples ok |
+
+CI gate: step 16 already ran under `set -o pipefail`, so exit 2 fails the job; the success-comment
+summary and the never-elide failure pattern now carry `M418 GATE` / `HYDRATION SAMPLES`
+
+### §V.3 CI evidence (seven runs)
+
+| Run | SHA | Configuration | Result |
+| --- | --- | --- | --- |
+| `38588457143` | `d49b5ba` | gate, no arms | step 16 **exit 2**, `malformed=57` (defect, §V.5) |
+| `38590637907` | `e0d7824` | gate, no arms | step 8 failed (TS2339 ×2) — never reached the journey |
+| `38591215765` | `9b1bbb0` | gate, no arms | step 8 green; step 16 exit 2; first E3 evidence |
+| `38593320641` | `799bd07` | `E1-no-throttle,E1-control-retrottled` | arm samples invalid (TargetCloseError, §V.5) |
+| `38595497875` | `4b01cb5` | `E1-no-throttle,E1-control-retrottled` | E1 measured (§V.7) |
+| `38597736390` | `3777d21` | `E2-reversed-order,E4-wait-60s` | E2 + E4 measured (§V.8, §V.9) |
+| `38600279722` | `78b4f0b` | permanent (arms unset) | step 16 exit 2; exact expected evidence |
+
+Permanent-configuration result (run `38600279722`, 11 minutes, step 8 green, steps 17–20 fail-fast
+skipped, step 23 failure report posted):
+
+```
+HYDRATION SAMPLES required=15 ok=3 failed=0 unresolved=12 missing=0 malformed=0 auxiliary=57 duplicates=0
+M418 GATE BLOCKED: required sample evidence incomplete (12 unresolved) :: food a1 … salon a3 …
+  professional a1 … professional a2 … (+4 more)
+```
+
+The functional check count in the same run is unchanged and separately visible (`428 passed,
+0 failed, 0 skipped`). The run now fails because evidence is unresolved, not because a check failed.
+
+### §V.4 Local verification
+
+`npx vitest run` exit 0 — 180 files passed / 13 skipped; **2257 passed / 114 skipped / 0 failed**
+(193 files, 2371 tests). `npx tsc --noEmit` reports exactly one error, the sandbox-only `TS2694`
+from the offline Prisma stub (CI generates the client; the equivalent error does not occur there).
+`npm run lint` exit 0 (36 pre-existing warnings, unchanged).
+
+### §V.5 Defects found while doing this work (two of them by CI, not by me)
+
+1. **`malformed=57` false classification** (run `38588457143`). The harness records its SSR
+   navigation probes `{category, timezone, path, status}` into the same array as the required
+   samples (`studio-authenticated.check.mjs:663`), and the classifier treated every non-required
+   record lacking a boolean `ok` as a malformed required sample. 57 = 5 categories × 3 timezones ×
+   per-category suffix count. The verdict was right and the classification was wrong; worse, the
+   same rule would have blocked a run in which all 15 required samples passed, so the gate could
+   never have been satisfied. Fixed in `e0d7824`, with the exact 57-record shape pinned as a test.
+2. **Stale JSDoc contract** (run `38590637907`, step 8). `counts.auxiliary`/`counts.duplicates`
+   were added at runtime without updating the `@returns` TypeScript reads from the `.mjs`, so
+   `tsc --noEmit` failed on two assertions in my own new test file. The code was correct; the
+   declared contract was not. Fixed in `9b1bbb0`. Cause of my miss: I ran `tsc` before making that
+   edit; it is now re-run after every edit.
+3. **Arms inherited a detached CDP session** (run `38593320641`). The arms reused `cdp`, created at
+   `:750` and detached at `:792`, so every arm sample failed in 1 ms with `TargetCloseError`. That
+   run's arm entries are **not evidence about the application** and are reported as such. Fixed in
+   `4b01cb5`, which also labels an unestablishable condition `conditionFailed` instead of recording
+   it as a failed sample.
+
+### §V.6 Part B — E3 timeout instrumentation (delivered, always on)
+
+Every required-sample timeout now records what the predicate actually saw. Across all 12 timed-out
+samples in run `38591215765`, and again in `38600279722`, the state is identical:
+
+```
+{"category":"food","attempt":1,"iframePresent":false,
+ "topUrl":"/dashboard/businesses/<id>/preview", "topReadyState":"complete",
+ "iframes":0, "bodyChildren":21, "bodyTextLength":14655,
+ "markerInTopDocument":false, "passwordFields":0, "nextErrorOverlay":false, "scripts":15}
+```
+
+The page is **fully loaded, on the preview route, with no sign-in redirect, no Next error overlay,
+a rendered shell — and no iframe element at all**. This is a different failure from "the frame
+rendered without the marker", which the previous instrumentation could not distinguish. `topTextHead`
+(head added in `3777d21`, synthetic QA text only) renders as the studio *Appearance* shell text.
+
+### §V.7 Part B — E1 (CPU throttling disabled), with the control in the same run
+
+Conditions held constant within the run: same five fixtures, same order, same route, same 25 s wait,
+same browser and session; only `Emulation.setCPUThrottlingRate` differs.
+
+| Arm | retail | food | salon | professional | technical |
+| --- | --- | --- | --- | --- | --- |
+| `E1-no-throttle` (rate 1) | **ok, 1408 ms** | TO 26027 ms | TO 27038 ms | TO 27040 ms | TO 27037 ms |
+| `E1-control-retrottled` (rate 4) | ok, 1494 ms | (reproduces) | (reproduces) | (reproduces) | (reproduces) |
+
+**Conclusion: CPU throttling is not the cause.** With throttling disabled the same four categories
+still never mount the iframe. The throttled control reproduces the original condition. Residual
+confound, stated: the two sub-arms run adjacently, so a cache/warm-up effect is not excluded by
+design — run `38597736390` (E2) removes it.
+
+### §V.8 Part B — E2 (reversed order, same categories and conditions)
+
+Execution order `[technical, professional, salon, food, retail]`:
+
+| technical | professional | salon | food | retail |
+| --- | --- | --- | --- | --- |
+| TO 26042 ms | TO 26457 ms | TO 26461 ms | TO 26449 ms | **ok, 1541 ms** |
+
+**Conclusion: iteration position is irrelevant.** Retail passes when it is checked *last*, so the
+"retail is always first" reading of the §T data is not the mechanism, and the warm-up confound from
+E1 is removed.
+
+### §V.9 Part B — E4 (wait extended to 60 s, existing 25 s timeout kept as the recorded baseline)
+
+`E4-wait-60s`, non-retail categories, 60 s budget: `food` failed at **61083 ms**
+(`Waiting failed: 60000ms exceeded`) with the same absent-iframe state. **Conclusion: the iframe
+does not mount late; "slow mount" is ruled out for the sample that is visible.** Limitation,
+stated: the failure reporter keeps at most 4000 characters of matched lines and the arm tallies and
+the other three E4 payloads were cut; they are in the `hydration-raw-order-evidence` artifact, which
+this environment **cannot download** (`EOF` from the artifact blob host — the same infrastructure
+limit recorded in §T/§U). So E4 is complete for one of four categories from the channel available
+here, and the remaining three are **NOT VERIFIED** in this report rather than assumed.
+
+### §V.10 Part B — E6 (iframe error-handler coverage), executed, not assumed
+
+The directive required investigating whether the Page-level `pageerror` handler captures iframe
+errors without assuming it does.
+
+- Source: puppeteer-core 25.13.0 registers exactly one page-level handler —
+  `cdp/Page.js:285` `clientEmitter.on('Runtime.exceptionThrown', this.#handleException)` — and
+  `#handleException` (`:713`) re-emits it as `pageerror` with **no frame or context filter**. The
+  only other `exceptionThrown` consumer in the library is `WebWorker`.
+- Execution (scratch `/tmp/e6x`, not persisted): Chromium 141 (npm-hosted `@sparticuz/chromium`
+  plus its AL2023 shared-library bundle) driven by puppeteer-core 25.13.0, one page with a
+  same-origin iframe and a cross-port iframe, each throwing after navigation. Result:
+  `pageerror_captured: ["SAMEORIGIN_BOOM","CROSSORIGIN_BOOM"]` — **both reached `page.on("pageerror")`**.
+- Relevance: the harness reads the draft-preview iframe through `iframe.contentDocument` inside
+  `page.evaluate` (`:251`, `:743`, `:452`…), which only works for a same-origin frame, so the iframe
+  the journey depends on is same-origin and its exceptions do reach the Page-level handler.
+- Unproven sub-case, stated plainly: the browser build available here did not promote the
+  cross-origin frame to a separate target even with `--site-per-process` (`browser.targets()`
+  listed two page targets and `contentDocument` stayed readable), so this does **not** settle the
+  out-of-process-iframe sub-case.
+
+### §V.11 The M418 finding — the samples open one tenant's preview with another tenant's session
+
+E1/E2 made the discriminating variable visible, and the harness source names it:
+
+- Each category gets its **own browser context and its own owner account**
+  (`studio-authenticated.check.mjs:377-388`: `createBrowserContext()` per iteration,
+  `email = studio-browser-${category}-${runId}@test.invalid`, and a per-fixture `ownerId`).
+- The journey's preview checks — which **pass for all five categories** — call
+  `preview(ownerPage, fixture, …)` with **that category's own page** (`:465`, `:468`, `:471`, `:554`).
+- The M418 required-sample block opens **every** category's preview route with
+  `first.ownerPage`, and `const [first, second, salon, professional, technical] = created` (`:690`)
+  makes `first` the **retail** fixture (`:743`, and the E1/E2/E4 arms likewise).
+
+So 12 of the 15 required samples ask for a draft preview of a business whose owner is not the
+session's owner, and the application does not serve it: the route settles into a complete shell with
+no preview iframe (identical at 25 s and 60 s). The sample's 25 s is the wait expiring on an iframe
+that will never exist — **not** a hydration mismatch, **not** a stall, **not** CPU throttling, and
+not the #418 defect class.
+
+What this does **not** prove, stated precisely: the exact refusal mechanism is not pinned (the
+evidence shows a rendered shell with no iframe, no error overlay, no sign-in redirect, and
+`topTextHead` showing the studio Appearance text; whether the route redirects, 403s or renders an
+empty state is unverified), and it does not by itself establish whether the application's behaviour
+is correct — **tenant isolation is a ratified contract, so refusing a cross-tenant preview is the
+expected behaviour**, but that expectation has not been verified against the product decision either.
+
+Smallest next experiment (**proposed, NOT run — requires authorization**): one diagnostic arm that
+repeats the identical wait with each category's **own** `ownerPage` (`fixture.ownerPage`, already
+alive in the harness), at the same route, order, wait and throttle, labelled by SHA + configuration.
+If all five then pass — under rate 4 and under rate 1 — the tenant-mixing reading is proven and the
+required-sample definition, not the application, is what the M418 gate has been measuring for 18
+gate-bearing runs.
+
+### §V.12 Gate status
+
+`M418 GATE BLOCKED — required evidence unresolved` (12 of 15 required samples; food, salon,
+professional, technical). The gate is now truthful and non-vacuous, and it fails CI for the right
+reason. Adding that evidence to the ledger: because the harness changed, new runs are **not
+identical** to the runs behind §T.2's 8-run streak, so per §T.2 that streak **resets** and cannot be
+extended by these runs. No run in this section is Class A evidence for the observation criteria;
+they are gate/diagnostic runs. The M418 gate therefore remains **BLOCKED — OBSERVATION INSUFFICIENT**
+in its original wording, now with a named, reproducible candidate cause and one unrun experiment.
+
+### §V.13 Evidence limits and preservation
+
+- Original artifacts were preserved; nothing was overwritten, and every earlier report section and
+  the pre-change harness (`392083d`) remain intact in history.
+- The raw log endpoint and the artifact download are unavailable from this environment (`EOF` from
+  the results/artifact blob hosts), so run evidence here comes from the PR comments the workflow
+  writes, the harness's own printed lines, and the job/step metadata from the API.
+- Redaction: the new diagnostics record pathnames (no query strings), counts, booleans, `readyState`
+  and a 120-character whitespace-collapsed text head of synthetic QA fixtures — no cookies, tokens,
+  secrets or customer data. No secrets were printed, logged, or committed.
+
+### §V.14 Owner decisions required
+
+1. **E5 authorization** (one arm, above) — the smallest test that would explain M418.
+2. Confirmation that PR #45 stays open and labelled `NOT APPROVED FOR PRODUCTION DEPLOYMENT`
+   (no merge was requested or performed).
+3. Unchanged from §U: advisories (5 dev-only high, `GHSA-vfj7-8cjw-p6xm`, no patch published),
+   Paystack configuration items, and the deferred media/upload work.
+
+### §V.15 What this work is not
+
+Not an application fix, not a claim that the application is defective or healthy on this evidence,
+not a merge, deployment, release or production change, not production data, not a reopened
+hydration/#418 conclusion, and not a pass for the M418 gate. The verdict classes used here are
+exactly: PASS, FAIL, BLOCKED, UNRESOLVED, NOT VERIFIED, NOT PERFORMED.
