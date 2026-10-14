@@ -4242,3 +4242,79 @@ is relaxed, added or reinterpreted.
   (16/18/19/20/22/23), the gate/sample lines and the control lines, taken from the CI API and the
   workflow's own published comment. The verdict table is applied exactly as predeclared, and a
   NOT MET verdict is reported as NOT MET without moving the criteria.
+
+### §V.17.2 Generation, exactly as predeclared
+
+One run per push, pushed serially — the next push only after the previous run reported a
+conclusion. **Observed peak concurrency: 1** (verified from the API's `run_started_at`/`updated_at`
+overlap across all twelve runs), inside the ≤ 2 bound that §T's wave violated. Two 15-minute gaps
+were inserted inside the streak for the diversity guard. No code, workflow, test or fixture change
+was made during the window: the markers are empty commits on report-only ancestry above `96641ee`.
+
+### §V.17.3 Per-run record
+
+| # | Run | Head | Window (UTC) | s16 | s18 | s19 | s20 | s22 | s23 | Classification |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `38614662568` | `b6555f6` | 18:22:55→18:31:05 | ✓ | ✗ | – | – | – | ✓ | EXCLUDED |
+| 2 | `38615932426` | `3d881d6` | 18:31:48→18:43:04 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 3 | `38617604629` | `a3849e7` | 18:43:43→18:55:17 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 4 | `38619340458` | `9466079` | 18:55:50→19:07:29 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 5 | `38623168778` | `f658153` | 19:22:49→19:34:20 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 6 | `38624861406` | `0b8e2c9` | 19:34:46→19:45:59 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 7 | `38626444141` | `7305069` | 19:46:12→19:56:47 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 8 | `38630069441` | `fdcb9b6` | 20:12:18→20:23:38 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 9 | `38631743429` | `b82d5ca` | 20:24:06→20:34:18 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 10 | `38635313381` | `48e34f6` | 20:49:34→21:01:32 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 11 | `38637036949` | `e6cb1ab` | 21:02:02→21:14:10 | ✓ | ✓ | ✓ | ✓ | ✓ | – | CLASS-A |
+| 12 | `38638695288` | `3d3736b` | 21:14:28→21:24:06 | ✓ | ✓ | ✓ | ✗ | – | ✓ | EXCLUDED |
+
+- `38614662568` (`b6555f6`) — **step 18**: `M418 THROW DIAGNOSTIC PATCH applied to 0 chunk(s)` / `M418 THROW DIAGNOSTIC UNAVAILABLE — no chunk matched the react-dom throw pattern`, so steps 19/20/22 were skipped. The identical code passed step 18 in every other run of this window.
+- `38638695288` (`3d3736b`) — **step 20**: `FAIL no JavaScript 360px phone: scenario executed — Waiting failed: 15000ms exceeded`, the same family as §T.5's two wave failures (`no JavaScript desktop`, same 15 s timeout). Its gate evidence was already produced by step 16 and is included below.
+
+### §V.17.4 Verdict — the §T.5 criteria applied unchanged
+
+| Criterion | Predeclared | Observed | Verdict |
+| --- | --- | --- | --- |
+| Consecutive Class A clean runs | ≥ 12 | **10** (`18:31:48Z`→`21:14:10Z`); the following run failed at step 20, which per §T.5 resets the count | **NOT MET** |
+| Diversity guard (streak spans ≥ 3 clock hours) | ≥ 3 h | 2h42m over the 10-run streak | **NOT MET** |
+| Controls valid (known-bad reproduces, shipped clean) | every run | every Class A run published `PASS (positive control): 19.2.8 reproduces the defect in 10 load(s)` and `PASS: no reproducing arm reproduced and both controls stayed clean on 19.3.0-canary-278794d7-20261002` | **PASS** |
+| Hydration recurrence | none | step 16 green in **12/12** runs; `436 passed, 0 failed, 0 skipped` and one distinct gate line (`M418 GATE PASS: all required samples and checks passed`) and one distinct sample tally (`required=15 ok=15 failed=0 unresolved=0 missing=0 malformed=0 auxiliary=57 duplicates=0`) in every Class A run | **PASS** |
+| Required test steps executed, no test skipped | every run | every Class A run: 26 success + 1 skipped (the failure reporter, skipped by design on passing runs) | **PASS** |
+
+**Status: BLOCKED — OBSERVATION INSUFFICIENT** — the same verdict as §T, from the same criteria applied to a
+larger and cleaner streak. At best the window held **10 consecutive** Class A runs spanning 2h42m with controls
+valid in all of them and no hydration signal of any kind; it ends at **0 consecutive** because the final run
+failed at step 20 and, per §T.5, an exclusion resets the count. The criteria were not moved and are not
+proposed to be moved.
+
+### §V.17.5 The binding constraint, measured
+
+Across the repaired harness, step 20 has now executed 16 times and failed twice (12.5%): the JS-disabled
+motion scenarios time out at 15 s. At that rate, a fresh twelve-consecutive attempt succeeds with
+probability ≈ 0.875¹² ≈ 20%, i.e. roughly 31 runs / six hours expected — which is why this window records
+10 and not 12. The exclusions are **not** hydration-related: step 16 was green in all twelve runs, the gate
+passed 15/15 in every Class A run, and both failures are in a scenario that runs with JavaScript disabled.
+
+Options, none of which requires touching the criteria or this window's record:
+
+1. Invest further serial runs (expected ≈ 6 h) to attempt a clean twelve-consecutive streak.
+2. Fix the step-20 JS-disabled scenario's 15 s timeout budget under a separate authorization — a
+   CI-robustness fix, already an open owner item (`motion wait budget`), after which the criteria become
+   attainable at the observed cadence.
+3. Treat this window's record — 10 consecutive Class A runs, controls valid in all of them, concurrency 1,
+   span 2h42m, zero hydration recurrence, gate 15/15 with `M418 GATE PASS` — as the evidence base for a
+   *different* owner decision. Stated plainly: that is an owner choice, not a criteria change by me, and
+   the §T.2/M418 verdict remains **BLOCKED — OBSERVATION INSUFFICIENT** until an owner decides otherwise.
+
+### §V.17.6 What this window does and does not establish
+
+Established: under serial generation at concurrency 1, the repaired harness produced 10 consecutive
+qualifying runs with valid positive controls, a passing gate, and no hydration recurrence — a strictly
+stronger record than §T's 6, arriving at the same verdict because the criteria demand 12 consecutive runs
+spanning 3 hours, and CI robustness in step 20 is what stops it.
+
+Not established: that the application is free of intermittent hydration defects (an isolated harness never
+proves that, and the criteria exist to keep that claim from being made casually); not production readiness;
+not a merge, deployment or release; and not a resolution of the step-20 robustness finding, which remains
+open and diagnosed only to the level of 'reproduces intermittently in a JS-disabled scenario' with load
+still the untested candidate.
