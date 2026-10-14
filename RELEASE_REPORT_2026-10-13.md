@@ -4318,3 +4318,26 @@ proves that, and the criteria exist to keep that claim from being made casually)
 not a merge, deployment or release; and not a resolution of the step-20 robustness finding, which remains
 open and diagnosed only to the level of 'reproduces intermittently in a JS-disabled scenario' with load
 still the untested candidate.
+
+### §V.17.7 Post-verdict state — why the record above cannot go stale
+
+The report-only push carrying §V.17.2–§V.17.6 (`dbcdec9`) was itself verified: run `38640119007`
+executed every required step green (26 success, only the failure reporter skipped by design), the gate
+reported `M418 GATE PASS` with the standard `required=15 ok=15` tally, and the journey reported
+`436 passed, 0 failed, 0 skipped`. By the §V.17.1 definition that push therefore also qualifies as a
+Class A run, and any further report-only push will do the same — so a live "trailing count" cannot be
+pinned to a number in a report that every such push re-renders.
+
+What is recorded instead, and stays true either way:
+
+- The **window's** record is frozen as §V.17.3/§V.17.4: 12 runs, 10 consecutive Class A, span 2h42m,
+  two exclusions, verdict **NOT MET** on the ≥12-consecutive and ≥3 h criteria.
+- A fresh attempt at those criteria requires a **streak that contains its own 3-hour span**, i.e. twelve
+  consecutive qualifying runs with the first and last at least three hours apart. Because step 20 has
+  failed in 2 of 16 executions (12.5%), that is an expected ≈31 pushes / ≈6 h of serial runs, not a
+  handful — and it is the owner's decision under §V.17.5 option 1, not something this window can reach
+  by continuing to push.
+- **No accumulation is underway.** The window is closed by its own verdict; the pushes after it are the
+  report's own audit trail, and their qualification as Class A runs is a property of the harness, not a
+  resumption of the count.
+
