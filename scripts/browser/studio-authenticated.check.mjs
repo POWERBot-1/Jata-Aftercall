@@ -820,6 +820,9 @@ try {
         { arm: "E1-control-retrottled", throttle: true, fixtures: sampleFixtures, waitMs: 25000 },
         { arm: "E2-reversed-order", throttle: true, fixtures: [...sampleFixtures].reverse(), waitMs: 25000 },
         { arm: "E4-wait-60s", throttle: true, fixtures: sampleFixtures.filter((fixture) => fixture.category !== "retail"), waitMs: Number(process.env.M418_DIAG_WAIT_MS || 60000) },
+        // E5 changes exactly one thing relative to the required-sample condition — whose session
+        // opens the route — holding throttle (4), order, route and wait (25 s) constant.
+        { arm: "E5-own-owner-page", throttle: true, ownPage: true, fixtures: sampleFixtures, waitMs: 25000 },
       ];
       // "1" runs every arm; otherwise a comma-separated list selects arms, so consecutive
       // diagnostic runs differ in configuration only — the harness source stays identical.
@@ -829,12 +832,27 @@ try {
       for (const arm of arms) {
         for (const fixture of arm.fixtures) {
           const startedAt = Date.now();
-          const entry = { arm: arm.arm, category: fixture.category, attempt: 1, throttle: arm.throttle ? 4 : 1, waitMs: arm.waitMs, route: `/dashboard/businesses/${fixture.id}/preview` };
+          // `first.ownerPage` is the retail account's page, which is what the required-sample
+          // block opens for every category; `fixture.ownerPage` is the account that owns the
+          // business being previewed. Whichever is used is recorded on the entry.
+          const armPage = arm.ownPage ? fixture.ownerPage : first.ownerPage;
+          const entry = { arm: arm.arm, category: fixture.category, attempt: 1, throttle: arm.throttle ? 4 : 1, waitMs: arm.waitMs, page: arm.ownPage ? "own-owner" : "first-owner", route: `/dashboard/businesses/${fixture.id}/preview` };
+          if (!armPage) {
+            entry.ok = false;
+            entry.conditionFailed = true;
+            entry.error = "owner page for this fixture is unavailable";
+            entry.ms = Date.now() - startedAt;
+            m418Diagnostics.push(entry);
+            const missing = `M418 DIAG ${JSON.stringify({ arm: entry.arm, cat: entry.category, conditionFailed: true, err: entry.error })}`.slice(0, 700);
+            m418Lines.push(missing);
+            console.log(missing);
+            continue;
+          }
           // Own throttling lifecycle: the required-sample block detaches its CDP session when its
           // own scope ends, so reusing that session failed every arm sample with TargetCloseError
           // in run 38593320641. The page-level API manages its own session.
           try {
-            await first.ownerPage.emulateCPUThrottling(arm.throttle ? 4 : 1);
+            await armPage.emulateCPUThrottling(arm.throttle ? 4 : 1);
           } catch (error) {
             // A condition that could not be established is not a measurement: label it and stop,
             // so a broken arm can never be read as evidence about the application.
@@ -849,21 +867,21 @@ try {
             continue;
           }
           try {
-            await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
-            await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), { timeout: arm.waitMs }, `QA first ${fixture.category} ${runId}`);
+            await armPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+            await armPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), { timeout: arm.waitMs }, `QA first ${fixture.category} ${runId}`);
             entry.ok = true;
           } catch (error) {
             entry.ok = false;
             entry.error = String(error).slice(0, 120);
-            entry.diag = await sampleFrameDiagnostics(first.ownerPage, `QA first ${fixture.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
+            entry.diag = await sampleFrameDiagnostics(armPage, `QA first ${fixture.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
           } finally {
-            await first.ownerPage.emulateCPUThrottling(1).catch(() => {});
+            await armPage.emulateCPUThrottling(1).catch(() => {});
           }
           entry.ms = Date.now() - startedAt;
           m418Diagnostics.push(entry);
           // The failure reporter keeps at most 4000 characters of matched lines, so the printed
           // payload stays compact; the full entry (including `diag`) is in the artifact.
-          const payload = { arm: entry.arm, cat: entry.category, ok: entry.ok, ms: entry.ms };
+          const payload = { arm: entry.arm, cat: entry.category, page: entry.page, ok: entry.ok, ms: entry.ms };
           if (entry.error) payload.err = String(entry.error).replace("TimeoutError: ", "TO ").slice(0, 46);
           if (entry.diag) payload.diag = entry.diag.iframePresent === false
             ? Object.fromEntries([["iframe", "absent"], ...Object.entries(entry.diag).filter(([k]) => ["topUrl", "topReadyState", "iframes", "bodyChildren", "bodyTextLength", "markerInTopDocument", "passwordFields", "nextErrorOverlay", "topTextHead"].includes(k))])

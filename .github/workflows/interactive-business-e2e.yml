@@ -177,6 +177,11 @@ jobs:
       # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
       # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
       - name: Authenticated production HTTP browser journey
+        env:
+          # M418-DIAG(E5): the single-variable confirmation. Same route, order, throttle (4)
+          # and 25 s wait as the required-sample condition; only the session that opens the
+          # route changes — each category's own owner page instead of retail's page.
+          M418_DIAG_ARMS: "E5-own-owner-page"
         # M418 diagnostic arms are default OFF. To run them, set M418_DIAG_ARMS here to a
         # comma-separated arm list ("1" = all): E1-no-throttle, E1-control-retrottled,
         # E2-reversed-order, E4-wait-60s (M418_DIAG_WAIT_MS overrides the 60 s E4 wait).
