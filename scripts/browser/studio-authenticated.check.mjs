@@ -30,10 +30,24 @@ function probeEnabled() {
  * "The frame never parsed" and "the frame parsed without the marker" produce the same
  * TimeoutError and the same `ok:false` today, so both are examined explicitly.
  */
-async function sampleFrameDiagnostics(page) {
-  return page.evaluate(() => {
+async function sampleFrameDiagnostics(page, marker = "") {
+  return page.evaluate((expected) => {
     const iframe = document.querySelector('iframe[title="Draft preview"]');
-    if (!iframe) return { iframePresent: false };
+    // Page-level context, captured whether or not the iframe exists: iframePresent:false alone
+    // cannot distinguish "the preview pane never mounted" from "the page is not on the preview
+    // route at all" (sign-in redirect, error document, blank shell).
+    const top = {
+      topUrl: String(location.pathname || "").slice(0, 120),
+      topReadyState: String(document.readyState || ""),
+      iframes: document.querySelectorAll("iframe").length,
+      bodyChildren: document.body ? document.body.children.length : -1,
+      bodyTextLength: document.body ? String(document.body.textContent || "").replace(/\s+/g, " ").trim().length : -1,
+      markerInTopDocument: Boolean(expected) && Boolean(document.body) && String(document.body.textContent || "").includes(expected),
+      passwordFields: document.querySelectorAll('input[type="password"]').length,
+      nextErrorOverlay: Boolean(document.querySelector("nextjs-portal")),
+      scripts: document.querySelectorAll("script").length,
+    };
+    if (!iframe) return { iframePresent: false, ...top };
     const out = { iframePresent: true, src: String(iframe.getAttribute("src") || "").slice(0, 140) };
     let doc = null;
     try { doc = iframe.contentDocument; } catch (error) { out.docError = String(error).slice(0, 80); }
@@ -48,8 +62,8 @@ async function sampleFrameDiagnostics(page) {
       out.bodyChildren = doc.body.children.length;
     }
     try { out.href = String(iframe.contentWindow.location.href).slice(0, 160); } catch { out.href = "cross-origin"; }
-    return out;
-  });
+    return { ...top, ...out };
+  }, marker);
 }
 
 let target;
@@ -762,7 +776,7 @@ try {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
           // E3: record what the timed-out predicate saw, in the artifact and in the log.
-          entry.diag = await sampleFrameDiagnostics(first.ownerPage).catch(() => ({ diagError: "capture failed" }));
+          entry.diag = await sampleFrameDiagnostics(first.ownerPage, `QA first ${entry.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
           const diagLine = `M418 DIAG TIMEOUT ${JSON.stringify({ category: entry.category, attempt: entry.attempt, ...entry.diag })}`.slice(0, 880);
           m418Lines.push(diagLine);
           console.log(diagLine);
@@ -794,13 +808,19 @@ try {
     // E1/E2/E4 diagnostic arms — test-only and default OFF, so normal runs are unchanged.
     // Each arm holds every other condition constant and labels its own measurements; no arm
     // contributes to the required sample set.
-    if (process.env.M418_DIAG_ARMS === "1") {
-      const arms = [
+    const armSelection = (process.env.M418_DIAG_ARMS ?? "").trim();
+    if (armSelection) {
+      const allArms = [
         { arm: "E1-no-throttle", throttle: false, fixtures: sampleFixtures, waitMs: 25000 },
         { arm: "E1-control-retrottled", throttle: true, fixtures: sampleFixtures, waitMs: 25000 },
         { arm: "E2-reversed-order", throttle: true, fixtures: [...sampleFixtures].reverse(), waitMs: 25000 },
         { arm: "E4-wait-60s", throttle: true, fixtures: sampleFixtures.filter((fixture) => fixture.category !== "retail"), waitMs: Number(process.env.M418_DIAG_WAIT_MS || 60000) },
       ];
+      // "1" runs every arm; otherwise a comma-separated list selects arms, so consecutive
+      // diagnostic runs differ in configuration only — the harness source stays identical.
+      const wanted = armSelection === "1" ? null : new Set(armSelection.split(",").map((name) => name.trim()));
+      const arms = wanted ? allArms.filter((arm) => wanted.has(arm.arm)) : allArms;
+      console.log(`M418 DIAG ARMS ${arms.map((arm) => arm.arm).join(",") || "(none selected)"} sha=${(process.env.GITHUB_SHA || "local").slice(0, 7)} config=${armSelection}`);
       for (const arm of arms) {
         for (const fixture of arm.fixtures) {
           const startedAt = Date.now();
@@ -813,13 +833,20 @@ try {
           } catch (error) {
             entry.ok = false;
             entry.error = String(error).slice(0, 120);
-            entry.diag = await sampleFrameDiagnostics(first.ownerPage).catch(() => ({ diagError: "capture failed" }));
+            entry.diag = await sampleFrameDiagnostics(first.ownerPage, `QA first ${fixture.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
           } finally {
             if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
           }
           entry.ms = Date.now() - startedAt;
           m418Diagnostics.push(entry);
-          const line = `M418 DIAG ${JSON.stringify(entry)}`.slice(0, 880);
+          // The failure reporter keeps at most 4000 characters of matched lines, so the printed
+          // payload stays compact; the full entry (including `diag`) is in the artifact.
+          const payload = { arm: entry.arm, cat: entry.category, ok: entry.ok, ms: entry.ms };
+          if (entry.error) payload.err = String(entry.error).replace("TimeoutError: ", "TO ").slice(0, 46);
+          if (entry.diag) payload.diag = entry.diag.iframePresent === false
+            ? Object.fromEntries([["iframe", "absent"], ...Object.entries(entry.diag).filter(([k]) => ["topUrl", "topReadyState", "iframes", "bodyChildren", "bodyTextLength", "markerInTopDocument", "passwordFields", "nextErrorOverlay"].includes(k))])
+            : { iframe: "present", readyState: entry.diag.readyState, body: entry.diag.body };
+          const line = `M418 DIAG ${JSON.stringify(payload)}`.slice(0, 700);
           m418Lines.push(line);
           console.log(line);
         }

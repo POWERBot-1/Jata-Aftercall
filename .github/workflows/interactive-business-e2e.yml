@@ -177,6 +177,11 @@ jobs:
       # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
       # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
       - name: Authenticated production HTTP browser journey
+        env:
+          # M418-DIAG(E1): configuration only — the harness source is identical to the
+          # non-diagnostic runs. E1 = CPU throttling disabled, every other condition unchanged;
+          # the immediately following control repeats the arm with the throttle restored.
+          M418_DIAG_ARMS: "E1-no-throttle,E1-control-retrottled"
         run: |
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
@@ -314,7 +319,7 @@ jobs:
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
                 for (const line of text.split('\n')) {
-                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED|M418 GATE|HYDRATION SAMPLES)/.test(line.trim())) {
+                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED|M418 GATE|M418 DIAG|HYDRATION SAMPLES)/.test(line.trim())) {
                     signatureLines.push(`${file.split('/').pop()}: ${line.trim()}`);
                   }
                 }
