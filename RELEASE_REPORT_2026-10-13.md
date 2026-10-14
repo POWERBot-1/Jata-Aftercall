@@ -4133,3 +4133,26 @@ script. `auxiliary=57` is the SSR navigation-probe count from §V.5, correctly c
 | `38606768667` | `b16d60b` | **repaired sampling** | **success**, `M418 GATE PASS`, 15/15 samples |
 
 None of these is Class A evidence for the §T.2 criteria; they are gate, diagnostic and repair runs.
+
+#### §V.16.7 Post-report run `38608376268` (`12dcc4a`) — step 20 intermittent, gate evidence identical
+
+This run was produced by the §V.16 addendum commit, whose **only** difference from the green
+`38606768667` is `RELEASE_REPORT_2026-10-13.md` — no code, harness or workflow change.
+
+| Step | `38606768667` (`b16d60b`) | `38608376268` (`12dcc4a`) |
+| --- | --- | --- |
+| 16 authenticated journey | success — `15/15 ok`, `M418 GATE PASS` | success — `15/15 ok`, `M418 GATE PASS` |
+| 20 Motion and immersive browser regressions | success | **failure** — `no JavaScript desktop: scenario executed — Waiting failed: 15000ms exceeded` (suite: 119 passed, 1 failed, 0 skipped) |
+| 22 evidence comment / 23 failure report | success / skipped | skipped / **fired** (why the newest comment is a failure report) |
+
+The gate evidence is identical between the two runs, so this failure is not attributable to §V's
+changes: a single check timed out at 15 s in a suite whose timeout budget was already recorded as an
+owner item (§U/§R: motion wait budget versus ≤2 concurrency; §T also saw step-20 failures during a
+9-way concurrency wave, 2 of 9 runs). Reported as observed, **not** diagnosed and **not** claimed as
+resolved: it is outside this authorization's scope, and the unresolved advisory line in the same
+comment (`FAIL full dependency audit: 5 findings (5 high)`) is the §S finding, unchanged (dev-only,
+no published patch, documented as unresolved).
+
+Last recorded state of the branch: gate integrity delivered, M418 cause explained and repaired at
+the sampling level, one full green run (`38606768667`), and one run in which only step 20 failed
+intermittently. No merge, deployment, release or production change was performed.
