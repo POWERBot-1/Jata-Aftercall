@@ -2014,6 +2014,28 @@ monitoring plus the prepared upstream issue** in `docs/WEBSITE_STUDIO_HYDRATION_
 Directive 8 requires (a) and (b) to be reported for owner decision before execution, and forbids
 suppressing the symptom.
 
+**A fresh reproduction arrived while this section was being written, and it matches the analysis.** CI run
+`38523812584` (the run for §L.3's commits, head `70628ffe`) failed at **step 16, "Authenticated production
+HTTP browser journey"**, with:
+
+- `BROWSER RUNTIME ERROR … "Minified React error #418; … args[]=HTML"` on
+  `/dashboard/businesses/cmv7qxhir004bsm3csw8sdxd7/preview` inside frame `/b/qa-salon-e2328a2d` — the
+  **authenticated draft-preview storefront iframe**, i.e. exactly the trigger condition M14 isolated, not
+  a new surface;
+- the stack resolves through `4bd1b696-100b9d70ed4e49c1.js` — **byte-for-byte the same framework chunk
+  name my local build produced in §L.2**, so the local code-level analysis is aimed at the same bundle
+  that fails in CI;
+- the M14 mutation stack capture is **empty** in this capture (`firstScriptInsert` / `firstScriptMove` /
+  `firstBodyReorder` all blank, with only `insertBefore: 7` / `appendChild: 15` counted), so this
+  particular reproduction does **not** re-capture the mover's call site. It is consistent with a
+  non-rewound hydration cursor, and it is not presented as an independent confirmation of it.
+
+This is **not** attributed to the diff that triggered the run: that diff is one unit-test file and this
+report section, neither of which the authenticated browser journey loads. It is also **not called a
+flake**, and the two preceding green runs (`38516677923`, `38516766371`) do not establish that anything
+was fixed — on the standing rule that a later pass never closes this gate. **Branch run history is now
+18 runs: 12 green, 6 red.**
+
 **Gate status: UNRESOLVED — blocked on that decision.** No `suppressHydrationWarning`, no framework
 patch, no test skip or rename, and no change to authentication, tenant isolation, entitlements, payment
 state or SSR was applied. §H.3 / §J.6 / §K.12 keep that status.
@@ -2166,6 +2188,8 @@ source is introduced, and the upstream release is the trigger to revisit. The ea
 | Production audit | `npm audit --omit=dev` | 0 findings |
 | Development audit | `npm audit` | 5 high, dev-only (§L.5) |
 | Advisory metadata | GitHub advisory API + npm registry | `firstPatchedVersion: NONE PUBLISHED` confirmed |
+| CI, commits of this section | run **`38523812584`** @ `70628ffe` | **FAILED at step 16** (authenticated browser journey, React `#418 args[]=HTML`, §L.2). Steps 1–15 **passed** — including the database-backed unit/integration/security suites, the §66 journey, the POS journey and the production build — and steps **17, 18 and 19 were SKIPPED** as a consequence (booking SSR/hydration regression, the controlled #418 race reproduction, and the motion/immersive browser regressions). Those three are **not** passes and this run provides no coverage from them |
+| CI, immediately preceding | `38518147628` @ `28a52c7`, `38516766371` @ `8bc4e4e`, `38516677923` @ `f67b632` | success, 0 failed steps |
 
 **The 114 local skips are unchanged and are entirely the database gate** — 97 across 13 fully
 database-gated files (8 under `tests/prisma/*`, 4 `tests/integration/*-postgres.test.ts`, and
