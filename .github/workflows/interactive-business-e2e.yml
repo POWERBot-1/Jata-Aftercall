@@ -22,7 +22,7 @@ jobs:
   e2e:
     name: Journey against a real database
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -177,11 +177,10 @@ jobs:
       # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
       # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
       - name: Authenticated production HTTP browser journey
-        env:
-          # M418-DIAG(E1): configuration only — the harness source is identical to the
-          # non-diagnostic runs. E1 = CPU throttling disabled, every other condition unchanged;
-          # the immediately following control repeats the arm with the throttle restored.
-          M418_DIAG_ARMS: "E2-reversed-order,E4-wait-60s"
+        # M418 diagnostic arms are default OFF. To run them, set M418_DIAG_ARMS here to a
+        # comma-separated arm list ("1" = all): E1-no-throttle, E1-control-retrottled,
+        # E2-reversed-order, E4-wait-60s (M418_DIAG_WAIT_MS overrides the 60 s E4 wait).
+        # Arms are measurements only: they never satisfy a required sample or change the verdict.
         run: |
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
