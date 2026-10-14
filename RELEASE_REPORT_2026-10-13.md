@@ -3297,3 +3297,98 @@ historical by a later section, so **no incorrect statement was found**:
 `fast-glob@3.3.1` pinned exactly for the other three · `gh api advisories/GHSA-vfj7-8cjw-p6xm` → the metadata
 in §S.1 · the four gate lines in §S.4 are quoted from the PR comment posted by run `38552219839`. No
 dependency was installed, changed, downgraded or removed by this section.
+
+## §T Directive 11 — hydration observation window and final release-gate decision package
+
+### T.1 Verified repository, PR and evidence state (before any work)
+
+| Check | Value | Status |
+| --- | --- | --- |
+| Branch | `arena/fac28f53-jata-aftercall` | PASS |
+| Local HEAD = remote HEAD | `f7aeef46628dffaabb8dce4674c052dcaad32903` | PASS |
+| Working tree | clean (0 changes) | PASS |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — unchanged | PASS |
+| PR #45 | OPEN, MERGEABLE, label `NOT APPROVED FOR PRODUCTION DEPLOYMENT` present | PASS |
+| CI history on branch | 34 runs total: 24 before the fixed runtime, 10 after | PASS |
+| Release report | §A–§S present, §N.12 and §S read before defining the protocol | PASS |
+| Replay gate implementation | `scripts/browser/hydration-replay.check.mjs` + CI step 19 (see §O.3/§Q.2) | PASS |
+
+Two trigger capabilities were tested because the protocol depends on being able to add trials, and both
+are unavailable to the token this session holds — recorded as **BLOCKED**, not worked around silently:
+
+| Attempt | Result |
+| --- | --- |
+| `gh run rerun <run-id>` (6 qualifying run ids) | **BLOCKED** — HTTP 403 `Resource not accessible by integration`; also reported as "its workflow file may be broken", which is the client's wording, not the cause |
+| `gh workflow run … --ref <branch>` (workflow already declares `workflow_dispatch`) | **BLOCKED** — HTTP 403 `Resource not accessible by integration` on the dispatches endpoint |
+
+The only trigger available is a push to the PR branch, which produces a `pull_request` synchronize event.
+The protocol below therefore obtains its trials from **labeled empty marker commits** (no file changes,
+message states exactly what they are) plus the report commit that carries this section. This inflates the
+branch's commit count with no functional change and is stated here so nobody has to discover it from the
+log: the alternative was to declare the window unobservable when in fact trials were obtainable.
+
+### T.2 Predeclared observation protocol (fixed before the trial wave)
+
+**Observation target.** The hydration behaviour of the authenticated production HTTP browser journey on
+the runtime this repository ships after the Option A upgrade, as executed by
+`.github/workflows/interactive-business-e2e.yml`.
+
+**Frozen application code.** Commits from `97dc0ef87e` onward. Verified: `git diff --stat 97dc0ef..f7aeef4`
+touches exactly one file, `RELEASE_REPORT_2026-10-13.md` — **zero** files under `app/`, `components/`,
+`lib/`, `tests/`, `prisma/`, `scripts/`, and zero changes to `package.json`, `package-lock.json`,
+`next.config.js` or the workflow itself. Documentation-only commits do not reset the window; they still
+produce qualifying runs.
+
+**Class A — fully published qualifying run.** A `pull_request` run on a frozen-code head in which:
+(a) every test step executed and succeeded — no test step skipped, cancelled or neutral; (b) the run
+conclusion is `success`; (c) the evidence comment was published and contains the authenticated-journey
+counts and the replay-gate block; (d) that block shows the **shipped** runtime clean (`microtask` and
+`timeout-0` at 0 reproducing loads) **and** the known-bad control reproducing (`5/5` in both arms, server
+DOM discarded).
+
+**Class B — supplementary trial.** Identical to Class A except the publication step was skipped (it is
+guarded `if: success() && github.event_name == 'pull_request'`) or its artifact is unavailable. Every test
+step must still have executed and succeeded; step conclusions are authoritative for pass/fail because a
+non-zero exit from any harness fails its step. Class B trials are listed with their evidence basis and are
+**not** counted toward the primary criterion.
+
+**Primary criterion — consecutive Class A clean runs: ≥ 12.** Rationale, derived from the defect's own
+history rather than a round number: across the 24 pre-upgrade runs on the defective runtime the longest
+run of consecutive greens was **4** (18:03Z→20:28Z, 2h25m), and under the pre-upgrade journey-failure rate
+(8 of 24 runs failed at step 16, `Minified React error #418 … args[]=HTML`, single failing test) a 4-run
+clean streak carries probability ≈ 25%. Twelve is 3× that streak and rejects the pre-upgrade rate at
+Fisher exact p < 0.05; twenty would reject it at p < 0.01.
+
+**Secondary criterion — diversity guard: the streak must span ≥ 3 clock hours.** Rationale: the
+pre-upgrade failures arrived in bursts (18:01Z; 21:35Z; 05:34Z–08:21Z), so a window shorter than a burst
+interval would be unrepresentative of the conditions that produced them. This is an environmental-diversity
+guard, **not** a statistical one — and the report says so rather than implying a strength it does not have.
+
+**Rejected as a binding criterion: a long wall-clock floor.** The longest pre-upgrade quiet interval
+(21:35Z→05:34Z, 7h59m) contained only **four** trials, and four clean trials carry ≈ 25% probability under
+the pre-upgrade rate; that interval is therefore evidence about trial count, not about elapsed time. A
+wall-clock floor derived from it would have looked rigorous while measuring nothing extra. Recorded here
+because a reader is entitled to know why the protocol does not demand "at least one full day".
+
+**Independence — answered honestly.** Each run executes in a fresh container with a freshly seeded
+disposable database, a freshly booted production server and a fresh browser session, so the trials are
+independent *executions*, which is the relevant axis for a scheduling/concurrency defect. They are **not**
+independent of code, workflow, runner image or infrastructure state, and no trial can sample a condition
+the suite does not create. This bounds what the streak can mean: it can only speak to defects whose
+recurrence probability is exercised by these runs.
+
+**Exclusions and invalidation (fixed in advance).**
+- Any step-16 failure, or any hydration-error signature in any browser step → **streak resets to zero**,
+  the gate returns to OPEN whatever its prior state, and the failing run becomes the new evidence.
+- Any change to application code, tests, harnesses or workflow → **streak resets** (the observed artifact
+  changed). Report-only commits do not reset it.
+- Any test step skipped/cancelled/neutral, a missing authenticated session, or a control that fails to
+  reproduce / reproduces when it must not → that run **does not count** and is listed with its reason.
+- Failures outside the test steps (dependency install, container setup) → the run is excluded, does **not**
+  reset the streak, and if such failures exceed 10% of the window the window is void.
+- If trial generation is unavailable, the window **pauses**; it is never closed by absence of trials.
+
+**What closure would mean — predeclared.** Meeting the criteria supports a recommendation that the agreed
+acceptance criteria were satisfied on the observed runtime. It does **not** assert that the defect can
+never recur, does not establish a zero failure rate, and is not a production-readiness claim from the
+hydration result alone. The residual risk is quantified in §T.5 rather than waved away.
