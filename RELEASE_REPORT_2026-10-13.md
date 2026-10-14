@@ -3185,3 +3185,115 @@ with the runtime version asserted inside the bundle rather than assumed. That is
 can take this gate. What evidence cannot do is prove the absence of an intermittent failure in the
 authenticated journey, which is why the gate remains open and closes by your decision, not by a green
 run.
+
+## §S Directive 9 (continued) — the advisory register, demonstrated finding by finding
+
+Directive 6(b) requires each unresolved finding to be demonstrated rather than summarised, and Directive
+8(e) requires the "no patch published" claim to be checked against authoritative metadata. This section
+does both against the post-upgrade tree, and also corrects how I described the register in §N.9.
+
+### S.1 The finding
+
+**GHSA-vfj7-8cjw-p6xm / CVE-2026-93687** — high, *not withdrawn*, "braces vulnerable to stack-exhaustion
+denial of service through deeply nested patterns", package `braces`, vulnerable range `<= 3.0.3`,
+**`first_patched_version`: `null`** (GitHub advisory API, global advisory endpoint — authoritative, not
+inferred from the npm client). Published `braces` versions end at **3.0.3**; nothing newer exists to move
+to.
+
+It fans out to **five flagged packages, all from this one advisory** — which is why "5 high findings" and
+"one finding" are both true statements about the same thing, and why the register is best read as one
+finding with five nodes:
+
+```
+eslint-config-next@16.4.0   (devDependency — the root of the chain)
+  └─ @next/eslint-plugin-next@16.4.0
+       └─ fast-glob@3.3.1        ← pinned exactly by the plugin
+            └─ micromatch@4.0.8  ← caret-raised by fast-glob (^4.0.4)
+                 └─ braces@3.0.3 ← caret-raised by micromatch (^3.0.3), no patched release exists
+```
+
+### S.2 Production exposure: zero, and the correct way to say so
+
+`npm audit --omit=dev` → **0 findings** (`{info:0, low:0, moderate:0, high:0, critical:0, total:0}`), and
+the chain root `eslint-config-next@16.4.0` appears only in `devDependencies` (the manifest has 12 runtime
+dependencies and 17 dev dependencies; the package is not among the former).
+
+**A correction to my own §N.9.** I wrote "5 high, single chain" and called it dev-only. The raw
+`npm audit --json` output marks **four of the five packages `"dev": false`** — only `eslint-config-next`
+carries `"dev": true` — so a reader checking my claim against the JSON could reasonably say it was wrong.
+The *conclusion* is right, but the evidence I leaned on was the wrong evidence: the authoritative proof is
+the `--omit=dev` result of zero combined with the chain root being a devDependency, not npm's per-package
+flag. Recorded here rather than silently reworded, because "the summary was right but the citation was
+not" is exactly the kind of thing that should be shown.
+
+### S.3 The only automated remediation is a two-major downgrade, so it was not taken
+
+`npm audit` proposes `fixAvailable: { name: "eslint-config-next", version: "14.2.35", isSemVerMajor: true }`.
+I verified *why*, instead of dismissing it: `@next/eslint-plugin-next@14.2.35` depends on `glob@10.3.10`,
+which does not pull `braces` — while `15.5.27`, `16.0.0` and `16.4.0` **all pin `fast-glob@3.3.1`
+exactly**, and that pin is what drags in `micromatch → braces`. So the suggested fix genuinely would clear
+the advisory, and it would do so by abandoning the Next-aligned lint stack and stepping back two majors
+from the ratified, owner-authorized `16.4.0`. The standing constraints forbid an unsupported major
+downgrade without a separate owner decision, so it was **not** applied. This is also the plain answer to
+"did the Next 16 upgrade fix the advisories?" — no (§N.9), and it could not have: the pin is identical in
+16.x.
+
+No workaround exists inside the ratified stack:
+`fast-glob@3.3.3` still declares `micromatch@^4.0.8`; `micromatch@4.0.8` declares `braces@^3.0.3`;
+`braces` has no patched release. An `overrides` entry would therefore either do nothing or force an
+unsupported tree.
+
+**How it clears, when upstream acts:** *nothing on the path pins `braces` exactly* — `micromatch` takes it
+as a caret range — so the day a patched `braces` (3.0.4+) is published, an ordinary lockfile refresh
+picks it up with no change to any ratified pin and no decision from the owner beyond continuing to
+maintain the lockfile. Until then, the smallest coherent action is none.
+
+**Actions explicitly not taken:** no `npm audit fix`, no `--force`, no `overrides`, no ignore file, no
+advisory suppression, no removal or weakening of the CI audit gate, no downgrade. The branch tree is
+unmodified by this section (`package.json` and `package-lock.json` diffs against `HEAD` are both zero).
+
+### S.4 What the CI gate does, quoted from the last green run
+
+The gate's name ("Production advisory gate and full-audit findings") undersells its shape, and its log
+could be misread as a waiver, so the actual printed lines matter:
+
+```
+PASS production dependency audit: 0 findings
+FAIL full dependency audit: 5 findings (5 high, 0 moderate); exit=1
+Open package paths: @next/eslint-plugin-next, braces, eslint-config-next, fast-glob, micromatch
+Full-security release acceptance stays OPEN while any finding remains; not provider/device/engine proof.
+```
+
+A non-zero **production** audit fails the step outright, with no ignored production advisory; an
+unavailable or malformed advisory report **fails** the step as BLOCKED rather than passing quietly. The
+development findings are printed as `FAIL` and the log states that full-security release acceptance stays
+**OPEN** — a green run here is a green *production* gate and an explicitly open full-security one. It is
+not a claim that the development findings are acceptable.
+
+### S.5 Impact, bounded to this repository's usage — and not a risk acceptance
+
+`braces` is reached here only through ESLint's file-pattern expansion during lint runs: the patterns come
+from this repository's configuration and CI invocation, not from any external party, and the package is
+not installed in production at all. That bounds the impact **for this repository's usage** — it is not a
+claim that the advisory is harmless in general, and it is not an acceptance of the risk. The register
+stays **UNRESOLVED**, exactly as Directive 6(b) requires while a finding remains.
+
+### S.6 Report hygiene: a sweep for references that no longer resolve
+
+Eight patterns swept across §A–§R; three classes of hit, all historical and all already framed as
+historical by a later section, so **no incorrect statement was found**:
+
+| Reference | Where | Status |
+| --- | --- | --- |
+| `diagnose:browser:replay-shape` | §M.13, §N.8 | script **removed** this directive, replaced by `test:browser:hydration-replay[:control]`; the rename is recorded in §O.5 |
+| "it does not reproduce" | §M.13 | left as written; superseded by §O.1 (two harness bugs) and §Q.1 (the patched cell) |
+| "all 26 steps" | §N.11, §N.12 | correct **then**: the job had 20 authored steps, and GitHub's entry list adds 6 (Set up job, Initialize containers, 2 post-action entries, Stop containers, Complete job). After this directive's insertion a green run reports **27 entries** (21 authored + 6). Same counting rule, one more step — which is why §N says 26 and §P/§R say 27 |
+
+### S.7 Commands and results for this section
+
+`npm audit --json` → 5 high, 5 flagged packages, one root advisory · `npm audit --omit=dev --json` → 0 ·
+`npm ls braces micromatch fast-glob` → the chain above · `npm view braces|micromatch|fast-glob|@next/eslint-plugin-next version` and `npm view braces versions` → 3.0.3 / 4.0.8 / 3.3.3 / 16.4.0, versions ending at 3.0.3 ·
+`npm view @next/eslint-plugin-next@{14.2.35,15.5.27,16.0.0,16.4.0} dependencies` → `glob@10.3.10` for 14.2.35,
+`fast-glob@3.3.1` pinned exactly for the other three · `gh api advisories/GHSA-vfj7-8cjw-p6xm` → the metadata
+in §S.1 · the four gate lines in §S.4 are quoted from the PR comment posted by run `38552219839`. No
+dependency was installed, changed, downgraded or removed by this section.
