@@ -825,8 +825,25 @@ try {
         for (const fixture of arm.fixtures) {
           const startedAt = Date.now();
           const entry = { arm: arm.arm, category: fixture.category, attempt: 1, throttle: arm.throttle ? 4 : 1, waitMs: arm.waitMs, route: `/dashboard/businesses/${fixture.id}/preview` };
+          // Own throttling lifecycle: the required-sample block detaches its CDP session when its
+          // own scope ends, so reusing that session failed every arm sample with TargetCloseError
+          // in run 38593320641. The page-level API manages its own session.
           try {
-            if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: arm.throttle ? 4 : 1 });
+            await first.ownerPage.emulateCPUThrottling(arm.throttle ? 4 : 1);
+          } catch (error) {
+            // A condition that could not be established is not a measurement: label it and stop,
+            // so a broken arm can never be read as evidence about the application.
+            entry.ok = false;
+            entry.conditionFailed = true;
+            entry.error = String(error).slice(0, 120);
+            entry.ms = Date.now() - startedAt;
+            m418Diagnostics.push(entry);
+            const broken = `M418 DIAG ${JSON.stringify({ arm: entry.arm, cat: entry.category, conditionFailed: true, err: entry.error.slice(0, 70) })}`.slice(0, 700);
+            m418Lines.push(broken);
+            console.log(broken);
+            continue;
+          }
+          try {
             await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
             await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), { timeout: arm.waitMs }, `QA first ${fixture.category} ${runId}`);
             entry.ok = true;
@@ -835,7 +852,7 @@ try {
             entry.error = String(error).slice(0, 120);
             entry.diag = await sampleFrameDiagnostics(first.ownerPage, `QA first ${fixture.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
           } finally {
-            if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
+            await first.ownerPage.emulateCPUThrottling(1).catch(() => {});
           }
           entry.ms = Date.now() - startedAt;
           m418Diagnostics.push(entry);
@@ -850,6 +867,15 @@ try {
           m418Lines.push(line);
           console.log(line);
         }
+      }
+      // Per-arm tally, so the run states its own measurement counts independently of which
+      // individual payload lines survive the reporter's 4000-character cap.
+      for (const arm of arms) {
+        const rows = m418Diagnostics.filter((entry) => entry.arm === arm.arm);
+        const ok = rows.filter((entry) => entry.ok === true).length;
+        const failed = rows.filter((entry) => entry.ok === false && entry.conditionFailed !== true).length;
+        const conditionFailed = rows.filter((entry) => entry.conditionFailed === true).length;
+        console.log(`M418 DIAG ARMS ${arm.arm} measured=${rows.length} ok=${ok} failed=${failed} conditionFailed=${conditionFailed} throttle=${arm.throttle ? 4 : 1} waitMs=${arm.waitMs}`);
       }
     }
   }
