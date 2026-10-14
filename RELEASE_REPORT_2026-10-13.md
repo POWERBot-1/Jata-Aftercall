@@ -2837,3 +2837,39 @@ be re-opened on the strength of the shipped fix plus CI, or whether to wait for 
 window across several runs, given the intermittency recorded in §M.12; (3) the deferred items — Turbopack,
 React 19 (before any Next 17), the fiber-level diagnostic replacement, widening lint coverage, and the
 still-unresolvable `braces` advisory — each need their own decision.
+
+### N.11 CI evidence on the upgrade head, and a new datum about the old runtime's intermittency
+
+**Run `38537723639` @ `165b8730c08b4d84bbcc63bb674ae069a09619d1` → SUCCESS, all 26 steps.** The step the
+whole section rests on, step 16 (authenticated production HTTP browser journey), reported **428 passed,
+0 failed, 0 skipped**, and every other suite matched or exceeded its pre-upgrade result:
+
+| CI evidence | Result |
+| --- | --- |
+| Full native DB suite | 190 files / **2308 tests passed** |
+| Experience journey / POS journey | 17 passed / 22 passed |
+| Studio production smoke | 9 passed, 0 failed, 0 skipped |
+| **Step 16 authenticated journey** | **428 passed, 0 failed, 0 skipped** |
+| Step 17 booking SSR/hydration | 25 passed, 0 failed, 0 skipped |
+| Step 18 hydration race | passed (locally: forced 0/8, control 0/3, synthetic arms still detect #418/#423) |
+| Step 19 Motion / immersive / layout / actionbar / families / media-local | step passed; 124 / 22 / 7 / 37 / 167 / 29 passed, 0 failed, 0 skipped |
+| Steps 20–22 (artifacts, PR evidence, failure reporting) | success |
+
+Two things in that run must not be over-read. The comment contains repeated
+`HYDRATION SAMPLE … throttle:4 … TimeoutError: Waiting failed: 25000ms` lines: those are the
+hydration probe's deliberately throttled sampling arms not completing inside their bounded 25 s wait.
+They are recorded observations, not failures — the journey's own verdict is 428/0/0 — and they neither
+prove nor disprove anything about hydration. And the CI comment does not echo the step-16 log, so the
+`M418 THROW DIAGNOSTIC PATCH applied to N chunk(s)` line is not visible here; locally the same build
+matches **0** chunks, which is why §N.8 records the fiber-level diagnostic as unavailable on Next 16.
+
+**New datum on the old runtime — independent confirmation of the intermittency.** The run that was still
+in progress at the end of §M has finished: **`38533270674` @ `1251273d` = FAILURE at step 16**, and
+`38534075981` @ `7e376f50` = success. Those two commits differ only in a comment added to this report.
+A documentation change cannot cause a hydration failure, so across consecutive runs of byte-identical
+application code on Next 15.5.27 the authenticated journey failed once and passed once. That is the
+intermittency §M.2/§M.3 diagnosed, observed from a commit that cannot have caused it — and it is the
+clearest available statement of why a single green run never closed this gate.
+
+Branch history is now **24 runs: 16 green, 8 red** (14/8 before this directive plus the two runs above).
+Nothing was merged, deployed, or reconfigured to obtain any of these results.
