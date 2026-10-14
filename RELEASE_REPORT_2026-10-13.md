@@ -2873,3 +2873,22 @@ clearest available statement of why a single green run never closed this gate.
 
 Branch history is now **24 runs: 16 green, 8 red** (14/8 before this directive plus the two runs above).
 Nothing was merged, deployed, or reconfigured to obtain any of these results.
+
+### N.12 Second consecutive green run on the fixed runtime
+
+Run **`38539670153` @ `47c1c208` → SUCCESS, all 26 steps**, including step 16 again.
+
+Read together with §N.11, that is two consecutive green runs of the authenticated journey on the Next 16
+runtime (the commit that carried the upgrade, and the report-only commit on top of it), against one
+failure and one pass across consecutive runs of byte-identical code on Next 15.5.27. It is the strongest
+evidence recorded in this document for the owner's decision — and it is still not a proof. Two green runs
+cannot establish the *absence* of an intermittent defect, which is exactly the reasoning that kept §M.12
+from closing the gate on a green run while no fix existed. What changed is the direction of the evidence:
+before, the only intermittency we had observed was in a runtime that provably lacked the upstream fix; now
+the observable failure has a named, shipped remedy and the newer runtime has not failed yet. A longer
+observation window (or an explicit owner acceptance) is what would close the gate; this section does not
+close it.
+
+Branch history after this directive: **26 runs — 18 green, 8 red.** The addendum you are reading was
+committed on top of `47c1c20`; that final report-only commit carries its own run, which is reported in the
+session handoff rather than here, because a section cannot record the result of the run that contains it.
