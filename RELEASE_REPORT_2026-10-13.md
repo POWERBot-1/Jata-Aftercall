@@ -2931,8 +2931,9 @@ for, on the exact two runtimes that bracket the change.
 
 ### O.3 The gate, and why it cannot pass vacuously
 
-Two npm scripts, both run by a new CI step (`Hydration replay-cursor regression`, workflow step 17 —
-steps after it shift by one in the YAML):
+Two npm scripts, both run by a new CI step (`Hydration replay-cursor regression`) — it is **step 19** in
+the job's step list (`gh run view`), being the 17th `steps:` entry in the YAML; this report numbers steps
+as GitHub does everywhere else, and §Q.2 records the correction:
 
 - `test:browser:hydration-replay` — `REPLAY_ASSERT=clean`: the **shipped** runtime must not reproduce.
 - `test:browser:hydration-replay:control` — `REPLAY_EXPECT=reproduce`: a runtime known to carry the
@@ -2990,9 +2991,11 @@ CI, because a gate that is never executed is not a gate.
 
 ### P.1 What the workflow now runs
 
-Step **17**, `Hydration replay-cursor regression (shipped clean, 19.2 positive control)`, immediately
-after the existing race-reproduction step (everything after it shifts by one: the artifact upload is now
-step 19, the success-comment step 20, the failure-report step 21 — 21 steps total, YAML re-parsed clean).
+Step **19**, `Hydration replay-cursor regression (shipped clean, 19.2 positive control)`, immediately
+after the existing race-reproduction step. Inserting it shifted everything below it by one: the artifact
+upload is now step 21, the success-comment step 22, the failure-report step 23, of 27 entries in the job
+(the job authors 21 steps; GitHub adds setup, container, post-action and completion entries). YAML
+re-parsed clean. The numbering is the subject of the correction in §Q.2.
 It installs the control runtime into `/tmp/replay-control` (outside the project, so `package.json`,
 `package-lock.json` and the shipped tree are untouched) and runs both arms, teeing to
 `/tmp/step-replay-hydration.log`. If a Chrome binary is absent the step fails loudly rather than
@@ -3034,7 +3037,8 @@ bundle that quietly loaded something other than the runtime intended.
 | `38541549420` | `fcf6e62` | success |
 | `38539670153` | `47c1c20` | success |
 
-Both runs are 27/27 steps green, each including the authenticated production journey
+Both runs are green — 26 entries succeeded and the failure-reporting entry was **skipped by design**, as
+it is on every passing run — each including the authenticated production journey
 (**428 passed, 0 failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.** at this head). The gate's first execution (`38544367514`) caught its own missing
 comment plumbing, which is the one thing it could not have caught locally.
 
@@ -3048,3 +3052,82 @@ the original defect and passes on the shipped runtime, executed in CI on every c
 evidence the gate was waiting for; §N.12's position still governs, because an intermittent defect is not
 disproved by green runs alone. **Closing the #418 gate remains the owner's call.** No merge, no deploy,
 no media activation, no production data or configuration change.
+
+## §Q Directive 9 (continued) — the patch cell measured: one 17-line change flips the defect, twice
+
+### Q.1 Causation, measured rather than inferred
+
+§O.2 showed the defect on the runtime the app shipped before the upgrade and its absence on the runtime it
+ships now, and attributed the difference to the hydration-cursor rewind (react#35494 + react#35518) on
+changelog evidence. The upstream reference's own patch script (`scripts/apply-patch.mjs`, the one file
+missing from §M.13's fetch) was retrieved and used to replace that inference with a measurement.
+
+Method: the reference's tree was rebuilt in **scratch** (`/tmp/refrepo` — never in this repository; the
+patch is applied only inside that standalone reference, which is the only place the standing constraint
+permits), its exact pins installed (`react@19.2.8`, `react-dom@19.2.8`), and its own script run to patch
+its `node_modules` only. The change is 17 added lines at the unique anchor
+`function replaySuspendedUnitOfWork(unitOfWork) {` in `react-dom-client.production.js` (and
+`.development.js`), restoring the cursor before a replayed host fiber that has already claimed its
+instance is reconciled — with byte-exact `.orig` backups.
+
+Measured with **this repository's harness** (not the reference's playwright probe), the same directory
+throughout, browser-side runtime asserted at 19.2.8/react-dom 19.2.8 in every row, 5 loads per arm:
+
+| `/tmp/refrepo/node_modules/react-dom` | `microtask` / `timeout-0` | controls | verdict |
+| --- | --- | --- | --- |
+| **unpatched** (pristine npm bytes) | **5/5 · 5/5** (server DOM discarded 5/5) | clean | reproduces |
+| **patched** by the reference's own script | **0/5 · 0/5** | clean | `PASS: no reproducing arm reproduced …` |
+| **restored** from `.orig` (`cmp` byte-identical) | **5/5 · 5/5** (discards 5/5) | clean | `PASS (positive control) … reproduces the defect in 10 load(s)` |
+
+Same runtime, one variable, flipped in both directions. This closes the last cell of the reference's
+documented matrix with our own instrument; the other three cells were already covered (§O.2's reproducing
+arms and the two control arms, which correspond to the reference's `?transition=0` and `?resolve=late`
+cells). The chain is now closed end to end: measured on the runtime we shipped before → reproduced in
+isolation → removed by the rewind alone → absent from the runtime we ship after, which vendors the same
+rewind.
+
+**Scope, unchanged from §O.4:** this is mechanism-level evidence. It is not the authenticated journey, it
+does not replace CI step 16, and it does not close the release gate — that remains the owner's decision,
+because §N.12's point about intermittent defects is unaffected by any of this.
+
+**Hygiene:** the app's vendored React and `node_modules/react-dom` contain **zero** occurrences of the
+patch marker (checked explicitly, both directories), the workspace dependency tree and lockfile are
+untouched, and none of this is bundled into the application. This does not consume Option B: patching the
+app's own vendored React remains unauthorized, and on this evidence remains unnecessary.
+
+### Q.2 A numbering error in my own §O and §P, corrected
+
+§O.3 and §P.1 described the new gate as "workflow step 17". That is the index within the file's `steps:`
+list, but every other step reference in this report uses GitHub's job step list — where **the gate is step
+19**. The mistake was mine and is corrected inline in both sections rather than left to mislead a reader
+comparing the report against `gh run view`. §P.3's "27/27 steps green" was likewise imprecise and now
+reads "26 entries succeeded and the failure-reporting entry was skipped by design", which is what a green
+run actually reports.
+
+The exact shift, derived from the two workflow revisions (`git show 13f4ad1^` vs the tree in `13f4ad1`)
+rather than asserted from memory:
+
+| GitHub step | before | after |
+| --- | --- | --- |
+| 1–18 | unchanged | unchanged |
+| **19** | Actual storefront Motion and immersive browser regressions | **Hydration replay-cursor regression (new)** |
+| 20 | Upload hydration raw-order evidence artifacts | Actual Motion and immersive browser regressions |
+| 21 | Record successful verification evidence on the PR | Upload hydration raw-order evidence artifacts |
+| 22 | Report failing output to the PR | Record successful verification evidence on the PR |
+| 23 | — | Report failing output to the PR |
+
+So sections §A–§N were written against the pre-insertion numbering: their "CI step 19" (the six-suite
+browser step) is now step 20, and their "step 22 Report failing output" is now step 23. **No finding,
+count or conclusion changes — only the labels.** The conditionals survive the shift
+(`if: always()` on the evidence upload, `if: failure()` on the reporter), re-checked after the edit.
+
+Recorded because it is the sibling of §O.1: a no-op that looked like success, and now a label that read
+as authoritative. Both were found by checking rather than assuming, which is the only way either gets
+caught.
+
+### Q.3 Verification for this section
+
+The three measurement runs above (`REPLAY_REACT_DIR=/tmp/refrepo/node_modules`, iterations 5), the
+reference's own `status`/`restore` reporting `unpatched` and byte-exact afterwards, the marker searches
+(0 occurrences in both app React directories), and the step-mapping derivation from git. No application
+code changed in this section; the branch remains green at the heads named in §P.3.
