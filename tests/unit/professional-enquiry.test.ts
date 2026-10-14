@@ -12,7 +12,7 @@ import { businessRecipeFor, documentBusinessRecipe, recipeCatalogue, defaultBusi
 import type { StorefrontItem } from "@/lib/experience/storefront";
 const valid = { slug: "owned-pro", serviceId: "owned-service", customerName: "QA customer", customerPhone: "0712345678", customerEmail: "qa@test.invalid", notes: "Requirements", idempotencyKey: "qa-replay-key-123456" };
 const quote = { id: "owned-service", name: "Owner quote work", description: "Owner scope", kind: "service" as const, price: null, pricingType: "QUOTE" as const, bookingEnabled: false };
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 const render = (preview = false) => renderToString(React.createElement(AppRouterContext.Provider, { value: router }, React.createElement(EnquiryClient, { slug: "owned-pro", services: [quote], preview })));
 
 describe("professional service requests", () => {

@@ -55,7 +55,7 @@ afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.useReal
 
 describe("safe finite recipes and full SSR", () => {
   it("keeps actual storefront text, prices and contact/shop links in readable server HTML", () => {
-    const html = renderToStaticMarkup(createElement(AppRouterContext.Provider, { value: { push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => {} } }, createElement(ExperienceSite, { data: motionFixture() })));
+    const html = renderToStaticMarkup(createElement(AppRouterContext.Provider, { value: { bfcacheId: "qa-router-fixture", push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => {} } }, createElement(ExperienceSite, { data: motionFixture() })));
     expect(html).toContain("Fresh coastal dishes");
     expect(html).toContain("Coastal lunch (fixture)");
     expect(html).toContain("KES 149");

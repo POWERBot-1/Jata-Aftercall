@@ -2640,3 +2640,200 @@ workstream and the decision should be taken on the §M.3 evidence alone.
 and mutation-probe guard tests included). No application file was touched: `app/`, `components/` and
 `lib/` are unchanged from `c9a2ca8` except the DEF-1 fix committed in `a81d57b`, and the framework chunk
 hash is still `4bd1b696-100b9d70ed4e49c1.js`.
+
+## §N Directive 9 (continued) — Owner-authorized Option A executed: Next.js 16.4.0 staged upgrade
+
+### N.1 Authorization and what was actually asked of me
+
+In Directive 9 §2 the owner was given a three-option decision for the #418 hydration defect (report
+§M.4–§M.5). The owner selected **Option A — the Next.js 16.x major upgrade**, which §M.5 described as:
+staged upgrade to `next@16.4.0`, whose vendored React contains the replay-cursor fix; `next lint` is
+removed in 16, so the lint script and CI step must change; needs its own baseline, staged verification
+and rollback plan.
+
+That is the authorization boundary for this section. It covers the Next.js major, the `eslint-config-next`
+major that must move with it, and the tooling consequences those two force. It does **not** authorize a
+React major, a Prisma/Motion/Tailwind/puppeteer change, a merge, a deploy, a production configuration or
+data change, or a live financial transaction — none of which happened.
+
+### N.2 The premise, verified in shipped bytes before anything was changed
+
+| Runtime | Replay branch in the shipped vendored build | Verdict |
+| --- | --- | --- |
+| Next 15.5.27 → `react-dom` `19.2.0-canary-0bdb9206-20250818` | `case 5: resetHooksOnUnwind(next);` — restores no hydration cursor | defect present |
+| Next 16.4.0 → `react-dom` `19.3.0-canary-278794d7-20261002` | `case 5: resetHooksOnUnwind(next); var fiber = next; fiber === hydrationParentFiber && (isHydrating ? (popToNextHostParent(fiber), 5 === fiber.tag && null != fiber.stateNode && (nextHydratableInstance = fiber.stateNode)) : …)` | **fix present** |
+
+The 16.4.0 snippet is the shipped form of the upstream change (react#35494 + react#35518) and matches
+the guard the upstream minimal reproduction proposes (`hydrationParentFiber === unitOfWork`). This was
+checked in the published tarball and again in `node_modules` after install, and the built application
+was confirmed to carry that same runtime: the webpack build emits the vendored React as
+`static/chunks/4bd1b696-8cd12253b448cc13.js` (Next 15's equivalent was `4bd1b696-100b9d70ed4e49c1.js`),
+and the hydration throw sites (`throw Error(f(418))`) live in `static/chunks/framework-a4ad8dcd0b719942.js`.
+
+### N.3 Exact version changes, and everything deliberately left alone
+
+| Package | Before | After | Why |
+| --- | --- | --- | --- |
+| `next` | `15.5.27` (exact) | **`16.4.0`** (exact) | The authorized upgrade; carries the fixed runtime. |
+| `eslint-config-next` | `15.5.27` (exact) | **`16.4.0`** (exact) | Must match the Next major; v16 peer is `eslint >= 9`. |
+| `eslint` | `^8.57.0` | **`^9.39.5`** | Forced by that peer. 9.39.5 is npm's `maintenance` tag: **eslint 10 is not usable** because `eslint-plugin-react` (a dependency of `eslint-config-next@16`) peers `^3 … ^9.7`. Not a downgrade, not a `--force`. |
+| `react`, `react-dom` | `18.3.1` | `18.3.1` (unchanged) | Next 16 still lists `^18.2.0` in its peer range and the App Router runs Next's vendored React regardless. |
+| `@prisma/client`, `prisma`, `motion`, `tailwindcss`, `@tailwindcss/postcss`, `puppeteer-core`, `typescript`, `vitest` | — | unchanged | Frozen by the ratified pin test (see §N.5). |
+
+`npm ci` resolves cleanly from the updated lockfile (`added 116 packages`, exit 0), which is what CI does.
+
+### N.4 Staging decisions, each with the evidence that produced it
+
+**Webpack is pinned for this stage: `next dev --webpack` and `next build --webpack`.** Next 16 makes
+Turbopack the default, so this is a deliberate, documented opt-out (the flag is supported and appears in
+`next build --help` / `next dev --help`). Two completed Next 16 builds, same source, were compared:
+
+| Artifact | Turbopack (16 default) | webpack (`--webpack`) | Consumed by |
+| --- | --- | --- | --- |
+| `app-build-manifest.json` | absent | absent (removed in 16 regardless) | bundle evidence (adapted, §N.5) |
+| `react-loadable-manifest.json` | **absent** | present | bundle evidence (lazy mini chunk) |
+| `website-studio-motion-mini` chunk name | **0** (chunks are bare hashes: `01cn5v9lf0yzl.js`) | **1** | bundle evidence + storefront Motion suite's chunk matcher |
+| `.next/static/css/*.css` | **0 files** | 1 (`82ba46d22769aa83.css`) | CSS/visual verification |
+| `i(418`-style minified throw | 0 matches | 0 matches (identical, mangled differently) | #418 fiber diagnostic (see §N.8) |
+
+Turbopack therefore breaks the release-verification apparatus on three counts, and the mutation-probe's
+chunk patch on a fourth. Adopting it is a separate project — new measurement method, re-baselined
+expectations, and a validated replacement diagnostic. Keeping one variable changed (the framework and its
+vendored React) is what makes this upgrade reviewable, so Turbopack is recorded as a **follow-up, not a
+regression**.
+
+**ESLint: `next lint` → the ESLint CLI, with coverage parity.** `.eslintrc.json`
+(`{"extends": "next/core-web-vitals"}`) is replaced by `eslint.config.mjs`, because
+`eslint-config-next@16` exports flat-config arrays. `npm run lint` runs `eslint app components lib` — the
+directories the removed `next lint` covered — so the migration does not silently change which files gate
+the build. Consequences recorded honestly:
+- `eslint .` would additionally cover `tests/`, `scripts/`, `prisma/` and surfaces **44 pre-existing
+  findings** there (6 `react/no-children-prop` errors, 5 stale `eslint-disable` directives, plus
+  warnings). Widening the gate is a separate reviewable change, deliberately not smuggled into this one.
+- The new config pulls in `eslint-plugin-react-hooks@7`, whose React Compiler-era rules did not exist in
+  the pre-upgrade config. They flag pre-existing patterns in ratified storefront code — 23 ×
+  `react-hooks/set-state-in-effect`, 3 × `react-hooks/purity`, 3 × `react-hooks/refs`. Remediating them
+  means changing component behaviour, which this upgrade is not authorized to do, so they are set to
+  **warn**: printed on every run, never hidden, never blocking. Result: `npm run lint` exits 0 with
+  **0 errors / 36 warnings** (pre-upgrade: 0 errors / 1 warning, the `<img>` in `CartProvider.tsx`).
+
+**React stays 18.3.1 for this stage — with a recorded deprecation.** Next 16 prints
+*"React 18 support is deprecated in Next.js 16 and will be removed in Next.js 17."* The upgrade does not
+need it, so bumping React (and `@types/react`) here would add a second major and invalidate the test
+baseline this section relies on. It is a **follow-up with a deadline**: React 19 must land before any
+Next 17 move. Nothing about the #418 remedy depends on it, because the App Router runs the vendored
+React.
+
+### N.5 Changes that require explicit disclosure
+
+- **Eight router test doubles** gained the property Next 16 made required (`bfcacheId: string` on
+  `AppRouterInstance`): six `const router = {…}` literals plus two inline context values. Inert
+  additions; no assertion, fixture or behaviour changed. Without them `tsc` reports 11 new `TS2769`s.
+- **Two ratified pin tests were re-baselined**, because they encoded the policy the owner just changed
+  (report §M.5's "do not change the Next major"). In `tests/unit/dependency-security-compat.test.ts` the
+  four `15.5.27` expectations became `16.4.0`; in `tests/unit/website-studio-master-spec.test.ts` the
+  `pkg.dependencies.next` expectation did. **Every other assertion is untouched**: react/react-dom
+  18.3.1, Prisma 5.22.0, motion 14.1.0, tailwindcss 4.3.3, puppeteer-core 25.13.0, the
+  `eslint-config-next === next` consistency check, the lock-vs-manifest check, the autoprefixer/chokidar
+  absence checks and the `brace-expansion` pins all still fail loudly if anything drifts. This is a
+  re-ratification of a policy the owner changed, not a weakening — and it is why the suite count is
+  identical before and after (§N.6).
+- **`tsconfig.json` and `next-env.d.ts` were rewritten by Next 16 itself** during the first build
+  (`jsx: preserve → react-jsx`, `.next/dev/types/**/*.ts` added, `root-params.d.ts` imported). These are
+  framework-managed files; the change is accepted as-is. A cold-start check (`tsc --noEmit` with `.next`
+  removed entirely, i.e. what CI's pre-build type-check sees) reports only the pre-existing offline
+  Prisma error — no missing-module error from the new import.
+- **The bundle-evidence measurement changed method (v2).** Next 16 removed `app-build-manifest.json` —
+  verified absent under *both* bundlers — so `scripts/measure-website-studio-bundles.mjs` now derives
+  entry files from `build-manifest.json` (`rootMainFiles` + `polyfillFiles`) plus the route's
+  `page_client-reference-manifest.js` chunk references (URL-decoded; manifest paths are
+  `%5Bslug%5D`-escaped while files on disk are literal). **The archived v1 numbers (115794 / 144384 /
+  106682) are not comparable with v2 and are kept only as history**; the v2 baseline was *measured*
+  (189291 / 312331 / 178633) and the script now reports +0 B against it. The check that actually protects
+  the product is unchanged and method-independent: the lazy `website-studio-motion-mini` chunk must not
+  appear in any measured route's initial entry — it does not (3057 B gzip, 1 chunk).
+
+### N.6 Verification, local (all commands run at this head)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Unit/integration | `npx vitest run` | **2234 passed / 114 skipped / 0 failed** (179 files) — identical counts to pre-upgrade |
+| Lint | `npm run lint` | **exit 0**, 0 errors, 36 warnings (see §N.4) |
+| Types | `npm run typecheck` | 1 error locally — the same pre-existing offline-Prisma `TS2694` (the sandbox's hand-made stub); **0 in CI**, which generates the real client |
+| Production build | `npm run build` → `next build --webpack` | **exit 0**, 40 static pages, `▲ Next.js 16.4.0 (webpack)` |
+| Route parity | build route tables, before vs after | **173 → 173 routes; none missing, none added** |
+| CSS parity | `.next/static/css/` | `82ba46d22769aa83.css` — **same name and size as the Next 15 build**, so the DEF-1 action-bar fix and the Tailwind pipeline are byte-identical |
+| Bundle evidence | `npm run measure:studio-bundles` | v2 baseline at +0 B; mini chunk absent from initial entries |
+| Browser, production (CI steps 17/18/smoke) | `test:browser:studio-hydration`, `test:browser:hydration-race`, `test:smoke:studio` | **25/0/0**, race forced **0/8** + control 0/3 with the synthetic arms still detecting #418/#423 (**2 and 1**) — the detector is not blind, and smoke **9/0/0** |
+| Browser, dev (CI step 19) | `test:browser:{motion,immersive,layout,actionbar,families,media-local}` | **124 / 22 / 7 / 37 / 167 / 29 passed, 0 failed, 0 skipped = 386 checks** — identical per-suite counts to pre-upgrade |
+| Cold-start types | `tsc --noEmit` with `.next` removed | only the pre-existing offline-Prisma error |
+
+The two reports I wrote in earlier turns were updated so they do not misdescribe the runtime they now run
+against: `diagnose:browser:replay-shape` bundles the **fixed** `19.3.0-canary-278794d7-20261002` and its
+header now says so (and repeats that its port is unfaithful, so it still proves nothing — it stays out of
+CI), and the mutation-probe docstring records that Next 16 mangles the throw differently.
+
+### N.7 What this establishes about #418 — and what it does not
+
+**Establishes:** the runtime the application ships now contains the upstream replay-cursor fix, verified
+in the built application's own chunks, not merely in `node_modules`. The mechanism identified in §M.2/§M.3
+(chunk-resolution timing → host-fiber replay → cursor not rewound → #418 naming whatever element follows)
+is the one upstream fixed in React 19.3, and that build is now what runs. This is a categorically
+different position from §M, which diagnosed the defect but shipped a runtime that still had it.
+
+**Does not establish:** that the authenticated browser journey is free of #418. `#418` is intermittent;
+§M.12 already recorded a green CI run *without* a fix, which is exactly why a green run is not proof. The
+authoritative check is CI step 16 (the authenticated production HTTP journey). Its result on this head is
+recorded in §N.10 once the run completes — and even then, the honest reading is "the known mechanism is
+fixed and the journey passes on the fixed runtime", not "hydration errors are now impossible".
+
+### N.8 Known gaps and NOT PERFORMED items
+
+- **NOT PERFORMED locally: the authenticated journey (CI step 16).** Same prerequisite as §M.7 — no
+  `DATABASE_URL`/PostgreSQL/seeded session in this sandbox. It runs in the authorized CI environment.
+- **The fiber-level #418 diagnostic (`window.__m418last`) no longer applies on Next 16.** The probe
+  matched a Next-15-era minified shape (`function rD(e){var n=Error(i(418`); Next 16 produces
+  `throw Error(f(418))` with a different mangled identifier. Rather than inject instrumentation I cannot
+  validate, `studio-authenticated.check.mjs` now prints a **loud warning** when it patches 0 chunks, so a
+  journey can no longer be reported as though that evidence had been collected. The DOM-level probe and
+  the "no uncaught browser runtime errors" gate are unaffected. Follow-up: derive and *validate* a
+  Next-16 matcher against a reproduced mismatch before trusting it.
+- **Turbopack migration: deferred** (§N.4), and **React 19: deferred with a Next 17 deadline** (§N.4).
+- **The v1 bundle baseline is retired**, not silently replaced: cross-method comparison is meaningless
+  (§N.5).
+
+### N.9 Advisory register — explicit correction of §M.5
+
+§M.5 stated that Option A "also moves the ESLint stack to 16.x — the one route to clearing the five
+dev-only advisories". **That expectation was wrong, and this section corrects it.** After the upgrade:
+
+```
+npm audit --omit=dev   → found 0 vulnerabilities          (production: clean, unchanged)
+npm audit              → 5 high, 0 moderate, 0 low, 0 critical   (development only, unchanged)
+  eslint-config-next@16.4.0 → @next/eslint-plugin-next@16.4.0 → fast-glob@3.3.1
+    → micromatch@4.0.8 → braces@3.0.3
+  GHSA-vfj7-8cjw-p6xm (braces, stack-exhaustion DoS): range <= 3.0.3, firstPatchedVersion NONE PUBLISHED
+```
+
+The chain is unchanged, at the same versions: `@next/eslint-plugin-next@16.4.0` still depends on
+`fast-glob@3.3.1`. `micromatch@4.0.8` is the newest release and `braces@3.0.3` is the newest release with
+no patched version published, so there is **still no supported remediation** — the only thing `npm audit`
+offers is `--force`, which remains rejected. Status: **explicitly unresolved, development-only, no zero-risk
+claim**, interim controls as in §M.8 (dev-only tooling path, never bundled, never shipped to production).
+
+### N.10 State, boundary and next actions
+
+Roll-forward is complete in the sense that matters for review: the change set is 23 files
+(+1258 / −471) — dependency pins and lockfile, the lint tooling migration (`eslint.config.mjs` added,
+`.eslintrc.json` removed), the two adapted verification scripts plus three diagnostics whose comments now
+described the wrong runtime, the eight test doubles, the two re-ratified pin baselines, the
+framework-rewritten `tsconfig.json`/`next-env.d.ts`, and this report. Branch only: PR #45 stays open with
+`NOT APPROVED FOR PRODUCTION DEPLOYMENT`; `main` is untouched; nothing was merged, deployed, or
+reconfigured, and no production data or live transaction was touched.
+
+Next actions: (1) CI on this head — install, advisory gate, lint, typecheck, build, and all browser
+journeys including the authenticated one; (2) if CI is green, the owner decides whether the #418 gate can
+be re-opened on the strength of the shipped fix plus CI, or whether to wait for a longer observation
+window across several runs, given the intermittency recorded in §M.12; (3) the deferred items — Turbopack,
+React 19 (before any Next 17), the fiber-level diagnostic replacement, widening lint coverage, and the
+still-unresolvable `braces` advisory — each need their own decision.

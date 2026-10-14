@@ -14,7 +14,7 @@ import { seedNewDocument } from "@/lib/experience/variant";
 import { defaultBusinessRecipe, businessRecipeFor, documentBusinessRecipe } from "@/lib/experience/businessRecipes";
 import { itemCardDataFor } from "@/lib/experience/catalogue";
 import type { StorefrontData, StorefrontItem } from "@/lib/experience/storefront";
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 function dataFor(category: string): StorefrontData {
   const document = seedNewDocument(createExperienceDocument({ categoryKey: category, businessName: "Owned business" }), "QA-RECIPE").document;
   const profile = getExperienceProfile(category);

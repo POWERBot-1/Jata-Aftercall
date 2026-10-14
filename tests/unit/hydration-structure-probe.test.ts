@@ -31,7 +31,7 @@ import type { StorefrontData, StorefrontItem } from "@/lib/experience/storefront
  * so any regression of the class fails deterministically in the native suite.
  */
 
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 
 const INLINE_CONTAINERS = new Set(["p", "span", "h1", "h2", "h3", "h4", "h5", "h6", "a", "button", "label", "figcaption"]);
 const BLOCK_CHILDREN = new Set(["div", "ul", "ol", "section", "article", "header", "footer", "nav", "main", "form", "p", "table", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "pre"]);

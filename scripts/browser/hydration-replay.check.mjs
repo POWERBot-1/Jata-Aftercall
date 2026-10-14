@@ -35,7 +35,8 @@
  * As committed, this harness does NOT reproduce the defect, on either runtime, and therefore says
  * **nothing** about whether the runtime has the bug:
  *
- *   vendored React 19.2.0-canary-0bdb9206 (what the app ships)   microtask/timeout-0: 0/5 mismatches
+ *   vendored React 19.2.0-canary-0bdb9206 (what the app shipped before the Next 16 upgrade)
+ *                                                microtask/timeout-0: 0/5 mismatches
  *     …and it discards the server DOM in those arms, i.e. React takes the "unwind to the root" path
  *   released react 19.2.8 + react-dom 19.2.8                    microtask/timeout-0: 0/3 mismatches,
  *   (the version the upstream reference repro reports as 20/20) no discard at all
@@ -51,6 +52,9 @@
  *
  * Until that reproduces, treat this file as a diagnostic scaffold, NOT as evidence for or against
  * any runtime, and do not wire it into CI — it would pass trivially and imply coverage it lacks.
+ * Note after the Next 16 upgrade: the vendored runtime now *has* the fix, so this harness could not
+ * distinguish fixed from unfixed even if it did reproduce. It is kept only as the starting point for
+ * the verbatim re-port described above (a faithful port would fail on 19.2 and pass on 19.3).
  *
  * WHAT IT IS NOT
  *
@@ -78,12 +82,14 @@ if (!process.env.CHROME_PATH || !existsSync(process.env.CHROME_PATH)) {
 const ASSERT_CLEAN = process.env.REPLAY_ASSERT === "clean";
 
 /**
- * Runtime under test. By default this is the build the application actually ships — Next 15.5.27
- * aliases `react` to `next/dist/compiled/react` (React 19.2.0-canary-0bdb9206-20250818), *not* the
- * repository's `react@18.3.1`. Set REPLAY_REACT_DIR to a directory containing another
- * react/react-dom pair (for example the released 19.2.8 the upstream reference repro uses) to run
- * the identical tree against it — which is how the report distinguishes "our tree is wrong" from
- * "this runtime build behaves differently".
+ * Runtime under test. By default this is the build the application actually ships. Since the
+ * Next.js 16 upgrade (report §N) that is Next 16.4.0, whose `next/dist/compiled/react` is
+ * React 19.3.0-canary-278794d7-20261002 — the runtime that *contains* the replay-cursor fix — not
+ * the repository's `react@18.3.1`. Before the upgrade it was 19.2.0-canary-0bdb9206-20250818, which
+ * does not. Set REPLAY_REACT_DIR to a directory containing another react/react-dom pair (for
+ * example the released 19.2.8 the upstream reference repro uses, or the released 19.3.0) to run the
+ * identical tree against it — which is how the report separates "our tree is wrong" from "this
+ * runtime build behaves differently".
  */
 const EXTERNAL_REACT_DIR = process.env.REPLAY_REACT_DIR || null;
 const VENDORED_REACT = EXTERNAL_REACT_DIR ? "react" : "next/dist/compiled/react/index.js";

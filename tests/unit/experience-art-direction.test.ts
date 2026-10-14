@@ -12,7 +12,7 @@ import { TEMPLATE_FAMILIES, TEMPLATE_FAMILY_KEYS, familyGeometrySignature, templ
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { motionFixture } from "@/app/dev/motion-preview/fixture";
 
-const router = { push() {}, replace() {}, back() {}, forward() {}, refresh() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", push() {}, replace() {}, back() {}, forward() {}, refresh() {}, prefetch() {} };
 const base = () => createExperienceDocument({ categoryKey: "food", businessName: "Owner facts, never generated", phone: "0712345678", location: "Owner-supplied address" });
 function factualSections(doc: ReturnType<typeof base>) { return doc.sections.map(({ layout, ...content }) => content).sort((a, b) => a.id.localeCompare(b.id)); }
 

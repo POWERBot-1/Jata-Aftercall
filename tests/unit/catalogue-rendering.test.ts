@@ -22,7 +22,7 @@ function fixture(category: string) {
     theme: { treatment: { cardStyle: "raised" } }, document: { privateDraft: "PRIVATE DRAFT" }, publishedVersion: 3 } as unknown as StorefrontData;
   return { profile, item, data };
 }
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 
 describe("faithful server/client catalogue context", () => {
   it("serializes only the required public card fields, including real theme treatment", () => {

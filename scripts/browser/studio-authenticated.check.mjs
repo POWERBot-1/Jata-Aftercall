@@ -293,6 +293,16 @@ try {
       if (patched) { writeFileSync(file, next); patchedCount += 1; }
     }
     console.log(`M418 THROW DIAGNOSTIC PATCH applied to ${patchedCount} chunk(s)`);
+    // Next 16 mangles the react-dom throw differently (`throw Error(<fn>(418))` rather than
+    // `var n=Error(i(418)`), so the Next-15-era pattern matches nothing. Say so loudly instead of
+    // reporting a journey as if the fiber-level evidence had been collected: a replacement matcher
+    // must be validated against a real reproduced mismatch before it is trusted (see report §N).
+    if (patchedCount === 0) {
+      console.warn(
+        "WARNING: M418 THROW DIAGNOSTIC UNAVAILABLE — no chunk matched the react-dom throw pattern, so window.__m418last is not populated for this run. " +
+          "The DOM-level hydration probe and the 'no uncaught browser runtime errors' gate are unaffected; fiber-level attribution of a #418 is NOT collected here.",
+      );
+    }
   }
   server = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-H", "0.0.0.0", "-p", String(port)], {
     env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PUBLIC_BASE_URL: origin, NEXTAUTH_URL: origin,

@@ -7,7 +7,8 @@
  *
  * Mechanism under test (release report §M.2): React re-runs ("replays") a host element when a
  * client chunk that hydration is waiting on resolves after the walk has already entered that
- * element. React 19.2 (which Next 15.5 vendors, up to and including 15.5.27) does not rewind the
+ * element. React 19.2 (what Next 15.5 vendored, up to and including 15.5.27; Next 16 vendors
+ * React 19.3, which fixes this) does not rewind the
  * hydration cursor when it replays, so the element then matches its own first child and every later
  * node is off by one — the walk meets a node of the wrong kind and throws #418, naming whatever
  * element comes next. Upstream fixed it in React 19.3.0 (react#35494 + react#35518).

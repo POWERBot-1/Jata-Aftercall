@@ -22,7 +22,7 @@ import {
 import { itemCardDataFor } from "@/lib/experience/catalogue";
 import type { StorefrontData, StorefrontItem } from "@/lib/experience/storefront";
 
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 
 function itemFor(category: string): StorefrontItem {
   return { id: "owned-row", kind: category === "salon" ? "service" : "product", name: "Owned catalogue fact", description: "Owned description",
