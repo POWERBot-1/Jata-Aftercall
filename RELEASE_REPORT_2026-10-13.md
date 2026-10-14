@@ -2575,3 +2575,68 @@ same-load-order contrast M12 described, not new proof. **Branch CI history is no
 The owner decision in §M.5 is unchanged by this run, and the gate stays **BLOCKED — OWNER DECISION
 REQUIRED**: a green run is exactly the reason this defect has survived several directives, so accepting
 it as closure now would repeat the mistake the record already warns about.
+
+### M.13 Deterministic-reproduction attempt for #418 — built, measured, and recorded as an honest negative
+
+Directive 9 §2 permits, before the A/B/C decision, to "improve diagnostics and add a focused regression
+test that reproduces the original failure". This section reports that work and its outcome, which is not
+the outcome I wanted.
+
+**What was built.** `scripts/browser/hydration-replay.check.mjs` (npm `diagnose:browser:replay-shape`):
+a real-browser harness that bundles **the runtime this application actually ships** —
+`next/dist/compiled/react` + `next/dist/compiled/react-dom`, i.e. React
+`19.2.0-canary-0bdb9206-20250818` — rather than the repository's `react@18.3.1`, which is the
+limitation of the pre-existing `hydration-race.check.mjs` (and the reason that harness can only
+demonstrate the invariant, never this defect). It can also run the identical tree against another
+React pair via `REPLAY_REACT_DIR`, which is what made the negative below interpretable, and it has a
+gate mode (`REPLAY_ASSERT=clean`) so it can serve as acceptance evidence if it is ever made to
+reproduce.
+
+It ports the four conditions the upstream minimal reproduction
+(`github.com/dreamerhyde/react-hydration-replay-repro`, the standalone repro M15 identified) states are
+necessary: the lazy must be a **child node** rather than `<Lazy />`; the thenable must carry React's
+**`status`/`value`** protocol; it must be fulfilled **inside the concurrent yield** (a microtask or
+`setTimeout(0)`, not 50 ms later); and hydration must run inside **`React.startTransition`**, because
+`replaySuspendedUnitOfWork` only exists in the concurrent path. Arms: `microtask` and `timeout-0`
+(expected to reproduce) and `resolved-before` / `late-50ms` (controls).
+
+**Measured result: it does not reproduce, on either runtime — so it says nothing about ours.**
+
+| Runtime under test | reproducing arms | controls | server DOM discarded |
+| --- | --- | --- | --- |
+| vendored `19.2.0-canary-0bdb9206-20250818` (what the app ships) | **0/5** mismatches | clean | 5/5 in the two suspending arms — React takes the "unwind to the root" path |
+| released **`react@19.2.8` + `react-dom@19.2.8`** | **0/3** mismatches | clean | 0/3 |
+
+**The second row is the decisive control, and it is why this is reported as a failure of my port rather
+than a fact about the runtime.** The reference repro measures that exact released pair at **20/20**.
+If the shape were right, the released pair would reproduce here too. It does not, so the remaining
+difference is in *this file*: its `pendingChunk` helper is a reconstruction of `src/App.jsx`, and its
+document is served with `renderToStaticMarkup` where the reference serves it through
+`renderToPipeableStream`, so the served HTML lacks the streaming/Flight boundary machinery React's
+hydration path expects. Two earlier iterations are worth recording for the next attempt: the first used
+`<Lazy />` and reproduced **0/15**, because a lazy *element* gets its own fiber (tag 16) and the replay
+is then harmless; the second still double-wrapped the hydration container and fulfilled the chunk from
+outside the render, until both were corrected — at which point the timing discriminator started working
+(`late-50ms` stopped discarding the server DOM while `microtask`/`timeout-0` discarded it), which is the
+reference table's late-row behaviour and shows the harness is now measuring the right axis even though
+it stops short of the defect.
+
+**What this does and does not mean.** It does **not** show that the vendored React lacks the defect —
+the CI failures in §M.2 and the code comparison in §M.3 stand unchanged, and Option A/B decision
+material in §M.4–§M.5 is unaffected. It does **not** close or advance the gate. The harness is
+deliberately **not** wired into CI, because as a gate it would pass trivially and imply coverage it does
+not have; its own header carries the measured result so no future reader can mistake it for a passing
+check.
+
+**Next concrete step for this line of work** (cheap, bounded, and the reason this section is not a dead
+end): port `src/App.jsx`, `src/server.jsx` and `src/client.jsx` from the reference repository verbatim —
+streaming server included — instead of reconstructing them, then re-run against both the vendored canary
+and released 19.2.8. If that reproduces, the harness becomes the deterministic acceptance evidence for
+Option A or Option B; if it still does not, then the isolated-reproduction route is exhausted for this
+workstream and the decision should be taken on the §M.3 evidence alone.
+
+**Verification for this section:** `npx vitest run` — **179 files passed, 13 skipped (192); 2234 passed,
+114 skipped (2348); 0 failed; exit 0**, so the new script trips no repository guard (the browser-safety
+and mutation-probe guard tests included). No application file was touched: `app/`, `components/` and
+`lib/` are unchanged from `c9a2ca8` except the DEF-1 fix committed in `a81d57b`, and the framework chunk
+hash is still `4bd1b696-100b9d70ed4e49c1.js`.
