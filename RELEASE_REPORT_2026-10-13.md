@@ -1866,3 +1866,64 @@ variable or provider setting; activate media storage; run or authorise any live 
 dependency outside the Tailwind toolchain; use `npm audit fix --force`; suppress an advisory; remove,
 skip or weaken a test; convert any financial reporting period or aggregation boundary to Nairobi time.
 No secret was requested, printed or committed at any point.
+
+### K.12 CI evidence for this change set
+
+| Run | Head | Result |
+| --- | --- | --- |
+| `38516401106` | `e5fce60` (the migration) | **RED** — step 16 only (authenticated browser journey), see below |
+| `38516677923` | `f67b632` (migration + policy tests) | **GREEN** |
+| **`38516766371`** | **`8bc4e4e` (migration + tests + this report)** | **GREEN — all 22 steps** |
+
+Evidence from the green run at `8bc4e4e`, as posted to PR #45 (comment `6161757860`):
+
+| Gate | Result |
+| --- | --- |
+| Full native DB suite (against a provisioned PostgreSQL) | **190 files · 2308 tests · 0 skipped** |
+| §66 experience journey | 17 passed |
+| Business POS journey | 22 passed |
+| Production HTTP isolation smoke | 9 passed, 0 failed, 0 skipped |
+| Authenticated production HTTP/browser/DB journey | passed — hydration samples `ok:true`, `rawStatus:200`, no uncaught browser runtime error |
+| Production advisory gate and full-audit findings | success |
+| Lint and TypeScript | success |
+| Migrations · seed · production build · harness isolation and bundle evidence | success |
+
+**Local-versus-CI reconciliation (exact).** CI reports 2308 tests in its suite step because the two
+journey files run as their own steps (18 and 22 tests). `2308 + 18 + 22 = 2348`, which is exactly the
+local total, and CI's 0 skipped against this environment's 114 is entirely the database gate: CI
+provisions PostgreSQL, this environment has none. **The Tailwind migration is exercised end-to-end in
+CI** — the production build at step 14 compiles the v4 stylesheet and the browser journey at step 16
+loads the real pages. That is functional, not visual, evidence (§K.10).
+
+**The one red run, reported rather than explained away.** `38516401106` failed **only** at step 16, the
+authenticated browser journey, on a React #418 hydration mismatch (`args[]=HTML`) on the Website Studio
+preview route. **This is not called a flake and is not attributed to the migration**: the signature is
+byte-identical to the pre-migration failure in `38470293452` (13 Oct, before any Tailwind change), the
+same route and the same `args[]=HTML` argument, and the two subsequent runs on the same migrated code
+were green. Being green twice afterwards does not establish a cause. **§H.3 / §J.6 keep their status:
+UNRESOLVED, cause unknown.** The gate remains intermittent, and the browser-verification limitation in
+§K.10 is unaffected by the green result.
+
+**Branch run history is now 17 runs: 12 green, 5 red** — the five reds are the pre-existing browser
+failures (`38441832430`, `38470293452`, `38500660586`, `38516401106`) and the infrastructure failure in
+`Install dependencies` (`38463216815`).
+
+### K.13 Final state of this directive
+
+| Item | Value |
+| --- | --- |
+| Verified code state | **`8bc4e4e`** — remote-verified, clean tree, and the head the CI run below was executed against. The commit carrying this §K text is its immediate successor and changes documentation only |
+| Commits added by this directive | `e5fce60` (Tailwind 4 migration) · `f67b632` (period-policy tests) · `8bc4e4e` (report §K.1–§K.11) · the report-only successor that carries §K.12–§K.13 |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — **untouched** |
+| PR #45 | **open**, MERGEABLE, head `8bc4e4e`, `NOT APPROVED FOR PRODUCTION DEPLOYMENT` retained |
+| Dependency audit | full **5 high (all dev-only)**; production **0** — **not** complete remediation, the five remaining findings are named in §K.5 |
+| Tailwind | `4.3.3` + `@tailwindcss/postcss` `4.3.3`; `tailwind.config.ts` removed; Autoprefixer removed (§K.7) |
+| D-3b-2 | **Option A recorded** (§K.1, §K.8) with tests; no boundary or bucket converted to Nairobi |
+| Visual verification | **NOT PERFORMED — no browser in this environment** (§K.10); the authenticated-browser `#418` gate remains UNRESOLVED (§K.12) |
+| Merge · deploy · production data or config change · media-storage activation · live transaction | **none performed, none authorised** |
+
+**Stopping here, as directed.** The scoped migration, its verification and this report update are
+complete. Merging, deploying, changing production data, activating media storage or running any live
+financial transaction requires separate, explicit owner authorisation — and on the evidence above, the
+remaining five advisories, the unresolved `#418` gate and the missing visual verification should each be
+resolved or consciously accepted first.
