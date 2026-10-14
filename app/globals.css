@@ -1122,15 +1122,27 @@ button:focus-visible {
   z-index: 40;
   display: flex;
   gap: 0.6rem;
+  /* DEF-1 (§M.4): a second row is allowed, because four actions cannot share one 320–430 px row at a
+     readable size — measured, their labels need ~420 px inside a 401 px content box even at 430 px. */
+  row-gap: 0.5rem;
+  flex-wrap: wrap;
   padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--eb-surface) 92%, transparent);
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
-.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
+/* Two actions per row, evenly grown, so every label keeps its own pill (§M.4, DEF-1).
+ *
+ * The previous rule (`flex: 1 1 0`) shared the row four ways and relied on wrapping, but a
+ * single-word label cannot wrap on whitespace: "WhatsApp" painted 17 px and "Directions" 22 px
+ * outside its button at 360 px, across the neighbouring control (`overflow: visible`). A label
+ * that still cannot fit — a longer locale, for instance — now breaks inside its own pill
+ * (`overflow-wrap: anywhere`) instead of bleeding. Typography, colours, padding and the 44 px
+ * touch target are unchanged. */
+.eb-actionbar .eb-btn { flex: 1 1 45%; min-width: 0; padding-inline: 0.5rem; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
-.eb-actionbar-spacer { height: 5rem; }
+/* Reserve the full two-row height below 900px so the fixed bar never covers page content. */
+.eb-actionbar-spacer { height: 9.5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
 
 /* ── Cart drawer ── */

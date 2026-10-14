@@ -208,6 +208,8 @@ jobs:
           WAIT_FOR_SERVER=1 npm run test:browser:motion 2>&1 | tee /tmp/step-motion-browser.log
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
+          # DEF-1 (§M.4): quick-action-bar labels must stay inside their own controls at 320-430px.
+          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
@@ -283,6 +285,7 @@ jobs:
               '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-hydration-browser.log',
               '/tmp/step-hydration-race.log', '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
               '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
+              '/tmp/step-actionbar-browser.log',
               '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
             ];
             const signatureLines = [];
