@@ -4014,3 +4014,122 @@ Not an application fix, not a claim that the application is defective or healthy
 not a merge, deployment, release or production change, not production data, not a reopened
 hydration/#418 conclusion, and not a pass for the M418 gate. The verdict classes used here are
 exactly: PASS, FAIL, BLOCKED, UNRESOLVED, NOT VERIFIED, NOT PERFORMED.
+
+### §V.16 Addendum — E5 result, the sampling repair, and the first green run (2026-10-14)
+
+Authorized by "proceed" in response to §V.14 item 1. Appended; §V.1–§V.15 are unchanged.
+
+#### §V.16.1 E5 — the single-variable confirmation (run `38604239350`, `5c1634f`)
+
+One arm. Same route, order (retail, food, salon, professional, technical), throttle (rate 4),
+wait (25 s) and marker as the required-sample condition. The **only** difference is whose session
+opens the route — each category's own owner page (`fixture.ownerPage`) instead of retail's page
+(`first.ownerPage`).
+
+| Category | Session | Result | Duration |
+| --- | --- | --- | --- |
+| retail | own-owner | **ok** | 2370 ms |
+| food | own-owner | **ok** | 2494 ms |
+| salon | own-owner | **ok** | 2386 ms |
+| professional | own-owner | **ok** | 2392 ms |
+| technical | own-owner | **ok** | 2385 ms |
+
+**Both conditions were measured inside the same run, minutes apart**: the required-sample block
+(cross-tenant session, same businesses, same throttle) produced the same 12 unresolved 25 s samples
+that every run since §T has produced, while E5 (own session) passed 5/5 in ~2.4 s. That controls
+for server warm-up, machine load and every other time-varying factor. Combined with E1 (throttling
+disabled still failed) and E2 (retail passed when checked last), the reading is established:
+
+> The 12 unresolved required samples were caused by the harness opening each business's draft
+> preview with **another tenant's session**. The application does not serve one tenant's draft
+> preview to another tenant — the harness asserts exactly that at
+> `studio-authenticated.check.mjs:743-744`:
+> `(await api(first.ownerPage, '/api/experience?businessId=${second.id}')).status === 403`
+> ("real cookie login restores only own workspace"). The 25 s was the wait expiring on a page whose
+> preview iframe is never created, and the samples could never pass. It was not a hydration defect,
+> not CPU throttling, not iteration order, and not a stall.
+
+#### §V.16.2 The repair (`b16d60b`) — harness only
+
+- The CDP session and the page are now per fixture: each preview is opened, throttled and inspected
+  through the account that owns the business. Every required sample records
+  `page: "own-owner"` so the artifact states which session was used.
+- Unchanged: five categories, three attempts each, throttle 4, route, 25 s wait, marker, the M11
+  server-order requirement, and the verdict model.
+- Not weakened, not skipped, not deleted: the sample count, key set, timeout and assertions are
+  identical; only the session identity was corrected. The cross-tenant assertion at `:743-744` is
+  untouched.
+- Reversible on its own.
+
+#### §V.16.3 Verification run `38606768667` (`b16d60b`) — success
+
+26 steps success, 1 skipped (step 23, the failure reporter, correctly skipped on success),
+10 minutes, steps 1–22 all green including the four browser suites that had been fail-fast skipped:
+
+```
+HYDRATION SAMPLES required=15 ok=15 failed=0 unresolved=0 missing=0 malformed=0 auxiliary=57 duplicates=0
+M418 GATE PASS: all required samples and checks passed
+PASS SSR body order: hydration bootstrap scripts never lead the content (M11 #418 regression)
+```
+
+| Evidence | Count |
+| --- | --- |
+| authenticated journey | 428 passed / 0 failed / 0 skipped |
+| booking SSR + midnight hydration | 25 passed / 0 failed |
+| §66 journey · POS journey | 9 passed · 9 passed |
+| Motion · immersive · layout · families · media | 124 · 22 · 7 · 167 · 29 passed, 0 failed each |
+| DB suite (step 11) | unchanged, green |
+
+M11 is no longer vacuous: all 15 required samples produced an SSR body order and none begins with a
+script. `auxiliary=57` is the SSR navigation-probe count from §V.5, correctly classified.
+
+#### §V.16.4 Status, stated within its limits
+
+- **Gate integrity (Part A): delivered and verified.** A failed required sample, a missing one, a
+  malformed one and an incomplete journey each block PASS, with 23 unit cases and a CI gate that
+  fails the job (exit 2) when evidence is unresolved.
+- **M418 cause: explained with reproducible evidence** (§V.16.1) — a harness sampling defect.
+- **This is not a product fix and not a claim that the application changed.** No application code
+  was touched at any point in §V. The application behaved consistently throughout: it did not serve
+  cross-tenant draft previews, and it served own-business previews in ~2.4 s under 4× throttling.
+- **`M418 GATE PASS` here means "the fifteen required samples as defined now passed"** — nothing
+  more. It is not a statement that #418 is resolved, not production readiness, and not a reopening
+  of §O/§T's mechanism conclusion (the shipped 15.5.27 vendored replay restored no hydration cursor;
+  19.3.0 does).
+- **The §T.2 observation criteria remain unmet.** Every harness change in §V makes new runs
+  non-identical to the runs behind the 8-run streak, so that streak is reset and cannot be extended.
+  Meeting the predeclared criteria (≥12 qualifying runs, ≥3 h elapsed, ≤2 concurrency) requires
+  re-accumulating them under the repaired harness — an owner decision, not a conclusion of this work.
+- Cross-tenant preview behaviour is no longer sampled as a required hydration sample (it never
+  could pass). Reproduction recipe: set `M418_DIAG_ARMS="E1-control-retrottled"` on the journey step
+  and read `M418 DIAG TIMEOUT` lines; the behaviour is also asserted at the API level by the
+  untouched `:743-744` check.
+
+#### §V.16.5 Owner decisions
+
+1. **Confirm or revert the §V.16.2 sampling repair.** It changes the M418 gate from permanently
+   failing on evidence that could never pass, to measuring the question it names. Reverting is one
+   commit (`b16d60b`), and the gate returns to `BLOCKED` with the same 12 unresolved samples.
+2. **Whether to re-accumulate the §T.2 observation ledger** (12 runs / 3 h / ≤2 concurrency) under
+   the repaired harness, or to record the streak as permanently interrupted by the repair.
+3. **Whether cross-tenant preview behaviour should get permanent, non-hydration coverage** (for
+   example an explicit route-level isolation check beside the existing API-level one).
+4. Unchanged from §U/§V.14: advisories (5 dev-only high, no published patch), Paystack
+   configuration items, media deferred; PR #45 stays open and unmerged.
+
+#### §V.16.6 Run ledger added by this authorization (13 runs)
+
+| Run | SHA | Configuration | Outcome |
+| --- | --- | --- | --- |
+| `38588457143` | `d49b5ba` | gate | step 16 exit 2; `malformed=57` defect found |
+| `38590637907` | `e0d7824` | gate | step 8 TS2339 (stale JSDoc) |
+| `38591215765` | `9b1bbb0` | gate | step 16 exit 2; first E3 evidence |
+| `38593320641` | `799bd07` | E1 (attempt 1) | arms invalid (TargetCloseError) |
+| `38595497875` | `4b01cb5` | E1 (attempt 2) | throttling refuted |
+| `38597736390` | `3777d21` | E2 + E4 | order refuted; no late mount at 60 s |
+| `38600279722` | `78b4f0b` | permanent (arms off) | step 16 exit 2, exact expected lines |
+| `38602094803` | `a45c8ce` | permanent (arms off) | step 16 exit 2, same lines |
+| `38604239350` | `5c1634f` | **E5** | own-owner 5/5; cross-tenant 12 unresolved, same run |
+| `38606768667` | `b16d60b` | **repaired sampling** | **success**, `M418 GATE PASS`, 15/15 samples |
+
+None of these is Class A evidence for the §T.2 criteria; they are gate, diagnostic and repair runs.
