@@ -2982,3 +2982,69 @@ authenticated browser journey (Directive 9 §8). The release gate stays exactly 
 the harness itself → the five exit codes in §O.3. The control install left `package.json` and
 `package-lock.json` untouched (`git diff` on both shows only the intended script additions), and the
 control is never bundled into the application.
+
+## §P Directive 9 (continued) — the #418 reproduction is now a standing CI gate
+
+§O established the reproduction and the local exit-code matrix; this section records what happens in
+CI, because a gate that is never executed is not a gate.
+
+### P.1 What the workflow now runs
+
+Step **17**, `Hydration replay-cursor regression (shipped clean, 19.2 positive control)`, immediately
+after the existing race-reproduction step (everything after it shifts by one: the artifact upload is now
+step 19, the success-comment step 20, the failure-report step 21 — 21 steps total, YAML re-parsed clean).
+It installs the control runtime into `/tmp/replay-control` (outside the project, so `package.json`,
+`package-lock.json` and the shipped tree are untouched) and runs both arms, teeing to
+`/tmp/step-replay-hydration.log`. If a Chrome binary is absent the step fails loudly rather than
+skipping: a missing browser is `NOT RUN`, never a pass.
+
+The failure mode I had to fix twice: **three of my four comment-plumbing edits silently no-opped** —
+anchors written with 16 spaces where the workflow has 14, and a `str.replace` that returns the input
+unchanged when it does not match. The step itself gated the run correctly, but its log was missing from
+the PR comment. Re-applied with indentation-agnostic patterns and asserted afterwards; this is the same
+class of mistake as §O.1 (a no-op looks exactly like a success), so it is called out rather than
+quietly corrected.
+
+### P.2 What CI printed, verbatim from the PR comment
+
+```
+browser-side runtime: react 19.2.8 / react-dom 19.2.8
+microtask       reproducing loads 5/5   server DOM discarded 5/5
+timeout-0       reproducing loads 5/5   server DOM discarded 5/5
+resolved-before reproducing loads 0/5   server DOM discarded 0/5
+late-50ms       reproducing loads 0/5   server DOM discarded 0/5
+PASS (positive control): 19.2.8 reproduces the defect in 10 load(s), so the harness still exercises the replay path.
+browser-side runtime: react 19.3.0-canary-278794d7-20261002 / react-dom 19.3.0-canary-278794d7-20261002
+microtask       reproducing loads 0/5   server DOM discarded 0/5
+timeout-0       reproducing loads 0/5   server DOM discarded 0/5
+resolved-before reproducing loads 0/5   server DOM discarded 0/5
+late-50ms       reproducing loads 0/5   server DOM discarded 0/5
+PASS: no reproducing arm reproduced and both controls stayed clean on 19.3.0-canary-278794d7-20261002.
+```
+
+The browser-side runtime versions are asserted by the harness, so these rows cannot be satisfied by a
+bundle that quietly loaded something other than the runtime intended.
+
+### P.3 Runs and state at the time of writing
+
+| Run | Commit | Conclusion |
+| --- | --- | --- |
+| `38546102874` | `97dc0ef` | success |
+| `38544367514` | `13f4ad1` | success |
+| `38541549420` | `fcf6e62` | success |
+| `38539670153` | `47c1c20` | success |
+
+Both runs are 27/27 steps green, each including the authenticated production journey
+(**428 passed, 0 failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.** at this head). The gate's first execution (`38544367514`) caught its own missing
+comment plumbing, which is the one thing it could not have caught locally.
+
+Branch HEAD = remote = **`97dc0ef87efe69a1dfe6f79dccbababb84dfbfb1`**; working tree clean. `main` remains
+**`8db6a9e4d0963241ad36e13cd9c946b76d1ef11a`** — untouched. PR #45 still open, labeled `NOT APPROVED FOR PRODUCTION DEPLOYMENT`.
+
+### P.4 Gate status — unchanged, and explicitly not mine to close
+
+Directive 9 §2 and §3's regression requirement is now met with a deterministic reproduction that fails on
+the original defect and passes on the shipped runtime, executed in CI on every commit. That is the
+evidence the gate was waiting for; §N.12's position still governs, because an intermittent defect is not
+disproved by green runs alone. **Closing the #418 gate remains the owner's call.** No merge, no deploy,
+no media activation, no production data or configuration change.
