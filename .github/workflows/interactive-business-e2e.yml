@@ -275,28 +275,6 @@ jobs:
                 return `${summaries}\n\n${text.slice(0, half)}\n\n…[${text.length - limit} characters truncated]…\n\n${text.slice(-half)}`;
               } catch (e) { return '(no output captured)'; }
             };
-            const body = [
-              ['Failure signatures (never elided)', null, 0],
-              ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
-              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
-              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
-              ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
-              ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
-              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
-              ['npm run test:e2e', '/tmp/step-journey.log', 11000],
-              ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
-              ['prisma generate', '/tmp/step-generate.log', 1500],
-              ['npm run build', '/tmp/step-build.log', 3000],
-              ['Production HTTP smoke', '/tmp/step-studio-smoke.log', 1500],
-              ['Bundle evidence', '/tmp/step-studio-bundles.log', 1500],
-              ['Motion browser', '/tmp/step-motion-browser.log', 4000],
-              ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
-              ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
-              ['Family browser', '/tmp/step-family-browser.log', 2500],
-              ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
-              ['Local browser server', '/tmp/step-browser-server.log', 1000],
-              ['npm run seed', '/tmp/step-seed.log', 1500],
-            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${file === null ? signatures : read(file, limit)}\n\`\`\``).join('\n\n');
             // Never-elided failure signatures: checks that throw (`FAIL ...`), uncaught browser
             // errors and their recorded M418 diagnostics, and the script's own `FAILED CHECK`
             // line. The head/tail windows above can elide the middle of a long log, which is
@@ -321,6 +299,28 @@ jobs:
             const signatures = signatureLines.length
               ? signatureLines.join('\n').slice(0, 4000)
               : '(no FAIL/BROWSER RUNTIME ERROR/FAILED CHECK lines in the captured step logs)';
+            const body = [
+              ['Failure signatures (never elided)', null, 0],
+              ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
+              ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
+              ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
+              ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
+              ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
+              ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
+              ['npm run test:e2e', '/tmp/step-journey.log', 11000],
+              ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
+              ['prisma generate', '/tmp/step-generate.log', 1500],
+              ['npm run build', '/tmp/step-build.log', 3000],
+              ['Production HTTP smoke', '/tmp/step-studio-smoke.log', 1500],
+              ['Bundle evidence', '/tmp/step-studio-bundles.log', 1500],
+              ['Motion browser', '/tmp/step-motion-browser.log', 4000],
+              ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
+              ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
+              ['Family browser', '/tmp/step-family-browser.log', 2500],
+              ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
+              ['Local browser server', '/tmp/step-browser-server.log', 1000],
+              ['npm run seed', '/tmp/step-seed.log', 1500],
+            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${file === null ? signatures : read(file, limit)}\n\`\`\``).join('\n\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
             try {
               await github.rest.issues.createComment({

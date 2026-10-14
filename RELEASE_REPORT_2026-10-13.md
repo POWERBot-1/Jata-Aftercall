@@ -1572,3 +1572,50 @@ booking record; backfill, rewrite or reinterpret a stored instant; change report
 ageing or settlement semantics; run `npm audit fix --force`; remove, weaken, skip or reclassify a test or
 advisory; install a major; execute a live charge or refund; activate media storage or any provider; or
 request, print or commit a secret.
+
+### J.11 CI evidence for `4b15429` — every database gate passed; one reporter bug found and fixed
+
+Run **`38500660586`** (head `4b15429`) is **red in exactly one place**, and it is not a gate this change
+set touches. Step conclusions, in order:
+
+| # | Step | Result |
+| --- | --- | --- |
+| 5 | Install dependencies | success |
+| 6 | Production advisory gate and full-audit findings | success (production 0; full audit reports the 7 dev-only findings of §J.2 and stays FAIL by design) |
+| 7-8 | Generate Prisma client · Lint and TypeScript | success |
+| **9** | **Apply migrations** | **success — the new `20261014000000_booking_time_zone_marker` applied cleanly to the disposable test database** |
+| 10-11 | Seed plans · unit/integration/security suites against the database | success |
+| 12-13 | §66 experience journey · Business POS journey | success |
+| 14-15 | Production build against the isolated test DB · harness isolation and bundle evidence | success |
+| **16** | **Authenticated production HTTP browser journey** | **failure — the pre-existing React `#418` gate of §J.6** |
+| 17-19 | Booking SSR/hydration · #418 race · Motion/immersive/layout/family/media | skipped (after the failure) |
+| 22 | **Report failing output to the pull request** | **failure — this change set's own bug, fixed below** |
+
+So the contract itself passed the real-database gates in CI: the migration deploys, and the DB-gated
+booking, POS, journey and security suites are green at `4b15429`. The only red is the same authenticated
+browser check the branch has failed intermittently since before this work, whose root cause remains
+UNRESOLVED (§J.6).
+
+**The reporter bug (mine, found and fixed in this change set).** Step 22 failed because the new
+"Failure signatures" block referenced `const signatures` in the body mapping that runs *before* the
+declaration — a temporal-dead-zone `ReferenceError`, which prevented the failure comment from posting at
+all. The job's own annotation names it exactly: `failure: Unhandled error: ReferenceError: Cannot access
+'signatures' before initialization`. The block was moved above the body array, and the reporter was then
+**executed locally in a harness** (the workflow's script body run with stub `context`/`github` against
+synthetic step logs, including the 20 000-character middle that used to hide the answer):
+
+```
+comment length: 12692
+step-authenticated-browser.log: BROWSER RUNTIME ERROR {"...","message":"Minified React error #418"}
+step-authenticated-browser.log: FAIL authenticated journey: no uncaught browser runtime errors
+step-authenticated-browser.log: M418-RECORDED {"...","path":"/dashboard/businesses/x/preview"}
+step-authenticated-browser.log: FAILED CHECK: no uncaught browser runtime errors
+```
+
+That is the outcome this section wanted: a failure now names its check in a section the comment's elision
+cannot reach. Also noted for future forensic work: the job annotation API answered for this run (it
+returned the `ReferenceError` above) even though the run log and artifacts still fail with a storage
+`EOF`, so annotations are a usable channel when the log download is not.
+
+**No test, step or assertion was weakened to get here.** The script change adds one log line; the reporter
+change adds one section. Pass/fail semantics, retries and coverage are unchanged.
