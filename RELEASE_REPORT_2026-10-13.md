@@ -3392,3 +3392,171 @@ recurrence probability is exercised by these runs.
 acceptance criteria were satisfied on the observed runtime. It does **not** assert that the defect can
 never recur, does not establish a zero failure rate, and is not a production-readiness claim from the
 hydration result alone. The residual risk is quantified in §T.5 rather than waved away.
+### T.3 The trial wave and the qualifying-run table
+
+Trials were generated as described in §T.1: one run per push, nine in total (the §T protocol commit plus
+eight empty marker commits), created 11:48:51Z–11:50:41Z and completed 12:02Z–12:06Z. Step conclusions below
+come from the CI API, not from prose: **16 gate-bearing runs** exist on frozen code (`97dc0ef`→`9bdd1882`),
+of which 13 are Class A, two failed at step 20, and one is excluded for an unpublished artifact. Columns are
+the hydration-relevant steps — 16 authenticated journey, 18 race reproduction, 19 replay gate, 20 motion/immersive.
+
+| Run | Head | s16 | s18 | s19 | s20 | Classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| `38544367514` | `13f4ad1` | ✓ | ✓ | ✓ | ✓ | EXCLUDED (gate evidence unpublished) |
+| `38546102874` | `97dc0ef` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38548038306` | `d23fcc0` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38550321695` | `fa1a105` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38550362207` | `ffac62b` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38552219839` | `f0e8e44` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38554339261` | `f7aeef4` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559223303` | `735988d` | ✓ | ✓ | ✓ | ✗ | EXCLUDED (step 20 failure) |
+| `38559296326` | `df5f66a` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559316388` | `15085c3` | ✓ | ✓ | ✓ | ✗ | EXCLUDED (step 20 failure) |
+| `38559338258` | `50fe515` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559360157` | `bbb68cc` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559381398` | `99b302b` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559403292` | `ca5333f` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559421946` | `6ef44da` | ✓ | ✓ | ✓ | ✓ | Class A |
+| `38559443294` | `9bdd188` | ✓ | ✓ | ✓ | ✓ | Class A |
+**Supplementary runs, excluded from Class A by design:** `38537723639` (`165b873`), `38539670153`
+(`47c1c20`) and `38541549420` (`fcf6e62`) ran the authenticated journey green on this same frozen runtime
+but predate the replay-gate step, so they carry no control evidence. Ten post-upgrade runs in total are
+journey-green; **nineteen** including the wave (§T.5).
+
+### T.4 Control evidence — published, and not vacuous
+
+All 13 Class A runs publish the gate block, and step 19 also passed in the two excluded runs, so **15 of 15
+gate-bearing runs executed the controls**. Every published block has the same shape, quoted from run
+`38559443294` (`9bdd1882`):
+
+```
+browser-side runtime: react 19.2.8 / react-dom 19.2.8
+microtask       reproducing loads 5/5   server DOM discarded 5/5
+timeout-0       reproducing loads 5/5   server DOM discarded 5/5
+resolved-before reproducing loads 0/5   server DOM discarded 0/5
+late-50ms       reproducing loads 0/5   server DOM discarded 0/5
+PASS (positive control): 19.2.8 reproduces the defect in 10 load(s), so the harness still exercises the replay path.
+browser-side runtime: react 19.3.0-canary-278794d7-20261002 / react-dom 19.3.0-canary-278794d7-20261002
+microtask       reproducing loads 0/5   server DOM discarded 0/5
+… (three further arms 0/5) …
+PASS: no reproducing arm reproduced and both controls stayed clean on 19.3.0-canary-278794d7-20261002.
+```
+
+The known-bad control reproduced the expected `Minified React error #418 … args[]=HTML` in every one of the
+15 runs, and the shipped runtime was clean in every one. The gate is therefore not vacuous in this window:
+a run in which the harness stopped exercising the replay path would have gone red instead of green.
+
+### T.5 Failures, exclusions, and the protocol verdict
+
+**Two of nine wave trials failed, at step 20 — not step 16, not the authenticated journey, not hydration.**
+
+| Run | Head | Failed step | Signature |
+| --- | --- | --- | --- |
+| `38559223303` | `735988d` | 20 — Actual storefront Motion and immersive browser regressions | `step-motion-browser.log: FAIL no JavaScript desktop: scenario executed — Waiting failed: 15000ms exceeded` |
+| `38559316388` | `15085c3` | 20 — same | same |
+
+Checked against every hydration signal before drawing a conclusion: both failure comments report the
+authenticated journey at **428 passed, 0 failed, 0 skipped**; a regex sweep for positive hydration-mismatch
+assertions found **zero**; the `#418`/`#423` strings present in those logs come from the race check's
+*synthetic* detector arms and a loud `M418 THROW DIAGNOSTIC UNAVAILABLE` warning, and the `HYDRATION SAMPLE`
+lines with `TimeoutError` appear 12 of 15 times in the **green** runs as well, i.e. they are recorded
+throttled-probe diagnostics, not assertions. In the green runs all five no-JavaScript scenarios pass; in the
+two failures the scenario asserts. The failing scenario runs with JavaScript **disabled**, which is also why
+a hydration error cannot be its cause.
+
+Mechanism assessment, stated as the likely cause rather than a proven one: these nine trials ran
+**concurrently**, each provisioning its own containers, database, production server and browser on shared
+runners. Ten runs at the window's normal cadence (≤ 2 concurrent) passed step 20 in every instance. Load is
+the obvious candidate and is *not* yet demonstrated as the cause; that distinction matters and is carried
+into §T.8 rather than resolved here. This is a new, unresolved CI-robustness finding in a JS-disabled motion
+scenario — not a customer-facing hydration defect, and not something this directive authorises me to fix
+(§7 forbids unrelated changes during the observation period).
+
+**Protocol verdict — applied exactly as predeclared:**
+
+| Criterion | Predeclared | Observed | Verdict |
+| --- | --- | --- | --- |
+| Consecutive Class A clean runs | ≥ 12 | **6** (streak restarted after the `15085c3` failure: `50fe5152`, `bbb68cc4`, `99b302b8`, `ca5333f3`, `6ef44da9`, `9bdd1882`) | **NOT MET** |
+| Diversity guard (streak spans ≥ 3 clock hours) | ≥ 3 h | ~0h52s — the wave's trials ran near-simultaneously | **NOT MET** |
+| Controls valid (known-bad reproduces, shipped clean) | every run | 15 / 15 gate-bearing runs | **PASS** |
+| Hydration recurrence | none | 19 / 19 post-upgrade runs green at step 16; no mismatch assertion anywhere | **PASS** |
+| Required test steps executed, no test skipped | every run | 13 Class A runs: 26 success + 1 skipped (the failure reporter, by design, on every passing run) | **PASS** |
+
+**Status: BLOCKED — OBSERVATION INSUFFICIENT.** Two contributing mistakes are mine and are named plainly:
+I executed the wave at 9-way concurrency, which both introduced the load artifact that broke two runs and
+collapsed the streak's time span to under a minute — defeating the diversity guard that existed precisely to
+stop a burst from being mistaken for an observation window. The criteria were not weak; my execution of them
+was. Reporting the streak honestly therefore yields 6, not 13, and no recommendation to close can rest on it.
+
+### T.6 Recommendation: keep the gate open (option B), with the residual-risk packet for the owner
+
+**Recommendation B — the #418 release gate stays OPEN.** The predeclared criteria were not met, so closure is
+not available on this evidence regardless of how favourable the hydration-specific rows look. This is my
+recommendation and not a request to override: the directive is explicit that a gate closes on met criteria or
+on the owner's decision, never on a favourable-looking subset.
+
+**Option C packet, for the owner's separate decision** — what accepting residual risk now would mean, quantified
+rather than asserted. The identified mechanism is fixed with deterministic evidence (§O: 5/5 reproducing before
+→ 0/5 after, and §Q: the reference's own 17-line cursor rewind flipping the same runtime 10 → 0 → 10), and the
+hydration-relevant CI evidence over this window is unbroken:
+
+| Observation | Value |
+| --- | --- |
+| Post-upgrade runs with step 16 green | 19 / 19 |
+| Gate-bearing runs with valid controls | 15 / 15 |
+| Hydration-mismatch assertions anywhere in the window | 0 |
+| Fisher exact, 19 clean runs vs the pre-upgrade journey-failure rate (8 / 24 = 33%) | p ≈ 0.0051 |
+| Fisher exact, 13 Class A clean runs vs the same rate | p ≈ 0.019 |
+| One-sided 95% upper bound on the per-run hydration-failure rate (n = 19, rule of three) | ≤ 14.6% |
+
+So the honest residual-risk statement is: **the specific #418 mechanism is remediated and measured; the
+evidence cannot bound the rate of *unidentified* hydration failure modes below roughly one run in seven, and
+the observation window is incomplete.** That bound, not the p-value, is the number a risk acceptance should
+be weighed against. I am not accepting it; presenting it is not accepting it.
+
+**What would close the gate (the continuation procedure, ready to run).** Six or more further Class A runs at
+normal cadence (≤ 2 concurrent) to carry the streak from 6 to ≥ 12 **while spanning ≥ 3 clock hours** — about
+three hours of elapsed CI. Because `rerun` and `workflow_dispatch` are both 403 for this session's token
+(§T.1), each trial again costs one empty marker commit, and those commits cannot be removed without a history
+rewrite, which is forbidden. If the owner prefers not to add more commits, the alternative is to let ordinary
+CI traffic on this branch complete the window, and the streak resumes from its current 6.
+
+### T.7 Dependency-security status (unchanged, and deliberately not acted on)
+
+| Gate | Result |
+| --- | --- |
+| Production dependency audit | **PASS** — 0 findings, every run in the window |
+| Full dependency audit | **FAIL / UNRESOLVED** — 5 high, one chain: `eslint-config-next@16.4.0 → @next/eslint-plugin-next@16.4.0 → fast-glob@3.3.1 → micromatch@4.0.8 → braces@3.0.3` |
+| Upstream metadata recheck | `braces` latest still **3.0.3**, no patched release — rechecked this section only to date the statement; §S's authoritative evidence stands and no reason to expect change was found |
+| Actions taken | none — no `npm audit fix`, no `--force`, no overrides, no suppression, no gate removal, no ESLint downgrade |
+
+The finding-by-finding evidence remains §S, including why npm's only automated remediation (a two-major
+downgrade of the ratified lint stack) was not taken and how a future patched `braces` will flow in through
+`micromatch`'s caret range without touching a ratified pin.
+
+### T.8 Remaining owner decisions
+
+1. **The #418 gate.** Three legitimate paths: (a) run the continuation window (§T.6, ~3h of CI) and decide on
+   a completed protocol; (b) explicitly accept the residual risk quantified in §T.6 — stage-owner's call,
+   not mine; (c) leave the gate open indefinitely, which costs nothing but keeps the PR unmergeable.
+2. **The motion-suite finding from this directive.** Two of nine high-concurrency trials failed a JS-disabled
+   scenario on a 15-second wait. Authorise either an investigation of the wait budget under load or a
+   documented "max 2 concurrent runs on this workflow" constraint — but it is a real finding, not a flake,
+   and it needs an owner decision about whether to touch the suite.
+3. **The advisory chain.** Wait for upstream, or an explicit decision to abandon the ratified lint stack.
+   **UNRESOLVED** either way — no action available inside the constraints.
+4. **Marker commits.** Nine empty commits now exist in the branch history (eight markers + one report commit
+   that also generated a trial) and cannot be removed without a history rewrite, which is not permitted.
+   They change no file; `git diff --name-only 97dc0ef..9bdd1882` returns exactly one path — this report.
+
+### T.9 Commits and verified state
+
+| Commit | Purpose |
+| --- | --- |
+| `735988d` | §T.1–§T.2 state verification and the predeclared protocol (also trial 1) |
+| `df5f66a`, `15085c3`, `50fe515`, `bbb68cc`, `99b302b`, `ca5333f`, `6ef44da`, `9bdd1882` | eight empty observation markers; each produced one trial; `15085c3` is one of the two step-20 failures |
+
+Preserved contracts: across the entire window `git diff --name-only 97dc0ef..9bdd1882` lists only
+`RELEASE_REPORT_2026-10-13.md` — no application, test, harness, workflow, Prisma, booking, payment, POS,
+tenant or media surface was touched, so the ratified contracts in §7 of the directive stand unmodified by
+this directive's execution.
