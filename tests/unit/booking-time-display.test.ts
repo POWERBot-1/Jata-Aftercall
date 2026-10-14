@@ -1,17 +1,19 @@
 /**
  * Booking instants and the clock they are shown on.
  *
- * `validateBookingRequest` builds a booking from the availability slot string in the *server's*
- * zone, and the server is UTC on Vercel: a customer who taps "09:00" is stored as 09:00Z. Showing
- * that instant with the Nairobi-pinned helpers moved every appointment three hours ("12:00"),
- * disagreeing with the slot the customer chose and with the owner's notification message, which
- * used the server clock. The booking surfaces therefore render on the clock the booking was made
- * against (`formatBookingDateTime`, JATA_BOOKING_TIME_ZONE).
+ * Superseded convention (pinned here until 2026-10-14): bookings were anchored to the *server's*
+ * zone — UTC on Vercel — so a customer who tapped "09:00" was stored as 09:00Z and the surfaces
+ * showed that clock. The owner then decided the booking-time contract (release report §J.1): a new
+ * booking's date + time are Nairobi wall-clock values, converted to a UTC instant before storage,
+ * and every surface renders a row on the clock it was anchored to.
  *
- * This is an interim, semantics-preserving convention — it changes no stored instant and no
- * business rule. Whether bookings should instead be *anchored* to the Nairobi wall clock is an
- * open product decision recorded in the release report (§H.4); these tests pin the display rule
- * and the fact that the Nairobi-pinned helpers still govern payment/report timestamps.
+ * That leaves exactly two display clocks, and this file pins both:
+ *   * a booking created under the contract (marker `Africa/Nairobi`) renders on the business
+ *     clock — the time the customer chose;
+ *   * a row written before the contract (no marker) renders on the legacy clock that produced it,
+ *     so no historical appointment silently moves three hours.
+ * Neither path reads the ambient zone, and the Nairobi-pinned helpers that govern payments,
+ * reports and subscriptions are unchanged.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -29,20 +31,22 @@ afterEach(() => {
 const root = path.resolve(__dirname, "..", "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
-/** The 09:00 slot a customer taps in Nairobi; stored UTC-anchored by the booking route. */
-const TAPPED = "2026-10-14T09:00:00.000Z";
+/** 09:00 Nairobi on 14 Oct 2026, stored under the contract. */
+const CONTRACT_STORED = "2026-10-14T06:00:00.000Z";
+/** The same appointment written before the contract, when the server was UTC. */
+const LEGACY_STORED = "2026-10-14T09:00:00.000Z";
 
-describe("booking instants render on the clock they were booked against", () => {
+describe("a booking created under the contract shows the time the customer chose", () => {
   it("is byte-identical under a UTC server, a Nairobi server, a US server and a UTC+14 server", async () => {
     const seen: string[] = [];
     for (const tz of ["UTC", "Africa/Nairobi", "America/Los_Angeles", "Pacific/Kiritimati"]) {
       process.env.TZ = tz;
       vi.resetModules();
       const { formatBookingDateTime } = await import("@/lib/dateFormat");
-      seen.push(formatBookingDateTime(new Date(TAPPED)));
+      const { bookingRowTimeZone, contractBookingMarker } = await import("@/lib/experience/booking");
+      seen.push(formatBookingDateTime(CONTRACT_STORED, "—", bookingRowTimeZone(contractBookingMarker())));
     }
     expect(new Set(seen).size, `different output per TZ: ${JSON.stringify(seen)}`).toBe(1);
-    // The slot the customer actually chose — not the 12:00 the Nairobi-pinned helper would show.
     expect(seen[0]).toBe("14 Oct 2026, 09:00");
   });
 
@@ -50,23 +54,26 @@ describe("booking instants render on the clock they were booked against", () => 
     process.env.TZ = "UTC";
     vi.resetModules();
     const { formatBookingDateTime, formatDateTime } = await import("@/lib/dateFormat");
-    // 21:30 UTC is 00:30 on the 13th in Nairobi. The chip the customer tapped is 2026-10-12 and
-    // the slot is 21:30, so the booking surface must say 12 Oct 21:30.
-    expect(formatBookingDateTime(new Date("2026-10-12T21:30:00.000Z"))).toBe("12 Oct 2026, 21:30");
+    const { bookingRowTimeZone } = await import("@/lib/experience/booking");
+    // 00:30 on the 13th in Nairobi is 21:30Z on the 12th: the contract row reads 13 Oct 00:30,
+    // while the same instant written before the contract reads 12 Oct 21:30 (legacy clock).
+    const stored = "2026-10-12T21:30:00.000Z";
+    expect(formatBookingDateTime(stored, "—", bookingRowTimeZone("Africa/Nairobi"))).toBe("13 Oct 2026, 00:30");
+    expect(formatBookingDateTime(stored, "—", bookingRowTimeZone(null))).toBe("12 Oct 2026, 21:30");
     // The Nairobi-pinned helper (payments, reports, subscriptions) is unchanged and still shifts.
-    expect(formatDateTime(new Date("2026-10-12T21:30:00.000Z"))).toBe("13 Oct 2026, 00:30");
+    expect(formatDateTime(new Date(stored))).toBe("13 Oct 2026, 00:30");
     const shared = await import("@/lib/format");
-    expect(shared.formatDateTime(new Date("2026-10-12T21:30:00.000Z"))).toBe("13 Oct 2026 · 00:30");
+    expect(shared.formatDateTime(new Date(stored))).toBe("13 Oct 2026 · 00:30");
   });
 
   it("does not read the clock: the same instant renders the same before and after midnight", async () => {
     process.env.TZ = "UTC";
     vi.useFakeTimers();
     const { formatBookingDateTime } = await import("@/lib/dateFormat");
-    vi.setSystemTime(new Date("2026-10-12T20:59:00.000Z"));
-    const before = formatBookingDateTime(new Date(TAPPED));
-    vi.setSystemTime(new Date("2026-10-12T21:00:30.000Z"));
-    const after = formatBookingDateTime(new Date(TAPPED));
+    vi.setSystemTime(new Date("2026-10-13T20:59:00.000Z"));
+    const before = formatBookingDateTime(CONTRACT_STORED);
+    vi.setSystemTime(new Date("2026-10-13T21:00:30.000Z"));
+    const after = formatBookingDateTime(CONTRACT_STORED);
     expect(after).toBe(before);
   });
 
@@ -74,21 +81,26 @@ describe("booking instants render on the clock they were booked against", () => 
     process.env.TZ = "UTC";
     vi.resetModules();
     const { formatBookingDateTime } = await import("@/lib/dateFormat");
+    const { bookingRowTimeZone } = await import("@/lib/experience/booking");
     expect(formatBookingDateTime("not-a-date")).toBe("—");
     expect(formatBookingDateTime(null)).toBe("—");
     expect(formatBookingDateTime(undefined)).toBe("—");
-    expect(formatBookingDateTime(new Date("2028-02-29T23:30:00.000Z"))).toBe("29 Feb 2028, 23:30");
+    // An unknown marker is never trusted: it falls back to the legacy clock rather than throwing.
+    expect(formatBookingDateTime(LEGACY_STORED, "—", bookingRowTimeZone("Mars/Olympus_Mons"))).toBe("14 Oct 2026, 09:00");
+    expect(formatBookingDateTime(new Date("2028-02-29T23:30:00.000Z"))).toBe("1 Mar 2028, 02:30");
   });
 });
 
-describe("the booking surfaces use the booking clock", () => {
+describe("the booking surfaces use each row's own clock", () => {
   it("dashboard board, customer booking page and the owner notification agree", () => {
-    expect(read("components/dashboard/BookingBoard.tsx")).toContain("formatBookingDateTime(booking.startAt)");
-    expect(read("app/b/[slug]/booking/[id]/page.tsx")).toContain("formatBookingDateTime(booking.startAt)");
+    expect(read("components/dashboard/BookingBoard.tsx")).toContain("formatBookingDateTime(booking.startAt, bookingRowTimeZone(booking.bookingTimeZone))");
+    expect(read("app/b/[slug]/booking/[id]/page.tsx")).toContain("formatBookingDateTime(booking.startAt, bookingRowTimeZone(booking.bookingTimeZone))");
+    // A new booking always carries the marker, so the notification renders on the same clock the
+    // board does; the legacy clock is never used to announce a new booking.
     const payments = read("lib/experience/payments.ts");
     expect(payments).toContain("formatBookingDateTime(params.startAt)");
-    // The notification used to print the server clock next to a Nairobi-rendered board.
     expect(payments).not.toMatch(/params\.startAt\.toLocaleString/);
+    expect(read("app/dashboard/businesses/[id]/bookings/page.tsx")).toContain("bookingTimeZone: booking.bookingTimeZone");
   });
 });
 

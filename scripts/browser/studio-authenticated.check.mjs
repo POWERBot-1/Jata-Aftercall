@@ -37,6 +37,9 @@ const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
+// The failing check's name, printed with the end-of-run summary so a CI comment that elides the
+// middle of the log still names the check that failed (see the workflow's failure reporter).
+let failureName = null;
 // M12: buffered M418 evidence lines are reprinted at end-of-run so they land in the
 // CI summary comment's tail window (the generator elides long-log middles).
 const m418Lines = [];
@@ -740,6 +743,7 @@ try {
   journeyComplete = true;
 } catch (error) {
   if (!results.at(-1) || results.at(-1).ok) results.push({ name: "journey execution", ok: false, detail: String(error.message).slice(0, 250) });
+  failureName = String(error.message).slice(0, 250);
   console.error(`FAIL authenticated journey: ${error.message}`);
   // Fail-fast must still surface pageerror evidence: an earlier hydration recovery can
   // explain a later DOM-state assertion (e.g., Float-managed head metas mid-regeneration).
@@ -791,6 +795,7 @@ if (m418Lines.length || hydrationVisits.length) {
   }
   console.log("M418E END");
 }
+if (failureName) console.log(`FAILED CHECK: ${failureName}`);
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
 if (!journeyComplete) console.log("NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance.");
 process.exitCode = failed || !journeyComplete ? 1 : 0;

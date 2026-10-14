@@ -28,15 +28,25 @@ export const JATA_TIME_ZONE = "Africa/Nairobi";
 /**
  * The clock booking instants are stored against.
  *
- * `validateBookingRequest` builds every booking from the availability slot string in the
- * *server's* zone, and the server is UTC on Vercel, so a customer who taps "09:00" is stored as
- * 09:00Z. Booking instants are therefore displayed on that same clock — showing them in
- * Africa/Nairobi would move every appointment three hours and disagree with the slot the
- * customer chose. This is an interim, semantics-preserving convention: whether bookings should
- * be *anchored* to the Nairobi wall clock instead is an open product decision (release report
- * §H.4) and is deliberately not decided by a display helper.
+ * The owner decided on 2026-10-14 (release report §J.1) that a booking is a Nairobi wall-clock
+ * appointment: the customer's "09:00" is converted to the unambiguous UTC instant 06:00Z before
+ * it is stored, and it is *displayed* on the same Nairobi clock, so the customer, the owner's
+ * board and the owner notification all read 09:00. The conversion itself lives in
+ * `lib/experience/bookingTime.ts` — this constant is the display half of the same contract.
+ *
+ * Rows written before the contract were anchored to the server's ambient zone (UTC on Vercel)
+ * and carry no marker. They keep being read on that legacy clock, so no historical appointment
+ * silently moves three hours — see `LEGACY_BOOKING_TIME_ZONE` and
+ * `bookingRowTimeZone()`.
  */
-export const JATA_BOOKING_TIME_ZONE = "UTC";
+export const JATA_BOOKING_TIME_ZONE = "Africa/Nairobi";
+
+/**
+ * The clock legacy (unmarked) booking rows were written on: `new Date(...)` in the server's
+ * ambient zone, which is UTC on Vercel. Used only to *read* rows that predate the contract —
+ * never to write, and never to reinterpret a stored instant.
+ */
+export const LEGACY_BOOKING_TIME_ZONE = "UTC";
 
 /**
  * Africa/Nairobi is UTC+3 all year (no daylight saving), so Nairobi calendar arithmetic is a
@@ -167,23 +177,36 @@ export function formatDate(value: DateInput, fallback = "—"): string {
 }
 
 /** `12 Oct 2026, 14:05`, in Africa/Nairobi. Returns `fallback` for missing or invalid input. */
-const bookingFormatter = new Intl.DateTimeFormat(JATA_LOCALE, {
-  timeZone: JATA_BOOKING_TIME_ZONE,
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+const bookingFormatters: Record<string, Intl.DateTimeFormat> = {
+  [JATA_BOOKING_TIME_ZONE]: new Intl.DateTimeFormat(JATA_LOCALE, {
+    timeZone: JATA_BOOKING_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }),
+  [LEGACY_BOOKING_TIME_ZONE]: new Intl.DateTimeFormat(JATA_LOCALE, {
+    timeZone: LEGACY_BOOKING_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }),
+};
 
 /**
- * A booking instant on the clock it was booked against (see JATA_BOOKING_TIME_ZONE).
- * Deterministic: no ambient time zone, so the server and the browser always agree.
+ * A booking instant on the clock it was booked against.
+ *
+ * New bookings are Nairobi-anchored (`JATA_BOOKING_TIME_ZONE`, the default here); rows that
+ * predate the contract are read on the legacy clock
+ * (`LEGACY_BOOKING_TIME_ZONE`) by passing the zone `bookingRowTimeZone()` returns for the row.
+ * Deterministic either way: no ambient time zone, so the server and the browser always agree and
+ * a legacy row never moves when the contract changes.
  */
-export function formatBookingDateTime(value: DateInput, fallback = "—"): string {
+export function formatBookingDateTime(value: DateInput, fallback = "—", timeZone: string = JATA_BOOKING_TIME_ZONE): string {
   const date = toDate(value);
   if (!date) return fallback;
+  const formatter = bookingFormatters[timeZone] ?? bookingFormatters[JATA_BOOKING_TIME_ZONE];
   try {
-    return bookingFormatter.format(date);
+    return formatter.format(date);
   } catch {
-    return manualDate(date, true, 0);
+    return manualDate(date, true, timeZone === LEGACY_BOOKING_TIME_ZONE ? 0 : NAIROBI_OFFSET_MS);
   }
 }
 

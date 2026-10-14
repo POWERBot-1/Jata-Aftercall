@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { StorefrontShell } from "@/components/storefront/StorefrontShell";
-import { BOOKING_STATUS_LABELS, type BookingStatus } from "@/lib/experience/booking";
+import { BOOKING_STATUS_LABELS, bookingRowTimeZone, type BookingStatus } from "@/lib/experience/booking";
 import { formatBookingDateTime, formatKES } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function BookingConfirmationPage({ params }: Props) {
             <p className="eb-muted">{data.business.name} will confirm with you directly.</p>
             <dl style={{ display: "grid", gap: "0.5rem", marginTop: "1.5rem" }}>
               <div className="eb-totals__row"><dt>What</dt><dd style={{ margin: 0 }}>{booking.serviceName}</dd></div>
-              <div className="eb-totals__row"><dt>When</dt><dd style={{ margin: 0 }}>{formatBookingDateTime(booking.startAt)}</dd></div>
+              <div className="eb-totals__row"><dt>When</dt><dd style={{ margin: 0 }}>{formatBookingDateTime(booking.startAt, bookingRowTimeZone(booking.bookingTimeZone))}</dd></div>
               {booking.staffName ? <div className="eb-totals__row"><dt>With</dt><dd style={{ margin: 0 }}>{booking.staffName}</dd></div> : null}
               <div className="eb-totals__row">
                 <dt>Status</dt>

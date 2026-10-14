@@ -43,6 +43,9 @@ export async function GET(req: Request) {
         staffName: booking.staffName,
         startAt: booking.startAt,
         endAt: booking.endAt,
+        // The clock the row was anchored to: the board renders each booking on it, so an
+        // unmarked legacy row is never shown three hours off. See lib/experience/bookingTime.ts.
+        bookingTimeZone: booking.bookingTimeZone,
         status: booking.status,
         statusLabel: BOOKING_STATUS_LABELS[booking.status as BookingStatus] || booking.status,
         depositKES: booking.depositKES,

@@ -1387,3 +1387,188 @@ inside the truncated middle of the log in both, and both predate or straddle the
 failure is therefore intermittent in observation but remains UNRESOLVED as to cause — not a flake, and not
 attributed to this change set.** The workflow's own PR comment is the evidence channel for any later run on
 this branch; §I is not extended per push.
+
+## J. Directive 6 execution — booking-time contract implemented, dependency remediation evidenced, Paystack verification classified, live exercise scoped
+**Date: 2026-10-14.** Branch `arena/fac28f53-jata-aftercall`, parent `0f402acb87ddbe4a1b62ed36138d00be1b24991e`. §A–§I are unchanged and remain in force. Nothing here merges PR #45, deploys, changes production configuration or data, activates a provider or storage, or performs a live charge or refund.
+
+### J.1 D-1 Package B — the `Africa/Nairobi` booking-time contract (IMPLEMENTED)
+
+**Decision executed (owner, 2026-10-14):** a new business booking's date + time are Nairobi wall-clock values, converted to an unambiguous UTC instant before storage; **existing rows are not reinterpreted or rewritten**.
+
+**What the contract is now.** One module, `lib/experience/bookingTime.ts`, owns the conversion:
+
+| Input | Result |
+| --- | --- |
+| `2026-10-14` + `09:00` (Nairobi) | `2026-10-14T06:00:00.000Z` |
+| `2026-10-14` + `00:30` | `2026-10-13T21:30:00.000Z` (the instant is on the previous UTC day) |
+| `2026-10-14` + `23:30`, 60 min duration | ends `2026-10-14T21:30:00.000Z` = **15 Oct 00:30** on the business clock |
+
+The stored column keeps holding an instant, so every existing query, index, ordering and comparison keeps its meaning. `new Date(\`${date}T${time}\`)` — which anchored to whatever zone the host ran in — is gone from the write path; the anchor is a named zone resolved through `Intl`, never the ambient one. Nairobi has been UTC+3 all year since 1940, so no wall time is ambiguous or nonexistent; the helper still validates the round trip, so a future per-business zone cannot silently accept a time a DST transition deleted.
+
+**Files changed**
+
+| File | Change |
+| --- | --- |
+| `lib/experience/bookingTime.ts` **(new)** | wall-clock ⇄ instant conversion, calendar-day arithmetic, business-day window, legacy marker resolution |
+| `lib/experience/booking.ts` | `validateBookingRequest`, `freeSlotsFor`, `openDays` anchor to the contract; re-exports the contract helpers |
+| `lib/experience/bookingCalendar.ts` | the customer picker offers **business** days (it built UTC days before: at 22:30 Nairobi it offered "today" as a day that had already ended) |
+| `app/api/storefront/booking/route.ts` | availability and overlap windows use the business day; `bookingTimeZone: contractBookingMarker()` on create |
+| `lib/dateFormat.ts` | `JATA_BOOKING_TIME_ZONE` = `Africa/Nairobi`; new `LEGACY_BOOKING_TIME_ZONE` = `UTC`; `formatBookingDateTime(value, fallback, timeZone)` |
+| `lib/format.ts` | `formatBookingDateTime(value, timeZone?)` passthrough |
+| `app/api/bookings/route.ts`, `app/dashboard/businesses/[id]/bookings/page.tsx`, `components/dashboard/BookingBoard.tsx`, `app/b/[slug]/booking/[id]/page.tsx` | each row renders on its own clock |
+| `prisma/schema.prisma` + `prisma/migrations/20261014000000_booking_time_zone_marker/` | one nullable marker column |
+
+**Legacy treatment (no silent rewrite).** `Booking.bookingTimeZone` is `NULL` for every row written before the contract and holds `"Africa/Nairobi"` for rows written after it. `bookingRowTimeZone()` trusts **only** that marker; anything else (NULL, empty, a future version's value, junk) reads on the legacy `UTC` clock. So a pre-contract row keeps its stored instant *and* keeps printing the time it was entered with, while a new row prints the time the customer chose:
+
+| Stored instant | Marker | Board / customer page / notification |
+| --- | --- | --- |
+| `2026-10-14T09:00:00Z` | `NULL` (legacy) | `14 Oct 2026, 09:00` |
+| `2026-10-14T06:00:00Z` | `Africa/Nairobi` | `14 Oct 2026, 09:00` |
+
+No backfill runs, no `UPDATE` exists in the migration, and no historical instant is rewritten. **Rescheduling:** there is no "move booking" endpoint — a reschedule is cancel + rebook, both of which now go through the contract, and the board/customer/notification display path is shared, so the three surfaces cannot disagree.
+
+**Migration safety.** `ALTER TABLE "Booking" ADD COLUMN "bookingTimeZone" TEXT;` — additive, nullable, no default, no table rewrite, no data change, no `NOT NULL`. The previous application version never selects or writes the column, so it keeps working before and after the deploy (expand-only; there is no contract step). Deployment order: **apply the migration first, then deploy the app** (the app writes the marker). Rollback needs no DDL: redeploy the previous version, which ignores the column; dropping it later would discard only the marker, never a `startAt`/`endAt`. **It has not been applied to any database by this change set** — it is staged for review, and production migration remains a separately authorized step. The only database that runs it is CI's disposable test database (`prisma migrate deploy` in the workflow), and the guard test `tests/unit/repair-guards.test.ts` now admits it in the authorized-migration allowlist with the additivity invariants (no `DROP`, no `UPDATE`, no `ALTER COLUMN`) still enforced.
+
+**Tests.** New `tests/unit/booking-time-contract.test.ts` — **22 tests**, one describe block per required category: (1) creation at representative Nairobi times incl. `00:00`, `00:30`, `23:00`; (2) a booking crossing midnight; (3) start/end validation and duration floor; (4) availability, overlap, capacity, past-slot and closed-day rules; (5) rescheduling + board/customer/notification label agreement; (6) explicit time-zone behaviour with the host forced to **UTC, Africa/Nairobi, America/Los_Angeles and Pacific/Kiritimati**; (7) legacy records unchanged (marker mapping, migration shape, no legacy clock on new rows); (8) concurrency protection and tenant isolation, with the DB-gated suites named as the real PostgreSQL evidence. Updated coherently (each previously pinned the *old* anchor): `booking-time-display.test.ts` (now pins both clocks), `hydration-determinism.test.ts` (three declared zones, same "no ambient zone" invariant), `experience-operations.test.ts`, `booking-hydration.test.ts` (leap-day/year boundary on the business clock), `integration/storefront-booking.test.ts` (stored fixtures built on the contract clock), `repair-guards.test.ts` (authorized migration).
+
+### J.2 D-2 — the seven remaining development-only findings, per finding
+
+Reproduced at this HEAD: **7 high, 0 moderate, 0 critical; production `--omit=dev` audit = 0**. All seven are dev-only and reachable through exactly four paths:
+
+```
+eslint-config-next@15.5.27 → @next/eslint-plugin-next@15.5.27 → fast-glob@3.3.1 → micromatch@4.0.8 → braces@3.0.3
+tailwindcss@3.4.19 → fast-glob@3.3.3 → micromatch@4.0.8 → braces@3.0.3
+tailwindcss@3.4.19 → micromatch@4.0.8 → braces@3.0.3
+tailwindcss@3.4.19 → chokidar@3.6.0 → braces@3.0.3
+```
+
+| Package | Status | Evidence |
+| --- | --- | --- |
+| `braces` | **NO SUPPORTED FIX EXISTS** | GHSA-vfj7-8cjw-p6xm (HIGH, published 2026-09-18): vulnerable `<= 3.0.3`, **first patched version: NONE PUBLISHED**; 3.0.3 is the highest published version. Verified against GitHub's advisory API, not just npm's report |
+| `micromatch` | **NO SUPPORTED FIX EXISTS** | latest 4.0.8 requires `braces@^3.0.3` → the vulnerable version. No release avoids braces |
+| `fast-glob` | **NO SUPPORTED FIX EXISTS** | 3.x is the only line (no 4.x); latest 3.3.3 requires micromatch. The lint plugin pins `fast-glob@3.3.1` exactly |
+| `@next/eslint-plugin-next` | **NO SUPPORTED FIX EXISTS** | our 15.5.27 is the highest 15.5.x; **even Next 16.4.0 (latest) still depends on `fast-glob@3.3.1`** → micromatch → braces |
+| `eslint-config-next` | **NO SUPPORTED FIX EXISTS** | highest 15.5.x = 15.5.27 (installed). npm's only suggested "fix" is a **downgrade** to 14.2.35, a Next-14 lint stack mismatched with Next 15.5.27; dropping the package would weaken lint, which is prohibited |
+| `tailwindcss` | **REMEDIABLE ONLY VIA A MAJOR** (staged, awaiting approval) | highest 3.x = 3.4.19 (no patch exists); `tailwindcss@4.3.3` has **zero dependencies**, which removes this finding and `chokidar` |
+| `chokidar` | **REMEDIABLE ONLY VIA THE SAME MAJOR** | tailwind 3 requires `chokidar@^3.6.0` (braces); chokidar 4 dropped braces but is outside that range — a cross-major override would be unsupported *and* would break tailwind's watcher |
+
+**Conclusion, stated plainly: full 7/7 remediation is not achievable today by any supported change.** Five findings have no fix in any published version of the packages involved. Two more would be cleared only by adopting Tailwind 4 — a major that does not clear the other five, because they hang off Next's own ESLint plugin. No `npm audit fix --force` was run, no package was removed to make a finding disappear from a report, no advisory was suppressed or reclassified, and the compatibility test is unchanged in this directive.
+
+**Staged Tailwind 4 plan (measured, not guessed) — needs owner approval to execute.**
+Blast radius in this repository: one stylesheet (`app/globals.css`, 2170 lines) with the three `@tailwind` directives and **zero `@apply`**; theme customisation is a single font stack in `tailwind.config.ts`; no Tailwind plugins; four files use a utility renamed in v4 (`shadow-sm` ×3, `outline-none` ×1, `ring-1` ×2, bare `rounded` ×47 to re-check). Required steps: `tailwindcss@^4` + `@tailwindcss/postcss`, replace the directives with `@import "tailwindcss"`, move `content` globs to `@source` and the font family to `@theme`, drop `autoprefixer` (v4 handles it), rename the utilities above, then verify. **The verification I cannot produce here is the blocker**: the directive asks for baseline screenshots or equivalent UI checks across dashboard, Website Studio, AI Front Desk, POS, checkout and generated business pages, and this environment has no browser (the browser gates run only in CI). Executing it half-verified would be exactly the "claim remediation without verification" this report must not do. It also clears only 2 of 7 findings.
+
+**Compensating control while the residual stands (facts, not a dismissal).** Both chains are `devDependencies`: they are absent from the deployed bundle, and the production audit is 0. The `braces` advisory is a stack-exhaustion DoS triggered by deeply nested *glob patterns*; in this repository those patterns come from source-controlled configuration (`tailwind.config.ts` content globs, the ESLint ignore list) — no customer or provider input reaches those globbers. That reduces likelihood; it does not change the severity classification, and this is recorded as an accepted-for-now risk, not a fix.
+
+### J.3 Paystack production-configuration verification — status, without secrets
+
+**Access reality:** Arena offers no Vercel or Paystack connector (both report `unsupported`), so dashboard-side verification from here is impossible and **no secret was requested, entered, printed or committed**. Items that can be verified from the code are verified below; dashboard-only items are **BLOCKED** with the exact owner navigation.
+
+| Checklist item | Status | Non-sensitive evidence |
+| --- | --- | --- |
+| Test/live credential separation | **VERIFIED (code)** | `lib/payments/config.ts:90-106` derives `mode: "TEST" \| "LIVE" \| "NONE"` from the key prefix (`sk_live_` ⇒ LIVE); `:145-155` refuses test mode when the deployment switches it off and reports "no live connector configured" explicitly |
+| Server-only secret storage | **VERIFIED (code)** | `PAYSTACK_SECRET_KEY` is read only in server modules; **zero** `NEXT_PUBLIC_PAYSTACK*`/`NEXT_PUBLIC_*SECRET` references; no `"use client"` file references the secret |
+| Transaction initialization + server-side verification | **VERIFIED (code + tests)** | `lib/paystack.ts` `initializeTransaction`/`verifyTransaction`; `lib/experience/payments.ts:342` verifies the provider transaction before settling; `lib/payments/providers/paystack.ts:103` calls `/transaction/verify/:ref` |
+| Webhook endpoint, signature validation, idempotency | **VERIFIED (code + tests)** | `app/api/payments/webhooks/paystack/route.ts` verifies `x-paystack-signature` (HMAC-SHA512 over the raw body) with `crypto.timingSafeEqual` before the payload is believed, and caps the body at 128 KB |
+| Duplicate events / repeated callbacks | **VERIFIED (code + tests)** | `lib/payments/webhooks.ts` dedupes on `providerEventId` (unique lookup ⇒ `already_processed` with HTTP 200, and a `DUPLICATE` status when the engine reports one) |
+| Subscription and POS payment-state transitions | **VERIFIED (tests)** | `lib/payments/states.ts` + engine; covered by the payments/POS/entitlement suites (198 passed in this run) |
+| Failure, cancellation, timeout, retry | **VERIFIED (code)** | 15 s/20 s `AbortSignal.timeout` on provider calls; explicit `retryable` flags; a refund with an unknown outcome is flagged `outcomeUnknown` rather than retried blind |
+| Logging, redaction, secret exposure prevention | **VERIFIED (code)** | zero `console.*` calls in `lib/payments/config.ts`, `lib/paystack.ts`, `lib/payments/providers/paystack.ts`; destinations/phones are masked before storage (`lib/payments/money.ts` `maskDestination`/`maskPhone`) |
+| Reconciliation, receipts, rollback/incident response | **VERIFIED (code) / BLOCKED (procedure)** | `lib/payments/reconciliation.ts` records matched and exception outcomes and the engine surfaces them; receipts use tokenised links. The operational rollback/incident *runbook* is a dashboard/ops artefact, not in the repository → BLOCKED |
+| Correct Vercel project + production environment | **BLOCKED — OWNER ACTION** | Requires dashboard access |
+
+**Owner navigation for the BLOCKED rows (no value may be pasted into Arena, GitHub, this report or the chat).** Vercel → the JATA project → **Settings → Environment Variables → Production**: confirm `PAYSTACK_SECRET_KEY` exists and its **prefix** is the intended one (`sk_test_` vs `sk_live_`) — note only *which* prefix, never the value; confirm no Paystack secret is scoped to Preview/Development unless intended; confirm `PAYSTACK_PUBLIC_KEY` is the matching mode. Paystack dashboard → **Settings → API Keys & Webhooks**: confirm the webhook URL points at the JATA production endpoint, that the webhook signing secret matches the deployed one, and that live mode is enabled only if live payments are intended. Record only VERIFIED/FAILED per item.
+
+### J.4 Live charge/refund exercise — scope proposed, **NOT executed**
+
+**Status: NOT EXECUTED — awaiting the exact scope confirmation below.** No live key was used, no provider call was made, no charge or refund exists, and the production-configuration items in §J.3 must be VERIFIED first. The owner's approval is in principle; the transaction itself is only authorized once the exact details are confirmed, and the smallest amount the provider supports will be used.
+
+**The exact details required before execution (owner to supply or approve each):**
+
+1. **Authorized merchant/account** — the production Paystack account (mode LIVE) the charge is to be made on.
+2. **Consenting participant + payment method** — who pays, and by which method (card / M-PESA STK / etc.).
+3. **Test amount + fees** — the explicit amount in KES and the acknowledgement that provider fees apply and are not refunded.
+4. **Charge operation + unique reference** — the exact endpoint/path used (subscription checkout or POS sale) and the reference JATA will emit, so a duplicate can be recognised.
+5. **Refund operation + permitted amount** — full or partial, and the maximum permitted.
+6. **Duplicate prevention** — the idempotency guarantee already in code (durable idempotency record + `providerEventId` dedupe) plus the rule that a possibly-successful charge is **never** retried before its reference and status are checked.
+7. **Observation plan** — how payment verification, the webhook, the receipt, the owner notification and the reconciliation record will be observed (screens/records, no secrets).
+8. **Refund verification** — how the provider's refund status is matched back to the JATA transaction record.
+9. **Stopping conditions + evidence retention** — stop if amount, account, payment status or refund status differs from this plan; retain the reference list and status evidence.
+
+**Lifecycle to be executed once confirmed (single cycle):** initialized → provider confirms → JATA verifies server-side → correct subscription/POS state recorded → notification + receipt → reconciles → refund initiated within the approved scope → provider refund status and JATA record verified → evidence and discrepancies documented. **Authorization to run this exercise is not authorization to merge or deploy.**
+
+### J.5 D-3b-2 — accounting calendar boundaries (decision note; unchanged)
+
+`lib/pos/reports.ts` `dayRange`/`weekRange`/`monthRange`/`dailySeries` are untouched, as directed.
+
+- **Option A — keep the UTC-based boundaries and grouping (status quo).** Daily totals, weekly/monthly reports, ageing buckets and every historical re-run stay exactly as they are today; a report re-run for a past range returns the same numbers it returned before. The cost is that a Nairobi business day is `03:00–03:00` local, so a sale at 00:30 EAT belongs to the previous bucket — which is what the owner sees today, and what the new timezone test pins so the behaviour is explicit rather than accidental.
+- **Option B — define business reporting periods and daily buckets in `Africa/Nairobi`.** Periods and buckets match the business's wall clock and agree with the printing/label policy from §I.2; but **every historical report changes when it is re-run** (the same closed range produces different totals), ageing day-counts shift near midnight, and comparisons against provider settlement/statement dates need a policy of their own.
+
+**Impact summary:** daily totals and historical reports — A: unchanged; B: restated. Ageing views — A: unchanged; B: up to one day different per entry near the boundary. Reconciliation — neither option changes the stored instant, the provider reference or the matching logic; only which *bucket* a matched payment is reported under moves.
+
+**Recommendation (safer): Option A for this release**, because it changes no number anyone has already seen, while the label policy from §I.2 already gives staff the correct local time on every row. If the business wants Nairobi-day totals, take **Option B as a deliberate, dated policy change** with a written note that reports re-run for earlier ranges will read differently, so an auditor can distinguish a policy change from a data error. Final choice stays with the owner.
+
+### J.6 Authenticated-browser CI failure — the failing check is identified; the root cause is not
+
+**Identified (code + log-window evidence, this time positively).** The failing check is
+**`no uncaught browser runtime errors`** — `scripts/browser/studio-authenticated.check.mjs:739`
+(`check("no uncaught browser runtime errors", errors.length === 0, …)`), the last gate before the run
+is marked complete. The evidence chain: the run reports `428 = 427 passed + 1 failed`, and that check is
+the final one; the visible log shows a recorded `BROWSER RUNTIME ERROR … React error #418 …` on the
+authenticated retail preview (`/dashboard/businesses/…/preview` with the `/b/qa-retail-…` iframe),
+immediately followed by the script's `M418` diagnostic bundle; the catch path prints
+`FAIL authenticated journey: <check name>`, then the last 3,500 characters of the server log (the Prisma
+`aIQualityEvent.create()` block the comment's tail begins with), then the `finally` cleanup lines and the
+summary — exactly the shape of the red comment. Green runs have no `BROWSER RUNTIME ERROR` line and
+report `428 passed, 0 failed`. This also explains §H.3's unnamed failing check: it is the same gate, and
+the earlier red run's `427 passed, 1 failed` signature matches (its truncated window simply did not
+display the pageerror line, so it is recorded as *consistent with*, not *conclusively matched to*, this
+mechanism).
+
+**Mechanism:** an uncaught React `#418` hydration mismatch raised during the authenticated retail
+journey. **Root cause of that mismatch: UNRESOLVED.** The frozen evidence that would name the mismatching
+node (`m418-evidence.json` / `results.json` `errors[]`) is inside the run's artifact, whose download from
+here fails with a storage `EOF` (retried), `gh run rerun` returns **403**, and the M418 bundle sits in the
+elided middle of the comment. **Exact missing evidence: the `errors[]` entry (message + stack) and the
+frozen pre-hydration snapshot for the failing load in `hydration-raw-order-evidence` for run
+`38470293452`, or the middle of that run's `step-authenticated-browser.log`.** It is **not** recorded as a
+flake, and no later green run is treated as proof it is fixed.
+
+**Two changes made so the next failure names itself (diagnostics only; pass/fail, retries and coverage
+are unchanged):**
+1. `scripts/browser/studio-authenticated.check.mjs` now prints `FAILED CHECK: <name>` immediately before
+   the end-of-run summary, which survives the comment's middle-elision.
+2. `.github/workflows/interactive-business-e2e.yml`'s failure reporter now posts a
+   **"Failure signatures (never elided)"** section first: every `FAIL`/`FAILED CHECK`/`BROWSER RUNTIME
+   ERROR`/`M418-RECORDED` line from the captured step logs, bounded, outside the head/tail windows.
+
+### J.7 Verification at this change set
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run tests/unit/booking-time-contract.test.ts` | **22 passed** (new contract suite) |
+| Booking/timezone/calendar/legacy group (`booking-time-contract`, `booking-time-display`, `booking-hydration`, `hydration-determinism`, `experience-operations`) | **64 passed / 0 failed** |
+| POS · payments · wallet · refund · reconciliation · dependency-security group (13 files) | **188 passed / 0 failed** |
+| Tenant isolation · authorization · publication/entitlement (`tests/security`, 14 files) | **198 passed / 0 failed** |
+| Integration booking suite (`tests/integration/storefront-booking.test.ts`) | **3 passed** (fixtures rebuilt on the contract clock) |
+| Migration guard (`tests/unit/repair-guards.test.ts`) | passed (authorized migration admitted; additivity invariants enforced) |
+| Full local suite `npx vitest run` | **2225 passed / 114 skipped / 0 failed** (+22 vs `0f402ac` = the new contract tests; the 114 environment-gated real-DB skips are unchanged and explained in §I.5) |
+| `npm run lint` | **0 errors** (1 pre-existing `<img>` warning) |
+| `npx tsc --noEmit` | **1 error — the pre-existing `Prisma.BusinessUncheckedCreateInput` (stale generated client offline), identical to `main`**; no new errors. Note: `prisma generate` cannot run in this environment (binaries.prisma.sh is not reachable); CI generates the client, and `lib/db.ts` types the client as `any`, so the marker write introduces no type error here |
+| `npm run build` | **Build completed successfully** |
+| `npm audit` | production **0**; full **7 high, all dev-only** (§J.2) |
+| Diff review | 18 modified + 3 new paths; **no secret, DSN or key in the diff**; no new `skip`/`only`; the only removed test lines are the 12 assertions in the two files rewritten in §J.1, each replaced in the same file by the contract-clock equivalent; no financial/POS/payment logic touched |
+
+### J.8 What §J did and did not do
+
+**Did:** implemented and documented the Nairobi booking-time contract with an explicit legacy rule and an
+additive migration (staged, unapplied); added 22 contract tests and updated six test files that pinned the
+superseded anchor; reproduced and classified all seven development findings with a per-finding no-fix
+demonstration and a measured staged plan; verified every code-level Paystack checklist item and listed the
+BLOCKED dashboard items with owner navigation; wrote the live-exercise scope and stopped before it; wrote
+the D-3b-2 decision note; identified the failing CI check and made the next failure self-identifying.
+
+**Did not:** merge PR #45; deploy; run any production migration; modify any production or historical
+booking record; backfill, rewrite or reinterpret a stored instant; change report periods, daily buckets,
+ageing or settlement semantics; run `npm audit fix --force`; remove, weaken, skip or reclassify a test or
+advisory; install a major; execute a live charge or refund; activate media storage or any provider; or
+request, print or commit a secret.

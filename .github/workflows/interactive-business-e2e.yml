@@ -276,6 +276,7 @@ jobs:
               } catch (e) { return '(no output captured)'; }
             };
             const body = [
+              ['Failure signatures (never elided)', null, 0],
               ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
@@ -295,7 +296,31 @@ jobs:
               ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
-            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
+            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${file === null ? signatures : read(file, limit)}\n\`\`\``).join('\n\n');
+            // Never-elided failure signatures: checks that throw (`FAIL ...`), uncaught browser
+            // errors and their recorded M418 diagnostics, and the script's own `FAILED CHECK`
+            // line. The head/tail windows above can elide the middle of a long log, which is
+            // exactly where the failing check's name sat; this section cannot.
+            const signatureFiles = [
+              '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-hydration-browser.log',
+              '/tmp/step-hydration-race.log', '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
+              '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
+              '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
+            ];
+            const signatureLines = [];
+            for (const file of signatureFiles) {
+              try {
+                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+                for (const line of text.split('\n')) {
+                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED)/.test(line.trim())) {
+                    signatureLines.push(`${file.split('/').pop()}: ${line.trim()}`);
+                  }
+                }
+              } catch { /* step did not run */ }
+            }
+            const signatures = signatureLines.length
+              ? signatureLines.join('\n').slice(0, 4000)
+              : '(no FAIL/BROWSER RUNTIME ERROR/FAILED CHECK lines in the captured step logs)';
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
             try {
               await github.rest.issues.createComment({

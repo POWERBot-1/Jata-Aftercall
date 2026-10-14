@@ -64,15 +64,17 @@ export function formatDateTime(value: string | Date | null | undefined): string 
 }
 
 /**
- * Booking instants render on the clock they were booked against, not the Nairobi clock — the
- * storage rule and the reasoning are in `lib/dateFormat.ts` (JATA_BOOKING_TIME_ZONE). Payments,
+ * Booking instants render on the clock they were booked against. New bookings are Nairobi-anchored
+ * (`JATA_BOOKING_TIME_ZONE`, the default); pass `bookingRowTimeZone(row.bookingTimeZone)` for a row
+ * that may predate the contract, so a legacy row keeps the time it was entered with. The storage
+ * rule and the reasoning are in `lib/dateFormat.ts` and `lib/experience/bookingTime.ts`. Payments,
  * orders and subscriptions keep the Nairobi-pinned helpers above.
  */
-export function formatBookingDateTime(value: string | Date | null | undefined): string {
+export function formatBookingDateTime(value: string | Date | null | undefined, timeZone?: string): string {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "";
-  return pinnedBookingDateTime(date, "");
+  return pinnedBookingDateTime(date, "", timeZone);
 }
 
 /** Deterministic grouping for counts and money amounts (en-KE, no ambient locale). */

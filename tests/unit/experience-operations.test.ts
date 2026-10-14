@@ -22,6 +22,7 @@ import {
   isValidBookingTransition,
   parseAvailability,
   validateBookingRequest,
+  wallClockToInstant,
 } from "@/lib/experience/booking";
 import { paymentStateOf } from "@/lib/experience/payments";
 import {
@@ -96,7 +97,9 @@ describe("booking rules", () => {
 
   it("never offers a slot that is already taken", () => {
     const date = futureDate(1);
-    const day = new Date(`${date}T10:00:00`);
+    // A stored booking is an instant: build it on the booking contract's clock (§J.1), exactly as
+    // the route now stores it. An ambient `new Date(`${date}T10:00:00`)` was the old anchor.
+    const day = wallClockToInstant(date, "10:00")!;
     const taken = [{ startAt: day, endAt: new Date(day.getTime() + 60 * 60_000), status: "CONFIRMED" }];
     const slots = freeSlotsFor({ date, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, taken });
     expect(slots).not.toContain("10:00");
@@ -107,8 +110,8 @@ describe("booking rules", () => {
     const today = futureDate(0);
     const now = new Date();
     for (const slot of freeSlotsFor({ date: today, availability: DEFAULT_AVAILABILITY, durationMinutes: 60 })) {
-      const [hours, minutes] = slot.split(":").map(Number);
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+      // The slot is a Nairobi wall-clock value; the instant it denotes must still be in the future.
+      const start = wallClockToInstant(today, slot)!;
       expect(start.getTime()).toBeGreaterThan(now.getTime());
     }
     // Sunday (day 0) is closed by default — find the next one regardless of today's weekday.

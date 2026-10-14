@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, isValidBookingTransition, type BookingStatus } from "@/lib/experience/booking";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, bookingRowTimeZone, isValidBookingTransition, type BookingStatus } from "@/lib/experience/booking";
 import { formatBookingDateTime, formatDuration, formatKES, maskPhone } from "@/lib/format";
 
 export type BoardBooking = {
@@ -21,6 +21,8 @@ export type BoardBooking = {
   staffName: string | null;
   startAt: string;
   endAt: string | null;
+  /** The clock this row was anchored to; absent/null for rows written before the contract. */
+  bookingTimeZone?: string | null;
   durationMinutes: number | null;
   status: string;
   depositKES: number;
@@ -95,7 +97,7 @@ export function BookingBoard({ bookings: initial }: { bookings: BoardBooking[] }
                   <p className="text-sm text-zinc-600">
                     {booking.customerName} · {maskPhone(booking.customerPhone)}
                   </p>
-                  <p className="text-sm text-zinc-600">{formatBookingDateTime(booking.startAt)}</p>
+                  <p className="text-sm text-zinc-600">{formatBookingDateTime(booking.startAt, bookingRowTimeZone(booking.bookingTimeZone))}</p>
                   {booking.durationMinutes ? <p className="text-xs text-zinc-500">{formatDuration(booking.durationMinutes)}</p> : null}
                   {booking.staffName ? <p className="text-xs text-zinc-500">With {booking.staffName}</p> : null}
                 </div>
