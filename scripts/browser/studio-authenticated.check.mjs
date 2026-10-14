@@ -87,6 +87,9 @@ const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
 // Diagnostic-arm measurements (E1/E2/E4) are recorded separately and never satisfy a required sample.
 const m418Diagnostics = [];
+// Cross-tenant preview probes (isolation check + its positive control). Auxiliary evidence:
+// never part of the hydration sample set, never able to satisfy or block a required key.
+const isolationProbes = [];
 let m11Evidence = { status: "INSUFFICIENT", checked: 0, required: REQUIRED_CATEGORIES.length * REQUIRED_ATTEMPTS, inverted: [] };
 let gateSummary = null;
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
@@ -802,6 +805,72 @@ try {
       }
       if (cdp) await cdp.detach().catch(() => {});
     }
+
+    // Cross-tenant preview isolation, measured explicitly. The M418 sampling used to open every
+    // category's preview with retail's session and record the (correct) absence of the preview
+    // iframe as an unresolved hydration sample (§V.11, §V.16.1). The hydration samples now use each
+    // business's own session, so the behaviour they were measuring by accident is measured here on
+    // purpose: another tenant's session must not be able to read this business's unpublished draft
+    // preview. Every category carries a positive control (its own session must still see the marker)
+    // so an application that rendered nothing at all could not satisfy the check either.
+    for (const foreignFixture of created.filter((item) => item !== first)) {
+      const marker = `QA first ${foreignFixture.category} ${runId}`;
+      const foreignRoute = `/dashboard/businesses/${foreignFixture.id}/preview`;
+      const foreign = { kind: "cross-tenant", business: foreignFixture.category, session: "first-owner", route: foreignRoute };
+      try {
+        const response = await first.ownerPage.goto(`${origin}${foreignRoute}`, { waitUntil: "networkidle0" });
+        foreign.status = response ? response.status() : null;
+        try {
+          await first.ownerPage.waitForFunction((expected) => {
+            const frame = document.querySelector('iframe[title="Draft preview"]');
+            const top = document.body ? String(document.body.textContent || "") : "";
+            const inside = frame && frame.contentDocument && frame.contentDocument.body ? String(frame.contentDocument.body.textContent || "") : "";
+            return `${top} ${inside}`.includes(expected);
+          }, { timeout: 10000 }, marker);
+          foreign.markerSeen = true; // the other tenant's draft was readable
+        } catch (error) {
+          const message = String(error);
+          // A timeout means "not observed within the window" — the expected outcome. Any other
+          // error leaves the outcome unknown, and an unknown outcome must fail, never pass.
+          if (/TimeoutError|Waiting failed/.test(message)) foreign.markerSeen = false;
+          else { foreign.markerSeen = null; foreign.error = message.slice(0, 120); }
+        }
+        foreign.diag = await sampleFrameDiagnostics(first.ownerPage, marker).catch(() => null);
+      } catch (error) {
+        foreign.markerSeen = null;
+        foreign.error = String(error).slice(0, 120);
+      }
+      isolationProbes.push(foreign);
+      const foreignLine = `M418 DIAG XTENANT ${JSON.stringify(foreign)}`.slice(0, 880);
+      m418Lines.push(foreignLine);
+      console.log(foreignLine);
+      check(`${foreignFixture.category}: another tenant's session cannot read this draft preview`,
+        foreign.markerSeen === false,
+        JSON.stringify({ status: foreign.status, markerSeen: foreign.markerSeen, error: foreign.error }));
+
+      const own = { kind: "positive-control", business: foreignFixture.category, session: "own-owner", route: foreignRoute };
+      try {
+        const response = await foreignFixture.ownerPage.goto(`${origin}${foreignRoute}`, { waitUntil: "networkidle0" });
+        own.status = response ? response.status() : null;
+        try {
+          await foreignFixture.ownerPage.waitForFunction((expected) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(expected), { timeout: 15000 }, marker);
+          own.markerSeen = true;
+        } catch (error) {
+          own.markerSeen = false;
+          own.error = String(error).slice(0, 120);
+        }
+      } catch (error) {
+        own.markerSeen = false;
+        own.error = String(error).slice(0, 120);
+      }
+      isolationProbes.push(own);
+      const ownLine = `M418 DIAG XTENANT ${JSON.stringify(own)}`.slice(0, 880);
+      m418Lines.push(ownLine);
+      console.log(ownLine);
+      check(`${foreignFixture.category}: owning session still reads its own draft preview (control)`,
+        own.markerSeen === true,
+        JSON.stringify({ status: own.status, markerSeen: own.markerSeen, error: own.error }));
+    }
     // M11 #418 regression gate: the root cause was Fizz emitting the `_R_`/Flight bootstrap
     // scripts BEFORE the content divs when the root segment was still pending at first
     // flush. React's body-level hydration walk cannot skip leading scripts (non-root
@@ -943,12 +1012,14 @@ try {
   writeFileSync(".cache/verification/studio-authenticated/m418-evidence.json", JSON.stringify({
     m418Lines: m418Lines.slice(0, 40), serverSnapshots, hydrationVisits: hydrationVisits.slice(0, 40),
     errors: errors.slice(0, 6), journeyComplete, m418Diagnostics: m418Diagnostics.slice(0, 40),
+    isolationProbes: isolationProbes.slice(0, 12),
     gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11 },
   }, null, 2));
   writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures, hydrationVisits,
     journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyStatusFor(gateSummary.status),
     gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11, problems: gateSummary.problems },
     m418Diagnostics,
+    isolationProbes,
     providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true, serverSnapshots }, null, 2));
 }
 const failed = results.filter((item) => !item.ok).length;
