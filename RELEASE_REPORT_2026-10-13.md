@@ -3560,3 +3560,198 @@ Preserved contracts: across the entire window `git diff --name-only 97dc0ef..9bd
 `RELEASE_REPORT_2026-10-13.md` — no application, test, harness, workflow, Prisma, booking, payment, POS,
 tenant or media surface was touched, so the ratified contracts in §7 of the directive stand unmodified by
 this directive's execution.
+
+## §U Directive 12 — checkpoint reconciliation and owner-approval readiness at `3a47c75`
+
+### U.1 What was verified before any write, and the exact discrepancy (directive §2)
+
+Directive 12 states its starting point as commit `1b8167d` with an unpushed branch, "five reported
+commits", "1,794 passing / 95 skipped" tests, a Tailwind 3 advisory chain of nine development findings, a
+`BookingClient` fix and a subscription-payment compare-and-set change. Verification was run **before any
+write operation**, as §2 requires. The `1b8167d` checkpoint is real — and it is a *20-hour-old ancestor of
+the current head*, not the current state:
+
+| Directive 12 premise | Observed at verification time | Status |
+| --- | --- | --- |
+| Branch `arena/fac28f53-jata-aftercall` | correct, checked out | **PASS** |
+| Working tree clean | 0 uncommitted changes | **PASS** |
+| Last reported commit `1b8167d` | `1b8167d` = `1b8167dcc1df50e9af049f364cb6990b2fe756a4`, "docs: consolidated release report (sections A–F)", authored 2026-10-13T16:16:45Z — **an ancestor of HEAD**, 7 commits ahead of `main`. Current HEAD is `3a47c75d…` | **DISCREPANCY** |
+| "The branch was not pushed" | Remote head = local HEAD = `3a47c75d…`; the branch has been pushed and CI-executed dozens of times since the checkpoint | **DISCREPANCY** |
+| "Five commits" | Matches the five commits ending at the checkpoint: `1ce74cf`, `730c0c8`, `ac3381d`, `b849b70`, `f27e07f` | **PASS (of that checkpoint)** |
+| "1,794 passing / 95 skipped" | Now: **2,234 passed / 114 skipped** locally; **2,308 / 0 skipped** in CI's database suite | **SUPERSEDED** |
+| "Nine residual development-only findings in the Tailwind 3 build chain" | The nine-finding figure is checkpoint commit `b849b70` ("19 findings to 9"). Current register: **5 high, all development, one ESLint chain** (§S); `tailwindcss` is `^4.3.3`, so no Tailwind 3 chain exists | **SUPERSEDED** |
+| PR #45 is the destination | OPEN, MERGEABLE, head `3a47c75`, label `NOT APPROVED FOR PRODUCTION DEPLOYMENT`, created 2026-10-13T16:39:10Z | **PASS** |
+| `main` unchanged | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` local and remote | **PASS** |
+
+**No write operation was performed before this verification, and none of the alternatives §2 forbids were
+used:** nothing was discarded, no history was reset or force-pushed, no replacement branch was created.
+Because the branch is already at its remote SHA there is nothing to push except this report section
+(one ordinary commit).
+
+### U.2 The directive's requirements against the actual head
+
+| Directive item | Status at `3a47c75` | Evidence |
+| --- | --- | --- |
+| §3 Push the branch | **ALREADY DONE** — remote = local = `3a47c75d5f927cebabfd9b55b3ee207b7a591e00` | `git ls-remote` |
+| §3 Run CI to completion | **PASS** — green run `38561757970` @ `3a47c75`, 26 successes + 1 skipped by design; plus the whole §T window (16 gate-bearing runs) | CI API |
+| §3 Database-backed counts incl. the previously-skipped tests | **PASS** — CI DB suite 190 files / **2,308 passed / 0 skipped**; locally 114 env-gated skips, listed in §U.3 | run comment |
+| §3 Former line-87 failure | **PASS (PostgreSQL-verified)** — already recorded at report line 667; the test containing line 87 is `tests/prisma/subscription-payment.test.ts:85` | §U.4 |
+| §4 Payment guard against real PostgreSQL | **PASS (DB-backed, suite-level)** with the attribution and concurrency limits stated in §U.4 | §U.4 |
+| §5 Real-browser hydration verification | **PASS (mechanism + journey)** — runtime versions asserted in-bundle, known-bad control reproducing, shipped arm clean, journey 428/0/0. **Gate itself remains OPEN** per Directive 11 §T.6 | §U.5 |
+| §6 Paystack configuration verification | **BLOCKED** — no authorized Vercel/Paystack dashboard access in this session; checklist and owner steps supplied, no secrets requested | §U.6 |
+| §7A Advisories | Current register re-verified; options presented; **no fix attempted** | §U.7 |
+| §7B Media storage | **DEFERRED, untouched** — no provisioning, no uploads, no cost | §U.7 |
+| §7C Sale price | **No unresolved owner decision** — ratified Option C is implemented and recorded, 50 policy tests green | §U.7 |
+| §8 Owner-approval report | **this section** | — |
+| §9 Stop conditions | no merge, no deploy, `main` untouched, label preserved | §U.9 |
+
+### U.3 Push and CI evidence (directive §3)
+
+Pushed SHA = verified remote SHA = `3a47c75d5f927cebabfd9b55b3ee207b7a591e00`. The §T delivery run
+`38561757970` completed **success** at that SHA: 27 entries = 26 successes + the failure-reporting entry
+skipped by design, with step 11 (database suites) reporting **190 test files / 2,308 tests passed, 0
+skipped** against the isolated PostgreSQL service, step 16 (authenticated journey) **428 passed, 0 failed,
+0 skipped**, and steps 6 (advisory gates), 8 (lint and TypeScript), 14 (production build), 17, 18, 19 and 20
+all green.
+
+**The "95 tests previously skipped locally"**: locally skipped tests are environment-gated, not skipped by
+choice, and CI runs them. At this head the local suite is **2,234 passed / 114 skipped** (`npx vitest run`,
+exit 0, dated to this section) — the count grew from 95 as suites were added. The payment-relevant files
+among the locally-skipped set are `tests/prisma/payment-settlement.test.ts` (12 tests) and
+`tests/prisma/subscription-payment.test.ts` (5 tests), both executed by CI with zero skips.
+
+Local `npx tsc --noEmit` reports 1 error, the pre-existing sandbox-only `TS2694` from the stub Prisma client
+(`node_modules/.prisma/client`, 2 types, engine download blocked); CI's TypeScript step is green because CI
+generates a real client. This distinction is unchanged from §N.
+
+### U.4 The subscription-payment guard against real PostgreSQL (directive §4)
+
+Code at this head, verified by reading it rather than trusting the report:
+
+- `lib/paystack.ts:139` — `if (payment.status !== "PENDING" && !repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED")`: settling from any non-pending state requires verified provider evidence.
+- `lib/paystack.ts:170` — the compare-and-set writes `updateMany({ where: { id: payment.id, status: settledFrom } })` and treats `changed.count !== 1` as a lost race resolved idempotently; `settledFrom` is the state that was read, not a stale constant.
+- `lib/paystack.ts:128` — `REFUNDED` and anything else are documented as **never settleable**; money already returned is not money received.
+
+Tests covering the seven behaviours §4 lists: `tests/integration/subscription-payment-revival.test.ts`
+(14 cases — revival, idempotency, refusal, lost-race), `tests/prisma/subscription-payment.test.ts` (5,
+DB-backed), `tests/prisma/payment-settlement.test.ts` (12, DB-backed), `tests/integration/payment-settlement.test.ts`,
+`tests/security/payments-isolation.test.ts` (16, tenant isolation), and the entitlement suites. All are inside
+the 190 files the CI database suite executes green.
+
+**The §4 exit criterion was already met and is recorded**: report line 667 reads "Line-87 subscription
+payment gap | **PASS (PostgreSQL-verified)** | CAS at `lib/paystack.ts:160`; REFUNDED never settleable;
+revival 14/14 locally and the full DB suite green in CI with 0 skips", superseding the checkpoint-era entry
+at line 336 ("95 tests, incl. `subscription-payment.test.ts:87` … **BLOCKED**"). Line 87 sits inside the test
+`"the verify route re-checks a stored FAILED with Paystack and activates on a verified success"`, opened at
+line 85 — precisely the behaviour §4 asks about, skipped locally, executed in CI. (The CAS now sits at line
+170 after later edits; the line drift is cosmetic.)
+
+**Attribution limit, stated rather than glossed:** CI publishes suite-level counts, so I can confirm that
+these files execute and that the suite is green; I cannot honestly attribute an individual per-test verdict
+from the published log. **Concurrency limit:** Vitest runs test files sequentially and the lost-race path is
+exercised by the explicit `changed.count !== 1` branch and duplicate-event tests, not by true multi-process
+writers. There is no OS-level concurrent-settlement harness in CI, and adding one would be new test
+infrastructure, which this directive does not authorize.
+
+### U.5 Real-browser verification of hydration #418 (directive §5)
+
+| Check | Result |
+| --- | --- |
+| Shipped Next.js version | `next@16.4.0` |
+| Vendored runtime, asserted **inside the browser bundle** | react / react-dom `19.3.0-canary-278794d7-20261002` |
+| Harness collects errors after hydration work executes | **Yes** — §O.1's two bugs fixed; errors are read after the page settles, and a version mismatch aborts with exit 2 rather than reporting a false clean |
+| Shipped-runtime arm | **clean** — `microtask` and `timeout-0` at 0/5, both controls clean |
+| Known-bad negative control | **reproduces** — 5/5 in both arms with `Minified React error #418 … args[]=HTML`, server DOM discarded 5/5, in every one of the 15 gate-bearing runs |
+| Authenticated browser journey | **428 passed, 0 failed, 0 skipped** in CI |
+| Console output / evidence | published per run in the PR comment (runtime versions, arm counts, first error sample); the artifacts step uploads `hydration-raw-order-evidence` (`m418-evidence.json`, `results.json`, 14-day retention) |
+| Artifact retrieval from this sandbox | **BLOCKED** — the documented host-TLS restriction prevents `gh run download`; the owner can download from run `38561757970`'s page |
+| Dashboard/booking/POS/date-time surfaces across zones | **PASS in CI** — booking SSR + Nairobi day step 17 (25/0/0), POS journey (22/22), the DB suite, and the no-JavaScript and timezone browser scenarios |
+
+**The `BookingClient` fix, verified in code**: `app/b/[slug]/book/page.tsx` computes the calendar server-side
+and passes `calendar: readonly BookingDay[]` into `components/storefront/BookingClient.tsx`, whose days come
+from `lib/experience/bookingCalendar.ts`. That module's header documents exactly the defect §5 describes:
+date keys are **business (`Africa/Nairobi`) calendar days**, because the previous UTC keys meant "at 22:30 in
+Nairobi a customer was offered 'today' as a day that had already [passed]". Coverage:
+`tests/unit/booking-hydration.test.ts`, `tests/unit/booking-time-contract.test.ts` (the Directive 8 fix,
+preserved) and `tests/unit/hydration-render-parity.test.ts`.
+
+**Stated plainly, as §5 demands:** an isolated harness plus a green journey does **not** prove the whole
+application is free of intermittent hydration defects, and nothing here changes Directive 11's verdict —
+the #418 gate remains **OPEN** (§T.6 recommendation B), with the residual-risk packet in §T.6 if the owner
+chooses to weigh it.
+
+### U.6 Paystack production-configuration verification (directive §6)
+
+**Status: BLOCKED — no authorized Vercel or Paystack dashboard access from this session.** I did not attempt
+to verify, did not request any secret in chat, and no secret is recorded here. The owner-facing checklist:
+
+| # | Verify | Non-secret evidence to record |
+| --- | --- | --- |
+| 1 | Public vs server environment separation (`NEXT_PUBLIC_*` vs server-only) | the key *names* present per environment, never values |
+| 2 | Live vs test mode credentials | which mode each environment's secret key is scoped to, from the Paystack dashboard's mode indicator |
+| 3 | Webhook endpoint registered and signature verification enabled | endpoint URL, subscribed events, HTTP status of the last deliveries |
+| 4 | Server-side transaction verification on every settle path | confirmation that `/api/paystack/verify` and the webhook call the provider before mutating state |
+| 5 | Idempotency / duplicate webhook handling | the duplicate-event test names and the CI run that executes them |
+| 6 | Subscription and POS flows | which plan/amount each flow settles, and that POS settlement shares the same guard |
+| 7 | Production deployment environment and expected callback URLs | the production deployment ref and the callback URLs registered in the dashboard, compared side by side |
+
+No live charge or refund was initiated, and none may be without the separately confirmed bounded scope in
+Directive 6(d).
+
+### U.7 The remaining owner decisions (directive §7)
+
+**A — Advisories.** Re-verified at this head: production **0 findings**; development **5 high, one chain**
+(`eslint-config-next@16.4.0 → @next/eslint-plugin-next@16.4.0 → fast-glob@3.3.1 → micromatch@4.0.8 → braces@3.0.3`),
+`braces` latest published still 3.0.3 with no patched release (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687,
+`first_patched_version: null`). The "nine Tailwind 3 findings" belongs to the checkpoint; the Tailwind 3
+chain no longer exists. Options, with compatibility implications: **(i) wait** — a patched `braces` flows in
+through `micromatch`'s caret range with no pin changed; **(ii) downgrade** `eslint-config-next` to 14.2.35,
+which npm offers but which abandons the Next-aligned lint stack two majors behind the ratified version —
+**not recommended and not done**; **(iii) force/override** — unsupported and not done. No suppression, no
+removed assertions, no `--force`.
+
+**B — Media storage.** Still **deferred and untouched**: no provisioning, no activation, no uploads, no
+provider cost incurred by any directive to date. The decision required remains the cost/privacy one: which
+provider, which region/residency commitments, and who accepts the recurring spend.
+
+**C — Sale price.** **No unresolved owner decision.** The report records the ratified policy (Option C) as
+implemented, with the exact semantics: base price authoritative outside a window; sale applies only inside a
+start-inclusive/end-exclusive window; expiry automatic; storage UTC with owner input in Nairobi; window-less,
+inverted or non-discount sales never discount; all previously divergent channels call `lib/sale-pricing.ts`;
+50 policy tests pass. The checkpoint-era "sale-price policy decided — verify" item is **PASS, no unresolved
+discrepancy**, and a green test is not being treated as approval of the policy itself.
+
+### U.8 Remaining blockers and their precise next actions
+
+| # | Blocker | Precise next action |
+| --- | --- | --- |
+| 1 | Directive 12 was written against the `1b8167d` checkpoint; its "unpushed" premise no longer holds | **Owner:** confirm whether the intent is to approve the current head `3a47c75`, or to have the Directive 12 plan executed against the older checkpoint (which would require a separate branch and authorization) |
+| 2 | Paystack configuration unverifiable from here | **Owner:** run the §U.6 checklist with dashboard access and record only non-secret evidence |
+| 3 | #418 gate open (§T.6) | **Owner:** choose continuation window (~3h of CI) or explicit residual-risk acceptance; no action available to me |
+| 4 | Motion suite fails under high concurrency (§T.5) | **Owner:** authorize an investigation of the 15s wait budget, or cap workflow concurrency at low values |
+| 5 | Advisories unresolved | **Owner:** none possible until upstream publishes; no action recommended meanwhile |
+| 6 | Artifact retrieval from this sandbox | **Owner:** download `hydration-raw-order-evidence` from run `38561757970` |
+
+### U.9 Rollback plan and production posture (directive §8.10)
+
+**Rollback.** This directive's own footprint is documentation: the section below adds one commit
+(`RELEASE_REPORT_2026-10-13.md`); reverting it is `git revert <sha>` on a new branch and a normal PR — never
+a force-push, never a rewrite, never a branch deletion. The branch as a whole is unmerged, so the primary
+rollback for everything it carries is simply **not merging it**; if it is ever merged and needs reverting,
+the merge commit is reverted on `main` through a PR under a separate authorization.
+
+**Production untouched — verified, not asserted.** `main` is `8db6a9e4…` locally and remotely, unchanged
+throughout. The deployments API shows exactly **one Production deployment** (2026-10-13T14:42:28Z, ref
+`8db6a9e4…`, i.e. `main`, predating this directive) and **99 Preview deployments** created automatically by
+the Vercel GitHub integration, the newest from this branch's head. Previews are not production. No production
+configuration, data, storage or financial action was taken by any directive in this session.
+
+### U.10 Status summary — the four distinctions §8 asks for
+
+| Dimension | Status |
+| --- | --- |
+| **Code readiness** | **PASS** for everything this branch carries; the payment guard and booking-day fix are present and covered |
+| **CI readiness** | **PASS** at `3a47c75` — 26 successes + 1 by-design skip; DB suite 190 files / 2,308 tests / 0 skips; browser journeys green |
+| **Owner approval** | **OPEN** — three decisions outstanding (§U.7/U.8), label still `NOT APPROVED FOR PRODUCTION DEPLOYMENT` |
+| **Production deployment authorization** | **NOT GRANTED and NOT PERFORMED** — no merge, no deploy, nothing in production changed |
+| **#418 hydration gate** | **OPEN / BLOCKED — OBSERVATION INSUFFICIENT** (§T), unchanged by this section |
