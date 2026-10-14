@@ -88,53 +88,51 @@ export function classifySample(entry) {
  */
 export function evaluateSamples(samples = [], categories = REQUIRED_CATEGORIES, attempts = REQUIRED_ATTEMPTS) {
   const list = Array.isArray(samples) ? samples : [];
-  const byKey = new Map();
-  for (const entry of list) {
-    const parsed = classifySample(entry);
-    if (!parsed.category || parsed.attempt === null) {
-      // Keep unidentifiable records: they can never satisfy a required key, and their
-      // presence must not be silently discarded.
-      continue;
-    }
-    const key = `${parsed.category}#${parsed.attempt}`;
-    if (byKey.has(key)) continue; // first record wins; required keys are unique
-    byKey.set(key, parsed);
-  }
+  const byKey = new Map(); // required key -> every record claiming it (first record wins)
+  const auxiliary = [];    // records that claim no required key
 
-  const counts = { ok: 0, failed: 0, unresolved: 0, missing: 0, malformed: 0 };
+  const counts = { ok: 0, failed: 0, unresolved: 0, missing: 0, malformed: 0, auxiliary: 0, duplicates: 0 };
   const problems = [];
   const keys = requiredSampleKeys(categories, attempts);
   const requiredKeys = new Set(keys);
+
+  // A record counts as required-sample evidence only when its (category, attempt) is one of the
+  // required keys. Every other record is auxiliary: SSR navigation probes
+  // ({category, timezone, path, status}), diagnostic-arm measurements, records with no identity.
+  // Auxiliary records are counted and reported so nothing is silently discarded, but they can
+  // neither satisfy a required key nor block the gate. Treating them as malformed required
+  // samples is a false-positive machine — 57 such records in run 38588457143 were reported as
+  // "malformed" although none of them was ever a required sample.
+  for (const entry of list) {
+    const parsed = classifySample(entry);
+    const key = parsed.category && parsed.attempt !== null ? `${parsed.category}#${parsed.attempt}` : "";
+    if (key && requiredKeys.has(key)) {
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(parsed);
+    } else {
+      auxiliary.push(parsed);
+    }
+  }
+  counts.auxiliary = auxiliary.length;
+
   for (const key of keys) {
-    const parsed = byKey.get(key);
-    if (!parsed) {
+    const records = byKey.get(key) ?? [];
+    const [category, attempt] = key.split("#");
+    if (records.length === 0) {
       counts.missing += 1;
-      const [category, attempt] = key.split("#");
       problems.push({ category, attempt: Number(attempt), state: "missing", reason: "required sample was never recorded" });
       continue;
     }
-    counts[parsed.state] += 1;
-    if (parsed.state !== "ok") {
-      problems.push({ category: parsed.category, attempt: parsed.attempt, state: parsed.state, reason: parsed.reason });
-    }
-  }
-
-  // Records outside the required key set are either diagnostic-arm measurements (which must be
-  // ignored, never counted) or uninterpretable evidence (which must never pass silently). A
-  // record that carries a category and attempt but no verdict — an out-of-range attempt, a
-  // missing boolean `ok` — is the dangerous case: it is neither a required key nor a legitimate
-  // arm record, and discarding it is exactly the defect this module exists to prevent.
-  for (const entry of list) {
-    const parsed = classifySample(entry);
-    if (parsed.category && parsed.attempt !== null && requiredKeys.has(`${parsed.category}#${parsed.attempt}`)) continue;
-    if (parsed.state !== "ok" && parsed.state !== "failed" && parsed.state !== "unresolved") {
-      counts.malformed += 1;
-      problems.push({ category: parsed.category || "(unidentified)", attempt: parsed.attempt, state: "malformed", reason: parsed.reason });
+    const [first, ...rest] = records;
+    counts.duplicates += rest.length; // reported, never allowed to inflate the pass count
+    counts[first.state] += 1;
+    if (first.state !== "ok") {
+      problems.push({ category: first.category, attempt: first.attempt, state: first.state, reason: first.reason });
     }
   }
 
   const samplesWithOrder = list.filter((entry) => entry && typeof entry === "object" && typeof entry.order === "string" && entry.order.length > 0).length;
-  return { required: categories.length * attempts, counts, problems, samplesWithOrder };
+  return { required: categories.length * attempts, counts, problems, auxiliary: auxiliary.slice(0, 12), samplesWithOrder };
 }
 
 /**
@@ -178,7 +176,11 @@ export function evaluateGate(input = {}) {
     stage = `${failingSampleProblems.length} required sample(s) failed`;
   } else if (unresolvedProblems.length > 0) {
     status = "BLOCKED";
-    stage = `${unresolvedProblems.length} required sample(s) unresolved, missing or malformed`;
+    const bits = [];
+    if (samples.counts.unresolved) bits.push(`${samples.counts.unresolved} unresolved`);
+    if (samples.counts.missing) bits.push(`${samples.counts.missing} missing`);
+    if (samples.counts.malformed) bits.push(`${samples.counts.malformed} malformed`);
+    stage = `required sample evidence incomplete (${bits.join(", ")})`;
   } else if (m11.status !== "PASS") {
     status = "BLOCKED";
     stage = `server-order evidence incomplete (${m11.checked}/${m11.required} samples produced an order)`;
@@ -220,7 +222,7 @@ export function gateLine(summary) {
 
 /** Sample tally line, kept separate from the functional check counts. */
 export function sampleTallyLine(summary) {
-  const counts = summary?.samples?.counts ?? { ok: 0, failed: 0, unresolved: 0, missing: 0, malformed: 0 };
+  const counts = summary?.samples?.counts ?? { ok: 0, failed: 0, unresolved: 0, missing: 0, malformed: 0, auxiliary: 0, duplicates: 0 };
   const required = summary?.samples?.required ?? 0;
-  return `HYDRATION SAMPLES required=${required} ok=${counts.ok} failed=${counts.failed} unresolved=${counts.unresolved} missing=${counts.missing} malformed=${counts.malformed}`;
+  return `HYDRATION SAMPLES required=${required} ok=${counts.ok} failed=${counts.failed} unresolved=${counts.unresolved} missing=${counts.missing} malformed=${counts.malformed} auxiliary=${counts.auxiliary ?? 0} duplicates=${counts.duplicates ?? 0}`;
 }

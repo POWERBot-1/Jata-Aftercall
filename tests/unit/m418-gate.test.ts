@@ -67,7 +67,7 @@ describe("case 1 — a complete set of passing required samples can pass", () =>
     expect(gate.status).toBe("PASS");
     expect(gate.exitCode).toBe(0);
     expect(journeyStatusFor(gate.status)).toBe("PASS");
-    expect(gate.samples.counts).toEqual({ ok: 15, failed: 0, unresolved: 0, missing: 0, malformed: 0 });
+    expect(gate.samples.counts).toEqual({ ok: 15, failed: 0, unresolved: 0, missing: 0, malformed: 0, auxiliary: 0, duplicates: 0 });
     expect(gateLine(gate)).toContain("M418 GATE PASS");
   });
 });
@@ -124,20 +124,82 @@ describe("case 4 — missing required samples produce an explicit non-passing st
 });
 
 describe("case 5 — malformed required samples never produce PASS", () => {
-  it("blocks when a sample cannot be interpreted", () => {
-    const samples = requiredSamples();
-    samples.push({ category: "retail", attempt: 4, throttle: 4 }); // no boolean ok
+  it("blocks when a required sample cannot be interpreted", () => {
+    const samples = requiredSamples({ "retail#1": { ok: undefined } }); // required key, no boolean ok
     const gate = evaluateGate({ results: ALL_CHECKS_OK, samples, journeyComplete: true, m11: evaluateM11(samples) });
     expect(gate.status).toBe("BLOCKED");
     expect(gate.exitCode).toBeGreaterThan(0);
-    expect(gate.samples.counts.malformed).toBeGreaterThan(0);
+    expect(gate.samples.counts.malformed).toBe(1);
+    expect(gate.problems).toContainEqual({ category: "retail", attempt: 1, state: "malformed", reason: "sample lacks a boolean `ok` field" });
     expect(journeyStatusFor(gate.status)).not.toBe("PASS");
   });
 
-  it("counts an unidentifiable sample as malformed evidence instead of discarding it", () => {
-    const gate = evaluateGate({ results: ALL_CHECKS_OK, samples: [...requiredSamples(), { ok: false, error: "no category" }], journeyComplete: true });
+  it('blocks when a required sample carries a non-boolean verdict (ok: "true")', () => {
+    const samples = requiredSamples({ "salon#3": { ok: "true" } });
+    const gate = evaluateGate({ results: ALL_CHECKS_OK, samples, journeyComplete: true, m11: evaluateM11(samples) });
     expect(gate.status).toBe("BLOCKED");
-    expect(gate.problems.some((problem) => problem.category === "(unidentified)" && problem.state === "malformed")).toBe(true);
+    expect(gate.samples.counts.malformed).toBe(1);
+    expect(gate.samples.counts.ok).toBe(14);
+  });
+
+  it("records a non-required record as auxiliary evidence instead of blocking on it", () => {
+    // Auxiliary records claim no required key, so they can neither satisfy one nor block the
+    // gate — but they are counted, reported and never silently discarded. Blocking on them
+    // would make the gate unsatisfiable by a clean run.
+    const gate = evaluateGate({ results: ALL_CHECKS_OK, samples: [...requiredSamples(), { ok: false, error: "no category" }], journeyComplete: true, m11: evaluateM11(requiredSamples()) });
+    expect(gate.status).toBe("PASS");
+    expect(gate.samples.counts.auxiliary).toBe(1);
+    expect(gate.samples.counts.malformed).toBe(0);
+  });
+});
+
+describe("the auxiliary shape a real run produces cannot block a clean gate", () => {
+  // scripts/browser/studio-authenticated.check.mjs records its SSR navigation probes
+  // ({category, timezone, path, status}) into the same array as the required samples. Run
+  // 38588457143 produced exactly 57 of them and the gate reported malformed=57 — a false
+  // classification of evidence that was never a required sample. These pin both numbers.
+  function ssrProbes() {
+    const probes = [];
+    for (const category of REQUIRED_CATEGORIES) {
+      const suffix = category === "salon"
+        ? ["", "/item/x", "/book?service=x"]
+        : ["professional", "technical"].includes(category)
+          ? ["", "/item/x", "/shop", "/enquire?service=x", "/book?service=c"]
+          : ["", "/item/x", "/shop"];
+      for (const timezone of ["UTC", "Africa/Nairobi", "America/New_York"]) {
+        for (const path of suffix) {
+          probes.push({ category, timezone, path: `/b/slug${path}`.split("?")[0], status: 200 });
+        }
+      }
+    }
+    return probes;
+  }
+
+  it("records 57 SSR probes as auxiliary, keeping malformed=0 on a clean set", () => {
+    const probes = ssrProbes();
+    expect(probes).toHaveLength(57); // the number run 38588457143 misreported as malformed
+    const gate = evaluateGate({ results: ALL_CHECKS_OK, samples: [...requiredSamples(), ...probes], journeyComplete: true, m11: evaluateM11(requiredSamples()) });
+    expect(gate.status).toBe("PASS");
+    expect(gate.exitCode).toBe(0);
+    expect(gate.samples.counts).toMatchObject({ ok: 15, malformed: 0, auxiliary: 57 });
+    expect(sampleTallyLine(gate)).toContain("auxiliary=57");
+    expect(sampleTallyLine(gate)).toContain("malformed=0");
+  });
+
+  it("still blocks the real failing shape, naming 12 unresolved and no malformed", () => {
+    const samples = requiredSamples();
+    for (const category of ["food", "salon", "professional", "technical"]) {
+      for (let attempt = 1; attempt <= REQUIRED_ATTEMPTS; attempt += 1) {
+        const index = samples.findIndex((sample) => sample.category === category && sample.attempt === attempt);
+        samples[index] = { category, attempt, throttle: 4, ok: false, error: TIMEOUT, diag: { iframePresent: true, readyState: "complete", body: true } };
+      }
+    }
+    const gate = evaluateGate({ results: ALL_CHECKS_OK, samples: [...samples, ...ssrProbes()], journeyComplete: true, m11: evaluateM11(samples) });
+    expect(gate.status).toBe("BLOCKED");
+    expect(gate.exitCode).toBe(2);
+    expect(gate.samples.counts).toEqual({ ok: 3, failed: 0, unresolved: 12, missing: 0, malformed: 0, auxiliary: 57, duplicates: 0 });
+    expect(gate.stage).toBe("required sample evidence incomplete (12 unresolved)");
+    expect(gate.problems).toHaveLength(12);
   });
 });
 
@@ -170,11 +232,11 @@ describe("the real-world shape that this work exists to catch", () => {
     const gate = evaluateGate({ results: ALL_CHECKS_OK, samples, journeyComplete: true, m11: evaluateM11(samples) });
     expect(gate.status).toBe("BLOCKED");
     expect(gate.exitCode).toBe(2);
-    expect(gate.samples.counts).toEqual({ ok: 3, failed: 0, unresolved: 12, missing: 0, malformed: 0 });
+    expect(gate.samples.counts).toEqual({ ok: 3, failed: 0, unresolved: 12, missing: 0, malformed: 0, auxiliary: 0, duplicates: 0 });
     const categories = new Set(gate.problems.map((problem) => problem.category));
     expect(categories).toEqual(new Set(["food", "salon", "professional", "technical"]));
     expect(journeyStatusFor(gate.status)).not.toBe("PASS");
-    expect(sampleTallyLine(gate)).toBe("HYDRATION SAMPLES required=15 ok=3 failed=0 unresolved=12 missing=0 malformed=0");
+    expect(sampleTallyLine(gate)).toBe("HYDRATION SAMPLES required=15 ok=3 failed=0 unresolved=12 missing=0 malformed=0 auxiliary=0 duplicates=0");
   });
 });
 
@@ -231,6 +293,8 @@ describe("sample matching is strict", () => {
   it("ignores duplicates so a repeated key cannot inflate the pass count", () => {
     const samples = requiredSamples();
     samples.push({ category: "retail", attempt: 1, ok: true, order: "div" });
-    expect(evaluateSamples(samples).counts.ok).toBe(15);
+    const evaluation = evaluateSamples(samples);
+    expect(evaluation.counts.ok).toBe(15);
+    expect(evaluation.counts.duplicates).toBe(1); // reported, never counted as a pass
   });
 });
