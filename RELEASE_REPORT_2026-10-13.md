@@ -1619,3 +1619,27 @@ returned the `ReferenceError` above) even though the run log and artifacts still
 
 **No test, step or assertion was weakened to get here.** The script change adds one log line; the reporter
 change adds one section. Pass/fail semantics, retries and coverage are unchanged.
+
+### J.12 Final CI state for the directive (run `38501689310`, head `0ed7463`) — GREEN
+
+| Evidence | Value at `0ed7463` |
+| --- | --- |
+| Full native DB suite | **188 files · 2299 tests · 0 skipped** (`2299 = 2277 + 22` — the new booking-time contract tests run and pass **against the real database** in CI, and no skip was added) |
+| §66 experience journey · Business POS journey | 17/17 · 22/22 |
+| Authenticated production HTTP/browser/native-DB journey | **428 passed, 0 failed, 0 skipped** |
+| Production HTTP isolation smoke | 9 passed, 0 failed, 0 skipped |
+| Migration step | applied (new marker migration) |
+| Production build · bundle evidence · harness isolation | passed |
+| Dependency audit | production **0**; full **7 high, all dev-only** (§J.2) — unchanged, and reported as unresolved rather than waived |
+
+Branch run history for this workflow is now **9 green / 4 red**: the reds are the two pre-existing
+authenticated-browser `#418` failures (`38441832430`, `38470293452`), the infrastructure failure in
+`Install dependencies` (`38463216815`, §H.14), and `38500660586` (§J.11), whose only non-browser failure
+was the reporter bug fixed in `0ed7463`. **The green run is not evidence that the `#418` mismatch is
+fixed**: the same gate passed six times before it failed twice, which is exactly why §J.6 keeps its status
+as UNRESOLVED rather than calling it a flake. The never-elided failure section is proven by the local
+harness in §J.11; it did not render in this run because the run passed.
+
+**Final state of this directive:** task-branch HEAD `0ed7463` (remote-verified, clean tree); `main`
+`8db6a9e4` untouched; PR #45 open with the `NOT APPROVED FOR PRODUCTION DEPLOYMENT` label; no merge, no
+deploy, no production migration or data change, no provider activation, no live charge or refund.
