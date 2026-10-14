@@ -134,32 +134,38 @@ describe("3. start/end validation and duration", () => {
 describe("4. availability and overlap stay correct on the business clock", () => {
   const DAY = "2026-10-14"; // a Wednesday
   const SLOT_0900 = wallClockToInstant(DAY, "09:00")!;
+  // `freeSlotsFor` never offers a slot whose instant has already started, so these checks inject
+  // the clock explicitly instead of relying on the host's. With the ambient clock they passed only
+  // while the runner's time was before 09:00 Nairobi on DAY, and failed for every later run — a
+  // calendar-dependent test, never a property of the contract. The clock behaviour itself is
+  // asserted separately below ("hides a slot once its Nairobi instant has passed").
+  const BEFORE_OPEN = new Date(SLOT_0900.getTime() - 60 * 60_000);
 
   it("offers the day's slots and refuses a day that is closed", () => {
     // 2026-10-18 is a Sunday; DEFAULT_AVAILABILITY is closed on day 0.
     expect(freeSlotsFor({ date: "2026-10-18", availability: DEFAULT_AVAILABILITY, durationMinutes: 60 })).toHaveLength(0);
-    expect(freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60 })).toContain("09:00");
+    expect(freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, now: BEFORE_OPEN })).toContain("09:00");
   });
 
   it("blocks a taken slot and its overlap, and frees it when the booking is cancelled", () => {
     const taken = [{ startAt: SLOT_0900, endAt: bookingEndAt(SLOT_0900, 60), status: "CONFIRMED" }];
-    const slots = freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, taken });
+    const slots = freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, taken, now: BEFORE_OPEN });
     expect(slots).not.toContain("09:00");
     expect(slots).toContain("10:00");
     // A cancelled booking never blocks the slot.
     const cancelled = [{ startAt: SLOT_0900, endAt: bookingEndAt(SLOT_0900, 60), status: "CANCELLED" }];
-    expect(freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, taken: cancelled })).toContain("09:00");
+    expect(freeSlotsFor({ date: DAY, availability: DEFAULT_AVAILABILITY, durationMinutes: 60, taken: cancelled, now: BEFORE_OPEN })).toContain("09:00");
   });
 
   it("counts capacity, so a two-chair business can take two overlapping bookings", () => {
     const availability = { ...DEFAULT_AVAILABILITY, capacity: 2 };
     const taken = [{ startAt: SLOT_0900, endAt: bookingEndAt(SLOT_0900, 60), status: "CONFIRMED" }];
-    expect(freeSlotsFor({ date: DAY, availability, durationMinutes: 60, taken })).toContain("09:00");
+    expect(freeSlotsFor({ date: DAY, availability, durationMinutes: 60, taken, now: BEFORE_OPEN })).toContain("09:00");
     const full = [
       { startAt: SLOT_0900, endAt: bookingEndAt(SLOT_0900, 60), status: "CONFIRMED" },
       { startAt: SLOT_0900, endAt: bookingEndAt(SLOT_0900, 60), status: "PENDING" },
     ];
-    expect(freeSlotsFor({ date: DAY, availability, durationMinutes: 60, taken: full })).not.toContain("09:00");
+    expect(freeSlotsFor({ date: DAY, availability, durationMinutes: 60, taken: full, now: BEFORE_OPEN })).not.toContain("09:00");
   });
 
   it("hides a slot once its Nairobi instant has passed, whatever the host clock says", () => {
