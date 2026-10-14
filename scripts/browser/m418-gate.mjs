@@ -21,7 +21,7 @@
  *   failed     the sample failed for a substantive reason (marker missing, page error, ...)
  *   unresolved the required evidence was not obtained (observed as a load timeout)
  *   missing    the required sample was never recorded
- *   malformed  a recorded sample cannot be interpreted (no category/attempt, no boolean ok)
+ *   malformed  a required-key record cannot be interpreted (no boolean ok)
  *
  * Verdicts (a required sample number is stated so a change here is a deliberate act)
  * ---------------------------------------------------------------
@@ -84,7 +84,7 @@ export function classifySample(entry) {
  * Evaluate the required sample set. Matches samples to required keys by (category, attempt);
  * extra samples (for example diagnostic-arm measurements) are ignored, never counted as
  * satisfying a required key.
- * @returns {{required: number, counts: {ok: number, failed: number, unresolved: number, missing: number, malformed: number}, problems: Array<{category: string, attempt: number|null, state: string, reason: string}>, samplesWithOrder: number}}
+ * @returns {{required: number, counts: {ok: number, failed: number, unresolved: number, missing: number, malformed: number, auxiliary: number, duplicates: number}, problems: Array<{category: string, attempt: number|null, state: string, reason: string}>, auxiliary: Array<{category: string, attempt: number|null, state: string, reason: string}>, samplesWithOrder: number}}
  */
 export function evaluateSamples(samples = [], categories = REQUIRED_CATEGORIES, attempts = REQUIRED_ATTEMPTS) {
   const list = Array.isArray(samples) ? samples : [];
