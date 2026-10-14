@@ -1927,3 +1927,291 @@ complete. Merging, deploying, changing production data, activating media storage
 financial transaction requires separate, explicit owner authorisation — and on the evidence above, the
 remaining five advisories, the unresolved `#418` gate and the missing visual verification should each be
 resolved or consciously accepted first.
+
+## L. Directive 8 execution — #418 isolated to the framework's reconciler, browser QA executed, advisories re-verified (2026-10-14)
+
+This section appends to §A–§K. Nothing above is rewritten, and every evidence item recorded earlier
+stays as recorded, including the statements it corrects.
+
+### L.1 Scope, verified starting state, and what this section does not claim
+
+Directive 8 has three workstreams: (A) diagnose and fix the React #418 hydration failure, (B) perform
+real browser visual/functional QA, (C) re-verify and resolve the five remaining dev-only advisories.
+
+Verified start: branch `arena/fac28f53-jata-aftercall` at
+**`28a52c7571e3b9cf64c9c8b592bccbe03e1c481c`** (local = remote, clean tree), PR #45 open with
+`NOT APPROVED FOR PRODUCTION DEPLOYMENT`, `main` = `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` —
+**untouched before and after this section**. The Tailwind 4 migration was not undone and no ratified
+booking, payment, POS or reporting contract was altered.
+
+**The most consequential change to this report's earlier positions is that browser verification is no
+longer unavailable.** §K.10 recorded visual verification as NOT PERFORMED "no browser in this
+environment". That is no longer true: a real Chromium 153 launches here, the repository's own browser
+checks run against a server this environment controls, and their screenshots were opened and inspected
+(§L.4). The hydration gate nevertheless stays **UNRESOLVED**, for a different and now precisely named
+reason (§L.2).
+
+Still unavailable here, and therefore still evidence of nothing: `DATABASE_URL` / PostgreSQL, and with it
+the authenticated studio journey, every `tests/prisma/*` and `tests/e2e/*` suite, and all POS and
+dashboard surfaces (§L.4.4).
+
+### L.2 Workstream A — the #418 root cause is isolated to the vendored React reconciler, and its fix is a framework decision the owner must make
+
+**What the failing signature means — verified in the shipped code, not inferred.** `args[]=HTML` is the
+second argument of React's `throwOnHydrationMismatch(fiber, isText)`, which the App Router runtime calls
+as `formatProdErrorMessage(418, isText ? "text" : "HTML")` in
+`node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js` (Next 15.5.27). `HTML`
+therefore means an **element** mismatch against the expected `nextHydratableInstance`. It is not a text
+mismatch, and not an ambient-clock label difference — which rules out that whole class for this
+signature, including the booking-calendar defect that was already fixed and proven in the earlier
+investigation document.
+
+**The app runtime's React is Next's vendored React, not the app's `react` package — proven locally.** A
+temporary diagnostic route (created, probed, deleted; never committed) rendered
+`{"reactVersion":"19.2.0-canary-0bdb9206-20250818","hasReactCache":"function","requestCacheIsIdentity":false}`
+while `node_modules/react` is `18.3.1`. Two consequences follow. First, the M11 request-cache
+deduplication in `lib/request-cache.ts` is genuinely active in the app runtime rather than silently
+falling back to its identity wrapper. Second, installing a different `react`/`react-dom` **cannot** change
+hydration here: only the framework's vendored build can.
+
+**The mechanism reproduces deterministically in a real browser.** `scripts/browser/hydration-race.check.mjs`
+on HeadlessChrome 153.0.8010.0:
+
+| Arm | Variable | Result |
+| --- | --- | --- |
+| `synthetic-leading-scripts` | two `<script>` nodes precede the expected body child | **2 × #418** |
+| `synthetic-parse-frontier` | the expected child is absent at hydration time | **#418 + #423** |
+| `synthetic-control` | correct order | **0 errors** |
+
+The only difference between arms is the DOM React is handed, so the precondition named in M11/M14 is
+causal and still live. Stated rather than glossed: these arms bundle the repository's own `react-dom`
+(18.3.1), so they demonstrate the invariant the reconciler enforces, not the production React 19
+signature. The forced-timing arms over the real production `/login` document (React 19, `next start`)
+produced **0/8 forced and 0/3 control** — without the authenticated retail journey (which requires a
+database) the production trigger did not reproduce here.
+
+**The root cause, located in the shipped bytes of two framework builds.** Read-only comparison of two
+published packages; nothing was patched:
+
+| | Next 15.5.27 (current) | Next 16.4.0 (`latest`) |
+| --- | --- | --- |
+| vendored `react-dom` peer | `19.2.0-canary-0bdb9206-20250818` | `19.3.0-canary-278794d7-20261002` |
+| `case 5:` in the unwind/replay switch | `resetHooksOnUnwind(next);` then straight to `default:` | `resetHooksOnUnwind(next); var fiber = next; fiber === hydrationParentFiber && (isHydrating ? (popToNextHostParent(fiber), 5 === fiber.tag && null != fiber.stateNode && (nextHydratableInstance = fiber.stateNode)) : (popToNextHostParent(fiber), (isHydrating = !0)));` |
+
+In 15.5.27's reconciler the **hydration cursor is not restored when a host fiber is replayed**; in
+16.4.0's it is — `nextHydratableInstance = fiber.stateNode`, with `isHydrating` re-armed. That is exactly
+the mechanism M14 named from runtime stacks (react-dom creating and inserting host nodes during the
+hydration attempt) and the fix M15's upstream research identified as react#35494 + react#35518, shipped
+in React 19.3.0 only. The two independent lines of evidence agree: a reconciler that replays a host fiber
+without rewinding the cursor finds script nodes where the tree expects a `div`, and throws #418 — the
+signature in the red runs.
+
+**Next 15.5.27 is the tip of its line.** `npm view next dist-tags` reports `backport: 15.5.27` (no
+15.5.28 exists) and `latest: 16.4.0`; the vendored React only moves with the major line. Obtaining the
+fix therefore means one of: **(a) a Next 16.x upgrade** (major), **(b) a `patch-package` patch to
+`next/dist/compiled/react-dom`** (framework internals), or **(c) accepting the intermittent failure with
+monitoring plus the prepared upstream issue** in `docs/WEBSITE_STUDIO_HYDRATION_UPSTREAM_ISSUE.md`.
+Directive 8 requires (a) and (b) to be reported for owner decision before execution, and forbids
+suppressing the symptom.
+
+**Gate status: UNRESOLVED — blocked on that decision.** No `suppressHydrationWarning`, no framework
+patch, no test skip or rename, and no change to authentication, tenant isolation, entitlements, payment
+state or SSR was applied. §H.3 / §J.6 / §K.12 keep that status.
+
+### L.3 Workstream A (continued) — a calendar-dependent test that would have failed this branch permanently from 15 October 2026
+
+Found by running the full suite rather than trusting the result recorded in §K.12.
+
+`tests/unit/booking-time-contract.test.ts` block 4 pinned `DAY = "2026-10-14"` — the day it was written —
+and called `freeSlotsFor` without its `now` parameter, while `freeSlotsFor`
+(`lib/experience/booking.ts`) drops every slot whose instant has passed
+(`if (start < now.getTime()) return false`). At 09:37 Africa/Nairobi on the 14th the 09:00 slot had
+passed, and the suite failed **3 failed / 2231 passed / 114 skipped**.
+
+That it is a date bomb and not a product defect is shown by a negative control: with the process clock
+shifted +400 days through a scratch `--import` preload, the **original** file fails **3 failed /
+19 passed**. Because `freeSlotsFor` never offers a slot that has started, from 2026-10-15 the same three
+tests fail on every runner, CI included — on code that never changed. The file's own `futureNairobiDay()`
+helper and `tests/unit/experience-operations.test.ts`'s relative `futureDate()` dates already avoid this
+hazard; block 4 simply did not use them.
+
+**Fix:** the five availability/capacity calls now pass the clock the API already accepts
+(`now: BEFORE_OPEN`). Every assertion, the `DAY` anchor and the dedicated clock test ("hides a slot once
+its Nairobi instant has passed") are unchanged, so the tests assert the contract instead of the calendar:
+**22/22 at the real clock, 22/22 at +400 days, 22/22 at −400 days.** This corrects §K.12 — the
+"0 failures" recorded there was clock-dependent, and on 13 October it passed only because `DAY` was still
+in the future.
+
+### L.4 Workstream B — browser visual/functional QA, executed
+
+#### L.4.1 How it became possible
+
+§K.10's blocker was environmental, not a permission: no browser could be launched. Working route found
+and documented in `/home/user/browser-env/README.md` (outside the repository; these are third-party
+binaries and must never be committed):
+
+- Chromium 153 binaries via npm `@sparticuz/chromium@153.0.0` (extracts to `/tmp/chromium`), driven by
+  `puppeteer-core@25.13.0`.
+- Its three missing direct shared libraries are supplied from npm tarballs: the **2018 NSS** set from
+  `chrome-aws-lambda@10.1.0`'s brotli-compressed `bin/aws.tar.br` (provides `NSS_3.39`; Chromium needs
+  only `NSS_3.30`), plus only the **NSPR trio** from `@achingbrain/nss@0.0.1` — that package's 2016 NSS
+  must not be allowed to overwrite the 2018 files.
+- Verified launch: `HeadlessChrome/153.0.8010.0`, a real render captured and visually inspected.
+- Routes that do **not** work here and should not be retried: `apt-get` (permission-denied lists
+  directory), Electron release assets (redirected off `github.com`), GitHub Actions artifact downloads
+  (storage `EOF`), and browser-layer repositories (no libs, or no releases).
+
+Every result below comes from the repository's own committed check scripts, unmodified, against a server
+started in this environment. Servers were local (ports 4100/4200); no production environment, no
+production data and no provider was contacted.
+
+#### L.4.2 QA matrix
+
+| Surface | Viewport | Scenario | Evidence (command) | Result |
+| --- | --- | --- | --- | --- |
+| Fixture layout (`/dev/immersive-preview`) | 360×740, 1280×800, reduced-motion | no horizontal overflow, `h1` visible and non-empty, product image visible | `npm run test:browser:layout` — **7 passed, 0 failed, 0 skipped** | PASS |
+| Immersive 3D preview | desktop + phone | eligibility (WebGL, low memory, Save-Data, reduced motion, opt-in), model-load failure, unsafe/compressed graph, context loss, 8-second draw budget, keyboard and touch orbit | `npm run test:browser:immersive` — **22 passed, 0 failed, 0 skipped**; 4 screenshots | PASS |
+| Generated business pages — 20 families | 360×740 (no-JS and JS) + desktop | semantic HTML without JavaScript, heading/price/phone/WhatsApp/shop present, `overflow=0`, local imagery only, 20/20 structurally distinct | `npm run test:browser:families` — **167 passed, 0 failed, 0 skipped**; 5 screenshots | PASS |
+| Touch cart (marketplace, interactive-showroom, minimal) | 360×740 touch | cart opens with the authoritative KES 149 subtotal, closes, no uncaught errors | included in the families run | PASS |
+| Motion / reduced-motion / slow network | phone + desktop | Save-Data and 3G stay Lite, active effects cancelled, content and exact price remain readable, no residual animations, React scope unmount cancels | `npm run test:browser:motion` — **124 passed, 0 failed, 0 skipped**; 2 screenshots | PASS |
+| Local media pipeline | n/a | EXIF 1–8 rotation/mirroring, PNG alpha, >5 MB source, MIME lie, cancel, monotonic progress, blocked provider mutations | `npm run test:browser:media-local` — **29 passed, 0 failed, 0 skipped** | PASS |
+| Quick-action bar geometry | 360×740 | element overlaps, escapes from the bar and viewport, touch-target size, console errors | own read-only probe against the running fixture | PASS, with **DEF-1** (pre-existing) |
+| Tailwind 4 preflight restorations | built CSS artefact | the six restored v3 defaults are present in the minified production CSS | byte check of `.next/static/css/9047531062c71c71.css` | PASS |
+| POS + storefront search inputs | — | `[type="search"]` normalisation present in the production CSS; the three inputs exist at `components/pos/RecordBoard.tsx:196`, `components/pos/TillClient.tsx:349`, `components/storefront/CatalogueClient.tsx:85` | source + built-CSS inspection | CSS PASS; **browser interaction NOT PERFORMED** — needs the dashboard/DB |
+| Authenticated dashboard, Website Studio create/edit/preview/publish, AI Business Front Desk, POS and transaction states, subscription/checkout/receipts, auth/registration/password recovery, onboarding, analytics, inventory, reports | — | — | — | **NOT PERFORMED — see §L.4.4** |
+
+Local browser total: **349 checks passed, 0 failed, 0 skipped** across five committed scripts.
+**Defects found: one (DEF-1), pre-existing, not caused by the Tailwind 4 migration.**
+
+#### L.4.3 What inspection actually found
+
+**DEF-1 — quick-action bar labels paint outside their buttons at 360 px (pre-existing).** Measured on
+`/dev/motion-preview` at 360×740: no element overlaps, nothing escapes the bar's content box or the
+viewport, `document.scrollWidth = 360`, every action is a 44 px-tall touch target, and there are no
+console errors — but the "WhatsApp" (83 px) and "Directions" (87 px) labels are wider than their 74 px
+pill buttons, so with `overflow: visible` the text paints across the neighbouring control. Mechanism:
+`.eb-scope.eb-btn--upper .eb-btn` uppercases at `0.85rem` with `0.06em` letter-spacing while
+`.eb-actionbar .eb-btn` gives each of four actions `flex: 1 1 0` of a 360 px bar.
+
+**This is not a migration regression, and that is proven rather than asserted:** `ActionBar.tsx` is not
+among the files the migration touched, and its governing rules are byte-identical before and after
+(`git show 52abdb0:app/globals.css` vs the working tree produced no diff for `.eb-actionbar*` /
+`.eb-btn*`). It is a real legibility defect on 4-action storefront bars at phone width; fixing it changes
+generated-page visual design, so it is reported for an owner decision rather than restyled here.
+
+**Deliberately not claimed:** no pre-migration screenshots exist, so **no pixel comparison and no claim
+of pixel parity** is made anywhere in this section. What is verified is that the built CSS carries every
+restored v3 rule (§L.4.2), the same rules the earlier migration analysis derived from the two preflight
+files.
+
+#### L.4.4 NOT PERFORMED, and exactly what would be required
+
+The authenticated surfaces in the matrix above are **not performed**, not "passed by inference". They
+need the same things CI has and this environment does not:
+
+1. a reachable PostgreSQL and a `DATABASE_URL` for the app plus `PRISMA_TEST_DATABASE_URL` for the
+   DB-backed suites (CI uses a `postgres:16` service container);
+2. a seeded, authenticated session for the retail journey that `studio-authenticated.check.mjs` drives
+   (the run that failed in `38516401106` on step 16);
+3. for the POS till and record-board search inputs specifically, the dashboard/DB context in which those
+   routes render.
+
+Also not performed anywhere in this section: physical-device testing, real payment providers, real
+uploads or media-storage activation, and production performance metrics. Those remain out of scope by
+standing policy, not merely unavailable.
+
+### L.5 Workstream C — the five dev-only advisories, re-verified against live metadata before any conclusion
+
+Re-run at this change set. **Production remains clean: `npm audit --omit=dev` reports 0 findings of every
+severity.** (Directive 8 requires production and development results to be kept separate; they are.)
+
+**Development-inclusive: 5 high, 0 moderate, 0 critical, 0 low** — one chain, all reached through
+`eslint-config-next@15.5.27` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`:
+
+| Package | Version | Advisory | Environment | Fix offered by npm |
+| --- | --- | --- | --- | --- |
+| `braces` | 3.0.3 | `GHSA-vfj7-8cjw-p6xm` | dev only | `eslint-config-next@14.2.35` (`isSemVerMajor: true`) — a **downgrade** |
+| `micromatch` | 4.0.8 | via `braces` | dev only | same |
+| `fast-glob` | (nested) | via `micromatch` | dev only | same |
+| `@next/eslint-plugin-next` | 15.5.27 | via `fast-glob` | dev only | same |
+| `eslint-config-next` | 15.5.27 | via the above | dev only | same |
+
+**The `braces` "NONE PUBLISHED" claim is re-verified — and confirmed — against live authoritative
+metadata**, as Directive 8 requires rather than on the strength of the earlier reading. GitHub's advisory
+API for `GHSA-vfj7-8cjw-p6xm`: severity HIGH, published 2026-09-18, updated 2026-10-02, **not withdrawn**,
+package `NPM/braces`, vulnerable range **`<= 3.0.3`**, `firstPatchedVersion` **`NONE PUBLISHED`**. npm
+registry: `braces` latest is still `3.0.3`, last modified 2024-09-18 — no release since the advisory.
+There is therefore **no supported patched version to move to**, and the only remediation npm can offer is
+the semver-major downgrade of `eslint-config-next`, which Directive 6/8 forbid.
+
+**Disposition: explicitly UNRESOLVED, individually demonstrated, not suppressed and not "fixed".**
+Exploitability context: the advisory is a stack-exhaustion denial of service on deeply nested brace
+patterns; here `braces` is reached only by the ESLint toolchain matching **developer-controlled**
+filenames and committed glob patterns during lint, never by request-time input, and it is absent from the
+production dependency graph. Interim controls: lint globs stay static and committed, no untrusted pattern
+source is introduced, and the upstream release is the trigger to revisit. The earlier finding that
+`tailwindcss` and `chokidar` cleared (0 occurrences in the lockfile) still holds.
+
+### L.6 Verification record
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Full local suite | `npx vitest run` | **179 files passed, 13 skipped (192); 2234 passed, 114 skipped (2348); 0 failed; exit 0** |
+| Booking-time contract | `npx vitest run tests/unit/booking-time-contract.test.ts` | **22 passed (22)**; 22/22 also at ±400-day clock shifts |
+| Lint | `npx next lint` | exit 0; one pre-existing warning (`<img>` at `components/storefront/CartProvider.tsx:210`, unchanged from the §K baseline) |
+| TypeScript | `npx tsc --noEmit` | exit 2 with **exactly one** error: `tests/prisma/experience-boundary.test.ts(34,19) TS2694 … 'BusinessUncheckedCreateInput'` — the known offline-Prisma error (the client at `node_modules/.prisma/client/index.d.ts` is a 3,989-byte stub because `prisma generate` cannot reach `binaries.prisma.sh` here); that test file is untouched by this session and CI's `prisma generate` succeeds |
+| Production build | `npx next build` | exit 0; `.next/static/css/9047531062c71c71.css` = **100,688 B** (identical to §K.12's build) |
+| Browser suites | the five `npm run test:browser:*` scripts above | **349 passed, 0 failed, 0 skipped** |
+| Hydration mechanism | `npm run test:browser:hydration-race` | 2×#418 / #418+#423 / 0 across the three arms; forced 0/8, control 0/3 |
+| Production audit | `npm audit --omit=dev` | 0 findings |
+| Development audit | `npm audit` | 5 high, dev-only (§L.5) |
+| Advisory metadata | GitHub advisory API + npm registry | `firstPatchedVersion: NONE PUBLISHED` confirmed |
+
+**The 114 local skips are unchanged and are entirely the database gate** — 97 across 13 fully
+database-gated files (8 under `tests/prisma/*`, 4 `tests/integration/*-postgres.test.ts`, and
+`tests/e2e/business-pos-journey.test.ts`) plus 17 inside the otherwise-passing
+`tests/e2e/interactive-business-journey.test.ts` — because this environment has no `DATABASE_URL`. They
+are **not** passes and **not** failures; CI runs those suites with a provisioned PostgreSQL and 0 skips
+(latest green run `38518147628`). No test was skipped, renamed, weakened or deleted to reach any result
+in this section; one test file was made *more* deterministic (§L.3).
+
+### L.7 Not performed, and not authorised
+
+No merge into `main`, no deployment, no production configuration or environment-variable change, no
+production data change, no database migration, no media-storage activation, and no live financial
+transaction — including any Paystack charge or refund. `main` is still
+`8db6a9e4d0963241ad36e13cd9c946b76d1ef11a`. PR #45 stays open with its label. The nine live
+charge/refund details and the Paystack/Vercel dashboard walk remain open owner inputs, and no credential
+was requested, printed or committed anywhere in this section.
+
+### L.8 Owner decisions required
+
+1. **The #418 fix (§L.2)** — choose one: authorise a **Next 16.x major upgrade**; authorise a
+   `patch-package` patch to the vendored reconciler; or accept the intermittent authenticated-preview
+   failure with monitoring plus submitting the prepared upstream issue. Until then the gate stays
+   UNRESOLVED. Note the upgrade also carries the framework's own migration surface for the app.
+2. **DEF-1 (§L.4.3)** — whether to restyle the quick-action bar labels at phone width. It is
+   pre-existing and cosmetic; fixing it changes generated-page design.
+3. **The five dev-only advisories (§L.5)** — accept as unpatchable-and-dev-only with the interim controls
+   recorded, or authorise replacing the ESLint stack (which would move a ratified pin).
+4. **Merge and deployment** — still separately authorised and not performed.
+
+### L.9 Final state of this directive
+
+| Item | Value |
+| --- | --- |
+| `main` | `8db6a9e4d0963241ad36e13cd9c946b76d1ef11a` — **untouched** |
+| PR #45 | **open**, `NOT APPROVED FOR PRODUCTION DEPLOYMENT` retained |
+| Tailwind 4 migration | intact; no ratified booking, payment, POS or reporting contract altered |
+| D-3b-2 | **Option A still in force**; no boundary or bucket converted to Nairobi |
+| Hydration #418 | **UNRESOLVED** — cause named at code level (§L.2); fix blocked on decision 1 |
+| Browser visual QA | **PERFORMED locally** (349 checks, 11 screenshots inspected); authenticated surfaces **NOT PERFORMED** (§L.4.4) |
+| Dependency audit | production **0**; development **5 high**, all dev-only, explicitly unresolved (§L.5) |
+| Test suite | 2234 passed / 114 skipped / 0 failed locally; skips are the database gate only |
+| Merge · deploy · production config or data · media activation · live transaction | **none performed, none authorised** |
+
+**Stopping here, as directed.** Correcting §K.10 is the headline: browser verification happened, and it
+found one pre-existing defect and no migration regression. The hydration gate is not closed, and the
+honest summary of this directive is that Workstream B succeeded, Workstream C confirmed an upstream dead
+end, and Workstream A produced the exact cause of #418 together with the framework decision that now
+belongs to the owner.
