@@ -752,19 +752,26 @@ try {
   // Every attempt is recorded in results.json.
   {
     const sampleFixtures = created; // all five representative business types
-    const cdp = await first.ownerPage.createCDPSession().catch(() => null);
     for (const fixture of sampleFixtures) {
+      // The session that opens a preview route must be the account that owns the business being
+      // previewed. E5 (run 38604239350) measured exactly that: with each category's own owner page,
+      // the identical condition (throttle 4, same route, same order, 25 s, same marker) passed 5/5
+      // in ~2.4 s, while using retail's page for every category produced the 12 unresolved samples
+      // in the same run. Sampling another tenant's draft preview asks the application to serve one
+      // tenant's unpublished content to another tenant — which it (correctly) does not do — so the
+      // previous definition could never pass and was not measuring the hydration question it named.
+      const cdp = await fixture.ownerPage.createCDPSession().catch(() => null);
       for (let attempt = 1; attempt <= 3; attempt += 1) {
-        const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4 };
+        const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4, page: "own-owner" };
         try {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-          await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
-          await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
+          await fixture.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+          await fixture.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
           entry.ok = true;
-          entry.order = await first.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
+          entry.order = await fixture.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
           // M12 Stage B: pair the pre-hydration DOM order with the RAW server response order
           // of the same document (byte-order markers captured before any browser-side parse).
-          const frameSrc = await first.ownerPage.evaluate(() => document.querySelector('iframe[title="Draft preview"]')?.getAttribute("src") || "").catch(() => "");
+          const frameSrc = await fixture.ownerPage.evaluate(() => document.querySelector('iframe[title="Draft preview"]')?.getAttribute("src") || "").catch(() => "");
           const absolute = frameSrc ? new URL(frameSrc, origin).href : "";
           const rawList = absolute ? serverDigests.get(absolute) : null;
           if (rawList && rawList.length) {
@@ -781,7 +788,7 @@ try {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
           // E3: record what the timed-out predicate saw, in the artifact and in the log.
-          entry.diag = await sampleFrameDiagnostics(first.ownerPage, `QA first ${entry.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
+          entry.diag = await sampleFrameDiagnostics(fixture.ownerPage, `QA first ${entry.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
           const diagLine = `M418 DIAG TIMEOUT ${JSON.stringify({ category: entry.category, attempt: entry.attempt, ...entry.diag })}`.slice(0, 880);
           m418Lines.push(diagLine);
           console.log(diagLine);
@@ -793,8 +800,8 @@ try {
         m418Lines.push(sampleLine);
         console.log(sampleLine);
       }
+      if (cdp) await cdp.detach().catch(() => {});
     }
-    if (cdp) await cdp.detach().catch(() => {});
     // M11 #418 regression gate: the root cause was Fizz emitting the `_R_`/Flight bootstrap
     // scripts BEFORE the content divs when the root segment was still pending at first
     // flush. React's body-level hydration walk cannot skip leading scripts (non-root
