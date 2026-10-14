@@ -266,6 +266,7 @@ jobs:
               ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
               ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
               ['Hydration #418 controlled race reproduction (widened $RC/$RV gap)', '/tmp/step-hydration-race.log'],
+              ['Hydration replay-cursor regression (positive control + shipped runtime)', '/tmp/step-replay-hydration.log'],
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
@@ -303,7 +304,7 @@ jobs:
             // exactly where the failing check's name sat; this section cannot.
             const signatureFiles = [
               '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-hydration-browser.log',
-              '/tmp/step-hydration-race.log', '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
+              '/tmp/step-replay-hydration.log',  '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
               '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
               '/tmp/step-actionbar-browser.log',
               '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
@@ -329,6 +330,7 @@ jobs:
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
               ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
               ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
+              ['Hydration replay-cursor regression', '/tmp/step-replay-hydration.log', 3000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
               ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
