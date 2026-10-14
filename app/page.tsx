@@ -199,7 +199,7 @@ export default async function HomePage() {
               <li key={s} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"><span className="font-bold">{i + 1}.</span> {s}</li>
             ))}
           </ol>
-          <p className="mt-4 text-sm text-zinc-600">Then put <code className="rounded bg-zinc-100 px-1.5 py-0.5">/b/your-business</code> on WhatsApp, Facebook, Instagram, TikTok, Google Business, posters and receipts — anywhere customers find you.</p>
+          <p className="mt-4 text-sm text-zinc-600">Then put <code className="rounded-sm bg-zinc-100 px-1.5 py-0.5">/b/your-business</code> on WhatsApp, Facebook, Instagram, TikTok, Google Business, posters and receipts — anywhere customers find you.</p>
         </div>
       </section>
 

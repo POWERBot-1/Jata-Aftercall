@@ -60,7 +60,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             {plansResult.ok === false ? <p className="mt-4 text-sm text-amber-800">Plans are temporarily unavailable. Please try again later.</p> :
               plansResult.list.length === 0 ? <p className="mt-4 text-sm text-amber-800">No active plans are available right now. Please try again later.</p> :
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {plansResult.list.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-sm">
+                {plansResult.list.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-xs">
                   <p className="text-sm font-semibold">{planDisplayName(plan)}</p>
                   <p className="mt-1 text-sm text-zinc-600">KES {formatNumber(plan.priceKES)} · {plan.durationDays} days</p>
                   <span className="mt-3 inline-flex min-h-11 items-center rounded-full bg-zinc-900 px-4 text-sm font-semibold text-white">Choose this plan</span>

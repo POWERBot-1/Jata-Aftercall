@@ -287,7 +287,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
           </ol>
         </nav>
 
-        <h2 ref={headingRef} tabIndex={-1} className="mt-4 text-lg font-bold outline-none">{meta.title}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="mt-4 text-lg font-bold outline-hidden">{meta.title}</h2>
         <p className="mt-1 text-sm text-zinc-600">{meta.intro}</p>
         <div className="mt-3"><FormError>{err}</FormError></div>
 

@@ -13,6 +13,12 @@
  * chain is ABSENT from the lockfile, that it cannot come back unnoticed, and that the replacement
  * is in place. The package that used to need `basic-ftp` is gone, so an import of it would be a
  * dead check; removing that import is the contract change, not a weakening.
+ *
+ * Re-ratified again 2026-10-14 (Directive 7 / D-2 — report §K): the `tailwindcss` pin moves 3.4.19 -> 4.3.3
+ * under the owner-approved staged Tailwind 4 migration. This is a re-ratification of a reviewed version,
+ * not a loosening: tailwindcss 4.x has ZERO dependencies, which structurally removes the
+ * chokidar -> readdirp/braces advisory chain that 3.4.x pulled in, and Autoprefixer is no longer needed
+ * because @tailwindcss/postcss handles vendor prefixing. The assertions below lock that structure in.
  */
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
@@ -30,8 +36,18 @@ describe("narrow security patches and compatibility", () => {
     expect(manifest.devDependencies["eslint-config-next"]).toBe("15.5.27");
     expect(packages["node_modules/next"].version).toBe("15.5.27");
     expect(packages["node_modules/eslint-config-next"].version).toBe("15.5.27");
-    for (const [name, version] of [["react", "18.3.1"], ["react-dom", "18.3.1"], ["@prisma/client", "5.22.0"], ["prisma", "5.22.0"], ["motion", "14.1.0"], ["tailwindcss", "3.4.19"], ["puppeteer-core", "25.13.0"]]) {
+    for (const [name, version] of [["react", "18.3.1"], ["react-dom", "18.3.1"], ["@prisma/client", "5.22.0"], ["prisma", "5.22.0"], ["motion", "14.1.0"], ["tailwindcss", "4.3.3"], ["@tailwindcss/postcss", "4.3.3"], ["puppeteer-core", "25.13.0"]]) {
       expect(packages[`node_modules/${name}`].version).toBe(version);
+    }
+    // The v3 build pipeline is gone: no leftover v3 tooling can silently re-introduce the advisory chain.
+    expect(manifest.devDependencies.autoprefixer, "autoprefixer is no longer part of the pipeline").toBeUndefined();
+    expect(packages["node_modules/autoprefixer"], "autoprefixer must not remain in the tree").toBeUndefined();
+    expect(manifest.devDependencies["@tailwindcss/postcss"], "v4 requires the dedicated PostCSS plugin").toBe("^4.3.3");
+    expect(readFileSync("postcss.config.js", "utf8"), "PostCSS must use the v4 plugin").toContain("@tailwindcss/postcss");
+    // v4 is zero-dependency — this is what removes the chain, so it is the assertion worth keeping.
+    expect(packages["node_modules/tailwindcss"].dependencies ?? {}, "tailwindcss 4.x must stay dependency-free").toEqual({});
+    for (const gone of ["chokidar", "readdirp"]) {
+      expect(Object.keys(packages).filter((p) => p.endsWith(`node_modules/${gone}`)), `${gone} came back — it is the advisory chain removed by Tailwind 4`).toEqual([]);
     }
     expect(manifest.engines.node).toBe("^20.19.0 || >=22.12.0");
   });

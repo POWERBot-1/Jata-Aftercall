@@ -574,7 +574,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
       <div className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3 sm:grid-cols-2">
         <label className="text-xs">
           Operational status
-          <select value={operationalStatus} onChange={(e) => setOperationalStatus(e.target.value as "LIVE" | "PAUSED" | "MAINTENANCE")} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm">
+          <select value={operationalStatus} onChange={(e) => setOperationalStatus(e.target.value as "LIVE" | "PAUSED" | "MAINTENANCE")} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm">
             <option value="LIVE">LIVE — Active & Answering</option>
             <option value="PAUSED">PAUSED — Temporarily Paused</option>
             <option value="MAINTENANCE">MAINTENANCE — Human Handoff Only</option>
@@ -598,7 +598,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           <Field label="Branch location" value={branchLocation} onChange={setBranchLocation} />
           <label className="text-xs">
             Preferred language
-            <select value={languageBehavior} onChange={(e) => setLanguageBehavior(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2">
+            <select value={languageBehavior} onChange={(e) => setLanguageBehavior(e.target.value)} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2">
               <option>English</option>
               <option>Swahili</option>
               <option>English + Swahili</option>
@@ -606,7 +606,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           </label>
           <label className="text-xs">
             Tone of voice
-            <select value={toneOfVoice} onChange={(e) => setToneOfVoice(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2">
+            <select value={toneOfVoice} onChange={(e) => setToneOfVoice(e.target.value)} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2">
               <option>Friendly</option>
               <option>Formal</option>
               <option>Direct</option>
@@ -616,7 +616,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           </label>
           <label className="text-xs sm:col-span-2">
             Greeting
-            <textarea value={greetingMessage} onChange={(e) => setGreetingMessage(e.target.value)} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2" />
+            <textarea value={greetingMessage} onChange={(e) => setGreetingMessage(e.target.value)} rows={2} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2" />
           </label>
         </section>
       )}
@@ -636,7 +636,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
             <Field label="Variations (Label:price, Label:price)" value={draft.variations} onChange={(value) => setDraft({ ...draft, variations: value })} />
             <label className="text-xs">
               Stock status
-              <select value={draft.stockStatus} onChange={(e) => setDraft({ ...draft, stockStatus: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2">
+              <select value={draft.stockStatus} onChange={(e) => setDraft({ ...draft, stockStatus: e.target.value })} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2">
                 <option value="IN_STOCK">In stock</option>
                 <option value="LOW_STOCK">Low stock</option>
                 <option value="OUT_OF_STOCK">Out of stock</option>
@@ -650,11 +650,11 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
             <Field label="Sale price (KES, optional)" value={draft.promoPrice} onChange={(value) => setDraft({ ...draft, promoPrice: value })} />
             <label className="block text-xs">
               Sale starts (Africa/Nairobi)
-              <input type="datetime-local" value={draft.promoStart} onChange={(event) => setDraft({ ...draft, promoStart: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2 text-sm" />
+              <input type="datetime-local" value={draft.promoStart} onChange={(event) => setDraft({ ...draft, promoStart: event.target.value })} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2 text-sm" />
             </label>
             <label className="block text-xs">
               Sale ends (Africa/Nairobi)
-              <input type="datetime-local" value={draft.promoEnd} onChange={(event) => setDraft({ ...draft, promoEnd: event.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2 text-sm" />
+              <input type="datetime-local" value={draft.promoEnd} onChange={(event) => setDraft({ ...draft, promoEnd: event.target.value })} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2 text-sm" />
             </label>
             <Field label="Special instructions" value={draft.instructions} onChange={(value) => setDraft({ ...draft, instructions: value })} />
             <label className="flex items-center gap-2 text-xs">
@@ -666,12 +666,12 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
               This is a service, not a product
             </label>
           </div>
-          <button type="button" onClick={() => { setItems((prev) => [...prev, draft]); setDraft(EMPTY_ITEM); }} className="rounded bg-slate-700 px-3 py-1.5 text-xs">
+          <button type="button" onClick={() => { setItems((prev) => [...prev, draft]); setDraft(EMPTY_ITEM); }} className="rounded-sm bg-slate-700 px-3 py-1.5 text-xs">
             Add to list
           </button>
           <ul className="space-y-1 text-xs">
             {items.map((item) => (
-              <li key={`${item.kind}-${item.name}`} className="flex justify-between rounded border border-slate-800 px-2 py-1">
+              <li key={`${item.kind}-${item.name}`} className="flex justify-between rounded-sm border border-slate-800 px-2 py-1">
                 <span>{item.name}{item.price ? ` — KES ${item.price}${item.unit ? `/${item.unit}` : ""}` : " — price not set"}</span>
                 <span className="text-slate-400">{item.stockStatus}{item.quantity ? ` · ${item.quantity}` : ""}</span>
               </li>
@@ -684,7 +684,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
               <Field label="Bulk unit price" value={bulkPrice} onChange={setBulkPrice} />
               <button
                 type="button"
-                className="self-end rounded bg-slate-700 px-3 py-2 text-xs"
+                className="self-end rounded-sm bg-slate-700 px-3 py-2 text-xs"
                 onClick={() => {
                   if (!bulkProduct.trim() || Number(bulkMin) < 2) return;
                   setBulkPricing((prev) => [...prev, { productName: bulkProduct.trim(), minQuantity: Number(bulkMin), unitPriceKES: Number(bulkPrice) || 0 }]);
@@ -709,12 +709,12 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           {deliveryEnabled && (
             <>
               <div className="flex flex-wrap gap-2">
-                <input value={newZoneName} onChange={(e) => setNewZoneName(e.target.value)} placeholder="Your zone name" className="flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
-                <input value={newZoneFee} onChange={(e) => setNewZoneFee(e.target.value)} placeholder="Fee KES" className="w-24 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
-                <input value={newZoneEta} onChange={(e) => setNewZoneEta(e.target.value)} placeholder="Expected time" className="w-36 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
+                <input value={newZoneName} onChange={(e) => setNewZoneName(e.target.value)} placeholder="Your zone name" className="flex-1 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
+                <input value={newZoneFee} onChange={(e) => setNewZoneFee(e.target.value)} placeholder="Fee KES" className="w-24 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
+                <input value={newZoneEta} onChange={(e) => setNewZoneEta(e.target.value)} placeholder="Expected time" className="w-36 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
                 <button
                   type="button"
-                  className="rounded bg-emerald-600 px-3 text-xs"
+                  className="rounded-sm bg-emerald-600 px-3 text-xs"
                   onClick={() => {
                     if (!newZoneName.trim()) return;
                     setDeliveryZones((prev) => [...prev.filter((zone) => zone.name.toLowerCase() !== newZoneName.trim().toLowerCase()), { name: newZoneName.trim(), feeKES: Math.max(0, Math.round(Number(newZoneFee) || 0)), estimatedTime: newZoneEta.trim() || undefined }]);
@@ -772,7 +772,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           <Field label="Can customers change an order?" value={modificationRules} onChange={setModificationRules} />
           <label className="text-xs">
             If an item is out of stock
-            <select value={outOfStockBehavior} onChange={(e) => setOutOfStockBehavior(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2">
+            <select value={outOfStockBehavior} onChange={(e) => setOutOfStockBehavior(e.target.value)} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2">
               <option value="state_fact">Tell the customer the stock fact</option>
               <option value="offer_preorder">Offer a pre-order if enabled</option>
               <option value="offer_alternative">Offer another configured item</option>
@@ -781,7 +781,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           </label>
           <label className="text-xs">
             When you are closed
-            <select value={afterHoursBehavior} onChange={(e) => setAfterHoursBehavior(e.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2">
+            <select value={afterHoursBehavior} onChange={(e) => setAfterHoursBehavior(e.target.value)} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2">
               <option value="message_only">Send the after-hours message</option>
               <option value="accept_enquiries">Keep answering questions</option>
               <option value="handoff">Call a person</option>
@@ -791,17 +791,17 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
           <Field label="Paused message" value={pausedMessage} onChange={setPausedMessage} />
           <label className="text-xs sm:col-span-2">
             When should JATA call a person?
-            <textarea value={escalationRules} onChange={(e) => setEscalationRules(e.target.value)} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2" placeholder="Complaints, refunds, missing information, large orders, payment problems." />
+            <textarea value={escalationRules} onChange={(e) => setEscalationRules(e.target.value)} rows={2} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2" placeholder="Complaints, refunds, missing information, large orders, payment problems." />
           </label>
           <label className="text-xs sm:col-span-2">
             If JATA does not know
-            <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)} rows={2} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2" />
+            <textarea value={fallbackMessage} onChange={(e) => setFallbackMessage(e.target.value)} rows={2} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2" />
           </label>
           <div className="sm:col-span-2 space-y-2">
             <div className="flex gap-2">
-              <input value={faqQuestion} onChange={(e) => setFaqQuestion(e.target.value)} placeholder="Question customers ask" className="flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
-              <input value={faqAnswer} onChange={(e) => setFaqAnswer(e.target.value)} placeholder="Your approved answer" className="flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
-              <button type="button" className="rounded bg-slate-700 px-3 text-xs" onClick={() => { if (faqQuestion.trim() && faqAnswer.trim()) { setFaqs((prev) => [...prev, { question: faqQuestion.trim(), approvedAnswer: faqAnswer.trim() }]); setFaqQuestion(""); setFaqAnswer(""); } }}>Add FAQ</button>
+              <input value={faqQuestion} onChange={(e) => setFaqQuestion(e.target.value)} placeholder="Question customers ask" className="flex-1 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
+              <input value={faqAnswer} onChange={(e) => setFaqAnswer(e.target.value)} placeholder="Your approved answer" className="flex-1 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
+              <button type="button" className="rounded-sm bg-slate-700 px-3 text-xs" onClick={() => { if (faqQuestion.trim() && faqAnswer.trim()) { setFaqs((prev) => [...prev, { question: faqQuestion.trim(), approvedAnswer: faqAnswer.trim() }]); setFaqQuestion(""); setFaqAnswer(""); } }}>Add FAQ</button>
             </div>
             {faqs.filter((faq) => faq.approvedAnswer).map((faq) => <p key={faq.question} className="text-xs text-slate-300">{faq.question}</p>)}
           </div>
@@ -810,13 +810,13 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
 
       {step === 6 && (
         <section className="flex gap-2">
-          <select value={notificationLabel} onChange={(e) => setNotificationLabel(e.target.value)} className="rounded border border-slate-700 bg-slate-950 p-2 text-xs">
+          <select value={notificationLabel} onChange={(e) => setNotificationLabel(e.target.value)} className="rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs">
             <option>PRIMARY</option>
             <option>SECONDARY</option>
             <option>OWNER</option>
             <option>STAFF</option>
           </select>
-          <input value={notificationPhone} onChange={(e) => setNotificationPhone(e.target.value)} placeholder="Number that receives new orders, bookings and handoffs" className="flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-xs" />
+          <input value={notificationPhone} onChange={(e) => setNotificationPhone(e.target.value)} placeholder="Number that receives new orders, bookings and handoffs" className="flex-1 rounded-sm border border-slate-700 bg-slate-950 p-2 text-xs" />
         </section>
       )}
 
@@ -828,7 +828,7 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
               <button key={question} type="button" onClick={() => askPreview(question)} className="rounded-full border border-emerald-500/40 px-3 py-1 text-xs text-emerald-200">{question}</button>
             ))}
           </div>
-          <div className="space-y-2 rounded border border-slate-800 bg-slate-950 p-3 text-sm">
+          <div className="space-y-2 rounded-sm border border-slate-800 bg-slate-950 p-3 text-sm">
             {previewMessages.length === 0 && <p className="text-xs text-slate-400">No preview yet.</p>}
             {previewMessages.map((message, index) => (
               <p key={`${message.role}-${index}`} className={message.role === "customer" ? "text-emerald-200" : "text-slate-100"}>
@@ -837,8 +837,8 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
             ))}
           </div>
           <div className="flex gap-2">
-            <input value={previewQuestion} onChange={(e) => setPreviewQuestion(e.target.value)} placeholder="Ask a realistic customer question" className="flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-sm" />
-            <button type="button" disabled={previewing} onClick={() => askPreview(previewQuestion)} className="rounded bg-emerald-600 px-3 text-sm">{previewing ? "Asking..." : "Ask"}</button>
+            <input value={previewQuestion} onChange={(e) => setPreviewQuestion(e.target.value)} placeholder="Ask a realistic customer question" className="flex-1 rounded-sm border border-slate-700 bg-slate-950 p-2 text-sm" />
+            <button type="button" disabled={previewing} onClick={() => askPreview(previewQuestion)} className="rounded-sm bg-emerald-600 px-3 text-sm">{previewing ? "Asking..." : "Ask"}</button>
           </div>
         </section>
       )}
@@ -861,10 +861,10 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
         <section className="space-y-3 text-sm">
           <p>AI Business Front Desk is <strong>KES 499/month</strong>. Configure, preview, verify, subscribe, then publish. An unpaid configuration cannot go live.</p>
           <p className="text-xs text-slate-300">Subscription status: {subscriptionInfo?.status || "not loaded"}{subscriptionInfo?.entitled ? " · entitled" : " · not entitled"}</p>
-          <Link href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`} className="inline-block rounded bg-indigo-600 px-3 py-2 text-xs font-semibold">
+          <Link href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`} className="inline-block rounded-sm bg-indigo-600 px-3 py-2 text-xs font-semibold">
             Subscribe — KES 499/month
           </Link>
-          <button type="button" onClick={handlePublish} disabled={publishing} className="ml-2 rounded bg-emerald-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">
+          <button type="button" onClick={handlePublish} disabled={publishing} className="ml-2 rounded-sm bg-emerald-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">
             {publishing ? "Publishing..." : "Verify & Publish Live"}
           </button>
         </section>
@@ -872,9 +872,9 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
 
       {statusMsg && <p className="text-sm text-emerald-300">{statusMsg}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={saving} className="rounded bg-emerald-600 px-4 py-2 text-sm disabled:opacity-50">{saving ? "Saving..." : "Save this step"}</button>
+        <button type="submit" disabled={saving} className="rounded-sm bg-emerald-600 px-4 py-2 text-sm disabled:opacity-50">{saving ? "Saving..." : "Save this step"}</button>
         {step < STEPS.length - 1 && (
-          <button type="button" onClick={() => setStep((current) => current + 1)} className="rounded border border-slate-600 px-4 py-2 text-sm">Next</button>
+          <button type="button" onClick={() => setStep((current) => current + 1)} className="rounded-sm border border-slate-600 px-4 py-2 text-sm">Next</button>
         )}
       </div>
     </form>
@@ -885,7 +885,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
   return (
     <label className="block text-xs">
       {label}
-      <input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded border border-slate-700 bg-slate-800 p-2 text-sm" />
+      <input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-800 p-2 text-sm" />
     </label>
   );
 }

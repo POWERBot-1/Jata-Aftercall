@@ -257,7 +257,7 @@ export default function AIFrontDeskCustomerClient({
               <p className="mt-1 text-xs text-slate-300">
                 Scan or share this link on counters, packaging, receipts, or social bios:
               </p>
-              <code className="mt-2 inline-block rounded bg-slate-950 px-2.5 py-1 text-xs text-emerald-300">
+              <code className="mt-2 inline-block rounded-sm bg-slate-950 px-2.5 py-1 text-xs text-emerald-300">
                 {shareUrl}
               </code>
             </div>
@@ -302,7 +302,7 @@ export default function AIFrontDeskCustomerClient({
                     <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
                     {m.role === "assistant" && m.responseType && (
                       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
-                        <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono">
+                        <span className="rounded-sm bg-slate-800 px-1.5 py-0.5 font-mono">
                           {m.responseType}
                         </span>
                         {m.escalatedToHuman && (
@@ -328,7 +328,7 @@ export default function AIFrontDeskCustomerClient({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about prices, stock, delivery, or type your order (English / Kiswahili)..."
-                className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
+                className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-hidden"
               />
               <button
                 type="submit"
@@ -432,7 +432,7 @@ export default function AIFrontDeskCustomerClient({
                     <button
                       type="button"
                       onClick={() => sendMessage(`How much is ${p.name}?`)}
-                      className="rounded bg-slate-800 px-2 py-1 font-semibold text-emerald-300 hover:bg-slate-700"
+                      className="rounded-sm bg-slate-800 px-2 py-1 font-semibold text-emerald-300 hover:bg-slate-700"
                     >
                       {p.priceKES != null ? (
                         <>

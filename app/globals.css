@@ -1,6 +1,106 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+/*
+ * Tailwind CSS v4 (upgrade from v3.4.19 — owner-approved staged remediation, release report §J.2).
+ *
+ * `source(none)` disables v4's automatic content detection so the class scan stays exactly what
+ * `tailwind.config.ts` declared before this migration: app/, components/ and lib/ only. The three
+ * @source lines below are that same content configuration, expressed CSS-first.
+ */
+@source "../app/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../components/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../lib/**/*.{js,ts,jsx,tsx,mdx}";
+
+/*
+ * Design tokens. The project's only theme customisation was `fontFamily.sans` in
+ * tailwind.config.ts, so this is the whole token migration — every other token (colours, spacing,
+ * radii, shadows, breakpoints) is v4's own scale, which the tests and the built CSS are checked
+ * against. The brand variables themselves (`--jata-*`, `--eb-*`) live below and are untouched.
+ */
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * v3 → v4 compatibility layer.
+ *
+ * v4's preflight deliberately changes four defaults that the previous version set. Each rule below
+ * restores the v3 value exactly, so the migration does not silently restyle the product; the
+ * evidence for each is a diff of the two preflight files (v3.4.19 vs v4.3.3) and is recorded in
+ * the release report. Nothing here overrides a utility: this is the `base` layer, so any
+ * `border-*`, `ring-*`, `placeholder-*` or `cursor-*` class still wins over it.
+ */
+@layer base {
+  /*
+   * v3: `*, ::before, ::after { border-color: theme(borderColor.DEFAULT) }` = gray-200.
+   * v4: the universal reset is `border: 0 solid`, i.e. currentColor. Without this, every bare
+   * `border` / `divide-y` in the app would take the text colour instead of the subtle v3 hairline.
+   */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb; /* v3 gray-200, verbatim — v4's palette is OKLCH, so the literal is used */
+  }
+
+  /*
+   * v3: the default `--tw-ring-color` was blue-500 at 50% opacity. v4 defaults it to currentColor.
+   * Only bare `ring-1`/`ring-2` are affected; `ring-<colour>` utilities still override this.
+   */
+  * {
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+  }
+
+  /*
+   * v3 preflight: `button, [role="button"] { cursor: pointer }` and `:disabled { cursor: default }`.
+   * v4 removed both, so buttons would fall back to the browser's default cursor — a UX change, not
+   * a styling detail, and the reason this rule exists.
+   */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :disabled {
+    cursor: default;
+  }
+
+  /*
+   * v3 preflight: `input::placeholder, textarea::placeholder { color: gray-400; opacity: 1 }`.
+   * v4 uses a half-transparent currentColor, which reads differently on coloured surfaces.
+   * Explicit `placeholder-<colour>` classes still override this.
+   */
+  ::placeholder {
+    color: #9ca3af; /* v3 gray-400, verbatim */
+    opacity: 1;
+  }
+
+  /*
+   * v3 preflight: `button, select { text-transform: none }`. v4 dropped it, so a control inside an
+   * uppercased container would inherit the transform instead of rendering its own label. No current
+   * markup nests a control under `uppercase`/`capitalize`, so this is defensive fidelity rather than
+   * a fix — but it keeps the reset v3 had, and an explicit `uppercase` class on the control itself
+   * still wins (utilities layer).
+   */
+  button,
+  select {
+    text-transform: none;
+  }
+
+  /*
+   * v3 preflight: `[type='search'] { -webkit-appearance: textfield; outline-offset: -2px }`, also
+   * dropped by v4. Three real search inputs depend on it — the POS record board and till
+   * (components/pos/RecordBoard.tsx, components/pos/TillClient.tsx) and the storefront catalogue
+   * (components/storefront/CatalogueClient.tsx) — because without it Safari draws its native rounded
+   * search field and the focus ring shifts outwards.
+   */
+  [type="search"] {
+    -webkit-appearance: textfield;
+    outline-offset: -2px;
+  }
+}
+
 
 :root {
   --jata-ink: #18181b;

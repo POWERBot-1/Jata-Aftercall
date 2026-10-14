@@ -414,7 +414,7 @@ export default function AIDashboardClient({
                       <span className="font-semibold text-white">
                         {conv.customerName || "Customer"} ({conv.conversationId})
                       </span>
-                      <span className="rounded bg-slate-800 px-2 py-0.5 text-emerald-300">
+                      <span className="rounded-sm bg-slate-800 px-2 py-0.5 text-emerald-300">
                         {conv.status} • {conv.channel}
                       </span>
                     </div>
@@ -456,11 +456,11 @@ export default function AIDashboardClient({
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <span className="rounded bg-slate-800 px-2.5 py-1 text-slate-100">
+                      <span className="rounded-sm bg-slate-800 px-2.5 py-1 text-slate-100">
                         Order: {ord.orderStatus}
                       </span>
                       <span
-                        className={`rounded px-2.5 py-1 font-semibold ${
+                        className={`rounded-sm px-2.5 py-1 font-semibold ${
                           ord.paymentStatus === "PAID"
                             ? "bg-emerald-500/20 text-emerald-300"
                             : "bg-amber-500/20 text-amber-300"
@@ -468,7 +468,7 @@ export default function AIDashboardClient({
                       >
                         Payment: {ord.paymentStatus}
                       </span>
-                      <span className="rounded bg-indigo-500/20 px-2.5 py-1 text-indigo-300">
+                      <span className="rounded-sm bg-indigo-500/20 px-2.5 py-1 text-indigo-300">
                         Notification: {ord.notificationStatus}
                       </span>
                     </div>
@@ -488,7 +488,7 @@ export default function AIDashboardClient({
               <div key={p.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-white">{p.name}</span>
-                  <span className="rounded bg-slate-800 px-2 py-0.5 text-emerald-300">{p.stockStatus}</span>
+                  <span className="rounded-sm bg-slate-800 px-2 py-0.5 text-emerald-300">{p.stockStatus}</span>
                 </div>
                 <p className="text-slate-200">
                   Price: {p.priceKES != null ? `KES ${p.priceKES}` : "Price on request"}
@@ -516,7 +516,7 @@ export default function AIDashboardClient({
                     </p>
                     <p className="text-slate-300">{lead.summary}</p>
                   </div>
-                  <span className="rounded bg-emerald-500/20 px-2.5 py-1 font-semibold text-emerald-300">
+                  <span className="rounded-sm bg-emerald-500/20 px-2.5 py-1 font-semibold text-emerald-300">
                     {lead.classification}
                   </span>
                 </div>
@@ -553,12 +553,12 @@ export default function AIDashboardClient({
                             setAnswerDrafts((prev) => ({ ...prev, [uq.id]: e.target.value }))
                           }
                           placeholder="Write authoritative answer..."
-                          className="flex-1 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white"
+                          className="flex-1 rounded-sm border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-white"
                         />
                         <button
                           type="button"
                           onClick={() => handleApproveAnswer(uq.id)}
-                          className="rounded bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-500"
+                          className="rounded-sm bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-500"
                         >
                           Approve
                         </button>

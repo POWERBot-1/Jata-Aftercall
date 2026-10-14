@@ -111,7 +111,7 @@ export default function BusinessPage({
 
       <main className="mx-auto max-w-[640px] px-4 pb-28 pt-4 sm:px-6">
         {/* Header */}
-        <div className={`rounded-[1.5rem] border ${t.colors.border} ${t.colors.card} p-5 shadow-sm`}>
+        <div className={`rounded-[1.5rem] border ${t.colors.border} ${t.colors.card} p-5 shadow-xs`}>
           <div className="flex items-start gap-4">
             <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${t.colors.primary} ${t.colors.primaryText} text-sm font-bold`}>
               {business.name.slice(0, 2).toUpperCase()}
@@ -132,7 +132,7 @@ export default function BusinessPage({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => track(business.id, "WHATSAPP_CLICK")}
-                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold shadow-sm ${whatsappCta}`}
+                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold shadow-xs ${whatsappCta}`}
                 >
                   WhatsApp
                 </a>
@@ -141,7 +141,7 @@ export default function BusinessPage({
                 <a
                   href={telLinkNormalized}
                   onClick={() => track(business.id, "CALL_CLICK")}
-                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
+                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-xs`}
                 >
                   Call
                 </a>

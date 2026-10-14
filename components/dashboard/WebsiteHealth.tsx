@@ -112,9 +112,9 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
   if (loading && !report) {
     return (
       <section className="jata-card" aria-busy="true">
-        <div className="h-5 w-40 animate-pulse rounded bg-zinc-100" />
-        <div className="mt-3 h-2 w-full animate-pulse rounded bg-zinc-100" />
-        <div className="mt-3 h-24 w-full animate-pulse rounded bg-zinc-50" />
+        <div className="h-5 w-40 animate-pulse rounded-sm bg-zinc-100" />
+        <div className="mt-3 h-2 w-full animate-pulse rounded-sm bg-zinc-100" />
+        <div className="mt-3 h-24 w-full animate-pulse rounded-sm bg-zinc-50" />
       </section>
     );
   }
