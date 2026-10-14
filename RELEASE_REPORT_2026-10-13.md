@@ -1643,3 +1643,226 @@ harness in §J.11; it did not render in this run because the run passed.
 **Final state of this directive:** task-branch HEAD `0ed7463` (remote-verified, clean tree); `main`
 `8db6a9e4` untouched; PR #45 open with the `NOT APPROVED FOR PRODUCTION DEPLOYMENT` label; no merge, no
 deploy, no production migration or data change, no provider activation, no live charge or refund.
+
+## K. Directive 7 execution — the staged Tailwind 4 migration (D-2) and the accounting-period decision recorded (D-3b-2 Option A)
+
+### K.1 The two owner decisions, as recorded
+
+| Decision | Owner's choice | What it authorises here |
+| --- | --- | --- |
+| **D-2** — staged Tailwind 4 remediation (§J.2 plan) | **APPROVED** | The Tailwind toolchain migration only, on the task branch |
+| **D-3b-2** — accounting calendar boundaries (§J.5) | **OPTION A SELECTED** — retain the existing UTC-based reporting-period boundaries and daily report buckets | Recording the decision and pinning it with tests; **no** financial period or daily-aggregation boundary was converted to Nairobi time |
+
+Both are scoped to this branch. They do **not** authorise a merge, a deployment, a production-data or
+configuration change, media-storage activation or any live transaction — none of which happened (§K.13).
+
+### K.2 What changed, file by file
+
+| File | Change |
+| --- | --- |
+| `package.json` | `tailwindcss` `^4.3.3`, `@tailwindcss/postcss` `^4.3.3` (both current stable); `autoprefixer` removed; `postcss-selector-parser` `7.1.6` re-declared as an explicit devDependency (§K.6) |
+| `package-lock.json` | Regenerated for those three changes only |
+| `postcss.config.js` | Now runs `@tailwindcss/postcss` alone, with a comment recording the removal rationale |
+| `tailwind.config.ts` | **Deleted** — its single `content` array and its only theme key (`fontFamily.sans`) are migrated CSS-first |
+| `app/globals.css` | `@import "tailwindcss" source(none)` + three `@source` globs + `@theme { --font-sans: … }` + the six-rule v3 compatibility shim (§K.3). Every `--jata-*` / `--eb-*` token and all authored CSS below are untouched |
+| 10 `.tsx` files | 55 token-accurate class renames (§K.4) |
+
+`source(none)` is deliberate: it disables v4's automatic content detection so the class scan is exactly
+what the deleted `content` array declared. The package/version pins for React, Prisma, Next, Motion,
+`puppeteer-core` and the Node `engines` field are unchanged.
+
+### K.3 Behaviour preservation — what the migration would otherwise have changed silently
+
+The v3-to-v4 preflights were **diffed file against file** (`tailwindcss@3.4.19`
+`lib/css/preflight.css` vs `tailwindcss@4.3.3` `preflight.css`) instead of relying on the published
+upgrade notes. **Seven rules** were required. Four were anticipated by the §J.2 plan — border colour,
+ring colour, button cursor, placeholder colour. The file-to-file diff added three more that a summary of
+the upgrade notes would not have caught: the `:disabled` companion to the button-cursor rule,
+`button, select { text-transform: none }`, and the `[type='search']` normalisation. Each is restored in
+`@layer base` in `app/globals.css` **with the v3 value verbatim**:
+
+| # | v3 default | v4 behaviour if unrestored | Restored as |
+| --- | --- | --- | --- |
+| 1 | universal border-colour `gray-200` | `border: 0 solid` → `currentColor`; every bare `border` / `divide-y` would take the text colour | `border-color: #e5e7eb` |
+| 2 | default `--tw-ring-color` `blue-500/50` | `currentColor` | `--tw-ring-color: rgb(59 130 246 / 0.5)` |
+| 3 | `button, [role="button"] { cursor: pointer }` | **removed** — buttons fall back to the arrow cursor (a UX change, not styling) | `button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer }` |
+| 4 | `:disabled { cursor: default }` | **removed** | `:disabled { cursor: default }` |
+| 5 | `input::placeholder { color: gray-400; opacity: 1 }` | `color-mix(… currentcolor 50% …)` — reads differently on coloured surfaces | `::placeholder { color: #9ca3af; opacity: 1 }` |
+| 6 | `button, select { text-transform: none }` | **removed** — an uppercased ancestor would leak into controls | `button, select { text-transform: none }` |
+| 7 | `[type='search'] { -webkit-appearance: textfield; outline-offset: -2px }` | **removed** — Safari draws its native rounded search field; three real inputs affected (`components/pos/RecordBoard.tsx`, `components/pos/TillClient.tsx`, `components/storefront/CatalogueClient.tsx`) | restored verbatim |
+
+Items 3 and 4 are two rules for one v3 area — the button cursor and its `:disabled` companion. Items 5–7
+were **not** in the §J.2 plan: they were found by the diff rather than assumed. The test file below pins all
+seven rules.
+
+**The layer is the point.** v4 emits `@layer properties, theme, base, components, utilities`, so a `base`
+rule loses to every utility: a bare `border`, `ring-1`, `placeholder-*` or `cursor-*` class still wins, and
+the app's own unlayered `.jata-*` / `.eb-*` rules still win over both — the same ordering v3 produced.
+
+**Deliberately not shimmed, because the emitted CSS is equivalent (verified, not assumed):**
+
+- `list-style: none` is **identical** in both preflights (`menu,ol,ul{list-style:none}` in both builds).
+- v3's per-element margin zeroing (`h1…h6`, `p`, `pre`, `figure`, `fieldset`, `legend`, `dialog`) and
+  `body{margin:0}` are covered by v4's broader `*,::backdrop,:after,:before{margin:0;padding:0}`.
+- The v3 `body { line-height: inherit }` is covered by v4 setting `line-height: 1.5` on `html`.
+- `::before/::after { --tw-content: '' }` was dropped by v4, but the repository uses **no**
+  pseudo-element utilities and no authored CSS references `--tw-content` (both checked).
+- **The html font family was verified end-to-end** because it is the one difference that could have
+  restyled the entire product: the built CSS resolves `:host,html{font-family:var(--default-font-family,…)}`
+  and `--default-font-family: var(--font-sans)` with `--font-sans: Inter,ui-sans-serif,…`. The app still
+  renders in Inter.
+
+### K.4 The class renames, and the proof that they are the whole diff
+
+v4 kept the three affected utility names but changed their meaning, so a rename is required and a missed
+rename is silent:
+
+| v3 | v4 | Occurrences |
+| --- | --- | --- |
+| `rounded` (0.25 rem) | `rounded-sm` | 49 |
+| `shadow-sm` | `shadow-xs` | 4 (including `hover:shadow-sm`) |
+| `outline-none` (2 px transparent offset ring) | `outline-hidden` | 2 (including `focus:outline-none`) |
+
+All 55 changes are inside `className` attributes; no prose or design-token text was touched. The claim was
+then **proved rather than asserted**: every removed/added line pair was normalised and compared, and all
+55 pairs are explained by those three renames and nothing else (`.tsx` added 55 lines / deleted 55 lines,
+delta 0). Values were verified in both builds: v3 `.rounded` = `.25rem` and v4 `.rounded-sm` =
+`var(--radius-sm)` = `.25rem`; v4 `.shadow-xs` emits the same `0 1px 2px 0 rgb(0 0 0/0.05)`; v4
+`.outline-hidden` emits v3's exact `outline:2px solid #0000; outline-offset:2px`. A resource-wide scan of
+every `className` attribute found **zero** missing utilities after the migration.
+
+### K.5 Dependency audit, before and after — exact findings
+
+| | Before (`52abdb0`) | After (`f67b632`) |
+| --- | --- | --- |
+| Full audit (`npm audit`) | 7 high, 0 moderate, 0 critical | **5 high, 0 moderate, 0 critical** |
+| Production audit (`npm audit --omit=dev`) | 0 | **0** |
+| Advisories cleared | — | **`tailwindcss`, `chokidar`** |
+| Advisories remaining | 7 | 5 — `@next/eslint-plugin-next`, `braces`, `eslint-config-next`, `fast-glob`, `micromatch` |
+
+`tailwindcss@4.3.3` has **zero dependencies** (asserted by the test), so the v3 chain
+`tailwindcss → chokidar → braces` and `tailwindcss → fast-glob/micromatch → braces` cannot exist: the
+string `chokidar` now appears **0 times** in the lockfile.
+
+**The two expected findings did disappear, and this is not complete remediation.** The five that remain
+are one development-only chain that hangs off Next's own ESLint plugin:
+
+```
+eslint-config-next@15.5.27 → @next/eslint-plugin-next@15.5.27 → fast-glob@3.3.1 → micromatch@4.0.8 → braces@3.0.3
+```
+
+`braces` (GHSA-vfj7-8cjw-p6xm, high, vulnerable `<= 3.0.3`) still has **no published patched version** —
+3.0.3 is the highest release — and the only `fixAvailable` npm offers for all five is a **major downgrade to
+`eslint-config-next@14.2.35`**, a Next-14 lint stack against Next 15.5.27. That is out of the authorised
+scope, so it was **not** done. No advisory was suppressed or reclassified, no security test was removed or
+loosened, `npm audit fix --force` was not run, and no override was introduced. **Full remediation is not
+claimed, because five findings remain.**
+
+### K.6 One unexpected but necessary finding: `postcss-selector-parser`
+
+Removing Autoprefixer removed `postcss-selector-parser` from the tree entirely — it had been present only
+as Autoprefixer's transitive dependency. That broke the ratified security test
+`tests/unit/dependency-security-compat.test.ts`, which **imports** the package and pins it at `7.1.6`
+(asserting selector round-tripping for adversarial selectors, the ReDoS-class check).
+
+Deleting that import and assertion would have removed a security assertion, which is prohibited. The
+package was therefore re-added as an **explicit devDependency at the already-reviewed `7.1.6`** — a
+re-declaration of the same reviewed version, not a new or upgraded dependency. It brings `cssesc@3.0.0`
+and `util-deprecate@1.0.2`, both dev-only; the audit totals were re-checked afterwards and are unchanged
+(§K.5). The ratified pin test was updated in the same way and for the same reason:
+`tailwindcss` `3.4.19` → `4.3.3`, plus structural assertions that v4 stays dependency-free, Autoprefixer is
+absent, and the removed chain cannot return unnoticed. No existing assertion was weakened.
+
+### K.7 Autoprefixer — removed only after checking what it was contributing
+
+There is **no `browserslist` configuration** in this repository, so Autoprefixer had been running its own
+legacy defaults. Comparing the two builds declaration by declaration:
+
+- **Uniquely Autoprefixer-era prefixes that v4 does not emit** target browsers outside any plausible
+  support baseline here: `-o-object-fit` (Opera Presto), `-o-tab-size`, `-moz-tab-size`,
+  `-moz-columns`, `-moz-column-gap`, `-moz-column-break-inside` (Firefox < 52). The app's only use of
+  that group is `object-cover` (8 occurrences), whose unprefixed `object-fit` is supported everywhere
+  modern.
+- **v4's Lightning CSS still prefixes for the modern baseline** — it *adds* `-webkit-backdrop-filter`,
+  `-webkit-hyphens`, `-webkit-text-decoration*`, `-moz-focusring`, `-moz-orient`.
+- The remaining difference is v4's own preflight being rewritten to the standard `appearance` and
+  `::file-selector-button`, which numbers 3, 4 and 7 in §K.3 already cover.
+
+### K.8 D-3b-2 Option A — recorded, and now a contract rather than an accident
+
+Option A is recorded in §K.1: **the accounting period stays the server's day, UTC in production, i.e.
+03:00–03:00 Nairobi.** No financial reporting period or daily aggregation boundary was changed, no
+historical report is reinterpreted, and `lib/pos/reports.ts` is untouched by this change set.
+
+New file `tests/unit/pos-reporting-period-policy.test.ts` (5 tests) makes the policy explicit:
+
+1. exact UTC bounds for the day, Monday-first week and calendar-month periods in the production zone;
+2. that every boundary derives from the **ambient server day** rather than Nairobi, asserted in a
+   zone-agnostic form so it holds wherever the suite runs;
+3. determinism — the same instant always yields the same period, a period never depends on when the
+   report is run, and a recomputed daily series is identical;
+4. the label/period separation the decision rests on, worked through at all three granularities: a
+   00:30 EAT sale is counted in the previous UTC bucket while printing `14 Oct 2026 · 00:30`; a sale at
+   00:30 EAT on 1 November is accounted in **October**; a Monday-morning sale is accounted in the
+   previous week;
+5. the accepted consequence, asserted rather than described — a Nairobi business day is 03:00–03:00 in
+   accounting terms, so its first three hours belong to the previous period. Changing that now requires a
+   deliberate, visible change to this file.
+
+Nairobi presentation is unchanged and stays separate from period mathematics (`lib/pos/receipt.ts`,
+`lib/pos/reporting.ts`, `lib/payments/wallet.ts` keep their business-clock labels). Existing coverage in
+`pos-financial-timezone.test.ts` is untouched and still passes alongside it.
+
+### K.9 Verification — exact commands and outcomes at `f67b632`
+
+| Gate | Command | Outcome |
+| --- | --- | --- |
+| Dependency audit (full) | `npm audit` | **5 high / 0 moderate / 0 critical**, all dev-only (§K.5) |
+| Dependency audit (production) | `npm audit --omit=dev` | **0** |
+| Production build | `npx next build` | **exit 0**, all routes compiled; built CSS **100,688 B** (v3 baseline 90,963 B) |
+| Full test suite | `npx vitest run` | **179 files passed / 13 skipped (192); 2234 tests passed / 114 skipped (2348); 0 failures** |
+| POS / payments group | `npx vitest run tests/unit/pos tests/unit/payments tests/e2e/business-pos-journey.test.ts` | **8 files passed / 1 skipped; 166 passed / 22 skipped** |
+| Lint | `npx next lint` | **exit 0**, one pre-existing warning (`components/storefront/CartProvider.tsx:210`, `<img>`), untouched by this change set |
+| TypeScript | `npx tsc --noEmit` | **1 error**, the known offline Prisma baseline: `tests/prisma/experience-boundary.test.ts(34,19)` — `BusinessUncheckedCreateInput` missing. The file is **byte-identical to `main`**, the error comes from `node_modules/.prisma/client` being un-generated here (`prisma generate` cannot reach `binaries.prisma.sh`), and CI runs `npx prisma generate` before type-checking. **Not introduced by this change set** |
+
+**Skip accounting (exact).** 114 skipped tests = 97 in the 13 wholly-skipped database suites + 17 in
+`tests/e2e/interactive-business-journey.test.ts`. Every skipped file is gated on
+`DATABASE_URL` / `PRISMA_TEST_DATABASE_URL`, neither of which exists in this environment (no Postgres, no
+Docker). **No test was skipped or weakened to obtain a green result**; the database gates run in CI, which
+provisions a database, and are reported from CI rather than from here.
+
+**CSS parity checks performed on the built artefacts.** All seven shim declarations are present in the
+final minified CSS; no v3-meaning utility is emitted (`outline-none` 0, `shadow-sm` 0); the 41 `@property`
+blocks and the layer order `properties, theme, base, components, utilities` are as expected. The CSS grew
+90,963 → 100,688 B (+10.7 %); the growth is v4's `@property` scaffolding (41 blocks, 2,540 B) plus the
+per-theme variable set, not duplicated utilities.
+
+### K.10 Visual verification — stated as a limitation, not satisfied
+
+**No browser or Chromium exists in this environment**, so **no screenshot was taken and no
+visual-equivalence claim is made.** Baseline evidence recorded before the migration was: the green CI runs
+at `0ed7463` / `52abdb0`, the existing component and design-system tests, the v3 production build and its
+built CSS, and the v3 preflight source. Post-migration UI evidence is limited to: the production build, the
+selector/declaration diff of the built CSS against the v3 build, the CSS-reading component tests
+(`design-system`, `lime-spark-contrast`, `product-themes`, `storefront-motion` — 66 tests, all passing),
+and the CI browser gates (§K.11).
+
+Accordingly the **authenticated-browser visual gate remains UNRESOLVED** and is not closed by this
+section. Dashboard, Website Studio, AI Front Desk, POS, checkout, auth/onboarding and generated
+business-page rendering were **not** visually inspected here; a passing build is not proof of visual
+correctness. A human or CI-browser pass over those surfaces against this HEAD is still required before any
+deployment decision.
+
+### K.11 What §K did and did not do
+
+**Did:** execute the approved staged Tailwind 4 migration; preserve the six v3 defaults that v4 changed
+or dropped, with evidence; rename the three re-meaning utilities token-accurately and prove the diff is
+exactly that; clear the two expected advisories and report the remaining five individually; record
+D-3b-2 Option A and pin it with tests; re-ratify the `tailwindcss` pin and keep the
+`postcss-selector-parser` security assertion meaningful.
+
+**Did not:** merge anything into `main`; deploy; change any production data, configuration, environment
+variable or provider setting; activate media storage; run or authorise any live payment; upgrade any
+dependency outside the Tailwind toolchain; use `npm audit fix --force`; suppress an advisory; remove,
+skip or weaken a test; convert any financial reporting period or aggregation boundary to Nairobi time.
+No secret was requested, printed or committed at any point.
