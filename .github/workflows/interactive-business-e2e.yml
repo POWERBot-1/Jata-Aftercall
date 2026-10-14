@@ -22,7 +22,7 @@ jobs:
   e2e:
     name: Journey against a real database
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     services:
       postgres:
@@ -181,7 +181,7 @@ jobs:
           # M418-DIAG(E1): configuration only — the harness source is identical to the
           # non-diagnostic runs. E1 = CPU throttling disabled, every other condition unchanged;
           # the immediately following control repeats the arm with the throttle restored.
-          M418_DIAG_ARMS: "E1-no-throttle,E1-control-retrottled"
+          M418_DIAG_ARMS: "E2-reversed-order,E4-wait-60s"
         run: |
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)

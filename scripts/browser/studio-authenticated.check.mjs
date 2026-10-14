@@ -46,6 +46,11 @@ async function sampleFrameDiagnostics(page, marker = "") {
       passwordFields: document.querySelectorAll('input[type="password"]').length,
       nextErrorOverlay: Boolean(document.querySelector("nextjs-portal")),
       scripts: document.querySelectorAll("script").length,
+      // Refusal shell vs unrendered shell: a cross-tenant or unentitled request renders a
+      // complete page with no preview iframe, which is indistinguishable from "still loading"
+      // without reading some of the text. Synthetic QA fixture text only, whitespace-collapsed,
+      // truncated; no cookies, tokens or customer data.
+      topTextHead: document.body ? String(document.body.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120) : "",
     };
     if (!iframe) return { iframePresent: false, ...top };
     const out = { iframePresent: true, src: String(iframe.getAttribute("src") || "").slice(0, 140) };
@@ -861,7 +866,7 @@ try {
           const payload = { arm: entry.arm, cat: entry.category, ok: entry.ok, ms: entry.ms };
           if (entry.error) payload.err = String(entry.error).replace("TimeoutError: ", "TO ").slice(0, 46);
           if (entry.diag) payload.diag = entry.diag.iframePresent === false
-            ? Object.fromEntries([["iframe", "absent"], ...Object.entries(entry.diag).filter(([k]) => ["topUrl", "topReadyState", "iframes", "bodyChildren", "bodyTextLength", "markerInTopDocument", "passwordFields", "nextErrorOverlay"].includes(k))])
+            ? Object.fromEntries([["iframe", "absent"], ...Object.entries(entry.diag).filter(([k]) => ["topUrl", "topReadyState", "iframes", "bodyChildren", "bodyTextLength", "markerInTopDocument", "passwordFields", "nextErrorOverlay", "topTextHead"].includes(k))])
             : { iframe: "present", readyState: entry.diag.readyState, body: entry.diag.body };
           const line = `M418 DIAG ${JSON.stringify(payload)}`.slice(0, 700);
           m418Lines.push(line);
