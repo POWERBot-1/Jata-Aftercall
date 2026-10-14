@@ -2534,3 +2534,44 @@ with its label.
 **Stopping at the authorization boundary, as directed.** A completed investigation is not a resolved
 release gate: the #418 gate stays failed and blocked on the owner's A/B/C decision, and that decision is
 also the only route to clearing the five development advisories.
+
+### M.12 The CI run for this directive's commits — green, and why that does not close the gate
+
+Recorded after §M.1–M.11 were written, because the result arrived while the report was being committed.
+It is appended rather than woven into §M.9 so that §M.9 keeps its verified-at-the-time content.
+
+**Run `38531451103` @ `d3ee6fc8734271bf29e9d1e046fc4ee87c594ecb` — `success`**, 25 steps succeeded:
+
+| Step | Verified result |
+| --- | --- |
+| 10–11 Native DB suite (`npx vitest run --exclude tests/e2e`) | 190 files passed, **2308 tests passed** |
+| 12 Experience journey | 17 passed |
+| 13 Business POS journey | 22 passed |
+| **16 Authenticated production HTTP/browser/DB journey** | **428 passed, 0 failed, 0 skipped** |
+| 17 Booking SSR/hydration regression | 25 passed |
+| 18 Hydration #418 controlled race reproduction | forced 8 iterations **0 errors**, control 3 iterations 0 errors, synthetic arms as expected |
+| **19 Motion / immersive / layout / action-bar / families / media-local** | motion 124, immersive 22, layout 7, families 167, media-local 29 — all `0 failed, 0 skipped` |
+| 14 Production build, 15 bundle evidence | passed; `/b/[slug]/page` 117,124 B gzip entry (+1,330 B vs baseline), lazy motion chunk still absent from initial entries |
+| 21 Record success on the PR | posted (step 22 "Report failing output" therefore skipped) |
+
+**The new action-bar regression check ran in CI and passed.** Step 19's `run` block executes
+`npm run test:browser:actionbar` under `set -o pipefail` with no error tolerance, so a non-zero exit
+would have failed the step and the run; both are green, therefore the check exited 0 in CI. Stated
+precisely because the raw evidence is thin in two ways: its summary line is **not** echoed in the PR
+success comment (the reporter enumerates a fixed set of log files, and the new log is used only for the
+failure-signature list), and raw run logs are unreachable from this environment
+(`results-receiver.actions.githubusercontent.com` fails, the same restriction as the artifacts in §M.2).
+The pass/fail signal is real — it gates the step — but the printed count from CI is not available here.
+
+**This does not close the #418 gate, and it is not treated as a fix.** The same runtime, the same route
+and the same failing check produced three consecutive failures (`70628ffe`, `20f23dfe`, `c9a2ca8`) and
+then this pass, which is what "intermittent" means; the standing rule recorded in §H.3/§J.6/§K.12/§L.2
+is that a later green run never establishes a cause or a fix. The success comment's own hydration sample
+for this run shows the healthy shape — `order: "div,div,script#_R_,script,…"` (content first, bootstrap
+scripts after) against the failing runs' `"script,script#_R_,script,…"` — which is the same
+same-load-order contrast M12 described, not new proof. **Branch CI history is now 22 runs: 14 green,
+8 red.**
+
+The owner decision in §M.5 is unchanged by this run, and the gate stays **BLOCKED — OWNER DECISION
+REQUIRED**: a green run is exactly the reason this defect has survived several directives, so accepting
+it as closure now would repeat the mistake the record already warns about.
