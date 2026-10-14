@@ -4207,3 +4207,38 @@ ledger under the repaired harness (≥12 qualifying runs, ≥3 h elapsed, ≤2 c
 that streak as permanently interrupted by the repair. Cost of the former, stated for the decision: 12
 sequential marker runs, roughly 2.5–3.5 hours of wall clock, concurrency 1 (within the ≤2 bound),
 using the same mechanism as §T. Nothing in §V depends on that choice.
+
+## §V.17 Observation ledger re-accumulation under the repaired harness (2026-10-14)
+
+### §V.17.1 Predeclared protocol — written before the first run of this window
+
+Authorized by "Proceed" following §V.16.9. Purpose: determine whether the §T.2/M418 observation
+criteria can be met under the repaired harness, with the criteria **unchanged from §T.5** — nothing
+is relaxed, added or reinterpreted.
+
+- **Frozen code:** `96641ee` (the last commit that changes the harness). Commits above it and the
+  markers are report-only or empty; no code, workflow or test change is allowed during the window.
+- **Unit of evidence — Class A run:** a `pull_request` workflow run in which the hydration-relevant
+  steps all succeed — 16 (authenticated journey), 18 (race reproduction), 19 (replay gate), 20
+  (motion/immersive) — the evidence comment is published (step 22), and no test step is skipped
+  (step 23 is skipped by design on every passing run, exactly as in §T.3).
+- **Criteria (identical to §T.5, not adjusted):**
+
+  | Criterion | Predeclared |
+  | --- | --- |
+  | Consecutive Class A clean runs | ≥ 12 |
+  | Diversity guard (streak spans ≥ 3 clock hours) | ≥ 3 h |
+  | Controls valid (known-bad reproduces, shipped clean) | every run |
+  | Hydration recurrence | none |
+  | Required test steps executed, no test skipped | every run |
+
+- **Generation:** the protocol commit plus empty marker commits, **one per push, pushed serially —
+  the next push only after the previous run completes** — so observed concurrency is 1, inside the
+  ≤ 2 bound that §T's wave violated (9-way concurrency).
+- **Exclusions, recorded and not hidden:** any run failing step 16, 18, 19 or 20, or lacking a
+  published evidence comment, is excluded and — per the criterion's wording and §T.5's treatment of
+  the `15085c3` failure — resets the consecutive count.
+- **Reporting:** the ledger records run id, head SHA, event, timestamps, step conclusions
+  (16/18/19/20/22/23), the gate/sample lines and the control lines, taken from the CI API and the
+  workflow's own published comment. The verdict table is applied exactly as predeclared, and a
+  NOT MET verdict is reported as NOT MET without moving the criteria.
