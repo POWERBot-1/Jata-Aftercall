@@ -2030,11 +2030,22 @@ HTTP browser journey"**, with:
   particular reproduction does **not** re-capture the mover's call site. It is consistent with a
   non-rewound hydration cursor, and it is not presented as an independent confirmation of it.
 
-This is **not** attributed to the diff that triggered the run: that diff is one unit-test file and this
-report section, neither of which the authenticated browser journey loads. It is also **not called a
+The run for the report-only commit that followed, `38524957971` @ `20f23dfe`, **failed at the same step
+16 with the same `#418 args[]=HTML`** — so the gate failed twice in succession, and the run history is
+now **19 runs: 12 green, 7 red**. Its `M418` bundle adds two facts worth recording, stated as what the
+instrument recorded rather than as a new diagnosis: React's own expectation at the throw was
+`M418 EXPECTED {"ft":5,"ty":"main","cl":null,"rc":0,"pt":"DIV",…}` — a HostComponent `main` whose parent
+is a `DIV` — and the probe logged **client-side (`"app"`) script appends into `<head>`** at growing
+positions (`M418 HEAD0/1/2`: `script [append@5/6 src=/_next/static/chunks/1255-…js]`,
+`6638-…js`, …) alongside parse-phase samples ending in a `script` node at the hydration point
+(`M418 PARSE`: `parse+435@36:script+#text(209…)`). That is consistent with the same
+unexpected-node-at-the-walk-position class as §L.2; the bundle is truncated in the comment, so no
+further claim is made from it.
+
+This is **not** attributed to the diff that triggered either run: those diffs are one unit-test file and
+this report section, neither of which the authenticated browser journey loads. It is also **not called a
 flake**, and the two preceding green runs (`38516677923`, `38516766371`) do not establish that anything
-was fixed — on the standing rule that a later pass never closes this gate. **Branch run history is now
-18 runs: 12 green, 6 red.**
+was fixed — on the standing rule that a later pass never closes this gate.
 
 **Gate status: UNRESOLVED — blocked on that decision.** No `suppressHydrationWarning`, no framework
 patch, no test skip or rename, and no change to authentication, tenant isolation, entitlements, payment
@@ -2188,7 +2199,7 @@ source is introduced, and the upstream release is the trigger to revisit. The ea
 | Production audit | `npm audit --omit=dev` | 0 findings |
 | Development audit | `npm audit` | 5 high, dev-only (§L.5) |
 | Advisory metadata | GitHub advisory API + npm registry | `firstPatchedVersion: NONE PUBLISHED` confirmed |
-| CI, commits of this section | run **`38523812584`** @ `70628ffe` | **FAILED at step 16** (authenticated browser journey, React `#418 args[]=HTML`, §L.2). Steps 1–15 **passed** — including the database-backed unit/integration/security suites, the §66 journey, the POS journey and the production build — and steps **17, 18 and 19 were SKIPPED** as a consequence (booking SSR/hydration regression, the controlled #418 race reproduction, and the motion/immersive browser regressions). Those three are **not** passes and this run provides no coverage from them |
+| CI, commits of this section | runs **`38523812584`** @ `70628ffe` and **`38524957971`** @ `20f23dfe` | **both FAILED at step 16** (authenticated browser journey, React `#418 args[]=HTML`, §L.2). In both, steps 1–15 **passed** — including the database-backed unit/integration/security suites, the §66 journey, the POS journey and the production build — and steps **17, 18 and 19 were SKIPPED** as a consequence (booking SSR/hydration regression, the controlled #418 race reproduction, and the motion/immersive browser regressions). Those three are **not** passes and neither run provides coverage from them |
 | CI, immediately preceding | `38518147628` @ `28a52c7`, `38516766371` @ `8bc4e4e`, `38516677923` @ `f67b632` | success, 0 failed steps |
 
 **The 114 local skips are unchanged and are entirely the database gate** — 97 across 13 fully
