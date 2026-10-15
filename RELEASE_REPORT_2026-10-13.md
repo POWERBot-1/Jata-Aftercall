@@ -4341,3 +4341,90 @@ What is recorded instead, and stays true either way:
   report's own audit trail, and their qualification as Class A runs is a property of the harness, not a
   resumption of the count.
 
+
+## §V.18 Second serial observation attempt — criteria MET (2026-10-15 EAT; times below UTC)
+
+Authorized by the owner's "Proceed" after §V.17.5, interpreted narrowly as **option 1**:
+more serial runs under §V.17.1/§T.2. Neither option 2 (step-20 wait-budget fix) nor option 3
+(owner adoption of the 10-run record) was selected. This addendum does **not** revise the
+first window's NOT MET verdict in §V.17.4 or the criteria. The second attempt began with the
+first empty marker after `3d4475d` and stopped on `23c10c5` when its own criteria were met.
+Report-only verification runs `38640119007` and `38641795833` also qualified as Class A,
+but are **not needed or counted** in the bounded second attempt.
+
+### §V.18.1 Frozen conditions and independently checked evidence
+
+- **Code and configuration:** frozen at `96641ee` (the last harness-changing commit); the
+  only file difference between that tree and `23c10c5` is this report. All **13** marker
+  commits from `f9602ad` through `23c10c5` have the exact same tree as `3d4475d`.
+  No application, harness, workflow, fixture, test or dependency was modified.
+- **Generation:** one `pull_request` run per push; the next push followed the previous run's
+  completion. The workflow API lists **exactly these 13 runs** on the PR branch inside the
+  bounded attempt, with no unlisted failure between them. Peak observed concurrency is **1**,
+  within the predeclared ≤2 bound. Idle gaps after runs 3 and 7 were included in the streak.
+- **Classification, checked against the CI API and each run's own published PR comment:**
+  all 13 runs concluded `success`, had 26 successful steps, and skipped only step 23 (the
+  failure reporter, by design on a passing run). Steps 16, 18, 19, 20 and evidence-publication
+  step 22 succeeded each time; each comment matched the exact head SHA **and** run ID.
+  The database-backed suites' no-skip guard also passed in every run.
+
+| # | Run | Head SHA | UTC run start → completion | Class |
+| --- | --- | --- | --- | --- |
+| 1 | `38643404610` | `f9602ad` | Oct 14 21:51:12 → 22:02:30 | A |
+| 2 | `38644884001` | `ce8b46d` | Oct 14 22:03:13 → 22:13:56 | A |
+| 3 | `38646199770` | `f3fc0e7` | Oct 14 22:14:07 → 22:25:30 | A |
+| 4 | `38649498500` | `100de00` | Oct 14 22:42:46 → 22:52:41 | A |
+| 5 | `38650611349` | `8a6b838` | Oct 14 22:53:06 → 23:03:25 | A |
+| 6 | `38651753260` | `80b0e4d` | Oct 14 23:03:58 → 23:15:47 | A |
+| 7 | `38653042299` | `c3cf452` | Oct 14 23:16:22 → 23:25:43 | A |
+| 8 | `38657000159` | `8fa62a7` | Oct 14 23:55:28 → Oct 15 00:06:40 | A |
+| 9 | `38658126567` | `8d14b0d` | Oct 15 00:06:50 → 00:18:23 | A |
+| 10 | `38659297688` | `dd36a60` | Oct 15 00:18:46 → 00:29:17 | A |
+| 11 | `38660329429` | `8b959b4` | Oct 15 00:29:39 → 00:40:47 | A |
+| 12 | `38661433905` | `585929d` | Oct 15 00:41:08 → 00:52:31 | A |
+| 13 | `38664024063` | `23c10c5` | Oct 15 01:08:39 → 01:20:11 | A |
+
+The twelfth run finished **3h01m19s** after run 1 started, but their **start times**
+were only 2h49m56s apart. To avoid treating that marginal first-start→last-finish reading
+as sufficient, a thirteenth serial run was made. Run 1 start→run 13 start is **3h17m27s**;
+run 1 start→run 13 completion is **3h28m59s**. Even the more conservative first-*finish*
+(22:02:30Z)→last-*start* (01:08:39Z) is **3h06m09s**. The ≥3 clock-hour
+diversity guard therefore passes regardless of which run boundary is used.
+
+### §V.18.2 Verdict against the unchanged §T.2/§V.17.1 criteria
+
+| Criterion | Required | Verified in this bounded attempt | Verdict |
+| --- | --- | --- | --- |
+| Consecutive Class A clean runs | ≥12 | **13**, with no exclusions or intervening runs | **PASS** |
+| Diversity guard | streak spans ≥3 clock hours | **3h17m27s** first-to-last run start (3h28m59s first start-to-last finish) | **PASS** |
+| Controls | known-bad reproduces; shipped runtime clean, every run | **13/13** published 19.2.8 positive-control `5/5` in both reproducing arms and 19.3.0-canary clean `0/5` in the corresponding arms, with the positive/negative control PASS lines | **PASS** |
+| Hydration recurrence | none in the observation | step 16 **13/13 success**; one identical gate line and one identical required-sample tally across all 13 | **PASS within the harness's measured scope** |
+| Required test steps executed; no test skipped | every Class A run | **26 successful steps**, only failure reporter skipped, in each of the 13 runs; journey **436/0/0** | **PASS** |
+
+Exact gate evidence in **every** run:
+
+```
+HYDRATION SAMPLES required=15 ok=15 failed=0 unresolved=0 missing=0 malformed=0 auxiliary=57 duplicates=0
+M418 GATE PASS: all required samples and checks passed
+436 passed, 0 failed, 0 skipped. Authenticated
+```
+
+**Observation-protocol verdict: MET, on the repaired harness.** This supersedes the
+*current insufficiency* noted in §V.17, but does not rewrite that earlier window's
+historical NOT MET result. The 13 executions are fresh disposable-DB/browser runs of
+unchanged code, not proof that an intermittent application defect is impossible or that
+an isolated harness covers all conditions. The E5 session-mixing diagnosis (§V.16.1),
+fail-closed reporting repair (Part A), and per-fixture sampling repair (`b16d60b`) remain
+the causal and test-integrity basis; this attempt only supplies the formerly missing
+observation window. It is **not** a new app-code fix or a production-readiness claim.
+
+**Owner boundary:** §V.16.5 decision 1 — confirm or revert the `b16d60b` sampling repair —
+is still open; "Proceed" here authorized only the serial observation attempt, **not**
+that decision. These results support recommending M418 observation acceptance **if the
+owner confirms the repair**; they do not grant final M418/release sign-off on an
+unconfirmed required-sample definition. PR #45 remains OPEN and labelled
+`NOT APPROVED FOR PRODUCTION DEPLOYMENT`. No merge, deployment, media activation,
+provider transaction or production-data action is authorized or performed. Step-20
+JS-disabled intermittent timeout remains an open robustness item (it did not fail in
+this attempt); the five full-audit development advisories and Paystack/dashboard-only
+configuration checks remain unresolved as previously reported.
