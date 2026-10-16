@@ -1,7 +1,7 @@
 /** Server-only Paystack integration. Never return or log secret configuration. */
 import crypto from "crypto";
 import prisma from "./db";
-import { subscriptionWindow } from "./paymentVerification";
+import { isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
@@ -117,10 +117,34 @@ export async function activateSubscriptionForPayment(
       if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
       return { subscription: current, alreadySettled: true };
     }
-    if (payment.status !== "PENDING" && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_PENDING");
+    /*
+     * What may settle, and on what evidence.
+     *
+     *   PENDING                     — the ordinary path.
+     *   FAILED/CANCELLED/EXPIRED    — only with provider evidence in this call (paystackId), i.e.
+     *                                 a verified success is correcting a stale local record.
+     *   PAID (with a subscription)  — already handled above, idempotent.
+     *   PAID without a subscription — the legacy repair path.
+     *   REFUNDED / anything else    — never: money already returned is not money received.
+     *
+     * The evidence requirement means this function cannot be talked into reviving a failed
+     * payment by a caller that skipped verification; the webhook and the verify route both pass
+     * the id from a transaction they verified against Paystack.
+     */
+    // Provider evidence for this settlement: the Paystack transaction id from a verification the
+    // caller performed and checked. Required to settle anything other than a PENDING payment.
+    const providerEvidence = typeof verification?.paystackId === "string" && verification.paystackId.trim() !== "";
+
+    if (!isSettleablePaymentStatus(payment.status) && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_SETTLEABLE");
+    if (payment.status !== "PENDING" && !repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
 
     const plan = await tx.planConfig.findUnique({ where: { id: payment.planId } });
     if (!plan) throw new Error("PLAN_NOT_FOUND");
+
+    // Remembered before any write: the state this verified success settled from, reported in the
+    // audit trail so a revived payment can be reconciled later. (Read from the row rather than
+    // assumed, and captured before the compare-and-set for the same reason.)
+    const settledFrom = payment.status;
 
     // JATA AFTERCALL Business POS (spec §4, §43–§45): an additive product with its own
     // subscription row, settled from the same verified payment and the same idempotency
@@ -134,7 +158,9 @@ export async function activateSubscriptionForPayment(
 
     if (!repairingLegacyPaidPayment) {
       const changed = await tx.payment.updateMany({
-        where: { id: payment.id, status: "PENDING" },
+        // Compare-and-set on the state that was read: a concurrent settlement of any kind makes
+        // this write match nothing, and the branch below then resolves idempotently.
+        where: { id: payment.id, status: settledFrom },
         data: {
           status: "PAID",
           ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),
@@ -186,7 +212,13 @@ export async function activateSubscriptionForPayment(
       data: {
         actorId: payment.userId, action: "SUBSCRIPTION_ACTIVATED", targetType: "SUBSCRIPTION",
         targetId: subscription.id,
-        metadata: JSON.stringify({ paymentReference: payment.reference, planKey: plan.key, businessId: payment.businessId }),
+        metadata: JSON.stringify({
+          paymentReference: payment.reference,
+          planKey: plan.key,
+          businessId: payment.businessId,
+          // Observability for a revived payment: the stored state a verified success corrected.
+          ...(settledFrom === "PENDING" ? {} : { settledFrom }),
+        }),
       },
     });
     return { subscription, alreadySettled: false };

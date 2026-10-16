@@ -75,7 +75,10 @@ describe("runtime and schema guards", () => {
     // tenant-scoped table that stops a duplicate till submission becoming a second sale), and the
     // durable checkout idempotency table (replaces in-memory order idempotency maps, one additive table),
     // and the sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
-    // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten).
+    // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten),
+    // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
+    // column that records which clock a booking was anchored to, so a legacy row keeps its stored
+    // instant and its meaning and no historical row is rewritten or backfilled).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -94,6 +97,7 @@ describe("runtime and schema guards", () => {
       "20261010000000_sale_price_windows",
       "20261010000100_pos_sale_price_windows",
       "20261010000200_checkout_idempotency",
+      "20261014000000_booking_time_zone_marker",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -130,6 +134,7 @@ describe("runtime and schema guards", () => {
       "20261005020000_pos_sale_refund_integrity",
       "20261005030000_pos_fractional_quantities",
       "20261005040000_pos_sale_idempotency",
+      "20261014000000_booking_time_zone_marker",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

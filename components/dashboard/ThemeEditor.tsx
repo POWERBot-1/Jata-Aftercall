@@ -85,7 +85,7 @@ export function ThemeEditor({
               >
                 <span className="flex gap-1" aria-hidden="true">
                   {theme.swatches.map((colour) => (
-                    <span key={colour} className="h-6 flex-1 rounded" style={{ background: colour }} />
+                    <span key={colour} className="h-6 flex-1 rounded-sm" style={{ background: colour }} />
                   ))}
                 </span>
                 <span className="mt-2 block text-sm font-semibold">{theme.name}</span>
@@ -205,7 +205,7 @@ function ColourField({ label, value, onChange }: { label: string; value: string;
           type="color"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-10 w-12 rounded border bg-white"
+          className="h-10 w-12 rounded-sm border bg-white"
         />
         <span
           className="flex-1 rounded-lg border px-3 py-2 text-sm font-semibold"

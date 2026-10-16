@@ -161,7 +161,15 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
     const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
+    // Flipping isPublished (either direction) is a publish-level action (§5, §15). Guarding
+    // with the default "read" action used to let any member — including a VIEWER, or one whose
+    // role lookup failed and resolved to no role — change the public visibility of the site.
+    // The role check runs before any write and fails closed on unknown/failed role lookups.
+    const guard = await guardTenantMutation(
+      session,
+      businessId,
+      body.isPublished !== undefined ? "publish" : "read",
+    );
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const data: Record<string, unknown> = {};

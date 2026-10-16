@@ -1,5 +1,6 @@
 import Link from "next/link";
 import prisma from "@/lib/db";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
 import { getSession } from "@/lib/auth";
 import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 import { planDisplayName, publiclyListedPlans } from "@/lib/pricing";
@@ -59,9 +60,9 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             {plansResult.ok === false ? <p className="mt-4 text-sm text-amber-800">Plans are temporarily unavailable. Please try again later.</p> :
               plansResult.list.length === 0 ? <p className="mt-4 text-sm text-amber-800">No active plans are available right now. Please try again later.</p> :
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {plansResult.list.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-sm">
+                {plansResult.list.map((plan) => <Link key={plan.id} href={getCheckoutUrl(selected.id, plan.id)} className="rounded-xl border bg-zinc-50 p-4 hover:bg-white hover:shadow-xs">
                   <p className="text-sm font-semibold">{planDisplayName(plan)}</p>
-                  <p className="mt-1 text-sm text-zinc-600">KES {plan.priceKES.toLocaleString()} · {plan.durationDays} days</p>
+                  <p className="mt-1 text-sm text-zinc-600">KES {formatNumber(plan.priceKES)} · {plan.durationDays} days</p>
                   <span className="mt-3 inline-flex min-h-11 items-center rounded-full bg-zinc-900 px-4 text-sm font-semibold text-white">Choose this plan</span>
                 </Link>)}
               </div>}
@@ -78,7 +79,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
               <p className="font-semibold [overflow-wrap:anywhere]">{business.name} — {business.subscription!.plan.name}</p>
               <p className="mt-1 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 font-semibold ${toneClass(label.tone)}`}>{label.label}</span>
-                <span>{business.subscription!.expiresAt ? `Until ${new Date(business.subscription!.expiresAt).toLocaleDateString("en-KE")}` : "No end date yet"}</span>
+                <span>{business.subscription!.expiresAt ? `Until ${formatDate(business.subscription!.expiresAt)}` : "No end date yet"}</span>
               </p>
               {label.help && <p className="mt-1 text-zinc-600">{label.help}</p>}
             </div>
@@ -95,8 +96,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
               return (
                 <li key={payment.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
                   <div className="min-w-0">
-                    <p className="font-semibold [overflow-wrap:anywhere]">{payment.business?.name || "Business removed"} · KES {(payment.amount / 100).toLocaleString()}</p>
-                    <p className="text-zinc-600">{new Date(payment.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}{label.help ? ` · ${label.help}` : ""}</p>
+                    <p className="font-semibold [overflow-wrap:anywhere]">{payment.business?.name || "Business removed"} · KES {formatNumber(payment.amount / 100)}</p>
+                    <p className="text-zinc-600">{formatDate(payment.createdAt)}{label.help ? ` · ${label.help}` : ""}</p>
                     <p className="break-all font-mono text-xs text-zinc-600">Ref: {payment.reference}</p>
                   </div>
                   <span className={`justify-self-start rounded-full px-2 py-0.5 font-semibold sm:justify-self-end ${toneClass(label.tone)}`}>{label.label}</span>

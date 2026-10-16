@@ -1,6 +1,106 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+/*
+ * Tailwind CSS v4 (upgrade from v3.4.19 — owner-approved staged remediation, release report §J.2).
+ *
+ * `source(none)` disables v4's automatic content detection so the class scan stays exactly what
+ * `tailwind.config.ts` declared before this migration: app/, components/ and lib/ only. The three
+ * @source lines below are that same content configuration, expressed CSS-first.
+ */
+@source "../app/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../components/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../lib/**/*.{js,ts,jsx,tsx,mdx}";
+
+/*
+ * Design tokens. The project's only theme customisation was `fontFamily.sans` in
+ * tailwind.config.ts, so this is the whole token migration — every other token (colours, spacing,
+ * radii, shadows, breakpoints) is v4's own scale, which the tests and the built CSS are checked
+ * against. The brand variables themselves (`--jata-*`, `--eb-*`) live below and are untouched.
+ */
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * v3 → v4 compatibility layer.
+ *
+ * v4's preflight deliberately changes four defaults that the previous version set. Each rule below
+ * restores the v3 value exactly, so the migration does not silently restyle the product; the
+ * evidence for each is a diff of the two preflight files (v3.4.19 vs v4.3.3) and is recorded in
+ * the release report. Nothing here overrides a utility: this is the `base` layer, so any
+ * `border-*`, `ring-*`, `placeholder-*` or `cursor-*` class still wins over it.
+ */
+@layer base {
+  /*
+   * v3: `*, ::before, ::after { border-color: theme(borderColor.DEFAULT) }` = gray-200.
+   * v4: the universal reset is `border: 0 solid`, i.e. currentColor. Without this, every bare
+   * `border` / `divide-y` in the app would take the text colour instead of the subtle v3 hairline.
+   */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb; /* v3 gray-200, verbatim — v4's palette is OKLCH, so the literal is used */
+  }
+
+  /*
+   * v3: the default `--tw-ring-color` was blue-500 at 50% opacity. v4 defaults it to currentColor.
+   * Only bare `ring-1`/`ring-2` are affected; `ring-<colour>` utilities still override this.
+   */
+  * {
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+  }
+
+  /*
+   * v3 preflight: `button, [role="button"] { cursor: pointer }` and `:disabled { cursor: default }`.
+   * v4 removed both, so buttons would fall back to the browser's default cursor — a UX change, not
+   * a styling detail, and the reason this rule exists.
+   */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :disabled {
+    cursor: default;
+  }
+
+  /*
+   * v3 preflight: `input::placeholder, textarea::placeholder { color: gray-400; opacity: 1 }`.
+   * v4 uses a half-transparent currentColor, which reads differently on coloured surfaces.
+   * Explicit `placeholder-<colour>` classes still override this.
+   */
+  ::placeholder {
+    color: #9ca3af; /* v3 gray-400, verbatim */
+    opacity: 1;
+  }
+
+  /*
+   * v3 preflight: `button, select { text-transform: none }`. v4 dropped it, so a control inside an
+   * uppercased container would inherit the transform instead of rendering its own label. No current
+   * markup nests a control under `uppercase`/`capitalize`, so this is defensive fidelity rather than
+   * a fix — but it keeps the reset v3 had, and an explicit `uppercase` class on the control itself
+   * still wins (utilities layer).
+   */
+  button,
+  select {
+    text-transform: none;
+  }
+
+  /*
+   * v3 preflight: `[type='search'] { -webkit-appearance: textfield; outline-offset: -2px }`, also
+   * dropped by v4. Three real search inputs depend on it — the POS record board and till
+   * (components/pos/RecordBoard.tsx, components/pos/TillClient.tsx) and the storefront catalogue
+   * (components/storefront/CatalogueClient.tsx) — because without it Safari draws its native rounded
+   * search field and the focus ring shifts outwards.
+   */
+  [type="search"] {
+    -webkit-appearance: textfield;
+    outline-offset: -2px;
+  }
+}
+
 
 :root {
   --jata-ink: #18181b;
@@ -1022,15 +1122,27 @@ button:focus-visible {
   z-index: 40;
   display: flex;
   gap: 0.6rem;
+  /* DEF-1 (§M.4): a second row is allowed, because four actions cannot share one 320–430 px row at a
+     readable size — measured, their labels need ~420 px inside a 401 px content box even at 430 px. */
+  row-gap: 0.5rem;
+  flex-wrap: wrap;
   padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--eb-surface) 92%, transparent);
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
-.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
+/* Two actions per row, evenly grown, so every label keeps its own pill (§M.4, DEF-1).
+ *
+ * The previous rule (`flex: 1 1 0`) shared the row four ways and relied on wrapping, but a
+ * single-word label cannot wrap on whitespace: "WhatsApp" painted 17 px and "Directions" 22 px
+ * outside its button at 360 px, across the neighbouring control (`overflow: visible`). A label
+ * that still cannot fit — a longer locale, for instance — now breaks inside its own pill
+ * (`overflow-wrap: anywhere`) instead of bleeding. Typography, colours, padding and the 44 px
+ * touch target are unchanged. */
+.eb-actionbar .eb-btn { flex: 1 1 45%; min-width: 0; padding-inline: 0.5rem; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
-.eb-actionbar-spacer { height: 5rem; }
+/* Reserve the full two-row height below 900px so the fixed bar never covers page content. */
+.eb-actionbar-spacer { height: 9.5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
 
 /* ── Cart drawer ── */
@@ -1717,3 +1829,454 @@ button:focus-visible {
 .eb-recipe-item__price { margin: 0; font-weight: 600; white-space: nowrap; }
 .eb-business-recipe--menu-board .eb-recipe-facts { margin: .45rem 0; }
 .eb-business-recipe--menu-board .eb-recipe-item__action { margin-top: .55rem; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   JATA AFTERCALL — Global design system layer (2026-10-13)
+
+   One enforced design language for every customer-facing surface: the owner
+   dashboard, the AI Business Front Desk, Website Studio, Business POS,
+   subscriptions, analytics, authentication and every generated customer
+   product. Everything here is ADDITIVE: the pre-existing .jata-*, .eb-* and
+   .pos-* rules above are unchanged and stay authoritative for their screens.
+
+   Rules:
+     • Every colour, radius, shadow, duration and focus ring comes from a token.
+       No component may hard-code a hex value in this layer.
+     • Every interactive control keeps a visible :focus-visible ring and a
+       minimum 2.75rem (44px) touch target.
+     • Every state a customer can reach has a defined style: hover, focus,
+       pressed, disabled, loading, empty, error, success, offline.
+     • Motion is opt-in, short and never required to complete a transaction.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Spacing scale (4px base, kept in rem so it scales with user font size). */
+  --jata-space-1: 0.25rem;
+  --jata-space-2: 0.5rem;
+  --jata-space-3: 0.75rem;
+  --jata-space-4: 1rem;
+  --jata-space-5: 1.5rem;
+  --jata-space-6: 2rem;
+  --jata-space-7: 3rem;
+
+  /* Typography scale. */
+  --jata-text-meta: 0.72rem;
+  --jata-text-sm: 0.8125rem;
+  --jata-text-body: 0.9375rem;
+  --jata-text-lg: 1.125rem;
+  --jata-text-title: 1.5rem;
+  --jata-display: 1.75rem;
+  --jata-leading-tight: 1.2;
+  --jata-leading-body: 1.6;
+  --jata-measure: 68ch;
+
+  /* Shape and elevation. */
+  --jata-radius-sm: 0.5rem;
+  --jata-radius-md: 0.75rem;
+  --jata-radius-lg: 1rem;
+  --jata-radius-xl: 1.25rem;
+  --jata-radius-pill: 999px;
+  --jata-elevation-1: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --jata-elevation-2: 0 6px 18px rgba(24, 24, 27, 0.07);
+  --jata-elevation-3: 0 18px 40px rgba(24, 24, 27, 0.12);
+
+  /* Semantic status colours (readable on --jata-card). */
+  --jata-success: #047857;
+  --jata-success-surface: #ecfdf5;
+  --jata-warning: #92400e;
+  --jata-warning-surface: #fffbeb;
+  --jata-info: #1d4ed8;
+  --jata-info-surface: #eff6ff;
+  --jata-danger-surface: #fef2f2;
+
+  /* Interaction. */
+  --jata-focus-width: 2px;
+  --jata-focus-offset: 2px;
+  --jata-touch-target: 2.75rem;
+  --jata-dur-fast: 120ms;
+  --jata-dur-base: 180ms;
+  --jata-dur-slow: 260ms;
+  --jata-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Containers. */
+  --jata-container-md: 42rem;
+  --jata-container-lg: 64rem;
+}
+
+/* ── Page structure ─────────────────────────────────────────────────────── */
+
+.jata-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--jata-space-4);
+  margin-bottom: var(--jata-space-5);
+}
+
+.jata-page-head__copy { min-width: 0; }
+
+.jata-page-head__title {
+  margin: 0;
+  font-size: var(--jata-text-title);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: var(--jata-leading-tight);
+}
+
+.jata-page-head__sub {
+  margin: var(--jata-space-1) 0 0;
+  max-width: var(--jata-measure);
+  color: var(--jata-muted);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+
+.jata-page-head__actions { display: flex; flex-wrap: wrap; gap: var(--jata-space-2); }
+.jata-page-head__actions > * { min-height: var(--jata-touch-target); }
+
+.jata-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--jata-space-1);
+  margin: 0 0 var(--jata-space-2);
+  padding: 0;
+  list-style: none;
+  color: var(--jata-muted);
+  font-size: var(--jata-text-meta);
+  font-weight: 600;
+}
+.jata-breadcrumb a { color: var(--jata-muted); text-decoration: none; }
+.jata-breadcrumb a:hover { color: var(--jata-ink); text-decoration: underline; text-underline-offset: 4px; }
+.jata-breadcrumb__sep { opacity: 0.55; }
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+.jata-surface {
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  box-shadow: var(--jata-elevation-1);
+}
+
+.jata-surface--raised { box-shadow: var(--jata-elevation-2); }
+.jata-surface--muted { background: color-mix(in srgb, var(--jata-line) 22%, var(--jata-card)); }
+.jata-surface--interactive { transition: box-shadow var(--jata-dur-base) var(--jata-ease-out), transform var(--jata-dur-base) var(--jata-ease-out); }
+@media (hover: hover) {
+  .jata-surface--interactive:hover { box-shadow: var(--jata-elevation-2); transform: translateY(-1px); }
+}
+
+.jata-surface__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  padding: var(--jata-space-4) var(--jata-space-4) 0;
+}
+
+.jata-surface__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-surface__body { padding: var(--jata-space-4); }
+.jata-surface__foot {
+  border-top: 1px solid var(--jata-line);
+  padding: var(--jata-space-3) var(--jata-space-4);
+  font-size: var(--jata-text-sm);
+  color: var(--jata-muted);
+}
+
+/* ── Section headings ───────────────────────────────────────────────────── */
+
+.jata-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  margin-bottom: var(--jata-space-3);
+}
+.jata-section-head__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-section-head__meta { margin: 0; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Status pills ───────────────────────────────────────────────────────── */
+
+.jata-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--jata-radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.jata-pill[data-tone="neutral"] { background: color-mix(in srgb, var(--jata-line) 40%, var(--jata-card)); color: var(--jata-muted); border-color: var(--jata-line); }
+.jata-pill[data-tone="info"] { background: var(--jata-info-surface); color: var(--jata-info); border-color: color-mix(in srgb, var(--jata-info) 24%, transparent); }
+.jata-pill[data-tone="success"] { background: var(--jata-success-surface); color: var(--jata-success); border-color: color-mix(in srgb, var(--jata-success) 24%, transparent); }
+.jata-pill[data-tone="warning"] { background: var(--jata-warning-surface); color: var(--jata-warning); border-color: color-mix(in srgb, var(--jata-warning) 24%, transparent); }
+.jata-pill[data-tone="danger"] { background: var(--jata-danger-surface); color: var(--jata-danger); border-color: color-mix(in srgb, var(--jata-danger) 24%, transparent); }
+
+/* ── Metric tiles ───────────────────────────────────────────────────────── */
+
+.jata-metric-grid { display: grid; gap: var(--jata-space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 720px) { .jata-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.jata-metric {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.15rem;
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  padding: var(--jata-space-3) var(--jata-space-4);
+}
+.jata-metric__label { color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.jata-metric__value { font-size: var(--jata-display); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: var(--jata-leading-tight); }
+.jata-metric__hint { color: var(--jata-muted); font-size: var(--jata-text-meta); }
+
+/* ── Buttons (extends .jata-btn) ────────────────────────────────────────── */
+
+.jata-btn { transition: background-color var(--jata-dur-fast) var(--jata-ease-out), box-shadow var(--jata-dur-fast) var(--jata-ease-out), transform var(--jata-dur-fast) var(--jata-ease-out); }
+.jata-btn:active:not(:disabled) { transform: translateY(1px); }
+.jata-btn-sm { min-height: 2.25rem; padding: 0.3rem 0.7rem; font-size: var(--jata-text-sm); }
+.jata-btn-block { width: 100%; justify-content: center; }
+.jata-btn[aria-busy="true"] { cursor: progress; opacity: 0.85; }
+.jata-btn .jata-spinner { animation: jata-spin 900ms linear infinite; }
+@keyframes jata-spin { to { transform: rotate(360deg); } }
+
+/* ── Alerts / inline states ─────────────────────────────────────────────── */
+
+.jata-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--jata-space-2);
+  border: 1px solid var(--jata-line);
+  border-left-width: 3px;
+  border-radius: var(--jata-radius-md);
+  padding: var(--jata-space-3);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+.jata-alert[data-tone="neutral"] { background: var(--jata-card); }
+.jata-alert[data-tone="info"] { background: var(--jata-info-surface); border-color: color-mix(in srgb, var(--jata-info) 30%, transparent); }
+.jata-alert[data-tone="success"] { background: var(--jata-success-surface); border-color: color-mix(in srgb, var(--jata-success) 30%, transparent); }
+.jata-alert[data-tone="warning"] { background: var(--jata-warning-surface); border-color: color-mix(in srgb, var(--jata-warning) 30%, transparent); }
+.jata-alert[data-tone="danger"] { background: var(--jata-danger-surface); border-color: color-mix(in srgb, var(--jata-danger) 30%, transparent); color: var(--jata-danger); }
+
+/* ── Loading, empty and offline states ──────────────────────────────────── */
+
+.jata-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--jata-radius-md);
+  background: color-mix(in srgb, var(--jata-line) 45%, var(--jata-card));
+}
+.jata-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.jata-skeleton--text { height: 0.85rem; }
+.jata-skeleton--title { height: 1.4rem; width: 40%; }
+.jata-skeleton--tile { height: 5rem; }
+@keyframes jata-shimmer { to { transform: translateX(100%); } }
+
+.jata-empty__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; }
+.jata-empty__text { margin: var(--jata-space-1) auto 0; max-width: var(--jata-measure); color: var(--jata-muted); font-size: var(--jata-text-sm); line-height: var(--jata-leading-body); }
+.jata-empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--jata-space-2); margin-top: var(--jata-space-4); }
+
+.jata-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--jata-radius-pill);
+  background: var(--jata-warning-surface);
+  color: var(--jata-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+}
+
+/* ── Tables (TanStack Table renders into these) ─────────────────────────── */
+
+.jata-table-wrap { overflow-x: auto; border: 1px solid var(--jata-line); border-radius: var(--jata-radius-lg); background: var(--jata-card); }
+.jata-table { width: 100%; border-collapse: collapse; font-size: var(--jata-text-sm); }
+.jata-table caption { padding: var(--jata-space-3) var(--jata-space-4); text-align: left; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-table th, .jata-table td { padding: 0.6rem var(--jata-space-4); text-align: left; border-bottom: 1px solid var(--jata-line); vertical-align: middle; }
+.jata-table th { background: color-mix(in srgb, var(--jata-line) 18%, var(--jata-card)); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jata-muted); white-space: nowrap; }
+.jata-table tbody tr:last-child td { border-bottom: 0; }
+.jata-table tbody tr:hover { background: color-mix(in srgb, var(--jata-line) 14%, var(--jata-card)); }
+.jata-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.jata-table__sort[aria-sort="ascending"], .jata-table__sort[aria-sort="descending"] { color: var(--jata-ink); }
+
+/* ── Charts ─────────────────────────────────────────────────────────────── */
+
+.jata-chart-shell { width: 100%; min-height: 12rem; }
+.jata-chart-legend { display: flex; flex-wrap: wrap; gap: var(--jata-space-3); margin-top: var(--jata-space-2); color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-chart-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.jata-chart-legend i { width: 0.65rem; height: 0.65rem; border-radius: var(--jata-radius-sm); display: inline-block; }
+
+/* ── Toasts (sonner) ────────────────────────────────────────────────────── */
+
+.jata-toaster [data-sonner-toast] {
+  border-radius: var(--jata-radius-md);
+  border-color: var(--jata-line);
+  box-shadow: var(--jata-elevation-3);
+  font-family: var(--font-sans);
+}
+.jata-toaster [data-sonner-toast][data-type="success"] { border-left: 3px solid var(--jata-success); }
+.jata-toaster [data-sonner-toast][data-type="error"] { border-left: 3px solid var(--jata-danger); }
+
+/* ── Focus ring for every interactive element in this layer ─────────────── */
+
+.jata-surface a:focus-visible,
+.jata-pill a:focus-visible,
+.jata-btn:focus-visible,
+.jata-table__sort:focus-visible,
+.jata-breadcrumb a:focus-visible {
+  outline: var(--jata-focus-width) solid var(--jata-focus);
+  outline-offset: var(--jata-focus-offset);
+  border-radius: var(--jata-radius-sm);
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .jata-skeleton::after { animation: none; }
+  .jata-btn .jata-spinner { animation: none; }
+  .jata-surface--interactive { transition: none; }
+}
+
+/* ── Dashboard section navigation (extends .jata-nav) ───────────────────── */
+
+.jata-nav__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: var(--jata-container-lg);
+  margin: 0 auto;
+  padding: 0.35rem 1rem 0.5rem;
+}
+@media (min-width: 768px) {
+  .jata-nav__sections { flex-direction: row-reverse; align-items: center; justify-content: space-between; }
+}
+.jata-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  background: color-mix(in srgb, var(--jata-line) 30%, transparent);
+  border-radius: var(--jata-radius-pill);
+}
+
+/* ── Generated customer products: shared foundation ──────────────────────
+   The Theme Engine (lib/experience/themes.ts#themeCss) injects `--eb-*` foundation tokens on
+   the root of every published product, for every category and theme. These rules consume them,
+   so a single shared change reaches every business website, catalogue, storefront, restaurant
+   page, booking flow, service page and course page without touching a template.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.eb-scope :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--eb-focus-width, 2px) solid var(--eb-ring);
+  outline-offset: var(--eb-focus-offset, 2px);
+  border-radius: var(--eb-radius);
+}
+
+/* Touch targets: the primary controls of a generated product stay pressable on a phone. */
+.eb-scope .eb-btn,
+.eb-scope .eb-action,
+.eb-scope .eb-nav__links a,
+.eb-scope .eb-actionbar a,
+.eb-scope .eb-actionbar button {
+  min-height: var(--eb-touch-target, 2.75rem);
+}
+
+/* Status surfaces shared by every product type (order states, stock, booking, payment). */
+.eb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.eb-status[data-tone="success"] { color: var(--eb-status-success); background: var(--eb-status-success-surface); }
+.eb-status[data-tone="warning"] { color: var(--eb-status-warning); background: var(--eb-status-warning-surface); }
+.eb-status[data-tone="danger"] { color: var(--eb-status-error); background: var(--eb-status-error-surface); }
+.eb-status[data-tone="neutral"] { color: var(--eb-muted); background: var(--eb-surface-muted); }
+
+/* Loading and offline states, so a slow connection never looks like a broken page. */
+.eb-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--eb-radius);
+  background: var(--eb-surface-muted);
+  min-height: 1rem;
+}
+.eb-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.eb-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  background: var(--eb-status-warning-surface);
+  color: var(--eb-status-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eb-skeleton::after { animation: none; }
+}
+
+/* ── POS navigation icons (extends .pos-nav) ────────────────────────────── */
+
+.pos-nav-link svg { flex: 0 0 auto; }
+.pos-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, transparent);
+}
+
+/* ── Studio section tabs (extends .jata-*) ──────────────────────────────── */
+
+.jata-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--jata-radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--jata-text-sm);
+  font-weight: 650;
+  color: var(--jata-muted);
+}
+.jata-tab[aria-current="page"], .jata-tab[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, var(--jata-card));
+}

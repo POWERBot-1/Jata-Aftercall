@@ -30,6 +30,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ id: s
     staffName: booking.staffName,
     startAt: booking.startAt.toISOString(),
     endAt: booking.endAt ? booking.endAt.toISOString() : null,
+    bookingTimeZone: booking.bookingTimeZone,
     durationMinutes: booking.durationMinutes,
     status: String(booking.status),
     depositKES: booking.depositKES,

@@ -472,8 +472,14 @@ export function serverHtmlDigest(html, options = {}) {
 /**
  * Test-only build patch (M11 Stage D): records the fiber React expected when
  * `throwOnHydrationMismatch` fires (hydration #418) into `window.__m418last`.
- * The built chunk is byte-stable (4bd1b696-*.js across runs), so the throw site
- * is addressable by its minified shape `function rD(e){var n=Error(i(418`.
+ * The built chunk name keeps the 4bd1b696-*.js prefix across runs but its content hash changes
+ * with the framework, so the throw site is addressed by its *minified shape*. That shape is
+ * version-bound: Next 15.5.27 (Terser) produced `function rD(e){var n=Error(i(418`, while
+ * Next 16.4.0 (webpack + SWC) produces `throw Error(f(418))` — a different mangled identifier and
+ * no `var n=` wrapper. The Next-15 pattern below therefore matches nothing on Next 16, which is why
+ * scripts/browser/studio-authenticated.check.mjs now prints a loud warning when it patches 0 chunks
+ * instead of quietly reporting a journey without the fiber-level evidence. A replacement matcher
+ * must be validated against a genuinely reproduced mismatch before it is trusted (report §N.8).
  * Diagnostics only: adds one guarded assignment before the Error construction;
  * never suppresses the throw, never alters hydration behavior. Applied by the
  * browser runner to the CI build's chunk on disk before `next start` — never

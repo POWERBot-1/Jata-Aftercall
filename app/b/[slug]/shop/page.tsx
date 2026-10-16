@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { formatNumber } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
@@ -61,7 +62,7 @@ export default async function ShopPage({ params, searchParams }: Props) {
               <h1 className="eb-h2">{data.profile.catalogueLabel}</h1>
               <p className="eb-lede">
                 {catalogue.length} {catalogue.length === 1 ? data.profile.itemNoun.toLowerCase() : data.profile.itemNounPlural.toLowerCase()}
-                {prices.length ? ` · from ${Math.min(...prices).toLocaleString("en-KE")} KES` : ""}
+                {prices.length ? ` · from ${formatNumber(Math.min(...prices))} KES` : ""}
               </p>
             </div>
           </header>

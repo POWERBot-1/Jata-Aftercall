@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ASPECT_LABELS, type AspectRatio } from "@/lib/media/imagePlan";
 import { cropDataUrl, uploadPreparedImage } from "@/lib/media/browserImage";
 import { PhotoLab } from "./PhotoLab";
+import { formatDate } from "@/lib/dateFormat";
 
 type Asset = {
   id: string;
@@ -258,7 +259,7 @@ export function MediaLibrary({ businessId, heroImageUrl }: { businessId: string;
                     <span className="font-semibold capitalize">{generation.kind.toLowerCase()}</span>{" "}
                     <span className="text-zinc-600">
                       · {generation.providerKey === "jata-local" ? "JATA designed" : generation.providerKey} ·{" "}
-                      {new Date(generation.createdAt).toLocaleDateString()} · {generation.assetIds.length} image
+                      {formatDate(generation.createdAt)} · {generation.assetIds.length} image
                       {generation.assetIds.length === 1 ? "" : "s"}
                       {generation.status !== "SUCCEEDED" ? ` · ${generation.status.toLowerCase()}` : ""}
                     </span>

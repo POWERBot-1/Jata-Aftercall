@@ -57,7 +57,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # puppeteer-core@25 (the only line free of the extract-zip advisories) requires
+          # Node >= 22.12.0, and Node 22 is inside the range package.json already declares.
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
@@ -175,6 +177,10 @@ jobs:
       # No auth mocks or application QA endpoints. Writes only the opted-in disposable DB;
       # paid rows are labelled synthetic entitlement, NOT provider/payment-verification evidence.
       - name: Authenticated production HTTP browser journey
+        # M418 diagnostic arms are default OFF. To run them, set M418_DIAG_ARMS here to a
+        # comma-separated arm list ("1" = all): E1-no-throttle, E1-control-retrottled,
+        # E2-reversed-order, E4-wait-60s (M418_DIAG_WAIT_MS overrides the 60 s E4 wait).
+        # Arms are measurements only: they never satisfy a required sample or change the verdict.
         run: |
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
@@ -191,6 +197,26 @@ jobs:
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           npm run test:browser:hydration-race 2>&1 | tee /tmp/step-hydration-race.log
 
+      # Report N.13: the same harness runs twice - once against a runtime known to carry the defect
+      # (positive control, must reproduce) and once against the runtime this application now ships
+      # (must be clean). The control is installed under /tmp so it cannot touch package.json,
+      # package-lock.json or the shipped dependency tree, and it is never bundled into the app.
+      - name: "Hydration replay-cursor regression (shipped clean, 19.2 positive control)"
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing - replay-cursor regression NOT RUN, not passed." >&2
+            exit 1
+          fi
+          npm install --prefix /tmp/replay-control --no-save --no-audit --no-fund react@19.2.8 react-dom@19.2.8 > /tmp/step-replay-control-install.log 2>&1
+          {
+            echo "--- positive control: react 19.2.8 (the harness must reproduce the defect here) ---"
+            REPLAY_REACT_DIR=/tmp/replay-control/node_modules npm run test:browser:hydration-replay:control
+            echo "--- shipped runtime (the defect must NOT reproduce here) ---"
+            npm run test:browser:hydration-replay
+          } 2>&1 | tee /tmp/step-replay-hydration.log
+
       - name: Actual storefront Motion and immersive browser regressions
         run: |
           set -o pipefail
@@ -206,6 +232,8 @@ jobs:
           WAIT_FOR_SERVER=1 npm run test:browser:motion 2>&1 | tee /tmp/step-motion-browser.log
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
+          # DEF-1 (§M.4): quick-action-bar labels must stay inside their own controls at 320-430px.
+          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
@@ -231,7 +259,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
@@ -242,6 +270,7 @@ jobs:
               ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
               ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
               ['Hydration #418 controlled race reproduction (widened $RC/$RV gap)', '/tmp/step-hydration-race.log'],
+              ['Hydration replay-cursor regression (positive control + shipped runtime)', '/tmp/step-replay-hydration.log'],
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
@@ -273,12 +302,39 @@ jobs:
                 return `${summaries}\n\n${text.slice(0, half)}\n\n…[${text.length - limit} characters truncated]…\n\n${text.slice(-half)}`;
               } catch (e) { return '(no output captured)'; }
             };
+            // Never-elided failure signatures: checks that throw (`FAIL ...`), uncaught browser
+            // errors and their recorded M418 diagnostics, and the script's own `FAILED CHECK`
+            // line. The head/tail windows above can elide the middle of a long log, which is
+            // exactly where the failing check's name sat; this section cannot.
+            const signatureFiles = [
+              '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-hydration-browser.log',
+              '/tmp/step-replay-hydration.log',  '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
+              '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
+              '/tmp/step-actionbar-browser.log',
+              '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
+            ];
+            const signatureLines = [];
+            for (const file of signatureFiles) {
+              try {
+                const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+                for (const line of text.split('\n')) {
+                  if (/^(FAIL|FAILED CHECK|BROWSER RUNTIME ERROR|M418-RECORDED|M418 GATE|M418 DIAG|HYDRATION SAMPLES)/.test(line.trim())) {
+                    signatureLines.push(`${file.split('/').pop()}: ${line.trim()}`);
+                  }
+                }
+              } catch { /* step did not run */ }
+            }
+            const signatures = signatureLines.length
+              ? signatureLines.join('\n').slice(0, 4000)
+              : '(no FAIL/BROWSER RUNTIME ERROR/FAILED CHECK lines in the captured step logs)';
             const body = [
+              ['Failure signatures (never elided)', null, 0],
               ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
               ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
               ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
+              ['Hydration replay-cursor regression', '/tmp/step-replay-hydration.log', 3000],
               ['npm run test:e2e:pos', '/tmp/step-pos-journey.log', 11000],
               ['npm run test:e2e', '/tmp/step-journey.log', 11000],
               ['prisma migrate deploy', '/tmp/step-migrate.log', 3000],
@@ -293,7 +349,7 @@ jobs:
               ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],
               ['npm run seed', '/tmp/step-seed.log', 1500],
-            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${read(file, limit)}\n\`\`\``).join('\n\n');
+            ].map(([label, file, limit]) => `### ${label}\n\n\`\`\`\n${file === null ? signatures : read(file, limit)}\n\`\`\``).join('\n\n');
             const issue = context.payload.pull_request ? context.payload.pull_request.number : 19;
             try {
               await github.rest.issues.createComment({

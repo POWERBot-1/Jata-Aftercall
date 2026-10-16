@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatKES, formatDateTime } from "@/lib/format";
+import { formatDate, formatKES, formatDateTime } from "@/lib/format";
 import { emptyStateFor } from "@/lib/pos/presentation";
 import { channelLabel } from "@/lib/pos/receipt";
 import { listSales, salesTotals } from "@/lib/pos/store";
@@ -46,7 +46,7 @@ export default async function PosSalesPage({ params, searchParams }: Props) {
           <p className="jata-kicker">{workspace.terminology.sales}</p>
           <h2 className="text-xl font-bold">{workspace.terminology.sales}</h2>
           <p className="pos-note">
-            {new Date(range.from).toLocaleDateString("en-KE")} — {new Date(range.to).toLocaleDateString("en-KE")}
+            {formatDate(range.from)} — {formatDate(range.to)}
           </p>
         </div>
         <Link href={`${workspace.basePath}/sell`} className="jata-btn jata-btn-primary">+ New {workspace.terminology.sale.toLowerCase()}</Link>

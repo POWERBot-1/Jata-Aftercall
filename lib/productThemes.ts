@@ -1,11 +1,17 @@
+import { PRODUCT_THEME_TOKENS, type ProductThemeToken } from "./designSystem";
+
 export type ProductThemeKey = "lime-spark" | "emerald-ink";
-type CssVariable = `--${string}`;
 
 export type ProductTheme = {
   key: ProductThemeKey;
   name: string;
   description: string;
-  tokens: Record<CssVariable, string>;
+  /**
+   * The full token contract from lib/designSystem.ts#PRODUCT_THEME_TOKENS — every theme defines
+   * exactly these and nothing else, so the two themes cannot drift apart again (a missing token,
+   * or a token added to only one theme, is a type error).
+   */
+  tokens: Record<ProductThemeToken, string>;
 };
 
 const sharedStatusTokens = {
@@ -26,6 +32,8 @@ export const PRODUCT_THEMES: Record<ProductThemeKey, ProductTheme> = {
     tokens: {
       ...sharedStatusTokens,
       "--color-brand-primary": "#B6FF2E",
+      // Graphite's second step: the soft branding accent beside the lime primary.
+      "--color-brand-secondary": "#454B58",
       "--color-brand-structure": "#23262F",
       "--color-structure": "#23262F",
       "--color-on-dark": "#F4F6F0",
@@ -53,6 +61,8 @@ export const PRODUCT_THEMES: Record<ProductThemeKey, ProductTheme> = {
       ...sharedStatusTokens,
       "--color-brand-primary": "#064E3B",
       "--color-brand-secondary": "#F8E7C9",
+      // The structure colour Emerald Ink always used for its headings and chrome.
+      "--color-brand-structure": "#064E3B",
       "--color-structure": "#064E3B",
       "--color-on-dark": "#FFFFFF",
       "--color-background": "#FFF9F0",

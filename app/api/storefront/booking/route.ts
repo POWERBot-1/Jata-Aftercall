@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
-import { bookingEndAt, freeSlotsFor, parseAvailability, validateBookingRequest } from "@/lib/experience/booking";
+import { bookingEndAt, contractBookingMarker, dayWindowInZone, freeSlotsFor, parseAvailability, validateBookingRequest } from "@/lib/experience/booking";
 import { initializeOrderPayment, notifyNewBooking, PAYMENT_PURPOSE } from "@/lib/experience/payments";
 import { recordEvent, hashSession } from "@/lib/analytics";
 import { sanitizeText } from "@/lib/validation";
@@ -49,10 +49,11 @@ export async function GET(req: Request) {
     });
     if (!service) return NextResponse.json({ slots: [] });
 
-    const dayStart = new Date(`${date}T00:00:00`);
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    // The customer asked about a *business* day (Africa/Nairobi), not a host-local one.
+    const window = dayWindowInZone(date);
+    if (!window) return NextResponse.json({ slots: [] });
     const taken = await prisma.booking.findMany({
-      where: { businessId: business.id, serviceId: service.id, startAt: { gte: dayStart, lt: dayEnd } },
+      where: { businessId: business.id, serviceId: service.id, startAt: { gte: window.start, lt: window.end } },
       select: { startAt: true, endAt: true, status: true },
     });
     const slots = freeSlotsFor({
@@ -140,12 +141,12 @@ export async function POST(req: Request) {
 
     // Re-check availability server-side: the browser's slot list is never authoritative.
     if (serviceId) {
-      const dayStart = new Date(`${body.date}T00:00:00`);
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const window = dayWindowInZone(String(body.date));
+      if (!window) return NextResponse.json({ error: "That date could not be read." }, { status: 400 });
       const [service, taken] = await Promise.all([
         prisma.service.findFirst({ where: { id: serviceId, businessId: business.id }, select: { availability: true } }),
         prisma.booking.findMany({
-          where: { businessId: business.id, serviceId, startAt: { gte: dayStart, lt: dayEnd } },
+          where: { businessId: business.id, serviceId, startAt: { gte: window.start, lt: window.end } },
           select: { startAt: true, endAt: true, status: true },
         }),
       ]);
@@ -171,6 +172,9 @@ export async function POST(req: Request) {
         staffName: typeof body.staffName === "string" ? body.staffName.trim().slice(0, 60) || staffName : staffName,
         startAt,
         endAt: bookingEndAt(startAt, durationMinutes ?? document.settings.bookingSlotMinutes ?? 30),
+        // Records which clock this row was anchored to, so a reader never has to guess and a
+        // legacy row (no marker) is never reinterpreted as Nairobi-anchored.
+        bookingTimeZone: contractBookingMarker(),
         notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : null,
         status: depositKES > 0 ? "PENDING" : "CONFIRMED",
         depositKES,

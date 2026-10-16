@@ -9,6 +9,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import net from "node:net";
 import { assertIsolatedStudioTarget, isAllowedStudioRequest } from "./studio-journey-safety.mjs";
 import { PROBE_PROPERTY, probeInstallSource, formatProbeDump, serverHtmlDigest, serverHtmlOrder, patchHydrationThrowDiagnostics } from "./hydration-mutation-probe.mjs";
+// Gate integrity: required hydration samples are part of the verdict, via a pure, unit-tested
+// module (scripts/browser/m418-gate.mjs, tests/unit/m418-gate.test.ts).
+import { REQUIRED_ATTEMPTS, REQUIRED_CATEGORIES, evaluateGate, evaluateM11, exitCodeFor, gateLine, journeyStatusFor, sampleTallyLine } from "./m418-gate.mjs";
 
 // Diagnostic on by default; `HYDRATION_PROBE=off` or scripts/browser/hydration-probe.mode
 // containing "off" disables installation for A/B control runs (is the probe perturbing the race?).
@@ -20,6 +23,52 @@ function probeEnabled() {
   } catch {
     return true;
   }
+}
+
+/**
+ * E3 (timeout instrumentation): what does the predicate actually see when the wait expires?
+ * "The frame never parsed" and "the frame parsed without the marker" produce the same
+ * TimeoutError and the same `ok:false` today, so both are examined explicitly.
+ */
+async function sampleFrameDiagnostics(page, marker = "") {
+  return page.evaluate((expected) => {
+    const iframe = document.querySelector('iframe[title="Draft preview"]');
+    // Page-level context, captured whether or not the iframe exists: iframePresent:false alone
+    // cannot distinguish "the preview pane never mounted" from "the page is not on the preview
+    // route at all" (sign-in redirect, error document, blank shell).
+    const top = {
+      topUrl: String(location.pathname || "").slice(0, 120),
+      topReadyState: String(document.readyState || ""),
+      iframes: document.querySelectorAll("iframe").length,
+      bodyChildren: document.body ? document.body.children.length : -1,
+      bodyTextLength: document.body ? String(document.body.textContent || "").replace(/\s+/g, " ").trim().length : -1,
+      markerInTopDocument: Boolean(expected) && Boolean(document.body) && String(document.body.textContent || "").includes(expected),
+      passwordFields: document.querySelectorAll('input[type="password"]').length,
+      nextErrorOverlay: Boolean(document.querySelector("nextjs-portal")),
+      scripts: document.querySelectorAll("script").length,
+      // Refusal shell vs unrendered shell: a cross-tenant or unentitled request renders a
+      // complete page with no preview iframe, which is indistinguishable from "still loading"
+      // without reading some of the text. Synthetic QA fixture text only, whitespace-collapsed,
+      // truncated; no cookies, tokens or customer data.
+      topTextHead: document.body ? String(document.body.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120) : "",
+    };
+    if (!iframe) return { iframePresent: false, ...top };
+    const out = { iframePresent: true, src: String(iframe.getAttribute("src") || "").slice(0, 140) };
+    let doc = null;
+    try { doc = iframe.contentDocument; } catch (error) { out.docError = String(error).slice(0, 80); }
+    if (!doc) { out.doc = false; return out; }
+    out.doc = true;
+    out.readyState = String(doc.readyState || "");
+    out.body = Boolean(doc.body);
+    if (doc.body) {
+      const text = String(doc.body.textContent || "").replace(/\s+/g, " ").trim();
+      out.bodyTextLength = text.length;
+      out.bodyTextHead = text.slice(0, 120);
+      out.bodyChildren = doc.body.children.length;
+    }
+    try { out.href = String(iframe.contentWindow.location.href).slice(0, 160); } catch { out.href = "cross-origin"; }
+    return { ...top, ...out };
+  }, marker);
 }
 
 let target;
@@ -36,7 +85,17 @@ const require = createRequire(import.meta.url);
 const runId = randomUUID().slice(0, 8);
 const password = "IsolatedStudio#2026";
 const created = [], results = [], denied = [], errors = [], signatures = [], hydrationVisits = [];
+// Diagnostic-arm measurements (E1/E2/E4) are recorded separately and never satisfy a required sample.
+const m418Diagnostics = [];
+// Cross-tenant preview probes (isolation check + its positive control). Auxiliary evidence:
+// never part of the hydration sample set, never able to satisfy or block a required key.
+const isolationProbes = [];
+let m11Evidence = { status: "INSUFFICIENT", checked: 0, required: REQUIRED_CATEGORIES.length * REQUIRED_ATTEMPTS, inverted: [] };
+let gateSummary = null;
 let browser, server, stopped, origin, serverLog = "", journeyComplete = false;
+// The failing check's name, printed with the end-of-run summary so a CI comment that elides the
+// middle of the log still names the check that failed (see the workflow's failure reporter).
+let failureName = null;
 // M12: buffered M418 evidence lines are reprinted at end-of-run so they land in the
 // CI summary comment's tail window (the generator elides long-log middles).
 const m418Lines = [];
@@ -290,6 +349,16 @@ try {
       if (patched) { writeFileSync(file, next); patchedCount += 1; }
     }
     console.log(`M418 THROW DIAGNOSTIC PATCH applied to ${patchedCount} chunk(s)`);
+    // Next 16 mangles the react-dom throw differently (`throw Error(<fn>(418))` rather than
+    // `var n=Error(i(418)`), so the Next-15-era pattern matches nothing. Say so loudly instead of
+    // reporting a journey as if the fiber-level evidence had been collected: a replacement matcher
+    // must be validated against a real reproduced mismatch before it is trusted (see report §N).
+    if (patchedCount === 0) {
+      console.warn(
+        "WARNING: M418 THROW DIAGNOSTIC UNAVAILABLE — no chunk matched the react-dom throw pattern, so window.__m418last is not populated for this run. " +
+          "The DOM-level hydration probe and the 'no uncaught browser runtime errors' gate are unaffected; fiber-level attribution of a #418 is NOT collected here.",
+      );
+    }
   }
   server = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-H", "0.0.0.0", "-p", String(port)], {
     env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PUBLIC_BASE_URL: origin, NEXTAUTH_URL: origin,
@@ -686,19 +755,26 @@ try {
   // Every attempt is recorded in results.json.
   {
     const sampleFixtures = created; // all five representative business types
-    const cdp = await first.ownerPage.createCDPSession().catch(() => null);
     for (const fixture of sampleFixtures) {
+      // The session that opens a preview route must be the account that owns the business being
+      // previewed. E5 (run 38604239350) measured exactly that: with each category's own owner page,
+      // the identical condition (throttle 4, same route, same order, 25 s, same marker) passed 5/5
+      // in ~2.4 s, while using retail's page for every category produced the 12 unresolved samples
+      // in the same run. Sampling another tenant's draft preview asks the application to serve one
+      // tenant's unpublished content to another tenant — which it (correctly) does not do — so the
+      // previous definition could never pass and was not measuring the hydration question it named.
+      const cdp = await fixture.ownerPage.createCDPSession().catch(() => null);
       for (let attempt = 1; attempt <= 3; attempt += 1) {
-        const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4 };
+        const entry = { category: fixture.category, route: `/dashboard/businesses/${fixture.id}/preview`, attempt, throttle: 4, page: "own-owner" };
         try {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-          await first.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
-          await first.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
+          await fixture.ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+          await fixture.ownerPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, `QA first ${fixture.category} ${runId}`);
           entry.ok = true;
-          entry.order = await first.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
+          entry.order = await fixture.ownerPage.evaluate(() => [...(document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.children ?? [])].slice(0, 12).map((n) => `${n.nodeName.toLowerCase()}${n.id ? `#${n.id}` : ""}`).join(",")).catch(() => "n/a");
           // M12 Stage B: pair the pre-hydration DOM order with the RAW server response order
           // of the same document (byte-order markers captured before any browser-side parse).
-          const frameSrc = await first.ownerPage.evaluate(() => document.querySelector('iframe[title="Draft preview"]')?.getAttribute("src") || "").catch(() => "");
+          const frameSrc = await fixture.ownerPage.evaluate(() => document.querySelector('iframe[title="Draft preview"]')?.getAttribute("src") || "").catch(() => "");
           const absolute = frameSrc ? new URL(frameSrc, origin).href : "";
           const rawList = absolute ? serverDigests.get(absolute) : null;
           if (rawList && rawList.length) {
@@ -714,6 +790,11 @@ try {
         } catch (error) {
           entry.ok = false;
           entry.error = String(error).slice(0, 120);
+          // E3: record what the timed-out predicate saw, in the artifact and in the log.
+          entry.diag = await sampleFrameDiagnostics(fixture.ownerPage, `QA first ${entry.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
+          const diagLine = `M418 DIAG TIMEOUT ${JSON.stringify({ category: entry.category, attempt: entry.attempt, ...entry.diag })}`.slice(0, 880);
+          m418Lines.push(diagLine);
+          console.log(diagLine);
         } finally {
           if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
         }
@@ -722,17 +803,180 @@ try {
         m418Lines.push(sampleLine);
         console.log(sampleLine);
       }
+      if (cdp) await cdp.detach().catch(() => {});
     }
-    if (cdp) await cdp.detach().catch(() => {});
+
+    // Cross-tenant preview isolation, measured explicitly. The M418 sampling used to open every
+    // category's preview with retail's session and record the (correct) absence of the preview
+    // iframe as an unresolved hydration sample (§V.11, §V.16.1). The hydration samples now use each
+    // business's own session, so the behaviour they were measuring by accident is measured here on
+    // purpose: another tenant's session must not be able to read this business's unpublished draft
+    // preview. Every category carries a positive control (its own session must still see the marker)
+    // so an application that rendered nothing at all could not satisfy the check either.
+    for (const foreignFixture of created.filter((item) => item !== first)) {
+      const marker = `QA first ${foreignFixture.category} ${runId}`;
+      const foreignRoute = `/dashboard/businesses/${foreignFixture.id}/preview`;
+      const foreign = { kind: "cross-tenant", business: foreignFixture.category, session: "first-owner", route: foreignRoute };
+      try {
+        const response = await first.ownerPage.goto(`${origin}${foreignRoute}`, { waitUntil: "networkidle0" });
+        foreign.status = response ? response.status() : null;
+        try {
+          await first.ownerPage.waitForFunction((expected) => {
+            const frame = document.querySelector('iframe[title="Draft preview"]');
+            const top = document.body ? String(document.body.textContent || "") : "";
+            const inside = frame && frame.contentDocument && frame.contentDocument.body ? String(frame.contentDocument.body.textContent || "") : "";
+            return `${top} ${inside}`.includes(expected);
+          }, { timeout: 10000 }, marker);
+          foreign.markerSeen = true; // the other tenant's draft was readable
+        } catch (error) {
+          const message = String(error);
+          // A timeout means "not observed within the window" — the expected outcome. Any other
+          // error leaves the outcome unknown, and an unknown outcome must fail, never pass.
+          if (/TimeoutError|Waiting failed/.test(message)) foreign.markerSeen = false;
+          else { foreign.markerSeen = null; foreign.error = message.slice(0, 120); }
+        }
+        foreign.diag = await sampleFrameDiagnostics(first.ownerPage, marker).catch(() => null);
+      } catch (error) {
+        foreign.markerSeen = null;
+        foreign.error = String(error).slice(0, 120);
+      }
+      isolationProbes.push(foreign);
+      const foreignLine = `M418 DIAG XTENANT ${JSON.stringify(foreign)}`.slice(0, 880);
+      m418Lines.push(foreignLine);
+      console.log(foreignLine);
+      check(`${foreignFixture.category}: another tenant's session cannot read this draft preview`,
+        foreign.markerSeen === false,
+        JSON.stringify({ status: foreign.status, markerSeen: foreign.markerSeen, error: foreign.error }));
+
+      const own = { kind: "positive-control", business: foreignFixture.category, session: "own-owner", route: foreignRoute };
+      try {
+        const response = await foreignFixture.ownerPage.goto(`${origin}${foreignRoute}`, { waitUntil: "networkidle0" });
+        own.status = response ? response.status() : null;
+        try {
+          await foreignFixture.ownerPage.waitForFunction((expected) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(expected), { timeout: 15000 }, marker);
+          own.markerSeen = true;
+        } catch (error) {
+          own.markerSeen = false;
+          own.error = String(error).slice(0, 120);
+        }
+      } catch (error) {
+        own.markerSeen = false;
+        own.error = String(error).slice(0, 120);
+      }
+      isolationProbes.push(own);
+      const ownLine = `M418 DIAG XTENANT ${JSON.stringify(own)}`.slice(0, 880);
+      m418Lines.push(ownLine);
+      console.log(ownLine);
+      check(`${foreignFixture.category}: owning session still reads its own draft preview (control)`,
+        own.markerSeen === true,
+        JSON.stringify({ status: own.status, markerSeen: own.markerSeen, error: own.error }));
+    }
     // M11 #418 regression gate: the root cause was Fizz emitting the `_R_`/Flight bootstrap
     // scripts BEFORE the content divs when the root segment was still pending at first
     // flush. React's body-level hydration walk cannot skip leading scripts (non-root
     // context) and throws #418. The request-cache fix makes the emission order
     // deterministic (content first); an inverted sample here means the defect class is back.
-    const invertedOrders = hydrationVisits.filter((entry) => String(entry.order ?? "").startsWith("script"));
+    // A gate asserting "no sample has scripts leading the body" is vacuous when no sample
+    // produced an order at all, so completeness travels with the result and the verdict
+    // treats INSUFFICIENT as BLOCKED — never PASS.
+    m11Evidence = evaluateM11(hydrationVisits, sampleFixtures.length * REQUIRED_ATTEMPTS);
+    const invertedOrders = m11Evidence.inverted;
     check("SSR body order: hydration bootstrap scripts never lead the content (M11 #418 regression)",
-      invertedOrders.length === 0,
-      JSON.stringify(invertedOrders.slice(0, 3).map((entry) => ({ route: entry.route, attempt: entry.attempt, order: entry.order }))));
+      m11Evidence.status !== "FAIL",
+      JSON.stringify({ status: m11Evidence.status, checked: m11Evidence.checked, required: m11Evidence.required,
+        inverted: invertedOrders.slice(0, 3).map((entry) => ({ route: entry.route, attempt: entry.attempt, order: entry.order })) }));
+
+    // E1/E2/E4 diagnostic arms — test-only and default OFF, so normal runs are unchanged.
+    // Each arm holds every other condition constant and labels its own measurements; no arm
+    // contributes to the required sample set.
+    const armSelection = (process.env.M418_DIAG_ARMS ?? "").trim();
+    if (armSelection) {
+      const allArms = [
+        { arm: "E1-no-throttle", throttle: false, fixtures: sampleFixtures, waitMs: 25000 },
+        { arm: "E1-control-retrottled", throttle: true, fixtures: sampleFixtures, waitMs: 25000 },
+        { arm: "E2-reversed-order", throttle: true, fixtures: [...sampleFixtures].reverse(), waitMs: 25000 },
+        { arm: "E4-wait-60s", throttle: true, fixtures: sampleFixtures.filter((fixture) => fixture.category !== "retail"), waitMs: Number(process.env.M418_DIAG_WAIT_MS || 60000) },
+        // E5 changes exactly one thing relative to the required-sample condition — whose session
+        // opens the route — holding throttle (4), order, route and wait (25 s) constant.
+        { arm: "E5-own-owner-page", throttle: true, ownPage: true, fixtures: sampleFixtures, waitMs: 25000 },
+      ];
+      // "1" runs every arm; otherwise a comma-separated list selects arms, so consecutive
+      // diagnostic runs differ in configuration only — the harness source stays identical.
+      const wanted = armSelection === "1" ? null : new Set(armSelection.split(",").map((name) => name.trim()));
+      const arms = wanted ? allArms.filter((arm) => wanted.has(arm.arm)) : allArms;
+      console.log(`M418 DIAG ARMS ${arms.map((arm) => arm.arm).join(",") || "(none selected)"} sha=${(process.env.GITHUB_SHA || "local").slice(0, 7)} config=${armSelection}`);
+      for (const arm of arms) {
+        for (const fixture of arm.fixtures) {
+          const startedAt = Date.now();
+          // `first.ownerPage` is the retail account's page, which is what the required-sample
+          // block opens for every category; `fixture.ownerPage` is the account that owns the
+          // business being previewed. Whichever is used is recorded on the entry.
+          const armPage = arm.ownPage ? fixture.ownerPage : first.ownerPage;
+          const entry = { arm: arm.arm, category: fixture.category, attempt: 1, throttle: arm.throttle ? 4 : 1, waitMs: arm.waitMs, page: arm.ownPage ? "own-owner" : "first-owner", route: `/dashboard/businesses/${fixture.id}/preview` };
+          if (!armPage) {
+            entry.ok = false;
+            entry.conditionFailed = true;
+            entry.error = "owner page for this fixture is unavailable";
+            entry.ms = Date.now() - startedAt;
+            m418Diagnostics.push(entry);
+            const missing = `M418 DIAG ${JSON.stringify({ arm: entry.arm, cat: entry.category, conditionFailed: true, err: entry.error })}`.slice(0, 700);
+            m418Lines.push(missing);
+            console.log(missing);
+            continue;
+          }
+          // Own throttling lifecycle: the required-sample block detaches its CDP session when its
+          // own scope ends, so reusing that session failed every arm sample with TargetCloseError
+          // in run 38593320641. The page-level API manages its own session.
+          try {
+            await armPage.emulateCPUThrottling(arm.throttle ? 4 : 1);
+          } catch (error) {
+            // A condition that could not be established is not a measurement: label it and stop,
+            // so a broken arm can never be read as evidence about the application.
+            entry.ok = false;
+            entry.conditionFailed = true;
+            entry.error = String(error).slice(0, 120);
+            entry.ms = Date.now() - startedAt;
+            m418Diagnostics.push(entry);
+            const broken = `M418 DIAG ${JSON.stringify({ arm: entry.arm, cat: entry.category, conditionFailed: true, err: entry.error.slice(0, 70) })}`.slice(0, 700);
+            m418Lines.push(broken);
+            console.log(broken);
+            continue;
+          }
+          try {
+            await armPage.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+            await armPage.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), { timeout: arm.waitMs }, `QA first ${fixture.category} ${runId}`);
+            entry.ok = true;
+          } catch (error) {
+            entry.ok = false;
+            entry.error = String(error).slice(0, 120);
+            entry.diag = await sampleFrameDiagnostics(armPage, `QA first ${fixture.category} ${runId}`).catch(() => ({ diagError: "capture failed" }));
+          } finally {
+            await armPage.emulateCPUThrottling(1).catch(() => {});
+          }
+          entry.ms = Date.now() - startedAt;
+          m418Diagnostics.push(entry);
+          // The failure reporter keeps at most 4000 characters of matched lines, so the printed
+          // payload stays compact; the full entry (including `diag`) is in the artifact.
+          const payload = { arm: entry.arm, cat: entry.category, page: entry.page, ok: entry.ok, ms: entry.ms };
+          if (entry.error) payload.err = String(entry.error).replace("TimeoutError: ", "TO ").slice(0, 46);
+          if (entry.diag) payload.diag = entry.diag.iframePresent === false
+            ? Object.fromEntries([["iframe", "absent"], ...Object.entries(entry.diag).filter(([k]) => ["topUrl", "topReadyState", "iframes", "bodyChildren", "bodyTextLength", "markerInTopDocument", "passwordFields", "nextErrorOverlay", "topTextHead"].includes(k))])
+            : { iframe: "present", readyState: entry.diag.readyState, body: entry.diag.body };
+          const line = `M418 DIAG ${JSON.stringify(payload)}`.slice(0, 700);
+          m418Lines.push(line);
+          console.log(line);
+        }
+      }
+      // Per-arm tally, so the run states its own measurement counts independently of which
+      // individual payload lines survive the reporter's 4000-character cap.
+      for (const arm of arms) {
+        const rows = m418Diagnostics.filter((entry) => entry.arm === arm.arm);
+        const ok = rows.filter((entry) => entry.ok === true).length;
+        const failed = rows.filter((entry) => entry.ok === false && entry.conditionFailed !== true).length;
+        const conditionFailed = rows.filter((entry) => entry.conditionFailed === true).length;
+        console.log(`M418 DIAG ARMS ${arm.arm} measured=${rows.length} ok=${ok} failed=${failed} conditionFailed=${conditionFailed} throttle=${arm.throttle ? 4 : 1} waitMs=${arm.waitMs}`);
+      }
+    }
   }
   check("no original uploads/media writes introduced", await prisma.mediaAsset.count({ where: { businessId: { in: created.map((item) => item.id) } } }) === 0);
   check("no external/provider/disallowed browser requests", denied.length === 0, JSON.stringify(denied));
@@ -740,6 +984,7 @@ try {
   journeyComplete = true;
 } catch (error) {
   if (!results.at(-1) || results.at(-1).ok) results.push({ name: "journey execution", ok: false, detail: String(error.message).slice(0, 250) });
+  failureName = String(error.message).slice(0, 250);
   console.error(`FAIL authenticated journey: ${error.message}`);
   // Fail-fast must still surface pageerror evidence: an earlier hydration recovery can
   // explain a later DOM-state assertion (e.g., Float-managed head metas mid-regeneration).
@@ -760,12 +1005,21 @@ try {
   mkdirSync(".cache/verification/studio-authenticated", { recursive: true });
   // M12 Stage B: bounded raw-order evidence artifact (redacted — tags/offsets only).
   const serverSnapshots = [...serverDigests.entries()].slice(0, 8).map(([path, info]) => ({ path, ...info }));
+  // The verdict is computed once, from checks AND required samples, and is the only source of
+  // `journeyStatus` and the exit code. Missing/unresolved evidence cannot report PASS.
+  gateSummary = evaluateGate({ results, samples: hydrationVisits, journeyComplete, m11: m11Evidence });
+  m418Lines.push(gateLine(gateSummary));
   writeFileSync(".cache/verification/studio-authenticated/m418-evidence.json", JSON.stringify({
     m418Lines: m418Lines.slice(0, 40), serverSnapshots, hydrationVisits: hydrationVisits.slice(0, 40),
-    errors: errors.slice(0, 6), journeyComplete,
+    errors: errors.slice(0, 6), journeyComplete, m418Diagnostics: m418Diagnostics.slice(0, 40),
+    isolationProbes: isolationProbes.slice(0, 12),
+    gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11 },
   }, null, 2));
   writeFileSync(".cache/verification/studio-authenticated/results.json", JSON.stringify({ results, denied, errors, signatures, hydrationVisits,
-    journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyComplete && results.every((item) => item.ok) ? "PASS" : "FAIL",
+    journeyComplete, remainingScenarios: journeyComplete ? "All defined provider-free scenarios executed" : "NOT RUN: fail-fast remainder", journeyStatus: journeyStatusFor(gateSummary.status),
+    gate: { status: gateSummary.status, stage: gateSummary.stage, exitCode: gateSummary.exitCode, samples: gateSummary.samples, m11: gateSummary.m11, problems: gateSummary.problems },
+    m418Diagnostics,
+    isolationProbes,
     providerPayment: "NOT RUN", persistentOriginals: "BLOCKED: owner DEFERRED", physicalAndroid: "NOT RUN", serverStopped: true, serverSnapshots }, null, 2));
 }
 const failed = results.filter((item) => !item.ok).length;
@@ -791,6 +1045,12 @@ if (m418Lines.length || hydrationVisits.length) {
   }
   console.log("M418E END");
 }
+if (failureName) console.log(`FAILED CHECK: ${failureName}`);
 console.log(`${results.length - failed} passed, ${failed} failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.`);
 if (!journeyComplete) console.log("NOT RUN: remaining required provider-free scenarios after first failure; passing attempted checks are not complete journey acceptance.");
-process.exitCode = failed || !journeyComplete ? 1 : 0;
+// Functional check results (above) and hydration/preview evidence (below) are reported
+// separately, so a green check count can never stand in for unresolved sample evidence.
+const summary = gateSummary ?? evaluateGate({ results, samples: hydrationVisits, journeyComplete, m11: m11Evidence });
+console.log(sampleTallyLine(summary));
+console.log(gateLine(summary));
+process.exitCode = exitCodeFor(summary.status);

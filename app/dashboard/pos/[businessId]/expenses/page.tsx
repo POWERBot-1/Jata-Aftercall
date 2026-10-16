@@ -4,7 +4,7 @@ import { expenseTotals, listExpenses } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
 import { PosRefusal } from "@/components/pos/PosRefusal";
-import { formatKES } from "@/lib/format";
+import { formatDate, formatKES } from "@/lib/format";
 
 /**
  * Expenses (§17). Categories come from the setup, including the ones the owner named themselves.
@@ -55,7 +55,7 @@ export default async function PosExpensesPage({ params, searchParams }: Props) {
         fields={spec.fields}
         rows={(expenses as any[]).map((expense) => ({
           ...expense,
-          when: new Date(expense.occurredAt).toLocaleDateString("en-KE"),
+          when: formatDate(expense.occurredAt),
         }))}
         titleKey="categoryKey"
         subtitleKeys={["label", "when", "method"]}

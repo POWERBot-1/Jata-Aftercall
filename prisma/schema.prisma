@@ -193,6 +193,11 @@ model Booking {
   staffName     String?
   startAt       DateTime
   endAt         DateTime?
+  // The clock this row's startAt was anchored to. "Africa/Nairobi" for bookings created under
+  // the 2026-10-14 contract; NULL for every row written before it, which was anchored to the
+  // server's ambient zone (UTC). Never rewritten — a reader picks the display clock from this
+  // value, so no stored instant changes meaning. See lib/experience/bookingTime.ts.
+  bookingTimeZone String?
   notes         String?  @db.Text
   // PENDING | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | NO_SHOW
   status        String   @default("PENDING")

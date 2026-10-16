@@ -7,6 +7,7 @@ import type { AnswerValue, QuestionnaireAnswers } from "@/lib/pos/types";
 import type { Terminology } from "@/lib/pos/terminology";
 import type { SummaryGroup } from "@/lib/pos/configuration";
 import type { ReadinessIssue } from "@/lib/pos/questionnaire";
+import { formatTime } from "@/lib/dateFormat";
 
 /**
  * The adaptive questionnaire (§9, §40, §41, §42, §43).
@@ -113,7 +114,7 @@ export function QuestionnaireClient(props: Props) {
           setMissing(data.readiness.missing ?? []);
         }
         if (data.draftVersion) setDraftVersion(data.draftVersion);
-        setSavedLabel(new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" }));
+        setSavedLabel(formatTime(new Date()));
       } catch {
         setError("We couldn't reach JATA. Check your connection — your answer is still on this screen.");
       } finally {

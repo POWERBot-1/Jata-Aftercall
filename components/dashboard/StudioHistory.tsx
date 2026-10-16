@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { formatDateTime } from "@/lib/dateFormat";
 
 type Revision = {
   draftVersion: number;
@@ -35,7 +36,7 @@ function when(value: string | null): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("en-KE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return formatDateTime(date);
 }
 
 export function StudioHistory({ businessId }: { businessId: string }) {

@@ -17,8 +17,8 @@ import { PAYMENT_CURRENCY } from "../paymentCurrency";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
-import { classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
-import { formatKES } from "../format";
+import { SETTLEABLE_PAYMENT_STATES, classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
+import { formatBookingDateTime, formatKES } from "../format";
 
 export const PAYMENT_PURPOSE = {
   SUBSCRIPTION: "SUBSCRIPTION",
@@ -176,7 +176,6 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
   return startOrderPayment(record, input);
 }
 
-const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
 
 /**
  * Settle a verified order/deposit payment. Idempotent: the compare-and-set on a settleable state means
@@ -472,7 +471,7 @@ export async function notifyNewBooking(params: {
       businessId: params.businessId,
       eventType: "BOOKING",
       title: "New booking",
-      message: `${params.customerName} booked ${params.serviceName} on ${params.startAt.toLocaleString("en-KE")}.`,
+      message: `${params.customerName} booked ${params.serviceName} on ${formatBookingDateTime(params.startAt)}.`,
       referenceId: params.bookingId,
     });
   } catch {

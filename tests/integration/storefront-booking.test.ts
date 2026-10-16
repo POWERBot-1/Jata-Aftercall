@@ -6,6 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { addCalendarDays, calendarDayInZone, dayOfWeekForCalendarDay, wallClockToInstant } from "@/lib/experience/bookingTime";
 
 const mocks = vi.hoisted(() => ({
   business: { id: "business-a", slug: "fade-lounge", name: "Fade Lounge", isPublished: true, status: "ACTIVE" },
@@ -61,13 +62,17 @@ function get(url: string) {
   return new Request(url);
 }
 
+/** A future *business* day (Nairobi), so the fixture never depends on the host clock (§J.1). */
 function futureDate(offsetDays: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  if (offsetDays > 0 && date.getDay() === 0) {
-    date.setDate(date.getDate() + 1);
-  }
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  let day = addCalendarDays(calendarDayInZone(new Date()), offsetDays);
+  if (offsetDays > 0 && dayOfWeekForCalendarDay(day) === 0) day = addCalendarDays(day, 1);
+  return day;
+}
+
+/** A stored booking instant: the route now stores the Nairobi wall clock's UTC instant. */
+function takenBooking(date: string, time = "11:00", status = "CONFIRMED", minutes = 60) {
+  const startAt = wallClockToInstant(date, time)!;
+  return { startAt, endAt: new Date(startAt.getTime() + minutes * 60_000), status };
 }
 
 const payload = {
@@ -103,8 +108,7 @@ describe("GET /api/storefront/booking — availability", () => {
 
   it("removes a slot that another customer has already taken", async () => {
     const date = futureDate(1);
-    const start = new Date(`${date}T11:00:00`);
-    mocks.taken = [{ startAt: start, endAt: new Date(start.getTime() + 60 * 60_000), status: "CONFIRMED" }];
+    mocks.taken = [takenBooking(date)];
     const response = await GET(get(`https://jata.test/api/storefront/booking?slug=fade-lounge&serviceId=s1&date=${date}`));
     const body = await response.json();
     expect(body.slots).not.toContain("11:00");
@@ -112,8 +116,7 @@ describe("GET /api/storefront/booking — availability", () => {
 
   it("ignores cancelled bookings when calculating availability", async () => {
     const date = futureDate(1);
-    const start = new Date(`${date}T11:00:00`);
-    mocks.taken = [{ startAt: start, endAt: new Date(start.getTime() + 60 * 60_000), status: "CANCELLED" }];
+    mocks.taken = [takenBooking(date, "11:00", "CANCELLED")];
     const response = await GET(get(`https://jata.test/api/storefront/booking?slug=fade-lounge&serviceId=s1&date=${date}`));
     expect((await response.json()).slots).toContain("11:00");
   });
@@ -134,8 +137,7 @@ describe("POST /api/storefront/booking", () => {
 
   it("re-checks the slot server-side, so a race cannot double-book", async () => {
     const date = payload.date;
-    const start = new Date(`${date}T11:00:00`);
-    mocks.taken = [{ startAt: start, endAt: new Date(start.getTime() + 60 * 60_000), status: "CONFIRMED" }];
+    mocks.taken = [takenBooking(date)];
     const response = await POST(request(payload));
     expect(response.status).toBe(409);
     expect(mocks.bookingCreate).not.toHaveBeenCalled();

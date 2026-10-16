@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { MethodOption } from "@/lib/pos/money";
 import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 import type { ReceiptDocument } from "@/lib/pos/types";
+import { formatNumber } from "@/lib/dateFormat";
 
 /**
  * The till (§58, §59, §62).
@@ -270,7 +271,7 @@ export function TillClient({
         <div className="jata-card p-5" data-pos-wallet="paid">
           <p className="jata-kicker">Paid</p>
           <h2 className="text-lg font-bold">
-            KES {walletPaid.amountKES.toLocaleString("en-KE")} received
+            KES {formatNumber(walletPaid.amountKES)} received
           </h2>
           <p className="pos-note">
             {walletPaid.receiptNumber ? `Receipt ${walletPaid.receiptNumber}. ` : ""}
@@ -296,10 +297,10 @@ export function TillClient({
           <p className="jata-kicker">Sale recorded</p>
           <h2 className="text-lg font-bold">{result.sale?.receiptNumber ?? nextReceiptNumber}</h2>
           <p className="pos-note">
-            {result.totals ? `Total KES ${result.totals.totalKES.toLocaleString("en-KE")}` : ""}
-            {result.changeKES ? ` · Change KES ${result.changeKES.toLocaleString("en-KE")}` : ""}
-            {result.creditKES ? ` · On credit KES ${result.creditKES.toLocaleString("en-KE")}` : ""}
-            {result.totals?.balanceKES ? ` · Still owed KES ${result.totals.balanceKES.toLocaleString("en-KE")}` : ""}
+            {result.totals ? `Total KES ${formatNumber(result.totals.totalKES)}` : ""}
+            {result.changeKES ? ` · Change KES ${formatNumber(result.changeKES)}` : ""}
+            {result.creditKES ? ` · On credit KES ${formatNumber(result.creditKES)}` : ""}
+            {result.totals?.balanceKES ? ` · Still owed KES ${formatNumber(result.totals.balanceKES)}` : ""}
           </p>
           {warnings.length ? (
             <ul className="mt-3 grid gap-1">
@@ -360,7 +361,7 @@ export function TillClient({
               return (
                 <button type="button" key={product.id} className="pos-item" data-out={out} onClick={() => add(product)}>
                   <strong>{product.name}</strong>
-                  <span>KES {product.priceKES.toLocaleString("en-KE")}</span>
+                  <span>KES {formatNumber(product.priceKES)}</span>
                   <small>
                     {typeof product.stock === "number" ? `${product.stock} ${product.unitKey}` : product.unitKey}
                   </small>
@@ -388,8 +389,8 @@ export function TillClient({
               <div className="pos-line-main">
                 <strong>{line.name}</strong>
                 <small>
-                  KES {line.unitPriceKES.toLocaleString("en-KE")} / {line.unitKey}
-                  {line.discountKES > 0 ? ` · less KES ${line.discountKES.toLocaleString("en-KE")}` : ""}
+                  KES {formatNumber(line.unitPriceKES)} / {line.unitKey}
+                  {line.discountKES > 0 ? ` · less KES ${formatNumber(line.discountKES)}` : ""}
                 </small>
               </div>
               <div className="pos-qty">
@@ -403,19 +404,19 @@ export function TillClient({
                   onChange={(event) => setQuantity(line.key, Math.max(0, Number(event.target.value)))}
                 />
                 <button type="button" aria-label={`One more ${line.name}`} onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
-                <strong className="ml-2">KES {(line.unitPriceKES * line.quantity - line.discountKES).toLocaleString("en-KE")}</strong>
+                <strong className="ml-2">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</strong>
               </div>
             </div>
           ))}
 
           <div className="pos-totals">
-            <div><span>Items</span><span>KES {subtotal.toLocaleString("en-KE")}</span></div>
+            <div><span>Items</span><span>KES {formatNumber(subtotal)}</span></div>
             {lineDiscounts + discountKES > 0 ? (
-              <div><span>Discount</span><span>− KES {(lineDiscounts + discountKES).toLocaleString("en-KE")}</span></div>
+              <div><span>Discount</span><span>− KES {formatNumber(lineDiscounts + discountKES)}</span></div>
             ) : null}
             {flags.taxEnabled ? <div><span>{flags.taxLabel || "Tax"}</span><span>Included by the server</span></div> : null}
-            {feeKES > 0 ? <div><span>Delivery</span><span>KES {feeKES.toLocaleString("en-KE")}</span></div> : null}
-            <div className="pos-total-line"><span>Total</span><span>KES {total.toLocaleString("en-KE")}</span></div>
+            {feeKES > 0 ? <div><span>Delivery</span><span>KES {formatNumber(feeKES)}</span></div> : null}
+            <div className="pos-total-line"><span>Total</span><span>KES {formatNumber(total)}</span></div>
           </div>
 
           {flags.discounts && flags.canDiscount && cart.length > 0 ? (
@@ -546,7 +547,7 @@ export function TillClient({
                     <option value="">Walk-in (no name)</option>
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
-                        {customer.name}{customer.balanceKES ? ` · owes KES ${Number(customer.balanceKES).toLocaleString("en-KE")}` : ""}
+                        {customer.name}{customer.balanceKES ? ` · owes KES ${formatNumber(customer.balanceKES)}` : ""}
                       </option>
                     ))}
                   </select>
@@ -571,10 +572,10 @@ export function TillClient({
           <div className="pos-totals">
             {tendered > 0 || onCredit > 0 ? (
               <>
-                <div><span>Taken</span><span>KES {tendered.toLocaleString("en-KE")}</span></div>
-                {onCredit > 0 ? <div><span>On credit</span><span>KES {onCredit.toLocaleString("en-KE")}</span></div> : null}
-                {change > 0 ? <div><span>Change due</span><span>KES {change.toLocaleString("en-KE")}</span></div> : null}
-                {balance > 0 ? <div><span>Still owed</span><span>KES {balance.toLocaleString("en-KE")}</span></div> : null}
+                <div><span>Taken</span><span>KES {formatNumber(tendered)}</span></div>
+                {onCredit > 0 ? <div><span>On credit</span><span>KES {formatNumber(onCredit)}</span></div> : null}
+                {change > 0 ? <div><span>Change due</span><span>KES {formatNumber(change)}</span></div> : null}
+                {balance > 0 ? <div><span>Still owed</span><span>KES {formatNumber(balance)}</span></div> : null}
               </>
             ) : null}
           </div>
@@ -585,7 +586,7 @@ export function TillClient({
             onClick={complete}
             disabled={busy || !cart.length || !entitled || (payments.length === 0 && !(flags.partialPayments || flags.credit))}
           >
-            {busy ? "Saving…" : `Complete ${words.sale.toLowerCase()} · KES ${total.toLocaleString("en-KE")}`}
+            {busy ? "Saving…" : `Complete ${words.sale.toLowerCase()} · KES ${formatNumber(total)}`}
           </button>
           <p className="pos-note">Stock, the receipt and the payment are saved together in one step.</p>
         </div>

@@ -95,7 +95,11 @@ describe("authenticated Studio browser fixture boundaries (test-only, not applic
     expect(script).not.toMatch(/deleteMany\(\s*\{\s*\}\s*\)/);
     expect(script).toContain('journeyComplete = true');
     expect(script).toContain('"NOT RUN: fail-fast remainder"');
-    expect(script).toContain('process.exitCode = failed || !journeyComplete ? 1 : 0');
+    // Exit status now comes from the verdict model (PASS=0 / FAIL=1 / BLOCKED=2 — every non-PASS
+    // is non-zero) instead of an inline ternary; the invariant is unchanged and is proven by
+    // tests/unit/m418-gate.test.ts, which includes exit-code mapping and incompleteness cases.
+    expect(script).toContain('process.exitCode = exitCodeFor(summary.status)');
+    expect(script).toContain('journeyComplete, m11: m11Evidence });');
   });
   it("reaches the enquiry form only through the trusted unobstructed link click, with failure evidence (PR #41 791a435)", () => {
     const script = readFileSync("scripts/browser/studio-authenticated.check.mjs", "utf8");

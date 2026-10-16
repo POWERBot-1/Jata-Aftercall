@@ -1,5 +1,9 @@
 # JATA AFTERCALL V1 — Verification Evidence
 
+> **Superseded for the 2026-10-13 candidate.** This file records the V1 evidence at
+> `c76d3b5a…`. For the current branch (`arena/fac28f53-jata-aftercall`, `f27e07f`) use
+> `RELEASE_REPORT_2026-10-13.md`.
+
 **Branch:** `arena/01a09b84-jata-aftercall`  
 **Date:** 2026-09-13 UTC  
 **Commit base:** `c76d3b5af088aa374c6adbeaffb8709776de6cd0`  

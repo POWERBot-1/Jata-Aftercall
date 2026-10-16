@@ -30,7 +30,13 @@ else
 fi
 
 # Step 3: Next.js build
-echo "[build] Running next build..."
-npx next build
+# `--webpack` is deliberate for the Next 16 stage: Turbopack (the 16 default) does not emit
+# app-build-manifest.json / react-loadable-manifest.json, names chunks by hash only, and extracts
+# no .next/static/css, which the release verification stack depends on (bundle evidence, the
+# storefront Motion mini-chunk check, the #418 throw diagnostic). Keeping one variable changed —
+# the framework and its vendored React — is what makes this upgrade reviewable. Turbopack adoption
+# is a separate follow-up with its own re-baselining; see RELEASE_REPORT_2026-10-13.md §N.
+echo "[build] Running next build (webpack)..."
+npx next build --webpack
 
 echo "[build] Build completed successfully"

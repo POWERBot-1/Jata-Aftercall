@@ -39,12 +39,18 @@ const ACTION_MIN_WEIGHT: Record<RolePermissionLevel, number> = {
   publish: 40, // ADMIN, OWNER
 };
 
-export function normalizeBusinessRole(raw: unknown): BusinessRole {
+/**
+ * Canonical role name, or null when the stored value is not a role this system knows.
+ *
+ * Fail closed (§5, §46): an unknown role must never be treated as a privileged default —
+ * granting "OWNER" here would hand publish/billing rights to any corrupted or forged row.
+ */
+export function normalizeBusinessRole(raw: unknown): BusinessRole | null {
   const upper = typeof raw === "string" ? raw.trim().toUpperCase() : "";
   if ((BUSINESS_ROLES as readonly string[]).includes(upper)) {
     return upper as BusinessRole;
   }
-  return "OWNER";
+  return null;
 }
 
 export function canBusinessRolePerform(
@@ -157,19 +163,39 @@ export async function getBusinessRoleForUser(
   if (userRole === "ADMIN") return "ADMIN";
 
   const hasDirectAccess = await canAccessBusiness(userId, businessId, userRole);
-  if (hasDirectAccess) {
-    if (prisma.businessMember?.findMany) {
-      const members = await prisma.businessMember
-        .findMany({ where: { userId }, select: { businessId: true, role: true } })
-        .catch(() => []);
-      const match = (Array.isArray(members) ? members : []).find(
-        (m: any) => m.businessId === businessId,
-      );
-      if (match?.role) return normalizeBusinessRole(match.role);
-    }
-    return "OWNER";
+  if (!hasDirectAccess) return null;
+
+  // Direct ownership is a fact recorded on the row itself, so it resolves without touching the
+  // membership table and can never be influenced by a failed or poisoned role lookup.
+  if (prisma.business?.findFirst) {
+    const owned = await prisma.business
+      .findFirst({ where: { id: businessId, ownerId: userId }, select: { id: true } })
+      .catch(() => null);
+    if (owned?.id) return "OWNER";
   }
 
+  if (prisma.businessMember?.findMany) {
+    let members: Array<{ businessId: string; role: string | null }> = [];
+    try {
+      // Fail closed (§46): if the role lookup itself fails there is no role to grant —
+      // returning a default here would turn a database error into privileged access.
+      members = await prisma.businessMember.findMany({
+        where: { userId },
+        select: { businessId: true, role: true },
+      });
+    } catch {
+      return null;
+    }
+    const match = (Array.isArray(members) ? members : []).find(
+      (m: { businessId: string; role: string | null }) => m.businessId === businessId,
+    );
+    if (!match) return null;
+    // Unknown or empty stored roles normalize to null — never to a privileged default.
+    return normalizeBusinessRole(match.role);
+  }
+
+  // Access was confirmed but no model can prove which role applies: fail closed rather than
+  // guess (a guess here used to default to OWNER).
   return null;
 }
 
@@ -252,7 +278,9 @@ export async function guardTenantMutation(
     await assertBusinessOwnership(businessId, session);
     if (requiredAction !== "read") {
       const role = await getBusinessRoleForUser(businessId, session);
-      if (role && !canBusinessRolePerform(role, requiredAction)) {
+      // Fail closed (§46): a missing role (failed lookup, unknown role, or no membership row)
+      // must deny, not fall through — `role && …` used to treat null as "allow".
+      if (!role || !canBusinessRolePerform(role, requiredAction)) {
         return { ok: false as const, status: 403, error: SAFE_ERRORS.noAccess };
       }
     }

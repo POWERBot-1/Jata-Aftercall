@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatKES, formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/dateFormat";
 
 /**
  * Buying in (§12, §33).
@@ -247,7 +248,7 @@ export function PurchasesClient({
                     <small>
                       {formatDateTime(new Date(purchase.createdAt))}
                       {purchase.supplierName ? ` · ${purchase.supplierName}` : ""}
-                      {purchase.expectedAt ? ` · expected ${new Date(purchase.expectedAt).toLocaleDateString("en-KE")}` : ""}
+                      {purchase.expectedAt ? ` · expected ${formatDate(purchase.expectedAt)}` : ""}
                     </small>
                   </div>
                   <div className="pos-row-values">

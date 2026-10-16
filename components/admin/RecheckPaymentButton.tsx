@@ -36,7 +36,7 @@ export function RecheckPaymentButton({ transactionId }: { transactionId: string 
 
   return (
     <span className="inline-flex items-center gap-2">
-      <button type="button" className="rounded border px-2 py-0.5 text-xs" onClick={recheck} disabled={busy}>
+      <button type="button" className="rounded-sm border px-2 py-0.5 text-xs" onClick={recheck} disabled={busy}>
         {busy ? "Checking…" : "Check with provider"}
       </button>
       {result ? <span className="text-zinc-500">{result}</span> : null}

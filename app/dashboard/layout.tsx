@@ -5,9 +5,18 @@ import prisma from "@/lib/db";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { dashboardRedirectTarget } from "@/lib/ownerFlow";
 import { DashboardNav } from "@/components/DashboardNav";
+import { Toaster } from "@/components/ui/Toaster";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The dashboard shell.
+ *
+ * Owns the platform's account chrome so it is identical on every owner screen: the brand, the
+ * signed-in account, the section navigation and the single notification surface (toasts). The
+ * `<main id="main">` landmark is here, matching the skip link, so keyboard users can jump past
+ * the navigation on every page.
+ */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -25,13 +34,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="jata-page min-h-screen">
-      <a href="#main" className="jata-skip-link">Skip to content</a>
+      <a href="#main" className="jata-skip-link">
+        Skip to content
+      </a>
       <nav className="jata-nav" aria-label="Account">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2">
           <BrandMark href="/dashboard" compact />
           <div className="flex items-center gap-2 text-sm">
-            <span className="hidden text-zinc-600 sm:inline">{session.email}</span>
-            <Link href="/" className="jata-btn jata-btn-secondary">Home</Link>
+            <span className="hidden max-w-[16rem] truncate text-[color:var(--jata-muted)] sm:inline" title={session.email}>
+              {session.email}
+            </span>
+            <Link href="/" className="jata-btn jata-btn-secondary">
+              Home
+            </Link>
             <form action="/api/auth/logout" method="post">
               <button className="jata-btn jata-btn-ghost">Log out</button>
             </form>
@@ -39,7 +54,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
         <DashboardNav isAdmin={session.role === "ADMIN"} />
       </nav>
-      <main id="main" className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main id="main" className="mx-auto max-w-6xl px-4 py-6">
+        {children}
+      </main>
+      <Toaster />
     </div>
   );
 }

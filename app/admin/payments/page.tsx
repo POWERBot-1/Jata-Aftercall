@@ -1,3 +1,4 @@
+import { formatDateTime, formatNumber } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
@@ -18,9 +19,9 @@ export default async function AdminPayments() {
                 <td className="px-3 py-2 font-mono text-xs">{p.reference}</td>
                 <td className="px-3 py-2 text-xs">{p.user.email}</td>
                 <td className="px-3 py-2 text-xs">{p.business?.name || p.businessId || "—"}</td>
-                <td className="px-3 py-2 text-center">KES {(p.amount / 100).toLocaleString()}</td>
+                <td className="px-3 py-2 text-center">KES {formatNumber(p.amount / 100)}</td>
                 <td className="px-3 py-2 text-center"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.status === "PAID" ? "bg-emerald-50 text-emerald-700" : p.status === "PENDING" ? "bg-amber-50 text-amber-700" : "bg-zinc-100"}`}>{p.status}</span></td>
-                <td className="px-3 py-2 text-xs text-zinc-500">{new Date(p.createdAt).toLocaleString()}</td>
+                <td className="px-3 py-2 text-xs text-zinc-500">{formatDateTime(p.createdAt)}</td>
               </tr>
             ))}
           </tbody>

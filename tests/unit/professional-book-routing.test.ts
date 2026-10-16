@@ -12,7 +12,7 @@ vi.mock("@/lib/experience/storefront", () => ({ loadStorefront: async () => h.da
 vi.mock("next/navigation", async (original) => ({ ...await original<typeof import("next/navigation")>(),
   redirect: (url: string) => { throw new Error(`REDIRECT ${url}`); }, notFound: () => { throw new Error("NOT_FOUND"); } }));
 import BookPage from "@/app/b/[slug]/book/page";
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
+const router = { bfcacheId: "qa-router-fixture", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, prefetch() {} };
 const request = (service?: string) => ({ params: Promise.resolve({ slug: "owned-pro" }), searchParams: Promise.resolve({ service }) });
 beforeEach(() => {
   const document = createExperienceDocument({ categoryKey: "professional", businessName: "Owned practice" });

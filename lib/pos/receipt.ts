@@ -6,6 +6,7 @@
  * credit is on, the cashier only where the business wants a name on the slip.
  */
 
+import { formatDateTime } from "@/lib/dateFormat";
 import { resolveTerminology } from "./terminology";
 import { hasCapability } from "./capabilities";
 import type { PosConfiguration, ReceiptDocument } from "./types";
@@ -139,7 +140,9 @@ export function receiptToText(document: ReceiptDocument): string {
   if (document.contact?.length) lines.push(document.contact.join(" · "));
   lines.push("");
   lines.push(`${document.tagline ?? "Receipt"} ${document.receiptNumber}`);
-  lines.push(new Date(document.issuedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" }));
+  // The business clock (Africa/Nairobi), deterministic: never the server's ambient zone. The
+  // stored instant is untouched; this is the label the customer and the merchant read.
+  lines.push(formatDateTime(document.issuedAt));
   if (document.cashier) lines.push(`Served by ${document.cashier}`);
   if (document.channel) lines.push(`Channel: ${document.channel}`);
   if (document.customer) {

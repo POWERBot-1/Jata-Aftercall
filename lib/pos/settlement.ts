@@ -56,7 +56,7 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
 
   if (!params.repairingLegacyPaidPayment) {
     const changed = await tx.payment.updateMany({
-      where: { id: payment.id, status: "PENDING" },
+      where: { id: payment.id, status: payment.status },
       data: {
         status: "PAID",
         ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),

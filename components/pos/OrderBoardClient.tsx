@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { channelLabel } from "@/lib/pos/receipt";
+import { formatDateTime } from "@/lib/dateFormat";
 
 /**
  * The order board (§28, §29).
@@ -102,7 +103,7 @@ export function OrderBoardClient({
                   {order.customerName ?? "Walk-in"} · {channelLabel(order.channel)} · {order.itemCount} item{order.itemCount === 1 ? "" : "s"}
                   {order.fulfilment ? ` · ${order.fulfilment.toLowerCase()}` : ""}
                 </small>
-                <small>{new Date(order.createdAt).toLocaleString("en-KE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}</small>
+                <small>{formatDateTime(order.createdAt)}</small>
 
                 {canManage && column.next.length ? (
                   <div className="pos-form-actions">

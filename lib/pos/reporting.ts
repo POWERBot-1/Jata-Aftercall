@@ -8,7 +8,7 @@
  * says so instead of inventing a number (§35, §71: analytical, never predictive).
  */
 
-import { formatKES } from "@/lib/format";
+import { formatDate, formatDateTime, formatKES } from "@/lib/format";
 import { hasCapability } from "./capabilities";
 import { ageingBucket, daysOverdue } from "./credit";
 import { inventoryValueKES, stockAlerts } from "./inventory";
@@ -190,7 +190,7 @@ export async function runReport(
           .reverse()
           .map((sale) => ({
             receipt: sale.receiptNumber ?? "",
-            when: new Date(sale.createdAt).toLocaleString("en-KE"),
+            when: formatDateTime(sale.createdAt),
             customer: sale.customerName ?? "—",
             staff: sale.staffName ?? "—",
             total: formatKES(sale.totalKES),
@@ -212,7 +212,7 @@ export async function runReport(
         ],
         rows: refunded.map((sale) => ({
           receipt: sale.receiptNumber ?? "",
-          when: new Date(sale.createdAt).toLocaleString("en-KE"),
+          when: formatDateTime(sale.createdAt),
           status: sale.status ?? "",
           sold: formatKES(sale.totalKES),
           refunded: formatKES(Number(sale.refundedKES ?? 0)),
@@ -272,7 +272,7 @@ export async function runReport(
           phone: party.phone ?? "—",
           balance: formatKES(Number(party.balanceKES ?? 0)),
           limit: party.creditLimitKES != null ? formatKES(Number(party.creditLimitKES)) : "—",
-          oldest: party.oldestEntryAt ? new Date(party.oldestEntryAt).toLocaleDateString("en-KE") : "—",
+          oldest: party.oldestEntryAt ? formatDate(party.oldestEntryAt) : "—",
           ageing: ageingBucket(daysOverdue(party.oldestEntryAt, termsDays)),
         })),
         notice: owing.length === 0 ? "Nothing outstanding. Everyone is square." : null,
@@ -398,7 +398,7 @@ export async function runReport(
           visits: entry.visits,
           spent: formatKES(entry.revenueKES),
           average: formatKES(entry.visits ? Math.round(entry.revenueKES / entry.visits) : 0),
-          lastVisit: entry.lastVisit.toLocaleDateString("en-KE"),
+          lastVisit: formatDate(entry.lastVisit),
         }))
         .sort((a, b) => b.visits - a.visits);
       return payload(definition, range, {
@@ -484,7 +484,7 @@ export async function runReport(
       const rows = movements.filter((movement: any) => ["PRODUCTION_IN", "PRODUCTION_OUT"].includes(movement.reason));
       return payload(definition, range, {
         rows: rows.slice(-200).reverse().map((movement: any) => ({
-          when: new Date(movement.createdAt).toLocaleString("en-KE"),
+          when: formatDateTime(movement.createdAt),
           item: movement.product?.name ?? "Item",
           direction: movement.reason === "PRODUCTION_IN" ? "Output" : "Materials used",
           quantity: `${Math.abs(Number(movement.delta ?? 0))} ${movement.product?.unitKey ?? ""}`.trim(),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatDateTime, formatNumber } from "@/lib/dateFormat";
 
 /**
  * The merchant payment screen (§40, §41, §53, §71, §72).
@@ -237,13 +238,13 @@ export function PaymentsClient({
                   <button type="button" className="pos-row-main" onClick={() => void openDetail(row)} style={{ textAlign: "left", background: "none", border: 0, padding: 0 }}>
                     <strong>{row.jataPaymentId}</strong>
                     <small>
-                      {new Date(row.createdAt).toLocaleString("en-KE")} · {row.providerLabel}
+                      {formatDateTime(row.createdAt)} · {row.providerLabel}
                       {row.destinationLabel ? ` · ${row.destinationLabel}` : ""}
                       {row.customerName ? ` · ${row.customerName}` : ""}
                     </small>
                   </button>
                   <div className="pos-row-values">
-                    <span>KES {row.amountKES.toLocaleString("en-KE")}</span>
+                    <span>KES {formatNumber(row.amountKES)}</span>
                     <span className="pos-pill" data-tone={row.tone}>{row.statusLabel}</span>
                     {row.receiptNumber ? <span className="pos-note">{row.receiptNumber}</span> : null}
                   </div>
@@ -615,7 +616,7 @@ function DestinationsTab({
           <p className="jata-kicker">Recent changes</p>
           {history.map((entry, index) => (
             <p className="pos-note" key={`${entry.at}-${index}`}>
-              {new Date(entry.at).toLocaleString("en-KE")} · {entry.summary}
+              {formatDateTime(entry.at)} · {entry.summary}
               {entry.actorName ? ` — ${entry.actorName}` : ""}
             </p>
           ))}
@@ -677,9 +678,9 @@ function ReconciliationTab({
   return (
     <section className="space-y-4">
       <dl className="jata-stat-grid">
-        <div className="jata-stat"><dt>Confirmed wallet payments today</dt><dd>KES {Number(daily?.confirmedPaymentsKES ?? 0).toLocaleString("en-KE")}</dd></div>
-        <div className="jata-stat"><dt>Wallet sales today (net of refunds)</dt><dd>KES {Number(daily?.posSalesKES ?? 0).toLocaleString("en-KE")}</dd></div>
-        <div className="jata-stat"><dt>Refunded today</dt><dd>KES {Number(daily?.refundedKES ?? 0).toLocaleString("en-KE")}</dd></div>
+        <div className="jata-stat"><dt>Confirmed wallet payments today</dt><dd>KES {formatNumber(daily?.confirmedPaymentsKES ?? 0)}</dd></div>
+        <div className="jata-stat"><dt>Wallet sales today (net of refunds)</dt><dd>KES {formatNumber(daily?.posSalesKES ?? 0)}</dd></div>
+        <div className="jata-stat"><dt>Refunded today</dt><dd>KES {formatNumber(daily?.refundedKES ?? 0)}</dd></div>
         <div className="jata-stat"><dt>Payments matched to a sale</dt><dd>{Number(daily?.settled ?? 0)} of {Number(daily?.transactions ?? 0)}</dd></div>
         <div className="jata-stat"><dt>Every payment matched?</dt><dd>{reconciliationStatusLabel(daily)}</dd></div>
         <div className="jata-stat"><dt>Waiting for an explanation</dt><dd>{Number(daily?.exceptions ?? 0)}</dd></div>
@@ -697,7 +698,7 @@ function ReconciliationTab({
               <div className="pos-row-main">
                 <strong>{EXCEPTION_LABELS[exception.result] ?? exception.result}</strong>
                 <small>
-                  {new Date(exception.createdAt).toLocaleString("en-KE")} · {exception.provider}
+                  {formatDateTime(exception.createdAt)} · {exception.provider}
                   {exception.providerReference ? ` · ${exception.providerReference}` : ""}
                   {exception.jataPaymentId ? ` · ${exception.jataPaymentId}` : ""}
                 </small>
@@ -705,10 +706,10 @@ function ReconciliationTab({
               </div>
               <div className="pos-row-values">
                 {exception.receivedAmountMinor != null ? (
-                  <span>KES {(Number(exception.receivedAmountMinor) / 100).toLocaleString("en-KE")}</span>
+                  <span>KES {formatNumber(Number(exception.receivedAmountMinor) / 100)}</span>
                 ) : null}
                 {exception.differenceMinor ? (
-                  <span className="pos-pill" data-tone="warn">Difference KES {(Number(exception.differenceMinor) / 100).toLocaleString("en-KE")}</span>
+                  <span className="pos-pill" data-tone="warn">Difference KES {formatNumber(Number(exception.differenceMinor) / 100)}</span>
                 ) : null}
               </div>
               {canReconcile && exception.transactionId ? (
@@ -791,7 +792,7 @@ function PaymentDrawer({
 
       <div className="pos-row-values">
         <span className="pos-pill" data-tone={payment.tone}>{payment.statusLabel}</span>
-        <span>KES {payment.amountKES.toLocaleString("en-KE")}</span>
+        <span>KES {formatNumber(payment.amountKES)}</span>
         {payment.receiptNumber ? <span className="pos-note">{payment.receiptNumber}</span> : null}
       </div>
 
@@ -800,7 +801,7 @@ function PaymentDrawer({
           <p className="jata-kicker">What happened</p>
           {(detail.timeline as any[]).map((entry, index) => (
             <p className="pos-note" key={`${entry.at}-${index}`}>
-              {new Date(entry.at).toLocaleString("en-KE")} · {entry.label}
+              {formatDateTime(entry.at)} · {entry.label}
               {entry.summary ? ` — ${entry.summary}` : ""}
             </p>
           ))}
@@ -812,7 +813,7 @@ function PaymentDrawer({
           <p className="jata-kicker">Money returned</p>
           {(detail.refunds as any[]).map((refund) => (
             <p className="pos-note" key={refund.id}>
-              KES {Number(refund.amountKES).toLocaleString("en-KE")} · {refund.status} · {refund.reason}
+              KES {formatNumber(refund.amountKES)} · {refund.status} · {refund.reason}
               {refund.initiatedByName ? ` — ${refund.initiatedByName}` : ""}
             </p>
           ))}
@@ -824,7 +825,7 @@ function PaymentDrawer({
           <div>
             <p className="jata-kicker">Refund</p>
             <h4 className="text-sm font-semibold">Send money back through the provider</h4>
-            <p className="pos-note">KES {refundable.toLocaleString("en-KE")} is left to refund on this payment.</p>
+            <p className="pos-note">KES {formatNumber(refundable)} is left to refund on this payment.</p>
           </div>
           <div className="jata-field">
             <label className="jata-label" htmlFor="refund-amount">Amount (KES)</label>

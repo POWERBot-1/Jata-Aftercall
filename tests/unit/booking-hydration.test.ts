@@ -63,9 +63,14 @@ describe("server booking calendar", () => {
     process.env.TZ = timezone;
     expect(bookingCalendar(now)).toEqual(server);
   });
-  it("crosses leap-day and year boundaries correctly", () => {
-    expect(bookingCalendar(new Date("2028-02-28T23:59:59Z")).slice(0, 3).map((day) => day.date)).toEqual(["2028-02-28", "2028-02-29", "2028-03-01"]);
-    expect(bookingCalendar(new Date("2026-12-31T23:59:59Z")).slice(0, 2).map((day) => day.date)).toEqual(["2026-12-31", "2027-01-01"]);
+  it("crosses leap-day and year boundaries correctly on the business clock", () => {
+    // The picker starts on the *Nairobi* day (§J.1). 23:59:59Z on 28 Feb is already 02:59:59 on the
+    // 29th in Nairobi, so the leap day leads; 20:59:00Z is 23:59 on the 28th, so it does not.
+    expect(bookingCalendar(new Date("2028-02-28T20:59:00Z")).slice(0, 3).map((day) => day.date)).toEqual(["2028-02-28", "2028-02-29", "2028-03-01"]);
+    expect(bookingCalendar(new Date("2028-02-28T23:59:59Z")).slice(0, 3).map((day) => day.date)).toEqual(["2028-02-29", "2028-03-01", "2028-03-02"]);
+    // Year boundary: 21:00Z on 31 Dec is exactly 00:00 on 1 Jan in Nairobi, so the new year leads.
+    expect(bookingCalendar(new Date("2026-12-31T20:59:00Z")).slice(0, 2).map((day) => day.date)).toEqual(["2026-12-31", "2027-01-01"]);
+    expect(bookingCalendar(new Date("2026-12-31T21:00:00Z")).slice(0, 2).map((day) => day.date)).toEqual(["2027-01-01", "2027-01-02"]);
   });
   it("fails safely for an invalid server clock", () => {
     expect(bookingCalendar(new Date("invalid"))).toEqual([]);

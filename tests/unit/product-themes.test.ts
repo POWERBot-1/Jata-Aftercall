@@ -8,9 +8,11 @@ import {
   DEFAULT_PRODUCT_THEME,
   PRODUCT_THEMES,
   PRODUCT_THEME_STORAGE_KEY,
+  productThemeCss,
   readProductThemePreference,
   saveProductThemePreference,
 } from "@/lib/productThemes";
+import { PRODUCT_THEME_TOKENS } from "@/lib/designSystem";
 
 function luminance(hex: string): number {
   const rgb = hex.slice(1).match(/.{2}/g)!.map((channel) => parseInt(channel, 16) / 255);
@@ -85,6 +87,24 @@ describe("JATA product UI themes", () => {
     expect(readProductThemePreference(storage)).toBeNull();
     expect(readProductThemePreference({ getItem: () => { throw new Error("storage blocked"); } })).toBeNull();
     expect(saveProductThemePreference("lime-spark", { setItem: () => { throw new Error("storage blocked"); } })).toBe(false);
+  });
+
+  it("defines the whole design-system token contract in every theme — no drift between themes", () => {
+    // The two themes had drifted: Lime Spark had no --color-brand-secondary, Emerald Ink no
+    // --color-brand-structure. Anything reading those tokens rendered an unresolved var(). The
+    // contract lives in lib/designSystem.ts; the record type makes it a type error for a theme to
+    // miss a token, and this pins it at run time too.
+    const contract = [...PRODUCT_THEME_TOKENS].sort();
+    for (const [key, theme] of Object.entries(PRODUCT_THEMES)) {
+      expect(Object.keys(theme.tokens).sort(), `${key} token set`).toEqual(contract);
+    }
+    const css = productThemeCss();
+    for (const token of PRODUCT_THEME_TOKENS) {
+      expect(css, `${token} is not emitted`).toContain(`${token}:`);
+    }
+    // Both branding tokens are real values now, in both themes.
+    expect(PRODUCT_THEMES["lime-spark"].tokens["--color-brand-secondary"]).toBe("#454B58");
+    expect(PRODUCT_THEMES["emerald-ink"].tokens["--color-brand-structure"]).toBe("#064E3B");
   });
 
   it("scopes product-wide controls and accessibility treatments without theming public pages", () => {

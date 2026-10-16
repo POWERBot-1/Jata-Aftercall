@@ -1,5 +1,10 @@
 # Release blockers: status and evidence
 
+> **Current candidate (2026-10-13):** the authoritative, per-check status for
+> `arena/fac28f53-jata-aftercall` at `f27e07f` is `RELEASE_REPORT_2026-10-13.md` (sections A–F).
+> The numbered list below is the historical ledger from an earlier branch/SHA; items 6, 7 and 9
+> are still open there and are carried forward into that report's §F.1.
+
 Status: **BLOCKED.** Not production-ready. Do not merge or deploy from this branch until every item marked
 *open* below is closed or explicitly accepted by an owner. Evidence in this file is tied to the SHA named in
 each section; a passing result at an older SHA is not evidence for a later one.
