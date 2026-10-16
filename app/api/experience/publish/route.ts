@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, assertBusinessRole } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
@@ -65,8 +65,12 @@ export async function POST(req: Request) {
   }
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
 
+  // Publishing AND unpublishing are privileged, publish-level actions (§5, §15): ownership
+  // alone is not enough — every member used to pass this gate, including VIEWER. The role is
+  // resolved fail-closed (unknown role, failed lookup, or cross-tenant → no role → 403), so
+  // neither direction mutates protected state without ADMIN/OWNER-level rights.
   try {
-    await assertBusinessOwnership(businessId, session);
+    await assertBusinessRole(businessId, session, "publish");
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -77,7 +81,9 @@ export async function POST(req: Request) {
     const { business, experience } = context;
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
-    // Unpublishing is always allowed — never lock an owner out of hiding their site.
+    // Unpublishing skips the payment/entitlement gates — never lock an owner out of hiding
+    // their site. The publish-level role check above still applies: hiding the site is a
+    // protected state change too, and only users with the publish role may perform it.
     if (action === "unpublish") {
       if (experience) {
         await prisma.businessExperience.update({

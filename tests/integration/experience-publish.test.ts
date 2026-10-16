@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: { userId: "user-a", role: "OWNER" } as any,
   ownershipError: null as (Error & { status?: number }) | null,
+  roleError: null as (Error & { status?: number }) | null,
   business: {
     id: "business-a", name: "Choma Place", slug: "choma-place", category: "Food & Restaurant",
     phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false,
@@ -48,6 +49,13 @@ vi.mock("@/lib/tenant", () => ({
   TenantError: class TenantError extends Error { status = 403; },
   assertBusinessOwnership: vi.fn(async () => {
     if (mocks.ownershipError) throw mocks.ownershipError;
+  }),
+  // Publish/unpublish now require a publish-level role (§5, §15) — not ownership alone.
+  // The assertion fails whenever roleError is set, exactly like the real fail-closed
+  // getBusinessRoleForUser → TenantError path (unknown role, failed lookup, cross-tenant).
+  assertBusinessRole: vi.fn(async () => {
+    if (mocks.roleError) throw mocks.roleError;
+    return "OWNER" as const;
   }),
 }));
 vi.mock("@/lib/db", () => ({
@@ -93,6 +101,7 @@ beforeEach(() => {
   mocks.experience.draftJson = ORIGINAL_DRAFT;
   mocks.session = { userId: "user-a", role: "OWNER" };
   mocks.ownershipError = null;
+  mocks.roleError = null;
   mocks.business.isPublished = false;
   mocks.experience.status = "DRAFT";
   mocks.experience.draftVersion = 3;
@@ -160,7 +169,9 @@ describe("POST /api/experience/publish", () => {
   });
 
   it("rejects publishing someone else's business", async () => {
-    mocks.ownershipError = Object.assign(new Error("not owner"), { status: 403 });
+    // POST /experience/publish now authorizes through assertBusinessRole: a cross-tenant
+    // caller resolves to no role and the assertion throws 403 (the real fail-closed path).
+    mocks.roleError = Object.assign(new Error("Tenant isolation: business does not belong to authenticated user"), { status: 403 });
     const response = await POST(request({ businessId: "business-b", expectedDraftVersion: 3 }));
     expect(response.status).toBe(403);
     expect(mocks.experienceUpdate).not.toHaveBeenCalled();
@@ -179,6 +190,45 @@ describe("POST /api/experience/publish", () => {
   it("requires a session", async () => {
     mocks.session = null;
     expect((await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }))).status).toBe(401);
+  });
+
+  // Fail-closed authorization (§5, §15, §46): publish AND unpublish are publish-level actions.
+  // Neither direction may mutate protected state when the role is unknown, the lookup failed,
+  // or the user is cross-tenant — the real assertion throws 403 for all of those.
+  it("refuses to publish when the publish-level role check fails, and writes nothing", async () => {
+    mocks.roleError = Object.assign(new Error("Insufficient role (VIEWER) for action (publish)."), { status: 403 });
+    const response = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
+    expect(response.status).toBe(403);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.experienceUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.businessUpdate).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it("refuses to unpublish when the publish-level role check fails, and writes nothing", async () => {
+    mocks.business.isPublished = true;
+    mocks.roleError = Object.assign(new Error("Tenant isolation: business does not belong to authenticated user"), { status: 403 });
+    const response = await POST(request({ businessId: "business-a", action: "unpublish" }));
+    expect(response.status).toBe(403);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.businessUpdate).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it("checks the publish role on every request, including unpublish", async () => {
+    mocks.business.isPublished = true;
+    const publishCall = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
+    expect(publishCall.status).toBe(200);
+    expect(vi.mocked(await import("@/lib/tenant")).assertBusinessRole).toHaveBeenCalledWith(
+      "business-a",
+      expect.objectContaining({ userId: "user-a" }),
+      "publish",
+    );
+    vi.mocked((await import("@/lib/tenant")).assertBusinessRole).mockClear();
+    const unpublishCall = await POST(request({ businessId: "business-a", action: "unpublish" }));
+    expect(unpublishCall.status).toBe(200);
+    expect(vi.mocked((await import("@/lib/tenant")).assertBusinessRole).mock.calls.at(-1)?.[2]).toBe("publish");
   });
 
   // Stale-tab concurrency: a publish is a write of the draft it was built from. It must name that version and
