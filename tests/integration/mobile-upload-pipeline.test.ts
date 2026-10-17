@@ -28,16 +28,27 @@ vi.mock("@/lib/db", () => ({
     mediaAsset: {
       findFirst: vi.fn(async (args: any) => mocks.assets.find((asset) => asset.businessId === args.where.businessId && asset.hash === args.where.hash) ?? null),
       create: vi.fn(async (args: any) => {
-        const asset = { id: `asset-${mocks.assets.length + 1}`, createdAt: new Date(), ...args.data };
+        // `version` mirrors the schema default, so a freshly stored asset is editable at 0.
+        const asset = { id: `asset-${mocks.assets.length + 1}`, createdAt: new Date(), version: 0, ...args.data };
         mocks.assets.push(asset);
         return asset;
       }),
       findMany: vi.fn(async () => mocks.assets),
       count: vi.fn(async () => mocks.assets.length),
-      update: vi.fn(async (args: any) => {
+      // Reusing an existing asset updates its description through the same versioned
+      // compare-and-swap the PATCH route uses; a mismatch leaves the row untouched.
+      updateMany: vi.fn(async (args: any) => {
         const asset = mocks.assets.find((entry) => entry.id === args.where.id);
-        if (asset) Object.assign(asset, args.data);
-        return asset;
+        if (!asset) return { count: 0 };
+        if (args.where.businessId && asset.businessId !== args.where.businessId) return { count: 0 };
+        if (args.where.version !== undefined && Number(asset.version) !== Number(args.where.version)) return { count: 0 };
+        for (const [key, value] of Object.entries(args.data)) {
+          (asset as any)[key] =
+            value && typeof value === "object" && "increment" in (value as Record<string, unknown>)
+              ? Number((asset as any)[key] ?? 0) + Number((value as { increment: number }).increment)
+              : value;
+        }
+        return { count: 1 };
       }),
       delete: vi.fn(async () => ({})),
     },

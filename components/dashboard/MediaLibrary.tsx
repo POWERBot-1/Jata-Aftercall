@@ -28,6 +28,8 @@ type Asset = {
   aiGenerationId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Monotonic concurrency token. Every guarded edit must send back the one it read. */
+  version: number;
 };
 
 type Generation = {
@@ -110,7 +112,7 @@ export function MediaLibrary({ businessId, heroImageUrl }: { businessId: string;
       const response = await fetch("/api/media", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: asset.id, alt: value, expectedUpdatedAt: asset.updatedAt }),
+        body: JSON.stringify({ id: asset.id, alt: value, expectedVersion: asset.version }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409) {
@@ -133,7 +135,12 @@ export function MediaLibrary({ businessId, heroImageUrl }: { businessId: string;
       setAssets((current) =>
         current.map((entry) =>
           entry.id === asset.id
-            ? { ...entry, alt: data.asset?.alt ?? value, updatedAt: data.asset?.updatedAt ?? entry.updatedAt }
+            ? {
+                ...entry,
+                alt: data.asset?.alt ?? value,
+                updatedAt: data.asset?.updatedAt ?? entry.updatedAt,
+                version: data.asset?.version ?? entry.version,
+              }
             : entry,
         ),
       );

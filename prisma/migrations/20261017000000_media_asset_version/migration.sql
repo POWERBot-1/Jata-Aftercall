@@ -1,0 +1,24 @@
+-- Media metadata optimistic concurrency: one monotonic counter column, nothing else touched.
+--
+-- Requirement (release blocker review 2026-10-17): PATCH /api/media must not overwrite an edit
+-- that landed after the client read the asset. The previous guard compared "updatedAt", which
+-- PostgreSQL stores at millisecond precision (TIMESTAMP(3)) and which Prisma fills from the
+-- application clock, so two writes inside the same millisecond could carry the same token and
+-- one of them would silently win. A counter that the same conditional UPDATE increments is
+-- monotonic regardless of clock resolution or clock skew between server instances.
+--
+-- Additive and backward compatible in both directions:
+--   * ADD COLUMN with a constant DEFAULT — PostgreSQL 11+ records the default in the catalog
+--     instead of rewriting the table, so there is no row rewrite and no long-held lock.
+--   * The previous application version never selects or writes this column, so it keeps working
+--     unchanged during and after the deploy (expand step; there is no contract step).
+--   * Every existing row reads as 0, the documented meaning "never edited through the guarded
+--     path". No historical row is recalculated, moved or rewritten, and no backfill runs.
+--   * Rollback needs no DDL: redeploying the previous version ignores the column, and removing
+--     it later would discard only a concurrency token, never asset metadata.
+--
+-- Staged in the repository for review only. It has NOT been applied to any database; running it
+-- against production remains a separately authorized release step, and the application must be
+-- deployed no earlier than this migration.
+
+ALTER TABLE "MediaAsset" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0;

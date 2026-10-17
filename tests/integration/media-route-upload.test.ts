@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   assets: [] as any[],
   deleted: [] as string[],
   updated: [] as any[],
+  // Simulates another writer editing the reused asset between the hash lookup and the swap.
+  reuseConflict: false,
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
@@ -32,44 +34,66 @@ vi.mock("@/lib/tenant", () => ({
 
 vi.mock("@/lib/audit", () => ({ logAudit: vi.fn(async () => undefined) }));
 
-vi.mock("@/lib/db", () => ({
-  default: {
-    mediaAsset: {
-      findFirst: vi.fn(async () => mocks.existing),
-      findMany: vi.fn(async () => mocks.assets),
-      findUnique: vi.fn(async ({ where }: any) => mocks.assets.find((asset) => asset.id === where.id) || mocks.existing || null),
-      groupBy: vi.fn(async () => [
-        { source: "UPLOAD", _count: { _all: 2 } },
-        { source: "AI_GENERATED", _count: { _all: 1 } },
-      ]),
-      create: vi.fn(async ({ data }: any) => {
-        const asset = { id: `asset-${mocks.created.length + 1}`, createdAt: new Date(), ...data };
-        mocks.created.push(asset);
-        return asset;
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        mocks.updated.push({ where, data });
-        return { id: where.id, ...data };
-      }),
-      // PATCH is a compare-and-swap on `updatedAt`: the write only lands while the row still
-      // carries the version the request read, exactly like the real `updateMany`.
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        const row = mocks.assets.find((asset) => asset.id === where.id);
-        const sameTenant = !!row && row.businessId === where.businessId;
-        const sameVersion = !!row && new Date(row.updatedAt).getTime() === new Date(where.updatedAt).getTime();
-        if (!sameTenant || !sameVersion) return { count: 0 };
-        Object.assign(row, data, { updatedAt: new Date(new Date(row.updatedAt).getTime() + 1000) });
-        mocks.updated.push({ where, data });
-        return { count: 1 };
-      }),
-      delete: vi.fn(async ({ where }: any) => {
-        mocks.deleted.push(where.id);
-        return { id: where.id };
-      }),
-      deleteMany: vi.fn(async () => ({ count: 2 })),
+vi.mock("@/lib/db", () => {
+  // The reuse path (`findFirst`) and the edit path (`findUnique`) look at different collections
+  // in these fixtures, so the conditional update has to see both.
+  const findRow = (id: string) =>
+    mocks.assets.find((asset: any) => asset.id === id) ?? (mocks.existing?.id === id ? mocks.existing : undefined);
+
+  return {
+    default: {
+      mediaAsset: {
+        findFirst: vi.fn(async () => {
+          if (!mocks.existing) return null;
+          // Hand back the row the request read; if another writer is meant to win this race, the
+          // stored copy moves on AFTER the snapshot, exactly as it would between two statements.
+          const snapshot = { ...mocks.existing };
+          if (mocks.reuseConflict) {
+            mocks.reuseConflict = false;
+            mocks.existing = {
+              ...mocks.existing,
+              version: Number(mocks.existing.version ?? 0) + 1,
+              alt: "Edited moments ago",
+            };
+          }
+          return snapshot;
+        }),
+        findMany: vi.fn(async () => mocks.assets),
+        findUnique: vi.fn(async ({ where }: any) => findRow(where.id) ?? null),
+        groupBy: vi.fn(async () => [
+          { source: "UPLOAD", _count: { _all: 2 } },
+          { source: "AI_GENERATED", _count: { _all: 1 } },
+        ]),
+        create: vi.fn(async ({ data }: any) => {
+          const asset = { id: `asset-${mocks.created.length + 1}`, createdAt: new Date(), version: 0, ...data };
+          mocks.created.push(asset);
+          return asset;
+        }),
+        // PATCH and the reuse path are compare-and-swaps on `version`: the write only lands while
+        // the row still carries the counter the request read, exactly like the real `updateMany`.
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          const row = findRow(where.id);
+          if (!row) return { count: 0 };
+          if (where.businessId && row.businessId !== where.businessId) return { count: 0 };
+          if (where.version !== undefined && Number(row.version) !== Number(where.version)) return { count: 0 };
+          for (const [key, value] of Object.entries(data)) {
+            row[key] =
+              value && typeof value === "object" && "increment" in (value as Record<string, unknown>)
+                ? Number(row[key] ?? 0) + Number((value as { increment: number }).increment)
+                : value;
+          }
+          mocks.updated.push({ where, data });
+          return { count: 1 };
+        }),
+        delete: vi.fn(async ({ where }: any) => {
+          mocks.deleted.push(where.id);
+          return { id: where.id };
+        }),
+        deleteMany: vi.fn(async () => ({ count: 2 })),
+      },
     },
-  },
-}));
+  };
+});
 
 import { DELETE, GET, PATCH, POST } from "@/app/api/media/route";
 import { MEDIA_RULES } from "@/lib/media/imageFormat";
@@ -86,6 +110,7 @@ beforeEach(() => {
   mocks.assets = [];
   mocks.deleted = [];
   mocks.updated = [];
+  mocks.reuseConflict = false;
   mocks.session = { userId: "user-a", role: "OWNER" };
 });
 
@@ -134,7 +159,7 @@ describe("uploading from a phone actually stores the photo", () => {
 
   it("does not store the same photo twice — an identical upload is reused", async () => {
     const dataUrl = dataUrlFor(jpegBytes({ width: 800, height: 600, padding: 256 }), "image/jpeg");
-    mocks.existing = { id: "asset-existing", url: dataUrl, alt: "Old alt", width: 800, height: 600, source: "UPLOAD", label: null };
+    mocks.existing = { id: "asset-existing", businessId: "business-a", url: dataUrl, kind: "IMAGE", alt: "Old alt", width: 800, height: 600, source: "UPLOAD", label: null, version: 0 };
     const response = await post({ businessId: "business-a", dataUrl, alt: "Chicken stew" });
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -142,6 +167,28 @@ describe("uploading from a phone actually stores the photo", () => {
     expect(body.asset.id).toBe("asset-existing");
     expect(mocks.created).toHaveLength(0);
     expect(mocks.updated).toHaveLength(1);
+  });
+
+  it("never overwrites a description edited while an identical photo was being reused", async () => {
+    const dataUrl = dataUrlFor(jpegBytes({ width: 800, height: 600, padding: 256 }), "image/jpeg");
+    mocks.existing = {
+      id: "asset-existing", businessId: "business-a", url: dataUrl, kind: "IMAGE",
+      alt: "Original alt", width: 800, height: 600, source: "UPLOAD", label: null, version: 5,
+    };
+    // Another writer commits version 6 between the hash lookup and the conditional update.
+    mocks.reuseConflict = true;
+
+    const response = await post({ businessId: "business-a", dataUrl, alt: "Uploaded alt" });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+
+    // The reuse still succeeds — the caller asked for an asset with these pixels and gets one —
+    // but the newer description survives and the response reports the row as it actually stands.
+    expect(body.reused).toBe(true);
+    expect(body.asset.alt).toBe("Edited moments ago");
+    expect(body.asset.version).toBe(6);
+    expect(mocks.existing.alt).toBe("Edited moments ago");
+    expect(mocks.updated).toHaveLength(0);
   });
 
   it("scopes uploads to the owner's own business", async () => {
@@ -231,18 +278,18 @@ describe("the library itself: search, re-tag and delete", () => {
   });
 
   it("updates the description of one of the owner's images", async () => {
-    const updatedAt = new Date("2026-10-01T10:00:00.000Z");
-    mocks.assets = [{ id: "a1", businessId: "business-a", alt: "Old description", updatedAt }];
+    mocks.assets = [{ id: "a1", businessId: "business-a", alt: "Old description", version: 3 }];
     const response = await PATCH(
       new Request("http://localhost/api/media", {
         method: "PATCH",
-        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate", expectedUpdatedAt: updatedAt.toISOString() }),
+        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate", expectedVersion: 3 }),
         headers: { "Content-Type": "application/json" },
       }),
     );
     expect(response.status).toBe(200);
     expect(mocks.updated[0].data.alt).toContain("Grilled chicken");
-    expect(mocks.updated[0].where).toEqual({ id: "a1", businessId: "business-a", updatedAt });
+    expect(mocks.updated[0].data.version).toEqual({ increment: 1 });
+    expect(mocks.updated[0].where).toEqual({ id: "a1", businessId: "business-a", version: 3 });
   });
 
   it("deletes exactly the asset that was asked for, after checking its owner", async () => {

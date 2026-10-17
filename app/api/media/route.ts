@@ -5,11 +5,13 @@
  * Studio's mobile picker depends on:
  *
  *   POST { businessId, dataUrl | url, alt?, kind?, source?, label?, width?, height? }
- *   PATCH { id, expectedUpdatedAt, alt?, kind?, label? }
+ *   PATCH { id, expectedVersion, alt?, kind?, label? }
  *
- * `PATCH` is a compare-and-swap on `MediaAsset.updatedAt`. A client sends the version it read;
- * a missing or unparseable version is refused with 428, a stale one with 409, and the write
- * itself is conditional so a request cannot overwrite an edit that landed in between (§45).
+ * `PATCH` is a compare-and-swap on `MediaAsset.version`, a counter the conditional update
+ * increments atomically. A client sends the version it read; a missing or unparseable version is
+ * refused with 428, a stale one with 409, and the write itself is conditional so a request cannot
+ * overwrite an edit that landed in between (§45). A counter rather than `updatedAt` because a
+ * TIMESTAMP(3) cannot separate two writes inside the same millisecond.
  *
  * `dataUrl` is what the on-device pipeline produces after it has rotated, resized and
  * re-encoded the photo. `url` remains supported so an existing library asset can be reused
@@ -40,36 +42,46 @@ const ALLOWED_LABELS = ["ACTUAL", "AI_GENERATED", "REPRESENTATIVE"];
 
 const ASSET_SELECT = {
   id: true, url: true, kind: true, alt: true, width: true, height: true, bytes: true,
-  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true, updatedAt: true,
+  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true, updatedAt: true, version: true,
 } as const;
 
-// Optimistic concurrency for media edits (§45). The same contract the Studio's draft routes
-// use: a write must name the version it was built from, so two windows cannot silently
-// overwrite each other. "Version" here is `MediaAsset.updatedAt` — the existing column, no
-// extra schema. A timestamp is coarser than a counter, so two writes landing inside the same
-// millisecond are the one case this token cannot separate (documented, not hidden).
+// Optimistic concurrency for media edits (§45). `MediaAsset.version` is a monotonic counter the
+// guard below increments in the same statement as the write, so no two writes can share a token.
+// The timestamp it replaced could: PostgreSQL keeps `updatedAt` at millisecond precision and
+// Prisma fills it from the application clock, so two updates inside one millisecond collided.
 const MEDIA_VERSION_REQUIRED_CODE = "media_version_required";
 const MEDIA_VERSION_REQUIRED_MESSAGE = "This change needs the version of the image it was made from. Reload the page and try again. Nothing was changed.";
 const MEDIA_CHANGED_CODE = "media_version_conflict";
 const MEDIA_CHANGED_MESSAGE = "This image changed in another window. Reload to see the latest version, then try again. Nothing was overwritten.";
 
+// PostgreSQL `INTEGER`: a token outside this range is not a version this application wrote.
+const MAX_MEDIA_VERSION = 2147483647;
+
 function hashBytes(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
 }
 
-/** Parse the concurrency token a PATCH sends back. Anything that is not a real instant is invalid. */
-function parseExpectedUpdatedAt(value: unknown): Date | null {
-  if (typeof value !== "string") return null;
-  const raw = value.trim();
-  if (!raw || raw.length > 40) return null;
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+/**
+ * Parse the concurrency token a PATCH sends back. Only a non-negative integer is a version;
+ * a timestamp, a float, a negative number or prose is not, and is refused rather than coerced.
+ */
+function parseExpectedVersion(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 0 && value <= MAX_MEDIA_VERSION ? value : null;
+  }
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!/^\d{1,10}$/.test(raw)) return null;
+    const parsed = Number(raw);
+    return parsed <= MAX_MEDIA_VERSION ? parsed : null;
+  }
+  return null;
 }
 
-/** Millisecond identity of a stored timestamp, tolerant of a string in place of a Date. */
-function versionMillis(value: unknown): number {
-  const date = value instanceof Date ? value : new Date(String(value ?? ""));
-  return date.getTime();
+/** The stored counter, with a missing/legacy column read as the schema default. */
+function storedVersion(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function normalizeKind(value: unknown): string {
@@ -207,17 +219,35 @@ export async function POST(req: Request) {
       }
     }
 
-    // Identical pixels are reused rather than stored twice (§19).
+    // Identical pixels are reused rather than stored twice (§19). Updating the reused row's
+    // description is itself a conditional write on the same counter PATCH uses, so an upload can
+    // never overwrite a description someone edited a moment earlier. Ids are the only thing that
+    // may be echoed back here; a failed swap reports the row as it actually stands.
     if (hash) {
       const existing = await prisma.mediaAsset.findFirst({
         where: { businessId, hash },
-        select: { id: true, url: true, alt: true, width: true, height: true, source: true, label: true },
+        select: { id: true, url: true, kind: true, alt: true, width: true, height: true, source: true, label: true, version: true },
       });
       if (existing) {
+        let reused = existing;
         if (alt && alt !== existing.alt) {
-          await prisma.mediaAsset.update({ where: { id: existing.id }, data: { alt, kind } });
+          const current = storedVersion(existing.version);
+          const applied = await prisma.mediaAsset.updateMany({
+            where: { id: existing.id, businessId, version: current },
+            data: { alt, kind, version: { increment: 1 } },
+          });
+          if (applied.count === 1) {
+            reused = { ...existing, alt, kind, version: current + 1 };
+          } else {
+            // A concurrent edit landed first. Reuse the asset as it now stands; never clobber it.
+            const fresh = await prisma.mediaAsset.findUnique({
+              where: { id: existing.id },
+              select: { id: true, url: true, kind: true, alt: true, width: true, height: true, source: true, label: true, version: true },
+            });
+            if (fresh) reused = fresh;
+          }
         }
-        return NextResponse.json({ asset: { ...existing, alt: alt || existing.alt, kind }, reused: true });
+        return NextResponse.json({ asset: reused, reused: true });
       }
     }
 
@@ -256,7 +286,7 @@ export async function POST(req: Request) {
  * PATCH — alt text, folder/kind and the "is this the real product?" label (§18, §27).
  * A library asset id is never trusted: the stored row decides which tenant may change it.
  *
- * Every edit must name the `updatedAt` it was made from. That is what stops a second window
+ * Every edit must name the `version` it was made from. That is what stops a second window
  * (or a second person with access) from silently replacing a description someone just wrote.
  */
 export async function PATCH(req: Request) {
@@ -269,7 +299,7 @@ export async function PATCH(req: Request) {
 
     const asset = await prisma.mediaAsset.findUnique({
       where: { id },
-      select: { id: true, businessId: true, updatedAt: true },
+      select: { id: true, businessId: true, version: true },
     });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const guard = await guardTenantMutation(session, asset.businessId);
@@ -278,8 +308,8 @@ export async function PATCH(req: Request) {
     // Authorization precedes the precondition, exactly like the Studio's draft routes: a caller
     // who may not touch this image learns nothing about its version. Without a usable token the
     // request cannot be applied, so it is refused before any validation or write (428).
-    const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
-    if (!expectedUpdatedAt) {
+    const expectedVersion = parseExpectedVersion(body?.expectedVersion);
+    if (expectedVersion === null) {
       return NextResponse.json({ error: MEDIA_VERSION_REQUIRED_MESSAGE, code: MEDIA_VERSION_REQUIRED_CODE }, { status: 428 });
     }
 
@@ -292,18 +322,18 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
     }
 
-    // Fast path: a window that is already stale is refused before any write.
-    if (versionMillis(asset.updatedAt) !== expectedUpdatedAt.getTime()) {
+    // Fast path only: a window that is already stale is answered without touching the row.
+    if (storedVersion(asset.version) !== expectedVersion) {
       return NextResponse.json({ error: MEDIA_CHANGED_MESSAGE, code: MEDIA_CHANGED_CODE }, { status: 409 });
     }
 
-    // Compare-and-swap: the write applies only while the row still carries the version this
-    // request read. Scoping by `businessId` as well means a tenant mix-up can never reach
-    // another business's row even if the ownership check above were wrong. A concurrent edit
-    // makes this match no row, and nothing is overwritten.
+    // The guarantee: the row is written only while it still carries the version this request
+    // read, and the same statement increments it. A write that lands in between matches no row,
+    // and nothing is overwritten. Scoping by `businessId` means a tenant mix-up can never reach
+    // another business's asset even if the ownership check above were wrong.
     const applied = await prisma.mediaAsset.updateMany({
-      where: { id, businessId: asset.businessId, updatedAt: expectedUpdatedAt },
-      data,
+      where: { id, businessId: asset.businessId, version: expectedVersion },
+      data: { ...data, version: { increment: 1 } },
     });
     if (applied.count !== 1) {
       return NextResponse.json({ error: MEDIA_CHANGED_MESSAGE, code: MEDIA_CHANGED_CODE }, { status: 409 });
