@@ -51,6 +51,17 @@ vi.mock("@/lib/db", () => ({
         mocks.updated.push({ where, data });
         return { id: where.id, ...data };
       }),
+      // PATCH is a compare-and-swap on `updatedAt`: the write only lands while the row still
+      // carries the version the request read, exactly like the real `updateMany`.
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const row = mocks.assets.find((asset) => asset.id === where.id);
+        const sameTenant = !!row && row.businessId === where.businessId;
+        const sameVersion = !!row && new Date(row.updatedAt).getTime() === new Date(where.updatedAt).getTime();
+        if (!sameTenant || !sameVersion) return { count: 0 };
+        Object.assign(row, data, { updatedAt: new Date(new Date(row.updatedAt).getTime() + 1000) });
+        mocks.updated.push({ where, data });
+        return { count: 1 };
+      }),
       delete: vi.fn(async ({ where }: any) => {
         mocks.deleted.push(where.id);
         return { id: where.id };
@@ -220,16 +231,18 @@ describe("the library itself: search, re-tag and delete", () => {
   });
 
   it("updates the description of one of the owner's images", async () => {
-    mocks.assets = [{ id: "a1", businessId: "business-a" }];
+    const updatedAt = new Date("2026-10-01T10:00:00.000Z");
+    mocks.assets = [{ id: "a1", businessId: "business-a", alt: "Old description", updatedAt }];
     const response = await PATCH(
       new Request("http://localhost/api/media", {
         method: "PATCH",
-        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate" }),
+        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate", expectedUpdatedAt: updatedAt.toISOString() }),
         headers: { "Content-Type": "application/json" },
       }),
     );
     expect(response.status).toBe(200);
     expect(mocks.updated[0].data.alt).toContain("Grilled chicken");
+    expect(mocks.updated[0].where).toEqual({ id: "a1", businessId: "business-a", updatedAt });
   });
 
   it("deletes exactly the asset that was asked for, after checking its owner", async () => {

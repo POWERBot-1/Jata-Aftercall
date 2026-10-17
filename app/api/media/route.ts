@@ -5,6 +5,11 @@
  * Studio's mobile picker depends on:
  *
  *   POST { businessId, dataUrl | url, alt?, kind?, source?, label?, width?, height? }
+ *   PATCH { id, expectedUpdatedAt, alt?, kind?, label? }
+ *
+ * `PATCH` is a compare-and-swap on `MediaAsset.updatedAt`. A client sends the version it read;
+ * a missing or unparseable version is refused with 428, a stale one with 409, and the write
+ * itself is conditional so a request cannot overwrite an edit that landed in between (§45).
  *
  * `dataUrl` is what the on-device pipeline produces after it has rotated, resized and
  * re-encoded the photo. `url` remains supported so an existing library asset can be reused
@@ -35,11 +40,36 @@ const ALLOWED_LABELS = ["ACTUAL", "AI_GENERATED", "REPRESENTATIVE"];
 
 const ASSET_SELECT = {
   id: true, url: true, kind: true, alt: true, width: true, height: true, bytes: true,
-  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true,
+  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true, updatedAt: true,
 } as const;
+
+// Optimistic concurrency for media edits (§45). The same contract the Studio's draft routes
+// use: a write must name the version it was built from, so two windows cannot silently
+// overwrite each other. "Version" here is `MediaAsset.updatedAt` — the existing column, no
+// extra schema. A timestamp is coarser than a counter, so two writes landing inside the same
+// millisecond are the one case this token cannot separate (documented, not hidden).
+const MEDIA_VERSION_REQUIRED_CODE = "media_version_required";
+const MEDIA_VERSION_REQUIRED_MESSAGE = "This change needs the version of the image it was made from. Reload the page and try again. Nothing was changed.";
+const MEDIA_CHANGED_CODE = "media_version_conflict";
+const MEDIA_CHANGED_MESSAGE = "This image changed in another window. Reload to see the latest version, then try again. Nothing was overwritten.";
 
 function hashBytes(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
+}
+
+/** Parse the concurrency token a PATCH sends back. Anything that is not a real instant is invalid. */
+function parseExpectedUpdatedAt(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || raw.length > 40) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Millisecond identity of a stored timestamp, tolerant of a string in place of a Date. */
+function versionMillis(value: unknown): number {
+  const date = value instanceof Date ? value : new Date(String(value ?? ""));
+  return date.getTime();
 }
 
 function normalizeKind(value: unknown): string {
@@ -225,6 +255,9 @@ export async function POST(req: Request) {
 /**
  * PATCH — alt text, folder/kind and the "is this the real product?" label (§18, §27).
  * A library asset id is never trusted: the stored row decides which tenant may change it.
+ *
+ * Every edit must name the `updatedAt` it was made from. That is what stops a second window
+ * (or a second person with access) from silently replacing a description someone just wrote.
  */
 export async function PATCH(req: Request) {
   const session = await getSession();
@@ -234,10 +267,21 @@ export async function PATCH(req: Request) {
     const id = typeof body?.id === "string" ? body.id.trim() : "";
     if (!id) return NextResponse.json({ error: "Choose an image to update." }, { status: 400 });
 
-    const asset = await prisma.mediaAsset.findUnique({ where: { id }, select: { id: true, businessId: true } });
+    const asset = await prisma.mediaAsset.findUnique({
+      where: { id },
+      select: { id: true, businessId: true, updatedAt: true },
+    });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const guard = await guardTenantMutation(session, asset.businessId);
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+    // Authorization precedes the precondition, exactly like the Studio's draft routes: a caller
+    // who may not touch this image learns nothing about its version. Without a usable token the
+    // request cannot be applied, so it is refused before any validation or write (428).
+    const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
+    if (!expectedUpdatedAt) {
+      return NextResponse.json({ error: MEDIA_VERSION_REQUIRED_MESSAGE, code: MEDIA_VERSION_REQUIRED_CODE }, { status: 428 });
+    }
 
     const data: Record<string, unknown> = {};
     if (body?.alt !== undefined) data.alt = sanitizeText(String(body.alt || ""), 160) || null;
@@ -248,7 +292,28 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
     }
 
-    const updated = await prisma.mediaAsset.update({ where: { id }, data, select: ASSET_SELECT });
+    // Fast path: a window that is already stale is refused before any write.
+    if (versionMillis(asset.updatedAt) !== expectedUpdatedAt.getTime()) {
+      return NextResponse.json({ error: MEDIA_CHANGED_MESSAGE, code: MEDIA_CHANGED_CODE }, { status: 409 });
+    }
+
+    // Compare-and-swap: the write applies only while the row still carries the version this
+    // request read. Scoping by `businessId` as well means a tenant mix-up can never reach
+    // another business's row even if the ownership check above were wrong. A concurrent edit
+    // makes this match no row, and nothing is overwritten.
+    const applied = await prisma.mediaAsset.updateMany({
+      where: { id, businessId: asset.businessId, updatedAt: expectedUpdatedAt },
+      data,
+    });
+    if (applied.count !== 1) {
+      return NextResponse.json({ error: MEDIA_CHANGED_MESSAGE, code: MEDIA_CHANGED_CODE }, { status: 409 });
+    }
+
+    const updated = await prisma.mediaAsset.findUnique({ where: { id }, select: ASSET_SELECT });
+    if (!updated) {
+      // Deleted between the write and the read: the edit no longer has anything to describe.
+      return NextResponse.json({ error: MEDIA_CHANGED_MESSAGE, code: MEDIA_CHANGED_CODE }, { status: 409 });
+    }
     await logAudit({
       actorId: session.userId,
       action: "MEDIA_UPDATED",
