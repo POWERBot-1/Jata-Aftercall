@@ -361,3 +361,43 @@ jobs:
             } catch (e) {
               console.log('comment failed:', String(e).slice(0, 300));
             }
+
+  # The migration target guard's own tests.
+  #
+  # A separate job on purpose: the guard needs no database, no secrets and no
+  # installed dependencies, so a failure here is unambiguous and reports in
+  # seconds instead of waiting behind the PostgreSQL service. Keeping it
+  # separate also means a broken database journey cannot hide a guard
+  # regression, and a guard regression cannot be mistaken for a flaky database.
+  #
+  # Same triggers as the e2e job (pull requests targeting main, pushes to main,
+  # manual dispatch), so the guard is exercised on every change that could reach
+  # production. `node --test` exits non-zero when any test fails, which fails
+  # this job and therefore the workflow.
+  #
+  # The two files are listed explicitly rather than globbed. A glob would depend
+  # on the runner's Node version and shell; an explicit list behaves identically
+  # everywhere and makes it obvious that a newly added guard test file has to be
+  # added here too.
+  migration-guard:
+    name: Migration target guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Deliberately no `npm ci`. The guard and its tests have zero dependencies
+      # and execute in a build container before application packages are
+      # guaranteed to exist; running them without `node_modules` proves that
+      # stays true. It also means a broken dependency tree cannot stop the
+      # guard's own tests from running.
+      - name: Migration target guard tests
+        run: node --test scripts/__tests__/migration-target-guard.test.mjs scripts/__tests__/migration-gate-refusal.test.mjs

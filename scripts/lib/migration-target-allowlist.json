@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Migration target allowlist. Fingerprints only — no hosts, no URLs, no credentials.",
+    "",
+    "A fingerprint is sha256(normalized_host + \"|\" + database_name) of the parsed",
+    "DATABASE_URL. It is one-way: this file cannot be reversed into a connection",
+    "string. It also does NOT prove ownership of the database, nor that the URL is",
+    "the one the Production runtime actually uses. Enrolment is a reviewed identity",
+    "claim; see docs/MIGRATION_TARGET_GUARD.md.",
+    "",
+    "production.fingerprints is EMPTY ON PURPOSE. No Production database identity has",
+    "been independently verified, so Production migration is refused (fail-closed).",
+    "Do not populate this list from a dashboard label, a local .env, a Preview",
+    "database, a build log, or a guess.",
+    "",
+    "mode and fingerprints must agree: 'unenrolled' requires an empty list; 'enrolled'",
+    "requires at least one fingerprint and a non-empty enrollmentEvidence string.",
+    "",
+    "Enrolling a value while Production builds are still expected to succeed means",
+    "the first Production build after merge will run prisma migrate deploy. Enrol and",
+    "enable in the same reviewed change, or accept that Production builds are refused",
+    "until enrolment lands."
+  ],
+  "version": 2,
+  "production": {
+    "mode": "unenrolled",
+    "fingerprints": [],
+    "enrollmentEvidence": null
+  },
+  "expectedHosts": []
+}
