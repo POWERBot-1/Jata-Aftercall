@@ -8,13 +8,17 @@
     "the one the Production runtime actually uses. Enrolment is a reviewed identity",
     "claim; see docs/MIGRATION_TARGET_GUARD.md.",
     "",
-    "production.fingerprints is EMPTY ON PURPOSE. No Production database identity has",
-    "been independently verified, so Production migration is refused (fail-closed).",
-    "Do not populate this list from a dashboard label, a local .env, a Preview",
-    "database, a build log, or a guess.",
+    "ENROLLED 2026-10-18 with exactly one Production fingerprint: the Neon Production",
+    "database `neondb` on the `production` branch of project damp-forest-92941163.",
+    "The matching Preview endpoint (jata_preview) and the CI disposable database are",
+    "deliberately NOT enrolled.",
     "",
     "mode and fingerprints must agree: 'unenrolled' requires an empty list; 'enrolled'",
     "requires at least one fingerprint and a non-empty enrollmentEvidence string.",
+    "",
+    "The rule \"a non-production environment may never migrate an enrolled Production",
+    "target\" only has effect while this list is non-empty. Emptying it silently",
+    "re-opens the cross-environment gap that rule exists to close.",
     "",
     "Enrolling a value while Production builds are still expected to succeed means",
     "the first Production build after merge will run prisma migrate deploy. Enrol and",
@@ -23,9 +27,11 @@
   ],
   "version": 2,
   "production": {
-    "mode": "unenrolled",
-    "fingerprints": [],
-    "enrollmentEvidence": null
+    "mode": "enrolled",
+    "fingerprints": [
+      "3439ca4ed940f77fde4d30f94a8873dc02ccf3daa1baec900804857450f3e8d5"
+    ],
+    "enrollmentEvidence": "Neon project damp-forest-92941163, production branch br-cold-snow-ax606swa, database neondb. Owner-supplied Neon Console observation dated 2026-10-18, matching the Vercel production deployment build log dpl_AF7xXZW7RHmZ4AbfVLh9659REYfj (datasource line 2026-10-16T17:52:48Z). Digest recomputed from normalized host | database on 2026-10-18. Independent second-person review was NOT completed at enrolment; owner authorized enrolment on 2026-10-18. Do not extend this list without the review procedure in docs/MIGRATION_TARGET_GUARD.md."
   },
   "expectedHosts": []
 }

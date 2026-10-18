@@ -346,12 +346,16 @@ describe("loadAllowlist", () => {
     assert.equal(r.ok, true);
   });
 
-  test("the shipped allowlist is unenrolled and empty", () => {
-    // Guards against an accidental enrolment slipping into the repository.
+  test("the shipped allowlist enrolls exactly the verified Production fingerprint", () => {
+    // Guards against an accidental enrolment slipping into the repository — and,
+    // now that one is enrolled, against a second one being added without review.
     const r = loadAllowlist(SHIPPED_ALLOWLIST);
-    assert.equal(r.production.mode, "unenrolled");
-    assert.deepEqual(r.production.fingerprints, []);
-    assert.equal(r.production.enrollmentEvidence, null);
+    assert.equal(r.ok, true);
+    assert.equal(r.production.mode, "enrolled");
+    assert.deepEqual(r.production.fingerprints, [PROD_FP]);
+    assert.equal(typeof r.production.enrollmentEvidence, "string");
+    assert.ok(r.production.enrollmentEvidence.length > 0);
+    assert.deepEqual(r.expectedHosts, []);
   });
 
   test("loads a valid enrolled allowlist", () => {
@@ -688,15 +692,16 @@ describe("decide", () => {
 describe("evaluate", () => {
   const PROD_URL = "postgresql://u:p@ep-autumn-sea-axqkyeaf-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
-  test("production with the shipped allowlist is refused", () => {
+  test("production with the shipped allowlist is allowed", () => {
     const r = evaluate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
-    assert.equal(r.allow, false);
-    assert.equal(r.code, CODES.REFUSED_PRODUCTION_UNENROLLED);
+    assert.equal(r.allow, true);
+    assert.equal(r.code, CODES.OK_ENROLLED_PRODUCTION);
     assert.equal(r.environment, "production");
     assert.equal(r.mode, "enforce");
+    assert.equal(r.fingerprint, PROD_FP);
   });
 
-  test("the refusal reports the target fingerprint but no URL material", () => {
+  test("the decision reports the target fingerprint but no URL material", () => {
     const r = evaluate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
     assert.equal(r.fingerprint, PROD_FP);
     const line = describeResult(r);
@@ -816,12 +821,24 @@ describe("describe / toJSON", () => {
   });
 
   test("describe includes code, environment, mode and target", () => {
-    const r = evaluate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: url });
-    const line = describeResult(r);
-    assert.match(line, /\[migration-guard\] REFUSED_PRODUCTION_UNENROLLED/);
-    assert.match(line, /env=production/);
-    assert.match(line, /mode=enforce/);
-    assert.match(line, /target=[0-9a-f]{64}/);
+    // The shipped allowlist is enrolled, so a refusal line is produced from an
+    // explicit unenrolled fixture rather than from the repository default.
+    const f = allowlistFixture({ mode: "unenrolled", fingerprints: [], enrollmentEvidence: null });
+    try {
+      const r = evaluate({
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        DATABASE_URL: url,
+        MIGRATION_GUARD_ALLOWLIST: f.path,
+      });
+      const line = describeResult(r);
+      assert.match(line, /\[migration-guard\] REFUSED_PRODUCTION_UNENROLLED/);
+      assert.match(line, /env=production/);
+      assert.match(line, /mode=enforce/);
+      assert.match(line, /target=[0-9a-f]{64}/);
+    } finally {
+      f.cleanup();
+    }
   });
 
   test("describe shows target=none when there is no target", () => {
@@ -857,12 +874,34 @@ describe("run (CLI behaviour)", () => {
   const PROD_URL = "postgresql://u:p@ep-autumn-sea-axqkyeaf-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
   test("check exits 1 and writes to stderr when refused", () => {
+    const f = allowlistFixture({ mode: "unenrolled", fingerprints: [], enrollmentEvidence: null });
+    try {
+      const r = capture((w) =>
+        run(
+          ["node", "guard.mjs", "check"],
+          {
+            VERCEL: "1",
+            VERCEL_ENV: "production",
+            DATABASE_URL: PROD_URL,
+            MIGRATION_GUARD_ALLOWLIST: f.path,
+          },
+          w,
+        ),
+      );
+      assert.equal(r.code, 1);
+      assert.match(r.err, /REFUSED_PRODUCTION_UNENROLLED/);
+      assert.equal(r.out, "");
+    } finally {
+      f.cleanup();
+    }
+  });
+
+  test("check exits 0 against the shipped enrolled allowlist", () => {
     const r = capture((w) =>
       run(["node", "guard.mjs", "check"], { VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL }, w),
     );
-    assert.equal(r.code, 1);
-    assert.match(r.err, /REFUSED_PRODUCTION_UNENROLLED/);
-    assert.equal(r.out, "");
+    assert.equal(r.code, 0);
+    assert.match(r.out, /OK_ENROLLED_PRODUCTION/);
   });
 
   test("check exits 0 and writes to stdout when allowed", () => {
@@ -879,8 +918,24 @@ describe("run (CLI behaviour)", () => {
   });
 
   test("check defaults to the check command", () => {
-    const r = capture((w) => run(["node", "guard.mjs"], { VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL }, w));
-    assert.equal(r.code, 1);
+    const f = allowlistFixture({ mode: "unenrolled", fingerprints: [], enrollmentEvidence: null });
+    try {
+      const r = capture((w) =>
+        run(
+          ["node", "guard.mjs"],
+          {
+            VERCEL: "1",
+            VERCEL_ENV: "production",
+            DATABASE_URL: PROD_URL,
+            MIGRATION_GUARD_ALLOWLIST: f.path,
+          },
+          w,
+        ),
+      );
+      assert.equal(r.code, 1);
+    } finally {
+      f.cleanup();
+    }
   });
 
   test("print-fingerprint prints exactly the digest", () => {

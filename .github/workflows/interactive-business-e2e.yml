@@ -375,7 +375,7 @@ jobs:
   # production. `node --test` exits non-zero when any test fails, which fails
   # this job and therefore the workflow.
   #
-  # The two files are listed explicitly rather than globbed. A glob would depend
+  # The three files are listed explicitly rather than globbed. A glob would depend
   # on the runner's Node version and shell; an explicit list behaves identically
   # everywhere and makes it obvious that a newly added guard test file has to be
   # added here too.
@@ -400,4 +400,8 @@ jobs:
       # stays true. It also means a broken dependency tree cannot stop the
       # guard's own tests from running.
       - name: Migration target guard tests
-        run: node --test scripts/__tests__/migration-target-guard.test.mjs scripts/__tests__/migration-gate-refusal.test.mjs
+        run: >-
+          node --test
+          scripts/__tests__/migration-target-guard.test.mjs
+          scripts/__tests__/migration-gate-refusal.test.mjs
+          scripts/__tests__/migration-allowlist-enrollment.test.mjs

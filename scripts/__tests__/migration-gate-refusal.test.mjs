@@ -37,6 +37,7 @@ let stubDir;
 let logPath;
 let allowEnrolledPath;
 let allowOtherPath;
+let allowUnenrolledPath;
 let basePath;
 
 before(() => {
@@ -84,6 +85,18 @@ before(() => {
     "utf8",
   );
 
+  // Fail-closed must remain provable now that the shipped allowlist is enrolled.
+  allowUnenrolledPath = join(workDir, "allow-unenrolled.json");
+  writeFileSync(
+    allowUnenrolledPath,
+    JSON.stringify({
+      version: 2,
+      production: { mode: "unenrolled", fingerprints: [], enrollmentEvidence: null },
+      expectedHosts: [],
+    }),
+    "utf8",
+  );
+
   basePath = [stubDir, dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 });
 
@@ -124,8 +137,20 @@ const migrate = (extra) => runScript("scripts/migrate.sh", extra);
 
 // ---------------------------------------------------------------------------
 describe("migrate.sh — refusals never reach npx", () => {
-  test("production with the shipped unenrolled allowlist is refused", () => {
+  test("production with the shipped enrolled allowlist reaches prisma", () => {
     const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
+    assert.equal(r.status, 0);
+    assert.deepEqual(r.calls, ["prisma migrate deploy"]);
+    assert.match(r.stdout, /OK_ENROLLED_PRODUCTION/);
+  });
+
+  test("an unenrolled allowlist still refuses before npx", () => {
+    const r = migrate({
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      DATABASE_URL: PROD_URL,
+      MIGRATION_GUARD_ALLOWLIST: allowUnenrolledPath,
+    });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, [], "npx must not run");
     assert.match(r.stderr, /REFUSED_PRODUCTION_UNENROLLED/);
@@ -253,7 +278,12 @@ describe("migrate.sh — allowed paths still run prisma", () => {
 // ---------------------------------------------------------------------------
 describe("build.sh — a refused migration stops the whole build", () => {
   test("production unenrolled never reaches generate or next build", () => {
-    const r = runScript("scripts/build.sh", { VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
+    const r = runScript("scripts/build.sh", {
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      DATABASE_URL: PROD_URL,
+      MIGRATION_GUARD_ALLOWLIST: allowUnenrolledPath,
+    });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, [], "neither prisma generate nor next build may run");
     assert.equal(r.stdout.includes("Running prisma generate"), false);

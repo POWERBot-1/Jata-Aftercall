@@ -103,8 +103,32 @@ evidence behind it.
 `scripts/lib/migration-target-allowlist.json` ships as:
 
 ```json
-"production": { "mode": "unenrolled", "fingerprints": [], "enrollmentEvidence": null }
+"production": {
+  "mode": "enrolled",
+  "fingerprints": ["3439ca4ed940f77fde4d30f94a8873dc02ccf3daa1baec900804857450f3e8d5"],
+  "enrollmentEvidence": "… Neon project damp-forest-92941163, production branch br-cold-snow-ax606swa, database neondb …"
+}
 ```
+
+### Enrolment record — 2026-10-18
+
+| Field | Value |
+|---|---|
+| Neon project | `damp-forest-92941163` |
+| Branch | `production` (`br-cold-snow-ax606swa`) |
+| Database | `neondb` |
+| Corroborating deployment | `dpl_AF7xXZW7RHmZ4AbfVLh9659REYfj` (Vercel Production, commit `0131445`, datasource line 2026-10-16T17:52:48Z) |
+| Digest recomputed | 2026-10-18, from normalized host + `\|` + database |
+| Preview target | `jata_preview` — **deliberately not enrolled** |
+| CI disposable target | `localhost/jata_e2e` — **deliberately not enrolled** |
+
+**Known deviation from the procedure below:** step 1 requires a second person to
+confirm the identity. That confirmation was **not obtained** before this
+enrolment; the owner authorized it on the strength of the Console observation
+plus the deployment-log match. The evidence string in the allowlist records this
+explicitly. Treat a second-person review as still outstanding — it should be
+completed before any *further* fingerprint is added, and its absence should be
+weighed when reviewing this change.
 
 Loader rules, all enforced fail-closed:
 
@@ -242,6 +266,10 @@ block a merge.
   afterwards.
 - **Guard merged but nothing enrolled:** Production builds refuse. Either enrol
   the verified target, or revert the merge.
+- **Deliberately un-enrolling a target:** set `mode` to `unenrolled` and empty
+  `fingerprints` in the same change, and say why in the commit. Note that this
+  also disables the "non-production environment may never migrate an enrolled
+  Production target" rule, because that rule has nothing to compare against.
 - **Reverting the guard entirely:** revert the commit. `migrate.sh` returns to
   running `prisma migrate deploy` unconditionally — the pre-guard behaviour.
 
