@@ -55,6 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    env:
+      # `prisma validate` resolves env("DATABASE_URL") from the schema, and an
+      # unresolvable variable is a validation error. This is a placeholder for
+      # schema validation only: nothing listens on this address and no
+      # connection is ever opened from this job.
+      DATABASE_URL: postgresql://validation_only:validation_only@127.0.0.1:5432/validation_only?schema=public
+
     steps:
       - uses: actions/checkout@v4
 
@@ -177,16 +184,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Assert PostgreSQL 18 is the actual server
-        run: |
-          set -o pipefail
-          version=$(psql "$DATABASE_URL" -tAc 'SHOW server_version;')
-          echo "server_version=$version"
-          case "$version" in
-            18.*) echo "PASS: PostgreSQL 18" ;;
-            *) echo "::error::BLOCKED: expected PostgreSQL 18, got $version — this gate's central claim is untested"; exit 1 ;;
-          esac
-
       - name: Install dependencies
         run: npm ci
 
@@ -198,6 +195,25 @@ jobs:
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1
           fi
+
+      - name: Assert PostgreSQL 18 is the actual server
+        run: |
+          set -o pipefail
+          node - <<'JS' | tee /tmp/step-pg-version.log
+          const { PrismaClient } = require('@prisma/client');
+          (async () => {
+            const prisma = new PrismaClient();
+            const rows = await prisma.$queryRawUnsafe("SELECT current_setting('server_version') AS v");
+            await prisma.$disconnect();
+            const version = String(rows[0].v);
+            console.log(`server_version=${version}`);
+            if (!version.startsWith('18.')) {
+              console.error(`::error::BLOCKED: expected PostgreSQL 18, got ${version} — this gate's central claim would be untested`);
+              process.exit(1);
+            }
+            console.log('PASS: PostgreSQL 18');
+          })().catch((error) => { console.error(error.message); process.exit(1); });
+          JS
 
       - name: Apply the complete migration history
         run: |
@@ -420,21 +436,22 @@ jobs:
           fi
           echo "PASS: invalid migration rejected with exit $status"
 
-      - name: "Control 2 — the verifier must fail on an empty database"
+      - name: "Control 2 — the verifier must fail on a database with no migrations"
         run: |
           set -o pipefail
-          psql "$DATABASE_URL" -c 'CREATE DATABASE verifier_empty'
+          # A separate schema in the same disposable database, so no role or
+          # CREATE DATABASE privilege is needed and nothing extra is provisioned.
           set +e
-          DATABASE_URL='postgresql://jata_ci:jata_ci_pw@localhost:5432/verifier_empty?schema=public' \
+          DATABASE_URL='postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_negative?schema=verifier_empty' \
             node scripts/ci/verify-migrations.mjs > /tmp/step-negative-verifier.log 2>&1
           status=$?
           set -e
           cat /tmp/step-negative-verifier.log
           if [ "$status" -eq 0 ]; then
-            echo "::error::FAIL: the verifier passed an empty database — its assertions are not being enforced"
+            echo "::error::FAIL: the verifier passed an unmigrated schema — its assertions are not being enforced"
             exit 1
           fi
-          echo "PASS: verifier rejected an empty database with exit $status"
+          echo "PASS: verifier rejected an unmigrated schema with exit $status"
 
       - name: "Control 3 — skipped tests must fail the gate"
         run: |
