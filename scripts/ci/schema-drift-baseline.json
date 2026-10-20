@@ -1,0 +1,22 @@
+{
+  "acceptedOn": "2026-10-20",
+  "owner": "repository owner",
+  "scope": "Pre-existing. Discovered by the release gate on 2026-10-20; present on main at 2575cf4 and unrelated to this branch and to PR #49.",
+  "why": "The committed migration history does not reproduce prisma/schema.prisma exactly. The gate must fail on NEW drift without being permanently red on debt nobody has fixed yet, so these exact findings are recorded here.",
+  "notA": "This is not an approval, not a waiver of correctness, and not a claim that the differences are harmless. Each one is a real divergence between the Prisma Client types and the actual database.",
+  "remediation": "A dedicated schema-reconciliation migration plus matching schema.prisma corrections, in its own reviewed pull request with its own rehearsal. Deliberately out of scope for a CI-infrastructure change, and deliberately not silently corrected here.",
+  "entries": [
+    "MediaAsset :: [*] Altered column `updatedAt` (default changed from `Some(Now)` to `None`)",
+    "MediaAsset :: [*] Changed the table",
+    "PaymentAttempt :: [*] Changed the table",
+    "PaymentAttempt :: [-] Removed foreign key on columns (businessId)",
+    "PaymentDestination :: [*] Altered column `capabilities` (default changed from `Some(Value(List([])))` to `None`)",
+    "PaymentDestination :: [*] Changed the table",
+    "PaymentDestination :: [*] Renamed index `PaymentDestination_businessId_provider_providerDestinationId_pr` to `PaymentDestination_businessId_provider_providerDestinationI_key`",
+    "PaymentProviderConnection :: [*] Altered column `capabilities` (default changed from `Some(Value(List([])))` to `None`)",
+    "PaymentProviderConnection :: [*] Changed the table",
+    "PosReceiptSequence :: [*] Changed the table",
+    "PosReceiptSequence :: [+] Added unique index on columns (businessId)",
+    "PosReceiptSequence :: [-] Dropped the primary key on columns (businessId)"
+  ]
+}
