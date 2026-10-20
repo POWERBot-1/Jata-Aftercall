@@ -87,6 +87,10 @@ jobs:
       - name: Validate Prisma schema and generate the client
         run: |
           set -o pipefail
+          # NOTE: DATABASE_URL here is the job-level placeholder
+          # (validation_only@127.0.0.1). validate/generate only need the variable
+          # to RESOLVE; nothing connects. If a future step in this job opens a
+          # connection, it must set its own real URL — do not reuse this one.
           npx prisma validate 2>&1 | tee /tmp/step-validate.log
           npx prisma generate 2>&1 | tee /tmp/step-generate.log
           # An engine download that silently fails leaves a client-less tree and
@@ -111,29 +115,33 @@ jobs:
       - name: Dependency audit (production gate + full report)
         run: |
           set -o pipefail
-          npm audit --omit=dev --json > /tmp/audit-production.json
+          # `npm audit` exits 1 when it FINDS something. Under the default
+          # `bash -e` that used to kill this step on the redirect line, so the
+          # reporter never ran and the log was empty exactly when it mattered.
+          # Capture both statuses explicitly, then let the summariser decide
+          # between PASS, FAIL (completed, with findings) and BLOCKED (did not
+          # complete). A registry outage must not read as a vulnerability, and a
+          # vulnerability must not read as an outage.
           set +e
+          npm audit --omit=dev --json > /tmp/audit-production.json
+          production_status=$?
           npm audit --json > /tmp/audit-full.json
           full_status=$?
           set -e
-          FULL_AUDIT_STATUS="$full_status" node - <<'JS' | tee /tmp/step-audit.log
-          const fs = require('fs');
-          const production = JSON.parse(fs.readFileSync('/tmp/audit-production.json', 'utf8'));
-          const full = JSON.parse(fs.readFileSync('/tmp/audit-full.json', 'utf8'));
-          // A network failure or a malformed report is a blocker: an unavailable
-          // advisory feed must never read as "no advisories".
-          if (production.error || full.error || !production.metadata?.vulnerabilities || !full.metadata?.vulnerabilities) {
-            throw new Error('BLOCKED: advisory service unavailable — cannot certify dependencies');
-          }
-          if (production.metadata.vulnerabilities.total !== 0) {
-            throw new Error(`FAIL: ${production.metadata.vulnerabilities.total} production advisor${production.metadata.vulnerabilities.total === 1 ? 'y' : 'ies'} remain`);
-          }
-          console.log('PASS: production dependency audit — 0 findings');
-          const risk = full.metadata.vulnerabilities;
-          console.log(`REPORTED: full tree has ${risk.total} finding(s) (${risk.high} high, ${risk.moderate} moderate); exit=${process.env.FULL_AUDIT_STATUS}`);
-          console.log('Known-open, documented, NOT waived: braces@3.0.3 (GHSA-vfj7-8cjw-p6xm), development-only path.');
-          console.log('Full-tree findings do not gate this release; the production tree above does.');
-          JS
+          echo "production audit exit: $production_status"
+          echo "full audit exit:       $full_status"
+
+          status=0
+          node scripts/ci/summarise-audit.mjs \
+            --production /tmp/audit-production.json --production-status "$production_status" \
+            --full /tmp/audit-full.json --full-status "$full_status" \
+            2>&1 | tee /tmp/step-audit.log || status=$?
+
+          case "$status" in
+            0) echo "PASS: production dependency audit — 0 findings" ;;
+            1) echo "::error::FAIL: production advisories remain (see /tmp/step-audit.log)"; exit 1 ;;
+            *) echo "::error::BLOCKED: the production dependency audit did not complete (see /tmp/step-audit.log)"; exit 1 ;;
+          esac
 
       - name: Gate self-tests (failure logic)
         run: |
@@ -142,7 +150,9 @@ jobs:
             scripts/__tests__/check-test-output.test.mjs \
             scripts/__tests__/migration-expectations.test.mjs \
             scripts/__tests__/authorize-migration.test.mjs \
-            scripts/__tests__/check-schema-drift.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+            scripts/__tests__/check-schema-drift.test.mjs \
+            scripts/__tests__/summarise-audit.test.mjs \
+            scripts/__tests__/migration-manifest.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -254,7 +264,7 @@ jobs:
           # approval.
           set +e
           npx prisma migrate diff \
-            --from-url "$DATABASE_URL" \
+            --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code 2>&1 | tee /tmp/step-migrate-diff.log
           diff_status=${PIPESTATUS[0]}
@@ -371,9 +381,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Record the migration history under test
+        run: |
+          set -o pipefail
+          # A count is not an identity. Record the commit, the directory, the
+          # number of migrations and a digest over every migration.sql, so a
+          # reader can tell WHICH history this job exercised.
+          node scripts/ci/verify-migrations.mjs --manifest-only 2>&1 | tee /tmp/step-manifest-before.log
+
       - name: "Run the production build (build.sh: guard → migrate → generate → next build)"
         run: |
           set -o pipefail
+          # A failing migration stops `build.sh` (set -e), so this step fails and
+          # the build below cannot be reported as successful.
           npm run build 2>&1 | tee /tmp/step-build.log
 
       - name: Build log proves the gate ran and no credential leaked
@@ -404,6 +424,15 @@ jobs:
             exit 1
           fi
           echo "PASS: guard allowed CI, migrations ran, build completed, no credential in the log"
+
+      - name: Verify the build migrated exactly this history
+        run: |
+          set -o pipefail
+          # Closes the gap where a green build job said nothing about what it
+          # migrated. Compares the ledger the build produced against the
+          # manifest on disk, and reports the PostgreSQL version, so the log
+          # itself identifies the history and the engine.
+          node scripts/ci/verify-migrations.mjs 2>&1 | tee /tmp/step-build-verify.log
 
       - name: Build artifact exists
         run: |
@@ -464,7 +493,10 @@ jobs:
           npx prisma migrate deploy
           # Add a deliberately invalid migration in a scratch copy and prove the
           # pipeline refuses it. The repository itself is never modified.
-          rm -rf /tmp/broken && cp -a . /tmp/broken && rm -rf /tmp/broken/.git /tmp/broken/node_modules
+          # Tracked files only: `cp -a .` copied node_modules (hundreds of MB)
+          # solely for the next line to delete it.
+          rm -rf /tmp/broken && mkdir -p /tmp/broken
+          git archive HEAD | tar -x -C /tmp/broken
           mkdir -p /tmp/broken/prisma/migrations/99999999999999_deliberate_failure
           printf 'CREATE TABLE "Broken" (\n' > /tmp/broken/prisma/migrations/99999999999999_deliberate_failure/migration.sql
           cd /tmp/broken
@@ -533,6 +565,40 @@ jobs:
           fi
           echo "PASS: missing log blocks"
 
+      - name: "Control 7 — an audit with findings must FAIL, not pass and not block"
+        run: |
+          set -o pipefail
+          printf '%s' '{"metadata":{"vulnerabilities":{"info":0,"low":1,"moderate":2,"high":3,"critical":0,"total":6}}}' > /tmp/aud-vulnerable.json
+          set +e
+          node scripts/ci/summarise-audit.mjs --production /tmp/aud-vulnerable.json --production-status 1 > /tmp/step-control-audit-findings.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-control-audit-findings.log
+          if [ "$status" -ne 1 ]; then
+            echo "::error::FAIL: a completed audit with findings did not produce FAIL (exit $status)"
+            exit 1
+          fi
+          echo "PASS: completed audit with findings -> FAIL (exit 1)"
+
+      - name: "Control 8 — an audit that could not run must BLOCK, not report findings"
+        run: |
+          set -o pipefail
+          # The distinction D1 exists for. A registry outage and a real
+          # vulnerability are different facts and must not collapse into one.
+          printf '%s' '{"error":{"summary":"registry unreachable"}}' > /tmp/aud-unavailable.json
+          set +e
+          node scripts/ci/summarise-audit.mjs --production /tmp/aud-unavailable.json --production-status 1 > /tmp/step-control-audit-blocked.log 2>&1
+          blocked=$?
+          node scripts/ci/summarise-audit.mjs --production /tmp/definitely-absent.json --production-status 1 > /dev/null 2>&1
+          missing=$?
+          set -e
+          cat /tmp/step-control-audit-blocked.log
+          if [ "$blocked" -ne 2 ] || [ "$missing" -ne 2 ]; then
+            echo "::error::FAIL: an audit that could not run did not BLOCK (unavailable=$blocked missing=$missing)"
+            exit 1
+          fi
+          echo "PASS: audit that could not run -> BLOCKED (exit 2)"
+
       - name: "Control 6 — the proposed migration authorizer refuses by default"
         run: |
           set -o pipefail
@@ -599,7 +665,7 @@ jobs:
           # asserting something untrue. Fail here rather than there.
           set +e
           npx prisma migrate diff \
-            --from-url "$DATABASE_URL" \
+            --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code 2>&1 | tee /tmp/step-recon-before.log
           status=${PIPESTATUS[0]}
@@ -621,7 +687,7 @@ jobs:
           set -o pipefail
           set +e
           npx prisma migrate diff \
-            --from-url "$DATABASE_URL" \
+            --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code 2>&1 | tee /tmp/step-recon-after.log
           status=${PIPESTATUS[0]}
