@@ -421,25 +421,31 @@ export async function failOrderPayment(paymentId: string): Promise<void> {
 /**
  * Verify a customer's order payment directly with Paystack (used by the confirmation page).
  * Returns the explicit state — never assumes success.
+ *
+ * A missing, blank or non-string reference is not a payment lookup. It fails closed here,
+ * before Prisma, whose unique `where` clause rejects `reference: undefined` outright.
  */
 export type OrderPaymentVerdict = { state: PaymentState; orderId?: string | null; providerChecked: boolean };
 
 export async function verifyOrderPayment(reference: string): Promise<OrderPaymentVerdict> {
-  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
+  const normalizedReference = typeof reference === "string" ? reference.trim() : "";
+  if (!normalizedReference) return { state: "NOT_STARTED", providerChecked: false };
+
+  const payment = await prisma.payment.findUnique({ where: { reference: normalizedReference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
   if (!payment) return { state: "NOT_STARTED", providerChecked: false };
   if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   if (payment.status === "REFUNDED") return { state: "CANCELLED", orderId: payment.orderId, providerChecked: false };
 
   if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
     // Test/demo confirmation path (no provider configured). Never reachable in production.
-    await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${reference}`, raw: { testMock: true } } });
+    await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${normalizedReference}`, raw: { testMock: true } } });
     return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   }
 
   // PENDING, FAILED, CANCELLED and EXPIRED are all re-checked with the provider. A local FAILED can be stale: Paystack can
   // report a failed card attempt and then a successful one on the same reference. The provider's verified answer decides.
   try {
-    const transaction = await verifyTransaction(reference);
+    const transaction = await verifyTransaction(normalizedReference);
     const evidence = validatePaymentEvidence(payment, transaction);
     if (evidence.ok === false) return { state: paymentStateOf(payment), orderId: payment.orderId, providerChecked: true };
     const outcome = classifyProviderStatus(transaction.status);
