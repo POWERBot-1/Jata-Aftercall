@@ -68,7 +68,7 @@ env:
 
 jobs:
   rehearsal:
-    name: PR #49 candidate applies on a disposable PostgreSQL 18
+    name: "PR #49 candidate applies on a disposable PostgreSQL 18"
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -92,7 +92,7 @@ jobs:
       # rehearsal databases. The rehearsal script refuses any non-loopback host.
       PG_ADMIN_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_ci
       CANDIDATE_SHA: ${{ inputs.candidate_commit || '59962291ec82d5ddbc8f323e3d057d6a5b15cf02' }}
-      CANDIDATE_LABEL: ${{ inputs.candidate_label || 'PR #49' }}
+      CANDIDATE_LABEL: "${{ inputs.candidate_label || 'PR #49' }}"
 
     steps:
       - name: Checkout the reviewing branch (rehearsal script + baseline history)
