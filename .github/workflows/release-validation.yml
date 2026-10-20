@@ -555,11 +555,104 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  schema-reconciliation-proposal:
+    name: Schema reconciliation proposal closes the drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_recon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recon?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply the complete migration history
+        run: npx prisma migrate deploy
+
+      - name: Confirm the recorded baseline still describes reality
+        run: |
+          set -o pipefail
+          # If this fails, the baseline has gone stale and the main gate is
+          # asserting something untrue. Fail here rather than there.
+          set +e
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code 2>&1 | tee /tmp/step-recon-before.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "::error::FAIL: expected the recorded drift (exit 2), got exit $status — the baseline is stale"
+            exit 1
+          fi
+          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-before.log
+
+      - name: Apply the proposed reconciliation to the schema only
+        run: |
+          set -o pipefail
+          git apply --verbose docs/schema-reconciliation/reconciliation.patch
+          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
+
+      - name: The proposal must close the drift completely
+        run: |
+          set -o pipefail
+          set +e
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code 2>&1 | tee /tmp/step-recon-after.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::error::FAIL: the proposal does not reconcile the schema (exit $status)"
+            cat /tmp/step-recon-after.log
+            exit 1
+          fi
+          echo "PASS: migrations + proposed schema edit produce zero drift, with no DDL"
+
+      - name: Restore the schema so later steps cannot inherit the proposal
+        if: always()
+        run: |
+          git checkout -- prisma/schema.prisma
+          git diff --exit-code -- prisma/schema.prisma
+          echo "PASS: prisma/schema.prisma restored"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reconciliation-logs
+          path: /tmp/step-recon-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   # ───────────────────────────────────────────────────────────────────────────
   release-gate:
     name: Release gate (aggregate)
     if: always()
-    needs: [static-checks, migrations-pg18, production-build, failure-path-controls]
+    needs: [static-checks, migrations-pg18, production-build, failure-path-controls, schema-reconciliation-proposal]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -570,6 +663,7 @@ jobs:
           MIGRATIONS: ${{ needs.migrations-pg18.result }}
           BUILD: ${{ needs.production-build.result }}
           NEGATIVE: ${{ needs.failure-path-controls.result }}
+          RECON: ${{ needs.schema-reconciliation-proposal.result }}
         run: |
           set -u
           failed=0
@@ -591,6 +685,7 @@ jobs:
           check "migrations-pg18" "$MIGRATIONS"
           check "production-build" "$BUILD"
           check "failure-path-controls" "$NEGATIVE"
+          check "schema-reconciliation-proposal" "$RECON"
 
           if [ "$failed" -ne 0 ]; then
             echo "RELEASE GATE: BLOCKED"

@@ -138,3 +138,22 @@ Items 4–7 are why this is a proposal. The switch is trivially reversible, but 
 ## 8. Recommendation
 
 Adopt B **only after** items 4–7 are satisfied in order, and only with the Vercel variable changed in a supervised window. Until then, keep the current coupling: it is understood, guarded, and log-verified. An untested replacement of a working gate is a worse risk than the coupling it removes.
+
+---
+
+## 9. Operating model — the eight questions this proposal must answer
+
+| Question | Answer under proposal B |
+|---|---|
+| **Who or what may execute a production migration?** | Only `.github/workflows/production-migrate.yml`, a `workflow_dispatch`-only workflow bound to a GitHub **Environment** with required reviewers. No human runs `prisma migrate deploy` from a laptop against production, and no Vercel build does it once `MIGRATE_ON_BUILD=false` is set |
+| **How are the exact candidate and migration artifacts verified?** | The workflow takes a **commit SHA**, not a branch. It checks out that SHA, records it, and runs `prisma migrate status` before mutating anything. The migration files are whatever that SHA contains — verified by the same `release-validation.yml` gate that rehearsed them on PostgreSQL 18 |
+| **How is the migration step authorized?** | `MIGRATION_AUTHORIZATION` must be exactly `sha:<the SHA being deployed>`. Anything else refuses (`scripts/ci/authorize-migration.mjs`, 8 tests). The existing migration-target guard still runs first, so the enrolled-fingerprint check remains |
+| **How do failures halt subsequent deployment steps?** | Migration and deploy are separate workflows. A non-zero exit in the migration workflow means no deploy is triggered — promotion is a manual or explicitly chained step that never runs on failure |
+| **How is application/schema compatibility maintained during rollout?** | Every migration must be **additive and backward compatible**: expand, deploy, contract later. The old deployment keeps serving during the migration window, and it must keep working against the newer schema |
+| **What evidence confirms migration completion?** | `prisma migrate status` reporting up to date, `scripts/ci/verify-migrations.mjs` confirming the ledger is complete and finished, and sanitised workflow output archived as an artifact |
+| **What if migration succeeds but deployment fails?** | Schema is ahead of code. That is safe **only** under the additive rule: re-run the deployment of the same SHA. Never "fix" it by reverting the migration |
+| **How are rollback and forward recovery handled?** | Code rollback = Vercel alias re-point; it does **not** touch schema. Schema problems are fixed forward with a new reviewed migration. A Neon restore is a whole-branch, destructive, last-resort action for **data** damage — never for a missing column, and never as an undo for DDL |
+
+### What remains unproven
+
+Everything in §9 is a design, not a measurement. The authorizer is implemented and tested; the workflow is **not written**, the Vercel variable is **not set**, and nothing has been rehearsed. Adopting it requires the four preconditions in §7, in order.
