@@ -78,6 +78,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DEFAULT_BASELINE, compareToBaseline, parseFindings } from "./check-schema-drift.mjs";
 import { migrationManifest } from "./migration-manifest.mjs";
 
 // ── Expectations for the two candidate migrations ──────────────────────────
@@ -478,12 +479,12 @@ const SNAPSHOT_SQL = {
       WHERE n.nspname = 'public' AND c.relname <> '_prisma_migrations'
       ORDER BY i.relname) t`,
   constraints: `SELECT coalesce(json_agg(row_to_json(t)), '[]') FROM (
-      SELECT conname, conrelid::regclass::text AS table_name, contype::text AS contype,
-             pg_get_constraintdef(oid) AS definition
-      FROM pg_constraint
-      WHERE connamespace = 'public'::regnamespace
-        AND conrelid::regclass::text <> '_prisma_migrations'
-      ORDER BY conname) t`,
+      SELECT p.conname, c.relname AS table_name, p.contype::text AS contype,
+             pg_get_constraintdef(p.oid) AS definition
+      FROM pg_constraint p
+      JOIN pg_class c ON c.oid = p.conrelid
+      WHERE p.connamespace = 'public'::regnamespace AND c.relname <> '_prisma_migrations'
+      ORDER BY p.conname) t`,
 };
 
 function snapshot(url) {
@@ -664,7 +665,11 @@ function main() {
   const fullUrl = psqlUrl(adminUrl, fullDb);
   const stepUrl = psqlUrl(adminUrl, stepDb);
   const failUrl = psqlUrl(adminUrl, failDb);
-  const env = { DATABASE_URL: fullUrl, AUTH_SECRET: process.env.AUTH_SECRET ?? "rehearsal-disposable-secret" };
+  const env = {
+    DATABASE_URL: fullUrl,
+    PRISMA_TEST_DATABASE_URL: fullUrl,
+    AUTH_SECRET: process.env.AUTH_SECRET ?? "rehearsal-disposable-secret",
+  };
 
   let driftReport = "";
   let failureControl = { attempted: false, detected: false, ledgerRecorded: false, statusExited: false };
@@ -804,19 +809,35 @@ function main() {
   try {
     const diff = runPrisma(
       candidateDir,
-      ["migrate", "diff", "--from-schema-datasource", "prisma/schema.prisma", "--to-schema-datamodel", "prisma/schema.prisma", "--script", "--exit-code"],
+      ["migrate", "diff", "--from-schema-datasource", "prisma/schema.prisma", "--to-schema-datamodel", "prisma/schema.prisma", "--exit-code"],
       env,
     );
     const plain = sanitise(diff.output).trim();
     if (diff.status === 0) {
       pass("the migration history and the datamodel agree", "empty diff");
     } else if (diff.status === 2) {
-      // Drift is a finding about the candidate, not a failure of the
-      // rehearsal: the migrations applied exactly as written. It is reported
-      // and recorded, never hidden.
-      note(`the migration history and the datamodel do NOT agree — ${plain.split("\n").filter(Boolean).length} statement(s):`);
-      console.log(plain);
+      // Drift is a property of the candidate, not a failure of the rehearsal:
+      // the migrations applied exactly as written. It is classified against the
+      // recorded pre-existing debt so the verdict says "known" or "new"
+      // instead of "something is different".
       driftReport = plain;
+      console.log(plain);
+      for (const line of plain.split("\n").slice(0, 25)) console.log(`DIFF ${line}`);
+      const findings = parseFindings(plain);
+      const baseline = JSON.parse(readFileSync(DEFAULT_BASELINE, "utf8"));
+      const { added, removed, matching } = compareToBaseline(findings, baseline.entries ?? []);
+      console.log(`[drift] observed ${findings.length}, matching the recorded debt ${matching.length}, new ${added.length}, recorded-but-absent ${removed.length}`);
+      if (added.length > 0) {
+        for (const entry of added.slice(0, 10)) console.log(`DIFF new: ${entry}`);
+        fail("the candidate introduces no drift beyond the recorded debt", `${added.length} new finding(s): ${added.slice(0, 4).join(" | ")}`);
+      } else if (findings.length === 0) {
+        note("migrate diff exited 2 but produced no parsable finding — treat as unclassified, not as clean");
+      } else {
+        pass("the candidate's drift is the recorded pre-existing debt and nothing else", `${matching.length} recorded finding(s)`);
+        if (removed.length > 0) {
+          note(`${removed.length} recorded baseline finding(s) are absent from this candidate (the baseline is stale for this tree, which is not a failure here)`);
+        }
+      }
     } else {
       blocked("`prisma migrate diff` runs", `exit ${diff.status}: ${plain.slice(0, 600)}`);
     }
@@ -922,7 +943,7 @@ function main() {
 
   for (const [label, script] of [
     ["typecheck", "typecheck"],
-    ["tests", "test"],
+    ["test suite", "test"],
   ]) {
     try {
       const result = run("npm", ["run", script], { cwd: candidateDir, env, timeout: 900000 });
@@ -941,7 +962,13 @@ function main() {
           pass(`the candidate ${label} passes`, "exit 0");
         }
       } else {
-        fail(`the candidate ${label} passes`, `exit ${result.status}`);
+        const failing = plain
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => /^(FAIL|×|✗)|AssertionError|Error: /.test(line))
+          .slice(0, 12);
+        for (const line of failing) console.log(`TESTFAIL ${line.slice(0, 200)}`);
+        fail(`the candidate ${label} passes`, `exit ${result.status}${failing.length ? `: ${failing.slice(0, 3).join(" | ").slice(0, 300)}` : ""}`);
       }
     } catch (error) {
       fail(`the candidate ${label} can run`, error.message);
