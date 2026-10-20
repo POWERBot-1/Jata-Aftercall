@@ -2,7 +2,7 @@
 
 **Status:** PROPOSAL. Nothing here has been applied to `prisma/schema.prisma`, to any database, or to the release gate's baseline.
 **Evidence date:** 2026-10-20 · **Discovered by:** release gate run `39505165659`, reproduced in the green run `39505943905`
-**Artifact:** `reconciliation.patch` (3,311 bytes, applies cleanly to `prisma/schema.prisma` at `2575cf4`)
+**Artifact:** `reconciliation.patch` (3,311 bytes, 7 hunks, applies cleanly to `prisma/schema.prisma` at `2575cf4`) — SHA-256 `228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29`
 
 ---
 
