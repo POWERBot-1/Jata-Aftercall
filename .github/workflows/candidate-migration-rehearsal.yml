@@ -127,6 +127,18 @@ jobs:
           cache: npm
           cache-dependency-path: candidate/package-lock.json
 
+      - name: Ensure a PostgreSQL client is available
+        run: |
+          set -o pipefail
+          if command -v psql >/dev/null 2>&1; then
+            echo "PASS: $(psql --version)"
+          else
+            echo "psql is absent from the runner image; installing the client"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+            psql --version
+          fi
+
       - name: Install the candidate lockfile
         run: |
           set -o pipefail
@@ -167,6 +179,7 @@ jobs:
       - name: Show the failing output
         if: failure()
         run: |
+          set -o pipefail
           for log in /tmp/step-rehearsal.log /tmp/candidate-npm-ci.log; do
             if [ -f "$log" ]; then
               echo "::group::${log}"
@@ -174,6 +187,20 @@ jobs:
               echo "::endgroup::"
             fi
           done
+          # Runner logs are not always retrievable after the fact. The verdict
+          # lines are therefore promoted to annotations, which are, so a failure
+          # can be diagnosed without downloading anything.
+          if [ -f /tmp/step-rehearsal.log ]; then
+            echo "--- annotations ---"
+            grep -E '^(FAIL|BLOCKED|RESULT|NOTE|UNCAUGHT)' /tmp/step-rehearsal.log | head -n 12 | while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              echo "::error::${line}"
+            done
+            head -n 20 /tmp/step-rehearsal.log | while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              echo "::error::${line}"
+            done
+          fi
 
       - name: Keep the logs
         if: always()

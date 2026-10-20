@@ -1003,7 +1003,18 @@ function writeSummary(file, verdict, details = {}) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("rehearse-candidate-migrations.mjs")) {
-  process.exitCode = main();
+  // An uncaught exception is a rehearsal that could not finish, which is
+  // BLOCKED — not a verdict about the candidate, and never a pass. It is
+  // reported explicitly because a bare stack trace on exit code 1 is
+  // indistinguishable from "a check failed".
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`BLOCKED: the rehearsal could not finish — ${error?.stack ?? error}`);
+    console.log("::error::BLOCKED: the rehearsal could not finish; treat the candidate as NOT TESTED");
+    console.log("RESULT: BLOCKED");
+    process.exitCode = 2;
+  }
 }
 
 export { ledger, parseArgs, psqlUrl, snapshot, writeSummary };
