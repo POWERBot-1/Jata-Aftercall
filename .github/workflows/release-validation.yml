@@ -157,6 +157,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    permissions:
+      contents: read
+      pull-requests: write
+
     services:
       postgres:
         image: postgres:18
@@ -283,6 +287,37 @@ jobs:
           set -o pipefail
           npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-suite.log
           node scripts/ci/check-test-output.mjs /tmp/step-suite.log
+
+      - name: Report diagnostics to the pull request
+        # Runner logs live behind a signed redirect that some environments cannot
+        # fetch. A failure that cannot be read is a failure that cannot be fixed,
+        # so the decisive lines are also posted where they can be seen.
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = [
+              '/tmp/step-pg-version.log', '/tmp/step-migrate-deploy.log',
+              '/tmp/step-migrate-status.log', '/tmp/step-migrate-diff.log',
+              '/tmp/step-verify-migrations.log', '/tmp/step-migrate-again.log',
+              '/tmp/step-suite.log',
+            ];
+            let out = '';
+            for (const file of files) {
+              try {
+                const text = fs.readFileSync(file, 'utf8')
+                  .replace(/\u001b\[[0-9;]*m/g, '')
+                  .replaceAll('jata_ci_pw', '[redacted]');
+                out += `\n### ${file.split('/').pop()}\n\n\`\`\`\n${text.slice(-4000)}\n\`\`\`\n`;
+              } catch { /* step did not run */ }
+            }
+            const body = `Release Validation — migrations-pg18 diagnostics on \`${context.sha}\`\n${out}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body.slice(0, 60000),
+            });
 
       - uses: actions/upload-artifact@v4
         if: always()
