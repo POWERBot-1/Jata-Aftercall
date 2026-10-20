@@ -153,7 +153,8 @@ jobs:
             scripts/__tests__/check-schema-drift.test.mjs \
             scripts/__tests__/summarise-audit.test.mjs \
             scripts/__tests__/migration-manifest.test.mjs \
-            scripts/__tests__/smoke-production.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+            scripts/__tests__/smoke-production.test.mjs \
+            scripts/__tests__/rehearse-candidate-migrations.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
 
       - uses: actions/upload-artifact@v4
         if: always()

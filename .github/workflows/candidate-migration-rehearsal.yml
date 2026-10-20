@@ -1,0 +1,188 @@
+name: Candidate migration rehearsal
+
+# WHY THIS WORKFLOW EXISTS
+# ------------------------
+# Pull request #49 proposes two additive migrations that are not on `main`:
+#
+#   prisma/migrations/20261017000000_media_asset_version
+#   prisma/migrations/20261018000000_password_reset_security
+#
+# The release gate in release-validation.yml validates the migration history of
+# the branch it runs on. It therefore cannot say anything about a candidate that
+# lives on a different branch, and PR #49 has no gate of its own: its head
+# (`5996229`) predates release-validation.yml entirely.
+#
+# This workflow closes that gap without touching PR #49. It checks the candidate
+# commit out into a second directory, applies the whole 18-migration history to a
+# disposable PostgreSQL 18 service, and verifies the result. The candidate tree
+# is read, never written, never rebased, never pushed.
+#
+# WHAT IT PROVES
+#   * the history applies in order through `prisma migrate deploy`;
+#   * the ledger is complete, finished, not rolled back, and matches the
+#     directories on disk;
+#   * every column, index, primary key and foreign key the two migrations
+#     promise exists with the promised shape;
+#   * applying the same files with psql reaches a byte-identical catalog, so the
+#     result is a property of the SQL and not of the CLI;
+#   * a deliberately broken migration fails loudly, is recorded as failed, and
+#     makes `migrate status` exit non-zero;
+#   * the candidate still generates a client, typechecks and runs its tests.
+#
+# WHAT IT CANNOT PROVE
+#   A container is not a Neon project. Nothing here says anything about Neon
+#   branching, restore, PITR, compute suspension or connection pooling. Nothing
+#   here authorises a merge: PR #49 is not modified by this workflow and the
+#   decision to rebase it remains an owner decision.
+#
+# No production credential exists in this workflow. The only database is a
+# service container destroyed with the runner, and the rehearsal script refuses
+# any host that is not loopback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_commit:
+        description: "Commit to rehearse (default: the head of PR #49)"
+        required: false
+        default: "59962291ec82d5ddbc8f323e3d057d6a5b15cf02"
+      candidate_label:
+        description: "Human label for the candidate (used in the run summary)"
+        required: false
+        default: "PR #49"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-rehearsal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22.22.3"
+  NEXT_TELEMETRY_DISABLED: "1"
+  # A throwaway value for a throwaway database. Never a production secret.
+  AUTH_SECRET: candidate-rehearsal-disposable-secret
+
+jobs:
+  rehearsal:
+    name: PR #49 candidate applies on a disposable PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The admin connection is used only to CREATE/DROP the three disposable
+      # rehearsal databases. The rehearsal script refuses any non-loopback host.
+      PG_ADMIN_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_ci
+      CANDIDATE_SHA: ${{ inputs.candidate_commit || '59962291ec82d5ddbc8f323e3d057d6a5b15cf02' }}
+      CANDIDATE_LABEL: ${{ inputs.candidate_label || 'PR #49' }}
+
+    steps:
+      - name: Checkout the reviewing branch (rehearsal script + baseline history)
+        uses: actions/checkout@v4
+        with:
+          path: gate
+
+      - name: Checkout the candidate commit (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+          fetch-depth: 1
+
+      - name: Assert the rehearsal is about the intended commit
+        run: |
+          set -o pipefail
+          actual=$(git -C candidate rev-parse HEAD)
+          echo "requested: ${CANDIDATE_SHA}"
+          echo "checked out: ${actual}"
+          if [ "$actual" != "$CANDIDATE_SHA" ]; then
+            echo "::error::BLOCKED: checked out $actual but the run asked for $CANDIDATE_SHA — the rehearsal would describe a different tree than the one it names"
+            exit 1
+          fi
+          echo "PASS: the candidate tree is ${actual}"
+          echo "--- candidate subject ---"
+          git -C candidate log -1 --format='%H %ci %s'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install the candidate lockfile
+        run: |
+          set -o pipefail
+          cd candidate
+          npm ci 2>&1 | tee /tmp/candidate-npm-ci.log
+          node -e "console.log('prisma CLI version:', require('prisma/package.json').version)"
+          test -f node_modules/.prisma/client/index.js || {
+            echo "::error::BLOCKED: the candidate's postinstall did not generate a Prisma client (engine download failed) — the typecheck and tests below would report errors that are not about the candidate"
+            exit 1
+          }
+
+      - name: Rehearse the candidate migrations on PostgreSQL 18
+        run: |
+          set -o pipefail
+          node gate/scripts/ci/rehearse-candidate-migrations.mjs \
+            --candidate-dir candidate \
+            --baseline-dir gate/prisma/migrations \
+            --admin-url "$PG_ADMIN_URL" \
+            --summary-file /tmp/rehearsal-summary.md 2>&1 | tee /tmp/step-rehearsal.log
+
+      - name: Publish the rehearsal verdict
+        if: always()
+        run: |
+          if [ -f /tmp/rehearsal-summary.md ]; then
+            {
+              echo "### ${CANDIDATE_LABEL} — candidate ${CANDIDATE_SHA}"
+              echo
+              cat /tmp/rehearsal-summary.md
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### ${CANDIDATE_LABEL} — candidate ${CANDIDATE_SHA}"
+              echo
+              echo "**BLOCKED** — the rehearsal produced no summary. Treat this as \"not tested\", not as a pass."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Show the failing output
+        if: failure()
+        run: |
+          for log in /tmp/step-rehearsal.log /tmp/candidate-npm-ci.log; do
+            if [ -f "$log" ]; then
+              echo "::group::${log}"
+              tail -n 120 "$log"
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-rehearsal-logs
+          path: |
+            /tmp/step-rehearsal.log
+            /tmp/candidate-npm-ci.log
+            /tmp/rehearsal-summary.md
+          if-no-files-found: warn
+          retention-days: 14
