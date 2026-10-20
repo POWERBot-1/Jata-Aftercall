@@ -78,6 +78,7 @@ async function goLive() {
       payment: { id: "pay_stock_1", reference: "jata-pos-stock-1", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49_900, currency: "KES", status: "PENDING" },
       plan: { id: "plan_pos", key: POS_PLAN_KEY, priceKES: 499, durationDays: 30 },
       eventId: "evt_stock_1",
+      verification: { paystackId: "ps_stock_seed" },
     }),
   );
   const record = await loadConfiguration("bizA");

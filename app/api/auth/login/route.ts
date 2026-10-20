@@ -2,29 +2,11 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { verifyPassword, setSessionCookie } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-
-// Simple in-memory rate limiter (zero-cost, no Redis)
-const attempts = new Map<string, { count: number; resetAt: number }>();
-const WINDOW_MS = 60_000;
-const MAX_ATTEMPTS = 20;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(ip);
-  if (!entry || now > entry.resetAt) {
-    attempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  entry.count++;
-  if (entry.count > MAX_ATTEMPTS) return true;
-  return false;
-}
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (isRateLimited(ip)) {
-    return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
-  }
+  const limit = rateLimit(req, { key: "auth-login", max: 20, windowMs: 60_000 });
+  if (!limit.allowed) return limit.response ?? NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
 
   try {
     const { email, password } = await req.json();
@@ -39,7 +21,13 @@ export async function POST(req: Request) {
 
     await logAudit({ actorId: user.id, action: "USER_LOGIN", targetType: "USER", targetId: user.id });
 
-    await setSessionCookie({ userId: user.id, email: user.email, role: user.role, name: user.name });
+    await setSessionCookie({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      sessionVersion: user.sessionVersion ?? 0,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

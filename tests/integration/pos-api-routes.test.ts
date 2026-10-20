@@ -116,6 +116,7 @@ const saleOf = (items: unknown[], payments: unknown[], extra: Record<string, unk
   post("bizA", "", { items, payments, ...extra });
 
 const twoChapati = { items: [{ productId: "p_a1", quantity: 2 }], payments: [{ method: "cash", amountKES: 100 }] };
+const INLINE_IMAGE_URL = "data:image/png;base64,iVBORw0KGgo=";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -349,6 +350,101 @@ describe("/configuration — answers become a Business Operating Profile (§4, �
     expect(answers.nope).toBeUndefined();
     expect(answers.priceKES).toBeUndefined();
     expect(answers.business_type).toBe("restaurant");
+  });
+
+  it("rejects an inline image hidden in free-text terminology before saving any POS JSON (§22, §56)", async () => {
+    const { status, body: refusal } = await call(await configPost(
+      post("bizA", "", { answers: restaurantAnswers, terminology: { customer: INLINE_IMAGE_URL } }),
+      context("bizA"),
+    ));
+
+    expect(status).toBe(503);
+    expect(refusal.code).toBe("inline_media_persistence_disabled");
+    expect(refusal.error).toMatch(/approved durable media provider/i);
+    expect(rows("posConfiguration")).toHaveLength(0);
+  });
+
+  it("refuses to normalize, publish, or template-copy a legacy inline URL hidden in unknown JSON keys", async () => {
+    await configure("bizA", restaurantAnswers);
+    const row = rows("posConfiguration")[0];
+    const legacy = JSON.parse(row.draftJson);
+    legacy.receipt.legacyLogo = INLINE_IMAGE_URL;
+    // JSON permits an escaped slash, so inspect parsed payloads as well as raw serialized text.
+    row.draftJson = JSON.stringify(legacy).replace("data:image/", "data:image\\/");
+    expect(row.draftJson).not.toContain(INLINE_IMAGE_URL);
+    expect(JSON.parse(row.draftJson).receipt.legacyLogo).toBe(INLINE_IMAGE_URL);
+    const preservedDraft = row.draftJson;
+
+    const save = await call(await configPost(post("bizA", "", { answers: { ...restaurantAnswers, keeps_stock: false } }), context("bizA")));
+    const publish = await call(await publishPost(post("bizA"), context("bizA")));
+    const template = await call(await clonePost(post("bizA", "/configuration/clone", { save: true, name: "Legacy setup" }), context("bizA")));
+
+    for (const attempt of [save, publish, template]) {
+      expect(attempt.status).toBe(503);
+      expect(attempt.body.code).toBe("inline_media_persistence_disabled");
+    }
+    expect(rows("posConfiguration")[0].draftJson).toBe(preservedDraft);
+    expect(rows("posConfigurationVersion")).toHaveLength(0);
+    expect(rows("posTemplate")).toHaveLength(0);
+  });
+
+  it("refuses rollback of a legacy inline-image snapshot without rewriting version history", async () => {
+    await configure("bizA", restaurantAnswers);
+    const row = rows("posConfiguration")[0];
+    const legacySnapshot = JSON.parse(row.draftJson);
+    legacySnapshot.delivery.legacyBanner = INLINE_IMAGE_URL;
+    const legacySnapshotJson = JSON.stringify(legacySnapshot).replace("data:image/", "data:image\\/");
+    expect(legacySnapshotJson).not.toContain(INLINE_IMAGE_URL);
+    expect(JSON.parse(legacySnapshotJson).delivery.legacyBanner).toBe(INLINE_IMAGE_URL);
+    const originalDraft = row.draftJson;
+    rows("posConfigurationVersion").push({
+      id: "legacy-version",
+      businessId: "bizA",
+      version: 1,
+      snapshotJson: legacySnapshotJson,
+      answersJson: row.answersJson,
+      fingerprint: "legacy",
+      createdById: "userA",
+    });
+
+    const { status, body: refusal } = await call(await versionsPost(
+      post("bizA", "/configuration/versions", { versionId: "legacy-version" }),
+      context("bizA"),
+    ));
+
+    expect(status).toBe(503);
+    expect(refusal.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posConfiguration")[0].draftJson).toBe(originalDraft);
+    expect(rows("posConfigurationVersion")).toHaveLength(1);
+    expect(JSON.parse(rows("posConfigurationVersion")[0].snapshotJson).delivery.legacyBanner).toBe(INLINE_IMAGE_URL);
+  });
+
+  it("does not roll back a confirmed POS payment when legacy inline media prevents publishing", async () => {
+    await configure("bizA", restaurantAnswers);
+    const row = rows("posConfiguration")[0];
+    const legacy = JSON.parse(row.draftJson);
+    legacy.business.legacyLogo = INLINE_IMAGE_URL;
+    row.draftJson = JSON.stringify(legacy);
+    const preservedDraft = row.draftJson;
+
+    const settled = await payForPos("bizA", "jata-pos-inline-legacy");
+
+    expect(settled.alreadySettled).toBe(false);
+    expect(rows("payment").find((payment: any) => payment.businessId === "bizA")?.status).toBe("PAID");
+    expect(rows("posSubscription").find((subscription: any) => subscription.businessId === "bizA")?.status).toBe("ACTIVE");
+    expect(rows("posConfiguration")[0].status).toBe("LIVE");
+    expect(rows("posConfiguration")[0].configurationStatus).toBe("READY");
+    expect(rows("posConfiguration")[0].draftJson).toBe(preservedDraft);
+    expect(rows("posConfiguration")[0].publishedJson).toBeFalsy();
+    expect(rows("posConfigurationVersion")).toHaveLength(0);
+    expect(JSON.parse(rows("posAuditEvent").find((event: any) => event.action === "POS_PROVISIONED")?.metadata ?? "{}").inlineMediaBlocked).toBe(true);
+
+    const workspace = await call(await workspaceGet(get("bizA"), context("bizA")));
+    expect(workspace.status).toBe(200);
+    expect(workspace.body.lifecycle).toBe("LIVE");
+    expect(workspace.body.entitlement.entitled).toBe(true);
+    expect(workspace.body.configuration.publishedVersion).toBe(0);
+    expect(workspace.body.ready).toBe(false);
   });
 
   it("fills in what the questionnaire was already showing when a question is skipped (§17, §41)", async () => {
@@ -768,16 +864,60 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.products.some((row: any) => row.id === "p_b1")).toBe(false);
   });
 
+  it("refuses inline image URLs with a 503 before creating a POS product", async () => {
+    const before = rows("posProduct").length;
+    const { status, body: refused } = await call(await productsPost(
+      post("bizA", "", { name: "Inline image item", priceKES: 80, imageUrl: "data:image/svg+xml,%3Csvg%3E" }),
+      context("bizA"),
+    ));
+    expect(status).toBe(503);
+    expect(refused.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posProduct")).toHaveLength(before);
+  });
+
+  it("rejects inline data hidden in POS product descriptions and variant options", async () => {
+    const before = rows("posProduct").length;
+    const { status, body: refused } = await call(await productsPost(
+      post("bizA", "", { name: "Madafu", priceKES: 80, description: "Notes data:image/png;base64,iVBORw0KGgo=" }),
+      context("bizA"),
+    ));
+    expect(status).toBe(503);
+    expect(refused.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posProduct")).toHaveLength(before);
+
+    const nested = await call(await productsPost(
+      post("bizA", "", { name: "Madafu", priceKES: 80, variantOptions: JSON.stringify({ thumbnail: "data:image/png;base64,iVBORw0KGgo=" }) }),
+      context("bizA"),
+    ));
+    expect(nested.status).toBe(503);
+    expect(nested.body.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posProduct")).toHaveLength(before);
+
+    const escaped = await call(await productsPost(
+      post("bizA", "", { name: "Madafu", priceKES: 80, variantOptions: String.raw`{"thumbnail":"data:image\\/png;base64,AA=="}` }),
+      context("bizA"),
+    ));
+    expect(escaped.status).toBe(503);
+    expect(escaped.body.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posProduct")).toHaveLength(before);
+  });
+
   it("refuses a product with no name", async () => {
     const { status } = await call(await productsPost(post("bizA", "", { priceKES: 80 }), context("bizA")));
     expect(status).toBe(400);
     expect(rows("posProduct")).toHaveLength(4);
   });
 
-  it("edits a product, and answers a foreign id exactly like a missing one (§75)", async () => {
+  it("preserves a legacy inline photo on ordinary edits and answers a foreign id like a missing one (§75)", async () => {
+    const legacyUrl = "data:image/png;base64,iVBORw0KGgo=";
+    rows("posProduct").find((row) => row.id === "p_a1")!.imageUrl = legacyUrl;
     const edited = await call(await productPatch(patch("bizA", "/products/p_a1", { name: "Chapati (large)", priceKES: 60 }), context("bizA", { productId: "p_a1" })));
     expect(edited.status).toBe(200);
-    expect(rows("posProduct").find((row) => row.id === "p_a1")).toMatchObject({ name: "Chapati (large)", priceKES: 60 });
+    expect(rows("posProduct").find((row) => row.id === "p_a1")).toMatchObject({ name: "Chapati (large)", priceKES: 60, imageUrl: legacyUrl });
+
+    const imageUnchanged = await call(await productPatch(patch("bizA", "/products/p_a1", { name: "Chapati with legacy image", imageUrl: legacyUrl }), context("bizA", { productId: "p_a1" })));
+    expect(imageUnchanged.status).toBe(200);
+    expect(rows("posProduct").find((row) => row.id === "p_a1")?.imageUrl).toBe(legacyUrl);
 
     const foreign = await call(await productPatch(patch("bizA", "/products/p_b1", { priceKES: 1 }), context("bizA", { productId: "p_b1" })));
     const missing = await call(await productPatch(patch("bizA", "/products/nope", { priceKES: 1 }), context("bizA", { productId: "nope" })));
@@ -793,6 +933,18 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.word).toBe("Guest");
     expect(list.customers.some((row: any) => row.name === "John Kamau")).toBe(true);
     expect(list.customers.some((row: any) => row.id === "c_b1")).toBe(false);
+  });
+
+  it("refuses inline image data hidden in POS customer-asset details before creating an asset", async () => {
+    const before = rows("posCustomerAsset").length;
+    const refused = await call(await customerPost(
+      post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle", details: JSON.stringify({ photo: INLINE_IMAGE_URL }) } }),
+      context("bizA", { customerId: "c_a1" }),
+    ));
+
+    expect(refused.status).toBe(503);
+    expect(refused.body.code).toBe("inline_media_persistence_disabled");
+    expect(rows("posCustomerAsset")).toHaveLength(before);
   });
 
   it("keeps customer credit and supplier credit in separate ledgers (§30)", async () => {

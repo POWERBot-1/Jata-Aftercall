@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { installInlineMediaPrismaWritePolicy } from "../lib/media/prisma-write-policy";
 
-const prisma = new PrismaClient();
+const prisma = installInlineMediaPrismaWritePolicy(new PrismaClient());
 
 async function main() {
   console.log("Seeding JATA AFTERCALL…");

@@ -11,6 +11,7 @@
  */
 import path from "node:path";
 import { createRequire } from "node:module";
+import { installInlineMediaPrismaWritePolicy } from "../../lib/media/prisma-write-policy";
 
 const require = createRequire(import.meta.url);
 
@@ -25,10 +26,12 @@ export function makeRealPrisma(): any {
     const { PrismaClient } = require(path.join(harness, "generated", "wasm.js"));
     const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg"));
     const { Pool } = require(path.join(harness, "node_modules", "pg"));
-    return new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionString: PRISMA_TEST_DATABASE_URL })) });
+    const client = new PrismaClient({ adapter: new PrismaPg(new Pool({ connectionString: PRISMA_TEST_DATABASE_URL })) });
+    return installInlineMediaPrismaWritePolicy(client);
   }
   const { PrismaClient } = require("@prisma/client");
-  return new PrismaClient({ datasourceUrl: PRISMA_TEST_DATABASE_URL });
+  const client = new PrismaClient({ datasourceUrl: PRISMA_TEST_DATABASE_URL });
+  return installInlineMediaPrismaWritePolicy(client);
 }
 
 /** The shared client handed to app modules through vi.mock("@/lib/db"). Created lazily. */

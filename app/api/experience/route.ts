@@ -34,6 +34,7 @@ import { validateForPublication, findInvalidCatalogueItems } from "@/lib/experie
 import { isSectionType, sectionLabel } from "@/lib/experience/sections";
 import { applyStudioFix, STUDIO_FIX_IDS, type StudioFixId } from "@/lib/studio/fixes";
 import { describeDraftChange, recordDraftRevision, draftCursorOf } from "@/lib/experience/history";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +180,9 @@ export async function POST(req: Request) {
       }
       const safeDocument = validateExperienceDocument(document);
       if (!safeDocument.ok) return NextResponse.json({ error: "This business direction does not use a supported configuration.", code: "experience_schema_invalid" }, { status: 400 });
+      if (containsInlineImageDataUrl(document)) {
+        return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+      }
       const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
       const updated = await prisma.businessExperience
@@ -232,6 +236,9 @@ export async function POST(req: Request) {
       businessId,
     );
     const document = seeded.document;
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const experience = await prisma.businessExperience.create({
       data: {
@@ -427,6 +434,9 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "This change would create an invalid experience. Nothing was saved.", code: "experience_schema_invalid", issues: checked.issues }, { status: 400 });
     }
     document = checked.document;
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     document.updatedAt = new Date().toISOString();
     const nextVersion = Math.max(1, Number(experience.draftVersion) || 1) + 1;
     // Compare-and-swap on the version this edit was built from. If another write landed first, the

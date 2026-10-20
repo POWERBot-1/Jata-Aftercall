@@ -25,7 +25,7 @@ vi.mock("next/navigation", () => ({
 }));
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { CATEGORY_KEYS, getExperienceProfile } from "@/lib/experience/categories";
-import { createExperienceDocument, themeOf } from "@/lib/experience/document";
+import { createExperienceDocument, normalizeExperienceDocument, themeOf } from "@/lib/experience/document";
 import { EXPERIENCE_THEMES } from "@/lib/experience/themes";
 import type { StorefrontData } from "@/lib/experience/storefront";
 import { PRODUCT_FOUNDATION_TOKENS, TEMPLATE_CONTRACT } from "@/lib/designSystem";
@@ -95,6 +95,23 @@ describe("every published product carries the design system", () => {
     expect(html).toContain("<main");
     expect(html).toContain("<nav");
     expect(html).not.toMatch(/<img(?![^>]*\balt=)/);
+  });
+
+  it("keeps a legacy inline hero image readable in a published customer render", () => {
+    const legacyImage = "data:image/png;base64,iVBORw0KGgo=";
+    const data = publishedProduct("food", EXPERIENCE_THEMES[0].key);
+    const legacyDocument = JSON.parse(JSON.stringify(data.document));
+    legacyDocument.brand.heroImageUrl = legacyImage;
+    const hero = legacyDocument.sections.find((section: { type: string }) => section.type === "hero");
+    expect(hero).toBeTruthy();
+    hero.imageUrl = legacyImage;
+
+    data.document = normalizeExperienceDocument(legacyDocument, "food");
+    const html = renderToStaticMarkup(createElement(ExperienceSite, { data }));
+
+    expect(data.document.brand.heroImageUrl).toBe(legacyImage);
+    expect(html).toContain(`src="${legacyImage}"`);
+    expect(html).toContain("eb-hero__media");
   });
 
   it("serves the customer the category's own structure, not a hard-coded page", () => {

@@ -3,10 +3,12 @@
 Status: **proposed, not approved.** No paid resource, credential or production configuration has been created.
 Scope: image derivatives and GLB models. Lite storefronts do not depend on either.
 
+**Current source correction (E-25):** the `inline-data-url` identifier remains for compatibility, but `put()` fails closed; `/api/media` refuses new data-image bytes and accepts hosted/path references as metadata only. `IMPLEMENTED_PROVIDERS` is empty, no durable object-read adapter is wired, and legacy reads remain. No database inventory ran, so existing media is unknown. Price figures below are earlier illustrations, not current quotes; compare current provider terms/costs before selection. See `RELEASE_DECISIONS.md` §1 and `OWNER_APPROVAL_REQUEST.md` C.
+
 ## 1. Rules that do not change
 
 - Binary media never goes into Neon. Neon stores metadata only: key, provider, URL, bytes, content type, dimensions and provenance.
-- Data URLs are not the long-term store for images or 3D assets. The inline provider in `lib/storage/inline.ts` is a development and fallback path only. It is declared non-durable. `assertCanStore` in `lib/storage/index.ts` encodes the refusal rules for derivatives and models, but **no production call site invokes it yet**. Today the only guard that stops 3D is the feature flag (`immersiveFeatureEnabled`), which also requires a durable provider. Any future upload path must call `assertCanStore` before writing.
+- Data URLs are not the long-term store for images or 3D assets. The inline provider in `lib/storage/inline.ts` is declared non-durable and its `put()` fails closed. `assertCanStore` in `lib/storage/index.ts` encodes the provider/size checks, but a repo-wide source search found only its definition and unit-test calls: **no application/runtime call site currently invokes it**. The feature flag (`immersiveFeatureEnabled`) also requires durable-provider capabilities. Any future upload path must call `assertCanStore` before writing; that future call is not yet implemented.
 - Tenant isolation: every key is built as `tenants/<businessId>/<kind>/<name>` (`lib/storage/keys.ts`). Traversal, extension mismatch and oversize inputs are rejected before any provider is called.
 - No secret is read, written or printed by the code in this change. `resolveStorageProvider` fails loudly for an unknown or not-yet-implemented provider (currently `vercel-blob`).
 
@@ -24,13 +26,14 @@ Adding a provider means implementing this interface and registering it in `lib/s
 
 | Option | Status in this repo | Notes |
 | --- | --- | --- |
-| Inline data URL (current default) | Implemented, non-durable | Images only, capped by `MAX_STORED_CHARS = 4_000_000`. Not for 3D. |
+| Inline data URL (legacy identifier/read compatibility) | Non-durable; new `put()` is disabled and fails closed | Existing historical references may be read; no new binary write. Not a durable provider and not for 3D. |
 | Vercel Blob | Candidate only. Not implemented. | Same vendor as hosting. CDN-backed. Needs a read-write token secret. |
-| Other S3-compatible object store | Not evaluated | Would add a second vendor and its own credentials. Not researched in this pass. |
+| S3-compatible (including AWS S3 or R2) | Candidate only; not evaluated or implemented | Compare storage, requests, egress/cache, versions/backups, lifecycle and current provider terms. Access/identity and cost are unknown. |
+| Cloudinary | Candidate only; not evaluated or implemented | Compare current plans/credits, transformations, bandwidth, access controls, retention and deletion. Compatibility and cost are unknown. |
 
 ## 4. Vercel Blob: cost model (disclosed, not authorised)
 
-Source: Vercel's official usage and pricing page, checked in this session (Sept 2026 revision).
+Source: a prior read of Vercel's official usage and pricing page (Sept 2026 revision). Not refreshed in E-25; figures below are historical illustrations, not current quotes or an approved budget.
 
 - Storage: **$0.023 per GB-month**.
 - Simple operations: **$0.40 per 1M**. Advanced operations: **$5.00 per 1M**.
@@ -47,25 +50,26 @@ Illustrative estimate (assumptions, not measured):
 - Transfer: 100,000 page views × 1.5 MB, if none were cached ≈ 150 GB × $0.05 ≈ **$7.50 per month**. With a high CDN hit rate this falls sharply.
 - 3D models would add storage and transfer. Each GLB is capped at 8 MB by the policy in `lib/experience/immersive/policy.ts`. Model volume is unknown and must be measured before any upload is enabled.
 
-The estimate is small at this scale, but usage-based billing is unbounded. A per-tenant upload quota and a storage ceiling are needed before enabling uploads for real customers.
+That illustration reflects only its stated historical assumptions; it is not a current estimate, forecast, quote or budget. Actual workload, provider terms, cache behavior and total cost are unknown. A per-tenant upload quota, global ceiling, alerts and explicit one-time/monthly budget must be approved before any real customer upload.
 
 ## 5. Recommendation (conservative)
 
-1. Keep the inline provider as the default. Do not enable 3D uploads.
-2. When explicitly authorised, implement a Vercel Blob adapter behind the interface. It would need one secret, expected to be `BLOB_READ_WRITE_TOKEN` (to be confirmed against the SDK docs before use). Do not create the token or store it in the repo.
-3. Before the first real upload: set per-tenant quotas, a global storage ceiling and alerts in the Vercel dashboard, and record which of these the owner has approved.
-4. Measure real GLB sizes. Add Draco, Meshopt or KTX2 only after the decoders are wired and tested. Until then, only uncompressed GLB is accepted.
+1. Keep new media writes fail-closed and preserve legacy reads. Do not enable 3D uploads or route new writes to the inline provider.
+2. Before selecting a durable provider, compare only candidates confirmed compatible with this runtime and access pattern, including provider/egress/operation costs, public versus private access, tenant isolation/quotas, privacy, retention/deletion, rollback and legacy-media remediation. Current compatibility and quotes are unknown; Vercel Blob, S3-compatible storage and Cloudinary remain candidates, not recommendations or approvals.
+3. After a provider and explicit one-time/monthly budget are approved, implement its adapter and read path behind the interface. Confirm the provider's current SDK, identity, secret names and access model before any secret is configured; do not create a token or store it in the repo.
+4. Before any approved upload, enforce per-tenant quotas, global storage ceiling and alerts. No provider activation, account, upload, migration, backfill, spending or deletion is authorized by this proposal.
+5. Measure real GLB sizes. Add Draco, Meshopt or KTX2 only after the decoders are wired and tested. 3D activation is a separate owner decision.
 
 ## 6. Decisions still needed from the owner
 
-- Approve Vercel Blob (or name another provider) as the durable store.
-- Approve the secret to be created and added to the environment.
-- Approve the monthly spend ceiling and per-tenant quota.
-- Approve when 3D asset uploads may be enabled for real businesses.
+- Approve a non-binding compatibility, current-cost, access/tenant/privacy, retention/deletion, rollback and legacy-media remediation comparison; then select a provider only after that evidence is reviewed.
+- Set explicit one-time and monthly spending ceilings, quota limits, alerting and an abort threshold before any account, secret, activation, upload or migration; current costs are unknown.
+- Separately authorize adapter/read-path implementation and the exact secret/identity setup after provider selection.
+- Separately approve when (if ever) 3D asset uploads may be enabled for real businesses.
 
 ## 7. Activation runbook (proposed, NOT active)
 
-Nothing in this section is enabled. Each step needs the owner's explicit approval, listed in section 7.4.
+Nothing in this section is enabled. Each step needs the owner's explicit approval, listed in section 7.5.
 
 ### 7.1 Environment variables
 
@@ -77,12 +81,9 @@ Nothing in this section is enabled. Each step needs the owner's explicit approva
 
 No variable is read from the repository, and no secret is committed. The token must be created by the owner in the Vercel dashboard and stored only in the Vercel project's environment settings.
 
-### 7.2 Estimated costs (Vercel Blob, from the official price list in section 4)
+### 7.2 Historical cost illustrations (not current quotes or a budget)
 
-- Storage is roughly $0.28 per month for the 500-business example, and grows linearly with images and models.
-- Transfer depends on cache hit rate. Uncached transfer for 100,000 page views at 1.5 MB is about $7.50 per month.
-- Each upload and each read is an operation, billed per million. At this scale these are small. They are unmeasured here.
-- Real GLB sizes are unknown. Each model may be up to 8 MB under the policy. Measure before enabling any uploads.
+Section 4 records a prior Vercel price-list snapshot and illustrative assumptions. Those values were not refreshed in E-25 and must not be used for selection, a spend cap or a business commitment. Current provider terms, total cost, transfer/cache profile and usage remain unknown; obtain a current like-for-like comparison before any decision or spend. Real GLB sizes are unknown; measure only on an approved synthetic/local fixture before enabling any uploads.
 
 ### 7.3 Spending safeguards (required before activation)
 
@@ -95,16 +96,15 @@ No variable is read from the repository, and no secret is committed. The token m
 
 ### 7.4 Migration behaviour (designed, not executed)
 
-- Existing images are inline data URLs inside the draft JSON. They keep working unchanged. Nothing is migrated automatically.
-- A backfill job would, per business: read the draft, upload each inline image to the provider under `tenants/<businessId>/…`, save a new draft revision that points at the stored URL, and keep the previous revision so Undo still works.
-- The old inline data is removed only after the new revision is confirmed and the revision history has been pruned by the owner's retention rule. Neon size stays bounded throughout.
-- The backfill is idempotent (keys are deterministic per content hash) and tenant-scoped. It must be dry-run first and run on an isolated copy, not production, before any real run.
-- Rollback: the provider can be switched back to inline, since references are only rewritten through new revisions.
+- Some legacy image references may be inline data URLs in draft/history/product rows; current inventory is unknown. Current source preserves legacy read paths, but does not establish that every historical consumer is still compatible. Nothing is migrated automatically.
+- A future, approved backfill design must inventory and classify legacy references first; preserve tenant scope and provenance; use deterministic idempotency keys; verify each uploaded object and new reference; and write a new version without mutating the prior revision. Run a dry-run and verification on an approved isolated copy before separately authorizing any real migration.
+- Retain old references/objects until the owner-approved rollback window and verification complete. Delete only under a separate approved retention/deletion procedure after verifying no drafts, published snapshots, versions, history, products or other rows still reference the object. Neon/binary behavior and historical duplicates must be measured; bounded storage cannot be claimed without evidence.
+- **Rollback is not implemented or executable today.** Switching the provider identifier back to `inline-data-url` is not a rollback: inline `put()` fails closed, and no durable object-read adapter is wired. A future plan must preserve old readers/references, specify how both old and new objects remain readable during rollback, and verify restoration using disposable fixtures before production is even considered. No inline-write fallback may be introduced to make rollback appear to work.
 
 ### 7.5 Owner decisions required before activation
 
-1. Approve Vercel Blob (or name another provider) as the durable store.
-2. Approve creating `BLOB_READ_WRITE_TOKEN` in the Vercel project.
-3. Approve the monthly spend limit and the per-tenant quota values.
-4. Approve running the backfill against production data, after a dry run on a copy.
-5. Approve the enabling of visitor-facing 3D (`JATA_IMMERSIVE_ENABLED`). This is separate from storage approval.
+1. Approve only a non-binding compatibility/cost/access/privacy/retention/deletion comparison; provider selection follows that review.
+2. Set one-time and monthly budget ceilings and per-tenant/global quotas, with no account, secret, activation, upload or spend until separately approved.
+3. After selection, separately authorize adapter/read-path implementation and provider-specific secret/identity setup.
+4. Define legacy inventory and remediation; any isolated-copy inventory, real backfill, deletion or production-data action requires its own explicit scope and approval.
+5. Approve visitor-facing 3D (`JATA_IMMERSIVE_ENABLED`) separately from image storage, with its own safety/performance review.

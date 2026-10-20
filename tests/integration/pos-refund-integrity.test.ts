@@ -86,6 +86,7 @@ async function goLive() {
       payment: { id: "pay_refund_1", reference: "jata-pos-refund-1", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49_900, currency: "KES", status: "PENDING" },
       plan: { id: "plan_pos", key: POS_PLAN_KEY, priceKES: 499, durationDays: 30 },
       eventId: "evt_refund_1",
+      verification: { paystackId: "ps_refund_seed" },
     }),
   );
   const record = await loadConfiguration("bizA");

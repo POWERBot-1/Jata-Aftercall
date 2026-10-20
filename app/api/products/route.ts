@@ -16,6 +16,7 @@ import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
 import { getExperienceProfile } from "@/lib/experience/categories";
 import { validateSaleWrite } from "@/lib/sale-pricing";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -146,6 +147,22 @@ function productDataFrom(body: ProductPayload) {
   return data;
 }
 
+function imageUrlListForComparison(value: unknown): string[] {
+  let parsed = value;
+  if (typeof parsed === "string") {
+    const raw = parsed;
+    try { parsed = JSON.parse(raw); } catch { return [raw]; }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((entry) => typeof entry === "string" ? entry : (entry && typeof entry === "object" ? (entry as { url?: unknown }).url : null))
+    .filter((url): url is string => typeof url === "string");
+}
+
+function sameImageUrlList(left: unknown, right: unknown): boolean {
+  return JSON.stringify(imageUrlListForComparison(left)) === JSON.stringify(imageUrlListForComparison(right));
+}
+
 async function assertOwner(session: SessionPayload | null, businessId: string) {
   const guard = await guardTenantMutation(session, businessId);
   if (!guard.ok) return guard;
@@ -194,12 +211,18 @@ export async function POST(req: Request) {
 
     const name = sanitizeText(String(body?.name || ""), 120);
     if (name.length < 2) return NextResponse.json({ error: "Give this item a name." }, { status: 400 });
+    if (containsInlineImageDataUrl({ imageUrl: body.imageUrl, images: body.images })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const data = productDataFrom(body);
     const sale = saleDataFrom(body, null);
     if (sale && "error" in sale) return NextResponse.json({ error: sale.error }, { status: 400 });
     if (sale && !("error" in sale)) Object.assign(data, sale.data);
     const variants = parseVariants(body?.variants);
+    if (containsInlineImageDataUrl({ data, variants })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const product = await prisma.product.create({
       data: {
         businessId,
@@ -246,11 +269,22 @@ export async function PATCH(req: Request) {
     // Ownership is re-checked against the stored row: the id in the body is never trusted.
     const existing = await prisma.product.findFirst({
       where: { id, businessId },
-      select: { id: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true },
+      select: { id: true, basePriceKES: true, variantPriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true, imageUrl: true, images: true },
     });
     if (!existing) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
     const data = productDataFrom(body);
+    // An unchanged legacy data URL can be left in place while other fields change, but it is
+    // omitted from the update so the image bytes are not written again. Changed/new inline URLs
+    // and changed galleries containing inline bytes are refused before the transaction.
+    if (body.imageUrl !== undefined && containsInlineImageDataUrl(body.imageUrl)) {
+      if (body.imageUrl === existing.imageUrl) delete data.imageUrl;
+      else return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
+    if (body.images !== undefined && containsInlineImageDataUrl(body.images)) {
+      if (sameImageUrlList(body.images, existing.images)) delete data.images;
+      else return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const sale = saleDataFrom(body, existing);
     if (sale && "error" in sale) return NextResponse.json({ error: sale.error }, { status: 400 });
     if (sale && !("error" in sale)) Object.assign(data, sale.data);
@@ -261,6 +295,9 @@ export async function PATCH(req: Request) {
     }
 
     const variants = body?.variants === undefined ? null : parseVariants(body.variants);
+    if (containsInlineImageDataUrl({ data, variants })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const product = await prisma.$transaction(async (tx) => {
       if (variants) {
         await tx.productVariant.deleteMany({ where: { productId: id, businessId } });

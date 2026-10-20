@@ -10,6 +10,7 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
+    if (containsInlineImageDataUrl(body)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const nameRaw = sanitizeText(body.name || "", 80);
     const category = sanitizeText(body.category || "Other", 40);
     const phone = (body.phone || "").trim();
@@ -171,6 +175,9 @@ export async function PATCH(req: Request) {
       body.isPublished !== undefined ? "publish" : "read",
     );
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    if (containsInlineImageDataUrl(body)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) {

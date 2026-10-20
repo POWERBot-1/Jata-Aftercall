@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
 import { recordEvent, EVENT_TYPES, hashSession } from "@/lib/analytics";
-
-// Rate limit in-memory (zero-cost)
-const hits = new Map<string, { count: number; reset: number }>();
-function limited(ip: string): boolean {
-  const now = Date.now();
-  const e = hits.get(ip);
-  if (!e || now > e.reset) {
-    hits.set(ip, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  e.count++;
-  return e.count > 100;
-}
+import { rateLimit, trustedClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
-  if (limited(ip)) return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+  const limit = rateLimit(req, { key: "analytics-event", max: 100, windowMs: 60_000 });
+  if (!limit.allowed) return limit.response ?? NextResponse.json({ error: "Rate limited" }, { status: 429 });
+  const ip = trustedClientIp(req.headers) ?? "unknown";
 
   try {
     const body = await req.json();

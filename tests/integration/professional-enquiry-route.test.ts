@@ -17,7 +17,9 @@ function request(input: unknown = body, headers: Record<string, string> = {}) {
   return new Request("https://jata.test/api/storefront/enquiry", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${++sequence}`, ...headers }, body: JSON.stringify(input) });
 }
 beforeEach(() => {
-  vi.stubEnv("DATABASE_URL", "postgresql://mock:mock@localhost:1/mock_only"); vi.clearAllMocks(); h.rows.clear();
+  vi.stubEnv("DATABASE_URL", "postgresql://mock:mock@localhost:1/mock_only");
+  vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
+  vi.clearAllMocks(); h.rows.clear();
   h.business = { id: "owned-business", isPublished: true, status: "ACTIVE" };
   h.experience = { status: "PUBLISHED", categoryKey: "professional", publishedJson: JSON.stringify(createExperienceDocument({ categoryKey: "professional", businessName: "Owned practice" })) };
   h.service = { id: "owned-service", title: "Authoritative professional service" };

@@ -1,10 +1,11 @@
 /** Server-only Paystack integration. Never return or log secret configuration. */
 import crypto from "crypto";
 import prisma from "./db";
-import { isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
+import { isProviderTransactionId, isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
+import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -66,7 +67,7 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
   });
   const result = await response.json().catch(() => null);
   const data = result?.data;
-  const validId = typeof data?.id === "number" ? Number.isSafeInteger(data.id) : typeof data?.id === "string" && data.id.trim().length > 0;
+  const validId = typeof data?.id === "number" ? Number.isSafeInteger(data.id) : isProviderTransactionId(data?.id);
   if (!response.ok || !result?.status || !data || typeof data.status !== "string" ||
       typeof data.reference !== "string" || !Number.isSafeInteger(data.amount) ||
       typeof data.currency !== "string" || !/^[A-Z]{3}$/.test(data.currency) || !validId) {
@@ -120,23 +121,23 @@ export async function activateSubscriptionForPayment(
     /*
      * What may settle, and on what evidence.
      *
-     *   PENDING                     — the ordinary path.
-     *   FAILED/CANCELLED/EXPIRED    — only with provider evidence in this call (paystackId), i.e.
-     *                                 a verified success is correcting a stale local record.
+     *   PENDING                     — only with provider transaction evidence from the caller.
+     *   FAILED/CANCELLED/EXPIRED    — the same evidence is required to correct a stale local state.
      *   PAID (with a subscription)  — already handled above, idempotent.
-     *   PAID without a subscription — the legacy repair path.
+     *   PAID without a subscription — legacy repair of the already-paid row.
      *   REFUNDED / anything else    — never: money already returned is not money received.
      *
-     * The evidence requirement means this function cannot be talked into reviving a failed
-     * payment by a caller that skipped verification; the webhook and the verify route both pass
-     * the id from a transaction they verified against Paystack.
+     * The webhook and verify route both verify the transaction with Paystack and match its
+     * reference, amount, currency and successful status before calling this function. Requiring
+     * the transaction id here also makes a bare internal call fail closed for every new settlement.
      */
-    // Provider evidence for this settlement: the Paystack transaction id from a verification the
-    // caller performed and checked. Required to settle anything other than a PENDING payment.
-    const providerEvidence = typeof verification?.paystackId === "string" && verification.paystackId.trim() !== "";
+    // Every new settlement needs the transaction id from a provider verification the caller
+    // performed and matched against this payment. PENDING is not permission to skip verification.
+    // The explicit legacy repair path only repairs a payment already recorded as PAID.
+    const providerEvidence = isProviderTransactionId(verification?.paystackId);
 
     if (!isSettleablePaymentStatus(payment.status) && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_SETTLEABLE");
-    if (payment.status !== "PENDING" && !repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
+    if (!repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
 
     const plan = await tx.planConfig.findUnique({ where: { id: payment.planId } });
     if (!plan) throw new Error("PLAN_NOT_FOUND");
@@ -157,14 +158,24 @@ export async function activateSubscriptionForPayment(
     const { startAt, expiresAt } = subscriptionWindow(now, plan.durationDays, current);
 
     if (!repairingLegacyPaidPayment) {
+      const rawForStorage = verification?.raw === undefined
+        ? undefined
+        : serializeJsonWithoutInlineImageData(verification.raw);
+      // The verified transaction id is evidence for this call, but optional provider text must
+      // not make the money-state transaction fail a database write policy. Omit only the unsafe
+      // identifier; retain the provider-verified settlement and its existing CAS/entitlement path.
+      const paystackIdForStorage = verification?.paystackId &&
+        !containsInlineImageDataUrl(verification.paystackId)
+        ? verification.paystackId
+        : undefined;
       const changed = await tx.payment.updateMany({
         // Compare-and-set on the state that was read: a concurrent settlement of any kind makes
         // this write match nothing, and the branch below then resolves idempotently.
         where: { id: payment.id, status: settledFrom },
         data: {
           status: "PAID",
-          ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),
-          ...(verification?.raw !== undefined ? { raw: JSON.stringify(verification.raw) } : {}),
+          ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+          ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
         },
       });
       if (changed.count !== 1) {

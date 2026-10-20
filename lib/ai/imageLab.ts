@@ -16,8 +16,8 @@
  *   • Nothing generated is published or substituted for an existing photo. The owner chooses.
  */
 
-import crypto from "crypto";
 import prisma from "@/lib/db";
+import { INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { MAX_UPLOAD_CHARS } from "@/lib/media/imageFormat";
 import { buildDesignContext, defaultStyleForCategory, photographyStyleOptions, resolvePhotographyStyle, type DesignContext } from "./designContext";
 import { IMAGE_PRESETS, buildEnhancePrompt, buildImagePrompt, presetFor } from "./promptBuilder";
@@ -68,6 +68,19 @@ export type StoredAsset = {
   aiGenerationId: string | null;
 };
 
+export type ImageAssetStoreInput = {
+  businessId: string;
+  image: GeneratedImage;
+  alt: string | null;
+  source: "AI_GENERATED" | "AI_ENHANCED" | "ENHANCED";
+  label: string;
+  generationId: string | null;
+  parentAssetId?: string | null;
+};
+
+/** An approved durable adapter is injected here; this build deliberately registers none. */
+export type ImageAssetStore = (input: ImageAssetStoreInput) => Promise<StoredAsset | null>;
+
 export type GenerationOutcome = {
   status: "ok";
   generationId: string | null;
@@ -112,6 +125,16 @@ export type ImageLabInfo = {
 };
 
 const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function mediaStorageUnavailable(): GenerationOutcome {
+  return {
+    status: "error",
+    httpStatus: 503,
+    error: INLINE_MEDIA_PERSISTENCE_MESSAGE,
+    code: INLINE_MEDIA_PERSISTENCE_CODE,
+    retryable: false,
+  };
+}
 
 type BusinessContext = {
   businessId: string;
@@ -264,50 +287,6 @@ function describeProvider(provider = resolveProvider("image")) {
   };
 }
 
-/** Reuses an identical asset instead of storing a byte-identical second copy (§19). */
-async function storeAsset(input: {
-  businessId: string;
-  image: GeneratedImage;
-  alt: string | null;
-  source: "AI_GENERATED" | "AI_ENHANCED" | "ENHANCED";
-  label: string;
-  generationId: string | null;
-  parentAssetId?: string | null;
-}): Promise<StoredAsset | null> {
-  const delegate = (prisma as any)?.mediaAsset;
-  if (!delegate?.create) return null;
-  const match = /^data:([^;]+);base64,([\s\S]*)$/.exec(input.image.dataUrl);
-  if (!match) return null;
-  const bytes = Buffer.from(match[2], "base64");
-  const hash = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
-  const existing = await delegate
-    .findFirst?.({ where: { businessId: input.businessId, hash }, select: { id: true, url: true, width: true, height: true, alt: true, source: true, label: true, aiGenerationId: true } })
-    .catch(() => null);
-  if (existing?.id) return existing as StoredAsset;
-  try {
-    const created = await delegate.create({
-      data: {
-        businessId: input.businessId,
-        url: input.image.dataUrl,
-        kind: "IMAGE",
-        mime: input.image.mime,
-        alt: input.alt,
-        width: input.image.width,
-        height: input.image.height,
-        bytes: bytes.length,
-        hash,
-        source: input.source,
-        label: input.label,
-        aiGenerationId: input.generationId,
-        parentAssetId: input.parentAssetId ?? null,
-      },
-      select: { id: true, url: true, width: true, height: true, alt: true, source: true, label: true, aiGenerationId: true },
-    });
-    return created as StoredAsset;
-  } catch {
-    return null;
-  }
-}
 
 /** Alt text for a generated image: from the owner's own words, never invented (§27, §55). */
 function altFor(context: BusinessContext, request: StudioImageRequest, representative: boolean): string {
@@ -316,7 +295,15 @@ function altFor(context: BusinessContext, request: StudioImageRequest, represent
   return representative ? `${base} (JATA designed image)` : base;
 }
 
-export async function generateStudioImages(request: StudioImageRequest): Promise<GenerationOutcome> {
+export async function generateStudioImages(
+  request: StudioImageRequest,
+  options: { assetStore?: ImageAssetStore } = {},
+): Promise<GenerationOutcome> {
+  // Fail before business/context reads, quota writes, generation records, or provider calls unless
+  // an approved durable adapter is explicitly supplied by the application. None is configured.
+  const assetStore = options.assetStore;
+  if (!assetStore) return mediaStorageUnavailable();
+
   const context = await loadBusinessContext(request.businessId, request.style || null);
   if (!context) return { status: "error", httpStatus: 404, error: "We couldn't find that business." };
 
@@ -425,7 +412,7 @@ export async function generateStudioImages(request: StudioImageRequest): Promise
     const alt = altFor(context, { ...request, subjectName }, representative);
     const stored: StoredAsset[] = [];
     for (const image of images) {
-      const asset = await storeAsset({
+      const asset = await assetStore({
         businessId: request.businessId,
         image,
         alt,
@@ -480,9 +467,10 @@ export async function generateStudioImages(request: StudioImageRequest): Promise
   }
 }
 
-export async function enhanceStudioImage(request: StudioEnhanceRequest): Promise<GenerationOutcome> {
-  const context = await loadBusinessContext(request.businessId);
-  if (!context) return { status: "error", httpStatus: 404, error: "We couldn't find that business." };
+export async function enhanceStudioImage(
+  request: StudioEnhanceRequest,
+  options: { assetStore?: ImageAssetStore } = {},
+): Promise<GenerationOutcome> {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]*)$/.exec(String(request.imageDataUrl || ""));
   if (!match) return { status: "error", httpStatus: 400, error: "Choose a photo to improve." };
   if (String(request.imageDataUrl).length > MAX_UPLOAD_CHARS) {
@@ -492,6 +480,11 @@ export async function enhanceStudioImage(request: StudioEnhanceRequest): Promise
       error: "That photo is too large to improve. JATA can optimize it on your phone first — try uploading it again.",
     };
   }
+
+  const assetStore = options.assetStore;
+  if (!assetStore) return mediaStorageUnavailable();
+  const context = await loadBusinessContext(request.businessId);
+  if (!context) return { status: "error", httpStatus: 404, error: "We couldn't find that business." };
 
   const applied = (request.applied || []).filter(Boolean).slice(0, 6);
 
@@ -507,7 +500,7 @@ export async function enhanceStudioImage(request: StudioEnhanceRequest): Promise
       providerKey: "device-canvas",
       modelKey: "jata-photo-editor-v1",
     });
-    const asset = await storeAsset({
+    const asset = await assetStore({
       businessId: request.businessId,
       image: {
         dataUrl: request.imageDataUrl,
@@ -580,7 +573,7 @@ export async function enhanceStudioImage(request: StudioEnhanceRequest): Promise
     );
     const stored: StoredAsset[] = [];
     for (const image of images) {
-      const asset = await storeAsset({
+      const asset = await assetStore({
         businessId: request.businessId,
         image,
         alt: null,

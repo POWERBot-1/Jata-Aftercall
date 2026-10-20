@@ -92,6 +92,15 @@ describe("POST /api/experience/assist uses the authorised business's draft", () 
     expect(mocks.copyCalls).toHaveLength(0);
   });
 
+  it("rejects an inline image hidden in copy notes before draft or provider persistence", async () => {
+    const res = await POST(request(ask("biz-a", { notes: "Brand reference data:image/png;base64,iVBORw0KGgo=" })));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: "inline_media_persistence_disabled" });
+    expect(mocks.experienceFindArgs).toHaveLength(0);
+    expect(mocks.copyCalls).toHaveLength(0);
+    expect(mocks.writes).toHaveLength(0);
+  });
+
   it("reads the draft only for the authorised businessId", async () => {
     mocks.experience = { draftJson: draftWithSeed("biz-a:4"), categoryKey: "food" };
     await POST(request(ask("biz-a")));

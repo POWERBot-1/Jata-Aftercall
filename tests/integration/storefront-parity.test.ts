@@ -116,6 +116,7 @@ const item = (quantity: number, productId = "p1") => ({ productId, quantity });
 const pickup = (items: unknown[], extra: Record<string, unknown> = {}) => ({ slug: "choma-place", items, fulfilment: "PICKUP", ...extra });
 
 beforeEach(() => {
+  vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
   vi.useRealTimers();
   mocks.products = [product()];
   mocks.bulk = [];

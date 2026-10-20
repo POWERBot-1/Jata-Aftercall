@@ -1,23 +1,28 @@
 /**
  * Media library API (§18, §19, §20, §41, §47)
  *
- * Upload, search, re-tag, reuse and delete the images a business owns. The contract that the
+ * Register external references, search, re-tag and delete the images a business owns. The contract that the
  * Studio's mobile picker depends on:
  *
  *   POST { businessId, dataUrl | url, alt?, kind?, source?, label?, width?, height? }
+ *        `dataUrl` remains a validated legacy input but is refused before persistence; `url`
+ *        accepts a hosted or local-path reference and creates metadata only.
+ *   PATCH { id, expectedVersion, alt?, kind?, label? }
  *
- * `dataUrl` is what the on-device pipeline produces after it has rotated, resized and
- * re-encoded the photo. `url` remains supported so an existing library asset can be reused
- * without re-uploading it. Both are validated by *content*: the bytes are sniffed, not the
- * filename or the browser's MIME guess, and a file whose real format contradicts its declared
- * type is rejected (§41).
+ * Metadata edits use a monotonic version counter and a tenant-scoped conditional update, so stale
+ * windows cannot silently replace newer descriptions.
  *
- * Only raster formats every phone renders are stored: JPEG, PNG, WebP and GIF. SVG is refused
- * outright — it is a script vector, not a photograph.
+ * Legacy `dataUrl` uploads are still validated so clients get accurate format/corruption errors,
+ * then refused with 503 because no approved durable media provider is configured. Existing inline
+ * assets remain readable. `url` accepts hosted/path references only; it never accepts a data URL.
+ *
+ * Raster formats are JPEG, PNG, WebP and GIF. SVG is refused outright — it is a script vector,
+ * not a photograph. No new image bytes are written to Neon.
+ *
+ * Mutations require the business `configure` role; VIEWER access remains read-only.
  */
 
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
@@ -25,7 +30,8 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { sanitizeText } from "@/lib/validation";
 import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, readImageDimensions, sniffImageFormat, validateImageBytes } from "@/lib/media/imageFormat";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, isInlineImageDataUrl } from "@/lib/media/persistence-policy";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, validateImageBytes } from "@/lib/media/imageFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +41,32 @@ const ALLOWED_LABELS = ["ACTUAL", "AI_GENERATED", "REPRESENTATIVE"];
 
 const ASSET_SELECT = {
   id: true, url: true, kind: true, alt: true, width: true, height: true, bytes: true,
-  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true,
+  mime: true, source: true, label: true, aiGenerationId: true, createdAt: true, version: true,
 } as const;
 
-function hashBytes(bytes: Uint8Array): string {
-  return crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
+const MEDIA_VERSION_INVALID_CODE = "media_version_invalid";
+const MEDIA_VERSION_INVALID_MESSAGE = "The image version is invalid. Reload the page and try again. Nothing was changed.";
+const MEDIA_VERSION_CONFLICT_CODE = "media_version_conflict";
+const MEDIA_VERSION_CONFLICT_MESSAGE = "This image changed in another window. Reload to see the latest version, then try again. Nothing was overwritten.";
+const MAX_MEDIA_VERSION = 2_147_483_647;
+
+
+/** Parse a non-negative PostgreSQL INTEGER version token without coercing timestamps or fractions. */
+function parseExpectedVersion(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 0 && value <= MAX_MEDIA_VERSION ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!/^\d{1,10}$/.test(raw)) return null;
+  const parsed = Number(raw);
+  return parsed <= MAX_MEDIA_VERSION ? parsed : null;
+}
+
+/** Old/test fixtures without the additive field resolve to its schema default, version 0. */
+function storedVersion(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_MEDIA_VERSION ? parsed : 0;
 }
 
 function normalizeKind(value: unknown): string {
@@ -113,35 +140,30 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardTenantMutation(session, businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const kind = normalizeKind(body?.kind);
     const alt = sanitizeText(String(body?.alt || ""), 160);
+    if (containsInlineImageDataUrl(alt)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const source = normalizeSource(body?.source);
     const label = normalizeLabel(body?.label);
-    const requestedWidth = Number(body?.width);
-    const requestedHeight = Number(body?.height);
 
-    // The picker sends `dataUrl`; older callers sent `url`, and library reuse sends a stored
-    // URL. Accepting both names is what makes the mobile upload path work end to end (§19).
+    // Legacy clients may still submit `dataUrl`. Validate supported formats and corruption for
+    // an actionable response, but never write those bytes into Neon. Existing library rows remain
+    // readable through GET; only remote/image-path references can create new metadata rows.
     const raw = String(body?.dataUrl || body?.url || "");
-
-    let url = "";
-    let hash: string | null = null;
-    let bytes: number | null = null;
-    let width: number | null = Number.isFinite(requestedWidth) && requestedWidth > 0 ? Math.round(requestedWidth) : null;
-    let height: number | null = Number.isFinite(requestedHeight) && requestedHeight > 0 ? Math.round(requestedHeight) : null;
-    let mime: string | null = null;
-
-    if (raw.startsWith("data:")) {
-      if (raw.length > MAX_UPLOAD_CHARS) {
+    const candidate = raw.trim();
+    if (/^data:/i.test(candidate)) {
+      if (candidate.length > MAX_UPLOAD_CHARS) {
         return NextResponse.json(
-          { error: `This photo is too large (${humanFileSize((raw.length * 3) / 4)}). JATA can shrink it automatically — try again and we will optimize it.` },
+          { error: `This photo is too large (${humanFileSize((candidate.length * 3) / 4)}). JATA can shrink it automatically — try again and we will optimize it.` },
           { status: 413 },
         );
       }
-      const parsed = parseImageDataUrl(raw);
+      const parsed = parseImageDataUrl(candidate);
       if (!parsed) {
         return NextResponse.json(
           { error: "We couldn't read that image. Upload a JPG, PNG, WebP or GIF photo." },
@@ -152,60 +174,52 @@ export async function POST(req: Request) {
       if (verdict.status !== "ok") {
         return NextResponse.json({ error: verdict.issue.message, code: verdict.issue.code }, { status: verdict.issue.code === "too_large" ? 413 : 400 });
       }
-      url = raw;
-      mime = verdict.facts.mime;
-      bytes = verdict.facts.bytes;
-      width = width ?? verdict.facts.width;
-      height = height ?? verdict.facts.height;
-      hash = hashBytes(parsed.bytes);
-    } else {
-      const safe = safeUrl(raw);
-      if (!safe) {
-        return NextResponse.json({ error: "That image could not be read. Upload a JPG, PNG or WebP photo." }, { status: 400 });
-      }
-      url = safe;
-      if (safe.startsWith("data:")) {
-        const parsed = parseImageDataUrl(safe);
-        if (parsed) {
-          mime = parsed.format === "jpeg" ? "image/jpeg" : `image/${parsed.format}`;
-          bytes = parsed.bytes.length;
-          hash = hashBytes(parsed.bytes);
-          const dims = readImageDimensions(parsed.bytes, parsed.format);
-          width = width ?? dims?.width ?? null;
-          height = height ?? dims?.height ?? null;
-        }
-      }
+      return NextResponse.json(
+        { error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE },
+        { status: 503 },
+      );
     }
 
-    // Identical pixels are reused rather than stored twice (§19).
-    if (hash) {
-      const existing = await prisma.mediaAsset.findFirst({
-        where: { businessId, hash },
-        select: { id: true, url: true, alt: true, width: true, height: true, source: true, label: true },
-      });
-      if (existing) {
-        if (alt && alt !== existing.alt) {
-          await prisma.mediaAsset.update({ where: { id: existing.id }, data: { alt, kind } });
-        }
-        return NextResponse.json({ asset: { ...existing, alt: alt || existing.alt, kind }, reused: true });
-      }
+    const url = safeUrl(candidate);
+    if (!url) {
+      return NextResponse.json({ error: "That image could not be read. Upload a JPG, PNG or WebP photo." }, { status: 400 });
+    }
+    // Defense in depth for schemes accepted by the URL normalizer.
+    if (isInlineImageDataUrl(url)) {
+      return NextResponse.json(
+        { error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE },
+        { status: 503 },
+      );
+    }
+
+    const widthValue = Number(body?.width);
+    const heightValue = Number(body?.height);
+    const width = Number.isFinite(widthValue) && widthValue > 0 ? Math.round(widthValue) : null;
+    const height = Number.isFinite(heightValue) && heightValue > 0 ? Math.round(heightValue) : null;
+    const bytes: number | null = null;
+    const mime: string | null = null;
+    const assetData = {
+      businessId,
+      url,
+      kind,
+      alt: alt || null,
+      width,
+      height,
+      bytes,
+      hash: null,
+      mime,
+      source,
+      label,
+      aiGenerationId: typeof body?.aiGenerationId === "string" ? body.aiGenerationId.slice(0, 40) : null,
+    };
+    // Check the exact row immediately before persistence: aiGenerationId is caller-controlled
+    // metadata, even when the image URL itself is a safe path.
+    if (containsInlineImageDataUrl(assetData)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
     const asset = await prisma.mediaAsset.create({
-      data: {
-        businessId,
-        url,
-        kind,
-        alt: alt || null,
-        width,
-        height,
-        bytes,
-        hash,
-        mime,
-        source,
-        label,
-        aiGenerationId: typeof body?.aiGenerationId === "string" ? body.aiGenerationId.slice(0, 40) : null,
-      },
+      data: assetData,
       select: ASSET_SELECT,
     });
     await logAudit({
@@ -225,6 +239,7 @@ export async function POST(req: Request) {
 /**
  * PATCH — alt text, folder/kind and the "is this the real product?" label (§18, §27).
  * A library asset id is never trusted: the stored row decides which tenant may change it.
+ * Every edit carries the version it was made from and writes only if that version is still current.
  */
 export async function PATCH(req: Request) {
   const session = await getSession();
@@ -234,21 +249,67 @@ export async function PATCH(req: Request) {
     const id = typeof body?.id === "string" ? body.id.trim() : "";
     if (!id) return NextResponse.json({ error: "Choose an image to update." }, { status: 400 });
 
-    const asset = await prisma.mediaAsset.findUnique({ where: { id }, select: { id: true, businessId: true } });
+    const asset = await prisma.mediaAsset.findUnique({
+      where: { id },
+      select: { id: true, businessId: true, version: true },
+    });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, asset.businessId);
+    const guard = await guardTenantMutation(session, asset.businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+    // Authorization intentionally precedes version validation so unauthorized callers do not
+    // learn the row's concurrency state. Version-aware clients send the snapshot they edited;
+    // omission remains compatible with older API callers and uses the version just read below.
+    const hasExpectedVersion = Object.prototype.hasOwnProperty.call(body, "expectedVersion");
+    const parsedExpectedVersion = parseExpectedVersion(body?.expectedVersion);
+    if (hasExpectedVersion && parsedExpectedVersion === null) {
+      return NextResponse.json(
+        { error: MEDIA_VERSION_INVALID_MESSAGE, code: MEDIA_VERSION_INVALID_CODE },
+        { status: 400 },
+      );
+    }
+    const currentVersion = storedVersion(asset.version);
+    const expectedVersion = parsedExpectedVersion ?? currentVersion;
 
     const data: Record<string, unknown> = {};
     if (body?.alt !== undefined) data.alt = sanitizeText(String(body.alt || ""), 160) || null;
     if (body?.kind !== undefined) data.kind = normalizeKind(body.kind);
     if (body?.label !== undefined) data.label = normalizeLabel(body.label);
 
+    if (containsInlineImageDataUrl(data)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
     }
 
-    const updated = await prisma.mediaAsset.update({ where: { id }, data, select: ASSET_SELECT });
+    if (currentVersion !== expectedVersion) {
+      return NextResponse.json(
+        { error: MEDIA_VERSION_CONFLICT_MESSAGE, code: MEDIA_VERSION_CONFLICT_CODE },
+        { status: 409 },
+      );
+    }
+
+    // The condition and increment are part of the same UPDATE. The earlier read is only a fast
+    // path; this tenant-scoped compare-and-swap is what prevents a concurrent last-writer-wins.
+    const applied = await prisma.mediaAsset.updateMany({
+      where: { id, businessId: asset.businessId, version: expectedVersion },
+      data: { ...data, version: { increment: 1 } },
+    });
+    if (applied.count !== 1) {
+      return NextResponse.json(
+        { error: MEDIA_VERSION_CONFLICT_MESSAGE, code: MEDIA_VERSION_CONFLICT_CODE },
+        { status: 409 },
+      );
+    }
+
+    const updated = await prisma.mediaAsset.findUnique({ where: { id }, select: ASSET_SELECT });
+    if (!updated) {
+      return NextResponse.json(
+        { error: MEDIA_VERSION_CONFLICT_MESSAGE, code: MEDIA_VERSION_CONFLICT_CODE },
+        { status: 409 },
+      );
+    }
     await logAudit({
       actorId: session.userId,
       action: "MEDIA_UPDATED",
@@ -279,7 +340,7 @@ export async function DELETE(req: Request) {
       });
       const first = rows[0];
       if (!first) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-      const guard = await guardTenantMutation(session, first.businessId);
+      const guard = await guardTenantMutation(session, first.businessId, "configure");
       if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
       const result = await prisma.mediaAsset.deleteMany({ where: { businessId: first.businessId, aiGenerationId: generationId } });
       await logAudit({ actorId: session.userId, action: "MEDIA_DELETED", targetType: "AI_GENERATION", targetId: generationId, metadata: { businessId: first.businessId, count: result?.count ?? rows.length } });
@@ -288,7 +349,7 @@ export async function DELETE(req: Request) {
 
     const asset = await prisma.mediaAsset.findUnique({ where: { id }, select: { id: true, businessId: true } });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, asset.businessId);
+    const guard = await guardTenantMutation(session, asset.businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     await prisma.mediaAsset.delete({ where: { id } });
     await logAudit({ actorId: session.userId, action: "MEDIA_DELETED", targetType: "MEDIA_ASSET", targetId: id, metadata: { businessId: asset.businessId } });
@@ -297,5 +358,3 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
   }
 }
-
-/** Exposed for tests and for the Studio's own pre-flight checks. */

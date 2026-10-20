@@ -5,6 +5,7 @@
  * (version N+1 or later), and must never touch another tenant's row.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createExperienceDocument } from "@/lib/experience/document";
 
 const mocks = vi.hoisted(() => ({
   session: { userId: "user-a", role: "OWNER" } as any,
@@ -78,6 +79,16 @@ describe("PATCH draft concurrency", () => {
     const args = mocks.experienceUpdate.mock.calls[0][0];
     expect(args.where).toEqual({ businessId: OWNED, draftVersion: 3 });
     expect(args.data.draftVersion).toBe(4);
+  });
+
+  it("refuses a draft containing inline image bytes before any document/history write", async () => {
+    const document = createExperienceDocument({ categoryKey: "food", businessName: "Choma Place" });
+    document.brand.heroImageUrl = "data:image/png;base64,iVBORw0KGgo=";
+    const response = await PATCH(patch({ businessId: OWNED, document, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
 
   it("refuses a stale preview with 409 and does not write, so a newer draft is never overwritten", async () => {

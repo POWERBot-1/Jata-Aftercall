@@ -10,6 +10,7 @@
  * See `lib/demoData.ts` for the exact boundary and the rows it refuses to overwrite.
  */
 import { PrismaClient } from "@prisma/client";
+import { installInlineMediaPrismaWritePolicy } from "../lib/media/prisma-write-policy";
 import { DEMO_SLUGS, restoreDemoBusinesses, type DemoDb } from "../lib/demoData";
 
 async function main() {
@@ -18,7 +19,7 @@ async function main() {
     process.exit(2);
   }
   const apply = process.argv.includes("--apply");
-  const prisma = new PrismaClient();
+  const prisma = installInlineMediaPrismaWritePolicy(new PrismaClient());
   try {
     console.log(`Demo restore (${apply ? "APPLY" : "dry run"}) for: ${DEMO_SLUGS.join(", ")}`);
     const report = await restoreDemoBusinesses(prisma as unknown as DemoDb, { apply, ownerEmail: process.env.DEMO_OWNER_EMAIL });
