@@ -130,6 +130,24 @@ test("a complete catalog satisfies every expectation", () => {
   assert.equal(checks.length, CANDIDATE_EXPECTATIONS.length);
 });
 
+test("constraint definitions are compared without identifier quoting", () => {
+  // pg_get_constraintdef quotes only what needs quoting: a primary key on a
+  // lowercase column renders unquoted, a mixed-case table renders quoted.
+  const unquoted = structuredClone(SNAPSHOT_OK);
+  unquoted.constraints.find((row) => row.contype === "p").definition = "PRIMARY KEY (id)";
+  assert.deepEqual(evaluateSnapshot(unquoted).filter((check) => !check.ok), []);
+
+  const mixedCase = structuredClone(SNAPSHOT_OK);
+  mixedCase.constraints.find((row) => row.contype === "f").definition =
+    'FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE';
+  assert.deepEqual(evaluateSnapshot(mixedCase).filter((check) => !check.ok), []);
+
+  const missingCascade = structuredClone(SNAPSHOT_OK);
+  missingCascade.constraints.find((row) => row.contype === "f").definition =
+    'FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE';
+  assert.equal(evaluateSnapshot(missingCascade).filter((check) => !check.ok).length, 1);
+});
+
 test("each expectation can fail on its own", () => {
   const withoutVersion = structuredClone(SNAPSHOT_OK);
   withoutVersion.columns = withoutVersion.columns.filter((row) => row.column_name !== "version");

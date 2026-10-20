@@ -316,7 +316,13 @@ export function evaluateSnapshot(snapshot, expectations = CANDIDATE_EXPECTATIONS
         continue;
       }
       const row = candidates[0];
-      const missing = (expectation.definitionIncludes ?? []).filter((fragment) => !row.definition.includes(fragment));
+      // PostgreSQL quotes an identifier only when it needs quoting, so the same
+      // constraint can render as PRIMARY KEY ("id") or PRIMARY KEY (id)
+      // depending on the column name. Compare with quotes and spacing removed.
+      const squash = (text) => String(text).replace(/"/g, "").replace(/\s+/g, " ").trim();
+      const missing = (expectation.definitionIncludes ?? []).filter(
+        (fragment) => !squash(row.definition).includes(squash(fragment)),
+      );
       checks.push({
         name: `constraint ${row.conname}`,
         ok: missing.length === 0,
@@ -941,10 +947,37 @@ function main() {
     fail("`prisma generate` can run", error.message);
   }
 
+  // The release gate seeds its disposable database before running the suites,
+  // because several tests assert on seeded pricing and entitlement data. A
+  // rehearsal that skips the seed reports those tests as failures of the
+  // candidate when they are failures of the harness.
+  let seeded = false;
+  try {
+    const seed = run("npm", ["run", "seed"], { cwd: candidateDir, env, timeout: 300000 });
+    if (seed.status === 0) {
+      pass("the candidate seed runs against the migrated database");
+      seeded = true;
+    } else {
+      blocked(
+        "the candidate seed runs against the migrated database",
+        `exit ${seed.status}: ${sanitise(seed.output).trim().split("\n").slice(-6).join(" | ").slice(0, 400)}`,
+      );
+    }
+  } catch (error) {
+    blocked("the candidate seed runs against the migrated database", error.message);
+  }
+
   for (const [label, script] of [
     ["typecheck", "typecheck"],
     ["test suite", "test"],
   ]) {
+    if (script === "test" && !seeded) {
+      blocked(
+        "the candidate test suite passes",
+        "the disposable database was not seeded, so a data-dependent failure would not be a statement about the candidate",
+      );
+      continue;
+    }
     try {
       const result = run("npm", ["run", script], { cwd: candidateDir, env, timeout: 900000 });
       const plain = sanitise(result.output);
