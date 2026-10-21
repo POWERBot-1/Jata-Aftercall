@@ -164,3 +164,89 @@ These are the only steps that can turn `BLOCKED` into `PASS` or `FAIL`:
 No snapshot, no restore, no reset, no retention change, no branch creation, no
 plan change, and no production credential was used or requested. The deployment
 boundary in `docs/RELEASE-GATE-PROPOSAL.md` remains **PROPOSED**, not adopted.
+
+---
+
+## Operator checklist — 2026-10-21
+
+Tick each line only with something actually read from the Neon console. A value
+that was assumed is not a value; leave it blank and keep the label `BLOCKED`.
+
+### A. Recovery points and retention
+
+- [ ] Open the project → **Branches** → `production`. Record the branch **ID**
+      (e.g. `br-cold-snow-ax606swa`) and whether a parent branch is listed.
+      → R1 is `PASS` only while no parent is shown.
+- [ ] Open **Restore** / *Recovery* for `production`. Record the **earliest**
+      restorable timestamp exactly as displayed, and the latest.
+      → this is R2. A plan table is not a substitute; the console's own range is.
+- [ ] Record whether *point-in-time* and *branch restore* are both offered, and
+      which one the console defaults to.
+- [ ] Open **Backups / Snapshots**. Record every entry: timestamp, size, and
+      whether it is manual or scheduled.
+      → this is R3. An entry in *History usage* is not a snapshot.
+- [ ] Record the **history retention window** shown for the branch. → R4.
+
+### B. Restore procedure, and its actual effect on production
+
+- [ ] Read the console's own description of what the restore will replace before
+      clicking anything. Write down: **branch restored**, **point selected**,
+      **whether the branch ID changes**, **whether PITR is preserved**.
+- [ ] Known behaviour to confirm rather than assume: a one-step restore **keeps the
+      branch name and connection URL but changes the branch ID**, and **disables
+      PITR on the newly restored branch**. If the console says otherwise, the
+      console wins — record its wording.
+- [ ] Confirm whether the restore **overwrites** the branch or creates a new one.
+      Overwrite-not-merge is the documented behaviour; verify it here.
+- [ ] **Do not restore `production` to establish any of the above.** A restore is a
+      destructive, whole-branch operation. Rehearse on a scratch branch only:
+
+  ```
+  1. create scratch branch  → note its ID and its connection string
+  2. write one sentinel row through the application
+  3. restore the scratch branch to a timestamp BEFORE the sentinel
+  4. read back: sentinel absent, older rows present, new branch ID shown
+  5. delete the scratch branch
+  ```
+
+  → R5 becomes `PASS` only after step 4 is recorded.
+
+### C. Cost — a quote is not a guarantee
+
+- [ ] Record the **current plan** name and whether any snapshot storage is already
+      charged on the account.
+- [ ] If a snapshot is proposed, record the console's projected **size** and any
+      **projected charge** it displays. If the console shows none, write
+      "no account-specific projection shown" — do not substitute a list rate.
+- [ ] Distinguish explicitly, in the record:
+
+  | Claim | Status |
+  |---|---|
+  | List rate is $0.09/GB-month | published rate, **not** an account charge |
+  | Worst-case snapshot ≈ 45.73 MB ≈ 4.6 % of a 1 GB allowance | arithmetic on a plan description |
+  | Actual charge to this account | **unknown until a snapshot exists and a bill is issued** |
+
+  → the earlier "$0" wording is withdrawn. The correct label is **`NOT TESTED`**.
+
+### D. Ownership and post-recovery verification
+
+- [ ] Name the person accountable for executing a restore, and the person who
+      authorizes it. One person doing both is a finding, not a plan.
+- [ ] Record the **maximum acceptable data loss** (RPO) the business will accept,
+      and compare it with the observed retention window. If RPO > retention, that
+      is a `FAIL`, not a gap.
+- [ ] Write the post-recovery check **before** any restore is needed:
+      1. `/health` returns `{"status":"ok","db":"up"}`;
+      2. the smoke procedure in `docs/release/PRODUCTION-SMOKE-PROCEDURE.md` passes;
+      3. a known row written before the restore point is present;
+      4. a known row written after it is absent;
+      5. the application's migrations report `Database schema is up to date`.
+- [ ] Confirm who can see this record after a recovery, and where it lives. It is
+      in the repository, so it survives the incident — but only if it is committed.
+
+### What remains `BLOCKED` regardless of this checklist
+
+R2, R3 and R5 cannot be closed from the review environment: no Neon connector, no
+resolution of `api.neon.tech`, and no credential. This is a capability boundary,
+not an omission. Any line ticked above must carry the operator's name and a
+timestamp, or it is not evidence.
