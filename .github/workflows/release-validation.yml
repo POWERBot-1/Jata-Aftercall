@@ -287,13 +287,19 @@ jobs:
           set -o pipefail
           # Exit code 2 means the migrated database differs from schema.prisma.
           #
-          # This repository has pre-existing divergence, discovered by this gate
-          # on 2026-10-20 and recorded in scripts/ci/schema-drift-baseline.json.
-          # The check therefore fails on drift that is NOT recorded (and on a
-          # baseline that has gone stale), rather than being permanently red on
-          # debt unrelated to the change under review. The recorded debt is
-          # reported as FAIL in the accompanying report — the baseline is not an
-          # approval.
+          # The 2026-10-20 divergence discovered by this gate used to be recorded
+          # in scripts/ci/schema-drift-baseline.json. It has since been reconciled
+          # in prisma/schema.prisma, so the baseline records no accepted debt and
+          # this step normally passes at the exit-0 branch below.
+          #
+          # The comparison is deliberately kept rather than switched off: if
+          # drift ever returns it must fail here, and if a recorded entry is left
+          # behind after being fixed, `check-schema-drift.mjs` fails on the stale
+          # entry. Keeping the baseline mechanism empty is not the same as
+          # removing it, and only one of those is a safety check.
+          #
+          # The failure branch of this gate is exercised by Control 9 in
+          # failure-path-controls.
           set +e
           npx prisma migrate diff \
             --from-schema-datasource prisma/schema.prisma \
@@ -544,6 +550,59 @@ jobs:
           fi
           echo "PASS: invalid migration rejected with exit $status"
 
+      - name: "Control 9 — the drift gate still fails when drift is reintroduced"
+        run: |
+          set -o pipefail
+          # The drift baseline was emptied when the six divergences were
+          # reconciled. An empty baseline must not become a gate that cannot
+          # fail: "0 drift, 0 recorded findings" passes trivially if the
+          # comparison itself has stopped working.
+          #
+          # So reintroduce divergence #1 — MediaAsset.updatedAt loses
+          # @default(now()) again — in a scratch copy of the schema. The
+          # repository is never modified. The database below was built from the
+          # committed migrations by Control 1, so it still has the
+          # CURRENT_TIMESTAMP default that the mutant no longer describes.
+          node -e '
+            const fs = require("node:fs");
+            const reconciled = "updatedAt  DateTime @updatedAt @default(now())";
+            const source = fs.readFileSync("prisma/schema.prisma", "utf8");
+            if (!source.includes(reconciled)) {
+              console.error("::error::the control cannot run: the reconciled updatedAt line is absent from prisma/schema.prisma");
+              process.exit(1);
+            }
+            fs.writeFileSync("/tmp/mutant.prisma", source.replace(reconciled, "updatedAt  DateTime @updatedAt"));
+          '
+          set +e
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel /tmp/mutant.prisma \
+            --exit-code > /tmp/step-control-drift.log 2>&1
+          diff_status=$?
+          set -e
+          cat /tmp/step-control-drift.log
+          if [ "$diff_status" -ne 2 ]; then
+            echo "::error::FAIL: migrate diff did not report the reintroduced drift (exit $diff_status)"
+            exit 1
+          fi
+
+          set +e
+          node scripts/ci/check-schema-drift.mjs /tmp/step-control-drift.log > /tmp/step-control-drift-baseline.log 2>&1
+          baseline_status=$?
+          set -e
+          cat /tmp/step-control-drift-baseline.log
+          if [ "$baseline_status" -ne 1 ]; then
+            echo "::error::FAIL: an empty baseline accepted new drift (exit $baseline_status) — the drift gate no longer discriminates"
+            exit 1
+          fi
+
+          # The discriminating half: a clean diff against the same empty baseline
+          # must pass. Without this, "it failed" could just mean "it always
+          # fails", which protects nothing.
+          : > /tmp/step-control-drift-clean.log
+          node scripts/ci/check-schema-drift.mjs /tmp/step-control-drift-clean.log | tee /tmp/step-control-drift-clean-baseline.log
+          echo "PASS: new drift fails the gate and no drift passes it (the gate discriminates)"
+
       - name: "Control 2 — the verifier must fail on a database with no migrations"
         run: |
           set -o pipefail
@@ -653,10 +712,32 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  schema-reconciliation-proposal:
-    name: Schema reconciliation proposal closes the drift
+  schema-reconciliation:
+    name: Reconciled schema holds on PostgreSQL 18
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
+    # WHAT THIS JOB ASSERTS, AND WHY IT CHANGED
+    # -----------------------------------------
+    # Until the six divergences were reconciled, this job proved a *proposal*:
+    # it applied `docs/schema-reconciliation/reconciliation.patch` to the
+    # checkout, showed that the patch closed the drift, and then discarded it.
+    # That was the right thing to assert while `main` still carried the
+    # divergence.
+    #
+    # Now the reconciliation is the committed datamodel, so the same procedure
+    # would fail for a reason that is no longer a defect:
+    #   * `git apply` fails — the patch is already applied;
+    #   * the pre-patch drift assertion expects `migrate diff` to exit 2, and the
+    #     reconciled schema makes it exit 0.
+    #
+    # This job therefore asserts the reconciled state directly, and keeps every
+    # guarantee the proposal job carried: full migration history on PostgreSQL
+    # 18, zero drift with no DDL, the two-sided justification check, a client
+    # generated from the reconciled datamodel, typecheck, and the whole suite.
+    # The negative half — that the drift gate still fails when drift exists —
+    # is Control 9 in `failure-path-controls`, because that job is where the
+    # gate's failure branches are exercised.
 
     permissions:
       contents: read
@@ -707,69 +788,65 @@ jobs:
       - name: Apply the complete migration history
         run: npx prisma migrate deploy
 
-      - name: Confirm the recorded baseline still describes reality
+      - name: Migration status reports no pending or failed migrations
         run: |
           set -o pipefail
-          # If this fails, the baseline has gone stale and the main gate is
-          # asserting something untrue. Fail here rather than there.
-          set +e
-          npx prisma migrate diff \
-            --from-schema-datasource prisma/schema.prisma \
-            --to-schema-datamodel prisma/schema.prisma \
-            --exit-code 2>&1 | tee /tmp/step-recon-before.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 2 ]; then
-            echo "::error::FAIL: expected the recorded drift (exit 2), got exit $status — the baseline is stale"
+          npx prisma migrate status 2>&1 | tee /tmp/step-recon-status.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-recon-status.log)
+          if printf '%s' "$plain" | grep -qiE 'failed migration|following migration'; then
+            echo "::error::FAIL: migration status reports a pending or failed migration"
             exit 1
           fi
-          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-before.log
+          if ! printf '%s' "$plain" | grep -qi 'Database schema is up to date'; then
+            echo "::error::FAIL: migration status did not report an up-to-date schema"
+            exit 1
+          fi
+          echo "PASS: schema up to date, no pending or failed migrations"
 
-      - name: Apply the proposed reconciliation to the schema only
+      - name: The committed datamodel matches the migration history exactly
         run: |
           set -o pipefail
-          git apply --verbose docs/schema-reconciliation/reconciliation.patch
-          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
-
-      - name: Apply the companion test change the reconciliation requires
-        run: |
-          set -o pipefail
-          # `tests/unit/pos-schema.test.ts` asserts that PosReceiptSequence's key is
-          # `@unique`. The committed migration declares it the PRIMARY KEY, so the
-          # test locks the divergence in place. It cannot be changed on the
-          # unreconciled branch — that would break the normal gate — so it travels
-          # with the reconciliation and is applied only here.
-          #
-          # The change is a strengthening, not a relaxation: `@id` implies
-          # uniqueness and adds NOT NULL, and the patch additionally rejects
-          # `@id @unique` on the same column.
-          git apply --verbose docs/schema-reconciliation/reconciliation-tests.patch
-
-      - name: The proposal must close the drift completely
-        run: |
-          set -o pipefail
+          # No patch is applied here. The point of this job is that the schema on
+          # disk *is* the reconciled one, so `migrate diff` must already return
+          # nothing against a database built from the committed migrations.
           set +e
           npx prisma migrate diff \
             --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
-            --exit-code 2>&1 | tee /tmp/step-recon-after.log
+            --exit-code 2>&1 | tee /tmp/step-recon-drift.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            echo "::error::FAIL: the proposal does not reconcile the schema (exit $status)"
-            cat /tmp/step-recon-after.log
+            echo "::error::FAIL: the committed datamodel and the migration history disagree (exit $status)"
+            cat /tmp/step-recon-drift.log
             exit 1
           fi
-          echo "PASS: migrations + proposed schema edit produce zero drift, with no DDL"
+          echo "PASS: migrations + committed datamodel produce zero drift, with no DDL"
+
+      - name: The drift baseline is empty because there is no drift left to record
+        run: |
+          set -o pipefail
+          # The baseline still exists — it is the mechanism that makes new drift
+          # fail while recording debt deliberately. Its `entries` are empty
+          # because the six divergences are now fixed in the datamodel rather
+          # than described as accepted debt.
+          #
+          # This runs the real comparator against the real (zero-finding) diff.
+          # `check-schema-drift.mjs` fails when a recorded entry DISAPPEARS, so
+          # this step is also what makes a stale, non-empty baseline impossible
+          # to leave behind: shortening the baseline belongs to the change that
+          # reconciled the schema, and nowhere else.
+          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-drift.log | tee /tmp/step-recon-baseline.log
+          echo "PASS: the baseline and the reconciled datamodel agree — nothing recorded, nothing drifting"
 
       - name: Every edit describes an object the database already has
         run: |
           set -o pipefail
-          # Zero drift is not the same as a correct reconciliation. A patch can
-          # silence `migrate diff` by inventing a constraint the database does
-          # not have. This checks both sides of all six divergences: the
-          # database must contain the object, and the patched datamodel must
-          # assert it. The patch is still applied at this point.
+          # Zero drift is not the same as a correct reconciliation. A model edit
+          # can silence `migrate diff` by inventing a constraint the database
+          # does not have. This checks both sides of all six divergences: the
+          # database must contain the object, and the committed datamodel must
+          # assert it.
           #
           # The exit code is captured, and on failure the shell — not the
           # script — promotes the reason to annotations. A checker that fails
@@ -862,12 +939,17 @@ jobs:
           echo "::notice::reconciled suite — ${summary_line//'%'/'%25'}"
           echo "PASS: the application agrees with the reconciled datamodel"
 
-      - name: Restore the schema so later steps cannot inherit the proposal
+      - name: No step mutated a tracked file
         if: always()
         run: |
-          git checkout -- prisma/schema.prisma tests/unit/pos-schema.test.ts
-          git diff --exit-code -- prisma/schema.prisma tests/unit/pos-schema.test.ts
-          echo "PASS: prisma/schema.prisma and the companion test are restored"
+          set -o pipefail
+          # This job no longer edits the checkout — the reconciliation is
+          # committed — so there is nothing to restore. Asserting that instead
+          # of restoring is stronger: it would catch a future step that starts
+          # writing to tracked files and quietly changes what the next step
+          # tests.
+          git diff --exit-code --stat
+          echo "PASS: the checkout is byte-identical to the commit under test"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -876,12 +958,11 @@ jobs:
           path: /tmp/step-recon-*.log
           if-no-files-found: warn
           retention-days: 14
-
   # ───────────────────────────────────────────────────────────────────────────
   release-gate:
     name: Release gate (aggregate)
     if: always()
-    needs: [static-checks, migrations-pg18, production-build, failure-path-controls, schema-reconciliation-proposal]
+    needs: [static-checks, migrations-pg18, production-build, failure-path-controls, schema-reconciliation]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -892,7 +973,7 @@ jobs:
           MIGRATIONS: ${{ needs.migrations-pg18.result }}
           BUILD: ${{ needs.production-build.result }}
           NEGATIVE: ${{ needs.failure-path-controls.result }}
-          RECON: ${{ needs.schema-reconciliation-proposal.result }}
+          RECON: ${{ needs.schema-reconciliation.result }}
         run: |
           set -u
           failed=0
@@ -914,7 +995,7 @@ jobs:
           check "migrations-pg18" "$MIGRATIONS"
           check "production-build" "$BUILD"
           check "failure-path-controls" "$NEGATIVE"
-          check "schema-reconciliation-proposal" "$RECON"
+          check "schema-reconciliation" "$RECON"
 
           if [ "$failed" -ne 0 ]; then
             echo "RELEASE GATE: BLOCKED"

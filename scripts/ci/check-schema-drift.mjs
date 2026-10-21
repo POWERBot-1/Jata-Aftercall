@@ -118,7 +118,15 @@ function main(argv) {
     process.exit(1);
   }
 
-  console.log("PASS: the schema diff matches the recorded baseline exactly (recorded debt, not a clean schema)");
+  // Say which of the two passes this is. With entries in the baseline, a pass
+  // means "recorded debt that has not changed"; with none, it means the schema
+  // is actually clean. Collapsing both into one message would let a reader
+  // believe a clean result was an excused one, or the reverse.
+  if ((baseline.entries ?? []).length === 0) {
+    console.log("PASS: the schema diff is empty and the baseline records no accepted debt — nothing is being excused");
+  } else {
+    console.log("PASS: the schema diff matches the recorded baseline exactly (recorded debt, not a clean schema)");
+  }
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
