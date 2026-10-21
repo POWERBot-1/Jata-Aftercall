@@ -93,3 +93,74 @@
 `release-validation.yml` runs migrations on a **disposable PostgreSQL 18 container**. That proves the SQL applies, the ledger is complete, and the schema matches `schema.prisma`.
 
 It proves **nothing** about Neon: not branching, not point-in-time recovery, not the history window, not compute suspension, not provider-side DDL quirks. A container is not a Neon project, and no amount of green CI changes that.
+
+---
+
+## Addendum — 2026-10-21, closeout restatement
+
+Nothing in this document changed. This section records what was *re-checked* in
+the Rev. 5 closeout and what an authorized operator must still do. No snapshot
+was taken, no restore was attempted, no retention was changed, no cost was
+incurred, and no production database was read.
+
+### What this environment can and cannot observe
+
+| Attempt | Result |
+|---|---|
+| Neon connector tool | **`unsupported`** — no Neon connector is offered to this session |
+| `api.neon.tech` from the sandbox | does not resolve |
+| Neon credential in the environment | **none configured** |
+| Console observation of the project | **not possible from here** — the earlier R1/R4 `PASS` labels came from owner-provided console observations, and remain labelled as such |
+
+Consequence: every statement about the Neon project in this document is either
+owner-supplied or absent. There is no independent verification of R2, R3 or R5,
+and there is no way to obtain one from this sandbox.
+
+### Labels, restated without softening
+
+| # | Question | Label | Reason |
+|---|---|---|---|
+| R1 | Is `production` a root branch? | **PASS** | owner console observation, 2026-10-20 |
+| R2 | Actual restore range / PITR offered | **BLOCKED** | never observed; a plan allowance is not a reachable restore point |
+| R3 | Does a manual snapshot exist? | **BLOCKED** | never observed; history usage is not a snapshot |
+| R4 | History retention | **PASS** | 6 hours, owner console observation |
+| R5 | Has a restore been rehearsed? | **NOT TESTED** | no restore has ever been executed |
+
+R2 and R3 are `BLOCKED`, not `FAIL`: a capability that was never examined is not
+a capability that was found missing. R5 is `NOT TESTED` because nothing was
+attempted — the distinction matters, since `FAIL` would imply an attempt.
+
+### The $0 cost claim — corrected in wording
+
+An earlier draft described the snapshot cost as `$0`. What was actually computed
+is a **list-rate expectation**: `$0.09/GB-month × 0.0447 GB ≈ $0.0041/month`, and
+the Free plan carries no monthly charge, so the expected charge is zero. That is
+arithmetic against a published rate, not a verified invoice. No snapshot was
+taken, so nothing was billed and nothing was proven about billing. The label is
+**NOT TESTED**.
+
+### What an authorized operator must verify in the Neon console
+
+These are the only steps that can turn `BLOCKED` into `PASS` or `FAIL`:
+
+1. **Restore points (R2).** Open the production branch → *Restore* and read the
+   actual earliest restorable timestamp. Record it verbatim. Do not infer it
+   from the plan table.
+2. **Snapshot inventory (R3).** Open *Backups / Snapshots* and record whether any
+   manual snapshot exists, its timestamp, and its size.
+3. **Compute state.** Record whether the compute is suspended and what wakes it,
+   since a suspended compute changes what a restore would cost in time.
+4. **Restore rehearsal (R5) — destructive-adjacent, do this only on a scratch
+   branch.** Restore a *branch* to a timestamp, confirm the data, then delete the
+   scratch branch. Record the before/after branch IDs. A one-step restore keeps
+   the name and URL but **changes the branch ID and disables PITR on the new
+   branch** — so it is not a harmless operation and must not be pointed at
+   production.
+5. **Confirm ownership.** The connector is unavailable from this sandbox, so the
+   operator is the only party who can authenticate.
+
+### Explicitly out of scope for this closeout
+
+No snapshot, no restore, no reset, no retention change, no branch creation, no
+plan change, and no production credential was used or requested. The deployment
+boundary in `docs/RELEASE-GATE-PROPOSAL.md` remains **PROPOSED**, not adopted.

@@ -93,3 +93,103 @@ Requiring only `Release gate (aggregate)` at Stage 2 is deliberate: it aggregate
 | 4 | Schedule the Stage 2 switch after the PR #49 rebase | **No action** |
 
 **I have not created the ruleset.** The token has `admin: true`, so I *could*; the order requires owner approval first, and that is the correct ordering.
+
+---
+
+## Addendum — 2026-10-21, verified against the live API
+
+Everything in this section was read from the GitHub API in this closeout. No
+setting was changed.
+
+### Current effective state
+
+| Fact | Value | How |
+|---|---|---|
+| `main` protected | **`false`** | `GET /branches/main` → `protected: false` |
+| Rulesets | **`[]`** (none) | `GET /rulesets` |
+| Effective rules on `main` | **`[]`** (none) | `GET /rules/branches/main` |
+| Classic protection API | **403** "Resource not accessible by integration" | `GET /branches/main/protection` |
+| Environment `Preview` | **0** protection rules | `GET /environments` |
+| Environment `Production` | **0** protection rules | `GET /environments` |
+
+Nothing forces any check to pass on `main` today. A force-push can rewrite it.
+
+The 403 on the classic endpoint is itself informative: it means the integration
+cannot *read* classic protection, so "no classic protection exists" cannot be
+fully distinguished from "this token cannot see it". The ruleset and effective-
+rules endpoints both return empty, and `protected: false` is authoritative for
+the branch object — so the conclusion holds, but the two mechanisms are not
+equally observable. An owner inspecting the repository settings page is the only
+way to close that last gap.
+
+### The check inventory that constrains the proposal
+
+This is the finding that changes the staging. The two open PRs do **not**
+produce the same checks:
+
+| Check | PR #50 head | PR #49 head |
+|---|---|---|
+| `Journey against a real database` | yes | **yes** (`39479231795`) |
+| `Migration target guard` | yes | **yes** (`39479231795`) |
+| `Release gate (aggregate)` | yes | **no** |
+| `Static (install, generate, lint, typecheck, audit)` | yes | **no** |
+| `Migrations + schema on PostgreSQL 18` | yes | **no** |
+| `Production build path on PostgreSQL 18` | yes | **no** |
+| `Failure paths actually fail` | yes | **no** |
+| `Schema reconciliation proposal closes the drift` | yes | **no** |
+| `PR #49 candidate applies on a disposable PostgreSQL 18` | yes | **no** |
+| `D2 — build, audit and controls on the candidate tree` | yes | **no** |
+
+`release-validation.yml` does not exist on PR #49's head — that PR predates it —
+so no job from that workflow can report on it. Requiring any of those checks now
+would make PR #49 permanently unmergeable: GitHub blocks a merge when a
+**required** status is missing, and no rebase is authorized. That is a deadlock
+created by the protection change itself.
+
+### Staged proposal, corrected
+
+**Stage 1 — safe to apply now (owner approval required).** Require only checks
+that both open PRs already produce:
+
+* `Journey against a real database`
+* `Migration target guard`
+
+Plus: require a pull request before merging, dismiss stale approvals, block
+force-pushes and deletions. No PR is deadlocked by this, today.
+
+**Stage 2 — after this branch merges to `main`.** `release-validation.yml` then
+exists on the default branch, so every new PR produces its jobs. Add
+`Release gate (aggregate)` — the aggregate only, not the five individual jobs,
+so a renamed or split job does not silently unrequire the gate.
+
+**Never require:**
+
+* `PR #49 candidate applies on a disposable PostgreSQL 18` and
+  `D2 — build, audit and controls on the candidate tree`. These inspect a
+  *foreign* commit. They run on every PR to this repository, but their subject is
+  PR #49, not the change under review. Requiring them means a PR can fail because
+  an unrelated open PR changed.
+* Any individual job of `release-validation.yml` other than the aggregate.
+
+### What must be verified after an authorized change
+
+The proposal is not the outcome. After any setting change, the owner must:
+
+1. `GET /branches/main` → expect `protected: true`.
+2. `GET /rules/branches/main` → expect the required-checks rule to be listed.
+3. Re-read this table and record the *effective* state, not the requested one.
+4. Confirm on PR #49 that its two existing checks are still reported, and that
+   nothing required is missing.
+
+Until step 1 returns `true`, this document does **not** claim protection is
+enabled.
+
+### Bypass surface, stated plainly
+
+* The repository is owned by a **User** account, not an organization. There is no
+  organization-level ruleset to backstop a repository-admin bypass, and the
+  owner is by definition an administrator.
+* `christine-kariuki` has **write**; `POWERBot-1` has **admin**.
+* A ruleset with a bypass list is only as strong as that list. If admin bypass is
+  permitted, the protection stops accidents, not a determined admin. This should
+  be recorded rather than described as enforcement.
