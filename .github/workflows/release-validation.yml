@@ -743,6 +743,19 @@ jobs:
           justify_status=$?
           set -e
           cat /tmp/step-recon-justification.log
+          # A PASS is evidence too. Publish the per-divergence result so the
+          # claim "all six are justified on both sides" can be audited from the
+          # checks API, not only from an artifact that may be unreachable.
+          {
+            echo "### Schema reconciliation justification"
+            echo
+            echo '```'
+            cat /tmp/step-recon-justification.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^PASS' /tmp/step-recon-justification.log | head -n 10 | while IFS= read -r line; do
+            echo "::notice::${line//'%'/'%25'}"
+          done || true
           if [ "$justify_status" -ne 0 ]; then
             echo "::error::justification check exited ${justify_status}"
             grep -E '^(FAIL|BLOCKED)' /tmp/step-recon-justification.log | head -n 8 | while IFS= read -r line; do
