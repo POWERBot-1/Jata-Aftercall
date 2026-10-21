@@ -208,8 +208,12 @@ ledger. Only the ledger was emptied.
 
 The earlier note in this body said whichever of this PR and #50 merged second
 had to empty the baseline. #50 is merged (`66c4f33`), so this PR carries the
-baseline change itself, in the same commit that proves the drift is gone. **No
-merge-order constraint remains, and `main` does not go red either way.**
+baseline change itself, in the same commit that proves the drift is gone. **The
+release gate (`release-validation.yml`) has no merge-order constraint left and
+does not go red either way.**
+
+One *other* workflow consumes the same baseline, and it is affected — see the
+next section. Recording it here rather than letting a reviewer discover it.
 
 ### About the checklist above
 
@@ -230,3 +234,62 @@ Every line is still checkable, with two name changes to read for:
 document and the checkers, all of which this PR changes, so it is regenerated in
 the same commit. `verify-evidence-manifest.mjs` — which also fails when a
 *required* artifact is missing — is what proves the regeneration is complete.
+
+### The candidate rehearsal is red on this head — and that is the true answer
+
+`Candidate migration rehearsal` (`candidate-rehearsal.yml`) fails on this PR's
+head. It is not a regression in this change, and it is not being papered over.
+
+**What it does.** It rehearses PR #49's candidate commit (`5996229`), not this
+branch. Section 6 applies the candidate's 18 migrations, runs `prisma migrate
+diff` against the candidate's own `prisma/schema.prisma`, and classifies the
+findings against `scripts/ci/schema-drift-baseline.json` — which it reads from
+the **branch under review**, because the candidate tree predates that file: the
+baseline does not exist at PR #49's merge base (`2575cf4`). It arrived with #50.
+
+**Why it passes before this PR and fails after.** PR #49's tree still carries
+all six divergences. Nothing about PR #49 changed; the ledger describing them
+did:
+
+| | before this PR | after this PR |
+|---|---|---|
+| findings in the candidate's diff | 12 | 12 (unchanged) |
+| recorded debt | 12 entries | **0 entries** |
+| classified as | *recorded debt* → PASS | **12 new findings → FAIL** |
+
+Reproduce the classification with the repository's own comparator — it is the
+same `compareToBaseline` the rehearsal calls:
+
+```
+node -e 'const {compareToBaseline}=require("./scripts/ci/check-schema-drift.mjs");
+const {execFileSync}=require("node:child_process");
+const prev=JSON.parse(execFileSync("git",["show","66c4f33:scripts/ci/schema-drift-baseline.json"],{encoding:"utf8"}));
+const now=JSON.parse(require("node:fs").readFileSync("scripts/ci/schema-drift-baseline.json","utf8"));
+console.log(compareToBaseline(prev.entries, now.entries).added.length)'   # → 12
+```
+
+**Why this PR does not "fix" it.** The only ways to make that check green here
+are (a) re-record the six divergences as accepted debt, which would certify the
+divergence this PR exists to remove, or (b) change what the rehearsal asserts,
+which is a different change with a different review. Both are out of scope, and
+(a) is the exact weakening the reconciliation forbids. So the check stays red
+and says what is true: **PR #49's tree predates the reconciliation and must be
+rebased.** This body's merge-order checklist already required that ("Merged
+before PR #49 is rebased — otherwise the gate goes red on PR #49 for a
+divergence that belongs here"); what was not obvious is that the rehearsal runs
+on *every* PR, so the red follows any PR opened before #49 is rebased.
+
+**Remedies, in preference order.**
+
+1. **Rebase PR #49 onto the reconciled `main`.** Its six divergences disappear
+   with the schema it rebases onto, the rehearsal goes green, and no CI code
+   changes at all. This was already required before this PR existed.
+2. If #49 must stay unrebased, a **separate, separately reviewed** change should
+   teach the rehearsal to judge a candidate against the debt recorded for *its
+   own* base — measured, not looked up in a ledger that postdates that base. That
+   is a change to what a release gate asserts, so it does not belong in the
+   commit that reconciles the schema.
+
+Until one of those happens, `Release gate (aggregate)` is green and
+`PR #49 candidate applies on a disposable PostgreSQL 18` is red, for reasons
+that are stated in one line each. Neither is a surprise and neither is hidden.
