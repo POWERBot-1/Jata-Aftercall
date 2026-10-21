@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import {
   CANDIDATE_EXPECTATIONS,
   DEFAULT_RECONCILIATION_PATCH,
+  applyPreReconciliationFixes,
   candidatePredatesReconciliation,
   canonicalInventory,
   evaluateSnapshot,
@@ -16,6 +18,7 @@ import {
   psqlUrl,
   scanForDestructiveStatements,
 } from "../ci/rehearse-candidate-migrations.mjs";
+import { evaluateModelSide } from "../ci/verify-reconciliation-justification.mjs";
 
 // These tests exist because the rehearsal script is the only thing standing
 // between "the SQL reads plausibly" and "the SQL was executed". If the checker
@@ -267,4 +270,28 @@ test("candidatePredatesReconciliation distinguishes pre-reconciliation candidate
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("applyPreReconciliationFixes reconciles all 7 model sites accurately even with adjacent candidate fields and refuses already-reconciled schemas", () => {
+  const reconciledRepoSchema = readFileSync("prisma/schema.prisma", "utf8");
+  // Must refuse an already-reconciled schema so partial regressions cannot hide.
+  assert.equal(applyPreReconciliationFixes(reconciledRepoSchema), null);
+
+  // Build synthetic pre-reconciliation schema that ALSO includes PR #49's adjacent `MediaAsset.version` field.
+  const preReconWithVersion = reconciledRepoSchema
+    .replace(/\n  paymentAttempts\s+PaymentAttempt\[\]/, "")
+    .replace(
+      /updatedAt\s+DateTime\s+@updatedAt\s+@default\(now\(\)\)/,
+      "updatedAt  DateTime @updatedAt\n  version    Int      @default(0)",
+    )
+    .replace(/(model PosReceiptSequence \{\s+businessId\s+String\s+)@id/, "$1@unique")
+    .replace(/(model PaymentDestination \{[\s\S]*?capabilities\s+String\[\])\s+@default\(\[\]\)/, "$1")
+    .replace(/, map: "PaymentDestination_businessId_provider_providerDestinationId_pr"\)/, ")")
+    .replace(/(model PaymentProviderConnection \{[\s\S]*?capabilities\s+String\[\])\s+@default\(\[\]\)/, "$1")
+    .replace(/\n  business\s+Business\s+@relation\(fields: \[businessId\], references: \[id\], onDelete: Cascade\)/, "");
+
+  const fixed = applyPreReconciliationFixes(preReconWithVersion);
+  assert.notEqual(fixed, null);
+  assert.match(fixed, /updatedAt\s+DateTime\s+@updatedAt\s+@default\(now\(\)\)\n  version\s+Int\s+@default\(0\)/);
+  assert.deepEqual(evaluateModelSide(fixed).filter((c) => !c.ok), []);
 });

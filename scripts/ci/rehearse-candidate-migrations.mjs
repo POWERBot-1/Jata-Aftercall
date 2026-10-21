@@ -92,6 +92,48 @@ export const DEFAULT_RECONCILIATION_PATCH = resolve(
   "reconciliation.patch",
 );
 
+function replaceInModelBlock(schemaText, modelName, pattern, replacement) {
+  const re = new RegExp(`(model\\s+${modelName}\\s*\\{[\\s\\S]*?\\n\\})`);
+  const match = schemaText.match(re);
+  if (!match) return null;
+  const updated = match[1].replace(pattern, replacement);
+  if (updated === match[1]) return null;
+  return schemaText.slice(0, match.index) + updated + schemaText.slice(match.index + match[1].length);
+}
+
+/**
+ * Applies the exact seven model-scoped edits from `reconciliation.patch` across
+ * their six named Prisma models. Returns `null` unless every single pre-reconciliation
+ * site matches in its own model block (avoiding unified-diff context displacement
+ * when a pre-reconciliation candidate adds an adjacent field such as `MediaAsset.version`).
+ */
+export function applyPreReconciliationFixes(schemaText) {
+  const steps = [
+    ["Business", /^(  paymentTransactions\s+PaymentTransaction\[\])$/m, "$1\n  paymentAttempts          PaymentAttempt[]"],
+    ["MediaAsset", /^(  updatedAt\s+DateTime\s+@updatedAt)$/m, "$1 @default(now())"],
+    ["PosReceiptSequence", /^(  businessId\s+String\s+)@unique$/m, "$1@id"],
+    ["PaymentDestination", /^(  capabilities\s+String\[\])$/m, "  capabilities           String[]                     @default([])"],
+    [
+      "PaymentDestination",
+      /^(  @@unique\(\[businessId, provider, providerDestinationId, providerAccountRef\])(\))$/m,
+      '$1, map: "PaymentDestination_businessId_provider_providerDestinationId_pr"$2',
+    ],
+    ["PaymentProviderConnection", /^(  capabilities\s+String\[\])$/m, "  capabilities       String[]                   @default([])"],
+    [
+      "PaymentAttempt",
+      /^(  businessId\s+String)$/m,
+      "$1\n  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)",
+    ],
+  ];
+  let current = schemaText;
+  for (const [modelName, pattern, replacement] of steps) {
+    const next = replaceInModelBlock(current, modelName, pattern, replacement);
+    if (!next) return null;
+    current = next;
+  }
+  return current;
+}
+
 /**
  * True only when the candidate checkout predates the schema-reconciliation
  * cutover (its own `scripts/ci/schema-drift-baseline.json` is absent or still
@@ -864,16 +906,16 @@ function main() {
       console.log(`[drift] observed ${findings.length}, matching the recorded debt ${matching.length}, new ${added.length}, recorded-but-absent ${removed.length}`);
       if (added.length > 0) {
         let resolvedByReconciliation = false;
-        if (candidatePredatesReconciliation(candidateDir) && existsSync(DEFAULT_RECONCILIATION_PATCH)) {
+        if (candidatePredatesReconciliation(candidateDir)) {
           const reconScratch = mkdtempSync(join(tmpdir(), "jata-candidate-recon-"));
           try {
-            const reconPrismaDir = join(reconScratch, "prisma");
-            mkdirSync(reconPrismaDir, { recursive: true });
-            const reconSchemaPath = join(reconPrismaDir, "schema.prisma");
-            cpSync(join(candidateDir, "prisma", "schema.prisma"), reconSchemaPath);
-            run("git", ["-C", reconScratch, "init", "-q"]);
-            const patchApply = run("git", ["-C", reconScratch, "apply", "-C1", DEFAULT_RECONCILIATION_PATCH]);
-            if (patchApply.status === 0) {
+            const candidateSchemaText = readFileSync(join(candidateDir, "prisma", "schema.prisma"), "utf8");
+            const reconciledCandidateSchema = applyPreReconciliationFixes(candidateSchemaText);
+            if (reconciledCandidateSchema) {
+              const reconPrismaDir = join(reconScratch, "prisma");
+              mkdirSync(reconPrismaDir, { recursive: true });
+              const reconSchemaPath = join(reconPrismaDir, "schema.prisma");
+              writeFileSync(reconSchemaPath, reconciledCandidateSchema, "utf8");
               const postReconDiff = runPrisma(
                 candidateDir,
                 [
@@ -896,13 +938,11 @@ function main() {
                 note("candidate predates schema reconciliation on main; rebase onto main before Stage 2 cutover");
               } else {
                 console.log(
-                  `[reconciliation-check] residual drift after reconciliation.patch (exit ${postReconDiff.status}): ${sanitise(postReconDiff.output).trim().slice(0, 600)}`,
+                  `[reconciliation-check] residual drift after reconciliation (exit ${postReconDiff.status}): ${sanitise(postReconDiff.output).trim().slice(0, 600)}`,
                 );
               }
             } else {
-              console.log(
-                `[reconciliation-check] reconciliation.patch did not apply cleanly (exit ${patchApply.status}): ${sanitise(patchApply.output).trim().slice(0, 400)}`,
-              );
+              console.log("[reconciliation-check] candidate schema did not match all 7 pre-reconciliation model sites");
             }
           } finally {
             rmSync(reconScratch, { recursive: true, force: true });
