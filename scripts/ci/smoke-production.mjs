@@ -129,6 +129,48 @@ export async function runSmoke({ baseUrl, slug, timeoutMs = 15000, attempts = 2,
   return { results, reachable, exitCode: failed.length === 0 ? 0 : 1 };
 }
 
+export const DEFAULT_PRODUCTION_ORIGIN = "https://jata-aftercall.vercel.app";
+
+/**
+ * Resolve the target base URL and storefront slug for a GitHub Actions smoke run.
+ *
+ * On `deployment_status`, Vercel sets `deployment_status.environment_url` to the
+ * per-deployment hostname (`https://jata-aftercall-<hash>-powerbot-1.vercel.app`),
+ * which Vercel Standard Protection (`all_except_custom_domains`) intercepts with
+ * an SSO login page. Automated post-deploy smoke runs therefore resolve the
+ * canonical public production origin (`SMOKE_PRODUCTION_URL` defaulting to
+ * `https://jata-aftercall.vercel.app`) while preserving `deploymentUrl` purely
+ * as diagnostic context.
+ */
+export function resolveSmokeTarget({
+  eventName = "",
+  inputBaseUrl = "",
+  inputSlug = "",
+  configuredProductionUrl = "",
+  deploymentUrl = "",
+} = {}) {
+  const baseUrl =
+    eventName === "workflow_dispatch"
+      ? String(inputBaseUrl ?? "").trim()
+      : String(configuredProductionUrl ?? "").trim() || DEFAULT_PRODUCTION_ORIGIN;
+  const slug = eventName === "workflow_dispatch" ? String(inputSlug ?? "").trim() : "";
+  if (!baseUrl) {
+    return {
+      ok: false,
+      baseUrl: "",
+      slug: "",
+      deploymentUrl: String(deploymentUrl ?? "").trim(),
+      reason: "no base URL configured and none supplied",
+    };
+  }
+  return {
+    ok: true,
+    baseUrl,
+    slug,
+    deploymentUrl: String(deploymentUrl ?? "").trim(),
+  };
+}
+
 function argValue(argv, flag) {
   const i = argv.indexOf(flag);
   return i === -1 ? undefined : argv[i + 1];

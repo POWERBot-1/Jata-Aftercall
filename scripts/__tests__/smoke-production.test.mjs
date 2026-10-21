@@ -112,6 +112,7 @@ test("evaluateStorefront requires HTML", () => {
 });
 
 import { readFileSync } from "node:fs";
+import { resolveSmokeTarget } from "../ci/smoke-production.mjs";
 
 test("Vercel SSO HTML login challenge on /health fails cleanly rather than passing", () => {
   const ssoHtml = "<!doctype html><html><head><title>Protected Deployment – Vercel</title></head><body><h1>Log in to Vercel</h1></body></html>";
@@ -120,8 +121,54 @@ test("Vercel SSO HTML login challenge on /health fails cleanly rather than passi
   assert.match(res.reason, /not JSON/);
 });
 
-test("production-smoke.yml targets canonical production domain rather than SSO-protected per-deployment URL", () => {
+test("resolveSmokeTarget uses canonical production origin on deployment_status, ignoring SSO deployment URL", () => {
+  const res = resolveSmokeTarget({
+    eventName: "deployment_status",
+    deploymentUrl: "https://jata-aftercall-d1ppkh90l-powerbot-1.vercel.app",
+  });
+  assert.deepEqual(res, {
+    ok: true,
+    baseUrl: "https://jata-aftercall.vercel.app",
+    slug: "",
+    deploymentUrl: "https://jata-aftercall-d1ppkh90l-powerbot-1.vercel.app",
+  });
+});
+
+test("resolveSmokeTarget honours SMOKE_PRODUCTION_URL override on deployment_status", () => {
+  const res = resolveSmokeTarget({
+    eventName: "deployment_status",
+    configuredProductionUrl: "https://custom.jata.example",
+    deploymentUrl: "https://jata-aftercall-d1ppkh90l-powerbot-1.vercel.app",
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.baseUrl, "https://custom.jata.example");
+  assert.equal(res.slug, "");
+});
+
+test("resolveSmokeTarget honours inputs on workflow_dispatch and refuses blank base URL", () => {
+  const ok = resolveSmokeTarget({
+    eventName: "workflow_dispatch",
+    inputBaseUrl: "https://staging.jata.example",
+    inputSlug: "nyumbani-kitchen",
+  });
+  assert.deepEqual(ok, {
+    ok: true,
+    baseUrl: "https://staging.jata.example",
+    slug: "nyumbani-kitchen",
+    deploymentUrl: "",
+  });
+
+  const empty = resolveSmokeTarget({
+    eventName: "workflow_dispatch",
+    inputBaseUrl: "   ",
+  });
+  assert.equal(empty.ok, false);
+  assert.match(empty.reason, /no base URL/);
+});
+
+test("production-smoke.yml invokes resolveSmokeTarget via env with zero shell input interpolation", () => {
   const wf = readFileSync(".github/workflows/production-smoke.yml", "utf8");
-  assert.match(wf, /CONFIGURED_PRODUCTION_URL:-https:\/\/jata-aftercall\.vercel\.app/);
+  assert.match(wf, /resolveSmokeTarget/);
+  assert.equal(/\$\{\{\s*inputs\./.test(wf.split("run: |").slice(1).join("\n")), false);
   assert.equal(/BASE="\$\{\{\s*github\.event\.deployment_status\.environment_url\s*\}\}"/.test(wf), false);
 });
