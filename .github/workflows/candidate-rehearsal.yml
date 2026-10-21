@@ -176,6 +176,23 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # A green job is not evidence. The counts and the load-bearing checks
+          # are promoted to notices so that a PASS can be audited after the fact
+          # from the checks API, without the log artifact.
+          if [ -f /tmp/step-rehearsal.log ]; then
+            log=/tmp/step-rehearsal.log
+            result=$(grep -m1 -E '^RESULT:' "$log" || true)
+            counts=$(grep -m1 -E '^[0-9]+ PASS, [0-9]+ FAIL, [0-9]+ BLOCKED' "$log" || true)
+            echo "::notice::${result:-RESULT: unknown (the rehearsal printed no verdict)}"
+            echo "::notice::${counts:-counts unavailable}"
+            grep -E '^PASS (the ledger names match|both application paths|the failure control is complete|the candidate test suite passes|the candidate seed runs|the candidate.s drift)' "$log" \
+              | head -n 6 \
+              | while IFS= read -r line; do
+                  line=${line//'%'/'%25'}
+                  echo "::notice::${line}"
+                done
+          fi
+
       - name: Show the failing output
         if: failure()
         run: |
