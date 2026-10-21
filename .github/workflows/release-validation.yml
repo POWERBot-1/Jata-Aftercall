@@ -733,8 +733,29 @@ jobs:
           # not have. This checks both sides of all six divergences: the
           # database must contain the object, and the patched datamodel must
           # assert it. The patch is still applied at this point.
-          node scripts/ci/verify-reconciliation-justification.mjs \
-            2>&1 | tee /tmp/step-recon-justification.log
+          #
+          # The exit code is captured, and on failure the shell — not the
+          # script — promotes the reason to annotations. A checker that fails
+          # without saying which check failed costs a whole CI cycle to
+          # diagnose, and that is not a property a release gate may have.
+          set +e
+          node scripts/ci/verify-reconciliation-justification.mjs > /tmp/step-recon-justification.log 2>&1
+          justify_status=$?
+          set -e
+          cat /tmp/step-recon-justification.log
+          if [ "$justify_status" -ne 0 ]; then
+            echo "::error::justification check exited ${justify_status}"
+            grep -E '^(FAIL|BLOCKED)' /tmp/step-recon-justification.log | head -n 8 | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            grep -E '^::error::' /tmp/step-recon-justification.log | head -n 4 | sed 's/^::error:://' | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            tail -n 4 /tmp/step-recon-justification.log | while IFS= read -r line; do
+              echo "::error::tail: ${line//'%'/'%25'}"
+            done
+            exit 1
+          fi
 
       - name: Restore the schema so later steps cannot inherit the proposal
         if: always()

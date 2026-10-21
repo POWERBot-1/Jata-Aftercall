@@ -289,5 +289,17 @@ async function main() {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("verify-reconciliation-justification.mjs")) {
-  process.exit(main());
+  // An uncaught exception means the check could not run, which is BLOCKED —
+  // never a statement about the schema, and never a silent exit 1 that reads
+  // like "a check failed".
+  main().then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error) => {
+      console.error(`BLOCKED: the justification check threw — ${error?.stack ?? error}`);
+      console.error("::error::BLOCKED: the justification check threw; treat the reconciliation as UNVERIFIED");
+      process.exitCode = 2;
+    },
+  );
 }
