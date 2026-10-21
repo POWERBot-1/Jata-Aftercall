@@ -26,7 +26,8 @@ Dropping the foreign key, renaming the truncated index, and dropping the primary
 | Check | Result |
 |---|---|
 | SHA-256 of `reconciliation.patch` | `228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29` |
-| Size / shape | 3,311 bytes · **7 hunks** · **1 file** · **0 DDL statements** |
+| SHA-256 of `reconciliation-tests.patch` | `c243200ae609452030a6530c4980566783d488c64e588f4d4adae676f8a4cbd6` |
+| Size / shape | 3,311 bytes (`prisma/schema.prisma`, **7 hunks**) + companion assertion strengthening (`tests/unit/pos-schema.test.ts`, **1 hunk**) · **0 DDL statements** |
 | Base blob vs the patch header (`398ecdd`) | `398ecdd52335e322d434b149165667742b8c1eb2` — **matches** |
 | Result blob vs the patch header (`25e45c3`) | `25e45c3afe584c7ac35f51b558cc1b73183a1b09` — **matches** |
 | Resulting schema SHA-256 | `440027c4fcb10e0f3d2de3f2c7ec1e540ffdc5d9b6283329bfb9af05988d8bfd` |
@@ -48,9 +49,11 @@ one extra line could not reproduce them.
 | Unit / integration / security suites (`vitest run --exclude "tests/e2e/**"`) | **PASS** | same job |
 | Suite did not pass by skipping | **PASS** — `check-test-output.mjs` | same job |
 
-Runs that demonstrate the above on the current workflow: `39545282950` (6/6 gate
-jobs) and later. **This PR must still go green on its own head** — the evidence
-above proves the *patch*, not the *branch*.
+Run demonstrating the full end-to-end execution on PostgreSQL 18: **`39556189976`**
+(head `5490396`, 6/6 gate jobs `success`), recording all **13/13** justification
+`PASS` lines and **`2382 passed, 0 failed, 0 skipped, 0 todo` across `192 passed`
+test files** verbatim in check-run annotations. **This PR must still go green on
+its own head** — the evidence above proves the *patch*, not the *branch*.
 
 ### Why "zero drift" alone was not enough
 
@@ -78,7 +81,7 @@ Tick every line before approving. Each is checkable from this PR alone.
 
 - [ ] `sha256sum docs/schema-reconciliation/reconciliation.patch` equals
       `228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29`.
-- [ ] `git diff main --name-only` shows **exactly one** file: `prisma/schema.prisma`.
+- [ ] `git diff main --name-only` shows **only the two expected files**: `prisma/schema.prisma` and `tests/unit/pos-schema.test.ts` (and `scripts/ci/schema-drift-baseline.json` if PR #50 has already merged before this PR).
 - [ ] The diff contains **no** `CREATE`, `ALTER`, `DROP`, `UPDATE`, `DELETE`.
 - [ ] Applying the patch to `main`'s schema reproduces blob `25e45c3…`.
 

@@ -179,3 +179,72 @@ The bundle is verified, but the PR itself must still go green on its own head:
    traversable `business` relation; the two `capabilities` arrays default to
    empty rather than being required; `PosReceiptSequence` keeps one key instead
    of two.
+
+---
+
+## 8. Addendum 2 — 2026-10-21, full application execution and companion test patch
+
+Executing `prisma generate`, `npm run seed`, `npm run typecheck`, and the full
+application suite against the reconciled schema on PostgreSQL 18 exposed two real
+issues before the separate PR was ever opened:
+
+1. **Test pinning the old divergence (`39554627253`):** `tests/unit/pos-schema.test.ts:159`
+   asserted `/businessId\s+String\s+@unique/`. Because the committed migration
+   declares `CONSTRAINT "PosReceiptSequence_pkey" PRIMARY KEY ("businessId")`,
+   that assertion locked the weaker model shape in place. Companion patch
+   `docs/schema-reconciliation/reconciliation-tests.patch` replaces it with
+   `/businessId\s+String\s+@id\b/` and explicitly forbids `@id @unique`.
+2. **Real-PostgreSQL suites skipping without `PRISMA_TEST_DATABASE_URL` (`39555282816`):**
+   `schema-reconciliation-proposal` set `DATABASE_URL` alone; `tests/helpers/prisma-client.ts`
+   gates real-Postgres constraint and race tests on `PRISMA_TEST_DATABASE_URL`.
+   Those files skipped, `vitest` exited `0`, and `check-test-output.mjs` failed
+   the step (`skipped > 0`). Setting `PRISMA_TEST_DATABASE_URL` ran every suite.
+
+### 8.1 Complete artifact table for the separate PR
+
+| File in separate PR | Patch in bundle | Patch SHA-256 | base → result git blob |
+|---|---|---|---|
+| `prisma/schema.prisma` | `docs/schema-reconciliation/reconciliation.patch` | `228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29` | `398ecdd52335e322d434b149165667742b8c1eb2` → `25e45c3afe584c7ac35f51b558cc1b73183a1b09` |
+| `tests/unit/pos-schema.test.ts` | `docs/schema-reconciliation/reconciliation-tests.patch` | `c243200ae609452030a6530c4980566783d488c64e588f4d4adae676f8a4cbd6` | strengthens `@unique` → `@id` (no `@id @unique`) |
+
+### 8.2 Exact commands to open the separate PR from `main@2575cf4`
+
+```bash
+# Run from a fresh clone or separate worktree where branch switching is permitted:
+BUNDLE_REF="origin/arena/7486dc85-jata-aftercall"
+git fetch origin main arena/7486dc85-jata-aftercall
+git switch -c schema/reconcile-six-divergences origin/main
+
+# Verify both patch digests before applying anything:
+git show "${BUNDLE_REF}:docs/schema-reconciliation/reconciliation.patch" > /tmp/reconciliation.patch
+git show "${BUNDLE_REF}:docs/schema-reconciliation/reconciliation-tests.patch" > /tmp/reconciliation-tests.patch
+git show "${BUNDLE_REF}:docs/schema-reconciliation/PR-BODY.md" > /tmp/reconciliation-pr-body.md
+echo "228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29  /tmp/reconciliation.patch" | sha256sum -c -
+echo "c243200ae609452030a6530c4980566783d488c64e588f4d4adae676f8a4cbd6  /tmp/reconciliation-tests.patch" | sha256sum -c -
+
+git apply --index /tmp/reconciliation.patch /tmp/reconciliation-tests.patch
+git diff --cached --name-only   # must print only prisma/schema.prisma and tests/unit/pos-schema.test.ts
+
+git commit -m "schema: reconcile six divergences between migrations and schema.prisma"
+git push -u origin schema/reconcile-six-divergences
+gh pr create --repo POWERBot-1/Jata-Aftercall \
+  --base main \
+  --head schema/reconcile-six-divergences \
+  --title "schema: reconcile six divergences between migrations and schema.prisma" \
+  --body-file /tmp/reconciliation-pr-body.md
+```
+
+### 8.3 End-to-end validation recorded on run `39556189976` (commit `5490396`)
+
+All steps ran against disposable PostgreSQL 18 in job `Schema reconciliation proposal closes the drift`:
+
+- `npx prisma migrate deploy` (16 `main` migrations): **PASS** (exit 0)
+- Pre-patch baseline verification (`check-schema-drift.mjs`): **PASS** (exit 0)
+- `git apply reconciliation.patch` + `reconciliation-tests.patch` + `npx prisma validate`: **PASS** (exit 0)
+- `npx prisma migrate diff --from-url ... --to-schema-datamodel prisma/schema.prisma --exit-code`: **PASS** (exit 0, 0 DDL)
+- Two-sided catalog + datamodel check (`verify-reconciliation-justification.mjs`): **PASS** — **13/13 checks** verbatim in check-run annotations (`119075966828` group / run `39556189976`)
+- `npx prisma generate` from reconciled schema: **PASS** (exit 0)
+- `npm run seed`: **PASS** (exit 0)
+- `npm run typecheck`: **PASS** (exit 0)
+- `npx vitest run --exclude "tests/e2e/**"` + `check-test-output.mjs`: **PASS** — **`2382 passed, 0 failed, 0 skipped, 0 todo` across `192 passed, 0 failed, 0 skipped` files** (verbatim in check-run annotation)
+- Post-step restore (`prisma/schema.prisma` + `tests/unit/pos-schema.test.ts`): **PASS** (exit 0)
