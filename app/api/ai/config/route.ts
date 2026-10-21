@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { assertBusinessRole, canAccessBusiness } from "@/lib/tenant";
-import { getExtendedAIConfig, saveExtendedAIConfig } from "@/lib/ai-config";
+import { assertStoredAIConfigIsMediaSafe, getExtendedAIConfig, saveExtendedAIConfig } from "@/lib/ai-config";
+import { assertNoInlineImagePersistence, containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, InlineMediaPersistenceError } from "@/lib/media/persistence-policy";
 import { AI_BUSINESS_TEMPLATES } from "@/lib/ai-templates";
 import { logAudit } from "@/lib/audit";
 
@@ -96,8 +97,14 @@ export async function POST(req: Request) {
     if (!roleCheck.allowed) {
       return NextResponse.json({ error: "Forbidden — insufficient permissions for this business." }, { status: 403 });
     }
+    if (containsInlineImageDataUrl(body)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const previousConfig = await prisma.aIConfiguration.findUnique({ where: { businessId } }).catch(() => null);
+    const previousExtendedConfig = await getExtendedAIConfig(businessId, previousConfig);
+    assertNoInlineImagePersistence(previousExtendedConfig);
+    await assertStoredAIConfigIsMediaSafe(businessId);
 
     const resolvedToneOfVoice = toneOfVoice || body?.tone || "Friendly";
     const resolvedGreeting = greetingMessage ?? body?.welcomeMessage ?? null;
@@ -216,6 +223,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ config, extendedConfig });
   } catch (err: unknown) {
+    if (err instanceof InlineMediaPersistenceError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+    }
     const message = err instanceof Error ? err.message : "Failed to save AI configuration.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

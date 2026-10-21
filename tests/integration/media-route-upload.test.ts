@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   assets: [] as any[],
   deleted: [] as string[],
   updated: [] as any[],
+  reuseConflict: false,
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
@@ -35,7 +36,15 @@ vi.mock("@/lib/audit", () => ({ logAudit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/db", () => ({
   default: {
     mediaAsset: {
-      findFirst: vi.fn(async () => mocks.existing),
+      findFirst: vi.fn(async () => {
+        if (!mocks.existing) return null;
+        const snapshot = { ...mocks.existing };
+        if (mocks.reuseConflict) {
+          mocks.reuseConflict = false;
+          mocks.existing = { ...mocks.existing, version: Number(mocks.existing.version ?? 0) + 1, alt: "Edited moments ago" };
+        }
+        return snapshot;
+      }),
       findMany: vi.fn(async () => mocks.assets),
       findUnique: vi.fn(async ({ where }: any) => mocks.assets.find((asset) => asset.id === where.id) || mocks.existing || null),
       groupBy: vi.fn(async () => [
@@ -43,13 +52,22 @@ vi.mock("@/lib/db", () => ({
         { source: "AI_GENERATED", _count: { _all: 1 } },
       ]),
       create: vi.fn(async ({ data }: any) => {
-        const asset = { id: `asset-${mocks.created.length + 1}`, createdAt: new Date(), ...data };
+        const asset = { id: `asset-${mocks.created.length + 1}`, createdAt: new Date(), version: 0, ...data };
         mocks.created.push(asset);
         return asset;
       }),
-      update: vi.fn(async ({ where, data }: any) => {
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const row = mocks.assets.find((asset) => asset.id === where.id) ??
+          (mocks.existing?.id === where.id ? mocks.existing : null);
+        if (!row || (where.businessId && row.businessId !== where.businessId)) return { count: 0 };
+        if (where.version !== undefined && Number(row.version ?? 0) !== Number(where.version)) return { count: 0 };
+        for (const [key, value] of Object.entries(data)) {
+          (row as any)[key] = value && typeof value === "object" && "increment" in (value as Record<string, unknown>)
+            ? Number((row as any)[key] ?? 0) + Number((value as { increment: number }).increment)
+            : value;
+        }
         mocks.updated.push({ where, data });
-        return { id: where.id, ...data };
+        return { count: 1 };
       }),
       delete: vi.fn(async ({ where }: any) => {
         mocks.deleted.push(where.id);
@@ -75,29 +93,27 @@ beforeEach(() => {
   mocks.assets = [];
   mocks.deleted = [];
   mocks.updated = [];
+  mocks.reuseConflict = false;
   mocks.session = { userId: "user-a", role: "OWNER" };
 });
 
-describe("uploading from a phone actually stores the photo", () => {
-  it("stores a normalized JPEG with its real dimensions and the details the library needs", async () => {
+describe("media API persistence boundary", () => {
+  it("refuses a validated new inline JPEG without touching the media table", async () => {
     const response = await post({
       businessId: "business-a",
       dataUrl: dataUrlFor(jpegBytes({ width: 1600, height: 1200 }), "image/jpeg"),
       alt: "Chicken stew served with chapati",
       kind: "IMAGE",
     });
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(503);
     const body = await response.json();
-    expect(body.asset.url.startsWith("data:image/jpeg;base64,")).toBe(true);
-    expect(body.asset.width).toBe(1600);
-    expect(body.asset.height).toBe(1200);
-    expect(body.asset.mime).toBe("image/jpeg");
-    expect(body.asset.source).toBe("UPLOAD");
-    expect(body.asset.alt).toContain("Chicken stew");
-    expect(mocks.created).toHaveLength(1);
+    expect(body.code).toBe("inline_media_persistence_disabled");
+    expect(body.error).toMatch(/approved durable media provider/);
+    expect(mocks.created).toHaveLength(0);
+    expect(mocks.updated).toHaveLength(0);
   });
 
-  it("accepts every format the Studio promises: JPEG, PNG, WebP and GIF", async () => {
+  it("validates supported raster formats, then refuses inline persistence for every one", async () => {
     const cases: Array<[string, string]> = [
       ["image/jpeg", dataUrlFor(jpegBytes({ width: 900, height: 600 }), "image/jpeg")],
       ["image/png", dataUrlFor(pngBytes({ width: 512, height: 512 }), "image/png")],
@@ -107,11 +123,34 @@ describe("uploading from a phone actually stores the photo", () => {
     for (const [mime, dataUrl] of cases) {
       mocks.created = [];
       const response = await post({ businessId: "business-a", dataUrl, alt: "photo" });
-      expect(response.status, mime).toBe(201);
+      expect(response.status, mime).toBe(503);
       const body = await response.json();
-      expect(body.asset.mime, mime).toBe(mime);
-      expect(body.asset.width, mime).toBeGreaterThan(0);
+      expect(body.code, mime).toBe("inline_media_persistence_disabled");
+      expect(mocks.created, mime).toHaveLength(0);
     }
+  });
+
+  it("rejects an inline image hidden in alt text instead of retaining it as metadata", async () => {
+    const response = await post({
+      businessId: "business-a",
+      url: "/uploads/hero.jpg",
+      alt: "Reference data:image/png;base64,iVBORw0KGgo=",
+    });
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.created).toHaveLength(0);
+  });
+
+  it("rejects inline image data in the persisted aiGenerationId", async () => {
+    const response = await post({
+      businessId: "business-a",
+      url: "/uploads/hero.jpg",
+      alt: "Safe description",
+      aiGenerationId: "generation-" + "data:image/png;base64,iVBORw0KGgo=",
+    });
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.created).toHaveLength(0);
   });
 
   it("keeps the legacy { url } contract working for existing callers and library reuse", async () => {
@@ -121,16 +160,31 @@ describe("uploading from a phone actually stores the photo", () => {
     expect(body.asset.url).toBe("/uploads/hero.jpg");
   });
 
-  it("does not store the same photo twice — an identical upload is reused", async () => {
+  it("refuses even a duplicate legacy data URL without changing the existing asset", async () => {
     const dataUrl = dataUrlFor(jpegBytes({ width: 800, height: 600, padding: 256 }), "image/jpeg");
-    mocks.existing = { id: "asset-existing", url: dataUrl, alt: "Old alt", width: 800, height: 600, source: "UPLOAD", label: null };
+    mocks.existing = { id: "asset-existing", businessId: "business-a", url: dataUrl, kind: "IMAGE", alt: "Old alt", width: 800, height: 600, source: "UPLOAD", label: null, version: 0 };
     const response = await post({ businessId: "business-a", dataUrl, alt: "Chicken stew" });
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.reused).toBe(true);
-    expect(body.asset.id).toBe("asset-existing");
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
     expect(mocks.created).toHaveLength(0);
-    expect(mocks.updated).toHaveLength(1);
+    expect(mocks.updated).toHaveLength(0);
+    expect(mocks.existing.alt).toBe("Old alt");
+  });
+
+  it("refuses an attempted stale duplicate before any metadata compare-and-swap", async () => {
+    const dataUrl = dataUrlFor(jpegBytes({ width: 800, height: 600, padding: 256 }), "image/jpeg");
+    mocks.existing = {
+      id: "asset-existing", businessId: "business-a", url: dataUrl, kind: "IMAGE", alt: "Original alt",
+      width: 800, height: 600, source: "UPLOAD", label: null, version: 5,
+    };
+    mocks.reuseConflict = true;
+
+    const response = await post({ businessId: "business-a", dataUrl, alt: "Upload's stale alt" });
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.updated).toHaveLength(0);
+    expect(mocks.created).toHaveLength(0);
+    expect(mocks.reuseConflict).toBe(true);
   });
 
   it("scopes uploads to the owner's own business", async () => {
@@ -205,6 +259,21 @@ describe("the failures owners actually hit, with sentences they can act on", () 
 });
 
 describe("the library itself: search, re-tag and delete", () => {
+  it("continues reading legacy inline image URLs without rewriting or deleting them", async () => {
+    const legacyUrl = "data:image/png;base64,iVBORw0KGgo=";
+    mocks.assets = [{
+      id: "legacy", businessId: "business-a", url: legacyUrl, kind: "IMAGE", alt: "Old catalogue photo",
+      width: 32, height: 32, source: "UPLOAD", label: "ACTUAL", version: 2,
+    }];
+    const response = await GET(new Request("http://localhost/api/media?businessId=business-a"));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.assets[0].url).toBe(legacyUrl);
+    expect(mocks.assets[0].url).toBe(legacyUrl);
+    expect(mocks.updated).toHaveLength(0);
+    expect(mocks.deleted).toHaveLength(0);
+  });
+
   it("lists only the tenant's images with counts for the filters", async () => {
     mocks.assets = [
       { id: "a1", url: "/a.jpg", kind: "IMAGE", alt: "Chicken", source: "UPLOAD", width: 800, height: 600 },
@@ -220,16 +289,45 @@ describe("the library itself: search, re-tag and delete", () => {
   });
 
   it("updates the description of one of the owner's images", async () => {
-    mocks.assets = [{ id: "a1", businessId: "business-a" }];
+    mocks.assets = [{ id: "a1", businessId: "business-a", alt: "Old description", version: 3 }];
     const response = await PATCH(
       new Request("http://localhost/api/media", {
         method: "PATCH",
-        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate" }),
+        body: JSON.stringify({ id: "a1", alt: "Grilled chicken on a plate", expectedVersion: 3 }),
         headers: { "Content-Type": "application/json" },
       }),
     );
     expect(response.status).toBe(200);
     expect(mocks.updated[0].data.alt).toContain("Grilled chicken");
+    expect(mocks.updated[0].data.version).toEqual({ increment: 1 });
+    expect(mocks.updated[0].where).toEqual({ id: "a1", businessId: "business-a", version: 3 });
+  });
+
+  it("rejects an inline image hidden in updated media metadata before the version CAS", async () => {
+    mocks.assets = [{ id: "asset-1", businessId: "business-a", url: "/uploads/photo.jpg", alt: "Before", version: 2 }];
+    const response = await PATCH(new Request("http://localhost/api/media", {
+      method: "PATCH",
+      body: JSON.stringify({ id: "asset-1", alt: `Reference ${"data:image/png;base64,iVBORw0KGgo="}`, expectedVersion: 2 }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.updated).toHaveLength(0);
+    expect(mocks.assets[0].alt).toBe("Before");
+  });
+
+  it("changes legacy inline asset metadata without including the URL in the update", async () => {
+    const legacyUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/";
+    const legacy = { id: "legacy", businessId: "business-a", url: legacyUrl, alt: "Before", version: 4 };
+    mocks.assets = [legacy];
+    const response = await PATCH(new Request("http://localhost/api/media", {
+      method: "PATCH",
+      body: JSON.stringify({ id: "legacy", alt: "Legacy photo, labeled clearly", expectedVersion: 4 }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    expect(response.status).toBe(200);
+    expect(mocks.updated[0].data).toEqual({ alt: "Legacy photo, labeled clearly", version: { increment: 1 } });
+    expect(legacy.url).toBe(legacyUrl);
   });
 
   it("deletes exactly the asset that was asked for, after checking its owner", async () => {

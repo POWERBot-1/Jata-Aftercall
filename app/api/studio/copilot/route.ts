@@ -26,6 +26,7 @@ import { loadStudioIntelligence } from "@/lib/studio/studioData";
 import { applyProposal, buildCopilotReply, COPILOT_SUGGESTIONS, type CopilotContext } from "@/lib/studio/copilot";
 import { diversityReport } from "@/lib/experience/diversity";
 import { historyBasisFor } from "@/lib/experience/variant";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,9 @@ export async function POST(req: Request) {
     });
 
     const document = normalizeExperienceDocument(result.document, workspace.document.categoryKey);
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE, applied: false }, { status: 503 });
+    }
     document.updatedAt = new Date().toISOString();
 
     // Compare-and-swap on the version this proposal was computed from. If the draft changed in

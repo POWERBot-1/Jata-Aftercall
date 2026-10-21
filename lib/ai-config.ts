@@ -6,6 +6,7 @@
  */
 
 import prisma from "./db";
+import { assertNoInlineImagePersistence, containsInlineImageDataUrl, InlineMediaPersistenceError } from "./media/persistence-policy";
 import {
   resolveTemplateForCategory,
   type DeliveryModeKey,
@@ -619,6 +620,19 @@ export async function getExtendedAIConfig(
   };
 }
 
+/**
+ * Protects the JSON snapshot from a legacy inline image hidden in an unknown/obsolete key.
+ * Reading may continue for compatibility, but rewriting that snapshot would either duplicate the
+ * bytes or destroy the old value; both outcomes are refused until an owner resolves the media.
+ */
+export async function assertStoredAIConfigIsMediaSafe(businessId: string): Promise<void> {
+  if (!prisma.knowledgeDocument?.findFirst) return;
+  const existingDoc = await prisma.knowledgeDocument.findFirst({
+    where: { businessId, sourceType: SYSTEM_CONFIG_SOURCE_TYPE, isApproved: false },
+  });
+  if (containsInlineImageDataUrl(existingDoc?.content)) throw new InlineMediaPersistenceError();
+}
+
 export async function saveExtendedAIConfig(
   businessId: string,
   updates: Omit<Partial<ExtendedAIConfig>, "delivery" | "policies"> & {
@@ -651,6 +665,10 @@ export async function saveExtendedAIConfig(
     draftVersion: (current.draftVersion || 1) + 1,
   };
 
+  // The typed view catches inline values in known fields; inspect the raw snapshot too so an
+  // unknown legacy key cannot be silently copied or erased during a full JSON rewrite.
+  assertNoInlineImagePersistence(next);
+  await assertStoredAIConfigIsMediaSafe(businessId);
   tenantConfigStore.set(businessId, next);
 
   try {

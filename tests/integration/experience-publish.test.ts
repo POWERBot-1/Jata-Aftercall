@@ -129,6 +129,20 @@ beforeEach(() => {
 });
 
 describe("POST /api/experience/publish", () => {
+  it("refuses to copy a legacy inline image into publishedJson or a new version snapshot", async () => {
+    const draft = JSON.parse(ORIGINAL_DRAFT);
+    draft.brand.heroImageUrl = "data:image/png;base64,iVBORw0KGgo=";
+    mocks.experience.draftJson = JSON.stringify(draft);
+
+    const response = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.experienceUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.versionUpsert).not.toHaveBeenCalled();
+    expect(mocks.businessUpdate).not.toHaveBeenCalled();
+  });
+
   it("publishes a paid, entitled, complete website and snapshots the version", async () => {
     const response = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
     expect(response.status).toBe(200);

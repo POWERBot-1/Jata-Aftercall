@@ -125,7 +125,7 @@ export default async function PublicAIFrontDeskPage({
           description: p.description,
           stockStatus: p.stockStatus,
           preOrderAllowed: p.preOrderAllowed,
-          // Only the price a customer pays now, and the original only while a sale runs. No sale window.
+          // Expose only the effective price now and the original while a sale is active; never expose window metadata.
           ...publicProductPrice(p),
         }))}
       services={brain.services.filter((s) => s.isActive !== false)}

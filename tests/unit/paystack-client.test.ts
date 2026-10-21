@@ -37,6 +37,14 @@ describe("Paystack server client", () => {
     await expect(verifyTransaction("jata-ref")).rejects.toThrow("PAYSTACK_VERIFICATION_FAILED");
   });
 
+  it("rejects a data URL masquerading as Paystack's transaction identifier", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => providerResponse({
+      status: true,
+      data: { id: "data:image/png;base64,iVBORw0KGgo=", status: "success", reference: "jata-ref", amount: 14900, currency: "KES" },
+    })));
+    await expect(verifyTransaction("jata-ref")).rejects.toThrow("PAYSTACK_VERIFICATION_FAILED");
+  });
+
   it("checks the actual webhook signature using a timing-safe comparison", () => {
     const raw = JSON.stringify({ event: "charge.success", data: { reference: "jata-ref" } });
     const signature = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY!).update(raw).digest("hex");

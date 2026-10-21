@@ -18,8 +18,13 @@ model User {
   role         Role           @default(CUSTOMER)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  // Incremented by credential recovery so every previously issued JWT is revoked.
+  sessionVersion Int          @default(0)
+  // Persistent per-account cooldown; avoids repeated recovery mail across app instances.
+  passwordResetRequestedAt DateTime?
   ownedBusinesses Business[]
   businesses   BusinessMember[]
+  passwordResetToken PasswordResetToken?
   payments     Payment[]
   subscriptions Subscription[]
   auditEvents  AuditEvent[]
@@ -30,6 +35,19 @@ model User {
 enum Role {
   CUSTOMER
   ADMIN
+}
+
+// A single active recovery token per account. Only its SHA-256 digest is stored.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Business {
@@ -896,9 +914,9 @@ model InteractiveBusinessEntitlement {
 }
 
 //
-// Tenant media library (§19). `hash` deduplicates identical uploads so the same asset is
-// never stored twice for one business. Alt text is stored with the asset so accessibility
-// travels with the image (§48).
+// Tenant media library (§19). `hash` is retained for legacy rows and historical deduplication;
+// new inline uploads are refused, and reference-only rows do not claim stored bytes. Alt text
+// is stored with the asset so accessibility travels with the image (§48).
 //
 model MediaAsset {
   id         String   @id @default(cuid())
@@ -922,6 +940,8 @@ model MediaAsset {
   parentAssetId  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  // Monotonic compare-and-swap token for media metadata edits; unlike updatedAt, it cannot collide within one millisecond.
+  version    Int      @default(0)
 
   @@index([businessId])
   @@index([businessId, hash])

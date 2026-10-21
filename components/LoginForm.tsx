@@ -42,6 +42,9 @@ export default function LoginForm() {
       <Field id="login-password" label="Password" hint="At least 8 characters.">
         <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required autoComplete="current-password" />
       </Field>
+      <p className="text-right text-sm">
+        <a href="/forgot-password" className="font-semibold underline">Forgot your password?</a>
+      </p>
       <FormError>{err}</FormError>
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Signing in…" : "Sign in"}

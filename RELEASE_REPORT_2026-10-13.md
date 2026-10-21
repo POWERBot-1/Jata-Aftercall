@@ -1,5 +1,7 @@
 # JATA AFTERCALL — Production release report (2026-10-13, updated after push and CI)
 
+> **Current-session correction (2026-10-19):** this is a historical report for `arena/fac28f53-jata-aftercall` and its named SHAs. Its “ratified/approved Option C” sale-price wording is not treated as evidence of owner approval in the current session; no separate owner decision record was established in the current worktree review. Current source implements windowed sale pricing, but confirmation is still requested in `OWNER_APPROVAL_REQUEST.md` G2 and detailed in `RELEASE_DECISIONS.md` §2. Historical test/CI results below do not describe E-25 runs or current DB/browser acceptance.
+
 Consolidated, evidence-based report for the P0 implementation directive. Every check carries one of
 **PASS**, **FAIL**, **BLOCKED** (cannot be executed with the available environment/authority) or
 **NOT TESTED** (not executed at all), with the evidence behind it. Nothing here is inferred from
@@ -308,16 +310,13 @@ reconcile a shadcn theme layer.
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| **Sale-price policy** — is the implemented time-windowed policy the ratified one? | **PASS — no unresolved discrepancy** | `lib/sale-pricing.ts` states the approved policy (Option C): base price authoritative outside a window; sale applies only inside a start-inclusive/end-exclusive window; expiry is automatic; storage UTC, owner input Nairobi; window-less/inverted/non-discount sales never discount. Every previously divergent channel now calls it (`lib/ai-tools.ts`, `lib/cart.ts`, `lib/order.ts`, `lib/preorder.ts`, `app/api/cart/route.ts`, `lib/experience/pricing.ts`, `lib/pos/sales.ts`), the AI knowledge-conflict check compares against the price a customer pays now, and the dashboard label was corrected to "Sale price (KES, optional)". Owner notice exists (`OWNER_NOTICE_SALE_PRICES.md`). 50 policy tests pass at this SHA |
+| **Sale-price policy** — did the historical report establish owner ratification? | **Historical report claim; owner approval unverified in E-25** | At this SHA, the report described the current implementation as Option C and recorded 50 policy tests passing. That implementation/test evidence remains historical for the named SHA; this review found no separate owner decision record, and neither source comments nor the draft notice prove ratification. Current source behavior and the explicit confirm-or-replace request are in `RELEASE_DECISIONS.md` §2 and `OWNER_APPROVAL_REQUEST.md` G2. The historical report's approval wording is not a current release decision. |
 | **Media storage** | **PASS — remains deferred** | `STORAGE_DECISION.md` is still "proposed, not approved"; no storage dependency, credential or provider was added or activated; nothing was uploaded or provisioned |
 | **Stale orders / refunds policy** | **OPEN — owner decision (no behaviour implemented)** | This candidate adds **no** cancellation or refund behaviour (the refund path is untouched). There is still **no documented policy proposal** in the repository for stale orders/auto-cancellation, and the brief requires one *before* implementing such behaviour. Not a blocker for the current scope |
 | **Payment provider activation** | **PASS — none** | No provider switched on, no env change, no live transaction |
 | **Branch currency vs `main`** | **OPEN — owner decision** | 107 commits behind with 6 conflicting files; re-validation on top of current `main` (or a merge/rebase decision) is required before any release merge |
 
-**Genuinely unresolved owner decisions:** (1) branch currency/conflict resolution; (2) the residual
-dev-only advisories and whether to schedule Tailwind 4 (and later Next 16/ESLint 9); (3) stale-order
-cancellation/refund policy proposal; (4) media storage remains deferred by policy (already decided —
-no action needed); (5) authorization for a live payment test.
+**Genuinely unresolved owner decisions at the historical report checkpoint:** (1) branch currency/conflict resolution; (2) residual dev-only advisories and whether to schedule Tailwind 4 (and later Next 16/ESLint 9); (3) stale-order cancellation/refund policy proposal; (4) media-storage deferral as described at that checkpoint; (5) authorization for a live payment test. **Current-session correction:** sale-price owner confirmation is also pending because this review did not establish an independent owner decision record; see the correction at the top of this report and `OWNER_APPROVAL_REQUEST.md` G2.
 
 ---
 
@@ -3601,7 +3600,7 @@ Because the branch is already at its remote SHA there is nothing to push except 
 | §6 Paystack configuration verification | **BLOCKED** — no authorized Vercel/Paystack dashboard access in this session; checklist and owner steps supplied, no secrets requested | §U.6 |
 | §7A Advisories | Current register re-verified; options presented; **no fix attempted** | §U.7 |
 | §7B Media storage | **DEFERRED, untouched** — no provisioning, no uploads, no cost | §U.7 |
-| §7C Sale price | **No unresolved owner decision** — ratified Option C is implemented and recorded, 50 policy tests green | §U.7 |
+| §7C Sale price | **Historical report claim; current owner approval unverified (E-25)** — this report recorded the Option C implementation and 50 policy tests at its named checkpoint; current confirmation remains open pending an independent owner decision record. See `RELEASE_DECISIONS.md` §2 and `OWNER_APPROVAL_REQUEST.md` G2. | §U.7 |
 | §8 Owner-approval report | **this section** | — |
 | §9 Stop conditions | no merge, no deploy, `main` untouched, label preserved | §U.9 |
 
@@ -3714,12 +3713,14 @@ removed assertions, no `--force`.
 provider cost incurred by any directive to date. The decision required remains the cost/privacy one: which
 provider, which region/residency commitments, and who accepts the recurring spend.
 
-**C — Sale price.** **No unresolved owner decision.** The report records the ratified policy (Option C) as
-implemented, with the exact semantics: base price authoritative outside a window; sale applies only inside a
-start-inclusive/end-exclusive window; expiry automatic; storage UTC with owner input in Nairobi; window-less,
-inverted or non-discount sales never discount; all previously divergent channels call `lib/sale-pricing.ts`;
-50 policy tests pass. The checkpoint-era "sale-price policy decided — verify" item is **PASS, no unresolved
-discrepancy**, and a green test is not being treated as approval of the policy itself.
+**C — Sale price.** **Historical report assertion; current owner approval unverified.** At the named historical
+checkpoint, this report described the time-windowed implementation (Option C) and recorded 50 policy tests
+passing: base price outside the explicit window; sale within the start-inclusive/end-exclusive window; expiry
+automatic; UTC storage and Nairobi owner input; no discount for missing/inverted/non-discount windows; channels
+calling `lib/sale-pricing.ts`. Those are implementation and test details for that checkpoint, not independent
+evidence that an owner ratified the rule. Current code still implements windowed pricing, but confirmation or an
+exact alternative remains open in `RELEASE_DECISIONS.md` §2 and `OWNER_APPROVAL_REQUEST.md` G2. No price or
+commercial behavior changed in E-25.
 
 ### U.8 Remaining blockers and their precise next actions
 

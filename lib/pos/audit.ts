@@ -7,6 +7,7 @@
  */
 
 import prisma from "../db";
+import { containsInlineImageDataUrl } from "../media/persistence-policy";
 
 export type PosAuditAction =
   | "POS_CONFIGURATION_SAVED"
@@ -64,8 +65,16 @@ const MAX_METADATA_BYTES = 8_000;
 /** Keys that must never be written to an audit log (§56). */
 const FORBIDDEN_METADATA_KEYS = ["password", "passwordhash", "pin", "secret", "token", "apikey", "credential", "signature", "session"];
 
+function safeAuditText(value: string | null | undefined, fallback: string | null = null): string | null {
+  if (value == null) return null;
+  return containsInlineImageDataUrl(value) ? fallback : value;
+}
+
 function sanitizeMetadata(metadata: Record<string, unknown> | null | undefined): string | null {
   if (!metadata || typeof metadata !== "object") return null;
+  // Audit metadata is optional. Keep the business operation/audit action but omit the entire
+  // snapshot if it contains inline media rather than copying provider or legacy text into Neon.
+  if (containsInlineImageDataUrl(metadata)) return JSON.stringify({ inlineMediaOmitted: true });
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
     const normalized = key.toLowerCase().replace(/[^a-z]/g, "");
@@ -88,12 +97,12 @@ export async function logPosAudit(entry: PosAuditEntry): Promise<void> {
     await prisma.posAuditEvent.create({
       data: {
         businessId: entry.businessId,
-        actorId: entry.actorId ?? null,
-        actorName: entry.actorName ?? null,
-        action: String(entry.action).slice(0, 60),
-        targetType: entry.targetType ?? null,
-        targetId: entry.targetId ?? null,
-        branchId: entry.branchId ?? null,
+        actorId: safeAuditText(entry.actorId),
+        actorName: safeAuditText(entry.actorName),
+        action: safeAuditText(String(entry.action), "POS_AUDIT_EVENT")!.slice(0, 60),
+        targetType: safeAuditText(entry.targetType),
+        targetId: safeAuditText(entry.targetId),
+        branchId: safeAuditText(entry.branchId),
         metadata: sanitizeMetadata({
           ...(entry.metadata ?? {}),
           ...(entry.before ? { before: entry.before } : {}),
@@ -113,12 +122,12 @@ export async function logPosAuditInTransaction(tx: any, entry: PosAuditEntry): P
   await tx.posAuditEvent.create({
     data: {
       businessId: entry.businessId,
-      actorId: entry.actorId ?? null,
-      actorName: entry.actorName ?? null,
-      action: String(entry.action).slice(0, 60),
-      targetType: entry.targetType ?? null,
-      targetId: entry.targetId ?? null,
-      branchId: entry.branchId ?? null,
+        actorId: safeAuditText(entry.actorId),
+        actorName: safeAuditText(entry.actorName),
+        action: safeAuditText(String(entry.action), "POS_AUDIT_EVENT")!.slice(0, 60),
+        targetType: safeAuditText(entry.targetType),
+        targetId: safeAuditText(entry.targetId),
+        branchId: safeAuditText(entry.branchId),
       metadata: sanitizeMetadata({
         ...(entry.metadata ?? {}),
         ...(entry.before ? { before: entry.before } : {}),

@@ -1,4 +1,5 @@
-import { fromOutcome, handlePosRequest } from "@/lib/pos/http";
+import { fromOutcome, handlePosRequest, posFail } from "@/lib/pos/http";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logPosAudit } from "@/lib/pos/audit";
 import { findProduct, setProductActive, updateProduct } from "@/lib/pos/store";
 import { bool, sanitizeProductInput } from "@/lib/pos/validation";
@@ -44,6 +45,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       const input = sanitizeProductInput(body);
       if (!input.name) return fromOutcome({ ok: false, message: "Give the item a name." });
       if (input.saleError) return fromOutcome({ ok: false, message: input.saleError });
+      if (containsInlineImageDataUrl(body.imageUrl)) {
+        if (typeof body.imageUrl === "string" && body.imageUrl === existing.imageUrl) input.imageUrl = undefined;
+        else return posFail(INLINE_MEDIA_PERSISTENCE_MESSAGE, 503, INLINE_MEDIA_PERSISTENCE_CODE);
+      }
       await updateProduct(businessId, productId, input);
       await logPosAudit({
         businessId,

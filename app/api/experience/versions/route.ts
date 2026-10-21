@@ -13,6 +13,7 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "That version cannot be restored safely. Nothing was changed.", code: "experience_schema_invalid", issues: schema.issues }, { status: 409 });
     }
     const document = schema.document;
+    // Old publication snapshots remain available for inspection, but restoring one containing
+    // inline image bytes would create a new Neon copy. Do not mutate the draft in that case.
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const nextVersion = Math.max(1, existing.draftVersion) + 1;
     // Compare-and-swap on the version read above: a write that lands in between makes this a 409, never a silent overwrite.
     const experience = await prisma.businessExperience

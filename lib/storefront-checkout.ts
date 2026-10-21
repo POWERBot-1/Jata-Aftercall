@@ -5,23 +5,15 @@
 import prisma from "./db";
 import { normalizeExperienceDocument } from "./experience/document";
 import type { RequestedItem } from "./experience/pricing";
-
-const hits = new Map<string, { count: number; reset: number }>();
+import { rateLimitByIdentity, trustedClientIp } from "./rate-limit";
 
 /** Per-instance throttle (§47). A coarse first line of defence; idempotency is what stops duplicate orders. */
 export function throttled(ip: string, limit = 20): boolean {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.reset) {
-    hits.set(ip, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > limit;
+  return !rateLimitByIdentity(ip, { key: "storefront-checkout", max: limit, windowMs: 60_000 }).allowed;
 }
 
 export function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  return trustedClientIp(req.headers) ?? "unknown";
 }
 
 /** Only a published business with a published experience can take orders (§3, §59). */

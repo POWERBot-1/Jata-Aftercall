@@ -10,7 +10,8 @@
  * conditional PENDING → PAID update and the processed-webhook key.
  */
 
-import { subscriptionWindow } from "../paymentVerification";
+import { isProviderTransactionId, subscriptionWindow } from "../paymentVerification";
+import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "../media/persistence-policy";
 import { provisionAfterPayment } from "./provisioning";
 import { POS_PLAN_KEY } from "./entitlement";
 
@@ -54,13 +55,27 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
     return { subscription: current, alreadySettled: true, posSubscription: true };
   }
 
-  if (!params.repairingLegacyPaidPayment) {
+  const repairingLegacyPaidPayment = params.repairingLegacyPaidPayment === true && payment.status === "PAID" && !current;
+  if (params.repairingLegacyPaidPayment && !repairingLegacyPaidPayment) throw new Error("PAYMENT_STATE_CHANGED");
+  const providerEvidence = isProviderTransactionId(verification?.paystackId);
+  if (!repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
+
+  if (!repairingLegacyPaidPayment) {
+    const rawForStorage = verification?.raw === undefined
+      ? undefined
+      : serializeJsonWithoutInlineImageData(verification.raw);
+    // Provider evidence remains authoritative for this call, but an unsafe optional identifier
+    // must not block the confirmed payment/entitlement settlement transaction.
+    const paystackIdForStorage = verification?.paystackId &&
+      !containsInlineImageDataUrl(verification.paystackId)
+      ? verification.paystackId
+      : undefined;
     const changed = await tx.payment.updateMany({
       where: { id: payment.id, status: payment.status },
       data: {
         status: "PAID",
-        ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),
-        ...(verification?.raw !== undefined ? { raw: JSON.stringify(verification.raw) } : {}),
+        ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+        ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
     });
     if (changed.count !== 1) {
@@ -112,8 +127,11 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
     create: { businessId: payment.businessId, packageKey: plan.key, status: "ACTIVE", activatedAt: now, expiresAt },
   });
 
-  // DRAFT/CONFIGURED → PROVISIONING → LIVE happens in the same transaction (§43, §44):
-  // a paid business is never left with an unpublished configuration.
+  // DRAFT/CONFIGURED → PROVISIONING → LIVE happens in the same transaction (§43, §44).
+  // A confirmed payment remains authoritative when legacy inline media prevents a new snapshot:
+  // publication stays blocked, the draft is preserved, and workspace readiness remains false.
+  // Whether paid-but-unpublished POS sales should remain enabled is an owner decision; do not
+  // convert this exception into a payment/entitlement rollback or a sales block without approval.
   await provisionAfterPayment(tx, { businessId: payment.businessId, actorId: payment.userId });
 
   if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });

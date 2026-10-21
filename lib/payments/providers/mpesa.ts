@@ -19,6 +19,7 @@
  */
 
 import { readMpesaConfig, readTestMode, publicBaseUrl, type MpesaConfig } from "../config";
+import { trustedClientIp } from "../../rate-limit";
 import { decimalStringToMinor, formatMinor, maskPhone, normalizePhoneKE } from "../money";
 import { normalizeMpesaReceipt } from "./mpesa-receipt";
 import { identifyDestination, type DestinationDraft, type DestinationInput, type IdentificationResult } from "../destinations";
@@ -403,8 +404,7 @@ export function createMpesaAdapter(): PaymentProviderAdapter {
       }
 
       if (config.allowedIps.length) {
-        const forwarded = (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ?? "";
-        const clientIp = forwarded || request.headers.get("x-real-ip")?.trim() || "";
+        const clientIp = trustedClientIp(request.headers) ?? "";
         if (!clientIp || !config.allowedIps.includes(clientIp)) {
           return { ok: false, code: "CALLBACK_IP_REJECTED", message: "Callback did not come from an allowed M-PESA address.", eventId, eventType: isStk ? "STK_CALLBACK" : "C2B" };
         }

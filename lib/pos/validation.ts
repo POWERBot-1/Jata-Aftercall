@@ -190,7 +190,7 @@ export function sanitizeProductInput(body: JsonBody): ProductInput {
     taxable: bool(body, "taxable"),
     durationMinutes: body.durationMinutes == null ? null : positiveNumber(body, "durationMinutes"),
     variantOptions: typeof body.variantOptions === "string" ? body.variantOptions.slice(0, 4000) : null,
-    imageUrl: optionalText(body, "imageUrl", 2000),
+    imageUrl: body.imageUrl === undefined ? undefined : optionalText(body, "imageUrl", 2000),
     isActive: bool(body, "isActive", true),
     sortOrder: positiveNumber(body, "sortOrder"),
   };

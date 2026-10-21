@@ -8,6 +8,7 @@
  */
 
 import prisma from "@/lib/db";
+import { containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
 import type { PaymentClient } from "./context";
 
 export const PAYMENT_AUDIT_ACTIONS = [
@@ -85,6 +86,7 @@ export type PaymentAuditInput = {
 /** Trims a before/after snapshot to a JSON-safe, non-sensitive shape. */
 function snapshot(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
+  if (containsInlineImageDataUrl(value)) return { inlineMediaOmitted: true };
   const entries = Object.entries(value as Record<string, unknown>).filter(([, entry]) => entry !== undefined);
   if (!entries.length) return null;
   return Object.fromEntries(entries.slice(0, 40).map(([key, entry]) => {
@@ -95,18 +97,20 @@ function snapshot(value: unknown): Record<string, unknown> | null {
 }
 
 export async function logPaymentAudit(input: PaymentAuditInput, client: PaymentClient = prisma) {
+  const safeText = (value: string | null | undefined, fallback: string | null = null) =>
+    value == null ? null : containsInlineImageDataUrl(value) ? fallback : value;
   const data = {
     businessId: input.businessId,
     transactionId: input.transactionId ?? null,
     destinationId: input.destinationId ?? null,
     actorKind: input.actorKind,
     actorId: input.actorId ?? null,
-    actorName: input.actorName ?? null,
+    actorName: safeText(input.actorName),
     action: input.action,
-    summary: input.summary.slice(0, 300),
+    summary: safeText(input.summary, "Provider detail omitted by the media persistence policy.")!.slice(0, 300),
     beforeState: snapshot(input.beforeState) ?? undefined,
     afterState: snapshot(input.afterState) ?? undefined,
-    reason: input.reason ? input.reason.slice(0, 300) : null,
+    reason: input.reason ? safeText(input.reason)?.slice(0, 300) ?? null : null,
   };
   // The audit row is part of the caller's transaction (§98): if it cannot be written, the
   // financial change it describes is rolled back with it. The only tolerated case is an offline

@@ -28,16 +28,23 @@ vi.mock("@/lib/db", () => ({
     mediaAsset: {
       findFirst: vi.fn(async (args: any) => mocks.assets.find((asset) => asset.businessId === args.where.businessId && asset.hash === args.where.hash) ?? null),
       create: vi.fn(async (args: any) => {
-        const asset = { id: `asset-${mocks.assets.length + 1}`, createdAt: new Date(), ...args.data };
+        const asset = { id: `asset-${mocks.assets.length + 1}`, createdAt: new Date(), version: 0, ...args.data };
         mocks.assets.push(asset);
         return asset;
       }),
       findMany: vi.fn(async () => mocks.assets),
       count: vi.fn(async () => mocks.assets.length),
-      update: vi.fn(async (args: any) => {
+      updateMany: vi.fn(async (args: any) => {
         const asset = mocks.assets.find((entry) => entry.id === args.where.id);
-        if (asset) Object.assign(asset, args.data);
-        return asset;
+        if (!asset) return { count: 0 };
+        if (args.where.businessId && asset.businessId !== args.where.businessId) return { count: 0 };
+        if (args.where.version !== undefined && Number(asset.version ?? 0) !== Number(args.where.version)) return { count: 0 };
+        for (const [key, value] of Object.entries(args.data)) {
+          (asset as any)[key] = value && typeof value === "object" && "increment" in (value as Record<string, unknown>)
+            ? Number((asset as any)[key] ?? 0) + Number((value as { increment: number }).increment)
+            : value;
+        }
+        return { count: 1 };
       }),
       delete: vi.fn(async () => ({})),
     },
@@ -204,8 +211,8 @@ beforeEach(() => {
   mocks.requests = [];
 });
 
-describe("a phone photo reaches the website", () => {
-  it("takes a 12 MP Android JPEG, rotates it, shrinks it, and stores it", async () => {
+describe("a phone photo is optimized locally but not persisted inline", () => {
+  it("takes a 12 MP Android JPEG, rotates and shrinks it, then receives the explicit storage refusal", async () => {
     const restore = installBrowserEnvironment();
     try {
       const jpeg = jpegBytes({ width: 3000, height: 4000, exifOrientation: 6, padding: 200_000 });
@@ -232,12 +239,11 @@ describe("a phone photo reaches the website", () => {
         width: prepared.upload.width,
         height: prepared.upload.height,
       });
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(503);
       const data = await response.json();
-      expect(data.asset.url.startsWith("data:image/png;base64,")).toBe(true);
-      expect(data.asset.width).toBe(prepared.upload.width);
-      expect(data.asset.label).toBe("ACTUAL");
-      expect(mocks.assets).toHaveLength(1);
+      expect(data.code).toBe("inline_media_persistence_disabled");
+      expect(data.error).toMatch(/approved durable media provider/);
+      expect(mocks.assets).toHaveLength(0);
     } finally {
       restore();
     }
@@ -249,15 +255,18 @@ describe("a phone photo reaches the website", () => {
       const prepared = await prepareUpload(phoneFile(jpegBytes({ width: 1600, height: 1200 }), "photo.jpg", "image/jpeg"));
       expect(prepared.status).toBe("ok");
       if (prepared.status !== "ok") return;
-      const data = await (await throughRoute({ businessId: "business-a", dataUrl: prepared.upload.dataUrl })).json();
-      expect(JSON.stringify(data)).not.toContain("could not be read");
-      expect(JSON.stringify(data)).not.toContain("Upload a JPG, PNG or WebP");
+      const response = await throughRoute({ businessId: "business-a", dataUrl: prepared.upload.dataUrl });
+      const data = await response.json();
+      expect(response.status).toBe(503);
+      expect(data.code).toBe("inline_media_persistence_disabled");
+      expect(data.error).not.toContain("could not be read");
+      expect(data.error).not.toContain("Upload a JPG, PNG or WebP");
     } finally {
       restore();
     }
   });
 
-  it("accepts a WebP straight from an Android camera and a PNG screenshot", async () => {
+  it("prepares WebP and PNG locally but refuses both before persistence", async () => {
     const restore = installBrowserEnvironment();
     try {
       for (const [bytes, name, type] of [
@@ -268,9 +277,10 @@ describe("a phone photo reaches the website", () => {
         expect(prepared.status, `${name} should prepare`).toBe("ok");
         if (prepared.status !== "ok") continue;
         const response = await throughRoute({ businessId: "business-a", dataUrl: prepared.upload.dataUrl, alt: name });
-        expect(response.status, `${name} should store`).toBe(201);
+        expect(response.status, `${name} should be refused`).toBe(503);
+        expect((await response.json()).code).toBe("inline_media_persistence_disabled");
       }
-      expect(mocks.assets).toHaveLength(2);
+      expect(mocks.assets).toHaveLength(0);
     } finally {
       restore();
     }
@@ -373,7 +383,7 @@ describe("failures are explained, recoverable, and never destroy the rest of the
     }
   });
 
-  it("keeps the prepared photo when the upload fails, and succeeds on retry", async () => {
+  it("keeps the optimized photo in memory after the policy refuses persistence", async () => {
     const restore = installBrowserEnvironment();
     const realFetch = globalThis.fetch;
     try {
@@ -395,11 +405,12 @@ describe("failures are explained, recoverable, and never destroy the rest of the
         expect(first.error).toContain("try again");
       }
 
-      // The same prepared payload is still in hand — nothing is lost, the owner just taps again.
+      // The image bytes remain in the prepared browser object, but retrying cannot bypass policy.
       const second = await uploadPreparedImage({ businessId: "business-a", upload: prepared.upload, alt: "Retry" });
-      expect(second.status).toBe("ok");
-      if (second.status === "ok") expect(second.asset.url.startsWith("data:image/png;base64,")).toBe(true);
-      expect(mocks.assets).toHaveLength(1);
+      expect(second.status).toBe("error");
+      if (second.status === "error") expect(second.error).toMatch(/approved durable media provider/);
+      expect(prepared.upload.dataUrl).toMatch(/^data:image\//i);
+      expect(mocks.assets).toHaveLength(0);
     } finally {
       (globalThis as any).fetch = realFetch;
       restore();
@@ -425,38 +436,40 @@ describe("failures are explained, recoverable, and never destroy the rest of the
   });
 });
 
-describe("existing media and replacement", () => {
-  it("reuses the same pixels instead of storing a duplicate", async () => {
+describe("legacy media and replacement", () => {
+  it("refuses duplicate inline uploads without running hash deduplication or writing rows", async () => {
     const restore = installBrowserEnvironment();
     try {
-      const file = phoneFile(jpegBytes({ width: 1500, height: 1000 }), "same.jpg", "image/jpeg");
-      const first = await prepareUpload(file);
-      if (first.status !== "ok") throw new Error("fixture should prepare");
-      await throughRoute({ businessId: "business-a", dataUrl: first.upload.dataUrl, alt: "First" });
+      const first = await prepareUpload(phoneFile(jpegBytes({ width: 1500, height: 1000 }), "same.jpg", "image/jpeg"));
+      const second = await prepareUpload(phoneFile(jpegBytes({ width: 1500, height: 1000 }), "same-again.jpg", "image/jpeg"));
+      if (first.status !== "ok" || second.status !== "ok") throw new Error("fixtures should prepare");
 
-      const again = await prepareUpload(phoneFile(jpegBytes({ width: 1500, height: 1000 }), "same-again.jpg", "image/jpeg"));
-      if (again.status !== "ok") throw new Error("fixture should prepare");
-      const response = await throughRoute({ businessId: "business-a", dataUrl: again.upload.dataUrl, alt: "Second" });
-      const data = await response.json();
-      expect(data.reused).toBe(true);
-      expect(mocks.assets).toHaveLength(1);
-      expect(data.asset.alt).toBe("Second");
+      const firstResponse = await throughRoute({ businessId: "business-a", dataUrl: first.upload.dataUrl, alt: "First" });
+      const secondResponse = await throughRoute({ businessId: "business-a", dataUrl: second.upload.dataUrl, alt: "Second" });
+      expect(firstResponse.status).toBe(503);
+      expect(secondResponse.status).toBe(503);
+      expect(mocks.assets).toHaveLength(0);
+      expect(mocks.requests).toHaveLength(2);
     } finally {
       restore();
     }
   });
 
-  it("stores a replacement as a new asset rather than overwriting the old one", async () => {
+  it("refuses inline replacement and leaves a legacy media row untouched", async () => {
     const restore = installBrowserEnvironment();
+    const legacyRow = {
+      id: "legacy-asset", businessId: "business-a", hash: "legacy-hash",
+      url: "data:image/png;base64,AA==", alt: "Existing product photo", version: 3,
+    };
+    mocks.assets.push(legacyRow);
     try {
-      const first = await prepareUpload(phoneFile(jpegBytes({ width: 1400, height: 900 }), "before.jpg", "image/jpeg"));
-      const second = await prepareUpload(phoneFile(jpegBytes({ width: 1400, height: 901 }), "after.jpg", "image/jpeg"));
-      if (first.status !== "ok" || second.status !== "ok") throw new Error("fixtures should prepare");
-      const one = await (await throughRoute({ businessId: "business-a", dataUrl: first.upload.dataUrl, alt: "Beef" })).json();
-      const two = await (await throughRoute({ businessId: "business-a", dataUrl: second.upload.dataUrl, alt: "Beef (new photo)" })).json();
-      expect(two.reused).toBeUndefined();
-      expect(two.asset.id).not.toBe(one.asset.id);
-      expect(mocks.assets).toHaveLength(2);
+      const replacement = await prepareUpload(phoneFile(jpegBytes({ width: 1400, height: 901 }), "after.jpg", "image/jpeg"));
+      if (replacement.status !== "ok") throw new Error("fixture should prepare");
+
+      const response = await throughRoute({ businessId: "business-a", dataUrl: replacement.upload.dataUrl, alt: "New product photo" });
+      expect(response.status).toBe(503);
+      expect(mocks.assets).toEqual([legacyRow]);
+      expect(legacyRow.url).toBe("data:image/png;base64,AA==");
     } finally {
       restore();
     }

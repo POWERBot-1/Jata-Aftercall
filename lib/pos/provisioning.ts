@@ -20,6 +20,7 @@ import { CLONE_SCOPES, cloneConfiguration } from "./templates";
 import type { CloneScopeKey } from "./types";
 import { logPosAudit } from "./audit";
 import type { PosConfiguration, PosLifecycleStatus, QuestionnaireAnswers } from "./types";
+import { assertNoInlineImagePersistence, containsInlineImageDataUrl, InlineMediaPersistenceError } from "../media/persistence-policy";
 
 export type ConfigurationRecord = {
   id: string;
@@ -43,6 +44,40 @@ function parseJson(raw: unknown): unknown {
     return JSON.parse(raw);
   } catch {
     return null;
+  }
+}
+
+/** Inspect the raw serialized columns before normalization can omit legacy/unknown JSON keys. */
+function hasInlineImageInConfigurationRow(row: any): boolean {
+  const draftJson = row?.draftJson;
+  const publishedJson = row?.publishedJson;
+  const answersJson = row?.answersJson;
+  return containsInlineImageDataUrl({
+    // Check both serialized bytes (including malformed JSON) and parsed values. JSON permits an
+    // escaped slash (`data:image\/png`), which only becomes the real scheme after parsing.
+    draftJson,
+    publishedJson,
+    answersJson,
+    parsedDraft: parseJson(draftJson),
+    parsedPublished: parseJson(publishedJson),
+    parsedAnswers: parseJson(answersJson),
+  });
+}
+
+function rejectInlineImageInConfigurationRow(row: any): void {
+  if (hasInlineImageInConfigurationRow(row)) throw new InlineMediaPersistenceError();
+}
+
+function rejectInlineImageInVersionRow(row: any): void {
+  const snapshotJson = row?.snapshotJson;
+  const answersJson = row?.answersJson;
+  if (containsInlineImageDataUrl({
+    snapshotJson,
+    answersJson,
+    parsedSnapshot: parseJson(snapshotJson),
+    parsedAnswers: parseJson(answersJson),
+  })) {
+    throw new InlineMediaPersistenceError();
   }
 }
 
@@ -73,9 +108,12 @@ export function effectiveConfiguration(record: ConfigurationRecord | null, lifec
   return record.draft;
 }
 
+async function loadConfigurationRow(businessId: string): Promise<any | null> {
+  return prisma.posConfiguration.findUnique({ where: { businessId } });
+}
+
 export async function loadConfiguration(businessId: string): Promise<ConfigurationRecord | null> {
-  const row = await prisma.posConfiguration.findUnique({ where: { businessId } });
-  return toRecord(row);
+  return toRecord(await loadConfigurationRow(businessId));
 }
 
 export type SaveDraftResult = {
@@ -100,10 +138,16 @@ export async function saveDraft(params: {
   const answers = pruneAnswers(sanitizeAnswers(params.answers));
   const built = finalize(buildConfiguration(answers, params.context ?? {}));
   const configuration = finalize(applyTerminologyOverrides(built, params.terminology));
+  // Free-text answers and terminology become JSON too; they are not an alternate image-storage
+  // channel. Check the complete payload before any write.
+  assertNoInlineImagePersistence({ answers, terminology: params.terminology, configuration });
   const readiness = configurationReadiness(answers);
   const validation = validateConfiguration(configuration);
   const fingerprint = configurationFingerprint(configuration);
-  const existing = await prisma.posConfiguration.findUnique({ where: { businessId: params.businessId } });
+  const existing = await loadConfigurationRow(params.businessId);
+  // Normalize only after inspecting the original JSON: unknown nested fields must not disappear
+  // silently when a legacy row is edited.
+  rejectInlineImageInConfigurationRow(existing);
   const previous = toRecord(existing);
   const status: PosLifecycleStatus = previous && isPostPaymentStatus(previous.status)
     ? previous.status
@@ -184,8 +228,12 @@ export async function publishConfiguration(params: {
   actorId: string;
   note?: string;
 }): Promise<{ ok: boolean; reason?: string; record: ConfigurationRecord | null; version?: number }> {
-  const record = await loadConfiguration(params.businessId);
+  const existingRow = await loadConfigurationRow(params.businessId);
+  if (!existingRow) return { ok: false, reason: "Configure your POS first.", record: null };
+  rejectInlineImageInConfigurationRow(existingRow);
+  const record = toRecord(existingRow);
   if (!record) return { ok: false, reason: "Configure your POS first.", record: null };
+  assertNoInlineImagePersistence({ draft: record.draft, answers: record.answers, note: params.note });
   const validation = validateConfiguration(record.draft);
   if (!validation.ok) {
     return { ok: false, reason: validation.issues.find((issue) => issue.severity === "error")?.message ?? "Your configuration is incomplete.", record };
@@ -254,13 +302,20 @@ export async function listVersions(businessId: string, limit = 20) {
  * snapshot — history is never rewritten, so past transactions stay interpretable (§54).
  */
 export async function rollbackToVersion(params: { businessId: string; versionId: string; actorId: string }): Promise<{ ok: boolean; reason?: string; version?: number }> {
-  const record = await loadConfiguration(params.businessId);
+  const row = await loadConfigurationRow(params.businessId);
+  if (!row) return { ok: false, reason: "Configure your POS first." };
+  rejectInlineImageInConfigurationRow(row);
+  const record = toRecord(row);
   if (!record) return { ok: false, reason: "Configure your POS first." };
-  const entitlement = await syncPosEntitlement(params.businessId);
-  if (!entitlement.entitled) return { ok: false, reason: entitlement.reason };
+  assertNoInlineImagePersistence({ draft: record.draft, answers: record.answers });
   const target = await prisma.posConfigurationVersion.findFirst({ where: { id: params.versionId, businessId: params.businessId } });
   if (!target) return { ok: false, reason: "That version does not belong to this business." };
+  rejectInlineImageInVersionRow(target);
+  const targetAnswers = parseJson((target as any).answersJson) ?? {};
   const snapshot = normalizeConfiguration(parseJson((target as any).snapshotJson));
+  assertNoInlineImagePersistence({ snapshot, answers: targetAnswers });
+  const entitlement = await syncPosEntitlement(params.businessId);
+  if (!entitlement.entitled) return { ok: false, reason: entitlement.reason };
   const nextVersion = record.publishedVersion + 1;
   await prisma.$transaction(async (tx: any) => {
     await tx.posConfigurationVersion.create({
@@ -269,7 +324,7 @@ export async function rollbackToVersion(params: { businessId: string; versionId:
         configurationId: record.id,
         version: nextVersion,
         snapshotJson: JSON.stringify(snapshot),
-        answersJson: JSON.stringify(parseJson((target as any).answersJson) ?? {}),
+        answersJson: JSON.stringify(targetAnswers),
         fingerprint: configurationFingerprint(snapshot),
         note: `Rolled back to version ${(target as any).version}`,
         createdById: params.actorId,
@@ -302,8 +357,9 @@ export async function rollbackToVersion(params: { businessId: string; versionId:
 }
 
 /**
- * Provisioning after confirmed payment (§43, §44): PAYMENT_CONFIRMED → PROVISIONING → LIVE.
- * Runs inside the settlement transaction so a paid business can never be left unpublished.
+ * Provisioning after confirmed payment (§43, §44). Settlement remains authoritative even when
+ * a legacy inline image blocks a new publication snapshot: the paid POS stays entitled, while
+ * the existing draft remains in use until the owner can safely publish it.
  */
 export async function provisionAfterPayment(tx: any, params: { businessId: string; actorId: string | null }): Promise<void> {
   const row = await tx.posConfiguration.findUnique({ where: { businessId: params.businessId } });
@@ -311,7 +367,11 @@ export async function provisionAfterPayment(tx: any, params: { businessId: strin
   const record = toRecord(row);
   if (!record) return;
   const validation = validateConfiguration(record.draft);
-  const publishable = validation.ok;
+  const inlineMediaBlocked = hasInlineImageInConfigurationRow(row);
+  // Payment settlement is authoritative: never roll back a confirmed payment because publishing
+  // is blocked. Keep legacy JSON untouched; with no published snapshot, POS reads continue to use
+  // the draft, while the dashboard remains not-ready until the owner resolves the image and publishes.
+  const publishable = validation.ok && !inlineMediaBlocked;
   await tx.posConfiguration.update({
     where: { businessId: params.businessId },
     data: {
@@ -348,7 +408,7 @@ export async function provisionAfterPayment(tx: any, params: { businessId: strin
       action: "POS_PROVISIONED",
       targetType: "POS_CONFIGURATION",
       targetId: record.id,
-      metadata: JSON.stringify({ published: publishable, version: record.publishedVersion + 1 }),
+      metadata: JSON.stringify({ published: publishable, version: record.publishedVersion + 1, inlineMediaBlocked }),
     },
   });
 }
@@ -370,8 +430,12 @@ export async function cancelPos(businessId: string, actorId: string | null): Pro
  * never balances, transactions or credentials, which `assertCloneSafety` would refuse anyway.
  */
 export async function saveTemplate(params: { businessId: string; actorId: string; name: string }): Promise<{ ok: boolean; reason?: string; id?: string }> {
-  const record = await loadConfiguration(params.businessId);
+  const sourceRow = await loadConfigurationRow(params.businessId);
+  if (!sourceRow) return { ok: false, reason: "Configure your POS first." };
+  rejectInlineImageInConfigurationRow(sourceRow);
+  const record = toRecord(sourceRow);
   if (!record) return { ok: false, reason: "Configure your POS first." };
+  assertNoInlineImagePersistence({ configuration: record.draft, answers: record.answers, name: params.name });
   // The owner's own words win; only a nameless save is labelled for them (§26, §51).
   const supplied = typeof params.name === "string" ? params.name.trim() : "";
   const name = (supplied || `${record.draft.business.name || "My business"} setup`).slice(0, 80);
@@ -413,9 +477,14 @@ export async function copyConfigurationTo(params: {
     // this was an authorization refusal, not a bad form (§5, §75).
     return { ok: false, reason: SAFE_ERRORS.noAccess, code: "NOT_ALLOWED" };
   }
-  const source = await loadConfiguration(params.sourceBusinessId);
+  const sourceRow = await loadConfigurationRow(params.sourceBusinessId);
+  if (!sourceRow) return { ok: false, reason: "That business has no configuration to copy." };
+  rejectInlineImageInConfigurationRow(sourceRow);
+  const source = toRecord(sourceRow);
   if (!source) return { ok: false, reason: "That business has no configuration to copy." };
-  const target = await loadConfiguration(params.targetBusinessId);
+  const targetRow = await loadConfigurationRow(params.targetBusinessId);
+  rejectInlineImageInConfigurationRow(targetRow);
+  const target = toRecord(targetRow);
   if (target && target.publishedVersion > 0) {
     return { ok: false, reason: "That business already has a live POS. Edit its configuration instead of overwriting it." };
   }
@@ -438,6 +507,7 @@ export async function copyConfigurationTo(params: {
   cloned.business.branchName = "";
   cloned.receipt.businessName = "";
   const answers = pruneAnswers(sanitizeAnswers({ business_type: cloned.business.typeKey }));
+  assertNoInlineImagePersistence({ configuration: cloned, answers });
   await prisma.posConfiguration.upsert({
     where: { businessId: params.targetBusinessId },
     update: {
