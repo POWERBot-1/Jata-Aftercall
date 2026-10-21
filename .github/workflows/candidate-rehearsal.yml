@@ -238,3 +238,380 @@ jobs:
             /tmp/rehearsal-summary.md
           if-no-files-found: warn
           retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # D2 — the release gate cannot run on PR #49, because that head predates the
+  # gate entirely. This job closes the part of that gap the gate would have
+  # covered and the rehearsal above does not: the production build path, the
+  # dependency audit, and the failure controls — all against the candidate's
+  # own tree, never a merge of it into this branch.
+  #
+  # The candidate is checked out read-only. Checkers are copied in from this
+  # branch as untracked files so they resolve the candidate's own
+  # node_modules; nothing in the candidate is edited except during the
+  # broken-migration control, which runs on a throwaway copy of the migrations
+  # directory and restores it.
+  #
+  # A green result here is evidence about 5996229. It is not a merge, a rebase,
+  # or an approval, and it does not make PR #49's own head green.
+  # ───────────────────────────────────────────────────────────────────────────
+  d2-build-audit-controls:
+    name: "D2 — build, audit and controls on the candidate tree"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_d2_build
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_VERSION: "22.22.3"
+      NEXT_TELEMETRY_DISABLED: "1"
+      AUTH_SECRET: candidate-d2-disposable-secret
+      # CI=true makes the candidate's migration guard classify this as `ci`,
+      # which is allowed to migrate its own disposable database. The guard
+      # refuses enrolled Production targets from here — asserted below.
+      CI: "true"
+      PG_ADMIN_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build
+      BUILD_DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build?schema=public
+      # psql cannot parse Prisma's `?schema=` parameter, so it gets its own URL.
+      BUILD_PSQL_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build
+      CANDIDATE_SHA: ${{ inputs.candidate_commit || '59962291ec82d5ddbc8f323e3d057d6a5b15cf02' }}
+      CANDIDATE_LABEL: "${{ inputs.candidate_label || 'PR #49' }}"
+
+    steps:
+      - name: Checkout the reviewing branch (checkers + baseline history)
+        uses: actions/checkout@v4
+        with:
+          path: gate
+
+      - name: Checkout the candidate commit (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+          fetch-depth: 1
+
+      - name: Assert the run is about the intended commit
+        run: |
+          set -o pipefail
+          actual=$(git -C candidate rev-parse HEAD)
+          echo "requested: ${CANDIDATE_SHA}"
+          echo "checked out: ${actual}"
+          if [ "$actual" != "$CANDIDATE_SHA" ]; then
+            echo "::error::BLOCKED: checked out $actual but the run asked for $CANDIDATE_SHA"
+            exit 1
+          fi
+          git -C candidate log -1 --format='%H %ci %s'
+          echo "PASS: the candidate tree is ${actual}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Ensure a PostgreSQL client is available
+        run: |
+          set -o pipefail
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update -qq; sudo apt-get install -y -qq postgresql-client; }
+          psql --version
+
+      - name: Install the candidate lockfile
+        run: |
+          set -o pipefail
+          cd candidate
+          npm ci 2>&1 | tee /tmp/d2-npm-ci.log
+          test -f node_modules/.prisma/client/index.js || {
+            echo "::error::BLOCKED: the candidate's postinstall did not generate a Prisma client"
+            exit 1
+          }
+
+      - name: Stage the checking scripts inside the candidate tree
+        run: |
+          set -o pipefail
+          # The candidate has no scripts/ci of its own (it predates the gate).
+          # Copying the checkers in makes them resolve the candidate's own
+          # @prisma/client and read the candidate's own prisma/migrations.
+          cp -r gate/scripts/ci candidate/scripts/ci-review
+          ls candidate/scripts/ci-review
+
+      - name: Record the identity of the tree under test
+        run: |
+          set -o pipefail
+          cd candidate
+          node scripts/ci-review/verify-migrations.mjs --manifest-only 2>&1 | tee /tmp/d2-manifest-before.log
+          sha256sum prisma/migrations/*/migration.sql > /tmp/d2-migration-hashes-before.txt
+          wc -l < /tmp/d2-migration-hashes-before.txt
+
+      # ── Audit: the diagnostics must survive a non-zero exit ────────────────
+      - name: Production dependency audit (exit code preserved, never swallowed)
+        run: |
+          set -o pipefail
+          cd candidate
+          # `npm audit` exits 1 when it FINDS something and also on some network
+          # failures. Under `bash -e` that killed the reporter before it could
+          # say which happened. Capture the code, then classify.
+          set +e
+          npm audit --omit=dev --audit-level=high --json > /tmp/d2-audit-prod.json 2>/tmp/d2-audit-prod.err
+          prod_status=$?
+          npm audit --json > /tmp/d2-audit-full.json 2>/tmp/d2-audit-full.err
+          full_status=$?
+          set -e
+          echo "production audit exit code: ${prod_status}"
+          echo "full-tree  audit exit code: ${full_status}"
+          echo "${prod_status}" > /tmp/d2-audit-prod.status
+          echo "${full_status}" > /tmp/d2-audit-full.status
+          # The report must be a file with content even when the exit code is
+          # non-zero — an empty report is exactly the defect this closes.
+          test -s /tmp/d2-audit-prod.json || { echo "::error::BLOCKED: npm audit produced no report"; exit 1; }
+          head -c 300 /tmp/d2-audit-prod.json; echo
+          # An audit that exits 0 with no report is also unusable.
+          if [ ! -s /tmp/d2-audit-prod.json ]; then echo "::error::BLOCKED: empty audit report"; exit 1; fi
+          echo "PASS: the audit wrote a report (${prod_status} exit code preserved)"
+
+      - name: Classify the audit (PASS / FAIL / BLOCKED, never silence)
+        run: |
+          set -o pipefail
+          node gate/scripts/ci/summarise-audit.mjs \
+            --production /tmp/d2-audit-prod.json \
+            --production-status "$(cat /tmp/d2-audit-prod.status)" \
+            --full /tmp/d2-audit-full.json \
+            --full-status "$(cat /tmp/d2-audit-full.status)" 2>&1 | tee /tmp/d2-audit-verdict.log
+          verdict=${PIPESTATUS[0]}
+          echo "classifier exit code: ${verdict}"
+          echo "${verdict}" > /tmp/d2-audit-classifier.status
+          case "$verdict" in
+            0) echo "::notice::D2 audit: production tree clean (PASS)" ;;
+            1) echo "::error::FAIL: the candidate's production dependency tree has advisories" ;;
+            2) echo "::error::BLOCKED: the audit could not run — this is not a pass" ;;
+            *) echo "::error::BLOCKED: the classifier itself failed (exit ${verdict})"; exit 1 ;;
+          esac
+          # Exit 0 and 1 are both *conclusive* results about the tree; both are
+          # reported. Only 2 or an unexpected code stops the job, because an
+          # audit that did not run certifies nothing.
+          if [ "$verdict" = "2" ] || [ "$verdict" -gt 2 ]; then exit 1; fi
+
+      - name: Control 7/8 — the classifier separates findings from no-result
+        run: |
+          set -o pipefail
+          # Fixtures, not the candidate: this asserts the classifier's own
+          # behaviour, so a broken audit can never be reported as a clean one.
+          printf '%s' '{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":1,"critical":0,"total":1}},"vulnerabilities":{"x":{"severity":"high"}}}' > /tmp/fx-findings.json
+          printf '%s' 'not json at all' > /tmp/fx-broken.json
+
+          set +e
+          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-findings.json --production-status 1 > /tmp/fx1.log 2>&1
+          findings=$?
+          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-broken.json --production-status 1 > /tmp/fx2.log 2>&1
+          broken=$?
+          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-findings.json --production-status abc > /tmp/fx3.log 2>&1
+          nostatus=$?
+          set -e
+          echo "findings->$findings (want 1)  broken->$broken (want 2)  bad-status->$nostatus (want 2)"
+          cat /tmp/fx1.log /tmp/fx2.log
+          [ "$findings" -eq 1 ] || { echo "::error::FAIL: Control 7 — findings must FAIL, got $findings"; exit 1; }
+          [ "$broken" -eq 2 ] || { echo "::error::FAIL: Control 8 — an unparseable audit must BLOCK, got $broken"; exit 1; }
+          [ "$nostatus" -eq 2 ] || { echo "::error::FAIL: Control 8b — a missing exit code must BLOCK, got $nostatus"; exit 1; }
+          echo "PASS: Control 7 (findings => FAIL) and Control 8 (no result => BLOCKED)"
+
+      # ── The production build path, on the candidate's own tree ─────────────
+      - name: "Production build on PostgreSQL 18 (build.sh: guard → migrate → generate → next build)"
+        run: |
+          set -o pipefail
+          cd candidate
+          export DATABASE_URL="${BUILD_DATABASE_URL}"
+          set +e
+          npm run build > /tmp/d2-build.log 2>&1
+          build_status=$?
+          set -e
+          echo "build exit code: ${build_status}"
+          echo "${build_status}" > /tmp/d2-build.status
+          tail -n 40 /tmp/d2-build.log
+          [ "$build_status" -eq 0 ] || { echo "::error::FAIL: the production build failed on the candidate tree (exit ${build_status})"; exit 1; }
+          echo "PASS: the production build exited 0"
+
+      - name: The build log proves the migration gate ran, on this history
+        run: |
+          set -o pipefail
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/d2-build.log)
+          fail() { echo "::error::FAIL: $1"; exit 1; }
+          printf '%s' "$plain" | grep -q 'invoking migration gate' || fail "the build did not invoke the migration gate"
+          printf '%s' "$plain" | grep -qE 'OK_(CI|LOCAL|DEVELOPMENT|PREVIEW)' || fail "the migration target guard did not report an allow code"
+          printf '%s' "$plain" | grep -q 'Migrations deployed successfully' || fail "migrations did not report success"
+          printf '%s' "$plain" | grep -q 'Build completed successfully' || fail "the build did not complete"
+          printf '%s' "$plain" | grep -q 'jata_ci_pw' && fail "the build log contains the database password"
+          applied=$(printf '%s' "$plain" | grep -c 'Applying migration' || true)
+          echo "migrations applied during the build: ${applied}"
+          [ "$applied" -eq 18 ] || fail "expected 18 migrations to apply, the log names ${applied}"
+          echo "PASS: guard allowed CI, 18 migrations applied, build completed, no credential in the log"
+
+      - name: The ledger and the promised objects match the candidate's history
+        run: |
+          set -o pipefail
+          cd candidate
+          DATABASE_URL="${BUILD_DATABASE_URL}" node scripts/ci-review/verify-migrations.mjs 2>&1 | tee /tmp/d2-verify.log
+          # 18 directories, 18 ledger rows, 13 declarative expectations for the
+          # two candidate migrations, all checked against the database the build
+          # itself migrated.
+          grep -q 'PASS' /tmp/d2-verify.log || { echo "::error::FAIL: the verifier did not report PASS"; exit 1; }
+          psql "$BUILD_PSQL_URL" -X -q -At -c "SELECT count(*) FROM _prisma_migrations" | tee /tmp/d2-ledger-count.txt
+          [ "$(cat /tmp/d2-ledger-count.txt)" = "18" ] || { echo "::error::FAIL: expected 18 ledger rows"; exit 1; }
+
+      - name: The build artifact exists
+        run: |
+          set -o pipefail
+          test -f candidate/.next/BUILD_ID || { echo "::error::FAIL: .next/BUILD_ID missing"; exit 1; }
+          test -d candidate/.next/server || { echo "::error::FAIL: .next/server missing"; exit 1; }
+          echo "BUILD_ID=$(cat candidate/.next/BUILD_ID)"
+
+      # ── Controls: the build must refuse, not proceed, when it should ──────
+      - name: "Control 1 — a broken migration must fail the candidate's build"
+        run: |
+          set -o pipefail
+          cd candidate
+          control="99999999999999_d2_broken_migration"
+          mkdir -p "prisma/migrations/${control}"
+          printf '%s\n' '-- D2 negative control: this table does not exist.' \
+            'ALTER TABLE "NoSuchTableForD2Control" ADD COLUMN "x" TEXT;' \
+            > "prisma/migrations/${control}/migration.sql"
+          # Reuse the database the build already migrated. A non-existent
+          # database would also fail the build — for the wrong reason — and the
+          # control would pass while proving nothing.
+          set +e
+          DATABASE_URL="${BUILD_DATABASE_URL}" npm run build > /tmp/d2-control1.log 2>&1
+          control_status=$?
+          set -e
+          rm -rf "prisma/migrations/${control}"
+          echo "control build exit code: ${control_status} (want non-zero)"
+          tail -n 15 /tmp/d2-control1.log
+          [ "$control_status" -ne 0 ] || { echo "::error::FAIL: a broken migration did NOT fail the build"; exit 1; }
+          if grep -q 'Build completed successfully' /tmp/d2-control1.log; then
+            echo "::error::FAIL: the build reported success despite a failed migration"
+            exit 1
+          fi
+          echo "PASS: Control 1 — the broken migration failed the build before next build"
+          echo "=== the migrations directory is restored ==="
+          sha256sum -c /tmp/d2-migration-hashes-before.txt --quiet && echo "PASS: every migration.sql is byte-identical after the control"
+
+      - name: "Control 2 — the verifier refuses a database with no migrations"
+        run: |
+          set -o pipefail
+          cd candidate
+          set +e
+          DATABASE_URL="postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build?schema=d2_empty" \
+            node scripts/ci-review/verify-migrations.mjs > /tmp/d2-control2.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/d2-control2.log
+          [ "$status" -ne 0 ] || { echo "::error::FAIL: the verifier passed on an empty database"; exit 1; }
+          [ "$status" -eq 2 ] || echo "::warning::Control 2 exited ${status}, expected 2 (BLOCKED)"
+          echo "PASS: Control 2 — the verifier refuses an unmigrated database (exit ${status})"
+
+      - name: "Control 3 — the candidate's guard refuses a Production-claimed disposable target"
+        run: |
+          set -o pipefail
+          cd candidate
+          set +e
+          VERCEL=1 VERCEL_ENV=production \
+            DATABASE_URL="postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build?schema=public" \
+            bash scripts/migrate.sh > /tmp/d2-control3.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/d2-control3.log
+          [ "$status" -ne 0 ] || { echo "::error::FAIL: the guard allowed a Production claim on an unenrolled target"; exit 1; }
+          grep -qE 'REFUSED_PRODUCTION_(UNENROLLED|UNKNOWN_TARGET)' /tmp/d2-control3.log \
+            || { echo "::error::FAIL: the guard refused for an unexpected reason"; exit 1; }
+          if grep -q 'Applying migration' /tmp/d2-control3.log; then
+            echo "::error::FAIL: prisma ran despite the guard refusing"
+            exit 1
+          fi
+          echo "PASS: Control 3 — the guard refused before prisma was invoked"
+
+      - name: "Control 4 — the guard allows this CI database (the refusal is not simply always-red)"
+        run: |
+          set -o pipefail
+          cd candidate
+          set +e
+          CI=true DATABASE_URL="postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build?schema=public" \
+            node scripts/lib/migration-target-guard.mjs check > /tmp/d2-control4.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/d2-control4.log
+          [ "$status" -eq 0 ] || { echo "::error::FAIL: the guard refused a disposable CI database"; exit 1; }
+          grep -qE 'OK_(CI|LOCAL)' /tmp/d2-control4.log || { echo "::error::FAIL: unexpected allow code"; exit 1; }
+          echo "PASS: Control 4 — the guard allows its own disposable database"
+
+      - name: The candidate tree was not modified
+        run: |
+          set -o pipefail
+          cd candidate
+          sha256sum -c /tmp/d2-migration-hashes-before.txt --quiet && echo "PASS: migrations unchanged"
+          dirty=$(git status --porcelain=v1 | grep -v '^??' || true)
+          [ -z "$dirty" ] || { echo "::error::FAIL: tracked files were modified by the run"; echo "$dirty"; exit 1; }
+          echo "PASS: no tracked file was modified by the run"
+
+      - name: Publish the D2 verdict
+        if: always()
+        run: |
+          {
+            echo "### D2 closeout — ${CANDIDATE_LABEL} @ ${CANDIDATE_SHA}"
+            echo
+            echo "| evidence | value |"
+            echo "| --- | --- |"
+            echo "| build exit code | $(cat /tmp/d2-build.status 2>/dev/null || echo 'not reached') |"
+            echo "| production audit exit | $(cat /tmp/d2-audit-prod.status 2>/dev/null || echo 'not reached') |"
+            echo "| audit classifier exit | $(cat /tmp/d2-audit-classifier.status 2>/dev/null || echo 'not reached') |"
+            echo "| ledger rows | $(cat /tmp/d2-ledger-count.txt 2>/dev/null || echo 'not reached') |"
+            echo
+            echo '```'
+            sed -n '1,25p' /tmp/d2-manifest-before.log 2>/dev/null || echo "(no manifest)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Promote the verdict lines so the result is auditable without the
+          # log artifact, which is not retrievable from every environment.
+          emit() { local n=0; while IFS= read -r line; do [ -z "$line" ] && continue; line=${line//'%'/'%25'}; echo "$1${line}"; n=$((n+1)); [ "$n" -ge 4 ] && return 0; done; return 0; }
+          grep -E '^\[audit\]|^(PASS|FAIL|BLOCKED)' /tmp/d2-audit-verdict.log 2>/dev/null | emit '::notice::' || true
+          grep -E '^PASS|exit code|Applying migration' /tmp/d2-build.log 2>/dev/null >/dev/null || true
+          for f in /tmp/d2-control1.log /tmp/d2-control2.log /tmp/d2-control3.log; do
+            grep -E 'REFUSED_|PASS' "$f" 2>/dev/null | head -2 | emit '::notice::' || true
+          done
+          grep -m1 'BUILD_ID' /tmp/d2-verify.log 2>/dev/null | emit '::notice::' || true
+          echo "::notice::D2 job finished with overall status: ${{ job.status }}"
+
+      - name: Show the failing output
+        if: failure()
+        run: |
+          set -o pipefail
+          for f in /tmp/d2-build.log /tmp/d2-control1.log /tmp/d2-audit-prod.err /tmp/d2-verify.log; do
+            if [ -f "$f" ]; then
+              echo "::group::${f}"
+              tail -n 40 "$f"
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Keep the D2 logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d2-build-audit-logs
+          path: |
+            /tmp/d2-*.log
+            /tmp/d2-*.txt
+            /tmp/d2-*.json
+            /tmp/d2-*.status
+            /tmp/d2-*.err
+          if-no-files-found: warn
+          retention-days: 14

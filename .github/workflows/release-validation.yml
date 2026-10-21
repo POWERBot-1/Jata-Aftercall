@@ -143,6 +143,16 @@ jobs:
             *) echo "::error::BLOCKED: the production dependency audit did not complete (see /tmp/step-audit.log)"; exit 1 ;;
           esac
 
+      - name: Workflow files would be accepted by GitHub
+        run: |
+          set -o pipefail
+          # A workflow that fails to load is not a failed check: it is the
+          # absence of every check. Run 39516190207 proved that, with zero jobs
+          # and the workflow named after its own file path. This is the one
+          # check that can see that class of defect, so it runs before the rest.
+          node scripts/ci/check-workflow-expressions.mjs .github/workflows/*.yml \
+            2>&1 | tee /tmp/step-workflow-expressions.log
+
       - name: Gate self-tests (failure logic)
         run: |
           set -o pipefail
@@ -154,7 +164,8 @@ jobs:
             scripts/__tests__/summarise-audit.test.mjs \
             scripts/__tests__/migration-manifest.test.mjs \
             scripts/__tests__/smoke-production.test.mjs \
-            scripts/__tests__/rehearse-candidate-migrations.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+            scripts/__tests__/rehearse-candidate-migrations.test.mjs \
+            scripts/__tests__/check-workflow-expressions.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
 
       - uses: actions/upload-artifact@v4
         if: always()
