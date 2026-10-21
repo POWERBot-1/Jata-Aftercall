@@ -67,6 +67,21 @@ export const REQUIRED_ARTIFACTS = [
   "scripts/ci/check-workflow-expressions.mjs",
   "scripts/ci/verify-migrations.mjs",
   "scripts/ci/schema-drift-baseline.json",
+  "scripts/__tests__/authorize-migration.test.mjs",
+  "scripts/__tests__/check-schema-drift.test.mjs",
+  "scripts/__tests__/check-test-output.test.mjs",
+  "scripts/__tests__/check-workflow-expressions.test.mjs",
+  "scripts/__tests__/migration-allowlist-enrollment.test.mjs",
+  "scripts/__tests__/migration-expectations.test.mjs",
+  "scripts/__tests__/migration-gate-refusal.test.mjs",
+  "scripts/__tests__/migration-manifest.test.mjs",
+  "scripts/__tests__/migration-target-guard.test.mjs",
+  "scripts/__tests__/rehearse-candidate-migrations.test.mjs",
+  "scripts/__tests__/smoke-production-e2e.test.mjs",
+  "scripts/__tests__/smoke-production.test.mjs",
+  "scripts/__tests__/summarise-audit.test.mjs",
+  "scripts/__tests__/verify-evidence-manifest.test.mjs",
+  "scripts/__tests__/verify-reconciliation-justification.test.mjs",
 ];
 
 /**

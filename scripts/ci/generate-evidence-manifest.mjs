@@ -39,6 +39,23 @@ export const COVERED_SOURCES = [
   "scripts/ci/migration-expectations.mjs",
   "scripts/ci/check-schema-drift.mjs",
   "scripts/ci/check-test-output.mjs",
+  // The tests that pin each claim are part of the claim. A regression test that
+  // is edited to match broken behaviour should invalidate the manifest.
+  "scripts/__tests__/authorize-migration.test.mjs",
+  "scripts/__tests__/check-schema-drift.test.mjs",
+  "scripts/__tests__/check-test-output.test.mjs",
+  "scripts/__tests__/check-workflow-expressions.test.mjs",
+  "scripts/__tests__/migration-allowlist-enrollment.test.mjs",
+  "scripts/__tests__/migration-expectations.test.mjs",
+  "scripts/__tests__/migration-gate-refusal.test.mjs",
+  "scripts/__tests__/migration-manifest.test.mjs",
+  "scripts/__tests__/migration-target-guard.test.mjs",
+  "scripts/__tests__/rehearse-candidate-migrations.test.mjs",
+  "scripts/__tests__/smoke-production-e2e.test.mjs",
+  "scripts/__tests__/smoke-production.test.mjs",
+  "scripts/__tests__/summarise-audit.test.mjs",
+  "scripts/__tests__/verify-evidence-manifest.test.mjs",
+  "scripts/__tests__/verify-reconciliation-justification.test.mjs",
 ];
 
 const HEADER = [
