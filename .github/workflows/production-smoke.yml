@@ -77,17 +77,27 @@ jobs:
 
       - name: Resolve the target
         id: target
+        env:
+          CONFIGURED_PRODUCTION_URL: ${{ vars.SMOKE_PRODUCTION_URL }}
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
         run: |
           set -euo pipefail
+          # Verified 2026-10-21 against live GitHub Deployment 7154099992:
+          # Vercel sets `deployment_status.environment_url` to the per-deployment
+          # hostname (`https://jata-aftercall-<hash>-powerbot-1.vercel.app`), which
+          # Vercel Standard Protection (`all_except_custom_domains`) intercepts
+          # with a `/login?next=/sso-api...` SSO challenge page, whereas the
+          # canonical production alias `https://jata-aftercall.vercel.app` serves
+          # unauthenticated public traffic directly (`/health` -> status:ok, db:up).
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BASE="${{ inputs.base_url }}"
             SLUG="${{ inputs.business_slug }}"
           else
-            BASE="${{ github.event.deployment_status.environment_url }}"
+            BASE="${CONFIGURED_PRODUCTION_URL:-https://jata-aftercall.vercel.app}"
             SLUG=""
           fi
           if [ -z "$BASE" ]; then
-            echo "::error::BLOCKED: no base URL on the deployment event and none supplied"
+            echo "::error::BLOCKED: no base URL configured and none supplied"
             exit 1
           fi
           echo "base_url=$BASE" >> "$GITHUB_OUTPUT"
@@ -98,6 +108,7 @@ jobs:
             echo "| | |"
             echo "|---|---|"
             echo "| Target | \`$BASE\` |"
+            echo "| Deployment URL (SSO-protected) | \`${DEPLOYMENT_URL:-n/a}\` |"
             echo "| Storefront | ${SLUG:+\\\`/b/$SLUG\\\`}${SLUG:-not configured} |"
             echo "| Trigger | ${{ github.event_name }} |"
           } >> "$GITHUB_STEP_SUMMARY"

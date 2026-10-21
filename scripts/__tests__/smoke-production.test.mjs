@@ -110,3 +110,18 @@ test("evaluateStorefront requires HTML", () => {
   assert.equal(evaluateStorefront({ status: 200, body: HTML }).ok, true);
   assert.equal(evaluateStorefront({ status: 404, body: HTML }).ok, false);
 });
+
+import { readFileSync } from "node:fs";
+
+test("Vercel SSO HTML login challenge on /health fails cleanly rather than passing", () => {
+  const ssoHtml = "<!doctype html><html><head><title>Protected Deployment – Vercel</title></head><body><h1>Log in to Vercel</h1></body></html>";
+  const res = evaluateHealth({ status: 200, body: ssoHtml });
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /not JSON/);
+});
+
+test("production-smoke.yml targets canonical production domain rather than SSO-protected per-deployment URL", () => {
+  const wf = readFileSync(".github/workflows/production-smoke.yml", "utf8");
+  assert.match(wf, /CONFIGURED_PRODUCTION_URL:-https:\/\/jata-aftercall\.vercel\.app/);
+  assert.equal(/BASE="\$\{\{\s*github\.event\.deployment_status\.environment_url\s*\}\}"/.test(wf), false);
+});

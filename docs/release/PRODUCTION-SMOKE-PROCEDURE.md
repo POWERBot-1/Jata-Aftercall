@@ -164,3 +164,21 @@ could not create workflow dispatch event: HTTP 403: Resource not accessible by i
 ```
 
 Recorded as `BLOCKED`, not retried, and not worked around.
+
+---
+
+## 7. Addendum — 2026-10-21T07:43:00Z, Live External HTTPS Verification & SSO Finding
+
+Unauthenticated external HTTPS `GET` probes (standard TLS verification, zero auth
+headers, zero SSO bypass) established **both** halves of production reachability:
+
+| Field | Recorded Value |
+|---|---|
+| Date/time (UTC, ISO 8601) | `2026-10-21T07:43:00.344Z` |
+| Operator | Release closeout pass (external unauthenticated HTTPS client) |
+| Target URL | `https://jata-aftercall.vercel.app` |
+| `/` result | **200 HTML** — `JATA AFTERCALL — Every call leaves your business behind` (`PASS`) |
+| `/health` result | **`{"status":"ok","db":"up","version":"1.0.0","timestamp":"2026-10-21T07:43:00.344Z"}`** (`evaluateHealth` → `ok: true`, `PASS`) |
+| `/b/nyumbani-kitchen` result | **200 HTML** — `Nyumbani Kitchen \| Kilimani, Nairobi \| JATA AFTERCALL` (`PASS`) |
+| Per-deployment URL `https://jata-aftercall-d1ppkh90l-powerbot-1.vercel.app/health` | **Intercepted by Vercel SSO** (`vercel.com/login?next=%2Fsso-api...`, `Protected Deployment – Vercel`) |
+| Workflow defect fixed in Rev. 8 | `.github/workflows/production-smoke.yml` previously read `deployment_status.environment_url` (which Vercel sets to the SSO-protected per-deployment URL) instead of the canonical public alias `https://jata-aftercall.vercel.app`. Updated + pinned with 2 unit tests in `scripts/__tests__/smoke-production.test.mjs`. |
