@@ -4,11 +4,17 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * `schema-reconciliation-proposal` proves that applying
- * `docs/schema-reconciliation/reconciliation.patch` makes `prisma migrate diff`
- * return nothing. That is necessary and not sufficient: a patch can silence a
- * diff by describing something the database does not have, and "zero drift"
- * would then be a new lie rather than a fixed one.
+ * The `schema-reconciliation` job proves that `prisma migrate diff` returns
+ * nothing for the committed datamodel. That is necessary and not sufficient: a
+ * model edit can silence a diff by describing something the database does not
+ * have, and "zero drift" would then be a new lie rather than a fixed one.
+ *
+ * The six divergences were reconciled by
+ * `docs/schema-reconciliation/reconciliation.patch`, which is applied in that
+ * PR and is now simply part of `prisma/schema.prisma`. The patch file stays in
+ * the repository as the record of what changed; this check reads the committed
+ * schema, so it keeps working whether the change arrives as a patch or as the
+ * datamodel itself.
  *
  * This script checks both sides of all six recorded divergences:
  *
@@ -261,7 +267,7 @@ async function main() {
       console.log(`::error::reconciliation ${check.id} FAILED — ${detail.slice(0, 400)}`);
     }
   };
-  console.log("── datamodel side (the patch as applied) ──");
+  console.log("── datamodel side (prisma/schema.prisma, as committed) ──");
   for (const check of modelChecks) emit(check);
   console.log("── database side (the migrations as applied) ──");
   for (const check of dbChecks) emit(check);

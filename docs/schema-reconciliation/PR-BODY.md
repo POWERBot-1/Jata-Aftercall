@@ -133,3 +133,100 @@ direction of the fix, not the reverse.
 - [ ] Merged **before** PR #49 is rebased — otherwise the gate goes red on PR #49
       for a divergence that belongs here.
 - [ ] No required check was weakened to obtain green.
+
+---
+
+## Addendum — the CI baseline transition (second commit)
+
+The first commit is the reconciliation and touches exactly two files. This
+addendum documents the second commit, which exists because the reconciliation
+makes the old reconciliation job's premises false. Keeping them apart is the
+point: the schema change stays reviewable on its own, and the CI change is
+explained rather than buried in it.
+
+### Why the old job had to change
+
+`schema-reconciliation-proposal` asserted three things that are only true while
+the divergence is unfixed:
+
+| Step | Assumption | After the reconciliation |
+|---|---|---|
+| *Confirm the recorded baseline still describes reality* | `prisma migrate diff` exits **2** | it exits **0** — the step fails on its own success condition |
+| *Apply the proposed reconciliation to the schema only* | `git apply …reconciliation.patch` succeeds | the patch is **already applied**, so `git apply` refuses |
+| *The proposal must close the drift completely* | drift after applying the patch | there is nothing left to apply |
+
+None of those is a defect in the reconciliation; they are the job outliving its
+own premise. Left unchanged, this PR's own head would have gone red for having
+succeeded.
+
+### What replaced it
+
+The job is renamed `schema-reconciliation` — *Reconciled schema holds on
+PostgreSQL 18* — because it no longer proposes anything. **No assertion was
+dropped.** Every guarantee the proposal job carried is still made, against the
+committed datamodel instead of a patched copy:
+
+| Guarantee | Where |
+|---|---|
+| Full migration history applies on PostgreSQL 18, no pending or failed migrations | same job |
+| `prisma migrate diff --exit-code` returns **0** — zero drift, no DDL | same job |
+| Both sides of all six divergences (catalog **and** datamodel) | same job, **13 checks**, unchanged checker |
+| Prisma Client generated from the reconciled datamodel | same job |
+| `npm run seed`, `npm run typecheck`, full suite, no skips | same job |
+| The gate still **fails** on real drift | `failure-path-controls`, **Control 9** (new) |
+
+`verify-reconciliation-justification.mjs` needed no logic change — it already
+read `prisma/schema.prisma` and the catalog, so it now checks the committed
+schema rather than a patched one. Only its description and one section label
+were corrected.
+
+### The baseline is empty, and that is checked
+
+`scripts/ci/schema-drift-baseline.json` keeps its mechanism and loses its
+`entries`. The reason is recorded in the file itself, not only here.
+
+The direction matters. `check-schema-drift.mjs` fails when a recorded entry
+**disappears**, so an emptied baseline is only safe once the drift is genuinely
+gone — the same commit that fixes the schema must shorten the baseline, and no
+earlier one. The reconciliation job therefore runs the comparator against the
+real (now empty) diff: if an entry were left behind, the job fails on the stale
+entry rather than quietly excusing nothing.
+
+An empty baseline is a gate with no failure evidence of its own, so **Control 9
+reintroduces divergence #1** — `MediaAsset.updatedAt` losing `@default(now())`
+again — in a scratch copy of the schema, and asserts the failure end to end:
+
+- `prisma migrate diff` must exit **2** (drift detected);
+- `check-schema-drift.mjs` must exit **1** (new drift against an empty baseline);
+- the same comparator must exit **0** on a clean diff (it discriminates, rather
+  than being always-red).
+
+That control is the difference between removing a safety check and emptying a
+ledger. Only the ledger was emptied.
+
+### Merge-order constraint: dissolved
+
+The earlier note in this body said whichever of this PR and #50 merged second
+had to empty the baseline. #50 is merged (`66c4f33`), so this PR carries the
+baseline change itself, in the same commit that proves the drift is gone. **No
+merge-order constraint remains, and `main` does not go red either way.**
+
+### About the checklist above
+
+Every line is still checkable, with two name changes to read for:
+
+- the job named `schema-reconciliation-proposal` in the checklist is now
+  `schema-reconciliation` (**Reconciled schema holds on PostgreSQL 18**);
+- `git diff main --name-only` shows **four** files, because the second commit
+  adds the CI transition (`release-validation.yml`), the emptied baseline, this
+  document, and the regenerated evidence manifest. The **first commit** is the
+  one limited to `prisma/schema.prisma` and `tests/unit/pos-schema.test.ts`, and
+  it is a separate commit precisely so that limit is verifiable with
+  `git show --stat HEAD~1`.
+
+### Evidence manifest
+
+`docs/release/EVIDENCE-MANIFEST.sha256` covers the workflow, the baseline, this
+document and the checkers, all of which this PR changes, so it is regenerated in
+the same commit. `verify-evidence-manifest.mjs` — which also fails when a
+*required* artifact is missing — is what proves the regeneration is complete.

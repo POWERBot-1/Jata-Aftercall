@@ -1,22 +1,11 @@
 {
   "acceptedOn": "2026-10-20",
+  "emptiedOn": "2026-10-21",
   "owner": "repository owner",
-  "scope": "Pre-existing. Discovered by the release gate on 2026-10-20; present on main at 2575cf4 and unrelated to this branch and to PR #49.",
-  "why": "The committed migration history does not reproduce prisma/schema.prisma exactly. The gate must fail on NEW drift without being permanently red on debt nobody has fixed yet, so these exact findings are recorded here.",
-  "notA": "This is not an approval, not a waiver of correctness, and not a claim that the differences are harmless. Each one is a real divergence between the Prisma Client types and the actual database.",
-  "remediation": "A dedicated schema-reconciliation migration plus matching schema.prisma corrections, in its own reviewed pull request with its own rehearsal. Deliberately out of scope for a CI-infrastructure change, and deliberately not silently corrected here.",
-  "entries": [
-    "MediaAsset :: [*] Altered column `updatedAt` (default changed from `Some(Now)` to `None`)",
-    "MediaAsset :: [*] Changed the table",
-    "PaymentAttempt :: [*] Changed the table",
-    "PaymentAttempt :: [-] Removed foreign key on columns (businessId)",
-    "PaymentDestination :: [*] Altered column `capabilities` (default changed from `Some(Value(List([])))` to `None`)",
-    "PaymentDestination :: [*] Changed the table",
-    "PaymentDestination :: [*] Renamed index `PaymentDestination_businessId_provider_providerDestinationId_pr` to `PaymentDestination_businessId_provider_providerDestinationI_key`",
-    "PaymentProviderConnection :: [*] Altered column `capabilities` (default changed from `Some(Value(List([])))` to `None`)",
-    "PaymentProviderConnection :: [*] Changed the table",
-    "PosReceiptSequence :: [*] Changed the table",
-    "PosReceiptSequence :: [+] Added unique index on columns (businessId)",
-    "PosReceiptSequence :: [-] Dropped the primary key on columns (businessId)"
-  ]
+  "scope": "Empty. The six divergences recorded here on 2026-10-20 were reconciled in prisma/schema.prisma, so there is no accepted debt left to describe. The mechanism is kept, because it is what makes new drift fail while a deliberate record of unfixed debt is still possible.",
+  "why": "The committed migration history did not reproduce prisma/schema.prisma exactly. The gate had to fail on NEW drift without being permanently red on debt nobody had fixed yet, so those exact findings were recorded here. Once each finding was fixed in the datamodel rather than described as accepted, the entries had to be removed in the same change: check-schema-drift.mjs fails on a recorded entry that has disappeared, by design, so leaving them would have made the gate red for a resolved finding.",
+  "notA": "This is not an approval, not a waiver of correctness, and not a claim that the differences were harmless. While it was populated it described real divergence between the Prisma Client types and the actual database. It is empty now because the divergence is gone, not because it was excused.",
+  "remediation": "Done: the six divergences were reconciled schema-side in prisma/schema.prisma (MediaAsset.updatedAt default, PaymentAttempt.business relation plus Business.paymentAttempts, both capabilities defaults, the mapped PaymentDestination unique-index name, and PosReceiptSequence.businessId as the primary key). No migration was written, because in all six cases the database was already correct or stricter than the schema. Proof that nothing was invented is scripts/ci/verify-reconciliation-justification.mjs, which checks both the catalog and the datamodel for every one of the six, and the negative control in the failure-path-controls job, which proves an empty baseline still fails on new drift.",
+  "emptiedBy": "the schema reconciliation commit that changed prisma/schema.prisma; evidence in docs/schema-reconciliation/ (patch SHA-256 228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29)",
+  "entries": []
 }
