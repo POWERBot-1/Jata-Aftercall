@@ -726,6 +726,20 @@ jobs:
           git apply --verbose docs/schema-reconciliation/reconciliation.patch
           npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
 
+      - name: Apply the companion test change the reconciliation requires
+        run: |
+          set -o pipefail
+          # `tests/unit/pos-schema.test.ts` asserts that PosReceiptSequence's key is
+          # `@unique`. The committed migration declares it the PRIMARY KEY, so the
+          # test locks the divergence in place. It cannot be changed on the
+          # unreconciled branch — that would break the normal gate — so it travels
+          # with the reconciliation and is applied only here.
+          #
+          # The change is a strengthening, not a relaxation: `@id` implies
+          # uniqueness and adds NOT NULL, and the patch additionally rejects
+          # `@id @unique` on the same column.
+          git apply --verbose docs/schema-reconciliation/reconciliation-tests.patch
+
       - name: The proposal must close the drift completely
         run: |
           set -o pipefail
@@ -854,9 +868,9 @@ jobs:
       - name: Restore the schema so later steps cannot inherit the proposal
         if: always()
         run: |
-          git checkout -- prisma/schema.prisma
-          git diff --exit-code -- prisma/schema.prisma
-          echo "PASS: prisma/schema.prisma restored"
+          git checkout -- prisma/schema.prisma tests/unit/pos-schema.test.ts
+          git diff --exit-code -- prisma/schema.prisma tests/unit/pos-schema.test.ts
+          echo "PASS: prisma/schema.prisma and the companion test are restored"
 
       - uses: actions/upload-artifact@v4
         if: always()

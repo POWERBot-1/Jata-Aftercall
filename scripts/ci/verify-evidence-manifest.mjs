@@ -54,6 +54,7 @@ export const REQUIRED_ARTIFACTS = [
   "docs/release/MAIN-PROTECTION-PROPOSAL.md",
   "docs/release/PR49-REVALIDATION-PLAN.md",
   "docs/schema-reconciliation/reconciliation.patch",
+  "docs/schema-reconciliation/reconciliation-tests.patch",
   "docs/schema-reconciliation/PR-BUNDLE.md",
   "docs/schema-reconciliation/PR-BODY.md",
   "docs/schema-reconciliation/README.md",
