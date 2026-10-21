@@ -58,6 +58,7 @@ export const REQUIRED_ARTIFACTS = [
   "docs/schema-reconciliation/PR-BODY.md",
   "docs/schema-reconciliation/README.md",
   "docs/NEON-RECOVERY-READINESS.md",
+  "docs/release/PRODUCTION-SMOKE-PROCEDURE.md",
   "docs/RELEASE-GATE-PROPOSAL.md",
   ".github/workflows/release-validation.yml",
   ".github/workflows/candidate-rehearsal.yml",

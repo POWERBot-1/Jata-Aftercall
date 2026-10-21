@@ -193,3 +193,137 @@ enabled.
 * A ruleset with a bypass list is only as strong as that list. If admin bypass is
   permitted, the protection stops accidents, not a determined admin. This should
   be recorded rather than described as enforcement.
+
+---
+
+## Addendum 2 — 2026-10-21, executable ruleset and rollback
+
+The narrative above says what to require. This section is the thing an owner
+actually applies, so it can be applied without interpretation, and undone without
+guesswork.
+
+### Stage 1 — ruleset JSON (both open PRs can satisfy it today)
+
+`POST /repos/POWERBot-1/Jata-Aftercall/rulesets`
+
+```json
+{
+  "name": "main-protection-stage-1",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": true,
+        "required_review_thread_resolution": true
+      } },
+    { "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          { "context": "Journey against a real database" },
+          { "context": "Migration target guard" }
+        ],
+        "strict_required_status_checks_policy": false
+      } }
+  ]
+}
+```
+
+Why each choice:
+
+| Setting | Value | Reason |
+|---|---|---|
+| `bypass_actors` | **`[]`** | An empty list is the only value that means "nobody bypasses". Adding the repository admin here converts the rule into a habit, not a control. |
+| `strict_required_status_checks_policy` | **`false`** | `true` requires the branch to be up to date before merging, which would force a rebase onto `main` for every PR — and rebasing PR #49 is not authorized. Turning it on would create a second deadlock. |
+| `required_approving_review_count` | **1** | The repository has one non-bot collaborator. Requiring two would make every PR unmergeable by construction. |
+| `require_last_push_approval` | **`true`** | Closes the "approve, then push" hole: the approval must cover the commit that would actually merge. |
+| `dismiss_stale_reviews_on_push` | **`true`** | The same hole, in the other direction. |
+| `require_review_thread_resolution` | **`true`** | An unresolved objection should block, not be forgotten. |
+
+### Stage 2 — after this branch merges
+
+Re-`PUT` the same ruleset with one addition to `required_status_checks`:
+
+```json
+{ "context": "Release gate (aggregate)" }
+```
+
+Only the aggregate. Requiring the five individual jobs would unrequire the gate
+the moment a job is renamed or split, and the failure mode would be a green PR
+with no gate.
+
+### Preconditions, checked before applying Stage 1
+
+1. `GET /branches/main` returns `protected: false` **and** `GET /rulesets`
+   returns `[]` — i.e. nothing already covers `main`.
+2. `GET /commits/<PR #49 head>/check-runs` lists both required contexts.
+   Verified 2026-10-21: `Journey against a real database` and
+   `Migration target guard` are both present and `success` on `5996229…`.
+3. No open PR is *between* pushes such that its checks are mid-flight.
+
+### Administrator bypass — what the empty list does and does not do
+
+With `bypass_actors: []` and an **active** ruleset:
+
+* a normal push to `main` is rejected for **everyone**, including the owner;
+* a repository admin can still *edit or delete the ruleset itself*, because
+  administration of rulesets is not a bypass — it is the control plane;
+* the repository is owned by a **User** account, so there is no organization-level
+  ruleset above it that the owner cannot delete.
+
+The honest conclusion: **Stage 1 stops accidents and unreviewed pushes. It does
+not stop the owner.** That is a property of a single-owner repository, and it
+should be written down rather than described as "protected".
+
+### Rollback of the ruleset
+
+Rollback is deleting the ruleset, which is one call and loses no data:
+
+```bash
+gh api -X DELETE repos/POWERBot-1/Jata-Aftercall/rulesets/<ruleset_id>
+```
+
+To find the id:
+
+```bash
+gh api repos/POWERBot-1/Jata-Aftercall/rulesets --jq '.[] | "\(.id) \(.name)"'
+```
+
+To *pause* rather than delete (keeps the definition for re-enabling):
+
+```bash
+gh api -X PUT repos/POWERBot-1/Jata-Aftercall/rulesets/<id> \
+  -f enforcement=disabled
+```
+
+Because the ruleset is additive and external to the repository content, rollback
+cannot lose a commit, and applying it again is idempotent at the definition
+level. The one irreversible thing would be deleting `main` — which is exactly
+what the `deletion` rule exists to prevent.
+
+### Verification after any authorized change
+
+Requested is not effective. All four must be read back:
+
+```bash
+gh api repos/POWERBot-1/Jata-Aftercall/branches/main --jq '.protected'          # expect true
+gh api repos/POWERBot-1/Jata-Aftercall/rules/branches/main --jq '.[].type'      # expect the four rule types
+gh api repos/POWERBot-1/Jata-Aftercall/rulesets --jq '.[] | "\(.name) \(.enforcement)"'
+gh pr checks 49 --repo POWERBot-1/Jata-Aftercall                                # the two contexts must still report
+```
+
+Until the first returns `true`, no document in this repository may claim
+protection is active.
+
+### Status
+
+**`BLOCKED`** — requires explicit owner approval. No setting has been changed in
+any phase of this review. Current verified state: `protected: false`,
+`rulesets: []`, `rules/branches/main: []`.
