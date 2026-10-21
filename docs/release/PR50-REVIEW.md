@@ -126,3 +126,19 @@ No path was found where an unavailable dependency is reported as a pass.
 ## 6. Limitation of this review
 
 **I wrote PR #50.** This document is a self-review. It found real defects, which is evidence it was not purely defensive, but it is not the independent review the order asks for. `christine-kariuki` has `write` access and can provide it; PR #50 currently has **0 reviews**.
+
+---
+
+## Addendum — 2026-10-21
+
+This review was written against `e2a12a1` and is preserved as it stood on that head.
+
+D1, D3, D4, D5 and D6 were fixed afterwards in `b1c78ab` and exercised by run `39514949695`
+(6/6 jobs). D2 — the gate cannot run on PR #49 — is now mitigated for migrations and tests by
+the read-only candidate rehearsal (`docs/release/PR49-REHEARSAL-RESULTS.md`), but not closed:
+the rehearsal does not run the build path, the audit or the gate's negative controls on PR
+#49's tree. D7 remains documented by design.
+
+The current disposition of every defect, with evidence and run IDs, is §2 of
+`docs/release/RELEASE-GATE-REPORT-REV4.md`. Where this document and Rev. 4 disagree about a
+status, Rev. 4 is current.
