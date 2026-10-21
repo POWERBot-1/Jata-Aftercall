@@ -656,7 +656,11 @@ jobs:
   schema-reconciliation-proposal:
     name: Schema reconciliation proposal closes the drift
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+      pull-requests: write
 
     services:
       postgres:
@@ -675,6 +679,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recon?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recon?schema=public
 
     steps:
       - uses: actions/checkout@v4
@@ -785,7 +790,10 @@ jobs:
             cat /tmp/step-recon-justification.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          grep -E '^PASS' /tmp/step-recon-justification.log | head -n 10 | while IFS= read -r line; do
+          # GitHub caps notices at 10 per job (including runner notices). Pairing
+          # consecutive PASS lines preserves all 13 verbatim in 7 notice slots,
+          # leaving room for the reconciled test-suite count notice below.
+          grep -E '^PASS' /tmp/step-recon-justification.log | paste -d '|' - - | sed 's/|$/ /; s/|/ | /g' | while IFS= read -r line; do
             echo "::notice::${line//'%'/'%25'}"
           done || true
           if [ "$justify_status" -ne 0 ]; then
@@ -829,11 +837,29 @@ jobs:
       - name: Application suites against the reconciled datamodel
         run: |
           set -o pipefail
+          set +e
           npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-recon-suite.log
-          node scripts/ci/check-test-output.mjs /tmp/step-recon-suite.log
-          grep -E '^ *Tests ' /tmp/step-recon-suite.log | tail -n 1 | while IFS= read -r line; do
-            echo "::notice::reconciled datamodel —${line}"
-          done
+          vitest_status=${PIPESTATUS[0]}
+          node scripts/ci/check-test-output.mjs /tmp/step-recon-suite.log > /tmp/step-recon-suite-check.log 2>&1
+          check_status=$?
+          set -e
+          cat /tmp/step-recon-suite-check.log
+          {
+            echo "### Reconciled datamodel — application suite summary"
+            echo
+            echo '```'
+            cat /tmp/step-recon-suite-check.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$vitest_status" -ne 0 ] || [ "$check_status" -ne 0 ]; then
+            echo "::error::reconciled suite failed (vitest=${vitest_status}, check-test-output=${check_status})"
+            grep -E '^(FAIL|BLOCKED):' /tmp/step-recon-suite-check.log | head -n 5 | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            exit 1
+          fi
+          summary_line="$(grep '^\[test-output\] tests:' /tmp/step-recon-suite-check.log || true) | $(grep '^\[test-output\] files:' /tmp/step-recon-suite-check.log || true)"
+          echo "::notice::reconciled suite — ${summary_line//'%'/'%25'}"
           echo "PASS: the application agrees with the reconciled datamodel"
 
       - name: Restore the schema so later steps cannot inherit the proposal
