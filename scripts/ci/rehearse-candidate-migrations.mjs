@@ -65,6 +65,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -135,18 +136,32 @@ export function applyPreReconciliationFixes(schemaText) {
 }
 
 /**
- * True only when the candidate checkout predates the schema-reconciliation
- * cutover (its own `scripts/ci/schema-drift-baseline.json` is absent or still
- * carries recorded entries). Any candidate branched from or rebased onto
- * reconciled `main` carries `entries: []` in its own tree and returns false,
- * keeping zero-drift enforcement strictly active on all rebased candidates.
+ * Exact SHA-256 of the historical pre-reconciliation baseline committed on
+ * `main` in PR #50 (`66c4f33a2dd08f790b1daf4d8d80802ec27038e8:scripts/ci/schema-drift-baseline.json`).
+ * Pinning this digest prevents post-reconciliation branches from spoofing
+ * pre-reconciliation status by either deleting `schema-drift-baseline.json`
+ * (while `.github/workflows/release-validation.yml` exists) or adding an
+ * unrelated non-empty entry to `entries`.
+ */
+export const PRE_RECONCILIATION_BASELINE_SHA256 =
+  "ffbdf47fb98964a455c6b1350d19cc35e1c8b7cd2ed61ee194933df54d6e81ee";
+
+/**
+ * A candidate commit predates PR #52 schema reconciliation iff EITHER:
+ *   1. It predates PR #50 as well, so neither `scripts/ci/schema-drift-baseline.json`
+ *      nor `.github/workflows/release-validation.yml` exists in `candidateDir`; OR
+ *   2. Its `scripts/ci/schema-drift-baseline.json` matches the exact SHA-256 of
+ *      the historical `2026-10-20` baseline from `main` (`66c4f33a2dd08f790b1daf4d8d80802ec27038e8`).
  */
 export function candidatePredatesReconciliation(candidateDir) {
   const candidateBaselinePath = join(candidateDir, "scripts", "ci", "schema-drift-baseline.json");
-  if (!existsSync(candidateBaselinePath)) return true;
+  if (!existsSync(candidateBaselinePath)) {
+    return !existsSync(join(candidateDir, ".github", "workflows", "release-validation.yml"));
+  }
   try {
-    const parsed = JSON.parse(readFileSync(candidateBaselinePath, "utf8"));
-    return Array.isArray(parsed.entries) && parsed.entries.length > 0;
+    const raw = readFileSync(candidateBaselinePath);
+    const digest = createHash("sha256").update(raw).digest("hex");
+    return digest === PRE_RECONCILIATION_BASELINE_SHA256;
   } catch {
     return false;
   }
