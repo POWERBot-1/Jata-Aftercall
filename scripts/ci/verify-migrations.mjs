@@ -68,11 +68,19 @@ async function introspect(prisma) {
     SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'
   `);
 
+  // `conrelid::regclass::text` renders `PasswordResetToken` as
+  // `"PasswordResetToken"` — quote included — because regclass output is a
+  // valid identifier, and a mixed-case identifier needs quoting to be valid.
+  // Expectations are written with the bare model name, so that comparison
+  // failed for every constraint on a mixed-case table. Joining pg_class gives
+  // the unquoted `relname` instead. See the regression test in
+  // scripts/__tests__/migration-expectations.test.mjs.
   const constraints = await prisma.$queryRawUnsafe(`
-    SELECT c.conname AS name, c.conrelid::regclass::text AS table_name,
+    SELECT c.conname AS name, k.relname AS table_name,
            pg_get_constraintdef(c.oid) AS definition
     FROM pg_constraint c
     JOIN pg_namespace n ON n.oid = c.connamespace
+    JOIN pg_class k ON k.oid = c.conrelid
     WHERE n.nspname = 'public'
   `);
 

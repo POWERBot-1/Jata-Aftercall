@@ -131,7 +131,14 @@ export function evaluateExpectations(expectations, snapshot) {
         violations.push(`${label}: constraint missing`);
         continue;
       }
-      if (constraint.table !== expected.table) violations.push(`${label}: constraint is on ${constraint.table}, expected ${expected.table}`);
+      // Belt and braces for the quoting defect fixed in verify-migrations.mjs:
+      // compare identifiers with their quotes stripped, so a snapshot that
+      // renders `"PasswordResetToken"` and an expectation that names
+      // `PasswordResetToken` describe the same table rather than a mismatch.
+      const bare = (value) => String(value ?? "").replace(/"/g, "");
+      if (bare(constraint.table) !== bare(expected.table)) {
+        violations.push(`${label}: constraint is on ${constraint.table}, expected ${expected.table}`);
+      }
       for (const fragment of expected.contains ?? []) {
         if (!constraint.definition.toUpperCase().includes(fragment.toUpperCase())) {
           violations.push(`${label}: definition does not contain "${fragment}" (got: ${constraint.definition})`);

@@ -461,13 +461,34 @@ jobs:
         run: |
           set -o pipefail
           cd candidate
-          DATABASE_URL="${BUILD_DATABASE_URL}" node scripts/ci-review/verify-migrations.mjs 2>&1 | tee /tmp/d2-verify.log
           # 18 directories, 18 ledger rows, 13 declarative expectations for the
-          # two candidate migrations, all checked against the database the build
+          # two candidate migrations, checked against the database the build
           # itself migrated.
-          grep -q 'PASS' /tmp/d2-verify.log || { echo "::error::FAIL: the verifier did not report PASS"; exit 1; }
-          psql "$BUILD_PSQL_URL" -X -q -At -c "SELECT count(*) FROM _prisma_migrations" | tee /tmp/d2-ledger-count.txt
-          [ "$(cat /tmp/d2-ledger-count.txt)" = "18" ] || { echo "::error::FAIL: expected 18 ledger rows"; exit 1; }
+          #
+          # The exit code is captured rather than inferred from `pipefail`: a
+          # step that dies silently on a pipeline gives the next reader nothing
+          # to work with, which is the D6 lesson applied to this job.
+          set +e
+          DATABASE_URL="${BUILD_DATABASE_URL}" node scripts/ci-review/verify-migrations.mjs > /tmp/d2-verify.log 2>&1
+          verify_status=$?
+          count=$(psql "$BUILD_PSQL_URL" -X -q -At -c "SELECT count(*) FROM _prisma_migrations" 2>&1)
+          psql_status=$?
+          set -e
+          echo "$count" > /tmp/d2-ledger-count.txt
+          echo "verify-migrations.mjs exit: ${verify_status}"
+          echo "psql exit: ${psql_status}  ledger rows: ${count}"
+          echo "--- verifier output ---"
+          cat /tmp/d2-verify.log
+          if [ "$verify_status" -ne 0 ]; then
+            echo "::error::FAIL: the verifier rejected the migrated candidate database (exit ${verify_status})"
+            exit 1
+          fi
+          if ! grep -q '^PASS' /tmp/d2-verify.log; then
+            echo "::error::FAIL: the verifier exited 0 without reporting PASS"
+            exit 1
+          fi
+          [ "$count" = "18" ] || { echo "::error::FAIL: expected 18 ledger rows, found '${count}'"; exit 1; }
+          echo "PASS: 18 ledger rows, every promised object present, verifier exit 0"
 
       - name: The build artifact exists
         run: |

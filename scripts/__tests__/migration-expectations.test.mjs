@@ -123,3 +123,54 @@ test("FAIL: a missing foreign key and a missing cascade are both reported", () =
   const violations = evaluateExpectations(requiredExpectations([M2]), noCascade);
   assert.ok(violations.some((v) => /ON DELETE CASCADE/.test(v)));
 });
+
+// ── regression: constraint tables must compare without identifier quoting ──
+// Found on 2026-10-21 while closing D2. `conrelid::regclass::text` renders a
+// mixed-case table as `"PasswordResetToken"`, quote included. The only
+// constraint expectation in the repository names that table, and it is only
+// reachable once PR #49's migrations are present — so the gate would have gone
+// red on a correctly migrated database the first time someone rebased PR #49,
+// and the failure would have looked like a missing foreign key.
+test("a quoted regclass table name still matches the unquoted expectation", () => {
+  const expectation = {
+    kind: "constraint",
+    table: "PasswordResetToken",
+    name: "PasswordResetToken_userId_fkey",
+    contains: ["FOREIGN KEY", "ON DELETE CASCADE", "ON UPDATE CASCADE"],
+  };
+  const snapshot = {
+    tables: {},
+    indexes: {},
+    constraints: {
+      PasswordResetToken_userId_fkey: {
+        table: '"PasswordResetToken"',
+        definition:
+          'FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE',
+      },
+    },
+  };
+  assert.deepEqual(evaluateExpectations([expectation], snapshot), []);
+
+  const unquoted = structuredClone(snapshot);
+  unquoted.constraints.PasswordResetToken_userId_fkey.table = "PasswordResetToken";
+  assert.deepEqual(evaluateExpectations([expectation], unquoted), []);
+});
+
+test("a genuinely wrong table is still reported", () => {
+  const expectation = {
+    kind: "constraint",
+    table: "PasswordResetToken",
+    name: "PasswordResetToken_userId_fkey",
+    contains: ["FOREIGN KEY"],
+  };
+  const snapshot = {
+    tables: {},
+    indexes: {},
+    constraints: {
+      PasswordResetToken_userId_fkey: { table: '"User"', definition: 'FOREIGN KEY ("userId") REFERENCES "User"(id)' },
+    },
+  };
+  const violations = evaluateExpectations([expectation], snapshot);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0], /constraint is on "User", expected PasswordResetToken/);
+});
