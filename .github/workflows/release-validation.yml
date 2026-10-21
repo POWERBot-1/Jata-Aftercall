@@ -1,0 +1,923 @@
+name: Release Validation
+
+# Reproducible release gate.
+#
+# WHY THIS EXISTS BESIDE interactive-business-e2e.yml
+# ---------------------------------------------------
+# That workflow proves the application journeys work against PostgreSQL 16. It
+# does not prove any of the following, which is what this workflow adds:
+#
+#   * that the committed migration history applies cleanly on PostgreSQL 18 —
+#     the version the production Neon project actually runs;
+#   * that the resulting schema matches prisma/schema.prisma (no drift) and the
+#     migration ledger is complete, finished and not rolled back;
+#   * that the production build path (`scripts/build.sh` → guard → migrate →
+#     generate → next build) still works on PostgreSQL 18;
+#   * that the gate FAILS when it should. Every negative control here exists
+#     because a gate whose failure branch has never executed is decoration.
+#
+# WHAT IT CANNOT PROVE
+# --------------------
+# A PostgreSQL container is not a Neon project. This workflow says nothing about
+# Neon branching, point-in-time restore, the history window, compute suspension,
+# or provider-side quirks. Those remain owner-verified and are recorded in
+# docs/NEON-RECOVERY-READINESS.md.
+#
+# No production credential exists in this workflow. Every DATABASE_URL below
+# points at a disposable service container that is destroyed with the runner.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned exactly, not "22": a gate that floats its own runtime cannot
+  # reproduce a previous result.
+  NODE_VERSION: "22.22.3"
+  NEXT_TELEMETRY_DISABLED: "1"
+  # A throwaway value for a throwaway database. Never a production secret.
+  AUTH_SECRET: release-validation-disposable-secret
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  static-checks:
+    name: Static (install, generate, lint, typecheck, audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # `prisma validate` resolves env("DATABASE_URL") from the schema, and an
+      # unresolvable variable is a validation error. This is a placeholder for
+      # schema validation only: nothing listens on this address and no
+      # connection is ever opened from this job.
+      DATABASE_URL: postgresql://validation_only:validation_only@127.0.0.1:5432/validation_only?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install the committed lockfile
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee /tmp/step-npm-ci.log
+
+      - name: Lockfile is reproducible (npm did not rewrite it)
+        run: |
+          set -o pipefail
+          if ! git diff --exit-code -- package-lock.json package.json; then
+            echo "::error::npm ci modified the manifest — the lockfile is not reproducible"
+            exit 1
+          fi
+          echo "PASS: package.json and package-lock.json unchanged by npm ci"
+
+      - name: Validate Prisma schema and generate the client
+        run: |
+          set -o pipefail
+          # NOTE: DATABASE_URL here is the job-level placeholder
+          # (validation_only@127.0.0.1). validate/generate only need the variable
+          # to RESOLVE; nothing connects. If a future step in this job opens a
+          # connection, it must set its own real URL — do not reuse this one.
+          npx prisma validate 2>&1 | tee /tmp/step-validate.log
+          npx prisma generate 2>&1 | tee /tmp/step-generate.log
+          # An engine download that silently fails leaves a client-less tree and
+          # a typecheck full of spurious errors. Make that an explicit blocker.
+          if [ ! -f node_modules/.prisma/client/index.js ]; then
+            echo "::error::BLOCKED: Prisma Client was not generated (missing node_modules/.prisma/client/index.js). Engine download failed."
+            exit 1
+          fi
+          echo "PASS: Prisma Client generated"
+          node -e "console.log('prisma version:', require('prisma/package.json').version)"
+
+      - name: Lint
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee /tmp/step-lint.log
+
+      - name: Typecheck
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee /tmp/step-typecheck.log
+
+      - name: Dependency audit (production gate + full report)
+        run: |
+          set -o pipefail
+          # `npm audit` exits 1 when it FINDS something. Under the default
+          # `bash -e` that used to kill this step on the redirect line, so the
+          # reporter never ran and the log was empty exactly when it mattered.
+          # Capture both statuses explicitly, then let the summariser decide
+          # between PASS, FAIL (completed, with findings) and BLOCKED (did not
+          # complete). A registry outage must not read as a vulnerability, and a
+          # vulnerability must not read as an outage.
+          set +e
+          npm audit --omit=dev --json > /tmp/audit-production.json
+          production_status=$?
+          npm audit --json > /tmp/audit-full.json
+          full_status=$?
+          set -e
+          echo "production audit exit: $production_status"
+          echo "full audit exit:       $full_status"
+
+          status=0
+          node scripts/ci/summarise-audit.mjs \
+            --production /tmp/audit-production.json --production-status "$production_status" \
+            --full /tmp/audit-full.json --full-status "$full_status" \
+            2>&1 | tee /tmp/step-audit.log || status=$?
+
+          case "$status" in
+            0) echo "PASS: production dependency audit — 0 findings" ;;
+            1) echo "::error::FAIL: production advisories remain (see /tmp/step-audit.log)"; exit 1 ;;
+            *) echo "::error::BLOCKED: the production dependency audit did not complete (see /tmp/step-audit.log)"; exit 1 ;;
+          esac
+
+      - name: The evidence manifest verifies
+        run: |
+          set -o pipefail
+          # A report cannot contain its own digest. The manifest is the
+          # workaround, and this is the check that it still describes the files
+          # it claims to. It fails on a mismatch, a missing file, a required
+          # artifact that vanished from the list, or a manifest that lists
+          # itself.
+          if [ -f docs/release/EVIDENCE-MANIFEST.sha256 ]; then
+            node scripts/ci/verify-evidence-manifest.mjs 2>&1 | tee /tmp/step-evidence-manifest.log
+            sha256sum -c docs/release/EVIDENCE-MANIFEST.sha256 >/dev/null && echo "PASS: sha256sum -c agrees with the manifest verifier"
+          else
+            echo "::error::BLOCKED: docs/release/EVIDENCE-MANIFEST.sha256 is absent"
+            exit 1
+          fi
+
+      - name: Workflow files would be accepted by GitHub
+        run: |
+          set -o pipefail
+          # A workflow that fails to load is not a failed check: it is the
+          # absence of every check. Run 39516190207 proved that, with zero jobs
+          # and the workflow named after its own file path. This is the one
+          # check that can see that class of defect, so it runs before the rest.
+          node scripts/ci/check-workflow-expressions.mjs .github/workflows/*.yml \
+            2>&1 | tee /tmp/step-workflow-expressions.log
+
+      - name: Gate self-tests (failure logic)
+        run: |
+          set -o pipefail
+          node --test \
+            scripts/__tests__/check-test-output.test.mjs \
+            scripts/__tests__/migration-expectations.test.mjs \
+            scripts/__tests__/authorize-migration.test.mjs \
+            scripts/__tests__/check-schema-drift.test.mjs \
+            scripts/__tests__/summarise-audit.test.mjs \
+            scripts/__tests__/migration-manifest.test.mjs \
+            scripts/__tests__/smoke-production.test.mjs \
+            scripts/__tests__/rehearse-candidate-migrations.test.mjs \
+            scripts/__tests__/check-workflow-expressions.test.mjs \
+            scripts/__tests__/verify-reconciliation-justification.test.mjs \
+            scripts/__tests__/verify-evidence-manifest.test.mjs \
+            scripts/__tests__/smoke-production-e2e.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: static-logs
+          path: /tmp/step-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  migrations-pg18:
+    name: Migrations + schema on PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_ci?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_ci?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: |
+          npx prisma validate
+          npx prisma generate
+          if [ ! -f node_modules/.prisma/client/index.js ]; then
+            echo "::error::BLOCKED: Prisma Client missing after generate"
+            exit 1
+          fi
+
+      - name: Assert PostgreSQL 18 is the actual server
+        run: |
+          set -o pipefail
+          node - <<'JS' | tee /tmp/step-pg-version.log
+          const { PrismaClient } = require('@prisma/client');
+          (async () => {
+            const prisma = new PrismaClient();
+            const rows = await prisma.$queryRawUnsafe("SELECT current_setting('server_version') AS v");
+            await prisma.$disconnect();
+            const version = String(rows[0].v);
+            console.log(`server_version=${version}`);
+            if (!version.startsWith('18.')) {
+              console.error(`::error::BLOCKED: expected PostgreSQL 18, got ${version} — this gate's central claim would be untested`);
+              process.exit(1);
+            }
+            console.log('PASS: PostgreSQL 18');
+          })().catch((error) => { console.error(error.message); process.exit(1); });
+          JS
+
+      - name: Apply the complete migration history
+        run: |
+          set -o pipefail
+          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate-deploy.log
+
+      - name: Migration status reports no pending or failed migrations
+        run: |
+          set -o pipefail
+          npx prisma migrate status 2>&1 | tee /tmp/step-migrate-status.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-migrate-status.log)
+          if printf '%s' "$plain" | grep -qiE 'failed migration|following migration'; then
+            echo "::error::FAIL: migration status reports a pending or failed migration"
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qi 'Database schema is up to date'; then
+            echo "::error::FAIL: migration status did not report an up-to-date schema"
+            exit 1
+          fi
+          echo "PASS: schema up to date, no pending or failed migrations"
+
+      - name: Schema drift is bounded by the recorded baseline
+        run: |
+          set -o pipefail
+          # Exit code 2 means the migrated database differs from schema.prisma.
+          #
+          # This repository has pre-existing divergence, discovered by this gate
+          # on 2026-10-20 and recorded in scripts/ci/schema-drift-baseline.json.
+          # The check therefore fails on drift that is NOT recorded (and on a
+          # baseline that has gone stale), rather than being permanently red on
+          # debt unrelated to the change under review. The recorded debt is
+          # reported as FAIL in the accompanying report — the baseline is not an
+          # approval.
+          set +e
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code 2>&1 | tee /tmp/step-migrate-diff.log
+          diff_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$diff_status" -eq 0 ]; then
+            echo "PASS: no drift between the migration history and schema.prisma"
+            exit 0
+          fi
+          if [ "$diff_status" -ne 2 ]; then
+            echo "::error::BLOCKED: prisma migrate diff could not run (exit $diff_status)"
+            exit 1
+          fi
+          echo "Drift reported; comparing against the recorded baseline."
+          node scripts/ci/check-schema-drift.mjs /tmp/step-migrate-diff.log
+
+      - name: Migration ledger and declarative expectations
+        run: |
+          set -o pipefail
+          node scripts/ci/verify-migrations.mjs 2>&1 | tee /tmp/step-verify-migrations.log
+
+      - name: Re-running migrate deploy is a no-op (idempotent)
+        run: |
+          set -o pipefail
+          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate-again.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-migrate-again.log)
+          if printf '%s' "$plain" | grep -qiE 'applying migration|applied migration'; then
+            echo "::error::FAIL: the second deployment applied migrations that should already have been applied"
+            exit 1
+          fi
+          echo "PASS: second deployment applied nothing"
+
+      - name: Seed disposable database
+        run: |
+          set -o pipefail
+          npm run seed 2>&1 | tee /tmp/step-seed.log
+
+      - name: Unit, integration and security suites against PostgreSQL 18
+        run: |
+          set -o pipefail
+          npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-suite.log
+          node scripts/ci/check-test-output.mjs /tmp/step-suite.log
+
+      - name: Report diagnostics to the pull request
+        # Runner logs live behind a signed redirect that some environments cannot
+        # fetch. A failure that cannot be read is a failure that cannot be fixed,
+        # so the decisive lines are also posted where they can be seen.
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = [
+              '/tmp/step-pg-version.log', '/tmp/step-migrate-deploy.log',
+              '/tmp/step-migrate-status.log', '/tmp/step-migrate-diff.log',
+              '/tmp/step-verify-migrations.log', '/tmp/step-migrate-again.log',
+              '/tmp/step-suite.log',
+            ];
+            let out = '';
+            for (const file of files) {
+              try {
+                const text = fs.readFileSync(file, 'utf8')
+                  .replace(/\u001b\[[0-9;]*m/g, '')
+                  .replaceAll('jata_ci_pw', '[redacted]');
+                out += `\n### ${file.split('/').pop()}\n\n\`\`\`\n${text.slice(-4000)}\n\`\`\`\n`;
+              } catch { /* step did not run */ }
+            }
+            const body = `Release Validation — migrations-pg18 diagnostics on \`${context.sha}\`\n${out}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body.slice(0, 60000),
+            });
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pg18-logs
+          path: /tmp/step-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  production-build:
+    name: Production build path on PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_build
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_build?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Record the migration history under test
+        run: |
+          set -o pipefail
+          # A count is not an identity. Record the commit, the directory, the
+          # number of migrations and a digest over every migration.sql, so a
+          # reader can tell WHICH history this job exercised.
+          node scripts/ci/verify-migrations.mjs --manifest-only 2>&1 | tee /tmp/step-manifest-before.log
+
+      - name: "Run the production build (build.sh: guard → migrate → generate → next build)"
+        run: |
+          set -o pipefail
+          # A failing migration stops `build.sh` (set -e), so this step fails and
+          # the build below cannot be reported as successful.
+          npm run build 2>&1 | tee /tmp/step-build.log
+
+      - name: Build log proves the gate ran and no credential leaked
+        run: |
+          set -o pipefail
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-build.log)
+
+          # The migration gate must actually have executed, not been skipped.
+          if ! printf '%s' "$plain" | grep -q 'invoking migration gate'; then
+            echo "::error::FAIL: DATABASE_URL was set but the build did not invoke the migration gate"
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE 'OK_(CI|LOCAL|DEVELOPMENT|PREVIEW)'; then
+            echo "::error::FAIL: the migration target guard did not report an allow code"
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -q 'Migrations deployed successfully'; then
+            echo "::error::FAIL: migrations did not report success during the build"
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -q 'Build completed successfully'; then
+            echo "::error::FAIL: the build did not complete"
+            exit 1
+          fi
+          # Credential-leak check: the disposable password must never appear.
+          if printf '%s' "$plain" | grep -q 'jata_ci_pw'; then
+            echo "::error::FAIL: the build log contains the database password"
+            exit 1
+          fi
+          echo "PASS: guard allowed CI, migrations ran, build completed, no credential in the log"
+
+      - name: Verify the build migrated exactly this history
+        run: |
+          set -o pipefail
+          # Closes the gap where a green build job said nothing about what it
+          # migrated. Compares the ledger the build produced against the
+          # manifest on disk, and reports the PostgreSQL version, so the log
+          # itself identifies the history and the engine.
+          node scripts/ci/verify-migrations.mjs 2>&1 | tee /tmp/step-build-verify.log
+
+      - name: Build artifact exists
+        run: |
+          test -f .next/BUILD_ID || { echo "::error::FAIL: .next/BUILD_ID missing"; exit 1; }
+          test -d .next/server || { echo "::error::FAIL: .next/server missing"; exit 1; }
+          echo "PASS: BUILD_ID=$(cat .next/BUILD_ID)"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-logs
+          path: /tmp/step-build.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  failure-path-controls:
+    name: Failure paths actually fail
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_negative
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_negative?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: "Control 1 — a broken migration must fail the gate"
+        run: |
+          set -o pipefail
+          # Baseline: the real history applies.
+          npx prisma migrate deploy
+          # Add a deliberately invalid migration in a scratch copy and prove the
+          # pipeline refuses it. The repository itself is never modified.
+          # Tracked files only: `cp -a .` copied node_modules (hundreds of MB)
+          # solely for the next line to delete it.
+          rm -rf /tmp/broken && mkdir -p /tmp/broken
+          git archive HEAD | tar -x -C /tmp/broken
+          mkdir -p /tmp/broken/prisma/migrations/99999999999999_deliberate_failure
+          printf 'CREATE TABLE "Broken" (\n' > /tmp/broken/prisma/migrations/99999999999999_deliberate_failure/migration.sql
+          cd /tmp/broken
+          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
+          set +e
+          npx prisma migrate deploy > /tmp/step-negative-broken-migration.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-negative-broken-migration.log
+          if [ "$status" -eq 0 ]; then
+            echo "::error::FAIL: an invalid migration was accepted — the gate cannot detect migration failure"
+            exit 1
+          fi
+          echo "PASS: invalid migration rejected with exit $status"
+
+      - name: "Control 2 — the verifier must fail on a database with no migrations"
+        run: |
+          set -o pipefail
+          # A separate schema in the same disposable database, so no role or
+          # CREATE DATABASE privilege is needed and nothing extra is provisioned.
+          set +e
+          DATABASE_URL='postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_negative?schema=verifier_empty' \
+            node scripts/ci/verify-migrations.mjs > /tmp/step-negative-verifier.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-negative-verifier.log
+          if [ "$status" -eq 0 ]; then
+            echo "::error::FAIL: the verifier passed an unmigrated schema — its assertions are not being enforced"
+            exit 1
+          fi
+          echo "PASS: verifier rejected an unmigrated schema with exit $status"
+
+      - name: "Control 3 — skipped tests must fail the gate"
+        run: |
+          set -o pipefail
+          printf 'Test Files  3 passed (3)\n     Tests  1 failed | 10 passed | 2 skipped (13)\n' > /tmp/skipped.log
+          set +e
+          node scripts/ci/check-test-output.mjs /tmp/skipped.log > /tmp/step-negative-skipped.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-negative-skipped.log
+          if [ "$status" -ne 1 ]; then
+            echo "::error::FAIL: skipped tests did not fail the gate (exit $status)"
+            exit 1
+          fi
+          echo "PASS: skipped tests fail the gate"
+
+      - name: "Control 4 — the skip detector is not simply always red"
+        run: |
+          set -o pipefail
+          printf 'Test Files  3 passed (3)\n     Tests  13 passed (13)\n' > /tmp/clean.log
+          node scripts/ci/check-test-output.mjs /tmp/clean.log | tee /tmp/step-control-clean.log
+          echo "PASS: a clean run passes (the control is discriminating, not always-fail)"
+
+      - name: "Control 5 — a missing log is a blocker, not a pass"
+        run: |
+          set -o pipefail
+          set +e
+          node scripts/ci/check-test-output.mjs /tmp/definitely-not-written.log > /tmp/step-negative-missing-log.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-negative-missing-log.log
+          if [ "$status" -ne 2 ]; then
+            echo "::error::FAIL: a missing log did not block (exit $status)"
+            exit 1
+          fi
+          echo "PASS: missing log blocks"
+
+      - name: "Control 7 — an audit with findings must FAIL, not pass and not block"
+        run: |
+          set -o pipefail
+          printf '%s' '{"metadata":{"vulnerabilities":{"info":0,"low":1,"moderate":2,"high":3,"critical":0,"total":6}}}' > /tmp/aud-vulnerable.json
+          set +e
+          node scripts/ci/summarise-audit.mjs --production /tmp/aud-vulnerable.json --production-status 1 > /tmp/step-control-audit-findings.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-control-audit-findings.log
+          if [ "$status" -ne 1 ]; then
+            echo "::error::FAIL: a completed audit with findings did not produce FAIL (exit $status)"
+            exit 1
+          fi
+          echo "PASS: completed audit with findings -> FAIL (exit 1)"
+
+      - name: "Control 8 — an audit that could not run must BLOCK, not report findings"
+        run: |
+          set -o pipefail
+          # The distinction D1 exists for. A registry outage and a real
+          # vulnerability are different facts and must not collapse into one.
+          printf '%s' '{"error":{"summary":"registry unreachable"}}' > /tmp/aud-unavailable.json
+          set +e
+          node scripts/ci/summarise-audit.mjs --production /tmp/aud-unavailable.json --production-status 1 > /tmp/step-control-audit-blocked.log 2>&1
+          blocked=$?
+          node scripts/ci/summarise-audit.mjs --production /tmp/definitely-absent.json --production-status 1 > /dev/null 2>&1
+          missing=$?
+          set -e
+          cat /tmp/step-control-audit-blocked.log
+          if [ "$blocked" -ne 2 ] || [ "$missing" -ne 2 ]; then
+            echo "::error::FAIL: an audit that could not run did not BLOCK (unavailable=$blocked missing=$missing)"
+            exit 1
+          fi
+          echo "PASS: audit that could not run -> BLOCKED (exit 2)"
+
+      - name: "Control 6 — the proposed migration authorizer refuses by default"
+        run: |
+          set -o pipefail
+          set +e
+          VERCEL_ENV=production MIGRATION_AUTHORIZATION= node scripts/ci/authorize-migration.mjs --sha 59962291ec82d5ddbc8f323e3d057d6a5b15cf02 > /tmp/step-negative-auth.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/step-negative-auth.log
+          if [ "$status" -eq 0 ]; then
+            echo "::error::FAIL: an unauthorized production build was permitted to migrate"
+            exit 1
+          fi
+          echo "PASS: unauthorized production migration refused with exit $status"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: negative-control-logs
+          path: /tmp/step-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  schema-reconciliation-proposal:
+    name: Schema reconciliation proposal closes the drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: jata_recon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recon?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recon?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: |
+          set -o pipefail
+          # The justification check queries the catalog through @prisma/client,
+          # not through the CLI. Without this the check cannot run at all, and
+          # "could not run" must never be mistaken for "the schema is fine".
+          npx prisma generate
+          test -f node_modules/.prisma/client/index.js || {
+            echo "::error::BLOCKED: Prisma Client missing after generate"
+            exit 1
+          }
+
+      - name: Apply the complete migration history
+        run: npx prisma migrate deploy
+
+      - name: Confirm the recorded baseline still describes reality
+        run: |
+          set -o pipefail
+          # If this fails, the baseline has gone stale and the main gate is
+          # asserting something untrue. Fail here rather than there.
+          set +e
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code 2>&1 | tee /tmp/step-recon-before.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "::error::FAIL: expected the recorded drift (exit 2), got exit $status — the baseline is stale"
+            exit 1
+          fi
+          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-before.log
+
+      - name: Apply the proposed reconciliation to the schema only
+        run: |
+          set -o pipefail
+          git apply --verbose docs/schema-reconciliation/reconciliation.patch
+          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
+
+      - name: Apply the companion test change the reconciliation requires
+        run: |
+          set -o pipefail
+          # `tests/unit/pos-schema.test.ts` asserts that PosReceiptSequence's key is
+          # `@unique`. The committed migration declares it the PRIMARY KEY, so the
+          # test locks the divergence in place. It cannot be changed on the
+          # unreconciled branch — that would break the normal gate — so it travels
+          # with the reconciliation and is applied only here.
+          #
+          # The change is a strengthening, not a relaxation: `@id` implies
+          # uniqueness and adds NOT NULL, and the patch additionally rejects
+          # `@id @unique` on the same column.
+          git apply --verbose docs/schema-reconciliation/reconciliation-tests.patch
+
+      - name: The proposal must close the drift completely
+        run: |
+          set -o pipefail
+          set +e
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code 2>&1 | tee /tmp/step-recon-after.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::error::FAIL: the proposal does not reconcile the schema (exit $status)"
+            cat /tmp/step-recon-after.log
+            exit 1
+          fi
+          echo "PASS: migrations + proposed schema edit produce zero drift, with no DDL"
+
+      - name: Every edit describes an object the database already has
+        run: |
+          set -o pipefail
+          # Zero drift is not the same as a correct reconciliation. A patch can
+          # silence `migrate diff` by inventing a constraint the database does
+          # not have. This checks both sides of all six divergences: the
+          # database must contain the object, and the patched datamodel must
+          # assert it. The patch is still applied at this point.
+          #
+          # The exit code is captured, and on failure the shell — not the
+          # script — promotes the reason to annotations. A checker that fails
+          # without saying which check failed costs a whole CI cycle to
+          # diagnose, and that is not a property a release gate may have.
+          set +e
+          node scripts/ci/verify-reconciliation-justification.mjs > /tmp/step-recon-justification.log 2>&1
+          justify_status=$?
+          set -e
+          cat /tmp/step-recon-justification.log
+          # A PASS is evidence too. Publish the per-divergence result so the
+          # claim "all six are justified on both sides" can be audited from the
+          # checks API, not only from an artifact that may be unreachable.
+          {
+            echo "### Schema reconciliation justification"
+            echo
+            echo '```'
+            cat /tmp/step-recon-justification.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # GitHub caps notices at 10 per job (including runner notices). Pairing
+          # consecutive PASS lines preserves all 13 verbatim in 7 notice slots,
+          # leaving room for the reconciled test-suite count notice below.
+          grep -E '^PASS' /tmp/step-recon-justification.log | paste -d '|' - - | sed 's/|$/ /; s/|/ | /g' | while IFS= read -r line; do
+            echo "::notice::${line//'%'/'%25'}"
+          done || true
+          if [ "$justify_status" -ne 0 ]; then
+            echo "::error::justification check exited ${justify_status}"
+            grep -E '^(FAIL|BLOCKED)' /tmp/step-recon-justification.log | head -n 8 | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            grep -E '^::error::' /tmp/step-recon-justification.log | head -n 4 | sed 's/^::error:://' | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            tail -n 4 /tmp/step-recon-justification.log | while IFS= read -r line; do
+              echo "::error::tail: ${line//'%'/'%25'}"
+            done
+            exit 1
+          fi
+
+      - name: Generate a client from the reconciled datamodel
+        run: |
+          set -o pipefail
+          # Separate steps on purpose: when one fails, the step NAME in the jobs
+          # API says which, and that channel works from environments where logs
+          # and artifacts do not.
+          npx prisma generate 2>&1 | tail -n 15
+          test -f node_modules/.prisma/client/index.js || {
+            echo "::error::BLOCKED: no generated client after generate"
+            exit 1
+          }
+          echo "PASS: client generated from the reconciled datamodel"
+
+      - name: Seed the reconciled database
+        run: |
+          set -o pipefail
+          npm run seed 2>&1 | tail -n 25
+
+      - name: Typecheck against the reconciled datamodel
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee /tmp/step-recon-typecheck.log
+          echo "PASS: typecheck clean on the reconciled client"
+
+      - name: Application suites against the reconciled datamodel
+        run: |
+          set -o pipefail
+          set +e
+          npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-recon-suite.log
+          vitest_status=${PIPESTATUS[0]}
+          node scripts/ci/check-test-output.mjs /tmp/step-recon-suite.log > /tmp/step-recon-suite-check.log 2>&1
+          check_status=$?
+          set -e
+          cat /tmp/step-recon-suite-check.log
+          {
+            echo "### Reconciled datamodel — application suite summary"
+            echo
+            echo '```'
+            cat /tmp/step-recon-suite-check.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$vitest_status" -ne 0 ] || [ "$check_status" -ne 0 ]; then
+            echo "::error::reconciled suite failed (vitest=${vitest_status}, check-test-output=${check_status})"
+            grep -E '^(FAIL|BLOCKED):' /tmp/step-recon-suite-check.log | head -n 5 | while IFS= read -r line; do
+              echo "::error::${line//'%'/'%25'}"
+            done
+            exit 1
+          fi
+          summary_line="$(grep '^\[test-output\] tests:' /tmp/step-recon-suite-check.log || true) | $(grep '^\[test-output\] files:' /tmp/step-recon-suite-check.log || true)"
+          echo "::notice::reconciled suite — ${summary_line//'%'/'%25'}"
+          echo "PASS: the application agrees with the reconciled datamodel"
+
+      - name: Restore the schema so later steps cannot inherit the proposal
+        if: always()
+        run: |
+          git checkout -- prisma/schema.prisma tests/unit/pos-schema.test.ts
+          git diff --exit-code -- prisma/schema.prisma tests/unit/pos-schema.test.ts
+          echo "PASS: prisma/schema.prisma and the companion test are restored"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reconciliation-logs
+          path: /tmp/step-recon-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  release-gate:
+    name: Release gate (aggregate)
+    if: always()
+    needs: [static-checks, migrations-pg18, production-build, failure-path-controls, schema-reconciliation-proposal]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Every required job must have succeeded
+        env:
+          STATIC: ${{ needs.static-checks.result }}
+          MIGRATIONS: ${{ needs.migrations-pg18.result }}
+          BUILD: ${{ needs.production-build.result }}
+          NEGATIVE: ${{ needs.failure-path-controls.result }}
+          RECON: ${{ needs.schema-reconciliation-proposal.result }}
+        run: |
+          set -u
+          failed=0
+          {
+            echo "| Job | Result |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          check() {
+            name="$1"; result="$2"
+            echo "| $name | $result |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name did not succeed (result: $result)"
+              failed=1
+            fi
+          }
+
+          check "static-checks" "$STATIC"
+          check "migrations-pg18" "$MIGRATIONS"
+          check "production-build" "$BUILD"
+          check "failure-path-controls" "$NEGATIVE"
+          check "schema-reconciliation-proposal" "$RECON"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "RELEASE GATE: BLOCKED"
+            exit 1
+          fi
+          echo "RELEASE GATE: all required jobs succeeded"
