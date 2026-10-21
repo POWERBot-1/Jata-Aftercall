@@ -121,6 +121,7 @@ model Business {
   paymentDestinations      PaymentDestination[]
   paymentConnections       PaymentProviderConnection[]
   paymentTransactions      PaymentTransaction[]
+  paymentAttempts          PaymentAttempt[]
   paymentNotifications     PaymentNotification[]
   paymentReconciliations   PaymentReconciliation[]
   paymentRefunds           Refund[]
@@ -921,7 +922,7 @@ model MediaAsset {
   aiGenerationId String?
   parentAssetId  String?
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt  DateTime @updatedAt @default(now())
 
   @@index([businessId])
   @@index([businessId, hash])
@@ -1339,9 +1340,9 @@ model PosSale {
 // numbers: a sale transaction claims its number with one atomic upsert, so concurrent sales
 // always receive unique sequences and no sale fails because another chose the same number.
 // No relation by design — like the stock room, the table is tenant-scoped by `businessId`
-// (unique), and a plain column keeps the back-relation surface of `Business` unchanged.
+// (primary key), and a plain column keeps the back-relation surface of `Business` unchanged.
 model PosReceiptSequence {
-  businessId String @unique
+  businessId String @id
   nextValue  Int    @default(1)
 
   @@index([businessId])
@@ -1783,7 +1784,7 @@ model PaymentDestination {
   accountName            String?
   currency               String                    @default("KES")
   /// Capabilities actually available for this destination (§8, §88). Never invented.
-  capabilities           String[]
+  capabilities           String[]                     @default([])
   status                 PaymentDestinationStatus @default(UNVERIFIED)
   /// How the status was earned: FORMAT | PROVIDER | LIVE (§52).
   verificationSource     String?
@@ -1799,7 +1800,7 @@ model PaymentDestination {
   transactions           PaymentTransaction[]
   auditEvents            PaymentAuditEvent[]
 
-  @@unique([businessId, provider, providerDestinationId, providerAccountRef])
+  @@unique([businessId, provider, providerDestinationId, providerAccountRef], map: "PaymentDestination_businessId_provider_providerDestinationId_pr")
   @@index([businessId, isActive])
   @@index([businessId, isPrimary])
 }
@@ -1816,7 +1817,7 @@ model PaymentProviderConnection {
   /// Never a secret: secrets stay in JATA's server environment (§58).
   providerConnectionId String?
   displayName        String?
-  capabilities       String[]
+  capabilities       String[]                   @default([])
   healthy            Boolean                   @default(false)
   /// Plain-language state for the merchant, never a technical error (§53, §86).
   detail             String?
@@ -1904,6 +1905,7 @@ model PaymentTransaction {
 model PaymentAttempt {
   id               String               @id @default(cuid())
   businessId       String
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transactionId    String
   transaction      PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   provider         PaymentProviderKey
