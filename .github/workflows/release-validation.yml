@@ -669,6 +669,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: |
+          set -o pipefail
+          # The justification check queries the catalog through @prisma/client,
+          # not through the CLI. Without this the check cannot run at all, and
+          # "could not run" must never be mistaken for "the schema is fine".
+          npx prisma generate
+          test -f node_modules/.prisma/client/index.js || {
+            echo "::error::BLOCKED: Prisma Client missing after generate"
+            exit 1
+          }
+
       - name: Apply the complete migration history
         run: npx prisma migrate deploy
 

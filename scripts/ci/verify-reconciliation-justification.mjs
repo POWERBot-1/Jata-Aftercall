@@ -209,6 +209,7 @@ const SNAPSHOT_SQL = {
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error("BLOCKED: DATABASE_URL is not set. A justification check with no database certifies nothing.");
+    console.error("::error::BLOCKED: no DATABASE_URL — the justification check did not run");
     return 2;
   }
 
@@ -217,6 +218,7 @@ async function main() {
     schemaText = readFileSync(SCHEMA_PATH, "utf8");
   } catch (error) {
     console.error(`BLOCKED: cannot read ${SCHEMA_PATH} (${error.message})`);
+    console.error("::error::BLOCKED: prisma/schema.prisma is unreadable");
     return 2;
   }
 
@@ -225,6 +227,7 @@ async function main() {
     ({ PrismaClient } = await import("@prisma/client"));
   } catch (error) {
     console.error(`BLOCKED: @prisma/client is not generated (${error.message})`);
+    console.error("::error::BLOCKED: @prisma/client is not generated — run `npx prisma generate` before this step");
     return 2;
   }
 
@@ -237,6 +240,7 @@ async function main() {
     }
   } catch (error) {
     console.error(`BLOCKED: the catalog could not be introspected (${error.message})`);
+    console.error("::error::BLOCKED: the catalog could not be introspected");
     await prisma.$disconnect();
     return 2;
   }
@@ -246,15 +250,33 @@ async function main() {
   const dbChecks = evaluateDatabaseSide(snapshot);
 
   let failed = 0;
+  const emit = (check) => {
+    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.id}${check.ok ? "" : ` — ${check.detail}`}`);
+    if (!check.ok) {
+      failed += 1;
+      // An annotation survives when the log artifact does not. A check that can
+      // fail must be able to say why in the only channel that is always
+      // readable from here.
+      const detail = String(check.detail ?? "").replace(/%/g, "%25").replace(/\r?\n/g, " | ");
+      console.log(`::error::reconciliation ${check.id} FAILED — ${detail.slice(0, 400)}`);
+    }
+  };
   console.log("── datamodel side (the patch as applied) ──");
-  for (const check of modelChecks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.id}${check.ok ? "" : ` — ${check.detail}`}`);
-    if (!check.ok) failed += 1;
-  }
+  for (const check of modelChecks) emit(check);
   console.log("── database side (the migrations as applied) ──");
-  for (const check of dbChecks) {
-    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.id}${check.ok ? "" : ` — ${check.detail}`}`);
-    if (!check.ok) failed += 1;
+  for (const check of dbChecks) emit(check);
+
+  // Always print what was observed, so a PASS is auditable and a FAIL is
+  // diagnosable without a second run.
+  console.log("── observed ──");
+  for (const row of snapshot.columns.filter((r) => ["updatedAt", "capabilities", "businessId"].includes(r.column_name))) {
+    console.log(`  column ${row.table_name}.${row.column_name} default=${row.column_default ?? "(none)"}`);
+  }
+  for (const row of snapshot.indexes.filter((r) => r.table_name === "PosReceiptSequence" || (r.table_name === "PaymentDestination" && r.is_unique))) {
+    console.log(`  index  ${row.table_name}.${row.index_name} unique=${row.is_unique} primary=${row.is_primary} columns=${row.columns}`);
+  }
+  for (const row of snapshot.foreignKeys.filter((r) => r.table_name === "PaymentAttempt")) {
+    console.log(`  fk     ${row.table_name} -> ${row.referenced_table} del=${row.delete_action} ${row.definition}`);
   }
 
   if (failed > 0) {
