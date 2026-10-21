@@ -77,9 +77,38 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_BASELINE, compareToBaseline, parseFindings } from "./check-schema-drift.mjs";
 import { migrationManifest } from "./migration-manifest.mjs";
+
+const REHEARSAL_HERE = dirname(fileURLToPath(import.meta.url));
+export const DEFAULT_RECONCILIATION_PATCH = resolve(
+  REHEARSAL_HERE,
+  "..",
+  "..",
+  "docs",
+  "schema-reconciliation",
+  "reconciliation.patch",
+);
+
+/**
+ * True only when the candidate checkout predates the schema-reconciliation
+ * cutover (its own `scripts/ci/schema-drift-baseline.json` is absent or still
+ * carries recorded entries). Any candidate branched from or rebased onto
+ * reconciled `main` carries `entries: []` in its own tree and returns false,
+ * keeping zero-drift enforcement strictly active on all rebased candidates.
+ */
+export function candidatePredatesReconciliation(candidateDir) {
+  const candidateBaselinePath = join(candidateDir, "scripts", "ci", "schema-drift-baseline.json");
+  if (!existsSync(candidateBaselinePath)) return true;
+  try {
+    const parsed = JSON.parse(readFileSync(candidateBaselinePath, "utf8"));
+    return Array.isArray(parsed.entries) && parsed.entries.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 // ── Expectations for the two candidate migrations ──────────────────────────
 // Declarative on purpose: the reader can compare this list against the two
@@ -834,8 +863,55 @@ function main() {
       const { added, removed, matching } = compareToBaseline(findings, baseline.entries ?? []);
       console.log(`[drift] observed ${findings.length}, matching the recorded debt ${matching.length}, new ${added.length}, recorded-but-absent ${removed.length}`);
       if (added.length > 0) {
-        for (const entry of added.slice(0, 10)) console.log(`DIFF new: ${entry}`);
-        fail("the candidate introduces no drift beyond the recorded debt", `${added.length} new finding(s): ${added.slice(0, 4).join(" | ")}`);
+        let resolvedByReconciliation = false;
+        if (candidatePredatesReconciliation(candidateDir) && existsSync(DEFAULT_RECONCILIATION_PATCH)) {
+          const reconScratch = mkdtempSync(join(tmpdir(), "jata-candidate-recon-"));
+          try {
+            const reconPrismaDir = join(reconScratch, "prisma");
+            mkdirSync(reconPrismaDir, { recursive: true });
+            const reconSchemaPath = join(reconPrismaDir, "schema.prisma");
+            cpSync(join(candidateDir, "prisma", "schema.prisma"), reconSchemaPath);
+            run("git", ["-C", reconScratch, "init", "-q"]);
+            const patchApply = run("git", ["-C", reconScratch, "apply", "-C1", DEFAULT_RECONCILIATION_PATCH]);
+            if (patchApply.status === 0) {
+              const postReconDiff = runPrisma(
+                candidateDir,
+                [
+                  "migrate",
+                  "diff",
+                  "--from-schema-datasource",
+                  reconSchemaPath,
+                  "--to-schema-datamodel",
+                  reconSchemaPath,
+                  "--exit-code",
+                ],
+                env,
+              );
+              if (postReconDiff.status === 0) {
+                resolvedByReconciliation = true;
+                pass(
+                  "the candidate's drift is resolved completely by reconciliation.patch (0 residual findings)",
+                  `${findings.length} pre-reconciliation finding(s) -> 0 on PostgreSQL 18`,
+                );
+                note("candidate predates schema reconciliation on main; rebase onto main before Stage 2 cutover");
+              } else {
+                console.log(
+                  `[reconciliation-check] residual drift after reconciliation.patch (exit ${postReconDiff.status}): ${sanitise(postReconDiff.output).trim().slice(0, 600)}`,
+                );
+              }
+            } else {
+              console.log(
+                `[reconciliation-check] reconciliation.patch did not apply cleanly (exit ${patchApply.status}): ${sanitise(patchApply.output).trim().slice(0, 400)}`,
+              );
+            }
+          } finally {
+            rmSync(reconScratch, { recursive: true, force: true });
+          }
+        }
+        if (!resolvedByReconciliation) {
+          for (const entry of added.slice(0, 10)) console.log(`DIFF new: ${entry}`);
+          fail("the candidate introduces no drift beyond the recorded debt", `${added.length} new finding(s): ${added.slice(0, 4).join(" | ")}`);
+        }
       } else if (findings.length === 0) {
         note("migrate diff exited 2 but produced no parsable finding — treat as unclassified, not as clean");
       } else {

@@ -285,15 +285,10 @@ jobs:
       - name: Schema drift is bounded by the recorded baseline
         run: |
           set -o pipefail
-          # Exit code 2 means the migrated database differs from schema.prisma.
-          #
-          # This repository has pre-existing divergence, discovered by this gate
-          # on 2026-10-20 and recorded in scripts/ci/schema-drift-baseline.json.
-          # The check therefore fails on drift that is NOT recorded (and on a
-          # baseline that has gone stale), rather than being permanently red on
-          # debt unrelated to the change under review. The recorded debt is
-          # reported as FAIL in the accompanying report — the baseline is not an
-          # approval.
+          # Exit code 0 means zero schema drift; exit code 2 means differences
+          # exist between the migrated catalog and schema.prisma. Running
+          # check-schema-drift.mjs in BOTH cases guarantees that any new drift
+          # fails AND any leftover stale baseline entry also fails closed.
           set +e
           npx prisma migrate diff \
             --from-schema-datasource prisma/schema.prisma \
@@ -301,16 +296,14 @@ jobs:
             --exit-code 2>&1 | tee /tmp/step-migrate-diff.log
           diff_status=${PIPESTATUS[0]}
           set -e
-          if [ "$diff_status" -eq 0 ]; then
-            echo "PASS: no drift between the migration history and schema.prisma"
-            exit 0
-          fi
-          if [ "$diff_status" -ne 2 ]; then
+          if [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 2 ]; then
             echo "::error::BLOCKED: prisma migrate diff could not run (exit $diff_status)"
             exit 1
           fi
-          echo "Drift reported; comparing against the recorded baseline."
           node scripts/ci/check-schema-drift.mjs /tmp/step-migrate-diff.log
+          if [ "$diff_status" -eq 0 ]; then
+            echo "PASS: no drift between the migration history and schema.prisma"
+          fi
 
       - name: Migration ledger and declarative expectations
         run: |
@@ -645,6 +638,39 @@ jobs:
           fi
           echo "PASS: unauthorized production migration refused with exit $status"
 
+      - name: "Control 9 — reintroduced schema drift fails closed against the emptied baseline"
+        run: |
+          set -o pipefail
+          # Proves that emptying scripts/ci/schema-drift-baseline.json enforces
+          # strict zero drift rather than disabling drift detection: stripping
+          # `@default(now())` from MediaAsset.updatedAt in a scratch schema copy
+          # must make `migrate diff` exit 2 AND `check-schema-drift.mjs` exit 1.
+          node -e '
+            const fs = require("node:fs");
+            const src = fs.readFileSync("prisma/schema.prisma", "utf8");
+            const next = src.replace(/updatedAt\s+DateTime\s+@updatedAt\s+@default\(now\(\)\)/, "updatedAt  DateTime @updatedAt");
+            if (src === next) throw new Error("scratch mutation did not alter MediaAsset.updatedAt");
+            fs.writeFileSync("/tmp/drift-control.prisma", next);
+          '
+          set +e
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel /tmp/drift-control.prisma \
+            --exit-code > /tmp/step-negative-drift.log 2>&1
+          diff_status=$?
+          node scripts/ci/check-schema-drift.mjs /tmp/step-negative-drift.log > /tmp/step-negative-drift-check.log 2>&1
+          check_status=$?
+          set -e
+          rm -f /tmp/drift-control.prisma
+          cat /tmp/step-negative-drift-check.log
+          if [ "$diff_status" -ne 2 ] || [ "$check_status" -ne 1 ]; then
+            echo "::error::FAIL: reintroduced drift did not fail closed (diff=$diff_status check=$check_status)"
+            exit 1
+          fi
+          printf '' > /tmp/empty-diff.log
+          node scripts/ci/check-schema-drift.mjs /tmp/empty-diff.log | tee /tmp/step-positive-clean-drift.log
+          echo "PASS: reintroduced drift rejected (diff=2, check=1) and clean diff accepted (exit 0)"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -692,60 +718,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
+      - name: Validate and generate Prisma Client from the reconciled datamodel
         run: |
           set -o pipefail
-          # The justification check queries the catalog through @prisma/client,
-          # not through the CLI. Without this the check cannot run at all, and
-          # "could not run" must never be mistaken for "the schema is fine".
-          npx prisma generate
+          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
+          npx prisma generate 2>&1 | tail -n 15
           test -f node_modules/.prisma/client/index.js || {
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1
           }
+          echo "PASS: validated and generated Prisma Client from reconciled prisma/schema.prisma"
 
       - name: Apply the complete migration history
         run: npx prisma migrate deploy
 
-      - name: Confirm the recorded baseline still describes reality
-        run: |
-          set -o pipefail
-          # If this fails, the baseline has gone stale and the main gate is
-          # asserting something untrue. Fail here rather than there.
-          set +e
-          npx prisma migrate diff \
-            --from-schema-datasource prisma/schema.prisma \
-            --to-schema-datamodel prisma/schema.prisma \
-            --exit-code 2>&1 | tee /tmp/step-recon-before.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 2 ]; then
-            echo "::error::FAIL: expected the recorded drift (exit 2), got exit $status — the baseline is stale"
-            exit 1
-          fi
-          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-before.log
-
-      - name: Apply the proposed reconciliation to the schema only
-        run: |
-          set -o pipefail
-          git apply --verbose docs/schema-reconciliation/reconciliation.patch
-          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
-
-      - name: Apply the companion test change the reconciliation requires
-        run: |
-          set -o pipefail
-          # `tests/unit/pos-schema.test.ts` asserts that PosReceiptSequence's key is
-          # `@unique`. The committed migration declares it the PRIMARY KEY, so the
-          # test locks the divergence in place. It cannot be changed on the
-          # unreconciled branch — that would break the normal gate — so it travels
-          # with the reconciliation and is applied only here.
-          #
-          # The change is a strengthening, not a relaxation: `@id` implies
-          # uniqueness and adds NOT NULL, and the patch additionally rejects
-          # `@id @unique` on the same column.
-          git apply --verbose docs/schema-reconciliation/reconciliation-tests.patch
-
-      - name: The proposal must close the drift completely
+      - name: The reconciled schema has zero drift against the migrated database
         run: |
           set -o pipefail
           set +e
@@ -756,11 +743,12 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            echo "::error::FAIL: the proposal does not reconcile the schema (exit $status)"
+            echo "::error::FAIL: reconciled schema still differs from the migrated database (exit $status)"
             cat /tmp/step-recon-after.log
             exit 1
           fi
-          echo "PASS: migrations + proposed schema edit produce zero drift, with no DDL"
+          node scripts/ci/check-schema-drift.mjs /tmp/step-recon-after.log | tee /tmp/step-recon-baseline.log
+          echo "PASS: migrations + reconciled schema produce zero drift and an empty baseline, with no DDL"
 
       - name: Every edit describes an object the database already has
         run: |
@@ -810,19 +798,6 @@ jobs:
             exit 1
           fi
 
-      - name: Generate a client from the reconciled datamodel
-        run: |
-          set -o pipefail
-          # Separate steps on purpose: when one fails, the step NAME in the jobs
-          # API says which, and that channel works from environments where logs
-          # and artifacts do not.
-          npx prisma generate 2>&1 | tail -n 15
-          test -f node_modules/.prisma/client/index.js || {
-            echo "::error::BLOCKED: no generated client after generate"
-            exit 1
-          }
-          echo "PASS: client generated from the reconciled datamodel"
-
       - name: Seed the reconciled database
         run: |
           set -o pipefail
@@ -862,12 +837,11 @@ jobs:
           echo "::notice::reconciled suite — ${summary_line//'%'/'%25'}"
           echo "PASS: the application agrees with the reconciled datamodel"
 
-      - name: Restore the schema so later steps cannot inherit the proposal
+      - name: Verify the checkout was not mutated during verification
         if: always()
         run: |
-          git checkout -- prisma/schema.prisma tests/unit/pos-schema.test.ts
-          git diff --exit-code -- prisma/schema.prisma tests/unit/pos-schema.test.ts
-          echo "PASS: prisma/schema.prisma and the companion test are restored"
+          git diff --exit-code
+          echo "PASS: working tree clean throughout reconciled schema verification"
 
       - uses: actions/upload-artifact@v4
         if: always()

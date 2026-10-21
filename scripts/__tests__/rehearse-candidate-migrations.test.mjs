@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CANDIDATE_EXPECTATIONS,
+  DEFAULT_RECONCILIATION_PATCH,
+  candidatePredatesReconciliation,
   canonicalInventory,
   evaluateSnapshot,
   extraMigrations,
@@ -238,4 +240,31 @@ test("a database name is substituted without disturbing the credentials", () => 
     psqlUrl("postgresql://jata:secret@localhost:5432/postgres", "jata_rehearsal_full"),
     "postgresql://jata:secret@localhost:5432/jata_rehearsal_full",
   );
+});
+
+test("candidatePredatesReconciliation distinguishes pre-reconciliation candidates from rebased candidates", () => {
+  assert.match(DEFAULT_RECONCILIATION_PATCH, /docs\/schema-reconciliation\/reconciliation\.patch$/);
+
+  const root = mkdtempSync(join(tmpdir(), "jata-recon-detect-"));
+  try {
+    // No baseline file on candidate commit (e.g. PR #49 @ 5996229): predates reconciliation.
+    assert.equal(candidatePredatesReconciliation(root), true);
+
+    // Non-empty baseline on candidate commit: still predates reconciliation cutover.
+    mkdirSync(join(root, "scripts", "ci"), { recursive: true });
+    writeFileSync(
+      join(root, "scripts", "ci", "schema-drift-baseline.json"),
+      JSON.stringify({ entries: ["MediaAsset :: [*] Changed the table"] }),
+    );
+    assert.equal(candidatePredatesReconciliation(root), true);
+
+    // Emptied baseline on candidate commit (rebased onto reconciled main): strictly post-reconciliation.
+    writeFileSync(
+      join(root, "scripts", "ci", "schema-drift-baseline.json"),
+      JSON.stringify({ entries: [] }),
+    );
+    assert.equal(candidatePredatesReconciliation(root), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
