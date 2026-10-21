@@ -802,68 +802,39 @@ jobs:
             exit 1
           fi
 
-      - name: The application still agrees with the reconciled datamodel
+      - name: Generate a client from the reconciled datamodel
         run: |
           set -o pipefail
-          # Up to here the job has proven that the patch reconciles the datamodel
-          # with the catalog. That is a statement about SQL. This step makes the
-          # matching statement about the application: a client generated FROM the
-          # reconciled schema must still typecheck and still pass the suites
-          # against the database the migrations produced.
-          #
-          # The reconciliation PR is the first place this can fail in production
-          # terms — `capabilities` becoming defaulted, `PosReceiptSequence` keyed
-          # by @id, `PaymentAttempt.business` appearing as a relation — so the
-          # evidence belongs with the proposal, not with the PR that has to
-          # discover it later.
-          set +e
-          npx prisma generate > /tmp/step-recon-generate.log 2>&1
-          generate_status=$?
-          npm run seed > /tmp/step-recon-seed.log 2>&1
-          seed_status=$?
-          set -e
-          echo "generate exit: ${generate_status}  seed exit: ${seed_status}"
-          tail -n 10 /tmp/step-recon-generate.log
-          if [ "$generate_status" -ne 0 ]; then
-            echo "::error::FAIL: prisma generate failed on the reconciled datamodel (exit ${generate_status})"
-            exit 1
-          fi
-          if [ ! -f node_modules/.prisma/client/index.js ]; then
+          # Separate steps on purpose: when one fails, the step NAME in the jobs
+          # API says which, and that channel works from environments where logs
+          # and artifacts do not.
+          npx prisma generate 2>&1 | tail -n 15
+          test -f node_modules/.prisma/client/index.js || {
             echo "::error::BLOCKED: no generated client after generate"
             exit 1
-          fi
-          if [ "$seed_status" -ne 0 ]; then
-            echo "::error::BLOCKED: seeding failed, so a data-dependent failure below would not be about the patch"
-            tail -n 20 /tmp/step-recon-seed.log
-            exit 1
-          fi
+          }
+          echo "PASS: client generated from the reconciled datamodel"
 
-          set +e
-          npm run typecheck > /tmp/step-recon-typecheck.log 2>&1
-          tc_status=$?
-          npx vitest run --exclude "tests/e2e/**" > /tmp/step-recon-suite.log 2>&1
-          suite_status=$?
-          set -e
-          echo "typecheck exit: ${tc_status}  suite exit: ${suite_status}"
-          tail -n 20 /tmp/step-recon-typecheck.log
-          tail -n 25 /tmp/step-recon-suite.log
-          if [ "$tc_status" -ne 0 ]; then
-            echo "::error::FAIL: typecheck failed against the reconciled datamodel (exit ${tc_status})"
-            grep -E 'error TS|error:' /tmp/step-recon-typecheck.log | head -n 8 | while IFS= read -r line; do
-              echo "::error::${line//'%'/'%25'}"
-            done
-            exit 1
-          fi
-          if [ "$suite_status" -ne 0 ]; then
-            echo "::error::FAIL: the application suite failed against the reconciled datamodel (exit ${suite_status})"
-            exit 1
-          fi
-          # A suite that passed by skipping is not a passing suite.
+      - name: Seed the reconciled database
+        run: |
+          set -o pipefail
+          npm run seed 2>&1 | tail -n 25
+
+      - name: Typecheck against the reconciled datamodel
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee /tmp/step-recon-typecheck.log
+          echo "PASS: typecheck clean on the reconciled client"
+
+      - name: Application suites against the reconciled datamodel
+        run: |
+          set -o pipefail
+          npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-recon-suite.log
           node scripts/ci/check-test-output.mjs /tmp/step-recon-suite.log
           grep -E '^ *Tests ' /tmp/step-recon-suite.log | tail -n 1 | while IFS= read -r line; do
             echo "::notice::reconciled datamodel —${line}"
           done
-          echo "PASS: the reconciled datamodel generates, typechecks and passes the suites"
+          echo "PASS: the application agrees with the reconciled datamodel"
 
       - name: Restore the schema so later steps cannot inherit the proposal
         if: always()
