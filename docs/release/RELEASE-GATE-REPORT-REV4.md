@@ -137,7 +137,7 @@ act on.
 | Interactive Business E2E green on the current head | run `39518712792`, 10m37s | **PASS** |
 | PR #49 rehearsal green, reproducible on two heads | `39518712777`, `39518438957` | **PASS** |
 | Failure control: a broken migration fails, is recorded, and is reported | rehearsal section 7 | **PASS** |
-| Gate self-tests | 261 assertions across 11 files (`node --test scripts/__tests__/*.test.mjs`), all passing locally and in `39518712800` | **PASS** |
+| Gate self-tests | 251 tests across 11 files (`node --test scripts/__tests__/*.test.mjs`), 251 pass / 0 fail locally, and the same files run in `39518712800` | **PASS** |
 | CI work does not touch production | every `DATABASE_URL` is a service container; no secret is present; `permissions: contents: read` | **PASS** |
 
 **Hydration flake, restated:** the E2E run failed at the Hydration 418 step on `39505943097`
