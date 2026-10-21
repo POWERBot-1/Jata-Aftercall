@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   EXPECTATIONS_BY_MIGRATION,
   evaluateExpectations,
@@ -173,4 +174,39 @@ test("a genuinely wrong table is still reported", () => {
   const violations = evaluateExpectations([expectation], snapshot);
   assert.equal(violations.length, 1);
   assert.match(violations[0], /constraint is on "User", expected PasswordResetToken/);
+});
+
+// ── the verifier cannot be satisfied by a Prisma model edit ────────────────
+// `verify-migrations.mjs` reads exactly two things: the migration directories on
+// disk, and the live catalog. It never reads prisma/schema.prisma. That is what
+// makes it evidence about the database rather than about the intent — adding a
+// relation to the model, or deleting an expectation from a migration comment,
+// changes nothing it inspects.
+//
+// This test pins that by reading the module source. It is a structural test on
+// purpose: an import would not fail at runtime if someone later "helpfully"
+// wired the verifier to the datamodel, and the failure would be silent.
+test("the verifier never reads prisma/schema.prisma", () => {
+  const source = readFileSync("scripts/ci/verify-migrations.mjs", "utf8");
+  assert.equal(/schema\.prisma/.test(source), false, "verify-migrations.mjs must not consult the datamodel");
+  assert.equal(/@prisma\/client\/generated|PrismaClient\s*,\s*type/.test(source), false);
+  // Its catalog introspection is SQL against the live database, not a model read.
+  assert.ok(source.includes("information_schema.columns"), "columns must come from the database");
+  assert.ok(source.includes("pg_constraint"), "constraints must come from the database");
+  assert.ok(source.includes("pg_indexes"), "indexes must come from the database");
+});
+
+test("a model that claims an object the database lacks is not enough", () => {
+  // The snapshot is the only input to the decision. An expectation whose object
+  // is absent from the snapshot fails, no matter what any datamodel says.
+  const expectation = {
+    kind: "constraint",
+    table: "PasswordResetToken",
+    name: "PasswordResetToken_userId_fkey",
+    contains: ["FOREIGN KEY", "ON DELETE CASCADE"],
+  };
+  const snapshotWithoutIt = { tables: {}, indexes: {}, constraints: {} };
+  const violations = evaluateExpectations([expectation], snapshotWithoutIt);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0], /constraint missing/);
 });
