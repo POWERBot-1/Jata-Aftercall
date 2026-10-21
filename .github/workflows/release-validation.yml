@@ -165,7 +165,8 @@ jobs:
             scripts/__tests__/migration-manifest.test.mjs \
             scripts/__tests__/smoke-production.test.mjs \
             scripts/__tests__/rehearse-candidate-migrations.test.mjs \
-            scripts/__tests__/check-workflow-expressions.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+            scripts/__tests__/check-workflow-expressions.test.mjs \
+            scripts/__tests__/verify-reconciliation-justification.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -711,6 +712,17 @@ jobs:
             exit 1
           fi
           echo "PASS: migrations + proposed schema edit produce zero drift, with no DDL"
+
+      - name: Every edit describes an object the database already has
+        run: |
+          set -o pipefail
+          # Zero drift is not the same as a correct reconciliation. A patch can
+          # silence `migrate diff` by inventing a constraint the database does
+          # not have. This checks both sides of all six divergences: the
+          # database must contain the object, and the patched datamodel must
+          # assert it. The patch is still applied at this point.
+          node scripts/ci/verify-reconciliation-justification.mjs \
+            2>&1 | tee /tmp/step-recon-justification.log
 
       - name: Restore the schema so later steps cannot inherit the proposal
         if: always()
