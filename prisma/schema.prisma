@@ -922,6 +922,11 @@ model MediaAsset {
   parentAssetId  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  // Monotonic optimistic-concurrency counter for metadata edits (§45). Every guarded write
+  // increments it in the same conditional UPDATE, so two writes never share a token — unlike
+  // `updatedAt`, which PostgreSQL stores at millisecond precision (TIMESTAMP(3)) and which
+  // Prisma fills from the application clock.
+  version    Int      @default(0)
 
   @@index([businessId])
   @@index([businessId, hash])

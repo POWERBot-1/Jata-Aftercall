@@ -78,7 +78,9 @@ describe("runtime and schema guards", () => {
     // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten),
     // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
     // column that records which clock a booking was anchored to, so a legacy row keeps its stored
-    // instant and its meaning and no historical row is rewritten or backfilled).
+    // instant and its meaning and no historical row is rewritten or backfilled), and the media
+    // concurrency counter (one defaulted INTEGER that replaces a millisecond timestamp as the
+    // optimistic-concurrency token; every existing row reads as 0 and no row is rewritten).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -98,6 +100,7 @@ describe("runtime and schema guards", () => {
       "20261010000100_pos_sale_price_windows",
       "20261010000200_checkout_idempotency",
       "20261014000000_booking_time_zone_marker",
+      "20261017000000_media_asset_version",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -178,6 +181,25 @@ describe("runtime and schema guards", () => {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
       expect(sql).toContain("ADD COLUMN");
     }
+  });
+
+  it("keeps the media concurrency counter in the schema and in the staged migration", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const media = schema.slice(
+      schema.indexOf("model MediaAsset {"),
+      schema.indexOf("\n}", schema.indexOf("model MediaAsset {")),
+    );
+    // The token the PATCH guard compares against: a counter, not the millisecond timestamp.
+    expect(media).toContain("version    Int      @default(0)");
+    expect(media).toContain("updatedAt  DateTime @updatedAt");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261017000000_media_asset_version/migration.sql"),
+      "utf8",
+    );
+    // One additive column: every existing row reads as 0, nothing is rewritten or backfilled.
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0');
+    expect(sql.toUpperCase()).not.toMatch(/ALTER COLUMN|DELETE FROM|UPDATE "/);
   });
 
   it("adds the Business POS as new tenant-scoped tables and touches no existing table", () => {

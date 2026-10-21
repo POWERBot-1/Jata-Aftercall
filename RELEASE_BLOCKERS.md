@@ -63,8 +63,23 @@ the route requires a session. A window that accepted unversioned writes would ke
 | `DesignPanel`, `ThemeEditor` | always |
 | `CreateExperienceForm` (create) | not applicable (creates a draft) |
 
-Unversioned route not under this gate: `PATCH /api/media` (`MediaLibrary`) edits a media asset's metadata. It does not
-touch the experience draft, so it is last-write-wins by design. Owner should confirm that is acceptable.
+Media metadata is under the same kind of gate, on its own counter. `PATCH /api/media` (`MediaLibrary`) requires
+`expectedVersion` — `MediaAsset.version`, a monotonic integer. A missing or malformed token is refused with 428; a stale
+one with 409. The write is a compare-and-swap scoped by asset id, `businessId` and the expected version, and the same
+statement increments the counter, so a stale request cannot overwrite a newer edit and two writes can never share a token.
+
+Why a counter and not `updatedAt`: `MediaAsset.updatedAt` is `TIMESTAMP(3)`, so two updates inside the same millisecond
+were indistinguishable, and Prisma fills that column from the application clock — which differs between server instances.
+The counter is the strict guarantee; `updatedAt` is now display-only.
+
+Residual limitations, stated rather than implied:
+- The `version` column ships in `prisma/migrations/20261017000000_media_asset_version`. It is **staged, not applied**, and
+  the application must not be deployed ahead of it (a `select` on a missing column fails closed with 500, not with data loss).
+- `DELETE /api/media` has no version precondition. Removing an asset is a destructive intent, not a merge of two edits, so a
+  stale delete still deletes. Deleting an asset someone just edited is a loss of that asset, not a silent overwrite of it.
+- The POST reuse path (`POST /api/media` with identical pixels) updates the reused row's description through the same
+  conditional write, so a reuse cannot clobber a concurrent edit. When the swap loses, the upload still succeeds and the
+  response reports the asset as it now stands.
 
 ## Publish (item 5)
 
@@ -128,7 +143,10 @@ plus one pricing fix in the commit that adds this section. The final SHA is in t
 1. Storage: approve a provider, a plan, and a migration for existing `data:` URLs (`RELEASE_DECISIONS.md` §1.11).
 2. Sale price: choose option A, B, or C (`RELEASE_DECISIONS.md` §2.6).
 3. Whether leads should also require an entitled business.
-4. Whether `PATCH /api/media` should be version-gated.
+4. ~~Whether `PATCH /api/media` should be version-gated.~~ **Decided and implemented.** The route is gated on
+   `MediaAsset.version` (428 without a usable token, 409 when stale, compare-and-swap in the update). The migration that
+   adds the column is staged and still needs a release decision: whether to apply it, and in which order relative to the
+   application deploy.
 5. Motion library: none added. Storage provider: not approved.
 
 ## Sale-price policy C: implementation status (uncommitted at time of writing; see commit on this branch)
