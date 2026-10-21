@@ -143,6 +143,22 @@ jobs:
             *) echo "::error::BLOCKED: the production dependency audit did not complete (see /tmp/step-audit.log)"; exit 1 ;;
           esac
 
+      - name: The evidence manifest verifies
+        run: |
+          set -o pipefail
+          # A report cannot contain its own digest. The manifest is the
+          # workaround, and this is the check that it still describes the files
+          # it claims to. It fails on a mismatch, a missing file, a required
+          # artifact that vanished from the list, or a manifest that lists
+          # itself.
+          if [ -f docs/release/EVIDENCE-MANIFEST.sha256 ]; then
+            node scripts/ci/verify-evidence-manifest.mjs 2>&1 | tee /tmp/step-evidence-manifest.log
+            sha256sum -c docs/release/EVIDENCE-MANIFEST.sha256 >/dev/null && echo "PASS: sha256sum -c agrees with the manifest verifier"
+          else
+            echo "::error::BLOCKED: docs/release/EVIDENCE-MANIFEST.sha256 is absent"
+            exit 1
+          fi
+
       - name: Workflow files would be accepted by GitHub
         run: |
           set -o pipefail
@@ -166,7 +182,8 @@ jobs:
             scripts/__tests__/smoke-production.test.mjs \
             scripts/__tests__/rehearse-candidate-migrations.test.mjs \
             scripts/__tests__/check-workflow-expressions.test.mjs \
-            scripts/__tests__/verify-reconciliation-justification.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
+            scripts/__tests__/verify-reconciliation-justification.test.mjs \
+            scripts/__tests__/verify-evidence-manifest.test.mjs 2>&1 | tee /tmp/step-gate-tests.log
 
       - uses: actions/upload-artifact@v4
         if: always()
