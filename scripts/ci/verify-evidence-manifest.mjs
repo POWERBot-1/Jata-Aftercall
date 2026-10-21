@@ -50,6 +50,7 @@ export const REQUIRED_ARTIFACTS = [
   "docs/release/RELEASE-GATE-REPORT-REV4.md",
   "docs/release/RELEASE-GATE-REPORT-REV5.md",
   "docs/release/FINAL-RELEASE-READINESS.md",
+  "docs/release/RELEASE-GATE-REPORT-REV6.md",
   "docs/release/PR49-REHEARSAL-RESULTS.md",
   "docs/release/PR50-REVIEW.md",
   "docs/release/MAIN-PROTECTION-PROPOSAL.md",
