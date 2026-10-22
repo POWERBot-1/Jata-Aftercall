@@ -133,3 +133,19 @@ direction of the fix, not the reverse.
 - [ ] Merged **before** PR #49 is rebased — otherwise the gate goes red on PR #49
       for a divergence that belongs here.
 - [ ] No required check was weakened to obtain green.
+
+---
+
+## Addendum — 2026-10-21, Post-PR-#50 Two-Commit Cutover (`base: 66c4f33a…`)
+
+With PR #50 merged to `main` (`66c4f33a2dd08f790b1daf4d8d80802ec27038e8`), this PR is structured as two isolated commits on session branch `arena/8aab3ad5-jata-aftercall` (Arena binds each coding session to its fixed branch name):
+
+1. **Commit 1 (`prisma/schema.prisma` + `tests/unit/pos-schema.test.ts` only · `0` DDL):**
+   - Applies verbatim verified patches `reconciliation.patch` (`228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29`) and `reconciliation-tests.patch` (`c243200ae609452030a6530c4980566783d488c64e588f4d4adae676f8a4cbd6`), producing `prisma/schema.prisma` git blob `25e45c3afe584c7ac35f51b558cc1b73183a1b09` (SHA-256 `440027c4fcb10e0f3d2de3f2c7ec1e540ffdc5d9b6283329bfb9af05988d8bfd`).
+2. **Commit 2 (CI zero-drift transition + emptied drift baseline + manifest seal):**
+   - Transitions `.github/workflows/release-validation.yml` (`schema-reconciliation-proposal` + `migrations-pg18`) to verify zero schema drift (`migrate diff --exit-code` = `0`), empty baseline enforcement (`check-schema-drift.mjs` = `0`), all **13/13** two-sided catalog+datamodel assertions (`verify-reconciliation-justification.mjs`), `npm run seed`, `npm run typecheck`, and the full PostgreSQL 18 suite (`0` skips).
+   - Adds **Control 9** in `failure-path-controls` proving that reintroducing divergence #1 (`MediaAsset.updatedAt` without `@default(now())`) fails closed (`migrate diff` = `2`, `check-schema-drift.mjs` = `1`) against the emptied baseline (`"entries": []`).
+   - Teaches `scripts/ci/rehearse-candidate-migrations.mjs` (`applyPreReconciliationFixes`) to apply all 7 model-scoped reconciliation edits to a scratch copy of a pre-reconciliation candidate's `prisma/schema.prisma` (avoiding line-offset displacement where PR #49's `MediaAsset.version` sits immediately below `MediaAsset.updatedAt`) and verify on live PostgreSQL 18 that **0 residual drift** remains across all 18 candidate migrations, while keeping strict zero-drift enforcement on rebased candidates. *(Operator rebase note for PR #49: when PR #49 rebases onto reconciled `main`, resolve the 2-line adjacent conflict in `model MediaAsset` by keeping both `updatedAt DateTime @updatedAt @default(now())` and `version Int @default(0)`.)*
+   - Regenerates `docs/release/EVIDENCE-MANIFEST.sha256` (`52/52` verified) with all nine prior release reports preserved byte-for-byte.
+   - **Independent safety review hardening (`candidatePredatesReconciliation`):** pins `PRE_RECONCILIATION_BASELINE_SHA256` (`ffbdf47fb98964a455c6b1350d19cc35e1c8b7cd2ed61ee194933df54d6e81ee`) and verifies `!existsSync(".github/workflows/release-validation.yml")` when `schema-drift-baseline.json` is absent, ensuring a post-reconciliation branch can neither spoof pre-reconciliation status by deleting `schema-drift-baseline.json` nor by inserting an unrelated non-empty baseline entry. Full independent safety audit recorded in `docs/release/RELEASE-GATE-REPORT-REV11.md`.
+

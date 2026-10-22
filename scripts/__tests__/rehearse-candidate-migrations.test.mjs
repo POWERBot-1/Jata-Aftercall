@@ -3,8 +3,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import {
   CANDIDATE_EXPECTATIONS,
+  DEFAULT_RECONCILIATION_PATCH,
+  PRE_RECONCILIATION_BASELINE_SHA256,
+  applyPreReconciliationFixes,
+  candidatePredatesReconciliation,
   canonicalInventory,
   evaluateSnapshot,
   extraMigrations,
@@ -14,6 +19,7 @@ import {
   psqlUrl,
   scanForDestructiveStatements,
 } from "../ci/rehearse-candidate-migrations.mjs";
+import { evaluateModelSide } from "../ci/verify-reconciliation-justification.mjs";
 
 // These tests exist because the rehearsal script is the only thing standing
 // between "the SQL reads plausibly" and "the SQL was executed". If the checker
@@ -238,4 +244,89 @@ test("a database name is substituted without disturbing the credentials", () => 
     psqlUrl("postgresql://jata:secret@localhost:5432/postgres", "jata_rehearsal_full"),
     "postgresql://jata:secret@localhost:5432/jata_rehearsal_full",
   );
+});
+
+const HISTORICAL_2026_10_20_BASELINE = `{
+  "acceptedOn": "2026-10-20",
+  "owner": "repository owner",
+  "scope": "Pre-existing. Discovered by the release gate on 2026-10-20; present on main at 2575cf4 and unrelated to this branch and to PR #49.",
+  "why": "The committed migration history does not reproduce prisma/schema.prisma exactly. The gate must fail on NEW drift without being permanently red on debt nobody has fixed yet, so these exact findings are recorded here.",
+  "notA": "This is not an approval, not a waiver of correctness, and not a claim that the differences are harmless. Each one is a real divergence between the Prisma Client types and the actual database.",
+  "remediation": "A dedicated schema-reconciliation migration plus matching schema.prisma corrections, in its own reviewed pull request with its own rehearsal. Deliberately out of scope for a CI-infrastructure change, and deliberately not silently corrected here.",
+  "entries": [
+    "MediaAsset :: [*] Altered column \`updatedAt\` (default changed from \`Some(Now)\` to \`None\`)",
+    "MediaAsset :: [*] Changed the table",
+    "PaymentAttempt :: [*] Changed the table",
+    "PaymentAttempt :: [-] Removed foreign key on columns (businessId)",
+    "PaymentDestination :: [*] Altered column \`capabilities\` (default changed from \`Some(Value(List([])))\` to \`None\`)",
+    "PaymentDestination :: [*] Changed the table",
+    "PaymentDestination :: [*] Renamed index \`PaymentDestination_businessId_provider_providerDestinationId_pr\` to \`PaymentDestination_businessId_provider_providerDestinationI_key\`",
+    "PaymentProviderConnection :: [*] Altered column \`capabilities\` (default changed from \`Some(Value(List([])))\` to \`None\`)",
+    "PaymentProviderConnection :: [*] Changed the table",
+    "PosReceiptSequence :: [*] Changed the table",
+    "PosReceiptSequence :: [+] Added unique index on columns (businessId)",
+    "PosReceiptSequence :: [-] Dropped the primary key on columns (businessId)"
+  ]
+}
+`;
+
+test("candidatePredatesReconciliation pins historical pre-reconciliation states and rejects spoofed or deleted baselines", () => {
+  assert.match(DEFAULT_RECONCILIATION_PATCH, /docs\/schema-reconciliation\/reconciliation\.patch$/);
+
+  const root = mkdtempSync(join(tmpdir(), "jata-recon-detect-"));
+  try {
+    // 1. Pre-PR-#50 commit (e.g. PR #49 @ 5996229): lacks both baseline and release-validation.yml -> true.
+    assert.equal(candidatePredatesReconciliation(root), true);
+
+    // 2. Post-reconciliation branch that deletes schema-drift-baseline.json while release-validation.yml exists -> false.
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "release-validation.yml"), "name: Release Validation\n");
+    assert.equal(candidatePredatesReconciliation(root), false);
+
+    // 3. Exact historical 2026-10-20 baseline from main (66c4f33a) -> true.
+    mkdirSync(join(root, "scripts", "ci"), { recursive: true });
+    writeFileSync(join(root, "scripts", "ci", "schema-drift-baseline.json"), HISTORICAL_2026_10_20_BASELINE);
+    assert.equal(PRE_RECONCILIATION_BASELINE_SHA256.length, 64);
+    assert.equal(candidatePredatesReconciliation(root), true);
+
+    // 4. Spoofed non-empty post-reconciliation baseline (arbitrary single entry) -> false.
+    writeFileSync(
+      join(root, "scripts", "ci", "schema-drift-baseline.json"),
+      JSON.stringify({ entries: ["MediaAsset :: [*] Changed the table"] }),
+    );
+    assert.equal(candidatePredatesReconciliation(root), false);
+
+    // 5. Emptied baseline on candidate commit (rebased onto reconciled main) -> false.
+    writeFileSync(
+      join(root, "scripts", "ci", "schema-drift-baseline.json"),
+      JSON.stringify({ entries: [] }),
+    );
+    assert.equal(candidatePredatesReconciliation(root), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("applyPreReconciliationFixes reconciles all 7 model sites accurately even with adjacent candidate fields and refuses already-reconciled schemas", () => {
+  const reconciledRepoSchema = readFileSync("prisma/schema.prisma", "utf8");
+  // Must refuse an already-reconciled schema so partial regressions cannot hide.
+  assert.equal(applyPreReconciliationFixes(reconciledRepoSchema), null);
+
+  // Build synthetic pre-reconciliation schema that ALSO includes PR #49's adjacent `MediaAsset.version` field.
+  const preReconWithVersion = reconciledRepoSchema
+    .replace(/\n  paymentAttempts\s+PaymentAttempt\[\]/, "")
+    .replace(
+      /updatedAt\s+DateTime\s+@updatedAt\s+@default\(now\(\)\)/,
+      "updatedAt  DateTime @updatedAt\n  version    Int      @default(0)",
+    )
+    .replace(/(model PosReceiptSequence \{\s+businessId\s+String\s+)@id/, "$1@unique")
+    .replace(/(model PaymentDestination \{[\s\S]*?capabilities\s+String\[\])\s+@default\(\[\]\)/, "$1")
+    .replace(/, map: "PaymentDestination_businessId_provider_providerDestinationId_pr"\)/, ")")
+    .replace(/(model PaymentProviderConnection \{[\s\S]*?capabilities\s+String\[\])\s+@default\(\[\]\)/, "$1")
+    .replace(/\n  business\s+Business\s+@relation\(fields: \[businessId\], references: \[id\], onDelete: Cascade\)/, "");
+
+  const fixed = applyPreReconciliationFixes(preReconWithVersion);
+  assert.notEqual(fixed, null);
+  assert.match(fixed, /updatedAt\s+DateTime\s+@updatedAt\s+@default\(now\(\)\)\n  version\s+Int\s+@default\(0\)/);
+  assert.deepEqual(evaluateModelSide(fixed).filter((c) => !c.ok), []);
 });

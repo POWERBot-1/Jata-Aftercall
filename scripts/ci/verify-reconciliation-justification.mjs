@@ -261,7 +261,7 @@ async function main() {
       console.log(`::error::reconciliation ${check.id} FAILED — ${detail.slice(0, 400)}`);
     }
   };
-  console.log("── datamodel side (the patch as applied) ──");
+  console.log("── datamodel side (reconciled prisma/schema.prisma) ──");
   for (const check of modelChecks) emit(check);
   console.log("── database side (the migrations as applied) ──");
   for (const check of dbChecks) emit(check);

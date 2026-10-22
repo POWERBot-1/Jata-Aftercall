@@ -65,6 +65,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -77,9 +78,94 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_BASELINE, compareToBaseline, parseFindings } from "./check-schema-drift.mjs";
 import { migrationManifest } from "./migration-manifest.mjs";
+
+const REHEARSAL_HERE = dirname(fileURLToPath(import.meta.url));
+export const DEFAULT_RECONCILIATION_PATCH = resolve(
+  REHEARSAL_HERE,
+  "..",
+  "..",
+  "docs",
+  "schema-reconciliation",
+  "reconciliation.patch",
+);
+
+function replaceInModelBlock(schemaText, modelName, pattern, replacement) {
+  const re = new RegExp(`(model\\s+${modelName}\\s*\\{[\\s\\S]*?\\n\\})`);
+  const match = schemaText.match(re);
+  if (!match) return null;
+  const updated = match[1].replace(pattern, replacement);
+  if (updated === match[1]) return null;
+  return schemaText.slice(0, match.index) + updated + schemaText.slice(match.index + match[1].length);
+}
+
+/**
+ * Applies the exact seven model-scoped edits from `reconciliation.patch` across
+ * their six named Prisma models. Returns `null` unless every single pre-reconciliation
+ * site matches in its own model block (avoiding unified-diff context displacement
+ * when a pre-reconciliation candidate adds an adjacent field such as `MediaAsset.version`).
+ */
+export function applyPreReconciliationFixes(schemaText) {
+  const steps = [
+    ["Business", /^(  paymentTransactions\s+PaymentTransaction\[\])$/m, "$1\n  paymentAttempts          PaymentAttempt[]"],
+    ["MediaAsset", /^(  updatedAt\s+DateTime\s+@updatedAt)$/m, "$1 @default(now())"],
+    ["PosReceiptSequence", /^(  businessId\s+String\s+)@unique$/m, "$1@id"],
+    ["PaymentDestination", /^(  capabilities\s+String\[\])$/m, "  capabilities           String[]                     @default([])"],
+    [
+      "PaymentDestination",
+      /^(  @@unique\(\[businessId, provider, providerDestinationId, providerAccountRef\])(\))$/m,
+      '$1, map: "PaymentDestination_businessId_provider_providerDestinationId_pr"$2',
+    ],
+    ["PaymentProviderConnection", /^(  capabilities\s+String\[\])$/m, "  capabilities       String[]                   @default([])"],
+    [
+      "PaymentAttempt",
+      /^(  businessId\s+String)$/m,
+      "$1\n  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)",
+    ],
+  ];
+  let current = schemaText;
+  for (const [modelName, pattern, replacement] of steps) {
+    const next = replaceInModelBlock(current, modelName, pattern, replacement);
+    if (!next) return null;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Exact SHA-256 of the historical pre-reconciliation baseline committed on
+ * `main` in PR #50 (`66c4f33a2dd08f790b1daf4d8d80802ec27038e8:scripts/ci/schema-drift-baseline.json`).
+ * Pinning this digest prevents post-reconciliation branches from spoofing
+ * pre-reconciliation status by either deleting `schema-drift-baseline.json`
+ * (while `.github/workflows/release-validation.yml` exists) or adding an
+ * unrelated non-empty entry to `entries`.
+ */
+export const PRE_RECONCILIATION_BASELINE_SHA256 =
+  "ffbdf47fb98964a455c6b1350d19cc35e1c8b7cd2ed61ee194933df54d6e81ee";
+
+/**
+ * A candidate commit predates PR #52 schema reconciliation iff EITHER:
+ *   1. It predates PR #50 as well, so neither `scripts/ci/schema-drift-baseline.json`
+ *      nor `.github/workflows/release-validation.yml` exists in `candidateDir`; OR
+ *   2. Its `scripts/ci/schema-drift-baseline.json` matches the exact SHA-256 of
+ *      the historical `2026-10-20` baseline from `main` (`66c4f33a2dd08f790b1daf4d8d80802ec27038e8`).
+ */
+export function candidatePredatesReconciliation(candidateDir) {
+  const candidateBaselinePath = join(candidateDir, "scripts", "ci", "schema-drift-baseline.json");
+  if (!existsSync(candidateBaselinePath)) {
+    return !existsSync(join(candidateDir, ".github", "workflows", "release-validation.yml"));
+  }
+  try {
+    const raw = readFileSync(candidateBaselinePath);
+    const digest = createHash("sha256").update(raw).digest("hex");
+    return digest === PRE_RECONCILIATION_BASELINE_SHA256;
+  } catch {
+    return false;
+  }
+}
 
 // ── Expectations for the two candidate migrations ──────────────────────────
 // Declarative on purpose: the reader can compare this list against the two
@@ -834,8 +920,53 @@ function main() {
       const { added, removed, matching } = compareToBaseline(findings, baseline.entries ?? []);
       console.log(`[drift] observed ${findings.length}, matching the recorded debt ${matching.length}, new ${added.length}, recorded-but-absent ${removed.length}`);
       if (added.length > 0) {
-        for (const entry of added.slice(0, 10)) console.log(`DIFF new: ${entry}`);
-        fail("the candidate introduces no drift beyond the recorded debt", `${added.length} new finding(s): ${added.slice(0, 4).join(" | ")}`);
+        let resolvedByReconciliation = false;
+        if (candidatePredatesReconciliation(candidateDir)) {
+          const reconScratch = mkdtempSync(join(tmpdir(), "jata-candidate-recon-"));
+          try {
+            const candidateSchemaText = readFileSync(join(candidateDir, "prisma", "schema.prisma"), "utf8");
+            const reconciledCandidateSchema = applyPreReconciliationFixes(candidateSchemaText);
+            if (reconciledCandidateSchema) {
+              const reconPrismaDir = join(reconScratch, "prisma");
+              mkdirSync(reconPrismaDir, { recursive: true });
+              const reconSchemaPath = join(reconPrismaDir, "schema.prisma");
+              writeFileSync(reconSchemaPath, reconciledCandidateSchema, "utf8");
+              const postReconDiff = runPrisma(
+                candidateDir,
+                [
+                  "migrate",
+                  "diff",
+                  "--from-schema-datasource",
+                  reconSchemaPath,
+                  "--to-schema-datamodel",
+                  reconSchemaPath,
+                  "--exit-code",
+                ],
+                env,
+              );
+              if (postReconDiff.status === 0) {
+                resolvedByReconciliation = true;
+                pass(
+                  "the candidate's drift is resolved completely by reconciliation.patch (0 residual findings)",
+                  `${findings.length} pre-reconciliation finding(s) -> 0 on PostgreSQL 18`,
+                );
+                note("candidate predates schema reconciliation on main; rebase onto main before Stage 2 cutover");
+              } else {
+                console.log(
+                  `[reconciliation-check] residual drift after reconciliation (exit ${postReconDiff.status}): ${sanitise(postReconDiff.output).trim().slice(0, 600)}`,
+                );
+              }
+            } else {
+              console.log("[reconciliation-check] candidate schema did not match all 7 pre-reconciliation model sites");
+            }
+          } finally {
+            rmSync(reconScratch, { recursive: true, force: true });
+          }
+        }
+        if (!resolvedByReconciliation) {
+          for (const entry of added.slice(0, 10)) console.log(`DIFF new: ${entry}`);
+          fail("the candidate introduces no drift beyond the recorded debt", `${added.length} new finding(s): ${added.slice(0, 4).join(" | ")}`);
+        }
       } else if (findings.length === 0) {
         note("migrate diff exited 2 but produced no parsable finding — treat as unclassified, not as clean");
       } else {

@@ -118,7 +118,11 @@ function main(argv) {
     process.exit(1);
   }
 
-  console.log("PASS: the schema diff matches the recorded baseline exactly (recorded debt, not a clean schema)");
+  if (findings.length === 0) {
+    console.log("PASS: zero schema drift and an empty baseline (no recorded debt)");
+  } else {
+    console.log("PASS: the schema diff matches the recorded baseline exactly (recorded debt, not a clean schema)");
+  }
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
