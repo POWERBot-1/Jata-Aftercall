@@ -168,6 +168,17 @@ beforeEach(() => {
 });
 
 describe("settleOrderPayment (mock-only)", () => {
+  it("does not settle a pending payment without a valid provider transaction ID", async () => {
+    await expect(settleOrderPayment("pay1", { eventId: "evt-no-evidence" })).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    await expect(settleOrderPayment("pay1", {
+      eventId: "evt-inline-id",
+      verification: { paystackId: "data:image/png;base64,iVBORw0KGgo=" },
+    })).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    expect(state.store.payments[0].status).toBe("PENDING");
+    expect(state.store.orders[0]).toMatchObject({ paymentStatus: "UNPAID", status: "PENDING_PAYMENT" });
+    expect(state.store.processed).toHaveLength(0);
+  });
+
   it("settles once: the order is paid and confirmed, with one notification and one analytics row", async () => {
     const result = await settleOrderPayment("pay1", { eventId: "evt-1", verification: { paystackId: "555" } });
     expect(result.alreadySettled).toBe(false);
@@ -178,7 +189,7 @@ describe("settleOrderPayment (mock-only)", () => {
   });
 
   it("a repeated callback with a new event id does not settle again or duplicate the notification", async () => {
-    await settleOrderPayment("pay1", { eventId: "evt-1" });
+    await settleOrderPayment("pay1", { eventId: "evt-1", verification: { paystackId: "555" } });
     const again = await settleOrderPayment("pay1", { eventId: "evt-2" });
     expect(again.alreadySettled).toBe(true);
     expect(state.store.notifications).toHaveLength(1);
@@ -186,14 +197,17 @@ describe("settleOrderPayment (mock-only)", () => {
   });
 
   it("concurrent callbacks for one payment settle exactly once", async () => {
-    const results = await Promise.all([1, 2, 3, 4].map((i) => settleOrderPayment("pay1", { eventId: `evt-c${i}` })));
+    const results = await Promise.all([1, 2, 3, 4].map((i) => settleOrderPayment("pay1", { eventId: `evt-c${i}`, verification: { paystackId: String(554 + i) } })));
     expect(results.filter((r) => !r.alreadySettled)).toHaveLength(1);
     expect(state.store.notifications).toHaveLength(1);
     expect(state.store.processed.map((p: any) => p.id).sort()).toEqual(["evt-c1", "evt-c2", "evt-c3", "evt-c4"]);
   });
 
   it("an event id seen twice concurrently does not double-settle; the loser is rolled back", async () => {
-    const results = await Promise.allSettled([settleOrderPayment("pay1", { eventId: "same" }), settleOrderPayment("pay1", { eventId: "same" })]);
+    const results = await Promise.allSettled([
+      settleOrderPayment("pay1", { eventId: "same", verification: { paystackId: "555" } }),
+      settleOrderPayment("pay1", { eventId: "same", verification: { paystackId: "555" } }),
+    ]);
     expect(results.every((r) => r.status === "fulfilled" || r.status === "rejected")).toBe(true);
     expect(state.store.notifications).toHaveLength(1);
     expect(state.store.processed.filter((p: any) => p.id === "same")).toHaveLength(1);
@@ -201,20 +215,20 @@ describe("settleOrderPayment (mock-only)", () => {
 
   it("a failure partway through settlement rolls back the payment update, the order and the notification", async () => {
     state.store.faultNotification = true;
-    await expect(settleOrderPayment("pay1", { eventId: "evt-fail" })).rejects.toThrow("notification store down");
+    await expect(settleOrderPayment("pay1", { eventId: "evt-fail", verification: { paystackId: "555" } })).rejects.toThrow("notification store down");
     expect(state.store.payments[0].status).toBe("PENDING");
     expect(state.store.orders[0]).toMatchObject({ paymentStatus: "UNPAID", status: "PENDING_PAYMENT" });
     expect(state.store.processed).toHaveLength(0);
     // Recovery: the same callback succeeds once the fault is gone.
     state.store.faultNotification = false;
-    const retry = await settleOrderPayment("pay1", { eventId: "evt-fail" });
+    const retry = await settleOrderPayment("pay1", { eventId: "evt-fail", verification: { paystackId: "555" } });
     expect(retry.alreadySettled).toBe(false);
     expect(state.store.payments[0].status).toBe("PAID");
     expect(state.store.notifications).toHaveLength(1);
   });
 
   it("recovers after a restart: a new client over the same stored state does not settle again", async () => {
-    await settleOrderPayment("pay1", { eventId: "evt-r1" });
+    await settleOrderPayment("pay1", { eventId: "evt-r1", verification: { paystackId: "555" } });
     state.dbClient = fakeDb(state.store); // simulated restart: only the stored state survives
     const after = await settleOrderPayment("pay1", { eventId: "evt-r2" });
     expect(after.alreadySettled).toBe(true);

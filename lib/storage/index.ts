@@ -1,9 +1,10 @@
 /**
  * Storage provider selection and capability checks (storage decision)
  *
- * Selection is server-side configuration only (JATA_STORAGE_PROVIDER). The default is the inline
- * provider, so nothing changes for existing sites. Selecting a provider that is not implemented in
- * this build fails loudly with an explanation, rather than silently falling back and losing uploads.
+ * Selection is server-side configuration only (JATA_STORAGE_PROVIDER). When unset, the legacy
+ * inline identifier is retained for read/capability compatibility, but its `put` operation fails
+ * closed. No durable write provider is configured. Selecting an unimplemented provider fails
+ * loudly rather than silently falling back and putting image bytes in Neon.
  */
 
 import { createInlineStorage, INLINE_PROVIDER_ID } from "./inline";
@@ -13,8 +14,8 @@ export { INLINE_PROVIDER_ID } from "./inline";
 export * from "./types";
 export { objectKeyFor, keyBelongsToTenant, MAX_BYTES_BY_KIND, CONTENT_TYPES_BY_KIND, tenantPrefix } from "./keys";
 
-/** Providers this build knows how to run. Others are reported as not configured. */
-export const IMPLEMENTED_PROVIDERS = [INLINE_PROVIDER_ID] as const;
+/** Durable providers this build can currently write to. No provider is configured or approved. */
+export const IMPLEMENTED_PROVIDERS: readonly string[] = [];
 
 export function resolveStorageProvider(env: NodeJS.ProcessEnv = process.env): ObjectStorageProvider {
   const requested = (env.JATA_STORAGE_PROVIDER || INLINE_PROVIDER_ID).trim();
@@ -32,6 +33,9 @@ export function assertCanStore(provider: ObjectStorageProvider, kind: StorageKin
   const caps = provider.capabilities;
   if (bytes > caps.maxObjectBytes) {
     throw new StorageCapabilityError("That file is larger than this storage can hold.");
+  }
+  if (kind === "image-original" && !caps.durable) {
+    throw new StorageCapabilityError("Image bytes require an approved durable media provider; inline persistence is disabled.");
   }
   if ((kind === "model-glb" || kind === "model-texture") && !caps.models) {
     throw new StorageCapabilityError("3D models need a durable storage provider, which is not configured yet.");

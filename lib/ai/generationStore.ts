@@ -12,6 +12,7 @@
 
 import crypto from "crypto";
 import prisma from "../db";
+import { assertNoInlineImagePersistence } from "../media/persistence-policy";
 
 export type GenerationKind = "IMAGE" | "ENHANCE" | "COPY" | "ALT_TEXT";
 export type GenerationStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "BLOCKED";
@@ -38,6 +39,9 @@ function model(): any {
 }
 
 export async function startGeneration(input: GenerationRecordInput): Promise<{ id: string } | null> {
+  // Prompts are retained in Neon as audit/usage records; do not let a secondary text path carry
+  // a data URL that bypassed its API-level media-field validation.
+  assertNoInlineImagePersistence(input.prompt);
   const delegate = model();
   if (!delegate?.create) return null;
   try {

@@ -18,8 +18,13 @@ model User {
   role         Role           @default(CUSTOMER)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  // Incremented by credential recovery so every previously issued JWT is revoked.
+  sessionVersion Int          @default(0)
+  // Persistent per-account cooldown; avoids repeated recovery mail across app instances.
+  passwordResetRequestedAt DateTime?
   ownedBusinesses Business[]
   businesses   BusinessMember[]
+  passwordResetToken PasswordResetToken?
   payments     Payment[]
   subscriptions Subscription[]
   auditEvents  AuditEvent[]
@@ -30,6 +35,19 @@ model User {
 enum Role {
   CUSTOMER
   ADMIN
+}
+
+// A single active recovery token per account. Only its SHA-256 digest is stored.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Business {
@@ -114,6 +132,7 @@ model Business {
   posOrderItems            PosOrderItem[]
   posOrderEvents           PosOrderEvent[]
   posAuditEvents           PosAuditEvent[]
+  posPublicationResolutions PosPublicationResolution[]
   posIdempotencyRecords    PosIdempotencyRecord[]
   checkoutIdempotencyRecords CheckoutIdempotencyRecord[]
 
@@ -315,8 +334,9 @@ model Payment {
   purpose    String        @default("SUBSCRIPTION")
   orderId    String?
   order      Order?        @relation(fields: [orderId], references: [id])
-  bookingId  String?
+  bookingId    String?
   customerEmail String?    // Guest checkout payer — never a secret (§47)
+  posPublicationResolution PosPublicationResolution?
 
   @@index([userId])
   @@index([businessId])
@@ -897,9 +917,9 @@ model InteractiveBusinessEntitlement {
 }
 
 //
-// Tenant media library (§19). `hash` deduplicates identical uploads so the same asset is
-// never stored twice for one business. Alt text is stored with the asset so accessibility
-// travels with the image (§48).
+// Tenant media library (§19). `hash` is retained for legacy rows and historical deduplication;
+// new inline uploads are refused, and reference-only rows do not claim stored bytes. Alt text
+// is stored with the asset so accessibility travels with the image (§48).
 //
 model MediaAsset {
   id         String   @id @default(cuid())
@@ -923,6 +943,8 @@ model MediaAsset {
   parentAssetId  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt @default(now())
+  // Monotonic compare-and-swap token for media metadata edits; unlike updatedAt, it cannot collide within one millisecond.
+  version    Int      @default(0)
 
   @@index([businessId])
   @@index([businessId, hash])
@@ -1654,6 +1676,40 @@ model PosAuditEvent {
 
   @@index([businessId, createdAt])
   @@index([businessId, action])
+}
+
+/// Owner-selected paid-but-unpublished POS safeguard. One row per confirmed POS subscription
+/// payment whose configuration did not publish in the settlement transaction. The payment and
+/// entitlement remain authoritative; this row tracks only publication resolution and never
+/// grants access, initiates a refund, or claims that a notification was delivered.
+model PosPublicationResolution {
+  id                              String    @id @default(cuid())
+  businessId                      String
+  business                        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  paymentId                       String    @unique
+  payment                         Payment   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  configurationId                 String?
+  paymentReference                String
+  /// Fresh: server settlement instant. Legacy repair: verified provider paid_at. Never mutable ledger timestamps.
+  confirmedAt                     DateTime
+  deadlineAt                      DateTime
+  blockerCode                     String
+  blockerDetail                   String?   @db.Text
+  /// OPEN | ESCALATED | RESOLVED. ESCALATED is derived from deadlineAt even before a worker runs.
+  status                          String    @default("OPEN")
+  /// Observational copy only. PosEntitlement remains the authorization source of truth.
+  entitlementStatus               String    @default("ACTIVE")
+  /// PENDING_PUBLICATION | OWNER_ESCALATED | PUBLISHED. No refund outcome is invented here.
+  remedyStatus                    String    @default("PENDING_PUBLICATION")
+  ownerNotificationQueuedAt       DateTime?
+  escalationNotificationScheduledAt DateTime?
+  escalatedAt                     DateTime?
+  resolvedAt                      DateTime?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([status, deadlineAt])
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

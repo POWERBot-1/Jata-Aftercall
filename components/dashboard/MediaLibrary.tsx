@@ -27,6 +27,8 @@ type Asset = {
   label: string | null;
   aiGenerationId: string | null;
   createdAt: string;
+  /** Monotonic compare-and-swap token returned by GET /api/media. */
+  version: number;
 };
 
 type Generation = {
@@ -100,21 +102,36 @@ export function MediaLibrary({ businessId, heroImageUrl }: { businessId: string;
     if (showHistory) void loadHistory();
   }, [showHistory, loadHistory]);
 
-  async function saveAlt(id: string, value: string) {
-    setBusy(`alt-${id}`);
+  async function saveAlt(asset: Asset, value: string) {
+    setBusy(`alt-${asset.id}`);
     setError(null);
     try {
       const response = await fetch("/api/media", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, alt: value }),
+        body: JSON.stringify({ id: asset.id, alt: value, expectedVersion: asset.version }),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 409) {
+        // Keep the owner's draft, refresh the server version, and never retry it automatically.
+        await load();
+        setError("Someone else changed this image while you were editing. Your text is still here — review the latest image, then press Save again to replace their change, or Cancel to keep theirs.");
+        return;
+      }
+      if (response.status === 428) {
+        await load();
+        setError("This page was out of date, so nothing was saved. Your text is still here — review the latest image and try again.");
+        return;
+      }
       if (!response.ok) {
         setError(data.error || "We couldn't save that description.");
         return;
       }
-      setAssets((current) => current.map((asset) => (asset.id === id ? { ...asset, alt: data.asset?.alt ?? value } : asset)));
+      setAssets((current) => current.map((entry) =>
+        entry.id === asset.id
+          ? { ...entry, alt: data.asset?.alt ?? value, version: data.asset?.version ?? entry.version }
+          : entry,
+      ));
       setAltDraft(null);
       setNotice("Description saved.");
     } catch {
@@ -318,7 +335,7 @@ export function MediaLibrary({ businessId, heroImageUrl }: { businessId: string;
                     <input className="jata-input" value={altDraft.value} maxLength={160} onChange={(event) => setAltDraft({ id: asset.id, value: event.target.value })} />
                   </label>
                   <div className="mt-1 flex gap-1">
-                    <button type="button" className="jata-btn jata-btn-primary" disabled={busy === `alt-${asset.id}`} onClick={() => void saveAlt(asset.id, altDraft.value)}>
+                    <button type="button" className="jata-btn jata-btn-primary" disabled={busy === `alt-${asset.id}`} onClick={() => void saveAlt(asset, altDraft.value)}>
                       Save
                     </button>
                     <button type="button" className="jata-btn jata-btn-ghost" onClick={() => setAltDraft(null)}>

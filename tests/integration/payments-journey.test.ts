@@ -12,6 +12,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The in-memory DB has no raw SQL engine; keep this provider helper optional without a generated client.
+vi.mock("@prisma/client", () => ({ Prisma: {} }));
+
 vi.mock("@/lib/db", async () => {
   const { createFakeDb, standardSeed } = await import("@/tests/helpers/posFakeDb");
   const fake = createFakeDb(standardSeed());
@@ -126,14 +129,14 @@ function confirmationFor(row: any, overrides: Record<string, unknown> = {}) {
   };
 }
 
-function requestSale(requestKey = "till-tap-1") {
+function requestSale(requestKey = "till-tap-1", logoUrl: string | null = null) {
   return createPaymentRequest({
     businessId: "bizA",
     requestKey,
     method: "mpesa",
     sale: {
       request: { items: [{ productId: "p_a1", quantity: 2 }, { productId: "p_a2", quantity: 1 }], payments: [] },
-      business,
+      business: { ...business, logoUrl },
       configurationVersion: 1,
       configurationFingerprint: null,
     },
@@ -174,6 +177,22 @@ describe("asking for a payment (§20, §21, §33)", () => {
     expect(row.businessId).toBe("bizA");
     expect(row.providerTransactionId).toBeNull();
     expect(row.status).toBe("PAYMENT_REQUESTED");
+    expect(fake().rows("paymentAttempt")[0].status).toBe("ACCEPTED");
+  });
+
+  it("omits a legacy inline logo from the new payment snapshot without blocking initiation", async () => {
+    const outcome = await requestSale("till-tap-legacy-logo", "data:image/png;base64,synthetic-fixture");
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.amountKES).toBe(350);
+    expect(outcome.status).toBe("PAYMENT_REQUESTED");
+
+    const row = fake().rows("paymentTransaction")[0];
+    const paymentContext = typeof row.paymentContext === "string" ? JSON.parse(row.paymentContext) : row.paymentContext;
+    expect(paymentContext.pos.business.logoUrl).toBeNull();
+    expect(JSON.stringify(paymentContext)).not.toContain("data:image/");
+    expect(fake().rows("paymentTransaction")).toHaveLength(1);
     expect(fake().rows("paymentAttempt")[0].status).toBe("ACCEPTED");
   });
 

@@ -5,24 +5,17 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { validateEnquiryInput, saveProfessionalEnquiry, listProfessionalEnquiries, EnquiryReplayConflict, usesServiceEnquiries } from "@/lib/experience/enquiries";
 import { recordEvent, hashSession, hashIp } from "@/lib/analytics";
+import { rateLimit, trustedClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 const noStore = { "cache-control": "private, no-store" };
-const hits = new Map<string, { count: number; until: number }>();
-function throttled(ip: string): boolean {
-  const key = hashIp(ip) || "unknown"; const now = Date.now();
-  for (const [id, entry] of hits) if (entry.until < now) hits.delete(id);
-  const entry = hits.get(key);
-  if (entry) { entry.count += 1; return entry.count > 20; }
-  if (hits.size >= 10000) return true;
-  hits.set(key, { count: 1, until: now + 60000 }); return false;
-}
 function reply(body: unknown, status: number) { return NextResponse.json(body, { status, headers: noStore }); }
 
 /** Public request-only intake. The stored slug/service/published document determines the tenant. */
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
-  if (throttled(ip)) return reply({ error: "Too many requests. Please wait a minute before trying again." }, 429);
+  const limit = rateLimit(req, { key: "storefront-enquiry", max: 20, windowMs: 60_000 });
+  if (!limit.allowed) return reply({ error: "Too many requests. Please wait a minute before trying again." }, 429);
+  const ip = trustedClientIp(req.headers) ?? "unknown";
   const origin = req.headers.get("origin");
   if (origin) {
     // Same-website CSRF check by host (host:port). Never compare serialized origins:

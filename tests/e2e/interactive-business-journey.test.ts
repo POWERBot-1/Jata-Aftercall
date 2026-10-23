@@ -82,6 +82,9 @@ async function call(handler: (req: Request) => Promise<Response>, url: string, i
 const TINY_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
 
+// The supported durable-media contract: a hosted or local-path reference, never inline bytes.
+const HOSTED_IMAGE_PATH = "/uploads/chicken-biryani.png";
+
 function futureDate(offsetDays: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
@@ -238,12 +241,25 @@ describe.skipIf(!enabled)("Interactive Business end-to-end journey (§66)", () =
   }, 120_000);
 
   it("7 — an image is uploaded to the media library", async () => {
+    // Durable media storage is deliberately deferred: new inline image bytes are refused (503).
+    // The journey must prove that refusal here and then use the supported reference path, which
+    // creates metadata only. Existing inline rows stay readable; nothing is uploaded.
+    const refused = await call(mediaPost, "https://jata.test/api/media", {
+      method: "POST",
+      body: { businessId: ctx.owner.businessId, kind: "IMAGE", url: TINY_PNG, alt: "Inline attempt" },
+    });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(503);
+    expect(refused.body?.code).toBe("inline_media_persistence_disabled");
+
     const response = await call(mediaPost, "https://jata.test/api/media", {
       method: "POST",
-      body: { businessId: ctx.owner.businessId, kind: "IMAGE", url: TINY_PNG, alt: "Chicken biryani" },
+      body: { businessId: ctx.owner.businessId, kind: "IMAGE", url: HOSTED_IMAGE_PATH, alt: "Chicken biryani" },
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
-    ctx.imageUrl = response.body?.asset?.url || TINY_PNG;
+    // A reference row carries no image bytes.
+    expect(response.body?.asset?.url).toBe(HOSTED_IMAGE_PATH);
+    expect(response.body?.asset?.bytes ?? null).toBeNull();
+    ctx.imageUrl = response.body?.asset?.url || HOSTED_IMAGE_PATH;
     expect(ctx.imageUrl).toBeTruthy();
   }, 120_000);
 

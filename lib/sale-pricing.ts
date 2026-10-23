@@ -1,7 +1,7 @@
 /**
  * Sale-price windows: the single server-side rule for what a product costs right now.
  *
- * Policy (approved, Option C):
+ * Current implementation (owner approval is a separate, still-pending decision):
  *  1. The base (list) price is authoritative outside a valid sale window.
  *  2. A sale price applies only when the current instant is inside its window. The window is
  *     start-inclusive and end-exclusive: at `startsAt` the sale is on; at `endsAt` it is off.

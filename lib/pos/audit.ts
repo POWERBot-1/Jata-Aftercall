@@ -7,6 +7,7 @@
  */
 
 import prisma from "../db";
+import { containsInlineImageDataUrl } from "../media/persistence-policy";
 
 export type PosAuditAction =
   | "POS_CONFIGURATION_SAVED"
@@ -17,6 +18,8 @@ export type PosAuditAction =
   | "POS_PREVIEW_OPENED"
   | "POS_PLAN_SELECTED"
   | "POS_PROVISIONED"
+  | "POS_PUBLICATION_ESCALATED"
+  | "POS_PUBLICATION_RESOLVED"
   | "POS_SUSPENDED"
   | "POS_CANCELLED"
   | "POS_SUBSCRIPTION_ACTIVATED"
@@ -64,8 +67,16 @@ const MAX_METADATA_BYTES = 8_000;
 /** Keys that must never be written to an audit log (§56). */
 const FORBIDDEN_METADATA_KEYS = ["password", "passwordhash", "pin", "secret", "token", "apikey", "credential", "signature", "session"];
 
+function safeAuditText(value: string | null | undefined, fallback: string | null = null): string | null {
+  if (value == null) return null;
+  return containsInlineImageDataUrl(value) ? fallback : value;
+}
+
 function sanitizeMetadata(metadata: Record<string, unknown> | null | undefined): string | null {
   if (!metadata || typeof metadata !== "object") return null;
+  // Audit metadata is optional. Keep the business operation/audit action but omit the entire
+  // snapshot if it contains inline media rather than copying provider or legacy text into Neon.
+  if (containsInlineImageDataUrl(metadata)) return JSON.stringify({ inlineMediaOmitted: true });
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
     const normalized = key.toLowerCase().replace(/[^a-z]/g, "");
@@ -88,12 +99,12 @@ export async function logPosAudit(entry: PosAuditEntry): Promise<void> {
     await prisma.posAuditEvent.create({
       data: {
         businessId: entry.businessId,
-        actorId: entry.actorId ?? null,
-        actorName: entry.actorName ?? null,
-        action: String(entry.action).slice(0, 60),
-        targetType: entry.targetType ?? null,
-        targetId: entry.targetId ?? null,
-        branchId: entry.branchId ?? null,
+        actorId: safeAuditText(entry.actorId),
+        actorName: safeAuditText(entry.actorName),
+        action: safeAuditText(String(entry.action), "POS_AUDIT_EVENT")!.slice(0, 60),
+        targetType: safeAuditText(entry.targetType),
+        targetId: safeAuditText(entry.targetId),
+        branchId: safeAuditText(entry.branchId),
         metadata: sanitizeMetadata({
           ...(entry.metadata ?? {}),
           ...(entry.before ? { before: entry.before } : {}),
@@ -113,12 +124,12 @@ export async function logPosAuditInTransaction(tx: any, entry: PosAuditEntry): P
   await tx.posAuditEvent.create({
     data: {
       businessId: entry.businessId,
-      actorId: entry.actorId ?? null,
-      actorName: entry.actorName ?? null,
-      action: String(entry.action).slice(0, 60),
-      targetType: entry.targetType ?? null,
-      targetId: entry.targetId ?? null,
-      branchId: entry.branchId ?? null,
+        actorId: safeAuditText(entry.actorId),
+        actorName: safeAuditText(entry.actorName),
+        action: safeAuditText(String(entry.action), "POS_AUDIT_EVENT")!.slice(0, 60),
+        targetType: safeAuditText(entry.targetType),
+        targetId: safeAuditText(entry.targetId),
+        branchId: safeAuditText(entry.branchId),
       metadata: sanitizeMetadata({
         ...(entry.metadata ?? {}),
         ...(entry.before ? { before: entry.before } : {}),
@@ -199,7 +210,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   POS_TEMPLATE_SAVED: "Template saved",
   POS_PREVIEW_OPENED: "Preview opened",
   POS_PLAN_SELECTED: "Plan selected",
-  POS_PROVISIONED: "POS went live",
+  POS_PROVISIONED: "POS payment provisioning recorded",
+  POS_PUBLICATION_ESCALATED: "Publication resolution escalated",
+  POS_PUBLICATION_RESOLVED: "Publication resolved",
   POS_SUBSCRIPTION_ACTIVATED: "Subscription activated",
   POS_SUSPENDED: "POS suspended",
   POS_CANCELLED: "POS cancelled",

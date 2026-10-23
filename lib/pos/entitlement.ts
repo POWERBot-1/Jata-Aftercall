@@ -39,6 +39,8 @@ export type EntitlementInput = {
   entitlement?: { status?: string | null } | null;
   paidPayment?: { status?: string | null } | null;
   configurationStatus?: string | null;
+  /** When supplied by the server read, zero proves no publication snapshot exists. */
+  publishedVersion?: number | null;
   now?: Date;
 };
 
@@ -120,6 +122,8 @@ export function derivePosEntitlement(input: EntitlementInput): PosEntitlementSta
 
   const activeStatuses = ["ACTIVE", "EXPIRING", "PAST_DUE"];
   const subscriptionActive = activeStatuses.includes(subscription.status);
+  const configurationPublished = ["LIVE", "PUBLISHED"].includes(configStatus) &&
+    (input.publishedVersion === undefined || Number(input.publishedVersion) > 0);
   if (!subscriptionActive && !paid) {
     return {
       ...base, entitled: false, status: "PENDING", lifecycle: lifecycleWithoutPayment(configStatus, false),
@@ -147,8 +151,13 @@ export function derivePosEntitlement(input: EntitlementInput): PosEntitlementSta
 
   if (base.expiresAt && now.getTime() > base.expiresAt.getTime()) {
     return {
-      ...base, entitled: true, status: "PAST_DUE", lifecycle: "LIVE",
-      reason: "Your Business POS is in its grace period. Renew to avoid interruption.",
+      ...base,
+      entitled: true,
+      status: "PAST_DUE",
+      lifecycle: configurationPublished ? "LIVE" : "PAYMENT_CONFIRMED",
+      reason: configurationPublished
+        ? "Your Business POS is in its grace period. Renew to avoid interruption."
+        : "Your Business POS is in its grace period and the entitlement is preserved, but publication is still pending. Renew to avoid interruption.",
       nextAction: "renew",
     };
   }
@@ -161,10 +170,16 @@ export function derivePosEntitlement(input: EntitlementInput): PosEntitlementSta
     };
   }
 
-  // Active, in date, right plan: the POS is live. Configuration state decides the screen.
+  // Active, in date, right plan: payment entitles selling, but only a real publication snapshot
+  // may report LIVE. A paid-but-unpublished configuration remains explicitly PAYMENT_CONFIRMED.
   return {
-    ...base, entitled: true, status: "ACTIVE", lifecycle: "LIVE",
-    reason: configStatus === "PUBLISHED" ? "Your business POS is live." : "Your POS is live. Publish your configuration to apply your latest changes.",
+    ...base,
+    entitled: true,
+    status: "ACTIVE",
+    lifecycle: configurationPublished ? "LIVE" : "PAYMENT_CONFIRMED",
+    reason: configurationPublished
+      ? "Your business POS is live."
+      : "Payment is confirmed and your POS entitlement is active. Your configuration is not published yet.",
     nextAction: "none",
   };
 }
@@ -192,7 +207,7 @@ export const POS_LIFECYCLE_LABELS: Record<PosLifecycleStatus, { label: string; t
   CONFIGURED: { label: "Configured", tone: "info", help: "Your POS is configured. Edit it, preview it, then choose the plan." },
   PREVIEW: { label: "In preview", tone: "info", help: "A preview is not production — nothing here is saved as a real sale." },
   AWAITING_PAYMENT: { label: "Awaiting payment", tone: "warn", help: "Choose JATA AFTERCALL Business POS — KES 499/month to go live." },
-  PAYMENT_CONFIRMED: { label: "Payment confirmed", tone: "success", help: "Payment confirmed. Your POS is being switched on." },
+  PAYMENT_CONFIRMED: { label: "Payment confirmed — publication pending", tone: "info", help: "Your paid entitlement is preserved, but the POS configuration is not published yet." },
   PROVISIONING: { label: "Setting up", tone: "info", help: "JATA is applying your configuration." },
   LIVE: { label: "Live", tone: "success", help: "Your business POS is live." },
   SUSPENDED: { label: "Suspended", tone: "danger", help: "The POS is paused. Renew or contact support." },
@@ -248,7 +263,7 @@ export async function getPosEntitlement(businessId: string): Promise<PosEntitlem
           orderBy: { createdAt: "desc" },
         }) ?? null
       : null,
-    prisma.posConfiguration?.findUnique?.({ where: { businessId }, select: { status: true } }) ?? null,
+    prisma.posConfiguration?.findUnique?.({ where: { businessId }, select: { status: true, publishedVersion: true } }) ?? null,
   ]);
 
   return derivePosEntitlement({
@@ -256,6 +271,7 @@ export async function getPosEntitlement(businessId: string): Promise<PosEntitlem
     entitlement: entitlement ?? null,
     paidPayment: paidPayment ?? null,
     configurationStatus: configuration?.status ?? "DRAFT",
+    publishedVersion: configuration?.publishedVersion ?? null,
   });
 }
 

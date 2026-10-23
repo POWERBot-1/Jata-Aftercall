@@ -1,5 +1,7 @@
 # Notice for shop owners: sale prices now need dates
 
+**Status: draft only.** This file is not evidence that an owner approved the pricing policy or that this notice was sent to customers.
+
 **What changed.** A sale price now runs only inside a start and end date you set. Outside those dates, or where no dates are set, the normal (base) price is charged everywhere: your shop page, the AI assistant, the cart, and payment.
 
 **What this means for existing sales.** Any sale price you set before this update has no dates, so it is **not running**. Customers see and pay the normal price until you set a start and end date for that product.

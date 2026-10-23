@@ -57,7 +57,7 @@ export async function GET(req: Request) {
           return NextResponse.json({ error: "Payment is recorded but could not be safely reconciled. Please contact support." }, { status: 503 });
         }
         const repaired = await activateSubscriptionForPayment(payment.id, undefined, {
-          paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+          paystackId: String(transaction.id), providerConfirmedAt: transaction.paid_at, raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
         });
         return NextResponse.json({ status: "PAID", subscriptionStatus: (repaired.subscription as { status?: string } | null)?.status ?? null, idempotent: true, ...posReturn });
       } catch {
@@ -112,7 +112,7 @@ export async function GET(req: Request) {
     }
 
     const settled = await activateSubscriptionForPayment(payment.id, undefined, {
-      paystackId: String(transaction.id), raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
+      paystackId: String(transaction.id), providerConfirmedAt: transaction.paid_at, raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
     });
     await logAudit({ actorId: payment.userId, action: "PAYMENT_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
     return NextResponse.json({ status: "PAID", subscriptionStatus: (settled.subscription as { status?: string } | null)?.status ?? "ACTIVE", idempotent: settled.alreadySettled, ...posReturn });

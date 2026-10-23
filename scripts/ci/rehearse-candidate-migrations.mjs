@@ -19,7 +19,7 @@
  * WHAT IT PROVES
  * --------------
  *   1. The candidate history (preceding migrations first, in filename order,
- *      then both candidates) applies to an empty database with `migrate deploy`.
+ *      then every candidate-added migration) applies to an empty database with `migrate deploy`.
  *   2. The ledger has one finished, non-rolled-back, log-free row per migration,
  *      and no row that has no directory on disk.
  *   3. Every column, index, primary key and foreign key promised by the two
@@ -167,9 +167,10 @@ export function candidatePredatesReconciliation(candidateDir) {
   }
 }
 
-// ── Expectations for the two candidate migrations ──────────────────────────
-// Declarative on purpose: the reader can compare this list against the two
-// migration.sql files without reading any control flow.
+// ── Expectations for the reviewed additive migrations ─────────────────────
+// Declarative on purpose: compare this list against the migration.sql files
+// without reading control flow. The candidate SHA and complete inventory are
+// asserted separately; these checks cover the objects added by this candidate.
 export const CANDIDATE_EXPECTATIONS = [
   { kind: "column", table: "MediaAsset", column: "version", type: "integer", nullable: "NO", default: "0" },
   { kind: "column", table: "User", column: "sessionVersion", type: "integer", nullable: "NO", default: "0" },
@@ -239,6 +240,32 @@ export const CANDIDATE_EXPECTATIONS = [
       "ON DELETE CASCADE",
       "ON UPDATE CASCADE",
     ],
+  },
+  { kind: "table", table: "PosPublicationResolution" },
+  { kind: "column", table: "PosPublicationResolution", column: "paymentId", type: "text", nullable: "NO", default: null },
+  { kind: "column", table: "PosPublicationResolution", column: "confirmedAt", type: "timestamp without time zone", nullable: "NO", default: null },
+  { kind: "column", table: "PosPublicationResolution", column: "deadlineAt", type: "timestamp without time zone", nullable: "NO", default: null },
+  { kind: "column", table: "PosPublicationResolution", column: "status", type: "text", nullable: "NO", default: "'OPEN'" },
+  { kind: "column", table: "PosPublicationResolution", column: "entitlementStatus", type: "text", nullable: "NO", default: "'ACTIVE'" },
+  { kind: "column", table: "PosPublicationResolution", column: "remedyStatus", type: "text", nullable: "NO", default: "'PENDING_PUBLICATION'" },
+  { kind: "column", table: "PosPublicationResolution", column: "resolvedAt", type: "timestamp without time zone", nullable: "YES", default: null },
+  { kind: "index", table: "PosPublicationResolution", name: "PosPublicationResolution_paymentId_key", columns: "paymentId", unique: true },
+  { kind: "index", table: "PosPublicationResolution", name: "PosPublicationResolution_businessId_status_idx", columns: "businessId,status", unique: false },
+  { kind: "index", table: "PosPublicationResolution", name: "PosPublicationResolution_status_deadlineAt_idx", columns: "status,deadlineAt", unique: false },
+  { kind: "constraint", table: "PosPublicationResolution", name: "PosPublicationResolution_pkey", type: "p", definitionIncludes: ['PRIMARY KEY ("id")'] },
+  {
+    kind: "constraint",
+    table: "PosPublicationResolution",
+    name: "PosPublicationResolution_businessId_fkey",
+    type: "f",
+    definitionIncludes: ['FOREIGN KEY ("businessId") REFERENCES "Business"(id)', "ON DELETE CASCADE", "ON UPDATE CASCADE"],
+  },
+  {
+    kind: "constraint",
+    table: "PosPublicationResolution",
+    name: "PosPublicationResolution_paymentId_fkey",
+    type: "f",
+    definitionIncludes: ['FOREIGN KEY ("paymentId") REFERENCES "Payment"(id)', "ON DELETE RESTRICT", "ON UPDATE CASCADE"],
   },
 ];
 
@@ -386,7 +413,10 @@ export function evaluateSnapshot(snapshot, expectations = CANDIDATE_EXPECTATIONS
     }
     if (expectation.kind === "constraint") {
       const candidates = snapshot.constraints.filter(
-        (row) => row.table_name === expectation.table && (expectation.type ? row.contype === expectation.type : true),
+        (row) =>
+          row.table_name === expectation.table &&
+          (expectation.name ? row.conname === expectation.name : true) &&
+          (expectation.type ? row.contype === expectation.type : true),
       );
       if (candidates.length === 0) {
         checks.push({

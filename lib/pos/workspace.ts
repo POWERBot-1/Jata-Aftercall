@@ -33,6 +33,7 @@ import { paymentMethodOptions } from "./money";
 import { lowStock, posCounts, salesTotals, type PosCounts, type PosClient } from "./store";
 import type { DashboardCardKey, PosConfiguration } from "./types";
 import prisma from "@/lib/db";
+import { reconcilePosPublicationDeadlines, type PosPublicationResolutionCase } from "./publication-policy";
 
 export function posBasePath(businessId: string): string {
   return `/dashboard/pos/${encodeURIComponent(businessId)}`;
@@ -53,6 +54,8 @@ export type PosWorkspace = PosContext & {
   plan: { key: string; name: string; priceKES: number; durationDays: number };
   /** True once a configuration is published and the subscription permits trading (§44). */
   ready: boolean;
+  /** Oldest unresolved paid-publication case; never used to grant or revoke an entitlement. */
+  publicationResolution: PosPublicationResolutionCase | null;
   /** One plain-language line for the banner; null when nothing needs saying (§38). */
   notice: string | null;
   noticeTone: "info" | "warn" | "danger" | "success";
@@ -160,6 +163,10 @@ export async function loadPosWorkspaceForSession(
     ? await requirePosAccess(businessId, session, options)
     : await requirePosAccessFromRequest(businessId, options);
 
+  // Authorized server-side reconciliation only. It never calls a payment provider and never
+  // changes payment or entitlement state; due in-app policy messages are delivered honestly.
+  const publicationPolicy = await reconcilePosPublicationDeadlines({ businessId, client: prisma });
+  const publicationResolution = publicationPolicy.cases[0] ?? null;
   const basePath = posBasePath(businessId);
   const configuration: PosConfiguration = context.configuration;
   const terminology: Terminology = context.terminology ?? resolveTerminology(configuration);
@@ -202,6 +209,7 @@ export async function loadPosWorkspaceForSession(
       durationDays: POS_PLAN_DURATION_DAYS,
     },
     ready: context.lifecycle === "LIVE" && Boolean(context.record?.publishedVersion),
+    publicationResolution,
     notice: null,
     noticeTone: "info",
     noticeHref: null,
@@ -216,10 +224,21 @@ export async function loadPosWorkspaceForSession(
  * next in the owner's own words, and it never uses platform internals (§38).
  */
 export function workspaceNotice(
-  workspace: Pick<PosWorkspace, "lifecycle" | "basePath" | "record" | "counts" | "terminology" | "configuration">,
+  workspace: Pick<PosWorkspace, "lifecycle" | "basePath" | "record" | "counts" | "terminology" | "configuration" | "publicationResolution">,
   remainingQuestions: number,
 ): { notice: string | null; noticeTone: PosWorkspace["noticeTone"]; noticeHref: string | null } {
-  const { lifecycle, basePath, record, counts, terminology } = workspace;
+  const { lifecycle, basePath, record, counts, terminology, publicationResolution } = workspace;
+
+  if (publicationResolution && lifecycle !== "SUSPENDED" && lifecycle !== "CANCELLED") {
+    const escalated = publicationResolution.status === "ESCALATED";
+    return {
+      notice: escalated
+        ? `Payment is confirmed, but the 72-hour publication deadline passed (${new Date(publicationResolution.deadlineAt).toISOString()}). Owner escalation is recorded; no support ticket or automatic refund has been initiated.`
+        : `Payment is confirmed and your entitlement is active. Publication is still blocked; resolve it by ${new Date(publicationResolution.deadlineAt).toISOString()}.`,
+      noticeTone: escalated ? "danger" : "warn",
+      noticeHref: `${basePath}/configure`,
+    };
+  }
 
   switch (lifecycle) {
     case "DRAFT":
@@ -362,6 +381,28 @@ export function serializeWorkspace(workspace: PosWorkspace) {
     supplierOutstandingKES: workspace.supplierOutstandingKES,
     plan: workspace.plan,
     ready: workspace.ready,
+    publicationResolution: workspace.publicationResolution
+      ? {
+          paymentReference: workspace.publicationResolution.paymentReference,
+          status: workspace.publicationResolution.status,
+          remedyStatus: workspace.publicationResolution.remedyStatus,
+          entitlementStatus: workspace.publicationResolution.entitlementStatus,
+          blockerCode: workspace.publicationResolution.blockerCode,
+          blockerDetail: workspace.publicationResolution.blockerDetail,
+          confirmedAt: new Date(workspace.publicationResolution.confirmedAt).toISOString(),
+          deadlineAt: new Date(workspace.publicationResolution.deadlineAt).toISOString(),
+          ownerNotificationQueuedAt: workspace.publicationResolution.ownerNotificationQueuedAt
+            ? new Date(workspace.publicationResolution.ownerNotificationQueuedAt).toISOString()
+            : null,
+          escalationNotificationScheduledAt: workspace.publicationResolution.escalationNotificationScheduledAt
+            ? new Date(workspace.publicationResolution.escalationNotificationScheduledAt).toISOString()
+            : null,
+          escalatedAt: workspace.publicationResolution.escalatedAt
+            ? new Date(workspace.publicationResolution.escalatedAt).toISOString()
+            : null,
+          resolvedAt: null,
+        }
+      : null,
     notice: workspace.notice,
     noticeTone: workspace.noticeTone,
     noticeHref: workspace.noticeHref,

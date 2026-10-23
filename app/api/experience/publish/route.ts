@@ -19,6 +19,7 @@ import { getBusinessUrl } from "@/lib/url";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,11 @@ export async function POST(req: Request) {
       }, { status: 409 });
     }
     const document = schema.document;
+    // The live site remains untouched. Publishing a legacy inline image would duplicate its
+    // bytes into publishedJson and ExperienceVersion; require removal/replacement first.
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE, published: false }, { status: 503 });
+    }
 
     const validation = validateForPublication({
       document,

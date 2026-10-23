@@ -69,7 +69,7 @@ END
 $$;
 `;
 
-test("the two candidate migrations are recognised as additive", () => {
+test("the additive media and recovery migration fixtures are recognised as additive", () => {
   assert.deepEqual(scanForDestructiveStatements(ADDITIVE_MEDIA), []);
   assert.deepEqual(scanForDestructiveStatements(ADDITIVE_RESET), []);
 });
@@ -129,11 +129,47 @@ const SNAPSHOT_OK = {
   ],
 };
 
+// The third additive migration is part of the same exact-candidate catalog.
+SNAPSHOT_OK.tables.push({ table_name: "PosPublicationResolution" });
+SNAPSHOT_OK.columns.push(
+  { table_name: "PosPublicationResolution", column_name: "paymentId", data_type: "text", is_nullable: "NO", column_default: null, datetime_precision: null, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "confirmedAt", data_type: "timestamp without time zone", is_nullable: "NO", column_default: null, datetime_precision: 3, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "deadlineAt", data_type: "timestamp without time zone", is_nullable: "NO", column_default: null, datetime_precision: 3, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "status", data_type: "text", is_nullable: "NO", column_default: "'OPEN'::text", datetime_precision: null, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "entitlementStatus", data_type: "text", is_nullable: "NO", column_default: "'ACTIVE'::text", datetime_precision: null, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "remedyStatus", data_type: "text", is_nullable: "NO", column_default: "'PENDING_PUBLICATION'::text", datetime_precision: null, numeric_precision: null, character_maximum_length: null },
+  { table_name: "PosPublicationResolution", column_name: "resolvedAt", data_type: "timestamp without time zone", is_nullable: "YES", column_default: null, datetime_precision: 3, numeric_precision: null, character_maximum_length: null },
+);
+SNAPSHOT_OK.indexes.push(
+  { index_name: "PosPublicationResolution_pkey", table_name: "PosPublicationResolution", is_unique: true, is_primary: true, columns: "id" },
+  { index_name: "PosPublicationResolution_paymentId_key", table_name: "PosPublicationResolution", is_unique: true, is_primary: false, columns: "paymentId" },
+  { index_name: "PosPublicationResolution_businessId_status_idx", table_name: "PosPublicationResolution", is_unique: false, is_primary: false, columns: "businessId,status" },
+  { index_name: "PosPublicationResolution_status_deadlineAt_idx", table_name: "PosPublicationResolution", is_unique: false, is_primary: false, columns: "status,deadlineAt" },
+);
+SNAPSHOT_OK.constraints.push(
+  { conname: "PosPublicationResolution_pkey", table_name: "PosPublicationResolution", contype: "p", definition: 'PRIMARY KEY ("id")' },
+  { conname: "PosPublicationResolution_businessId_fkey", table_name: "PosPublicationResolution", contype: "f", definition: 'FOREIGN KEY ("businessId") REFERENCES "Business"(id) ON DELETE CASCADE ON UPDATE CASCADE' },
+  { conname: "PosPublicationResolution_paymentId_fkey", table_name: "PosPublicationResolution", contype: "f", definition: 'FOREIGN KEY ("paymentId") REFERENCES "Payment"(id) ON DELETE RESTRICT ON UPDATE CASCADE' },
+);
+
 test("a complete catalog satisfies every expectation", () => {
   const checks = evaluateSnapshot(SNAPSHOT_OK);
   const failures = checks.filter((check) => !check.ok);
   assert.deepEqual(failures, []);
   assert.equal(checks.length, CANDIDATE_EXPECTATIONS.length);
+});
+
+test("same-type policy foreign keys are checked by name, not PostgreSQL result order", () => {
+  const reversed = structuredClone(SNAPSHOT_OK);
+  reversed.constraints.reverse();
+  assert.deepEqual(evaluateSnapshot(reversed).filter((check) => !check.ok), []);
+
+  const wrongPaymentRule = structuredClone(SNAPSHOT_OK);
+  wrongPaymentRule.constraints.find((row) => row.conname === "PosPublicationResolution_paymentId_fkey").definition =
+    'FOREIGN KEY ("paymentId") REFERENCES "Payment"(id) ON DELETE CASCADE ON UPDATE CASCADE';
+  const failures = evaluateSnapshot(wrongPaymentRule).filter((check) => !check.ok);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].detail, /ON DELETE RESTRICT/);
 });
 
 test("constraint definitions are compared without identifier quoting", () => {

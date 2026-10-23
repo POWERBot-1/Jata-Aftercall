@@ -74,11 +74,14 @@ describe("runtime and schema guards", () => {
     // promotion of the POS quantity columns, and the POS till-sale replay guard (one new
     // tenant-scoped table that stops a duplicate till submission becoming a second sale), and the
     // durable checkout idempotency table (replaces in-memory order idempotency maps, one additive table),
-    // and the sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
+    // and the sale-price window columns (current implementation: additive nullable columns and a CHECK that
     // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten),
     // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
     // column that records which clock a booking was anchored to, so a legacy row keeps its stored
-    // instant and its meaning and no historical row is rewritten or backfilled).
+    // instant and its meaning and no historical row is rewritten or backfilled), the media version
+    // counter (one defaulted integer for strict compare-and-swap), and password recovery (additive
+    // token table, per-account cooldown, and a defaulted session revocation counter), and the
+    // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -98,6 +101,9 @@ describe("runtime and schema guards", () => {
       "20261010000100_pos_sale_price_windows",
       "20261010000200_checkout_idempotency",
       "20261014000000_booking_time_zone_marker",
+      "20261017000000_media_asset_version",
+      "20261018000000_password_reset_security",
+      "20261023000000_pos_publication_resolution",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -135,6 +141,9 @@ describe("runtime and schema guards", () => {
       "20261005030000_pos_fractional_quantities",
       "20261005040000_pos_sale_idempotency",
       "20261014000000_booking_time_zone_marker",
+      "20261017000000_media_asset_version",
+      "20261018000000_password_reset_security",
+      "20261023000000_pos_publication_resolution",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -178,6 +187,69 @@ describe("runtime and schema guards", () => {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
       expect(sql).toContain("ADD COLUMN");
     }
+  });
+
+  it("keeps media metadata concurrency additive and defaulted", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model MediaAsset {");
+    const media = schema.slice(start, schema.indexOf("\n}", start));
+    expect(media).toContain("version    Int      @default(0)");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261017000000_media_asset_version/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps password recovery additive, hashed-token only, and session-revocable", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const userStart = schema.indexOf("model User {");
+    const user = schema.slice(userStart, schema.indexOf("\n}", userStart));
+    expect(user).toContain("sessionVersion Int          @default(0)");
+    expect(user).toContain("passwordResetRequestedAt DateTime?");
+    const tokenStart = schema.indexOf("model PasswordResetToken {");
+    const token = schema.slice(tokenStart, schema.indexOf("\n}", tokenStart));
+    expect(token).toContain("userId    String   @unique");
+    expect(token).toContain("tokenHash String   @unique");
+    expect(token).toContain("expiresAt DateTime");
+    expect(token).toContain("usedAt    DateTime?");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261018000000_password_reset_security/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('"sessionVersion" INTEGER NOT NULL DEFAULT 0');
+    expect(sql).toContain('"passwordResetRequestedAt" TIMESTAMP(3)');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "PasswordResetToken"');
+    expect(sql).toContain('FOREIGN KEY ("userId") REFERENCES "User"("id")');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps the paid-POS publication policy additive and payment-preserving", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model PosPublicationResolution {");
+    expect(start).toBeGreaterThan(-1);
+    const policy = schema.slice(start, schema.indexOf("\n}", start));
+    expect(policy).toMatch(/paymentId\s+String\s+@unique/);
+    expect(policy).toMatch(/confirmedAt\s+DateTime/);
+    expect(policy).toMatch(/deadlineAt\s+DateTime/);
+    expect(policy).toMatch(/remedyStatus\s+String\s+@default\("PENDING_PUBLICATION"\)/);
+    expect(policy).toContain('onDelete: Restrict');
+    expect(policy).toContain("@@index([status, deadlineAt])");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261023000000_pos_publication_resolution/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "PosPublicationResolution"');
+    expect(sql).toContain('"paymentId" TEXT NOT NULL');
+    expect(sql).toContain('"deadlineAt" TIMESTAMP(3) NOT NULL');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "PosPublicationResolution_paymentId_key"');
+    expect(sql).toContain('ON "PosPublicationResolution"("paymentId")');
+    expect(sql).toContain('ON DELETE RESTRICT ON UPDATE CASCADE');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE "|ALTER COLUMN/);
   });
 
   it("adds the Business POS as new tenant-scoped tables and touches no existing table", () => {

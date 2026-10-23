@@ -39,6 +39,10 @@ Its results are reported as engine `wasm-query-engine+adapter-pg`, which is not 
   closed 2026-10-13 — the settlement now accepts the same provider-verified states as the order path: PENDING,
   FAILED, CANCELLED, EXPIRED, never REFUNDED); the verify route re-checks a stored FAILED with Paystack and
   activates on a verified success, while a still-failing provider verdict changes nothing.
+- `pos-publication-policy`: concurrent Option B settlement creates one PAID payment/entitlement/case; owner and
+  escalation notifications remain idempotent; the exact 72-hour boundary is enforced; failed publication remains
+  open until a real snapshot; legacy PAID repair requires and uses verified provider `paid_at` rather than mutable
+  row timestamps. All provider evidence is synthetic and no provider HTTP call is made.
 
 ## Not covered here
 

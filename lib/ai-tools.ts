@@ -600,9 +600,11 @@ export async function executeBusinessTool(
           preview: true,
         };
       }
-      const orderId = typeof args.orderId === "string" ? args.orderId : undefined;
-      const amountKES = Math.max(0, Math.round(Number(args.amountKES) || 0));
-      const email = typeof args.email === "string" && args.email ? args.email : "customer@jata.local";
+      const orderId = typeof args.orderId === "string" ? args.orderId.trim() : undefined;
+      // The persisted order is the only authority for amount and tenant. Zero deliberately makes
+      // a missing/invalid order fail closed instead of falling back to an AI-provided amount.
+      const amountKES = 0;
+      const email = typeof args.email === "string" ? args.email.trim() : "";
       const paymentInit = await initializeOrderPayment({
         businessId: context.businessId,
         orderId,

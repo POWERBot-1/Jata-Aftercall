@@ -25,6 +25,7 @@ import {
 } from "@/lib/experience/contentAssist";
 import { writeStudioCopy } from "@/lib/ai/copyLab";
 import { designContextFromDraftJson } from "@/lib/ai/designContext";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,11 @@ export async function POST(req: Request) {
   // Hard boundary: an assist request may never carry commercial data to be written (§44).
   if (requestTouchesCommercialData(body)) {
     return NextResponse.json({ error: "Assistance only writes descriptions and copy — never prices or stock." }, { status: 400 });
+  }
+  // A configured copy provider records prompts for audit; do not let a data URL ride along in
+  // notes/attributes and become a new inline-image write through that secondary persistence path.
+  if (containsInlineImageDataUrl(body)) {
+    return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
   }
 
   try {
