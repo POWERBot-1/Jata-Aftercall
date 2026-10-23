@@ -9,6 +9,7 @@ import {
   type AIOperationalStatus,
 } from "@/lib/ai-config";
 import { logAudit } from "@/lib/audit";
+import { InlineMediaPersistenceError } from "@/lib/media/persistence-policy";
 
 export async function GET(req: Request) {
   try {
@@ -115,6 +116,9 @@ export async function POST(req: Request) {
       pauseAllOrdering: updatedExtended.pauseAllOrdering,
     });
   } catch (err: unknown) {
+    if (err instanceof InlineMediaPersistenceError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+    }
     const message = err instanceof Error ? err.message : "Failed to update operational status.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

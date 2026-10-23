@@ -1,5 +1,6 @@
 import prisma from "./db";
 import crypto from "crypto";
+import { containsInlineImageDataUrl } from "./media/persistence-policy";
 
 /**
  * Analytics event model (§31, §32, §57)
@@ -61,17 +62,19 @@ export async function recordEvent(params: {
   subjectId?: string | null;
   sessionHash?: string | null;
 }) {
-  await prisma.analyticsEvent.create({
-    data: {
-      businessId: params.businessId,
-      eventType: String(params.eventType).slice(0, 40),
-      ipHash: hashIp(params.ip),
-      userAgent: params.userAgent?.slice(0, 300) || null,
-      source: params.source?.slice(0, 300) || null,
-      subjectId: params.subjectId?.slice(0, 64) || null,
-      sessionHash: params.sessionHash?.slice(0, 40) || null,
-    },
-  });
+  const data = {
+    businessId: params.businessId,
+    eventType: String(params.eventType).slice(0, 40),
+    ipHash: hashIp(params.ip),
+    userAgent: params.userAgent?.slice(0, 300) || null,
+    source: params.source?.slice(0, 300) || null,
+    subjectId: params.subjectId?.slice(0, 64) || null,
+    sessionHash: params.sessionHash?.slice(0, 40) || null,
+  };
+  // Analytics is best-effort telemetry. Omit an unsafe event rather than making a customer
+  // journey depend on telemetry or allowing a caller-controlled source/User-Agent into Neon.
+  if (containsInlineImageDataUrl(data)) return;
+  await prisma.analyticsEvent.create({ data });
 }
 
 export type BusinessMetrics = {

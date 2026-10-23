@@ -63,11 +63,31 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { enhanceStudioImage, generateStudioImages, imageLabInfo, loadBusinessContext } from "@/lib/ai/imageLab";
+import { enhanceStudioImage, generateStudioImages, imageLabInfo, loadBusinessContext, type ImageAssetStoreInput, type StoredAsset, type StudioEnhanceRequest, type StudioImageRequest } from "@/lib/ai/imageLab";
 import { localProvider } from "@/lib/ai/providers/local";
-import { promptHash } from "@/lib/ai/generationStore";
+import { promptHash, startGeneration } from "@/lib/ai/generationStore";
 import { INTERACTIVE_AI_QUOTA, PREVIEW_AI_QUOTA } from "@/lib/ai/quota";
 import { tinyPngDataUrl } from "../helpers/imageFixtures";
+
+// Explicit in-memory test adapter models an approved durable store without enabling any provider
+// or writing image bytes to the test database mock. Production passes no adapter and fails closed.
+const testAssetStore = async (input: ImageAssetStoreInput): Promise<StoredAsset> => {
+  const id = `asset-${mocks.assets.length + 1}`;
+  const asset: StoredAsset = {
+    id,
+    url: `https://media.test/${id}.png`,
+    width: input.image.width,
+    height: input.image.height,
+    alt: input.alt,
+    source: input.source,
+    label: input.label,
+    aiGenerationId: input.generationId,
+  };
+  mocks.assets.push({ ...asset, businessId: input.businessId });
+  return asset;
+};
+const generateWithTestStorage = (request: StudioImageRequest) => generateStudioImages(request, { assetStore: testAssetStore });
+const enhanceWithTestStorage = (request: StudioEnhanceRequest) => enhanceStudioImage(request, { assetStore: testAssetStore });
 
 const AI_ENV = ["JATA_AI_IMAGE_PROVIDER", "JATA_AI_TEXT_PROVIDER", "OPENAI_API_KEY", "GEMINI_API_KEY"] as const;
 const original: Record<string, string | undefined> = {};
@@ -107,8 +127,34 @@ afterEach(() => {
 });
 
 describe("generating images for a business", () => {
-  it("creates real, stored, clearly-labelled candidates and records the generation", async () => {
-    const outcome = await generateStudioImages({
+  it("fails closed before database/provider work when no durable media adapter is configured", async () => {
+    const spy = vi.spyOn(localProvider, "generateImage");
+    const outcome = await generateStudioImages({ businessId: "business-a", preset: "product-photo", count: 1 });
+    expect(outcome).toMatchObject({ status: "error", httpStatus: 503, code: "inline_media_persistence_disabled", retryable: false });
+    expect(spy).not.toHaveBeenCalled();
+    expect(mocks.generations).toHaveLength(0);
+    expect(mocks.assets).toHaveLength(0);
+
+    const enhance = await enhanceStudioImage({ businessId: "business-a", imageDataUrl: tinyPngDataUrl(), mode: "provider" });
+    expect(enhance).toMatchObject({ status: "error", httpStatus: 503, code: "inline_media_persistence_disabled" });
+    expect(mocks.generations).toHaveLength(0);
+    expect(mocks.assets).toHaveLength(0);
+  });
+
+  it("refuses an escaped image data URL in an internal generation prompt before the Neon write", async () => {
+    const prompt = String.raw`{"notes":"Reference data:image\\/png;base64,AA=="}`;
+    await expect(startGeneration({
+      businessId: "business-a",
+      kind: "COPY",
+      prompt,
+      providerKey: "test",
+      modelKey: "test-model",
+    })).rejects.toMatchObject({ code: "inline_media_persistence_disabled", status: 503 });
+    expect(mocks.generations).toHaveLength(0);
+  });
+
+  it("creates clearly-labelled candidates through the explicit in-memory durable-store test adapter", async () => {
+    const outcome = await generateWithTestStorage({
       businessId: "business-a",
       userId: "user-a",
       preset: "product-photo",
@@ -122,7 +168,8 @@ describe("generating images for a business", () => {
 
     expect(outcome.assets).toHaveLength(2);
     for (const asset of outcome.assets) {
-      expect(asset.url.startsWith("data:image/png;base64,")).toBe(true);
+      expect(asset.url.startsWith("https://media.test/")).toBe(true);
+      expect(asset.url).not.toMatch(/^data:image\//i);
       expect(asset.source).toBe("AI_GENERATED");
       // The built-in provider designs artwork — it must never be presented as a photo of the dish.
       expect(asset.label).toBe("REPRESENTATIVE");
@@ -150,7 +197,7 @@ describe("generating images for a business", () => {
 
   it("never re-reads a product from another business as the subject", async () => {
     mocks.product = null; // The scoped lookup returns nothing for a foreign id.
-    const outcome = await generateStudioImages({
+    const outcome = await generateWithTestStorage({
       businessId: "business-a",
       preset: "product-photo",
       subjectType: "PRODUCT",
@@ -169,11 +216,11 @@ describe("generating images for a business", () => {
     const spy = vi.spyOn(localProvider, "generateImage");
     const request = { businessId: "business-a", preset: "product-photo", subjectType: "PRODUCT" as const, subjectId: "product-1", count: 2 };
 
-    const first = await generateStudioImages(request);
+    const first = await generateWithTestStorage(request);
     expect(first.status).toBe("ok");
     expect(spy).toHaveBeenCalledTimes(1);
 
-    const second = await generateStudioImages(request);
+    const second = await generateWithTestStorage(request);
     expect(second.status).toBe("ok");
     if (second.status !== "ok") return;
     expect(second.cached).toBe(true);
@@ -183,7 +230,7 @@ describe("generating images for a business", () => {
   });
 
   it("serves the cache from the stored prompt hash, so a repeat is recognised even after a restart", async () => {
-    await generateStudioImages({ businessId: "business-a", preset: "product-photo", subjectType: "PRODUCT", subjectId: "product-1", count: 2 });
+    await generateWithTestStorage({ businessId: "business-a", preset: "product-photo", subjectType: "PRODUCT", subjectId: "product-1", count: 2 });
     const row = mocks.generations[0];
     expect(row.promptHash).toBe(promptHash(row.prompt));
     expect(row.promptHash).toHaveLength(32);
@@ -192,10 +239,10 @@ describe("generating images for a business", () => {
   it("waits out the cooldown between spends, then creates a genuinely new set on request", async () => {
     const spy = vi.spyOn(localProvider, "generateImage");
     const request = { businessId: "business-a", preset: "product-photo", subjectType: "PRODUCT" as const, subjectId: "product-1", count: 2 };
-    await generateStudioImages(request);
+    await generateWithTestStorage(request);
 
     // Tapping again immediately must not spend a second generation: the owner is told to wait.
-    const tooSoon = await generateStudioImages({ ...request, refresh: true });
+    const tooSoon = await generateWithTestStorage({ ...request, refresh: true });
     expect(tooSoon.status).toBe("error");
     if (tooSoon.status !== "error") return;
     expect(tooSoon.code).toBe("too_soon");
@@ -203,7 +250,7 @@ describe("generating images for a business", () => {
 
     // Once the cooldown has passed, "Create other options" deliberately bypasses the cache.
     for (const row of mocks.generations) row.createdAt = new Date(Date.now() - 60_000);
-    const refreshed = await generateStudioImages({ ...request, refresh: true });
+    const refreshed = await generateWithTestStorage({ ...request, refresh: true });
     expect(refreshed.status).toBe("ok");
     if (refreshed.status !== "ok") return;
     expect(refreshed.cached).toBe(false);
@@ -221,7 +268,7 @@ describe("generating images for a business", () => {
       createdAt: new Date(now.getTime() - (index + 1) * 3600_000),
     }));
     const spy = vi.spyOn(localProvider, "generateImage");
-    const outcome = await generateStudioImages({ businessId: "business-a", preset: "product-photo", count: 1 });
+    const outcome = await generateWithTestStorage({ businessId: "business-a", preset: "product-photo", count: 1 });
     expect(outcome.status).toBe("error");
     if (outcome.status !== "error") return;
     expect(outcome.httpStatus).toBe(402);
@@ -234,7 +281,7 @@ describe("generating images for a business", () => {
     mocks.generations = [
       { id: "gen-recent", businessId: "business-a", kind: "IMAGE", status: "SUCCEEDED", createdAt: new Date(Date.now() - 500) },
     ];
-    const outcome = await generateStudioImages({ businessId: "business-a", preset: "product-photo", count: 1 });
+    const outcome = await generateWithTestStorage({ businessId: "business-a", preset: "product-photo", count: 1 });
     expect(outcome.status).toBe("error");
     if (outcome.status !== "error") return;
     expect(outcome.httpStatus).toBe(429);
@@ -248,7 +295,7 @@ describe("generating images for a business", () => {
       "fetch",
       vi.fn(async () => new Response(JSON.stringify({ error: { message: "upstream exploded at ip 10.0.0.1" } }), { status: 500 })),
     );
-    const outcome = await generateStudioImages({ businessId: "business-a", preset: "product-photo", count: 1 });
+    const outcome = await generateWithTestStorage({ businessId: "business-a", preset: "product-photo", count: 1 });
     expect(outcome.status).toBe("error");
     if (outcome.status !== "error") return;
     expect(outcome.error).not.toContain("sk-live-do-not-leak");
@@ -273,7 +320,7 @@ describe("generating images for a business", () => {
 
 describe("improving a real photo", () => {
   it("stores a photo improved on the owner's phone as their own photo, not as an AI photograph", async () => {
-    const outcome = await enhanceStudioImage({
+    const outcome = await enhanceWithTestStorage({
       businessId: "business-a",
       userId: "user-a",
       imageDataUrl: tinyPngDataUrl(),
@@ -293,7 +340,7 @@ describe("improving a real photo", () => {
   });
 
   it("offers the on-device route when no editing provider is connected, instead of a dead button", async () => {
-    const outcome = await enhanceStudioImage({
+    const outcome = await enhanceWithTestStorage({
       businessId: "business-a",
       imageDataUrl: tinyPngDataUrl(),
       mode: "provider",
@@ -306,7 +353,7 @@ describe("improving a real photo", () => {
   });
 
   it("asks for a photo when the request contains none", async () => {
-    const outcome = await enhanceStudioImage({ businessId: "business-a", imageDataUrl: "not-an-image", mode: "device" });
+    const outcome = await enhanceWithTestStorage({ businessId: "business-a", imageDataUrl: "not-an-image", mode: "device" });
     expect(outcome.status).toBe("error");
     if (outcome.status !== "error") return;
     expect(outcome.httpStatus).toBe(400);
@@ -326,7 +373,7 @@ describe("improving a real photo", () => {
 describe("a created image can actually be used on the website", () => {
   it("produces an asset the document will accept as a product, hero or section image", async () => {
     const { safeUrl } = await import("@/lib/experience/document");
-    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", preset: "hero", placement: "hero", count: 1 });
+    const outcome = await generateWithTestStorage({ businessId: "business-a", userId: "user-a", preset: "hero", placement: "hero", count: 1 });
     expect(outcome.status).toBe("ok");
     if (outcome.status !== "ok") return;
     const asset = outcome.assets[0];
@@ -342,11 +389,14 @@ describe("a created image can actually be used on the website", () => {
     expect(asset.label).toBe("REPRESENTATIVE");
   });
 
-  it("keeps everything it creates inside the one storage ceiling the document enforces", async () => {
-    const { MAX_STORED_CHARS } = await import("@/lib/media/imageFormat");
-    const outcome = await generateStudioImages({ businessId: "business-a", userId: "user-a", preset: "product-photo", placement: "product", count: 2, refresh: true });
+  it("returns hosted object references from the explicit test adapter, never inline data URLs", async () => {
+    const outcome = await generateWithTestStorage({ businessId: "business-a", userId: "user-a", preset: "product-photo", placement: "product", count: 2, refresh: true });
     expect(outcome.status).toBe("ok");
     if (outcome.status !== "ok") return;
-    for (const asset of outcome.assets) expect(asset.url.length).toBeLessThanOrEqual(MAX_STORED_CHARS);
+    expect(outcome.assets).toHaveLength(2);
+    for (const asset of outcome.assets) {
+      expect(asset.url).toMatch(/^https:\/\/media\.test\//);
+      expect(asset.url).not.toMatch(/^data:image\//i);
+    }
   });
 });

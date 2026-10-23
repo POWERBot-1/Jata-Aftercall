@@ -1,5 +1,5 @@
 /**
- * Channel regression tests for approved sale-price policy C.
+ * Channel regression tests for the current time-window sale implementation; these tests do not establish owner approval.
  *
  * Every ordering channel (conversational cart, AI quote, POS write) must charge the same unit price the
  * shared helper (lib/sale-pricing.ts) gives for the same instant. The storefront checkout, pre-order and

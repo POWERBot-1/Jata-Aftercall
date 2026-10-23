@@ -321,6 +321,33 @@ describe("the store never widens a query beyond its tenant (§5)", () => {
     expect((await store.findStaff("bizB", "st_b1"))!.roleKey).toBe("CASHIER");
   });
 
+  it("blocks new POS inline media and preserves legacy images when ordinary fields change", async () => {
+    const client = (await import("@/lib/db")).default;
+    const legacyUrl = "data:image/png;base64,iVBORw0KGgo=";
+    state.posProduct.find((row) => row.id === "p_a1")!.imageUrl = legacyUrl;
+
+    await expect(store.createProduct("bizA", { name: "New photo item", imageUrl: legacyUrl })).rejects.toMatchObject({
+      status: 503,
+      code: "inline_media_persistence_disabled",
+    });
+    expect(client.posProduct.create).not.toHaveBeenCalled();
+    await expect(store.createProduct("bizA", { name: "New SVG item", imageUrl: "data:image/svg+xml,%3Csvg%3E" })).rejects.toMatchObject({
+      status: 503,
+      code: "inline_media_persistence_disabled",
+    });
+
+    await store.updateProduct("bizA", "p_a1", { name: "Flour updated", priceKES: 155 });
+    const update = client.posProduct.updateMany.mock.calls.at(-1)?.[0];
+    expect(update.data).not.toHaveProperty("imageUrl");
+    expect((await store.findProduct("bizA", "p_a1"))!.imageUrl).toBe(legacyUrl);
+
+    await expect(store.updateProduct("bizA", "p_a1", { name: "New inline", imageUrl: "data:image/png;base64,AAAA" })).rejects.toMatchObject({
+      status: 503,
+      code: "inline_media_persistence_disabled",
+    });
+    expect((await store.findProduct("bizA", "p_a1"))!.imageUrl).toBe(legacyUrl);
+  });
+
   it("keeps receipt and order sequences per business, so tenants never collide or peek", async () => {
     expect(await store.nextSaleSequence("bizA")).toBe(2);
     expect(await store.nextSaleSequence("bizB")).toBe(2);

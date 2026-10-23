@@ -17,6 +17,7 @@ import { derivePosEntitlement, POS_LIFECYCLE_LABELS, syncPosEntitlement, type Po
 import { effectiveConfiguration, loadConfiguration, type ConfigurationRecord } from "./provisioning";
 import { logPosAudit } from "./audit";
 import { resolveTerminology, type Terminology } from "./terminology";
+import { InlineMediaPersistenceError } from "@/lib/media/persistence-policy";
 import type { PosConfiguration, PosLifecycleStatus } from "./types";
 
 export class PosAccessError extends Error {
@@ -196,6 +197,9 @@ export function resolveRoleKey(params: {
 
 /** Map any thrown error to a safe JSON response body (§56). */
 export function posErrorBody(error: unknown, fallback: string): { status: number; body: { error: string; code?: string } } {
+  if (error instanceof InlineMediaPersistenceError) {
+    return { status: error.status, body: { error: error.message, code: error.code } };
+  }
   if (error instanceof PosAccessError) {
     return { status: error.status, body: { error: error.message, code: error.code } };
   }

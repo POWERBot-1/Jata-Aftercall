@@ -377,6 +377,7 @@ describe("step 5–7: choose plan, pay, provision (§43, §44, §45)", () => {
       settlePosPayment(tx, {
         payment: { id: "pay_2", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49900, currency: "KES", status: "PENDING", reference: "jata-pos-2" },
         plan: { id: "plan_pos", key: POS_PLAN_KEY, priceKES: 499, durationDays: 30 },
+        verification: { paystackId: "ps_pos_2" },
       }),
     );
     expect(fake().rows("subscription")).toHaveLength(0);
@@ -392,6 +393,7 @@ describe("step 8: trading on a live POS (§27, §31, §33, §54, §62)", () => {
       settlePosPayment(tx, {
         payment: { id: "pay_1", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49900, currency: "KES", status: "PENDING", reference: "jata-pos-1" },
         plan: { id: "plan_pos", key: POS_PLAN_KEY, priceKES: 499, durationDays: 30 },
+        verification: { paystackId: "ps_pos_seed" },
       }),
     );
     const record = await loadConfiguration("bizA");

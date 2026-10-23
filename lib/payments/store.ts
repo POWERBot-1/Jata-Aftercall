@@ -140,7 +140,7 @@ export async function paymentDetail(
       id: row.id,
       audience: row.audience,
       channel: row.channel,
-      status: notificationStatusLabel(String(row.status ?? "")),
+      status: notificationStatusLabel(String(row.status ?? ""), row.lastError ?? row.failureReason ?? null),
       deliveredAt: row.deliveredAt,
       failureReason: row.failureReason ?? null,
     })),

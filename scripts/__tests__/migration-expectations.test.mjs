@@ -9,6 +9,7 @@ import {
 
 const M1 = "20261017000000_media_asset_version";
 const M2 = "20261018000000_password_reset_security";
+const M3 = "20261023000000_pos_publication_resolution";
 
 /** A snapshot that satisfies every declared expectation. */
 function goodSnapshot() {
@@ -30,16 +31,38 @@ function goodSnapshot() {
           createdAt: { dataType: "timestamp without time zone", nullable: false, default: "CURRENT_TIMESTAMP", primaryKey: false },
         },
       },
+      PosPublicationResolution: {
+        columns: {
+          paymentId: { dataType: "text", nullable: false, default: null, primaryKey: false },
+          confirmedAt: { dataType: "timestamp without time zone", nullable: false, default: null, primaryKey: false },
+          deadlineAt: { dataType: "timestamp without time zone", nullable: false, default: null, primaryKey: false },
+          status: { dataType: "text", nullable: false, default: "'OPEN'::text", primaryKey: false },
+          entitlementStatus: { dataType: "text", nullable: false, default: "'ACTIVE'::text", primaryKey: false },
+          remedyStatus: { dataType: "text", nullable: false, default: "'PENDING_PUBLICATION'::text", primaryKey: false },
+          resolvedAt: { dataType: "timestamp without time zone", nullable: true, default: null, primaryKey: false },
+        },
+      },
     },
     indexes: {
       PasswordResetToken_userId_key: { table: "PasswordResetToken", unique: true },
       PasswordResetToken_tokenHash_key: { table: "PasswordResetToken", unique: true },
       PasswordResetToken_expiresAt_idx: { table: "PasswordResetToken", unique: false },
+      PosPublicationResolution_paymentId_key: { table: "PosPublicationResolution", unique: true },
+      PosPublicationResolution_businessId_status_idx: { table: "PosPublicationResolution", unique: false },
+      PosPublicationResolution_status_deadlineAt_idx: { table: "PosPublicationResolution", unique: false },
     },
     constraints: {
       PasswordResetToken_userId_fkey: {
         table: "PasswordResetToken",
         definition: "FOREIGN KEY (\"userId\") REFERENCES \"User\"(id) ON DELETE CASCADE ON UPDATE CASCADE",
+      },
+      PosPublicationResolution_businessId_fkey: {
+        table: "PosPublicationResolution",
+        definition: "FOREIGN KEY (\"businessId\") REFERENCES \"Business\"(id) ON DELETE CASCADE ON UPDATE CASCADE",
+      },
+      PosPublicationResolution_paymentId_fkey: {
+        table: "PosPublicationResolution",
+        definition: "FOREIGN KEY (\"paymentId\") REFERENCES \"Payment\"(id) ON DELETE RESTRICT ON UPDATE CASCADE",
       },
     },
   };
@@ -57,10 +80,14 @@ test("only the migrations on disk contribute", () => {
 
   const both = requiredExpectations([M1, M2]);
   assert.equal(both.length, EXPECTATIONS_BY_MIGRATION[M1].length + EXPECTATIONS_BY_MIGRATION[M2].length);
+
+  const all = requiredExpectations([M1, M2, M3]);
+  assert.equal(all.length, EXPECTATIONS_BY_MIGRATION[M1].length + EXPECTATIONS_BY_MIGRATION[M2].length + EXPECTATIONS_BY_MIGRATION[M3].length);
+  assert.ok(all.some((expectation) => expectation.migration === M3 && expectation.column === "deadlineAt"));
 });
 
 test("PASS: the fully migrated schema satisfies every expectation", () => {
-  const violations = evaluateExpectations(requiredExpectations([M1, M2]), goodSnapshot());
+  const violations = evaluateExpectations(requiredExpectations([M1, M2, M3]), goodSnapshot());
   assert.deepEqual(violations, []);
 });
 

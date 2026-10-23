@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import prisma from "../db";
 import { sanitizeText } from "../validation";
+import { assertNoInlineImagePersistence } from "../media/persistence-policy";
 import type { LeadRecord } from "../leads";
 
 export const ENQUIRY_CHANNEL = "website_studio_professional";
@@ -71,6 +72,8 @@ export async function saveProfessionalEnquiry(params: { businessId: string; serv
     referenceId: service.id, serviceName: service.title, transactionalOnly: true, createdAt: new Date().toISOString(),
     status: "RECEIVED", requestHash,
   };
+  // This JSON metadata is an opaque database field; validate the complete record before its first write.
+  assertNoInlineImagePersistence({ source: "professional_enquiry", record });
   try {
     const saved = await prisma.aIQualityEvent.create({ data: { id, businessId, sourceUsed: "structured_data", confidence: "high",
       escalatedToHuman: false, customerCorrectedAI: false, missingBusinessInfo: false, eventType: ENQUIRY_EVENT,

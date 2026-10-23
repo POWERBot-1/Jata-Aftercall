@@ -4,6 +4,13 @@ export type PaymentExpectation = { reference: string; amount: number; currency: 
 export type PaymentEvidence = { reference?: unknown; amount?: unknown; currency?: unknown; status?: unknown };
 export type PaymentMismatch = "REFERENCE_MISMATCH" | "AMOUNT_MISMATCH" | "CURRENCY_MISMATCH";
 
+/** A provider transaction identifier is evidence, not an arbitrary non-empty payload. */
+export function isProviderTransactionId(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const id = value.trim();
+  return id.length > 0 && id.length <= 255 && !/^data:/i.test(id);
+}
+
 export function validatePaymentEvidence(expected: PaymentExpectation, evidence: PaymentEvidence): { ok: true } | { ok: false; reason: PaymentMismatch } {
   if (evidence.reference !== expected.reference) return { ok: false, reason: "REFERENCE_MISMATCH" };
   if (evidence.amount !== expected.amount) return { ok: false, reason: "AMOUNT_MISMATCH" };

@@ -120,6 +120,7 @@ export async function POST(req: Request) {
       if (!isOrderPayment) {
         const settled = await activateSubscriptionForPayment(payment.id, eventId, {
           paystackId: String(transaction.id),
+          providerConfirmedAt: transaction.paid_at,
           raw: { status: transaction.status, reference: transaction.reference, amount: transaction.amount, currency: transaction.currency, id: transaction.id },
         });
         await logAudit({ actorId: payment.userId, action: "WEBHOOK_CHARGE_SUCCESS", targetType: "PAYMENT", targetId: payment.id });

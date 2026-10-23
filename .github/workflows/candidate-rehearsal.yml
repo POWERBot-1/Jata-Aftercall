@@ -2,38 +2,29 @@ name: Candidate migration rehearsal
 
 # WHY THIS WORKFLOW EXISTS
 # ------------------------
-# Pull request #49 proposes two additive migrations that are not on `main`:
+# A pull request is rehearsed at github.event.pull_request.head.sha. A manual
+# run must explicitly supply a full commit SHA; there is deliberately no default
+# to a historical or foreign PR. The baseline checkout is always read-only main,
+# so the candidate's added migrations cannot disappear from the comparison.
 #
-#   prisma/migrations/20261017000000_media_asset_version
-#   prisma/migrations/20261018000000_password_reset_security
-#
-# The release gate in release-validation.yml validates the migration history of
-# the branch it runs on. It therefore cannot say anything about a candidate that
-# lives on a different branch, and PR #49 has no gate of its own: its head
-# (`5996229`) predates release-validation.yml entirely.
-#
-# This workflow closes that gap without touching PR #49. It checks the candidate
-# commit out into a second directory, applies the whole 18-migration history to a
-# disposable PostgreSQL 18 service, and verifies the result. The candidate tree
-# is read, never written, never rebased, never pushed.
+# The workflow checks that exact commit out into a second directory, applies its
+# complete migration history to disposable PostgreSQL 18, and verifies the
+# result. It never rebases, pushes, deploys, or mutates the original PR #49.
 #
 # WHAT IT PROVES
 #   * the history applies in order through `prisma migrate deploy`;
 #   * the ledger is complete, finished, not rolled back, and matches the
 #     directories on disk;
-#   * every column, index, primary key and foreign key the two migrations
-#     promise exists with the promised shape;
-#   * applying the same files with psql reaches a byte-identical catalog, so the
-#     result is a property of the SQL and not of the CLI;
-#   * a deliberately broken migration fails loudly, is recorded as failed, and
-#     makes `migrate status` exit non-zero;
-#   * the candidate still generates a client, typechecks and runs its tests.
+#   * declared columns, indexes, primary keys and foreign keys exist with the
+#     promised shape;
+#   * applying the same files with psql reaches a byte-identical catalog;
+#   * a deliberately broken migration fails loudly and is recorded as failed;
+#   * the candidate generates a client, typechecks and runs its tests.
 #
 # WHAT IT CANNOT PROVE
-#   A container is not a Neon project. Nothing here says anything about Neon
-#   branching, restore, PITR, compute suspension or connection pooling. Nothing
-#   here authorises a merge: PR #49 is not modified by this workflow and the
-#   decision to rebase it remains an owner decision.
+#   A container is not a Neon project. Nothing here proves Neon branching,
+#   restore, PITR, compute suspension or pooling, and nothing authorises merge,
+#   deployment, production migration, or a live payment/provider operation.
 #
 # No production credential exists in this workflow. The only database is a
 # service container destroyed with the runner, and the rehearsal script refuses
@@ -43,13 +34,12 @@ on:
   workflow_dispatch:
     inputs:
       candidate_commit:
-        description: "Commit to rehearse (default: the head of PR #49)"
-        required: false
-        default: "59962291ec82d5ddbc8f323e3d057d6a5b15cf02"
+        description: "Required full 40-character commit SHA to rehearse"
+        required: true
       candidate_label:
         description: "Human label for the candidate (used in the run summary)"
         required: false
-        default: "PR #49"
+        default: "Explicit candidate"
   pull_request:
     branches: [main]
 
@@ -68,7 +58,7 @@ env:
 
 jobs:
   rehearsal:
-    name: "PR #49 candidate applies on a disposable PostgreSQL 18"
+    name: "Exact candidate applies on disposable PostgreSQL 18"
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -91,18 +81,21 @@ jobs:
       # The admin connection is used only to CREATE/DROP the three disposable
       # rehearsal databases. The rehearsal script refuses any non-loopback host.
       PG_ADMIN_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_ci
-      CANDIDATE_SHA: ${{ inputs.candidate_commit || '59962291ec82d5ddbc8f323e3d057d6a5b15cf02' }}
-      CANDIDATE_LABEL: "${{ inputs.candidate_label || 'PR #49' }}"
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_commit }}
+      CANDIDATE_LABEL: "${{ inputs.candidate_label || github.event.pull_request.title || 'Explicit candidate' }}"
 
     steps:
       - name: Checkout the reviewing branch (rehearsal script + baseline history)
         uses: actions/checkout@v4
         with:
+          ref: main
           path: gate
+          fetch-depth: 1
 
       - name: Checkout the candidate commit (read-only)
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ env.CANDIDATE_SHA }}
           path: candidate
           fetch-depth: 1
@@ -110,6 +103,10 @@ jobs:
       - name: Assert the rehearsal is about the intended commit
         run: |
           set -o pipefail
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::BLOCKED: CANDIDATE_SHA must be an explicit full lowercase commit SHA"
+            exit 1
+          fi
           actual=$(git -C candidate rev-parse HEAD)
           echo "requested: ${CANDIDATE_SHA}"
           echo "checked out: ${actual}"
@@ -153,7 +150,7 @@ jobs:
       - name: Rehearse the candidate migrations on PostgreSQL 18
         run: |
           set -o pipefail
-          node gate/scripts/ci/rehearse-candidate-migrations.mjs \
+          node candidate/scripts/ci/rehearse-candidate-migrations.mjs \
             --candidate-dir candidate \
             --baseline-dir gate/prisma/migrations \
             --admin-url "$PG_ADMIN_URL" \
@@ -252,8 +249,9 @@ jobs:
   # broken-migration control, which runs on a throwaway copy of the migrations
   # directory and restores it.
   #
-  # A green result here is evidence about 5996229. It is not a merge, a rebase,
-  # or an approval, and it does not make PR #49's own head green.
+  # A green result here is evidence only about the exact CANDIDATE_SHA asserted
+  # above. It is not a merge, a rebase, an approval, or evidence about any other
+  # pull request or commit.
   # ───────────────────────────────────────────────────────────────────────────
   d2-build-audit-controls:
     name: "D2 — build, audit and controls on the candidate tree"
@@ -287,18 +285,21 @@ jobs:
       BUILD_DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build?schema=public
       # psql cannot parse Prisma's `?schema=` parameter, so it gets its own URL.
       BUILD_PSQL_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_d2_build
-      CANDIDATE_SHA: ${{ inputs.candidate_commit || '59962291ec82d5ddbc8f323e3d057d6a5b15cf02' }}
-      CANDIDATE_LABEL: "${{ inputs.candidate_label || 'PR #49' }}"
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_commit }}
+      CANDIDATE_LABEL: "${{ inputs.candidate_label || github.event.pull_request.title || 'Explicit candidate' }}"
 
     steps:
       - name: Checkout the reviewing branch (checkers + baseline history)
         uses: actions/checkout@v4
         with:
+          ref: main
           path: gate
+          fetch-depth: 1
 
       - name: Checkout the candidate commit (read-only)
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ env.CANDIDATE_SHA }}
           path: candidate
           fetch-depth: 1
@@ -306,6 +307,10 @@ jobs:
       - name: Assert the run is about the intended commit
         run: |
           set -o pipefail
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::BLOCKED: CANDIDATE_SHA must be an explicit full lowercase commit SHA"
+            exit 1
+          fi
           actual=$(git -C candidate rev-parse HEAD)
           echo "requested: ${CANDIDATE_SHA}"
           echo "checked out: ${actual}"
@@ -338,19 +343,25 @@ jobs:
             exit 1
           }
 
-      - name: Stage the checking scripts inside the candidate tree
+      - name: Stage the exact candidate's checking scripts
         run: |
           set -o pipefail
-          # The candidate has no scripts/ci of its own (it predates the gate).
-          # Copying the checkers in makes them resolve the candidate's own
-          # @prisma/client and read the candidate's own prisma/migrations.
-          cp -r gate/scripts/ci candidate/scripts/ci-review
-          ls candidate/scripts/ci-review
+          # Keep the reviewed checker copy untracked while resolving the candidate's
+          # own dependencies and migration inventory. The main checkout is baseline only.
+          cd candidate
+          test -f scripts/ci/verify-migrations.mjs
+          rm -rf scripts/ci-review
+          cp -r scripts/ci scripts/ci-review
+          ls scripts/ci-review
 
       - name: Record the identity of the tree under test
         run: |
           set -o pipefail
           cd candidate
+          expected=$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          case "$expected" in ''|*[!0-9]*|0) echo "::error::BLOCKED: invalid candidate migration count '$expected'"; exit 1;; esac
+          echo "$expected" > /tmp/d2-expected-migrations.txt
+          echo "expected candidate migrations: $expected"
           node scripts/ci-review/verify-migrations.mjs --manifest-only 2>&1 | tee /tmp/d2-manifest-before.log
           sha256sum prisma/migrations/*/migration.sql > /tmp/d2-migration-hashes-before.txt
           wc -l < /tmp/d2-migration-hashes-before.txt
@@ -384,7 +395,7 @@ jobs:
       - name: Classify the audit (PASS / FAIL / BLOCKED, never silence)
         run: |
           set -o pipefail
-          node gate/scripts/ci/summarise-audit.mjs \
+          node candidate/scripts/ci-review/summarise-audit.mjs \
             --production /tmp/d2-audit-prod.json \
             --production-status "$(cat /tmp/d2-audit-prod.status)" \
             --full /tmp/d2-audit-full.json \
@@ -412,11 +423,11 @@ jobs:
           printf '%s' 'not json at all' > /tmp/fx-broken.json
 
           set +e
-          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-findings.json --production-status 1 > /tmp/fx1.log 2>&1
+          node candidate/scripts/ci-review/summarise-audit.mjs --production /tmp/fx-findings.json --production-status 1 > /tmp/fx1.log 2>&1
           findings=$?
-          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-broken.json --production-status 1 > /tmp/fx2.log 2>&1
+          node candidate/scripts/ci-review/summarise-audit.mjs --production /tmp/fx-broken.json --production-status 1 > /tmp/fx2.log 2>&1
           broken=$?
-          node gate/scripts/ci/summarise-audit.mjs --production /tmp/fx-findings.json --production-status abc > /tmp/fx3.log 2>&1
+          node candidate/scripts/ci-review/summarise-audit.mjs --production /tmp/fx-findings.json --production-status abc > /tmp/fx3.log 2>&1
           nostatus=$?
           set -e
           echo "findings->$findings (want 1)  broken->$broken (want 2)  bad-status->$nostatus (want 2)"
@@ -454,16 +465,17 @@ jobs:
           printf '%s' "$plain" | grep -q 'jata_ci_pw' && fail "the build log contains the database password"
           applied=$(printf '%s' "$plain" | grep -c 'Applying migration' || true)
           echo "migrations applied during the build: ${applied}"
-          [ "$applied" -eq 18 ] || fail "expected 18 migrations to apply, the log names ${applied}"
-          echo "PASS: guard allowed CI, 18 migrations applied, build completed, no credential in the log"
+          expected=$(cat /tmp/d2-expected-migrations.txt)
+          [ "$applied" -eq "$expected" ] || fail "expected ${expected} migrations to apply, the log names ${applied}"
+          echo "PASS: guard allowed CI, ${applied}/${expected} migrations applied, build completed, no credential in the log"
 
       - name: The ledger and the promised objects match the candidate's history
         run: |
           set -o pipefail
           cd candidate
-          # 18 directories, 18 ledger rows, 13 declarative expectations for the
-          # two candidate migrations, checked against the database the build
-          # itself migrated.
+          # The expected directory count was captured from this exact candidate
+          # before the build. The ledger and declarative object expectations are
+          # checked against the database the build itself migrated.
           #
           # The exit code is captured rather than inferred from `pipefail`: a
           # step that dies silently on a pipeline gives the next reader nothing
@@ -487,8 +499,9 @@ jobs:
             echo "::error::FAIL: the verifier exited 0 without reporting PASS"
             exit 1
           fi
-          [ "$count" = "18" ] || { echo "::error::FAIL: expected 18 ledger rows, found '${count}'"; exit 1; }
-          echo "PASS: 18 ledger rows, every promised object present, verifier exit 0"
+          expected=$(cat /tmp/d2-expected-migrations.txt)
+          [ "$count" = "$expected" ] || { echo "::error::FAIL: expected ${expected} ledger rows, found '${count}'"; exit 1; }
+          echo "PASS: ${count}/${expected} ledger rows, every promised object present, verifier exit 0"
 
       - name: The build artifact exists
         run: |
@@ -594,7 +607,7 @@ jobs:
             echo "| build exit code | $(cat /tmp/d2-build.status 2>/dev/null || echo 'not reached') |"
             echo "| production audit exit | $(cat /tmp/d2-audit-prod.status 2>/dev/null || echo 'not reached') |"
             echo "| audit classifier exit | $(cat /tmp/d2-audit-classifier.status 2>/dev/null || echo 'not reached') |"
-            echo "| ledger rows | $(cat /tmp/d2-ledger-count.txt 2>/dev/null || echo 'not reached') |"
+            echo "| ledger rows | $(cat /tmp/d2-ledger-count.txt 2>/dev/null || echo 'not reached') / $(cat /tmp/d2-expected-migrations.txt 2>/dev/null || echo 'not reached') |"
             echo
             echo '```'
             sed -n '1,25p' /tmp/d2-manifest-before.log 2>/dev/null || echo "(no manifest)"

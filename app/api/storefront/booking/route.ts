@@ -12,24 +12,14 @@ import { normalizeExperienceDocument } from "@/lib/experience/document";
 import { bookingEndAt, contractBookingMarker, dayWindowInZone, freeSlotsFor, parseAvailability, validateBookingRequest } from "@/lib/experience/booking";
 import { initializeOrderPayment, notifyNewBooking, PAYMENT_PURPOSE } from "@/lib/experience/payments";
 import { recordEvent, hashSession } from "@/lib/analytics";
+import { rateLimitByIdentity, trustedClientIp } from "@/lib/rate-limit";
 import { sanitizeText } from "@/lib/validation";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
-const hits = new Map<string, { count: number; reset: number }>();
-function throttled(ip: string): boolean {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.reset) {
-    hits.set(ip, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > 20;
-}
-
 function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  return trustedClientIp(req.headers) ?? "unknown";
 }
 
 /** Public: the next free slots for a service, so the customer's picker matches the server's rules. */
@@ -70,7 +60,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  if (throttled(ip)) return NextResponse.json({ error: "Too many attempts. Please wait a moment and try again." }, { status: 429 });
+  const limit = rateLimitByIdentity(ip, { key: "storefront-booking", max: 20, windowMs: 60_000 });
+  if (!limit.allowed) return limit.response ?? NextResponse.json({ error: "Too many attempts. Please wait a moment and try again." }, { status: 429 });
 
   let body: Record<string, unknown>;
   try {
@@ -161,25 +152,29 @@ export async function POST(req: Request) {
       }
     }
 
+    const bookingData = {
+      businessId: business.id,
+      serviceId: serviceId || null,
+      serviceName,
+      customerName: String(body.customerName).trim().slice(0, 80),
+      customerPhone: String(body.customerPhone).trim().slice(0, 30),
+      customerEmail: typeof body.customerEmail === "string" ? body.customerEmail.trim().slice(0, 160) || null : null,
+      staffName: typeof body.staffName === "string" ? body.staffName.trim().slice(0, 60) || staffName : staffName,
+      startAt,
+      endAt: bookingEndAt(startAt, durationMinutes ?? document.settings.bookingSlotMinutes ?? 30),
+      // Records which clock this row was anchored to, so a reader never has to guess and a
+      // legacy row (no marker) is never reinterpreted as Nairobi-anchored.
+      bookingTimeZone: contractBookingMarker(),
+      notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : null,
+      status: depositKES > 0 ? "PENDING" : "CONFIRMED",
+      depositKES,
+      paymentStatus: depositKES > 0 ? "UNPAID" : "UNPAID",
+    };
+    if (containsInlineImageDataUrl(bookingData)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const booking = await prisma.booking.create({
-      data: {
-        businessId: business.id,
-        serviceId: serviceId || null,
-        serviceName,
-        customerName: String(body.customerName).trim().slice(0, 80),
-        customerPhone: String(body.customerPhone).trim().slice(0, 30),
-        customerEmail: typeof body.customerEmail === "string" ? body.customerEmail.trim().slice(0, 160) || null : null,
-        staffName: typeof body.staffName === "string" ? body.staffName.trim().slice(0, 60) || staffName : staffName,
-        startAt,
-        endAt: bookingEndAt(startAt, durationMinutes ?? document.settings.bookingSlotMinutes ?? 30),
-        // Records which clock this row was anchored to, so a reader never has to guess and a
-        // legacy row (no marker) is never reinterpreted as Nairobi-anchored.
-        bookingTimeZone: contractBookingMarker(),
-        notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : null,
-        status: depositKES > 0 ? "PENDING" : "CONFIRMED",
-        depositKES,
-        paymentStatus: depositKES > 0 ? "UNPAID" : "UNPAID",
-      },
+      data: bookingData,
       select: { id: true, serviceName: true, startAt: true, status: true, depositKES: true },
     });
 

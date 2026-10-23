@@ -16,6 +16,7 @@
  * The entries are derived line-by-line from the committed migration SQL:
  *   prisma/migrations/20261017000000_media_asset_version/migration.sql
  *   prisma/migrations/20261018000000_password_reset_security/migration.sql
+ *   prisma/migrations/20261023000000_pos_publication_resolution/migration.sql
  */
 
 /** Expectations keyed by the exact migration directory name. */
@@ -44,6 +45,21 @@ export const EXPECTATIONS_BY_MIGRATION = Object.freeze({
     { kind: "index", table: "PasswordResetToken", index: "PasswordResetToken_tokenHash_key", unique: true, why: "CREATE UNIQUE INDEX ... (tokenHash)" },
     { kind: "index", table: "PasswordResetToken", index: "PasswordResetToken_expiresAt_idx", unique: false, why: "CREATE INDEX ... (expiresAt)" },
     { kind: "constraint", table: "PasswordResetToken", name: "PasswordResetToken_userId_fkey", contains: ["FOREIGN KEY", "ON DELETE CASCADE", "ON UPDATE CASCADE"], why: "guarded FK to User(id)" },
+  ],
+  "20261023000000_pos_publication_resolution": [
+    { kind: "table", table: "PosPublicationResolution", why: "CREATE TABLE for the 72-hour publication-resolution policy" },
+    { kind: "column", table: "PosPublicationResolution", column: "paymentId", nullable: false, why: "one authoritative POS payment per case" },
+    { kind: "column", table: "PosPublicationResolution", column: "confirmedAt", dataType: "timestamp without time zone", nullable: false, why: "server-recorded confirmation instant" },
+    { kind: "column", table: "PosPublicationResolution", column: "deadlineAt", dataType: "timestamp without time zone", nullable: false, why: "confirmedAt + 72 hours" },
+    { kind: "column", table: "PosPublicationResolution", column: "status", nullable: false, default: "OPEN", why: "OPEN initial publication state" },
+    { kind: "column", table: "PosPublicationResolution", column: "entitlementStatus", nullable: false, default: "ACTIVE", why: "observational entitlement state; never an authorization grant" },
+    { kind: "column", table: "PosPublicationResolution", column: "remedyStatus", nullable: false, default: "PENDING_PUBLICATION", why: "publication remedy, with no invented refund state" },
+    { kind: "column", table: "PosPublicationResolution", column: "resolvedAt", dataType: "timestamp without time zone", nullable: true, why: "null until actual publication succeeds" },
+    { kind: "index", table: "PosPublicationResolution", index: "PosPublicationResolution_paymentId_key", unique: true, why: "duplicate callbacks cannot create a second case" },
+    { kind: "index", table: "PosPublicationResolution", index: "PosPublicationResolution_businessId_status_idx", unique: false, why: "tenant-scoped reconciliation" },
+    { kind: "index", table: "PosPublicationResolution", index: "PosPublicationResolution_status_deadlineAt_idx", unique: false, why: "due-case lookup" },
+    { kind: "constraint", table: "PosPublicationResolution", name: "PosPublicationResolution_businessId_fkey", contains: ["FOREIGN KEY", "ON DELETE CASCADE", "ON UPDATE CASCADE"], why: "tenant-owned policy record" },
+    { kind: "constraint", table: "PosPublicationResolution", name: "PosPublicationResolution_paymentId_fkey", contains: ["FOREIGN KEY", "ON DELETE RESTRICT", "ON UPDATE CASCADE"], why: "preserve the authoritative payment ledger" },
   ],
 });
 

@@ -173,6 +173,20 @@ describe("recordDraftRevision", () => {
     expect(JSON.parse(rows.find((row) => row.draftVersion === 4).snapshotJson).brand.businessName).toBe("Replacement");
   });
 
+  it("does not create or prune history when the proposed snapshot contains a legacy inline image", async () => {
+    const { db, rows } = fakeDb({ revisions: [revision(1, "keep this revision")] });
+    const before = rows.map((row) => row.snapshotJson);
+    const saved = await recordDraftRevision(db, {
+      businessId: "b",
+      draftVersion: 2,
+      discardAfter: 0,
+      document: documentFor("Legacy", "data:image/png;base64,iVBORw0KGgo="),
+    });
+    expect(saved).toBe(false);
+    expect(rows.map((row) => row.snapshotJson)).toEqual(before);
+    expect(rows).toHaveLength(1);
+  });
+
   it("refuses an impossible version and never throws when history cannot be written", async () => {
     const { db } = fakeDb();
     expect(await recordDraftRevision(db, { businessId: "b", draftVersion: 0, discardAfter: 0 - 1, document: documentFor("x") })).toBe(false);
@@ -256,6 +270,17 @@ describe("moveDraftHistory", () => {
 
     const unknown = await moveDraftHistory(db, { businessId: "b", version: 42 });
     expect(unknown.status).toBe("unavailable");
+  });
+
+  it("will not restore an old snapshot containing inline bytes into a new draft row", async () => {
+    const experience = { id: "exp", draftVersion: 3, historyCursor: 3, categoryKey: "food", draftJson: JSON.stringify(documentFor("Current")) };
+    const legacyRevision = { ...revision(2, "legacy inline"), snapshotJson: JSON.stringify(documentFor("Legacy", "data:image/png;base64,iVBORw0KGgo=")) };
+    const { db, updates } = fakeDb({ experience, revisions: [revision(1, "clean"), legacyRevision, revision(3, "current")] });
+    const result = await moveDraftHistory(db, { businessId: "b", version: 2 });
+    expect(result.status).toBe("unavailable");
+    if (result.status === "unavailable") expect(result.reason).toMatch(/approved durable media provider/);
+    expect(updates).toHaveLength(0);
+    expect(experience.draftVersion).toBe(3);
   });
 
   it("returns an empty history instead of failing when the table is unreachable", async () => {

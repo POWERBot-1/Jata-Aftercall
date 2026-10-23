@@ -85,12 +85,14 @@ const payload = {
 };
 
 beforeEach(() => {
+  vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
   vi.clearAllMocks();
-  counter = 0;
   mocks.business.isPublished = true;
   mocks.business.status = "ACTIVE";
   mocks.experience.status = "PUBLISHED";
   mocks.service.depositKES = 0;
+  mocks.service.title = "Haircut";
+  mocks.service.staffName = "Brian";
   mocks.taken = [];
   mocks.bookingCreate.mockImplementation(async ({ data }: any) => ({ id: "booking-1", ...data }));
   mocks.bookingUpdate.mockResolvedValue({ id: "booking-1" });
@@ -133,6 +135,22 @@ describe("POST /api/storefront/booking", () => {
     expect(created.businessId).toBe("business-a");
     expect(created.serviceName).toBe("Haircut");
     expect(mocks.notify).toHaveBeenCalled();
+  });
+
+  it("rejects inline image data in customer booking text before persistence", async () => {
+    const response = await POST(request({ ...payload, notes: "Reference data:image/png;base64,iVBORw0KGgo=" }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.bookingCreate).not.toHaveBeenCalled();
+    expect(mocks.initialize).not.toHaveBeenCalled();
+  });
+
+  it("rejects inline image data in the resolved service name before persistence", async () => {
+    mocks.service.title = "data:image/png;base64,iVBORw0KGgo=";
+    const response = await POST(request(payload));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.bookingCreate).not.toHaveBeenCalled();
   });
 
   it("re-checks the slot server-side, so a race cannot double-book", async () => {

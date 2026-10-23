@@ -7,6 +7,7 @@
  */
 
 import { allowStubPrismaClient } from "./prismaRuntime";
+import { installInlineMediaPrismaWritePolicy } from "./media/prisma-write-policy";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -448,6 +449,12 @@ function createFallbackPrisma(): any {
       findMany: async () => [],
       create: async () => { throw new Error("DB not available"); },
     },
+    posPublicationResolution: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      upsert: async () => { throw new Error("DB not available"); },
+      updateMany: async () => { throw new Error("DB not available"); },
+    },
     posAuditEvent: {
       findMany: async () => [],
       create: async () => ({ id: "mock" }),
@@ -468,7 +475,7 @@ function createRealPrisma(): any {
     const client = new PrismaClient({
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     });
-    return client;
+    return installInlineMediaPrismaWritePolicy(client);
   } catch (e) {
     if (!allowStubPrismaClient(databaseUrl)) {
       console.error("[db] Prisma client unavailable while DATABASE_URL is configured. Refusing stub fallback.");
@@ -480,7 +487,9 @@ function createRealPrisma(): any {
 }
 
 if (globalThis.__prisma) {
-  prismaInstance = globalThis.__prisma;
+  prismaInstance = installInlineMediaPrismaWritePolicy(globalThis.__prisma, {
+    required: Boolean(process.env.DATABASE_URL),
+  });
 } else {
   prismaInstance = createRealPrisma();
   if (process.env.NODE_ENV !== "production") {

@@ -41,19 +41,18 @@ describe("tenant-scoped object keys", () => {
   });
 });
 
-describe("inline provider (today's behaviour, declared honestly)", () => {
+describe("legacy inline provider (read compatibility only)", () => {
   it("declares itself non-durable with no derivatives and no models", () => {
     const provider = createInlineStorage();
     expect(provider.id).toBe(INLINE_PROVIDER_ID);
     expect(provider.capabilities).toMatchObject({ durable: false, derivatives: false, models: false });
   });
 
-  it("stores a small photo as a data URL and returns a tenant-scoped key", async () => {
+  it("refuses new image bytes rather than creating another database data URL", async () => {
     const provider = createInlineStorage();
-    const ref = await provider.put({ businessId: BIZ, kind: "image-original", name: "p.png", contentType: "image/png", body: new Uint8Array([137, 80, 78, 71]) });
-    expect(ref.url.startsWith("data:image/png;base64,")).toBe(true);
-    expect(ref.key).toBe(`tenants/${BIZ}/image-original/p.png`);
-    expect(ref.bytes).toBe(4);
+    await expect(
+      provider.put({ businessId: BIZ, kind: "image-original", name: "p.png", contentType: "image/png", body: new Uint8Array([137, 80, 78, 71]) }),
+    ).rejects.toThrow(/inline image persistence is disabled/i);
   });
 
   it("refuses 3D models and derivatives: a data URL must never become the long-term model store", async () => {
@@ -90,7 +89,7 @@ describe("provider selection and capability gate", () => {
     const provider = createInlineStorage();
     expect(() => assertCanStore(provider, "model-glb", 1000)).toThrow(/durable storage/);
     expect(() => assertCanStore(provider, "image-derivative", 1000)).toThrow(/durable storage/);
-    expect(() => assertCanStore(provider, "image-original", 1000)).not.toThrow();
+    expect(() => assertCanStore(provider, "image-original", 1000)).toThrow(/approved durable media provider/);
     expect(() => assertCanStore(provider, "image-original", 10 * 1024 * 1024 * 1024)).toThrow(/larger/);
   });
 });

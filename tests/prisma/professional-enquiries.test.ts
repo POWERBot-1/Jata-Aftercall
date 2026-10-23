@@ -16,6 +16,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: request-only professional e
   const payload = () => ({ slug: business.slug, serviceId: service.id, customerName: "QA Customer", customerPhone: "0712345678", notes: "Owned request only", idempotencyKey: `qa-enquiry-${uid()}` });
   const post = (body: unknown) => POST(new Request("https://jata.test/api/storefront/enquiry", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": `198.51.100.${++ip}` }, body: JSON.stringify(body) }));
   beforeEach(async () => {
+    vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
     ({ business, owner } = await seedBusiness(p, { category: "professional", isPublished: true, status: "ACTIVE" }));
     created.push({ id: business.id, ownerId: owner.id });
     const doc = createExperienceDocument({ categoryKey: "professional", businessName: business.name, phone: business.phone });
@@ -27,6 +28,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: request-only professional e
     if (!p) return;
     for (const fixture of created) { await p.business.deleteMany({ where: { id: fixture.id, ownerId: fixture.ownerId } }); await p.user.deleteMany({ where: { id: fixture.ownerId } }); }
     await p.$disconnect();
+    vi.unstubAllEnvs();
   });
   it("durably stores only the owned service request, with no fake booking/order/payment or deposit change", async () => {
     const result = await post(payload()); expect(result.status).toBe(201); const response = await result.json();

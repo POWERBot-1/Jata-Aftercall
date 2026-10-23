@@ -14,6 +14,7 @@
 
 import prisma from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
 import { adapterContext, db, type PaymentClient } from "./context";
 import { applyConfirmation, applyFailure, applyReversal } from "./engine";
 import { deliverPendingPaymentNotifications } from "./notifications";
@@ -21,7 +22,7 @@ import { isOk } from "./result";
 import { recordReconciliationException } from "./reconciliation";
 import { publishPaymentEvent } from "./realtime";
 import { getAdapter } from "./providers/registry";
-import type { ProviderKey } from "./types";
+import type { ProviderEventOutcome, ProviderKey } from "./types";
 
 export type WebhookInput = {
   provider: ProviderKey | string;
@@ -54,6 +55,53 @@ export type WebhookResult = {
 function isUniqueViolation(error: unknown): boolean {
   const code = (error as { code?: string } | null)?.code;
   return code === "P2002";
+}
+
+/** Strip optional, provider-controlled image data without changing verified amount/state fields. */
+function omitInlineMediaFromProviderOutcome(outcome: ProviderEventOutcome): ProviderEventOutcome {
+  if (!containsInlineImageDataUrl(outcome)) return outcome;
+  const safe = { ...outcome } as Record<string, any>;
+  for (const [key, value] of Object.entries(safe)) {
+    if (!containsInlineImageDataUrl(key) && !containsInlineImageDataUrl(value)) continue;
+    if (containsInlineImageDataUrl(key)) {
+      delete safe[key];
+      continue;
+    }
+    switch (key) {
+      case "providerReference":
+      case "providerTransactionId":
+      case "providerReceipt":
+      case "customerName":
+      case "customerPhoneMasked":
+        safe[key] = null;
+        break;
+      case "destination":
+        // A safe sentinel preserves fail-closed destination matching; null would skip the check.
+        safe.destination = { kind: null, providerDestinationId: "INVALID_INLINE_MEDIA", providerAccountRef: null };
+        break;
+      case "currency":
+        safe.currency = "INVALID";
+        break;
+      case "method":
+        safe.method = "UNKNOWN";
+        break;
+      case "code":
+        safe.code = "PROVIDER_ERROR";
+        break;
+      case "message":
+        safe.message = "The provider reported a payment failure.";
+        break;
+      case "reason":
+        safe.reason = "PROVIDER_DETAIL_OMITTED";
+        break;
+      case "sanitized":
+        safe.sanitized = { type: "PROVIDER_PAYLOAD_OMITTED" };
+        break;
+      default:
+        delete safe[key];
+    }
+  }
+  return safe as ProviderEventOutcome;
 }
 
 /**
@@ -94,7 +142,13 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
     return "";
   };
   const eventId = verification.ok ? verification.eventId || eventIdFromPayload() : verification.eventId ?? eventIdFromPayload();
-  const eventType = verification.ok ? verification.eventType : verification.eventType ?? "UNKNOWN";
+  const candidateEventType = verification.ok ? verification.eventType : verification.eventType ?? "UNKNOWN";
+  if (containsInlineImageDataUrl(eventId)) {
+    await logAudit({ action: "PAYMENT_WEBHOOK_MALFORMED", metadata: { provider, code: "INLINE_MEDIA_EVENT_ID" } });
+    return { status: "rejected", httpStatus: 400, body: { error: "Event refused." } };
+  }
+  // The provider event type is only an audit label. Never persist it if it contains inline media.
+  const eventType = containsInlineImageDataUrl(candidateEventType) ? "UNKNOWN" : candidateEventType;
 
   if (!isOk(verification)) {
     await logAudit({ action: "PAYMENT_WEBHOOK_REJECTED", metadata: { provider, code: verification.code } });
@@ -151,6 +205,7 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
     await finishEvent(client, eventRowId, { status: "FAILED", errorCode: "PARSING_FAILED", processedAt: new Date() });
     return { status: "failed", httpStatus: 500, body: { error: "Could not process this event." } };
   }
+  outcome = omitInlineMediaFromProviderOutcome(outcome);
 
   // ── 4. Apply ─────────────────────────────────────────────────────────────
   if (outcome.kind === "confirmation") {
@@ -240,6 +295,11 @@ async function finishEvent(client: PaymentClient, eventRowId: string | null, dat
   if (!eventRowId || !client.paymentEvent?.updateMany) return;
   const patch: Record<string, unknown> = { ...data };
   delete patch.businessId;
+  // Provider details are optional; discard any unsafe field while retaining status/idempotency
+  // updates so a valid settlement is not rolled back by untrusted descriptive text.
+  for (const [key, value] of Object.entries(patch)) {
+    if (containsInlineImageDataUrl(key) || containsInlineImageDataUrl(value)) delete patch[key];
+  }
   await client.paymentEvent.updateMany({ where: { id: eventRowId }, data: patch });
 }
 
