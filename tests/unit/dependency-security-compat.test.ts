@@ -36,10 +36,13 @@ describe("narrow security patches and compatibility", () => {
     // vendored React 19.3 runtime the #418 replay-cursor fix ships in). This is the only sanctioned
     // major bump; react/react-dom, Prisma, Motion, Tailwind and puppeteer-core stay frozen below,
     // and the exact-pin requirement is unchanged — `eslint-config-next` must still match `next`.
-    expect(manifest.dependencies.next).toBe("16.4.0");
-    expect(manifest.devDependencies["eslint-config-next"]).toBe("16.4.0");
-    expect(packages["node_modules/next"].version).toBe("16.4.0");
-    expect(packages["node_modules/eslint-config-next"].version).toBe("16.4.0");
+    // Re-ratified 2026-10-23: 16.4.0 -> 16.4.2 for GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr and
+    // GHSA-p3m5-59mp-jv5r, which all affect next >= 16.0.0 <= 16.4.0 (first fixed release 16.4.1).
+    // The exact-pin contract is unchanged: still exact equality, still matched to eslint-config-next.
+    expect(manifest.dependencies.next).toBe("16.4.2");
+    expect(manifest.devDependencies["eslint-config-next"]).toBe("16.4.2");
+    expect(packages["node_modules/next"].version).toBe("16.4.2");
+    expect(packages["node_modules/eslint-config-next"].version).toBe("16.4.2");
     for (const [name, version] of [["react", "18.3.1"], ["react-dom", "18.3.1"], ["@prisma/client", "5.22.0"], ["prisma", "5.22.0"], ["motion", "14.1.0"], ["tailwindcss", "4.3.3"], ["@tailwindcss/postcss", "4.3.3"], ["puppeteer-core", "25.13.0"]]) {
       expect(packages[`node_modules/${name}`].version).toBe(version);
     }
