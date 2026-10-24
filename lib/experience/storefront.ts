@@ -326,6 +326,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
 
   const items = products.map(mapProduct);
   const mappedServices = services.map(mapService);
+  const currentOffer = offer && offer.isActive && (!offer.validUntil || offer.validUntil >= new Date()) ? offer : null;
   const categories = Array.from(
     new Set([...items, ...mappedServices].map((item) => item.category).filter((value): value is string => Boolean(value))),
   ).sort();
@@ -337,8 +338,8 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
     profile: getExperienceProfile(document.categoryKey),
     items,
     services: mappedServices,
-    offer: offer && offer.isActive
-      ? { title: offer.title, subtitle: offer.subtitle, imageUrl: offer.imageUrl, ctaLabel: offer.ctaLabel, badge: offer.badge }
+    offer: currentOffer
+      ? { title: currentOffer.title, subtitle: currentOffer.subtitle, imageUrl: currentOffer.imageUrl, ctaLabel: currentOffer.ctaLabel, badge: currentOffer.badge }
       : null,
     categories,
     isPreview: usePreferredDraft || (usingDraft && !published),

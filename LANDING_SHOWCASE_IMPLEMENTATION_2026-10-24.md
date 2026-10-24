@@ -3,7 +3,7 @@
 **Branch:** `arena/e5c4c14b-jata-aftercall`
 **Baseline:** `cce008dfc468c17e5091162941531a58575ca5c6` (= `origin/main` at the time of work)
 **Date:** 2026-10-24
-**Status:** implementation complete, verified locally. **Not merged, not deployed, not auto-merged.**
+**Status:** Pre-delivery verification checkpoint for the follow-up corrections. At this checkpoint, PR #55 was open and unmerged at head `f61e27278a75bf2297640017d4bc19d5bad57da3`, and the corrections below were local and uncommitted. See PR #55 for the delivery head and current CI. **Not deployed or merged; auto-merge was not used.**
 
 ---
 
@@ -42,12 +42,13 @@ card, and in the footer. No customer photographs, logos or listings were fabrica
 * `prisma generate` cannot download its engine here (only npm/github/pypi hosts are reachable), so
   the build uses the repository's documented offline Prisma stub in `lib/db.ts`. The stub returns
   empty results, which is exactly the "database unavailable" path the homepage already handled.
-* With the stub, `next build`'s type-check step fails on `tests/prisma/experience-boundary.test.ts`
-  (`Prisma.BusinessUncheckedCreateInput` does not exist on the stub client). A **local, uncommitted**
-  one-line alias was added to `node_modules/.prisma/client/default.d.ts` to reproduce a production
-  type-check; nothing in the repository was changed for this.
-* No local PostgreSQL server could be installed (package archives are unreachable), so Prisma-backed
-  integration tests remain **skipped**, exactly as on the baseline (118 skipped before and after).
+* The offline Prisma stub lacks `Prisma.BusinessUncheckedCreateInput`; a **local-only** one-line alias
+  remains in `node_modules/.prisma/client/default.d.ts` so TypeScript/build checks can run. This file
+  is outside Git and is not part of the patch. `npm run build` still reports that the Prisma engine
+  download is offline, then uses the documented fallback.
+* `DATABASE_URL` and `DIRECT_URL` were unset during this gate. The build skipped its migration gate;
+  no database, seed, restore, migration or production write was run. PostgreSQL-backed integration
+  tests were skipped in this verification; see the current aggregate count in §6.
 
 ---
 
@@ -72,17 +73,20 @@ card, and in the footer. No customer photographs, logos or listings were fabrica
 
 | File | Change |
 | --- | --- |
-| `app/page.tsx` | Rewritten as a section stack: hero → story → benefits → demo showcase → pricing → how it works → FAQ → final CTA → POS entry → footer. **Every string and structure the existing tests pin was preserved verbatim**: the four plan names in order, `KES 149 / 999 / 499 / 999`, `>KES 149<`, `>KES 999<`, `Get my business page`, `href="/register"`, `Secure Paystack checkout. Your plan starts once payment is confirmed.`, `Turn every customer interaction`, `Create your page in ~5 minutes`, `Demo businesses`, `id="demo"`, `Simple pricing`, `<main id="main">`, the POS block's exact classes (`mx-auto max-w-6xl px-4 pb-10 sm:px-6`, `sm:flex sm:items-center sm:gap-5`, `sm:w-60 sm:shrink-0`), `aria-labelledby="business-pos-heading"`, one inline SVG icon, one `Open Business POS`, one `/dashboard/pos`, and `POS_PLAN_PRICE_KES` (the literal `499` still never appears in the file). |
+| `app/page.tsx` | Rewritten as a section stack: hero → story → benefits → demo showcase → pricing → how it works → FAQ → final CTA → separate public POS entry → footer. The four plan names/order and existing plan prices remain pinned; outcome-style hero copy was replaced with descriptive copy. Demo-card links now render only for eligible published, `ACTIVE` businesses with at least one active service. The POS entry remains outside the plan cards and links to `/dashboard/pos`. |
 | `components/Navbar.tsx` | Adds in-page sections (Product, Benefits, Demos, Pricing, FAQ) and a native `<details>` menu for phones. No `useState`/`useEffect`/`onClick` — navigation works before hydration, with scripts blocked, and if animation fails. Auth state unchanged (Dashboard/Admin/Logout, or Log in/Get started). |
-| `app/b/[slug]/page.tsx` | Builds and renders the demo band for the four documented demo slugs only (`+14` lines). Experience-driven storefronts return earlier and are untouched; a customer's own page never matches `demoShowcaseForSlug()`. |
+| `app/b/[slug]/page.tsx` | Builds demo-band data only for documented demo slugs and eligible businesses; applies active-service and active/unexpired-offer filters on the classic route. Experience-driven storefronts still return before the demo band; their public loader now hides inactive/expired offers independently. |
 | `app/globals.css` | `+1,109` lines appended in one clearly delimited block. No existing selector was edited. |
 | `package.json` | Two scripts: `test:landing` and `test:browser:landing`. No dependency added, removed or upgraded. |
+| Follow-up corrections (`lib/demoContent.ts`, `lib/demoData.ts`, `lib/landing.ts`, `lib/demoShowcase.ts`, `lib/experience/storefront.ts`, `app/dev/demo-showcase/page.tsx`, `components/BusinessPage.tsx`, landing/storefront copy, metadata and analytics) | Mark synthetic listings/prices and imagery as fictional/illustrative; remove unsupported outcome/property/weekend claims; filter active services and active/unexpired offers on classic and Website Studio routes; gate demo destinations; use accepted analytics event names and accurate counters. |
+| Tests, seed and local evidence (`prisma/seed.ts`, `scripts/browser/landing-showcase.check.mjs`, targeted unit/security tests, `docs/evidence/landing-2026-10-24/README.md`) | Update seeded demo disclosures and assertions; collect browser `pageerror`s; verify eligible-route/no-link behavior; label the earlier screenshot run as local historical evidence and record current check counts separately. |
 
 ### Added
 
 | File | Purpose |
 | --- | --- |
-| `lib/landing.ts` | Copy, plan notes, FAQ, demo-card builder, demo order. |
+| `lib/landing.ts` | Copy, plan notes, FAQ, demo-card builder, demo order; updated to remove unsupported outcomes and property/weekend viewing claims and to gate demo destinations. |
+| `lib/demoContent.ts` | Shared rules for clearly fictional demo labels and active-service / active-and-unexpired-offer filtering. |
 | `lib/demoShowcase.ts` | Band configuration for the four demo slugs + a pure `buildDemoShowcase()` gate. |
 | `components/landing/Hero.tsx` | Hero with CSS-only motion and a markup phone (no screenshot). |
 | `components/landing/Sections.tsx` | Story acts, marquee, benefits grid. |
@@ -98,7 +102,7 @@ card, and in the footer. No customer photographs, logos or listings were fabrica
 | `tests/unit/demo-showcase-band.test.ts` | Band scope: demo slugs only, public only, non-empty only; never on a customer page. |
 | `docs/evidence/landing-2026-10-24/` | Before/after and per-viewport screenshots + reproduction notes. |
 
-No authentication, payment, settlement, provider, migration, secret or POS file was modified.
+No authentication/session logic, checkout or payment-provider flow, settlement logic, schema/migration, secret, provider configuration or POS authorization/entitlement code was changed. Seed/restore edits are limited to demo fixtures and owner/payment overwrite guards, and neither script was run.
 
 ---
 
@@ -111,8 +115,8 @@ No authentication, payment, settlement, provider, migration, secret or POS file 
   connection cannot afford and an autoplay surface that cannot be paused; the CSS version ships
   **0 bytes** of extra media beyond stills already needed.
 * **No 3D.** The existing `three`-based immersive viewer is opt-in and gated by device/network
-  policy; nothing here uses WebGL, which keeps the landing's bundle to a **2.3 KB gzipped** page
-  chunk plus the router.
+  policy; this landing implementation does not use WebGL. No bundle-size claim is made for the
+  follow-up corrections because a separate bundle measurement was not run in this gate.
 * **One client component.** Plan tabs use real `<button role="tab">` elements with `aria-selected`,
   `aria-controls`, roving `tabIndex`, Arrow/Home/End keys, and panels hidden with `hidden` — no
   third-party tab library.
@@ -121,7 +125,7 @@ No authentication, payment, settlement, provider, migration, secret or POS file 
   nothing depends on an animation having run. Verified in Chromium with the media feature emulated.
 * **No layout shift.** Demo panels keep a fixed 16:10 media box, images carry real
   `width`/`height`, and switching tabs does not move anything above the showcase (measured:
-  section offset 2453 px → 2453 px).
+  section offset 2432 px → 2432 px (local production build)).
 * **Mobile first.** 320, 360, 414, 768, 1024 and 1440 px are checked for horizontal overflow;
   the phone navigation collapses the wordmark and menu label at very narrow widths so the sticky
   bar fits 320 px without clipping.
@@ -130,133 +134,207 @@ No authentication, payment, settlement, provider, migration, secret or POS file 
 
 ## 5. Accuracy and privacy
 
-* **No fabricated claims.** No testimonials, ratings, review counts, customer numbers, revenue
-  figures, "trusted by" copy, "best/leading" adjectives or income promises. Pinned by
-  `tests/unit/landing-content.test.ts` (regex sweep over every marketing string).
-* **No invented prices.** Plan prices come from `PlanConfig` (or `FALLBACK_PLANS` when the database
-  is unreachable); demo prices come from the published demo rows and, when those cannot be read, from
-  the documented demo seed — labelled "documented demo content" in that case.
-* **Illustrative imagery stated everywhere.** Alt text begins with the scene and ends with
-  "Illustrative photograph… not the business's own"; cards carry a visible "Illustrative photograph ·
-  example business" caption; the demo band carries an "Illustrative demo" flag; the footer states it
-  again.
-* **POS stays private.** The POS is not a plan card, is not in `PLAN_INCLUDES`, does not appear on any
-  demo page, and its only public reference is one FAQ sentence explaining that it is separate and
-  owner-only. Its entry still links to the authenticated `/dashboard/pos`, which redirects anonymous
-  visitors to `/login` and lists businesses strictly from `getOwnedBusinessIds(session)`.
-* **No cross-tenant data.** The band is only built for the four exact demo slugs on a `public`
-  decision with at least one service row; the card builder only reads the same four slugs.
-  A customer's page was rendered in the test suite and confirmed to contain neither the band nor the
-  word "Illustrative".
-* **Demonstrations isolated from real transactions.** Every band and card action is an existing
-  in-page anchor (`#services`, `#quote`) or the demo's own WhatsApp/Call/Directions. No new checkout,
-  cart or payment path was introduced; the demo pages take no payments (stated on the band).
+* **No unsupported outcome claims.** Removed claims implying guaranteed analytics coverage or business outcomes, along with unsupported property-viewing/weekend-viewing copy. No testimonials, ratings, review counts, customer numbers, revenue figures, "trusted by" copy, "best/leading" adjectives or income promises remain. Tests check the marketing copy and analytics wording.
+* **Fictional demo data is explicit.** Demo business names, contacts, locations, service titles, offers and sample prices are synthetic examples, not current listings, quotes, promotions or availability. Landing cards and demo pages say so; generated imagery is separately labelled illustrative. Production plan prices still come from `PlanConfig` (or `FALLBACK_PLANS` when the database is unavailable).
+* **Active content only.** Demo services require `isActive === true`; offers require `isActive === true`, a non-empty title and a null or future `validUntil`. The persisted Offer schema has no `validFrom`; no nonexistent field is assumed. Property examples do not show offers.
+* **Illustrative imagery is disclosed.** Alt text identifies the photograph as illustrative and not the business's own; cards and the demo band show visible disclosure; the footer repeats it.
+* **POS remains a separate public landing entry, not a plan.** A dedicated Business POS section links to `/dashboard/pos`; POS is not one of the four plan cards and is not included in `PLAN_INCLUDES`. The destination remains authenticated and owner-only, redirects anonymous visitors to `/login`, and lists businesses strictly from `getOwnedBusinessIds(session)`. The FAQ says POS is separate and owner-only.
+* **Demo routes are gated.** Landing cards link only when the destination is an eligible published `ACTIVE` demo business with at least one active service. The demo band requires a documented demo slug, a public page decision and active service rows. A customer's page test confirms the band does not render there.
+* **No new transaction path.** Demo actions use in-page anchors or existing WhatsApp/Call/Directions actions. No checkout/cart/payment path was added; the band states no payment is taken.
 
 ---
 
-## 6. Verification
+## 6. Verification — local pre-delivery worktree (not deployed)
 
-### Automated tests — `npx vitest run`
+The commands below were re-run against the follow-up source worktree before its delivery commit;
+results are local checks, not PR/Actions results. `DATABASE_URL` and `DIRECT_URL` were unset, so the
+build used the documented offline Prisma fallback and did not run a migration gate. No database or
+production operation was performed. Browser results below are local checks, not production evidence;
+no screenshots were generated in these runs (`SHOT_DIR` unset).
 
-| | Baseline `cce008d` | This branch |
+### Tests, lint, types and build
+
+| Command | Exit | Verified result |
+| --- | ---: | --- |
+| `npm test` | **0** | 200 test files passed, 14 skipped; 2,517 tests passed, 118 skipped (2,635 total). PostgreSQL/E2E-gated tests are among the skips; expected stderr from simulated DB/provider failure paths did not fail the suite. |
+| `npm run test:landing` | **0** | 3 files, 50/50 tests passed. |
+| `npx vitest run tests/unit/demo-data-restore.test.ts tests/unit/homepage-plan-cards.test.ts tests/unit/homepage-business-pos.test.ts tests/unit/pos-entitlement.test.ts tests/security/pos-page-authorization.test.ts tests/security/referral-security.test.ts tests/unit/business-page-ai-link.test.ts tests/unit/storefront-preview-metadata.test.ts tests/unit/storefront-public-content.test.ts` | **0** | 9 files, 125/125 tests passed. Covers fictional identity/restore boundaries, active/inactive services and offers, expiry, fallback/link eligibility, four public plan prices/order, and the authenticated owner-only POS boundary. |
+| `npm run typecheck` (`tsc --noEmit`) | **0** | Clean. |
+| `npm run lint` | **0** | 0 errors; 36 warnings remain in the repository lint output. The changed app/component/lib, seed, browser and test files also passed the targeted ESLint command below with no diagnostics. |
+| Targeted ESLint + `node --check scripts/browser/landing-showcase.check.mjs` | **0** | All modified app/component/lib, seed, restore/browser script and unit/security test files passed with no diagnostics. |
+| `git diff --check` | **0** | No whitespace errors. |
+| `npm run build` | **0** | Webpack production build compiled, type-checked and emitted 44 routes. Prisma engine download failed offline; the documented fallback ran. `DATABASE_URL` was unset, so migrations were skipped. |
+
+Exact targeted lint/syntax command (exit **0**):
+
+```sh
+npx eslint --no-warn-ignored app/admin/page.tsx 'app/b/[slug]/page.tsx' app/dev/demo-showcase/page.tsx app/layout.tsx app/page.tsx components/BusinessPage.tsx components/landing/DemoShowcase.tsx components/landing/FaqAndFooter.tsx components/landing/Hero.tsx components/landing/Sections.tsx components/storefront/DemoShowcaseBand.tsx lib/demoContent.ts lib/demoData.ts lib/demoShowcase.ts lib/experience/contentAssist.ts lib/experience/storefront.ts lib/landing.ts prisma/seed.ts scripts/restore-demo-businesses.ts scripts/browser/landing-showcase.check.mjs tests/security/referral-security.test.ts tests/unit/demo-data-restore.test.ts tests/unit/demo-showcase-band.test.ts tests/unit/homepage-business-pos.test.ts tests/unit/landing-content.test.ts tests/unit/storefront-public-content.test.ts && node --check scripts/browser/landing-showcase.check.mjs
+```
+
+The full Vitest suite **did pass** as shown above. PostgreSQL-backed and E2E-gated cases are among the 118 skipped tests. This environment had no database configuration, so no live database result is claimed.
+
+### Browser checks and startup evidence
+
+| Command / run | Exit | Result |
+| --- | ---: | --- |
+| `LD_LIBRARY_PATH=/tmp/chromium-libs/lib CHROME_PATH=/tmp/chromium BASE_URL=http://127.0.0.1:3141 ONLY=home npm run test:browser:landing` | **0** | 58/58 checks passed against the local production build: 320–1440 px overflow, decoded/labelled images, one H1/main, links only for destinations marked available, tab interaction, navigation, reduced motion and zero page errors. |
+| `LD_LIBRARY_PATH=/tmp/chromium-libs/lib CHROME_PATH=/tmp/chromium BASE_URL=http://127.0.0.1:3000 ONLY=demos npm run test:browser:landing` | **0** | 32/32 checks passed against the development-only showcase harness: all four fictional pages, mobile/desktop layout, anchors, illustrative-image labels and zero page errors. |
+| Three repetitions of `LD_LIBRARY_PATH=/tmp/chromium-libs/lib CHROME_PATH=/tmp/chromium npm run test:browser:hydration-race` | **0 each** | Diagnostic only. Each run reproduced the expected synthetic #418/#423 negative arms with no uncaught errors; the synthetic control did not. Across 24 widened live `/login` attempts there were 0 #418/other errors; across 9 controls there were 0. This is not a real-database Journey pass. |
+
+Before the production browser run, `npm run start -- -p 3141` logged `✓ Ready`, and a readiness
+request to `/` returned HTTP 200. Before the demo run, the existing dev server on port 3000 returned
+HTTP 200 for `/dev/demo-showcase?slug=nyumbani-kitchen`. The production server started for the
+check was stopped afterwards. The offline database meant all four homepage demo cards were fallback
+cards: the browser confirmed none linked to an unavailable `/b/<slug>` route. The direct browser
+navigation to an eligible database-backed demo route was therefore **not exercised**; unit tests
+cover the eligible-link branch.
+
+A separate attempt to start a second dev server with `npm run dev -- -p 3142` exited **1** after
+Next.js reported another dev server already running in this worktree (PID 7778 on port 3000). The
+readiness request to 3142 exited **7** because that process had stopped. This was a duplicate-server
+lock issue, not an application/browser failure; the existing port-3000 server was confirmed ready
+before the demo browser suite ran.
+
+### Initial failures corrected during this verification
+
+The first `npm run test:landing` and focused `npx vitest run ...` invocation exited **1**, and the
+first `npx tsc --noEmit` exited **2**, because of a missing comma in `lib/landing.ts`; the first
+focused Vitest run also exposed a fixture referencing a nonexistent `h.tables.user`. The first
+`npm run lint` exited **1** on that same parse error. Those local issues were fixed; all final reruns
+above passed. These initial exits are not the current outcomes.
+
+## 7. GitHub Actions on the exact PR head
+
+Read-only inspection on **2026-10-24**: PR #55 is OPEN, head
+`f61e27278a75bf2297640017d4bc19d5bad57da3`, base `main` at
+`cce008dfc468c17e5091162941531a58575ca5c6`. At the pre-delivery checkpoint, these corrections
+were not yet committed, so none of the checks below ran against the follow-up worktree.
+
+| PR check on `f61e272…` | Classification | Evidence |
 | --- | --- | --- |
-| Test files | 196 passed / 14 skipped | **199 passed / 14 skipped** |
-| Tests | 2,464 passed / 118 skipped | **2,502 passed / 118 skipped** |
-| Failures | 0 | **0** |
+| Exact candidate applies on disposable PostgreSQL 18 | **BLOCKED** (GitHub conclusion: failure) | Run `40043414368`, step 9. Check-run annotations say `RESULT: BLOCKED`, `BLOCKED the candidate adds migrations — no difference from the baseline — nothing to rehearse`, process exit 2. This is not evidence of a migration failure; no candidate migration diff applied to this PR. |
+| Journey against a real database | **BLOCKED** (GitHub conclusion: failure) | Run `40043414437`, step 18, “Hydration 418 controlled race reproduction”. Database setup/migrations, native suites, §66 journey, POS journey, production build, authenticated HTTP/browser journey and booking SSR hydration step passed. Step 18 emitted `BLOCKED / NOT RUN: Navigation timeout of 30000 ms exceeded` and exited 2; later replay-cursor and storefront browser steps were skipped (**NOT TESTED**). Cross-tenant negative probes had `markerSeen:false` and positive controls `markerSeen:true`; they are not the failure. The bot comment attributes the run to `8aa45572cd80648f91a573a488e7c66cf2395894`, while Actions metadata says the run head was `f61e272…`; attribution mismatch retained. |
+| D2 — build, audit and controls on the candidate tree | **PASS** | Run `40043414368`. |
+| Failure paths actually fail | **PASS** | Run `40043414385`. |
+| Migration target guard | **PASS** | Run `40043414437`. |
+| Migrations + schema on PostgreSQL 18 | **PASS** | Run `40043414385`. |
+| Production build path on PostgreSQL 18 | **PASS** | Run `40043414385`. |
+| Release gate (aggregate) | **PASS** | Run `40043414385`. |
+| Schema reconciliation proposal closes the drift | **PASS** | Run `40043414385`. |
+| Static (install, generate, lint, typecheck, audit) | **PASS** | Run `40043414385`. |
+| Vercel | **PASS** (check only) | PR check is green; the Vercel bot comment says deployment was skipped. No deployment is claimed. |
+| Vercel Preview Comments | **PASS** | PR check is green. |
 
-38 new tests across three files (`test:landing`), including:
-content accuracy and demo-card data, band scope isolation, AA contrast for the landing palette,
-reduced-motion and lazy-media rules, dev-harness production 404, and the POS boundary.
+`gh pr checks 55` exited **1** because the two check runs above have GitHub failure
+conclusions; it is not a passing gate. Candidate/Journey signed-log retrieval and the Journey
+raw-order artifact download returned `EOF`; the classifications above use the check annotations and
+bot diagnostic, not an unavailable archive. No workflow was manually rerun on this head.
 
-The 118 skipped tests are the Prisma/PostgreSQL suites; they are skipped on the baseline for the same
-reason (no database reachable in this sandbox).
+### Hydration timeout triage (original PR head `f61e272…`)
 
-### Build and static checks
+Actions identifies the failing step as `npm run test:browser:hydration-race`; it is a controlled
+diagnostic, not the preceding database-backed §66 or POS journey. The bot's only failure detail is
+the generic 30-second navigation timeout. In `scripts/browser/hydration-race.check.mjs`, the
+synthetic fixture's `page.setContent(..., { waitUntil: "networkidle0" })` is uncaught, whereas
+actual production `/login` `page.goto` timeouts are caught and recorded in the diagnostic summary.
+That makes the synthetic fixture's network-idle wait the likely timeout source, but the unavailable
+stack trace means the exact call site is **not confirmed** and this does not establish an application
+hydration defect.
 
-| Command | Result |
-| --- | --- |
-| `npm run build` | **Success** — compiled, type-checked and exported 44 routes (`Build completed successfully`). The only baseline type error was the offline Prisma stub, worked around locally as described above. |
-| `npx tsc --noEmit` | **Clean** |
-| `npx eslint app components lib` | **0 errors**; the 40 warnings are all pre-existing (POS/storefront `setState`-in-effect, unused disables). The new and modified files lint **clean**. |
+To seek reproduction without rerunning Actions, the same local command was run three times against
+the production build: all three exited **0**. Each reported 0 #418/other errors in its eight widened
+`/login` attempts and 0 in its three controls; the synthetic arms reproduced expected #418/#423 with
+no uncaught errors. The CI timeout was therefore not reproduced locally and remains a GitHub blocker,
+not a pass. A normal push to the updated PR head will provide the next exact-head run; no manual
+workflow rerun was requested.
 
-### Browser acceptance — `npm run test:browser:landing`
+## 8. Remaining limitations and risks
 
-Run in headless Chromium 131 at 320/360/414/768/1024/1440 px.
+1. **No live/seeded database verification.** `DATABASE_URL` and `DIRECT_URL` were unset. The local
+   homepage therefore used fallback cards, and the public `/b/<slug>` database-backed eligible
+   destination was not navigated in a browser. Unit tests cover the conditional eligible-link path,
+   demo identity, and the no-overwrite/owner/payment boundaries. Any database integration check must
+   use an explicitly isolated non-production database; no production DB operation is authorized.
+2. **Database-backed coverage remains unverified locally.** `npm test` passed 2,517 tests and
+   reported 118 skips across the suite; PostgreSQL/E2E-gated coverage was not exercised because no
+   database was configured. The 50 landing tests and 125 focused regression/security tests also
+   passed as separate commands.
+3. **CI evidence here is for the pre-delivery head only.** Candidate rehearsal is inapplicable
+   without a migration diff (the required check is still red, not green); the real-database Journey
+   job's hydration diagnostic was blocked by the timeout described in §7. Check PR #55 for normal
+   Actions runs on the later delivery head; no manual workflow rerun was requested.
+4. **Illustrative assets only.** Images are generated illustrations, not authorized photographs of
+   the fictional demo businesses or actual property listings. Existing screenshots in
+   `docs/evidence/landing-2026-10-24/` are local design evidence only, not production evidence; no
+   screenshots were generated by the verification runs in §6.
+5. **Payment/subscription E2E was not exercised.** No Paystack key, payment operation or database
+   was used. The local POS regression/security suites passed, but no live payment path was tested.
+6. **Hydration diagnostic scope.** The local `test:browser:hydration-race` run is a controlled
+   production-build diagnostic with a synthetic mechanism arm; it does not replace the blocked
+   real-database Journey and does not establish production behavior.
+7. **No 3G/physical-device run.** Browser coverage used headless Chromium at the six listed viewport
+   widths; it did not emulate a constrained network or physical handset.
+8. **Development harness.** `/dev/demo-showcase` is explicitly guarded by `NODE_ENV === "production"`
+   and declares `robots: index:false`; the current build lists the route, but this gate did not run a
+   production HTTP check against that path.
 
-| Run | Result |
-| --- | --- |
-| `ONLY=home` (production build, hydrated) | **55/55 checks passed** |
-| `ONLY=demos` (dev server harness) | **32/32 checks passed** |
+## 9. Pre-delivery branch checkpoint, diff review and authorization boundary
 
-What those 87 checks assert:
+The following state records the worktree immediately before delivery; it is historical, not the
+post-push status:
 
-* no horizontal overflow at every width; every visible photograph decodes; every image has alt text;
-  one `<h1>` and one `<main id="main">`; primary CTA present; zero page errors — at all six widths;
-* four demo tabs; the first panel shows three real services and links to `/b/nyumbani-kitchen`;
-  clicking a tab switches panels; **no layout shift** above the showcase; ArrowRight/Home move focus
-  *and* the panel; no page errors during interaction;
-* the phone menu is closed until pressed, the nav bar fits 360 px, and the open menu renders every
-  section link plus Log in/Get started fully inside the viewport;
-* with `prefers-reduced-motion: reduce`, the hero photograph, marquee, phone and hero copy all report
-  `animation-name: none`, stay at `opacity: 1`, and stay visible;
-* for each of the four demo businesses at 360 px and 1440 px: the band renders with three services and
-  `#services`/`#quote` actions, its photography is labelled illustrative, there is no horizontal
-  overflow, and no page errors.
+* **Branch:** `arena/e5c4c14b-jata-aftercall`.
+* **Local HEAD and remote branch head:** `f61e27278a75bf2297640017d4bc19d5bad57da3` (remote
+  confirmed with `git ls-remote`).
+* **PR #55:** OPEN, unmerged, head `f61e27278a75bf2297640017d4bc19d5bad57da3`, base `main` at
+  `cce008dfc468c17e5091162941531a58575ca5c6`.
+* The reviewed follow-up diff contained **26 modified tracked files and 2 untracked files**; nothing
+  was staged, committed or pushed at that checkpoint. The delivery commit and current remote state
+  are reported separately against PR #55.
 
-Screenshots: `docs/evidence/landing-2026-10-24/` (before/after pairs for desktop and Android, per-width
-captures, the open mobile menu, the reduced-motion capture and all four demo businesses on mobile and
-desktop).
+Files in the pre-delivery worktree diff:
 
----
+```text
+LANDING_SHOWCASE_IMPLEMENTATION_2026-10-24.md
+app/admin/page.tsx
+app/b/[slug]/page.tsx
+app/dev/demo-showcase/page.tsx
+app/layout.tsx
+app/page.tsx
+components/BusinessPage.tsx
+components/landing/DemoShowcase.tsx
+components/landing/FaqAndFooter.tsx
+components/landing/Hero.tsx
+components/landing/Sections.tsx
+components/storefront/DemoShowcaseBand.tsx
+docs/evidence/landing-2026-10-24/README.md
+lib/demoData.ts
+lib/demoShowcase.ts
+lib/experience/contentAssist.ts
+lib/experience/storefront.ts
+lib/landing.ts
+prisma/seed.ts
+scripts/browser/landing-showcase.check.mjs
+scripts/restore-demo-businesses.ts
+tests/security/referral-security.test.ts
+tests/unit/demo-data-restore.test.ts
+tests/unit/demo-showcase-band.test.ts
+tests/unit/homepage-business-pos.test.ts
+tests/unit/landing-content.test.ts
+lib/demoContent.ts                         (untracked)
+tests/unit/storefront-public-content.test.ts (untracked)
+```
 
-## 7. Known limitations and remaining defects
+The final diff was reviewed. It changes public copy/demo identity and visibility, contact-action
+analytics event names, and seed/restore demo fixtures and safety checks. It does **not** change
+authentication/session logic, checkout/payment-provider or settlement logic, POS authorization or
+entitlement logic, Prisma schema/migrations, secrets, dependencies, or provider configuration.
+`prisma/seed.ts` was edited for fictional demo fixtures and the demo-owner/non-demo-payment
+overwrite guard; the seed was not run. No production data, migration, payment, deployment, merge or
+unrelated workflow operation occurred. The Business POS remains a separate landing entry, outside
+all four plan cards, and its workspace remains authenticated and owner-only.
 
-1. **No live database run.** The demo pages were verified through the development harness that mounts
-   the same components against the documented demo content, not against a seeded PostgreSQL. The
-   Prisma-backed integration tests remain skipped. To close this gap, run in an environment with a
-   database:
-   ```bash
-   npx prisma migrate deploy && npm run seed
-   npm run dev   # then: /b/nyumbani-kitchen, /b/marys-beauty-studio, /b/kamau-auto-care, /b/john-kamau-properties
-   ```
-   The unit suite already renders `/b/<slug>` with a mocked Prisma for all four slugs and asserts
-   name, services, prices, location, offer, `tel:` and `wa.me` links.
-2. **Imagery is illustrative, not the businesses' own.** No authorised photography existed in the
-   repository, so generated photographs are used and labelled. Replacing them with owner-supplied
-   assets is a content task, not a code change.
-3. **The `/dev/demo-showcase` harness exists in the tree.** It returns 404 in production and is
-   registered with `robots: index:false`. It reads no database and writes nothing, but if the
-   project's policy is that no `/dev` route may ship outside local builds, it should be deleted
-   before release.
-4. **Static `<img>` instead of `next/image`.** Chosen deliberately (static files in `/public`, hand
-   picked `srcset`/`sizes`, no optimizer endpoint in this deployment). Next's lint rule warns for the
-   eager hero; the rule is satisfied on every other image.
-5. **No slow-network throttle run.** The check does not emulate 3G. Weight was instead bounded by
-   budget: hero 215 KB (jpg) / 103 KB (720 px), cards 72–146 KB (webp), the rest lazy; one test fails
-   the build if any landing image exceeds 260 KB.
-6. **Hydration delay in `next dev`.** Under React 18 + Next 16 dev mode the client bundle hydrates late
-   enough that a click in the first seconds is lost; the interaction checks therefore run against the
-   production build (`ONLY=home`) and use retry-and-wait in the harness. This is a dev-server
-   behaviour, not a production one.
-7. **`Payment`/subscription flows were not exercised end-to-end** — no Paystack key or database is
-   available. Their existing regression tests all pass unchanged.
-8. **Product theme toolbar.** The appearance picker remains above the landing page (existing global
-   chrome). Its background is matched to the landing palette via `:has(> .lp-page)` so there is no
-   stray strip, but the page intentionally keeps its own palette rather than following the theme.
-
----
-
-## 8. Authorisation boundary — what was and was not done
-
-* Work is confined to `arena/e5c4c14b-jata-aftercall`; nothing else was branched, pushed or merged.
-* No production data, migration, secret, payment provider, settlement setting or external provider
-  configuration was touched (`git status` lists only the files above).
-* No dependency was added, removed or upgraded; no paid service was used. The Chromium used for
-  screenshots was installed **outside** the repository (`/tmp`) and is not a project dependency.
-* No unrelated workflow was re-run.
-* **Production release requires separate explicit approval.** Nothing here is deployed.
-
-### Landing plan order (unchanged, verified)
+### Landing plan order (unchanged; current focused tests passed)
 
 1. Monthly — KES 149/month
 2. Annual — KES 999/year

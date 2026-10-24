@@ -11,6 +11,8 @@ import { FALLBACK_PLANS, orderHomepagePlans, planDisplayName, publiclyListedPlan
 // The Business POS price is a server-side constant, never a number written into this page (§45).
 import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
 import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_INCLUDES, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
+import { isVerifiedDemoRecord } from "@/lib/demoContent";
+import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +28,9 @@ export const dynamic = "force-dynamic";
  *     Business POS plan is never a card (§67). Marketing order comes from `orderHomepagePlans()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
  *   • The POS keeps its own separate entry and its price comes from the server constant.
- *   • The four demo cards reuse the demo businesses' own content; when the rows cannot be read the
- *     documented example content is shown and is labelled as an example.
+ *   • The four fictional demo cards show active services only; fallback content is labelled
+ *     synthetic. Links require the dedicated demo owner, no non-demo payment rows, and a published
+ *     ACTIVE business with active services — not a matching slug alone.
  */
 export default async function HomePage() {
   const session = await getSession();
@@ -43,21 +46,38 @@ export default async function HomePage() {
 
   let demoRows: LandingDemoRow[] = [];
   try {
-    demoRows = await prisma.business.findMany({
+    const rows = await prisma.business.findMany({
       where: { slug: { in: [...LANDING_DEMO_SLUGS] }, isPublished: true, status: "ACTIVE" },
       select: {
         slug: true,
         name: true,
         category: true,
         location: true,
+        isPublished: true,
+        status: true,
+        owner: { select: { email: true } },
+        payments: {
+          where: { NOT: { reference: { startsWith: DEMO_PAYMENT_PREFIX } } },
+          select: { reference: true },
+          take: 1,
+        },
         services: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { title: true, priceLabel: true, priceFrom: true, isActive: true } },
-        offer: { select: { title: true, subtitle: true } },
+        offer: { select: { title: true, subtitle: true, isActive: true, validUntil: true } },
       },
     });
+    demoRows = rows.map(({ owner, payments, ...row }) => ({
+      ...row,
+      isVerifiedDemo: isVerifiedDemoRecord({
+        slug: row.slug,
+        ownerEmail: owner.email,
+        paymentReferences: payments.map((payment) => payment.reference),
+      }),
+    }));
   } catch {
     demoRows = [];
   }
   const demoCards = buildLandingDemoCards(demoRows);
+  const availableDemoSlugs = demoCards.filter((card) => card.routeAvailable).map((card) => card.slug);
 
   return (
     <div className="jata-landing lp-page">
@@ -125,7 +145,7 @@ export default async function HomePage() {
         <section className="lp-section lp-section--cream" id="how" aria-labelledby="how-title">
           <div className="lp-wrap">
             <p className="lp-kicker">How it works</p>
-            <h2 id="how-title" className="lp-h2">Create your page in ~5 minutes</h2>
+            <h2 id="how-title" className="lp-h2">Create your page</h2>
             <ol className="lp-steps">
               {LANDING_STEPS.map((step, index) => (
                 <li key={step} className="lp-step">
@@ -147,7 +167,7 @@ export default async function HomePage() {
         <section className="lp-final" aria-labelledby="final-title">
           <div className="lp-wrap lp-final__inner">
             <div>
-              <h2 id="final-title" className="lp-h2 lp-h2--light">Your next customer is one link away.</h2>
+              <h2 id="final-title" className="lp-h2 lp-h2--light">Your business page, ready to share.</h2>
               <p className="lp-lede lp-lede--light">
                 Build the page, preview it on your own phone, and publish it once your payment is confirmed.
               </p>
@@ -210,7 +230,7 @@ export default async function HomePage() {
         </section>
       </main>
 
-      <LandingFooter />
+      <LandingFooter availableDemoSlugs={availableDemoSlugs} />
     </div>
   );
 }

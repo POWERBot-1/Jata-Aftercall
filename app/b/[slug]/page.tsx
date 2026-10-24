@@ -13,6 +13,8 @@ import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
 import { buildDemoShowcase } from "@/lib/demoShowcase";
+import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
+import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,12 @@ const getBusiness = requestCache(async (slug: string) => {
   return prisma.business.findUnique({
     where: { slug },
     include: {
+      owner: { select: { email: true } },
+      payments: {
+        where: { NOT: { reference: { startsWith: DEMO_PAYMENT_PREFIX } } },
+        select: { reference: true },
+        take: 1,
+      },
       services: { orderBy: { sortOrder: "asc" } },
       offer: true,
       subscription: true,
@@ -39,6 +47,15 @@ function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>
     ownerId: business.ownerId,
     ownerMemberIds: business.members.filter((member) => member.role === "OWNER").map((member) => member.userId),
   };
+}
+
+function verifiedDemoFixture(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>) {
+  const verified = isVerifiedDemoRecord({
+    slug: business.slug,
+    ownerEmail: business.owner?.email,
+    paymentReferences: business.payments?.map((payment) => payment.reference) ?? [],
+  });
+  return verified ? DEMO_BUSINESSES.find((demo) => demo.slug === business.slug) : undefined;
 }
 
 async function viewerFromSessionUncached(): Promise<PublicViewer> {
@@ -99,7 +116,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (decision === "public") await classicPageExtras(business.id);
 
   const title = `${business.name} | ${business.location || business.category}`;
+  const demoFixture = verifiedDemoFixture(business);
   const description =
+    demoFixture?.description ||
     business.description ||
     `${business.name} — ${business.category} in ${business.location || "Kenya"}. WhatsApp, call, directions, services & offers.`;
   return {
@@ -177,19 +196,53 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     aiFrontDeskLive = extras.aiFrontDeskLive;
   }
 
-  // The four documented demo businesses get one cinematic, illustrative band at the top of
-  // their page. It is built only for a public decision on a demo slug and only when the page
-  // actually lists services, so a customer's own page and an empty demo page are untouched.
-  const showcase = buildDemoShowcase({
-    slug: business.slug,
-    decision,
-    business: { name: business.name, category: business.category, location: business.location },
-    services: business.services,
-    offerTitle: business.offer?.title ?? null,
-  });
+  const demoFixture = verifiedDemoFixture(business);
+  const isDemoBusiness = Boolean(demoFixture);
+  const isPropertyDemo = demoFixture?.slug === "john-kamau-properties";
+  const activeServices = business.services.filter(
+    (service) => service.isActive === true && Boolean(service.title?.trim()),
+  );
+  const displayedServices = demoFixture
+    ? activeServices.map((service) => {
+        const sample = demoFixture.services.find((entry) => entry.title === service.title);
+        return {
+          ...service,
+          description:
+            sample?.description ??
+            (isPropertyDemo
+              ? "Fictional property category only; this is not an available listing."
+              : "Fictional sample service entry; details and prices are examples only."),
+        };
+      })
+    : activeServices;
+  const currentOffer = isCurrentPublicOffer(business.offer) ? business.offer : null;
+  const demoOffer =
+    demoFixture && !isPropertyDemo && currentOffer
+      ? { title: demoFixture.offer.title, subtitle: demoFixture.offer.subtitle }
+      : null;
+  const displayedOffer = demoFixture ? demoOffer : currentOffer;
+
+  // The showcase requires both the verified seed identity and a public route with active services.
+  // Its sample offer text comes from the fixture, never arbitrary persisted wording.
+  const showcase = demoFixture
+    ? buildDemoShowcase({
+        slug: business.slug,
+        decision,
+        isVerifiedDemo: true,
+        business: { name: business.name, category: business.category, location: business.location },
+        services: displayedServices,
+        offer: business.offer,
+      })
+    : null;
 
   return (
     <>
+      {isDemoBusiness ? (
+        <p role="note" className="bg-amber-100 px-4 py-2 text-center text-xs font-semibold text-amber-950">
+          Fictional demo page. Names, contact details, services, offers and prices are synthetic examples — not a live
+          business or current offer, quote, property listing or availability.
+        </p>
+      ) : null}
       {showcase ? <DemoShowcaseBand {...showcase} /> : null}
       {decision === "preview" && (
         <div className="bg-zinc-900 py-2 text-center text-xs font-semibold text-white">Draft preview. Only you can see this unpublished page.</div>
@@ -210,17 +263,18 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
           location: business.location,
           lat: business.lat,
           lng: business.lng,
-          description: business.description,
+          description: demoFixture?.description ?? business.description,
           theme: business.theme,
           aftercallMsg: business.aftercallMsg,
           openingHours: business.openingHours,
           socialLinks: business.socialLinks,
         }}
-        services={business.services}
-        offer={business.offer}
+        services={displayedServices}
+        offer={displayedOffer}
         theme={theme}
         referralHref={referralHref}
         aiFrontDeskLive={aiFrontDeskLive}
+        demoPage={isDemoBusiness}
       />
     </>
   );

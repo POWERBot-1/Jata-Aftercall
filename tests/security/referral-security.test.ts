@@ -43,7 +43,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/analytics", () => ({
-  EVENT_TYPES: ["PAGE_VIEW", "WHATSAPP_CLICK", "CALL_CLICK", "DIRECTION_CLICK", "SHARE_CLICK", "SERVICE_CLICK"],
+  EVENT_TYPES: ["PAGE_VIEW", "WHATSAPP_CLICK", "CALL_CLICK", "DIRECTIONS_CLICK", "SHARE_CLICK", "SERVICE_CLICK"],
   recordEvent: async (params: any) => {
     store.events.push(params);
     return { id: "event" };

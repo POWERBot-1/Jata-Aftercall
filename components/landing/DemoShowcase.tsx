@@ -6,8 +6,8 @@
  * Four example businesses, one panel at a time. Interaction is deliberately plain:
  *   • Tabs follow the WAI-ARIA tabs pattern — roving focus with Arrow/Home/End, and a real button
  *     per tab, so it works with a screen reader, a keyboard and a thumb.
- *   • Every panel links to the live demo page (`/b/<slug>`), which is the existing, real
- *     experience. Nothing here starts a transaction; the demo pages take no payments.
+ *   • A business-page link is shown only for a published ACTIVE demo row with active services;
+ *     fallback examples remain non-linkable. Nothing here starts a transaction.
  *   • Images are lazy-loaded except nothing is forced, so a slow connection only fetches the
  *     panel the visitor actually opens.
  *   • Panels are hidden with the `hidden` attribute rather than unmounted, so switching is instant
@@ -46,11 +46,11 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
           <div>
             <p className="lp-kicker">Demo businesses</p>
             <h2 id="demo-title" className="lp-h2">
-              Four real pages. Four different businesses.
+              Four fictional page examples. Four business types.
             </h2>
             <p className="lp-lede">
-              Open any demo and use it as a customer would — the WhatsApp button, the offer, the services and the
-              map all work. Each page states plainly that it is an example.
+              Explore the page layouts and sample actions. Names, contact details, services, offers and prices are
+              fictional examples — not live businesses, current listings, quotes or availability.
             </p>
           </div>
           <p className="lp-demo__hint" aria-hidden="true">Pick a business to preview →</p>
@@ -89,6 +89,7 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
               className="lp-demo__panel"
               data-motion={card.motion}
               data-price-source={card.source}
+              data-route-available={card.routeAvailable ? "true" : "false"}
             >
               <figure className="lp-demo__media">
                 <picture>
@@ -137,7 +138,7 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
 
                 {card.offer ? (
                   <p className="lp-demo__offer">
-                    <span className="lp-demo__offer-label">Offer on the page</span>
+                    <span className="lp-demo__offer-label">Sample offer · fictional, not current</span>
                     <span className="lp-demo__offer-title">{card.offer.title}</span>
                     {card.offer.subtitle ? <span className="lp-demo__offer-sub">{card.offer.subtitle}</span> : null}
                   </p>
@@ -146,40 +147,51 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
                 <ul className="lp-demo__services" aria-label={`Services shown on ${card.name}`}>
                   {card.services.map((service) => (
                     <li key={service.title}>
-                      <Link href={`/b/${card.slug}#services`} className="lp-demo__service">
-                        <span className="lp-demo__service-title">{service.title}</span>
-                        <span className="lp-demo__service-price">{service.priceLabel}</span>
-                      </Link>
+                      {card.routeAvailable ? (
+                        <Link href={`/b/${card.slug}#services`} className="lp-demo__service">
+                          <span className="lp-demo__service-title">{service.title}</span>
+                          <span className="lp-demo__service-price">{service.priceLabel}</span>
+                        </Link>
+                      ) : (
+                        <span className="lp-demo__service" aria-disabled="true">
+                          <span className="lp-demo__service-title">{service.title}</span>
+                          <span className="lp-demo__service-price">{service.priceLabel}</span>
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
 
                 <div className="lp-demo__actions">
-                  <Link href={`/b/${card.slug}`} className="lp-btn lp-btn--primary">
-                    Open the demo <span aria-hidden="true">→</span>
-                  </Link>
+                  {card.routeAvailable ? (
+                    <Link href={`/b/${card.slug}`} className="lp-btn lp-btn--primary">
+                      Open the demo <span aria-hidden="true">→</span>
+                    </Link>
+                  ) : null}
                   <Link href="/register" className="lp-btn lp-btn--ghost">
                     Build yours
                   </Link>
                 </div>
-                <p className="lp-demo__note">
-                  {card.source === "live"
-                    ? "Prices shown are the ones this demo page currently displays. Example business — no real customer data."
-                    : "Prices shown come from the documented demo content for this example business — no real customer data."}
+                <p className="lp-demo__note" role={card.routeAvailable ? undefined : "status"}>
+                  Fictional demo content: contact details, service entries, offers and prices are sample values only,
+                  not current business information. {card.routeAvailable ? "" : "This demo page is not currently available to open."}
                 </p>
               </div>
             </article>
           ))}
         </div>
 
-        <ul className="lp-demo__index">
-          {cards.map((card) => (
+        <ul className="lp-demo__index" aria-label="Available demo pages">
+          {cards.filter((card) => card.routeAvailable).map((card) => (
             <li key={card.slug}>
               <Link href={`/b/${card.slug}`} className="lp-demo__index-link">
-                /b/{card.slug}
+                Open {card.name}
               </Link>
             </li>
           ))}
+          {cards.every((card) => !card.routeAvailable) ? (
+            <li>No demo page is currently available to open.</li>
+          ) : null}
         </ul>
       </div>
     </section>

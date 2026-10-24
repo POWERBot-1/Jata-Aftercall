@@ -23,6 +23,8 @@ vi.mock("@/lib/db", () => ({
         if (!b) return null;
         return {
           ...structuredClone(b),
+          owner: { email: b.ownerEmail },
+          payments: structuredClone(b.payments ?? []),
           services: h.tables.service.filter((s) => s.businessId === b.id).sort((a, c) => a.sortOrder - c.sortOrder),
           offer: h.tables.offer.find((o) => o.businessId === b.id) ?? null,
           subscription: h.tables.subscription.find((s) => s.businessId === b.id) ?? null,
@@ -38,7 +40,7 @@ vi.mock("@/lib/referral", () => ({ ensureReferralCode: async () => null, referra
 vi.mock("@/lib/ai-entitlement", () => ({ getAIPackageStatus: async () => ({ entitled: false }) }));
 
 import PublicBusinessPage from "@/app/b/[slug]/page";
-import { DEMO_BUSINESSES, DEMO_SLUGS } from "@/lib/demoData";
+import { DEMO_BUSINESSES, DEMO_OWNER_EMAIL, DEMO_SLUGS } from "@/lib/demoData";
 import { DEMO_SHOWCASES, buildDemoShowcase, demoShowcaseForSlug } from "@/lib/demoShowcase";
 
 const BASE = { phone: null, whatsapp: null, location: null, description: null, theme: "clean", aftercallMsg: null, openingHours: null };
@@ -53,6 +55,8 @@ const seedDemo = (slug: string, options: { published?: boolean; services?: boole
     category: demo.category,
     location: demo.location,
     ownerId: "owner-1",
+    ownerEmail: DEMO_OWNER_EMAIL,
+    payments: [{ reference: `demo-${slug}` }],
     isPublished: options.published ?? true,
     status: "ACTIVE",
     ...BASE,
@@ -93,22 +97,66 @@ describe("demo showcase configuration", () => {
   });
 
   it("builds nothing for a draft preview, an empty page or another tenant", () => {
-    const services = [{ id: "s1", title: "Pilau", priceLabel: "KES 650" }];
-    expect(buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "preview", business: { name: "N", category: "Restaurant" }, services })).toBeNull();
-    expect(buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "public", business: { name: "N", category: "Restaurant" }, services: [] })).toBeNull();
-    expect(buildDemoShowcase({ slug: "real-salon", decision: "public", business: { name: "R", category: "Beauty" }, services })).toBeNull();
+    const services = [{ id: "s1", title: "Pilau", priceLabel: "KES 650", isActive: true }];
+    expect(buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "preview", isVerifiedDemo: true, business: { name: "N", category: "Restaurant" }, services })).toBeNull();
+    expect(buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "public", isVerifiedDemo: true, business: { name: "N", category: "Restaurant" }, services: [] })).toBeNull();
+    expect(buildDemoShowcase({ slug: "real-salon", decision: "public", isVerifiedDemo: true, business: { name: "R", category: "Beauty" }, services })).toBeNull();
+    expect(buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "public", isVerifiedDemo: false, business: { name: "Real Kitchen", category: "Restaurant" }, services })).toBeNull();
   });
 
-  it("caps the service list and keeps the page's own prices", () => {
-    const services = Array.from({ length: 7 }, (_, index) => ({ id: `s${index}`, title: `Service ${index}`, priceLabel: `KES ${100 + index}` }));
-    const built = buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "public", business: { name: "Nyumbani Kitchen", category: "Restaurant" }, services })!;
+  it("caps active services and keeps the page's own sample prices", () => {
+    const services = Array.from({ length: 7 }, (_, index) => ({ id: `s${index}`, title: `Service ${index}`, priceLabel: `KES ${100 + index}`, isActive: true }));
+    const built = buildDemoShowcase({ slug: "nyumbani-kitchen", decision: "public", isVerifiedDemo: true, business: { name: "Nyumbani Kitchen", category: "Restaurant" }, services })!;
     expect(built.services).toHaveLength(4);
     expect(built.services.map((service) => service.priceLabel)).toEqual(["KES 100", "KES 101", "KES 102", "KES 103"]);
+  });
+
+  it("excludes inactive services and hides inactive or expired offers using Offer schema fields", () => {
+    const now = new Date("2026-10-24T12:00:00.000Z");
+    const services = [
+      { id: "active", title: "Active service", isActive: true },
+      { id: "inactive", title: "Inactive service", isActive: false },
+    ];
+    const offer = { title: "Stale database wording", isActive: true, validUntil: new Date("2026-10-23T23:59:59.000Z") };
+    const built = buildDemoShowcase({
+      slug: "nyumbani-kitchen",
+      decision: "public",
+      isVerifiedDemo: true,
+      business: { name: "Nyumbani Kitchen", category: "Restaurant" },
+      services,
+      offer,
+    }, now)!;
+    expect(built.services.map((service) => service.title)).toEqual(["Active service"]);
+    expect(built.offerTitle).toBeNull();
+
+    const current = buildDemoShowcase({
+      slug: "nyumbani-kitchen",
+      decision: "public",
+      isVerifiedDemo: true,
+      business: { name: "Nyumbani Kitchen", category: "Restaurant" },
+      services,
+      offer: { title: "Untrusted current text", isActive: true, validUntil: new Date("2026-10-25T00:00:00.000Z") },
+    }, now)!;
+    expect(current.offerTitle).toBe(DEMO_BUSINESSES[0].offer.title);
+    expect(current.offerTitle).not.toBe("Untrusted current text");
+  });
+
+  it("never shows a property offer as if it were a current listing", () => {
+    const built = buildDemoShowcase({
+      slug: "john-kamau-properties",
+      decision: "public",
+      isVerifiedDemo: true,
+      business: { name: "John Kamau Properties", category: "Real Estate" },
+      services: [{ id: "sample-rental", title: "1BR Rentals", isActive: true }],
+      offer: { title: "Viewing this weekend", isActive: true, validUntil: null },
+    })!;
+    expect(built.offerTitle).toBeNull();
+    expect(built.lede).not.toMatch(/viewing this weekend|this weekend/i);
   });
 });
 
 describe("the band on a public demo page", () => {
-  it("renders the story, the real services and the existing on-page actions", async () => {
+  it("renders the fictional story, active sample services and existing on-page actions", async () => {
     const html = await render("nyumbani-kitchen");
     const config = DEMO_SHOWCASES["nyumbani-kitchen"];
 
@@ -116,8 +164,10 @@ describe("the band on a public demo page", () => {
     expect(html).toContain('data-motion="steam"');
     expect(html).toContain(config.headline);
     expect(html).toContain("Illustrative demo");
+    expect(html).toContain("Fictional demo only");
+    expect(html).toContain("Fictional demo page");
     expect(html).toContain("Illustrative photograph");
-    // Real services with the page's own price labels.
+    // Active sample services with their fixture price labels.
     for (const service of DEMO_BUSINESSES[0].services) {
       expect(html).toContain(service.title);
       expect(html).toContain(service.priceLabel);
@@ -140,6 +190,28 @@ describe("the band on a public demo page", () => {
     const property = await render("john-kamau-properties");
     expect(property).toContain('data-motion="tour"');
     expect(property).toContain("/landing/john-kamau-properties-interior");
+    expect(property).toContain("Fictional property-page demonstration");
+    expect(property).not.toMatch(/verified listings|no brokers|viewing this weekend/i);
+    expect(property).not.toContain(DEMO_BUSINESSES.find((demo) => demo.slug === "john-kamau-properties")!.offer.title);
+  });
+
+  it("filters inactive demo services and an inactive or expired demo offer from the public route", async () => {
+    const inactiveServices = h.tables.service.filter((row) => row.businessId === "biz-nyumbani-kitchen");
+    inactiveServices.forEach((service) => { service.isActive = false; });
+    const offer = h.tables.offer.find((row) => row.businessId === "biz-nyumbani-kitchen")!;
+    offer.isActive = false;
+    offer.title = "Stale inactive offer";
+    const html = await render("nyumbani-kitchen");
+    for (const service of inactiveServices) expect(html).not.toContain(service.title);
+    expect(html).not.toContain("Stale inactive offer");
+    expect(html).toContain("No services listed yet");
+    expect(html).not.toContain("jata-showcase");
+
+    offer.isActive = true;
+    offer.validUntil = new Date(Date.now() - 1000);
+    offer.title = "Stale expired offer";
+    const expired = await render("nyumbani-kitchen");
+    expect(expired).not.toContain("Stale expired offer");
   });
 
   it("never appears on a customer's own business page", async () => {
@@ -149,6 +221,43 @@ describe("the band on a public demo page", () => {
     expect(html).toContain("Real Salon");
     expect(html).not.toContain("jata-showcase");
     expect(html).not.toContain("Illustrative");
+  });
+
+  it("does not mark an authorized real owner as fictional when its slug matches a showcase slug", async () => {
+    const business = h.tables.business.find((row) => row.slug === "nyumbani-kitchen")!;
+    Object.assign(business, {
+      name: "Authorized Kitchen",
+      ownerEmail: "real-owner@example.com",
+      payments: [{ reference: "PSK_real_payment" }],
+    });
+    h.tables.service[0].title = "Owner menu item";
+    h.tables.service[0].priceLabel = "KES 999";
+    const html = await render("nyumbani-kitchen");
+    expect(html).toContain("Authorized Kitchen");
+    expect(html).toContain("Owner menu item");
+    expect(html).not.toContain("Fictional demo page");
+    expect(html).not.toContain("Illustrative demo");
+    expect(html).not.toContain("Sample offer · fictional");
+  });
+
+  it("filters inactive services and inactive or expired offers on a real business page", async () => {
+    h.tables.business.push({ id: "biz-real", slug: "real-salon", name: "Real Salon", category: "Beauty", ownerId: "owner-real", isPublished: true, status: "ACTIVE", ...BASE });
+    h.tables.service.push(
+      { id: "real-active", businessId: "biz-real", title: "Visible service", sortOrder: 0, isActive: true },
+      { id: "real-inactive", businessId: "biz-real", title: "Hidden service", sortOrder: 1, isActive: false },
+    );
+    h.tables.offer.push({ id: "real-offer", businessId: "biz-real", title: "Inactive offer", subtitle: null, isActive: false, validUntil: null });
+    const inactive = await render("real-salon");
+    expect(inactive).toContain("Visible service");
+    expect(inactive).not.toContain("Hidden service");
+    expect(inactive).not.toContain("Inactive offer");
+
+    const offer = h.tables.offer.find((row) => row.businessId === "biz-real")!;
+    offer.isActive = true;
+    offer.validUntil = new Date(Date.now() - 1000);
+    offer.title = "Expired offer";
+    const expired = await render("real-salon");
+    expect(expired).not.toContain("Expired offer");
   });
 
   it("does not appear on an empty demo page, which keeps its honest empty state", async () => {

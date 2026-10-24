@@ -32,8 +32,9 @@ const DEMO_NAMES: Record<string, string> = {
   "john-kamau-properties": "John Kamau Properties",
 };
 
-export function LandingFooter() {
+export function LandingFooter({ availableDemoSlugs }: { availableDemoSlugs: readonly string[] }) {
   const year = nairobiCalendarDay().slice(0, 4);
+  const available = new Set(LANDING_DEMO_SLUGS.filter((slug) => availableDemoSlugs.includes(slug)));
   return (
     <footer className="lp-footer">
       <div className="lp-wrap">
@@ -56,9 +57,10 @@ export function LandingFooter() {
           </nav>
           <nav className="lp-footer__col" aria-label="Demo businesses">
             <p className="lp-footer__heading">Demo businesses</p>
-            {LANDING_DEMO_SLUGS.map((slug) => (
+            {LANDING_DEMO_SLUGS.filter((slug) => available.has(slug)).map((slug) => (
               <Link key={slug} href={`/b/${slug}`}>{DEMO_NAMES[slug] ?? slug}</Link>
             ))}
+            {available.size === 0 ? <span>No demo page is currently available to open.</span> : null}
           </nav>
           <nav className="lp-footer__col" aria-label="Account">
             <p className="lp-footer__heading">Account</p>

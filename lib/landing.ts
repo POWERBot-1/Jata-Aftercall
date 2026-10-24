@@ -8,14 +8,14 @@
  * seeded from (`lib/demoData.ts`).
  *
  * Accuracy rules followed here:
- *   • No testimonials, ratings, customer counts, revenue or "X× more sales" claims — the product
- *     has no such verified data, so none is shown.
- *   • No invented prices. Plan prices come from the database (`lib/pricing.ts`); demo prices come
- *     from the demo business rows or, when those cannot be read, from the documented demo seed.
+ *   • No testimonials, ratings, customer counts, revenue, outcome or universal analytics claims.
+ *   • Plan prices come from the database (`lib/pricing.ts`); demo prices are visibly labelled as
+ *     fictional examples and never presented as current listings, quotes or promotions.
  *   • Imagery is illustrative and labelled as such everywhere it appears.
  */
 
 import { DEMO_BUSINESSES, type DemoBusiness } from "./demoData";
+import { activePublicServices, isCurrentPublicOffer } from "./demoContent";
 import { formatKES } from "./format";
 
 /* ── Benefit storytelling ────────────────────────────────────────────────── */
@@ -27,17 +27,17 @@ export const LANDING_STORY: readonly LandingStoryAct[] = [
   {
     step: "01",
     title: "A customer reaches out",
-    body: "They call, WhatsApp or walk past. Most small businesses lose that moment because there is nothing to send them next.",
+    body: "They call, send a WhatsApp or visit. A simple page can put your business details, services and contact options in one place.",
   },
   {
     step: "02",
-    title: "Your page answers instantly",
-    body: "Send one link. It opens fast on any Android phone with your offer, services, prices, directions and one-tap WhatsApp and Call.",
+    title: "Share one page",
+    body: "Share a mobile-friendly link with your business details, services, prices, directions and WhatsApp and Call actions.",
   },
   {
     step: "03",
-    title: "You keep the sale",
-    body: "Every tap is counted for you in the dashboard, so you can see what customers actually look at — and adjust your offer.",
+    title: "Check selected activity",
+    body: "Your dashboard can show page views and selected actions such as WhatsApp, Call, Directions, Share and service clicks. Some events may not be recorded, so not every tap is guaranteed to appear.",
   },
 ];
 
@@ -54,12 +54,12 @@ export type LandingIconKey =
   | "bolt";
 
 export const LANDING_BENEFITS: readonly LandingBenefit[] = [
-  { icon: "phone", title: "WhatsApp & Call in one tap", body: "Large, thumb-sized buttons above the fold. No forms, no menus, no waiting for a reply." },
-  { icon: "tag", title: "Today's offer, always visible", body: "Put the deal you are running today at the top of the page and change it whenever you like." },
-  { icon: "cart", title: "Services and prices", body: "A clean list of what you sell with the price you charge, so customers arrive already knowing." },
-  { icon: "map", title: "Directions that open Maps", body: "One tap to the map pin — useful for shops, salons, garages and viewings." },
-  { icon: "chart", title: "Simple, private analytics", body: "Page views and taps on WhatsApp, Call, Directions, Share and services. No customer accounts, no tracking pixels." },
-  { icon: "bolt", title: "Built for Kenyan phones", body: "Mobile-first, light on data and usable without installing an app." },
+  { icon: "phone", title: "WhatsApp & Call in one tap", body: "Large, thumb-sized contact buttons above the fold. Customers can reach you without filling in a form." },
+  { icon: "tag", title: "Highlight an offer", body: "Add an offer to your page and update or deactivate it when its details change." },
+  { icon: "cart", title: "Services and prices", body: "List your services and the prices you choose to share." },
+  { icon: "map", title: "Directions that open Maps", body: "Share a location on your page so customers can open directions in Maps." },
+  { icon: "chart", title: "Selected activity in your dashboard", body: "See recorded page views and selected WhatsApp, Call, Directions, Share and service-click events. Some events may not be recorded; not every tap is guaranteed to appear." },
+  { icon: "bolt", title: "Built for Kenyan phones", body: "A mobile-friendly page customers can open in their browser without installing an app." },
 ];
 
 /* ── How it works ────────────────────────────────────────────────────────── */
@@ -86,12 +86,12 @@ export const PLAN_INCLUDES: Record<string, readonly string[]> = {
     "Your public page at /b/your-business",
     "WhatsApp, Call, Directions & Share",
     "Services, offer and opening hours",
-    "Views and tap analytics in your dashboard",
+    "Recorded page views and selected action counts in your dashboard",
   ],
   ANNUAL: [
     "Everything in the monthly plan",
     "One payment for a full year",
-    "Same dashboard, same page, same support",
+    "The same dashboard and public page",
   ],
   AI_BUSINESS_FRONT_DESK: [
     "An AI front desk for your business page",
@@ -154,9 +154,9 @@ export const LANDING_FAQ: readonly LandingFaq[] = [
       "Through Paystack, with M-Pesa or a card. Your card details are never stored by JATA AFTERCALL, and your plan starts only after the payment is confirmed.",
   },
   {
-    question: "What does the analytics show?",
+    question: "What does analytics show?",
     answer:
-      "Page views and taps on WhatsApp, Call, Directions, Share and services, counted per business in your own dashboard. There are no customer accounts and no third-party tracking pixels on your page.",
+      "Your dashboard can show recorded page views and selected WhatsApp, Call, Directions, Share and service-click events. Some events may not be recorded, so not every tap is guaranteed to appear. No customer accounts or third-party tracking pixels are used on your page.",
   },
 ];
 
@@ -176,11 +176,13 @@ export type LandingDemoCard = {
   story: string;
   /** Motion style applied to the panel media. */
   motion: "steam" | "salon" | "drive" | "tour";
-  /** Real, currently-listed services (name + the exact price label shown on the page). */
+  /** Active service rows or visibly labelled fictional sample entries. */
   services: { title: string; priceLabel: string }[];
   offer: { title: string; subtitle: string } | null;
-  /** "live" when the rows came from the published demo page; "example" for documented seed copy. */
+  /** "live" means values came from an eligible published demo row; the business remains fictional. */
   source: "live" | "example";
+  /** True only for the verified seed demo with a published ACTIVE route and active services. */
+  routeAvailable: boolean;
   /** Optional second frame (used by the property story to move from the building to the home). */
   inset?: { image: string; alt: string };
 };
@@ -191,37 +193,37 @@ const DEMO_PRESENTATION: Record<
 > = {
   "nyumbani-kitchen": {
     image: "/landing/nyumbani-kitchen",
-    kicker: "Restaurant · Kilimani",
-    headline: "Smell the pilau before you arrive.",
+    kicker: "Restaurant page example",
+    headline: "A sample food page, from menu to contact.",
     story:
-      "Preparation, plated dishes and the menu in one page: what is cooking today, what it costs, and a one-tap WhatsApp to reserve a plate.",
+      "Illustrative food photography alongside sample menu entries and prices. This fictional example is not today's menu or a live offer.",
     motion: "steam",
     altScene: "A plate of Kenyan pilau with beef, kachumbari and folded chapati on a wooden table",
   },
   "marys-beauty-studio": {
     image: "/landing/marys-beauty-studio",
-    kicker: "Beauty · Kitengela",
-    headline: "The chair is warm. The price is clear.",
+    kicker: "Beauty page example",
+    headline: "A beauty page with sample services and prices.",
     story:
-      "A stylist at work, the services on offer and what each one costs — so a client books the braids, nails or makeup they actually want.",
+      "Illustrative salon photography alongside fictional braiding, nail and makeup entries; the details and prices are examples only.",
     motion: "salon",
     altScene: "A stylist braiding a seated client's hair in a bright salon",
   },
   "kamau-auto-care": {
     image: "/landing/kamau-auto-care",
-    kicker: "Mechanic · Westlands",
-    headline: "Back on the road, with the price agreed first.",
+    kicker: "Auto-care page example",
+    headline: "An example auto-care page layout.",
     story:
-      "Diagnostics, oil and brakes listed with honest fundi pricing. Call or WhatsApp from the roadside and know the cost before the car is lifted.",
+      "Sample diagnostics, oil-change and brake entries with illustrative photography; these details are not a current quote.",
     motion: "drive",
     altScene: "A silver sedan on a Nairobi road at dusk with headlights on",
   },
   "john-kamau-properties": {
     image: "/landing/john-kamau-properties",
-    kicker: "Real estate · Kiambu",
-    headline: "See the home before the viewing.",
+    kicker: "Property page example",
+    headline: "A fictional property-page layout.",
     story:
-      "Rentals and plots presented properly, with the area, the price range and a direct line to the person who can actually show you around.",
+      "Sample rental and land categories only. They are not property listings, availability statements or viewing details.",
     motion: "tour",
     altScene: "A modern apartment building in Kiambu at golden hour",
   },
@@ -234,7 +236,7 @@ function priceLabelOf(service: DemoBusiness["services"][number]): string {
   return service.priceLabel || `From ${formatKES(service.priceFrom)}`;
 }
 
-function cardFromDemo(demo: DemoBusiness, source: LandingDemoCard["source"]): LandingDemoCard {
+function cardFromDemo(demo: DemoBusiness, source: LandingDemoCard["source"], routeAvailable = false): LandingDemoCard {
   const presentation = DEMO_PRESENTATION[demo.slug];
   const inset =
     demo.slug === "john-kamau-properties"
@@ -255,8 +257,9 @@ function cardFromDemo(demo: DemoBusiness, source: LandingDemoCard["source"]): La
     story: presentation.story,
     motion: presentation.motion,
     services: demo.services.map((service) => ({ title: service.title, priceLabel: priceLabelOf(service) })),
-    offer: demo.offer,
+    offer: demo.slug === "john-kamau-properties" ? null : demo.offer,
     source,
+    routeAvailable,
     inset,
   };
 }
@@ -266,26 +269,36 @@ export type LandingDemoRow = {
   name: string;
   category: string | null;
   location: string | null;
-  services: { title: string; priceLabel: string | null; priceFrom: number | null; isActive?: boolean | null }[];
-  offer: { title: string; subtitle: string | null } | null;
+  isPublished: boolean;
+  status: string;
+  /** Verified from the dedicated demo owner's identity and absence of real payment references. */
+  isVerifiedDemo: boolean;
+  services: { title: string; priceLabel: string | null; priceFrom: number | null; isActive: boolean }[];
+  offer: { title: string; subtitle: string | null; isActive: boolean; validUntil: Date | null } | null;
 };
 
 /**
- * Builds the four demo cards.
+ * Builds the four fictional demo cards in their fixed order.
  *
- * A published demo row that still lists services is shown as `live`, using the price labels that
- * the demo page itself renders. When the row is missing, unpublished, has no services, or the read
- * failed, the documented demo content is shown instead and marked `example` — never a made-up
- * price. The order is always the fixed demo order.
+ * A route is linked only when the row is verified as a seeded demo, published, ACTIVE and has at
+ * least one active service. A matching slug alone is not sufficient: other cards use labelled
+ * fixtures and never link to a real owner's page. Offer visibility uses the authoritative
+ * `isActive` and `validUntil` fields; displayed offer copy comes from the fictional fixture.
  */
-export function buildLandingDemoCards(rows: readonly LandingDemoRow[] | null | undefined): LandingDemoCard[] {
+export function buildLandingDemoCards(
+  rows: readonly LandingDemoRow[] | null | undefined,
+  now: Date = new Date(),
+): LandingDemoCard[] {
   const bySlug = new Map((rows ?? []).map((row) => [row.slug, row]));
   return DEMO_BUSINESSES.map((demo) => {
     const row = bySlug.get(demo.slug);
-    const services = (row?.services ?? []).filter((service) => service.isActive !== false);
-    if (!row || services.length === 0) return cardFromDemo(demo, "example");
+    const services = activePublicServices(row?.services);
+    const routeAvailable = Boolean(row?.isVerifiedDemo && row.isPublished && row.status === "ACTIVE" && services.length > 0);
+    if (!row || !routeAvailable) return cardFromDemo(demo, "example");
+
+    const offerIsCurrent = demo.slug !== "john-kamau-properties" && isCurrentPublicOffer(row.offer, now);
     return {
-      ...cardFromDemo(demo, "live"),
+      ...cardFromDemo(demo, "live", true),
       name: row.name || demo.name,
       category: row.category || demo.category,
       location: row.location || demo.location,
@@ -293,7 +306,7 @@ export function buildLandingDemoCards(rows: readonly LandingDemoRow[] | null | u
         title: service.title,
         priceLabel: service.priceLabel || (service.priceFrom ? `From ${formatKES(service.priceFrom)}` : "Ask for a price"),
       })),
-      offer: row.offer ? { title: row.offer.title, subtitle: row.offer.subtitle ?? "" } : null,
+      offer: offerIsCurrent ? demo.offer : null,
     };
   });
 }

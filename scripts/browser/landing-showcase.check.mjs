@@ -10,8 +10,8 @@
  * What it proves, in a real browser at real phone and desktop widths:
  *   1. No horizontal overflow at 320–1440px (the acceptance test in the brief).
  *   2. Every photograph actually decodes, and none is served from a third-party host.
- *   3. The demo showcase switches on click AND on ArrowRight/Home with the keyboard, and the
- *      visible panel is the one the tab says is selected.
+ *   3. The demo showcase switches on click AND on ArrowRight/Home with the keyboard, and only
+ *      links to a verified seeded-demo route that is published, active and has active services.
  *   4. `prefers-reduced-motion: reduce` removes every animation, and the content stays visible.
  *   5. Navigation works with the mobile menu closed and open, and the primary CTA is reachable.
  *
@@ -120,12 +120,24 @@ try {
   /* ── 2. Demo showcase interaction ───────────────────────────────────────── */
   if (runHome) {
     const page = await browser.newPage();
+    const interactionErrors = [];
+    page.on("pageerror", (error) => interactionErrors.push(String(error.message || error)));
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(`${base}/`, { waitUntil: "networkidle2", timeout: 120000 });
     await page.evaluate(() => document.querySelector("#demo")?.scrollIntoView({ block: "center" }));
 
     const tabs = await page.$$('[role="tab"]');
     check("showcase renders one tab per demo business", tabs.length === 4, `${tabs.length} tabs`);
+    const destinations = await page.evaluate(() => Array.from(document.querySelectorAll(".lp-demo__panel")).map((panel) => ({
+      slug: panel.id.replace("demo-panel-", ""),
+      available: panel.getAttribute("data-route-available") === "true",
+      href: panel.querySelector('.lp-demo__actions a[href^="/b/"]')?.getAttribute("href") ?? null,
+    })));
+    check(
+      "all demo cards link only to server-marked available destinations",
+      destinations.length === 4 && destinations.every(({ slug, available, href }) => available ? href === `/b/${slug}` : href === null),
+      JSON.stringify(destinations),
+    );
 
     const panelFor = (slug) =>
       page.evaluate((target) => {
@@ -134,6 +146,7 @@ try {
         return {
           hidden: panel.hasAttribute("hidden"),
           services: panel.querySelectorAll(".lp-demo__service").length,
+          routeAvailable: panel.getAttribute("data-route-available") === "true",
           link: panel.querySelector('.lp-demo__actions a[href^="/b/"]')?.getAttribute("href") ?? null,
           alt: panel.querySelector("img")?.getAttribute("alt") ?? "",
           height: Math.round(panel.getBoundingClientRect().height),
@@ -142,10 +155,26 @@ try {
 
     const first = await panelFor("nyumbani-kitchen");
     check(
-      "first demo panel is visible with real services and a link to the demo page",
-      Boolean(first && !first.hidden && first.services >= 3 && first.link === "/b/nyumbani-kitchen"),
+      "first fictional demo panel is visible with sample services",
+      Boolean(first && !first.hidden && first.services >= 3),
       JSON.stringify(first),
     );
+    check(
+      "demo page link follows verified-demo and published/active/services eligibility",
+      Boolean(first && (first.routeAvailable ? first.link === "/b/nyumbani-kitchen" : first.link === null)),
+      JSON.stringify(first),
+    );
+    if (first?.routeAvailable && first.link) {
+      const routePage = await browser.newPage();
+      const routeErrors = [];
+      routePage.on("pageerror", (error) => routeErrors.push(String(error.message || error)));
+      const response = await routePage.goto(`${base}${first.link}`, { waitUntil: "networkidle2", timeout: 120000 });
+      check("eligible demo destination responds successfully", response?.status() === 200, `status=${response?.status() ?? "no response"}`);
+      check("eligible demo destination has no page errors", routeErrors.length === 0, routeErrors.join(" | "));
+      await routePage.close();
+    } else {
+      check("fallback demo card does not link to an unavailable route", Boolean(first && first.link === null));
+    }
     check("demo panel photography is labelled illustrative", Boolean(first && first.alt.includes("Illustrative")));
 
     // Dev mode hydrates after paint, so retry the click until the panel actually switches.
@@ -180,7 +209,7 @@ try {
       .catch(() => {});
     check("Home returns to the first demo", Boolean((await panelFor("nyumbani-kitchen")) && !(await panelFor("nyumbani-kitchen")).hidden));
 
-    check("no page errors during interaction", true);
+    check("no uncaught page errors during showcase interactions", interactionErrors.length === 0, interactionErrors.join(" | "));
     await page.close();
   }
 

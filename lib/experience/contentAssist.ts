@@ -140,13 +140,13 @@ const COPY: Record<CategoryKey, CategoryCopy> = {
   },
   realestate: {
     productIntro: [
-      "A well-kept home in a convenient location.",
-      "Bright, spacious and ready to move into.",
-      "Verified listing — no brokers, no surprises.",
+      "Share the property details, price and location you have confirmed.",
+      "Describe the property using details supplied by its owner.",
+      "Include features and availability only after you confirm them.",
     ],
-    serviceIntro: ["Viewings arranged around your schedule.", "We handle the paperwork properly."],
-    taglines: ["Find a place to call home", "Verified homes, honest advice", "Property, handled properly"],
-    benefit: "verified",
+    serviceIntro: ["Share viewing details once availability is confirmed.", "Describe enquiry and paperwork steps accurately."],
+    taglines: ["Property details in one place", "Share a property page", "Find a place to call home"],
+    benefit: "details-first",
   },
   furniture: {
     productIntro: [

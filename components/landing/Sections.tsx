@@ -13,11 +13,11 @@ export function StorySection() {
       <div className="lp-wrap">
         <p className="lp-kicker">The moment after</p>
         <h2 id="product-title" className="lp-h2">
-          A customer reaches out. What they find next decides the sale.
+          Put the next step after a customer interaction in one place.
         </h2>
         <p className="lp-lede">
-          Most small businesses lose the customer in the gap between &ldquo;I saw your post&rdquo; and &ldquo;where do I
-          find you?&rdquo;. JATA AFTERCALL closes that gap with one link that carries everything a customer needs.
+          A customer may see a post and then look for your details or services. JATA AFTERCALL gives you one mobile-friendly
+          page for the business information and contact options you choose to share.
         </p>
 
         <ol className="lp-story">
@@ -37,7 +37,7 @@ export function StorySection() {
                 <span>WhatsApp</span><span aria-hidden="true">·</span>
                 <span>Call</span><span aria-hidden="true">·</span>
                 <span>Directions</span><span aria-hidden="true">·</span>
-                <span>Today&apos;s offer</span><span aria-hidden="true">·</span>
+                <span>Offers</span><span aria-hidden="true">·</span>
                 <span>Services &amp; prices</span><span aria-hidden="true">·</span>
                 <span>Share</span><span aria-hidden="true">·</span>
                 <span>Analytics</span><span aria-hidden="true">·</span>
@@ -56,7 +56,7 @@ export function BenefitsSection() {
       <div className="lp-wrap">
         <p className="lp-kicker lp-kicker--light">What is on the page</p>
         <h2 id="benefits-title" className="lp-h2 lp-h2--light">
-          Everything the customer needs. Nothing they have to hunt for.
+          Business details, services and contact options in one place.
         </h2>
         <div className="lp-benefits">
           {LANDING_BENEFITS.map((benefit) => (

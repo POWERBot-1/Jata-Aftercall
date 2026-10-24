@@ -44,8 +44,8 @@ export function Hero() {
             For Kenyan micro &amp; small businesses
           </p>
           <h1 id="hero-title" className="lp-hero__title">
-            Turn every customer interaction{" "}
-            <span className="lp-hero__accent">into another opportunity to sell.</span>
+            Make the next step after a customer interaction{" "}
+            <span className="lp-hero__accent">easy to find.</span>
           </h1>
           <p className="lp-hero__lede">
             JATA AFTERCALL gives your business a light, mobile-first page for the moment <em>after</em> a customer
@@ -60,7 +60,7 @@ export function Hero() {
               Explore demos
             </a>
           </div>
-          <p className="lp-hero__micro">Create your page in ~5 minutes · Works on any Android phone · Pay with M-Pesa or card</p>
+          <p className="lp-hero__micro">Set up your page · Mobile-friendly · Pay with M-Pesa or card</p>
         </div>
 
         <figure className="lp-phone">
@@ -79,9 +79,9 @@ export function Hero() {
                 <span className="lp-phone__cta">Call</span>
               </div>
               <div className="lp-phone__offer">
-                <p className="lp-phone__offer-label">Today&apos;s offer</p>
-                <p className="lp-phone__offer-title">Braids from KES 1,500</p>
-                <p className="lp-phone__offer-sub">This week only</p>
+                <p className="lp-phone__offer-label">Sample offer · fictional</p>
+                <p className="lp-phone__offer-title">Example braid price — from KES 1,500</p>
+                <p className="lp-phone__offer-sub">Illustrative value only · not current</p>
               </div>
               <div className="lp-phone__rows">
                 <span><span>Braiding</span><span>From KES 1,500</span></span>
@@ -95,8 +95,8 @@ export function Hero() {
             </div>
           </div>
           <figcaption className="lp-phone__caption">
-            Example page — one primary action, prices and offer above the fold.
-            <Link href="/b/marys-beauty-studio" className="lp-phone__caption-link">Open this demo →</Link>
+            Fictional demo page — sample contact details, service entries and prices; no current offer is represented.
+            <a href="#demo" className="lp-phone__caption-link">Explore the examples →</a>
           </figcaption>
         </figure>
       </div>

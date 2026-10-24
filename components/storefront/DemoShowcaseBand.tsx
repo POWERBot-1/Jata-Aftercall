@@ -10,8 +10,8 @@ import { formatKES } from "@/lib/format";
  * by the visitor's reduced-motion setting, a slow device or a blocked stylesheet animation — the
  * band simply becomes a still photograph behind real copy.
  *
- * The image is a photograph of a scene, clearly labelled illustrative; it is never presented as the
- * business's own photography, and the copy below never claims customers, sales or results.
+ * The image is labelled illustrative, and all business details, services, offers and prices are
+ * explicitly identified as fictional samples rather than current business information.
  */
 export function DemoShowcaseBand(props: DemoShowcaseProps) {
   const {
@@ -87,12 +87,12 @@ export function DemoShowcaseBand(props: DemoShowcaseProps) {
 
         {offerTitle ? (
           <p className="jata-showcase__offer">
-            <span className="jata-showcase__offer-label">Today&apos;s offer</span>
+            <span className="jata-showcase__offer-label">Sample offer · fictional, not current</span>
             <span className="jata-showcase__offer-title">{offerTitle}</span>
           </p>
         ) : null}
 
-        <ul className="jata-showcase__services" aria-label={`Services listed on ${businessName}`}>
+        <ul className="jata-showcase__services" aria-label={`Fictional sample services and prices for ${businessName}`}>
           {services.map((service) => (
             <li key={service.id}>
               <a className="jata-showcase__service" href="#services">
@@ -119,7 +119,9 @@ export function DemoShowcaseBand(props: DemoShowcaseProps) {
         </details>
 
         <p className="jata-showcase__meta">
-          {location ? `${location} · ` : ""}Example business. Illustrative photography. No payment is taken on this page.
+          {location ? `Example location: ${location}. ` : ""}Fictional demo only — names, contact details, services,
+          offers and prices are synthetic examples, not current business information or property listings. Illustrative
+          photography. No payment is taken on this page.
         </p>
       </div>
     </section>

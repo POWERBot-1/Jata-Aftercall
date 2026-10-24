@@ -31,14 +31,16 @@ export default async function DemoShowcaseHarness({ searchParams }: { searchPara
     priceLabel: service.priceLabel,
     priceFrom: service.priceFrom,
     category: service.category,
+    isActive: true,
   }));
 
   const showcase = buildDemoShowcase({
     slug: demo.slug,
     decision: "public",
+    isVerifiedDemo: true,
     business: { name: demo.name, category: demo.category, location: demo.location },
     services,
-    offerTitle: demo.offer.title,
+    offer: { title: demo.offer.title, isActive: true, validUntil: null },
   });
 
   return (
@@ -68,10 +70,11 @@ export default async function DemoShowcaseHarness({ searchParams }: { searchPara
           socialLinks: null,
         }}
         services={services}
-        offer={{ title: demo.offer.title, subtitle: demo.offer.subtitle }}
+        offer={demo.slug === "john-kamau-properties" ? null : { title: demo.offer.title, subtitle: demo.offer.subtitle }}
         theme={resolveTheme(demo.theme)}
         referralHref={null}
         aiFrontDeskLive={false}
+        demoPage
       />
       <nav aria-label="Other demo businesses" style={{ padding: "1rem", textAlign: "center", fontSize: "0.8rem" }}>
         {businesses.map((entry) => (

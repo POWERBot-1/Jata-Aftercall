@@ -46,5 +46,9 @@ CHROME_PATH=/path/to/chrome ONLY=home  BASE_URL=http://127.0.0.1:3100 SHOT_DIR=d
 CHROME_PATH=/path/to/chrome ONLY=demos BASE_URL=http://127.0.0.1:3000 SHOT_DIR=docs/evidence/out npm run test:browser:landing
 ```
 
-`ONLY=home` passes 55/55 checks, `ONLY=demos` passes 32/32. A headless Chromium is required; the
-check exits with status 2 and a clear message when `CHROME_PATH` is unset.
+These 55/55 (`ONLY=home`) and 32/32 (`ONLY=demos`) counts document the original screenshot-capture
+run, not the follow-up corrections. The screenshots remain local design evidence only and are not
+production evidence. The follow-up verification counts (58/58 production-build homepage checks and
+32/32 development-harness checks) are recorded in `LANDING_SHOWCASE_IMPLEMENTATION_2026-10-24.md`;
+those later runs generated no screenshots. A headless Chromium is required; the check exits with
+status 2 and a clear message when `CHROME_PATH` is unset.
