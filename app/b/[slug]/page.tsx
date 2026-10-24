@@ -11,6 +11,8 @@ import { loadStorefront } from "@/lib/experience/storefront";
 import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
+import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
+import { buildDemoShowcase } from "@/lib/demoShowcase";
 
 export const dynamic = "force-dynamic";
 
@@ -175,8 +177,20 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     aiFrontDeskLive = extras.aiFrontDeskLive;
   }
 
+  // The four documented demo businesses get one cinematic, illustrative band at the top of
+  // their page. It is built only for a public decision on a demo slug and only when the page
+  // actually lists services, so a customer's own page and an empty demo page are untouched.
+  const showcase = buildDemoShowcase({
+    slug: business.slug,
+    decision,
+    business: { name: business.name, category: business.category, location: business.location },
+    services: business.services,
+    offerTitle: business.offer?.title ?? null,
+  });
+
   return (
     <>
+      {showcase ? <DemoShowcaseBand {...showcase} /> : null}
       {decision === "preview" && (
         <div className="bg-zinc-900 py-2 text-center text-xs font-semibold text-white">Draft preview. Only you can see this unpublished page.</div>
       )}
