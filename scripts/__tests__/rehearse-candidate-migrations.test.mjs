@@ -9,6 +9,7 @@ import {
   DEFAULT_RECONCILIATION_PATCH,
   PRE_RECONCILIATION_BASELINE_SHA256,
   applyPreReconciliationFixes,
+  assessCandidateMigrationHistory,
   candidatePredatesReconciliation,
   canonicalInventory,
   evaluateSnapshot,
@@ -20,6 +21,7 @@ import {
   scanForDestructiveStatements,
 } from "../ci/rehearse-candidate-migrations.mjs";
 import { evaluateModelSide } from "../ci/verify-reconciliation-justification.mjs";
+import { migrationManifest } from "../ci/migration-manifest.mjs";
 
 // These tests exist because the rehearsal script is the only thing standing
 // between "the SQL reads plausibly" and "the SQL was executed". If the checker
@@ -260,6 +262,149 @@ test("migration directory discovery and set comparisons", () => {
     assert.deepEqual(extraMigrations(names.slice(0, 2), names), ["20260303000000_c"]);
     assert.deepEqual(missingMigrations(names, names.slice(0, 2)), ["20260303000000_c"]);
     assert.deepEqual(extraMigrations(names, names), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const TEST_MIGRATION_LOCK = 'provider = "postgresql"\n';
+
+function createMigrationHistory(root, label, migrations, lock = TEST_MIGRATION_LOCK) {
+  const dir = join(root, label);
+  mkdirSync(dir, { recursive: true });
+  for (const [name, sql] of migrations) {
+    mkdirSync(join(dir, name), { recursive: true });
+    writeFileSync(join(dir, name, "migration.sql"), sql);
+  }
+  writeFileSync(join(dir, "migration_lock.toml"), lock);
+  return { dir, manifest: migrationManifest(dir), lock };
+}
+
+test("an unchanged migration history still selects the full rehearsal", () => {
+  const root = mkdtempSync(join(tmpdir(), "jata-rehearsal-no-delta-"));
+  const history = [["20260101000000_base", "CREATE TABLE base (id integer);\n"]];
+  try {
+    const baseline = createMigrationHistory(root, "baseline", history);
+    const candidate = createMigrationHistory(root, "candidate", history);
+    const assessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      candidate.manifest,
+      baseline.lock,
+      candidate.lock,
+    );
+
+    assert.equal(assessment.status, "REHEARSE");
+    assert.deepEqual(assessment.added, []);
+    assert.equal(assessment.detail, "no migration difference; the complete unchanged history must still be rehearsed");
+    assert.equal(candidate.manifest.hash, baseline.manifest.hash);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an added migration remains on the rehearsal path and its SQL is still safety-scanned", () => {
+  const root = mkdtempSync(join(tmpdir(), "jata-rehearsal-added-"));
+  const baselineHistory = [["20260101000000_base", "CREATE TABLE base (id integer);\n"]];
+  const addedName = "20260102000000_candidate_change";
+  const addedSql = 'DROP TABLE "base";\n';
+  const malformedName = "20260103000000_malformed_sql";
+  const malformedSql = "THIS IS NOT VALID SQL;\n";
+  try {
+    const baseline = createMigrationHistory(root, "baseline", baselineHistory);
+    const candidate = createMigrationHistory(root, "candidate", [
+      ...baselineHistory,
+      [addedName, addedSql],
+      [malformedName, malformedSql],
+    ]);
+    const assessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      candidate.manifest,
+      baseline.lock,
+      candidate.lock,
+    );
+
+    assert.equal(assessment.status, "REHEARSE");
+    assert.deepEqual(assessment.added, [addedName, malformedName]);
+    assert.deepEqual(
+      scanForDestructiveStatements(readFileSync(join(candidate.dir, addedName, "migration.sql"), "utf8")),
+      ['DROP: DROP TABLE "base"'],
+    );
+    assert.match(
+      readFileSync(join(candidate.dir, malformedName, "migration.sql"), "utf8"),
+      /THIS IS NOT VALID SQL/,
+    );
+    // The workflow scans each addition and then applies the full history
+    // with prisma migrate deploy, so syntactically malformed SQL cannot take a
+    // no-op shortcut and must fail the database rehearsal.
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a removed, rewritten, malformed, or provider-changed baseline is not treated as no migration difference", () => {
+  const root = mkdtempSync(join(tmpdir(), "jata-rehearsal-unsafe-delta-"));
+  const baselineHistory = [["20260101000000_base", "CREATE TABLE base (id integer);\n"]];
+  try {
+    const baseline = createMigrationHistory(root, "baseline", baselineHistory);
+    const removed = createMigrationHistory(root, "removed", []);
+    const rewritten = createMigrationHistory(root, "rewritten", [
+      ["20260101000000_base", "CREATE TABLE base (id text);\n"],
+    ]);
+    const malformed = createMigrationHistory(root, "malformed", [
+      ["not-a-timestamp_migration", "CREATE TABLE other (id integer);\n"],
+    ]);
+    const changedLock = createMigrationHistory(root, "changed-lock", baselineHistory, 'provider = "sqlite"\n');
+
+    const removedAssessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      removed.manifest,
+      baseline.lock,
+      removed.lock,
+    );
+    const rewrittenAssessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      rewritten.manifest,
+      baseline.lock,
+      rewritten.lock,
+    );
+    const malformedAssessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      malformed.manifest,
+      baseline.lock,
+      malformed.lock,
+    );
+    const changedLockAssessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      changedLock.manifest,
+      baseline.lock,
+      changedLock.lock,
+    );
+    const missingLockAssessment = assessCandidateMigrationHistory(
+      baseline.manifest,
+      baseline.manifest,
+      undefined,
+      baseline.lock,
+    );
+
+    assert.equal(removedAssessment.status, "FAIL");
+    assert.equal(rewrittenAssessment.status, "FAIL");
+    assert.match(rewrittenAssessment.detail, /rewrites baseline migration SQL/);
+    assert.equal(malformedAssessment.status, "FAIL");
+    assert.match(malformedAssessment.detail, /malformed migration directory names/);
+    assert.equal(changedLockAssessment.status, "FAIL");
+    assert.match(changedLockAssessment.detail, /migration_lock.toml differs/);
+    assert.equal(missingLockAssessment.status, "BLOCKED");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a missing migration.sql cannot produce an identifiable manifest", () => {
+  const root = mkdtempSync(join(tmpdir(), "jata-rehearsal-missing-sql-"));
+  try {
+    mkdirSync(join(root, "20260101000000_missing_sql"), { recursive: true });
+    writeFileSync(join(root, "migration_lock.toml"), TEST_MIGRATION_LOCK);
+    assert.throws(() => migrationManifest(root), /migration\.sql/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
