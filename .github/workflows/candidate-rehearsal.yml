@@ -9,7 +9,12 @@ name: Candidate migration rehearsal
 #
 # The workflow checks that exact commit out into a second directory, applies its
 # complete migration history to disposable PostgreSQL 18, and verifies the
-# result. It never rebases, pushes, deploys, or mutates the original PR #49.
+# result. No new migration directory is a supported case, not a skip: when
+# baseline SQL and migration_lock.toml are unchanged, the complete history is
+# still rehearsed. Removed/rewritten baseline migrations and malformed directory
+# names fail before rehearsal databases are created; missing SQL is BLOCKED, and
+# malformed SQL is rejected by migrate deploy on the disposable database. It
+# never rebases, pushes, deploys, or mutates the original PR #49.
 #
 # WHAT IT PROVES
 #   * the history applies in order through `prisma migrate deploy`;

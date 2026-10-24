@@ -1,13 +1,13 @@
 /**
  * Restore the four advertised demo businesses — and nothing else.
  *
- *   DATABASE_URL=... npx tsx scripts/restore-demo-businesses.ts            # dry run (default)
- *   DATABASE_URL=... npx tsx scripts/restore-demo-businesses.ts --apply    # write
- *   DEMO_OWNER_EMAIL=existing@user  ... --apply    # only needed if a demo row is MISSING
+ *   # Use an isolated non-production database only; default is a dry run.
+ *   DATABASE_URL=... npx tsx scripts/restore-demo-businesses.ts
+ *   DATABASE_URL=... DEMO_OWNER_EMAIL=demo@jata.link npx tsx scripts/restore-demo-businesses.ts --apply
  *
- * Unlike `prisma/seed.ts` this never creates a user (no admin, no demo account), never writes
- * subscriptions or payments, and never touches a row whose slug is not one of the four demos.
- * See `lib/demoData.ts` for the exact boundary and the rows it refuses to overwrite.
+ * This never creates a user, writes subscriptions or payments, or changes a row unless it belongs
+ * to the dedicated demo account and has no non-demo payment. It refuses arbitrary owner emails.
+ * See `lib/demoData.ts` for the full identity and write boundary.
  */
 import { PrismaClient } from "@prisma/client";
 import { installInlineMediaPrismaWritePolicy } from "../lib/media/prisma-write-policy";

@@ -3,7 +3,7 @@
 # Verify with: sha256sum -c docs/release/EVIDENCE-MANIFEST.sha256
 # This file deliberately does not list itself; a digest of itself cannot verify.
 
-51fcf285852e000591e575aafd012fdd4d338d7ffd5e6c3f21c3dcca516291d8  .github/workflows/candidate-rehearsal.yml
+362b71ae3e0dad7691dfa2563ab040a36bd1dc25ea6c5f417a2e7303cb7d1c65  .github/workflows/candidate-rehearsal.yml
 9d84ddb57796a1c5879c91a5933fad68ce7a60f8af19bff6a45d31243b22ca88  .github/workflows/production-smoke.yml
 044e1cde47f0fd45024f42f6cc1753445ada3cd0abe1f5e11922201366c238ca  .github/workflows/release-validation.yml
 788cffbf7e28d411d27ea5726ea68f39663f2935f06f2dd6c406b0a53419e84c  docs/NEON-RECOVERY-READINESS.md
@@ -37,7 +37,7 @@ c3605c7192aa52fee2cc21107bab70bafb80b3375ff6aee51049bfe8a2875186  scripts/__test
 c72ee36f56aab4dd4e3a6ffbeb9cfefebce4b61dfba04bbff8123be364b77c0c  scripts/__tests__/migration-gate-refusal.test.mjs
 194ea0eca2bb3ea85c513eb2105a35d0bc78a47ac8b9d4a5229abeaf76c6a481  scripts/__tests__/migration-manifest.test.mjs
 687c106d0b766275168681882985737a06efa07cfca66e23987bb399852539c8  scripts/__tests__/migration-target-guard.test.mjs
-65e366596dd74b2ba54cc97be53dc8c52906766303b3ba68794387693d1f94f7  scripts/__tests__/rehearse-candidate-migrations.test.mjs
+d8c3dec2cade0113c22e71dad4ad15ed3d0dc4c674fb9bfc2865c51d2a1235cd  scripts/__tests__/rehearse-candidate-migrations.test.mjs
 891be635949cc870769dd247fef2b67745b72f018cff236990ee04e9e78c82cd  scripts/__tests__/smoke-production-e2e.test.mjs
 7c0f0b5677512de6e2ca14f597bc769fd96d2841b9c757a585944e4f192a7b66  scripts/__tests__/smoke-production.test.mjs
 f0d6f63753fc64913293c8dea8579c7c8ae6bfb2758d8b0c6c37d9c04ef01259  scripts/__tests__/summarise-audit.test.mjs
@@ -49,7 +49,7 @@ e81364d85529d2c66430aff37c56fc1dcad89a01a11dac864d716be2e8b57564  scripts/ci/che
 1a6c790f9e01ff16fa85c07a287fdea1892903329d76d4fc9fe12b3576209ba8  scripts/ci/generate-evidence-manifest.mjs
 0e47ce48ddbfa4aec070db5cc846fae19f3988546e3dba12a2c72cb2820760f2  scripts/ci/migration-expectations.mjs
 37043589993a22cf57750b7e0e5222f6b7f43ed719cdc6f82f891b15f91d4183  scripts/ci/migration-manifest.mjs
-b6f2b733456dfc74be00439f140c5f88180de399ce8a422afde888ee5cacd899  scripts/ci/rehearse-candidate-migrations.mjs
+44084dda9b60cdd7d20eefc4c5ce600f6a554b63a931a31eb9c5438e76ccce92  scripts/ci/rehearse-candidate-migrations.mjs
 f557f739ad86c753120403663a9a0bd4e68f700b86dd2c8713227fc44e20d2aa  scripts/ci/schema-drift-baseline.json
 cb6dafb7c5530a0d0c69193a7e3acde4b861ce8f430039c5de816cc6fb7f1b22  scripts/ci/summarise-audit.mjs
 c92e1d3067aa7aeb6907a47978677d18ab04c056dec27cf87154e53f2522cc14  scripts/ci/verify-evidence-manifest.mjs

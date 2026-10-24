@@ -7,14 +7,14 @@ import { productThemeBootScript, productThemeCss } from "@/lib/productThemes";
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseUrl()),
   title: {
-    default: "JATA AFTERCALL — Every call leaves your business behind",
+    default: "JATA AFTERCALL — Business details and contact options in one page",
     template: "%s | JATA AFTERCALL",
   },
   description:
-    "Turn every customer interaction into another opportunity to sell. Lightweight after-interaction pages for Kenyan SMEs — WhatsApp, Call, Directions, Offers, Analytics.",
+    "Mobile-friendly business pages for Kenyan small businesses to share their details, services, prices and contact options — including WhatsApp, Call and Directions.",
   openGraph: {
     title: "JATA AFTERCALL",
-    description: "Every call leaves your business behind.",
+    description: "Business details and contact options in one mobile-friendly page.",
     type: "website",
   },
 };

@@ -4,17 +4,19 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * Pull request #49 proposes two additive migrations that are not on `main`:
+ * This rehearsal originated as independent verification of two additive
+ * migrations proposed by PR #49, which were not on `main` at the time:
  *
  *   prisma/migrations/20261017000000_media_asset_version
  *   prisma/migrations/20261018000000_password_reset_security
  *
- * Neither has been executed on a database by this review. A static read of the
- * SQL is not evidence that the history applies in order, that the ledger ends
- * complete, that the objects the application selects really exist, or that a
- * failure in the middle of the history is reported as a failure. This script
- * performs that rehearsal against a database that the caller guarantees is
- * disposable, and it prints what it actually did.
+ * That review is historical. Every current run compares an exact candidate
+ * commit with `main` and rehearses the complete candidate history, including
+ * when it adds no migrations. A static read of SQL is not evidence that the
+ * history applies in order, that the ledger ends complete, that selected
+ * objects exist, or that a mid-history failure is reported as a failure. This
+ * script performs that rehearsal on a caller-guaranteed disposable database
+ * and prints what it actually did.
  *
  * WHAT IT PROVES
  * --------------
@@ -22,11 +24,11 @@
  *      then every candidate-added migration) applies to an empty database with `migrate deploy`.
  *   2. The ledger has one finished, non-rolled-back, log-free row per migration,
  *      and no row that has no directory on disk.
- *   3. Every column, index, primary key and foreign key promised by the two
+ *   3. Every column, index, primary key and foreign key promised by the
  *      candidate migrations exists with the promised shape.
- *   4. Applying the same 18 files with `psql -f` (no ledger, no Prisma) reaches
- *      a byte-identical catalog inventory — the chain is not order-dependent
- *      magic performed by the CLI.
+ *   4. Applying the same complete history with `psql -f` (no ledger, no Prisma)
+ *      reaches a byte-identical catalog inventory — the chain is not
+ *      order-dependent magic performed by the CLI.
  *   5. A second `migrate deploy` applies nothing (the history is idempotent from
  *      Prisma's point of view).
  *   6. A deliberately broken migration makes `migrate deploy` exit non-zero,
@@ -58,10 +60,11 @@
  *     --summary-file /tmp/rehearsal-summary.md
  *
  * EXIT CODES
- *   0  every check passed
- *   1  a concrete check failed (details printed)
+ *   0  every check passed; an unchanged candidate history is still fully rehearsed
+ *   1  a concrete check failed (details printed), including a removed or
+ *      rewritten baseline migration
  *   2  blocked: a precondition could not be met (no psql, no candidate tree,
- *      no Prisma CLI, a migration set that could not be identified)
+ *      no Prisma CLI, or a migration set that could not be identified)
  */
 
 import { spawnSync } from "node:child_process";
@@ -327,6 +330,62 @@ export function extraMigrations(baselineNames, candidateNames) {
 /** Names present in `baseline` but missing from `candidate` (a deletion, not an addition). */
 export function missingMigrations(baselineNames, candidateNames) {
   return baselineNames.filter((name) => !candidateNames.includes(name));
+}
+
+const MIGRATION_DIRECTORY_NAME = /^\d{14}_[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
+ * Decide whether the candidate migration history is safe to rehearse.
+ *
+ * An empty addition set is not a reason to block: the workflow contract is to
+ * rehearse the complete candidate history, even when it exactly matches main.
+ * However, deleting or rewriting an existing migration, changing the provider
+ * lock, or introducing a malformed directory must fail before rehearsal
+ * databases are created. Missing/unreadable `migration.sql` files are rejected
+ * earlier by `migrationManifest` and become BLOCKED in the CLI's top-level guard.
+ */
+export function assessCandidateMigrationHistory(
+  baselineManifest,
+  candidateManifest,
+  baselineLock,
+  candidateLock,
+) {
+  const baselineNames = baselineManifest.names ?? [];
+  const candidateNames = candidateManifest.names ?? [];
+  const added = extraMigrations(baselineNames, candidateNames);
+  const removed = missingMigrations(baselineNames, candidateNames);
+  const baselineNameErrors = baselineNames.filter((name) => !MIGRATION_DIRECTORY_NAME.test(name));
+  const candidateNameErrors = candidateNames.filter((name) => !MIGRATION_DIRECTORY_NAME.test(name));
+  const candidateEntries = new Map((candidateManifest.entries ?? []).map((entry) => [entry.name, entry.sha256]));
+  const modified = (baselineManifest.entries ?? [])
+    .filter((entry) => candidateEntries.has(entry.name) && candidateEntries.get(entry.name) !== entry.sha256)
+    .map((entry) => entry.name);
+
+  const assessment = { status: "REHEARSE", added, removed, modified, detail: "" };
+  if (baselineNameErrors.length > 0) {
+    assessment.status = "BLOCKED";
+    assessment.detail = `the baseline has malformed migration directory names: ${baselineNameErrors.join(", ")}`;
+  } else if (candidateNameErrors.length > 0) {
+    assessment.status = "FAIL";
+    assessment.detail = `the candidate has malformed migration directory names: ${candidateNameErrors.join(", ")}`;
+  } else if (removed.length > 0) {
+    assessment.status = "FAIL";
+    assessment.detail = `the candidate removes baseline migrations: ${removed.join(", ")}`;
+  } else if (modified.length > 0) {
+    assessment.status = "FAIL";
+    assessment.detail = `the candidate rewrites baseline migration SQL: ${modified.join(", ")}`;
+  } else if (typeof baselineLock !== "string" || typeof candidateLock !== "string") {
+    assessment.status = "BLOCKED";
+    assessment.detail = "migration_lock.toml is missing or unreadable in the baseline or candidate";
+  } else if (baselineLock !== candidateLock) {
+    assessment.status = "FAIL";
+    assessment.detail = "migration_lock.toml differs from the baseline; provider/history changes are not additive migrations";
+  } else if (added.length === 0) {
+    assessment.detail = "no migration difference; the complete unchanged history must still be rehearsed";
+  } else {
+    assessment.detail = `candidate additions: ${added.join(", ")}`;
+  }
+  return assessment;
 }
 
 /**
@@ -702,6 +761,14 @@ function main() {
     if (existsSync(dir) && statSync(dir).isDirectory()) pass(`${label} exists`, dir);
     else blocked(`${label} exists`, `${dir} is not a directory`);
   }
+  for (const [label, dir] of [
+    ["the candidate migration lock", candidateMigrationsDir],
+    ["the baseline migration lock", baselineDir],
+  ]) {
+    const lockPath = join(dir, "migration_lock.toml");
+    if (existsSync(lockPath) && statSync(lockPath).isFile()) pass(`${label} exists`, lockPath);
+    else blocked(`${label} exists`, `${lockPath} is missing or not a file`);
+  }
 
   const psqlPresent = run("psql", ["--version"]);
   if (psqlPresent.status === 0) pass("psql is available", psqlPresent.output.trim());
@@ -731,26 +798,51 @@ function main() {
   const baselineNames = migrationDirectories(baselineDir);
   const candidateManifest = migrationManifest(candidateMigrationsDir);
   const baselineManifest = migrationManifest(baselineDir);
+  const candidateLock = readFileSync(join(candidateMigrationsDir, "migration_lock.toml"), "utf8");
+  const baselineLock = readFileSync(join(baselineDir, "migration_lock.toml"), "utf8");
+  const assessment = assessCandidateMigrationHistory(
+    baselineManifest,
+    candidateManifest,
+    baselineLock,
+    candidateLock,
+  );
 
   console.log(`migration directory = ${candidateMigrationsDir}`);
   console.log(`baseline count      = ${baselineNames.length} (manifest ${baselineManifest.hash})`);
   console.log(`candidate count     = ${candidateNames.length} (manifest ${candidateManifest.hash})`);
+  console.log(`added by candidate  = ${assessment.added.length ? assessment.added.join(", ") : "(none)"}`);
 
-  const extras = extraMigrations(baselineNames, candidateNames);
-  const removed = missingMigrations(baselineNames, candidateNames);
-  console.log(`added by candidate  = ${extras.length ? extras.join(", ") : "(none)"}`);
-
-  if (removed.length > 0) {
-    fail("the candidate history only adds migrations", `missing versus baseline: ${removed.join(", ")}`);
-  } else {
-    pass("the candidate history only adds migrations", `0 baseline migrations removed`);
+  if (assessment.status !== "REHEARSE") {
+    if (assessment.status === "FAIL") {
+      fail("the candidate migration history is safe to rehearse", assessment.detail);
+    } else {
+      blocked("the candidate migration history is identifiable", assessment.detail);
+    }
+    const verdict = assessment.status;
+    console.log(`\nRESULT: ${verdict}`);
+    writeSummary(args.summaryFile, verdict, {
+      candidateCommit,
+      candidateSubject,
+      serverVersion,
+      candidateManifest,
+      baselineManifest,
+      extras: assessment.added,
+    });
+    return verdict === "FAIL" ? 1 : 2;
   }
 
+  const extras = assessment.added;
+  pass(
+    "the candidate only adds migrations and preserves the baseline history",
+    `${extras.length} added, 0 removed or rewritten; migration_lock.toml matches`,
+  );
   if (extras.length === 0) {
-    blocked("the candidate adds migrations", "no difference from the baseline — nothing to rehearse");
-    console.log("\nRESULT: BLOCKED");
-    writeSummary(args.summaryFile, "BLOCKED");
-    return 2;
+    pass(
+      "an empty migration diff still receives a full rehearsal",
+      "candidate and baseline SQL manifests match; continuing with the complete history",
+    );
+  } else {
+    pass("the candidate adds migrations", extras.join(", "));
   }
 
   const nodeVersion = process.version;
