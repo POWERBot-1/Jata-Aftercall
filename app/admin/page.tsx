@@ -18,7 +18,7 @@ export default async function AdminOverview() {
   const totalViews = analytics.find((a) => a.eventType === "PAGE_VIEW")?._count.eventType || 0;
   const waClicks = analytics.find((a) => a.eventType === "WHATSAPP_CLICK")?._count.eventType || 0;
   const callClicks = analytics.find((a) => a.eventType === "CALL_CLICK")?._count.eventType || 0;
-  const dirClicks = analytics.find((a) => a.eventType === "DIRECTION_CLICK")?._count.eventType || 0;
+  const dirClicks = analytics.find((a) => a.eventType === "DIRECTIONS_CLICK")?._count.eventType || 0;
   const revenuePaid = await prisma.payment.aggregate({ where: { status: "PAID" }, _sum: { amount: true } }).catch(() => ({ _sum: { amount: 0 } }));
 
   return (

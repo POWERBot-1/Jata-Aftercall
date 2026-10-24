@@ -46,6 +46,7 @@ export default function BusinessPage({
   theme,
   referralHref = null,
   aiFrontDeskLive = false,
+  demoPage = false,
 }: {
   business: Business;
   services: Service[];
@@ -59,6 +60,8 @@ export default function BusinessPage({
    * customer tapping it would land on "Page not found".
    */
   aiFrontDeskLive?: boolean;
+  /** Whether this page contains only fictional demonstration content. */
+  demoPage?: boolean;
 }) {
   const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function BusinessPage({
 
   // Request Quote fallback: WhatsApp -> tel: -> #quote
   const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
+  const quoteActionEvent = waQuoteLink ? "WHATSAPP_CLICK" : telLinkNormalized ? "CALL_CLICK" : null;
 
   const t = theme;
   const hours = formatOpeningHours(business.openingHours);
@@ -157,7 +161,7 @@ export default function BusinessPage({
                 href={mapsLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => track(business.id, "DIRECTION_CLICK")}
+                onClick={() => track(business.id, "DIRECTIONS_CLICK")}
                 className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
               >
                 Get Directions
@@ -182,7 +186,7 @@ export default function BusinessPage({
                 href={quoteHref}
                 target={quoteHref.startsWith("http") ? "_blank" : undefined}
                 rel={quoteHref.startsWith("http") ? "noopener noreferrer" : undefined}
-                onClick={() => track(business.id, "WHATSAPP_CLICK")}
+                onClick={() => { if (quoteActionEvent) track(business.id, quoteActionEvent); }}
                 className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
               >
                 Request quote
@@ -212,7 +216,7 @@ export default function BusinessPage({
         {/* Offer */}
         {offer && offer.title && (
           <div className={`mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950`}>
-            <p className="text-xs font-bold tracking-widest text-amber-700">TODAY&apos;S OFFER</p>
+            <p className="text-xs font-bold tracking-widest text-amber-700">{demoPage ? "SAMPLE OFFER · FICTIONAL, NOT CURRENT" : "TODAY'S OFFER"}</p>
             <p className="mt-1 text-base font-bold">{offer.title}</p>
             {offer.subtitle && <p className="text-sm text-amber-900/80">{offer.subtitle}</p>}
           </div>
@@ -251,7 +255,7 @@ export default function BusinessPage({
               <h3 className="text-xs font-bold tracking-widest">LOCATION</h3>
               <p className={`mt-1 text-sm ${t.colors.muted}`}>{business.location}</p>
               {mapsLink && (
-                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`jata-cta mt-2 inline-flex items-center rounded-full border ${t.colors.border} px-4 py-2 text-sm font-semibold`}>
+                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTIONS_CLICK")} className={`jata-cta mt-2 inline-flex items-center rounded-full border ${t.colors.border} px-4 py-2 text-sm font-semibold`}>
                   Open in Maps
                 </a>
               )}
@@ -264,7 +268,7 @@ export default function BusinessPage({
           <h2 className="text-sm font-bold">Quote</h2>
           <p className={`mt-2 text-sm ${t.colors.muted}`}>Ask {business.name} for a quote. No payment is taken on this page.</p>
           {quoteHref && quoteHref !== "#quote" ? (
-            <a href={quoteHref} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
+            <a href={quoteHref} onClick={() => { if (quoteActionEvent) track(business.id, quoteActionEvent); }} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
           ) : (
             <p className={`mt-2 text-sm ${t.colors.muted}`}>Add a phone or WhatsApp number to receive quote requests.</p>
           )}
@@ -361,7 +365,7 @@ export default function BusinessPage({
             </a>
           ) : null}
           {mapsLink && (
-            <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`flex items-center justify-center rounded-full border ${t.colors.border} px-5 py-3.5 text-sm font-semibold`}>
+            <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTIONS_CLICK")} className={`flex items-center justify-center rounded-full border ${t.colors.border} px-5 py-3.5 text-sm font-semibold`}>
               Directions
             </a>
           )}

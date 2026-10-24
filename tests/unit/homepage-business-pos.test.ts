@@ -136,8 +136,9 @@ describe("the homepage offers one Business POS entry (§67 exception, 2026-10-03
 describe("the Business POS entry does not disturb the rest of the landing page", () => {
   it("keeps the hero, how-it-works and demo sections", async () => {
     const html = await renderHome();
-    expect(html).toContain("Turn every customer interaction");
-    expect(html).toContain("Create your page in ~5 minutes");
+    expect(html).toContain("Make the next step after a customer interaction");
+    expect(html).toContain("Create your page");
+    expect(html).not.toContain("in ~5 minutes");
     expect(html).toContain("Demo businesses");
     expect(html).toContain('id="demo"');
     expect(html).toContain("Simple pricing");
