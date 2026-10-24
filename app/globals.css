@@ -2632,8 +2632,21 @@ button:focus-visible {
   .lp-hero__copy { position: relative; z-index: 1; }
 }
 
-/* Phone mock (pure markup — no screenshot, so it stays sharp and costs nothing) */
-.lp-phone { min-width: 0; justify-self: center; width: min(21rem, 100%); }
+/*
+ * Phone mock (pure markup — no screenshot, so it stays sharp and costs nothing).
+ *
+ * The mock is laid out square to the page on purpose: a tilted frame (the old float rotated the
+ * whole figure by -1.2deg) pushed every row below the first sideways, so the badge, contact row,
+ * action buttons, offer card, service rows, Directions/Share chips and the caption all sat on
+ * slightly different left edges, and the caption and its link were tilted too. The float now moves
+ * the mock up and down only, and every row inside the screen is a full-width block on the same
+ * 1rem gutter, so the stack is aligned at every width and cannot spill past the page gutter.
+ */
+.lp-phone {
+  min-width: 0;
+  justify-self: center;
+  width: min(21rem, 100%);
+}
 .lp-phone__frame {
   border-radius: 2rem;
   border: 1px solid rgba(247, 242, 232, 0.16);
@@ -2647,17 +2660,23 @@ button:focus-visible {
   padding: 1rem;
   color: var(--lp-text);
 }
+/* One column, one gutter, no child wider than the screen. */
+.lp-phone__screen > * { min-width: 0; }
 .lp-phone__thanks {
-  text-align: center;
   color: var(--lp-text-muted);
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.14em;
+  text-align: left;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
+/* Avatar and business details share one baseline; the details take the remaining width. */
 .lp-phone__biz { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
+.lp-phone__biz > div { min-width: 0; }
 .lp-phone__avatar {
   display: grid;
+  flex: 0 0 auto;
   width: 2.1rem;
   height: 2.1rem;
   place-items: center;
@@ -2667,52 +2686,84 @@ button:focus-visible {
   font-size: 0.7rem;
   font-weight: 800;
 }
-.lp-phone__name { font-size: 0.85rem; font-weight: 800; }
-.lp-phone__meta { color: var(--lp-text-muted); font-size: 0.68rem; }
-.lp-phone__ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.8rem; }
+.lp-phone__name { font-size: 0.85rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.lp-phone__meta { color: var(--lp-text-muted); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; }
+.lp-phone__ctas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem; margin-top: 0.8rem; }
 .lp-phone__cta {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
   border-radius: 0.7rem;
   background: #171310;
-  padding: 0.6rem;
+  padding: 0.5rem;
   color: #fffdf8;
   text-align: center;
   font-size: 0.75rem;
   font-weight: 750;
+  line-height: 1.2;
 }
 .lp-phone__cta--wa { background: #0b6b4f; }
-.lp-phone__offer { margin-top: 0.7rem; border: 1px solid #f3d3a8; border-radius: 0.7rem; background: #fdf2e2; padding: 0.6rem 0.7rem; }
+.lp-phone__offer {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.7rem;
+  border: 1px solid #f3d3a8;
+  border-radius: 0.7rem;
+  background: #fdf2e2;
+  padding: 0.6rem 0.7rem;
+}
 .lp-phone__offer-label { color: #8a4a10; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.lp-phone__offer-title { font-size: 0.82rem; font-weight: 800; }
-.lp-phone__offer-sub { color: var(--lp-text-muted); font-size: 0.68rem; }
+.lp-phone__offer-title { font-size: 0.82rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.lp-phone__offer-sub { color: var(--lp-text-muted); font-size: 0.68rem; line-height: 1.4; }
 .lp-phone__rows { display: grid; gap: 0.32rem; margin-top: 0.65rem; }
 .lp-phone__rows > span {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   border-radius: 0.55rem;
   background: #f4efe6;
   padding: 0.42rem 0.55rem;
   font-size: 0.72rem;
+  line-height: 1.3;
 }
-.lp-phone__rows > span > span:last-child { color: var(--lp-text-muted); }
+.lp-phone__rows > span > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.lp-phone__rows > span > span:last-child { flex: 0 0 auto; color: var(--lp-text-muted); text-align: right; white-space: nowrap; }
 .lp-phone__chips { display: flex; gap: 0.4rem; margin-top: 0.65rem; }
 .lp-phone__chips > span {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: 1px solid rgba(23, 19, 16, 0.18);
   border-radius: 999px;
   padding: 0.4rem;
   text-align: center;
   font-size: 0.68rem;
   font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .lp-phone__caption {
+  width: 100%;
   margin-top: 0.8rem;
   color: rgba(247, 242, 232, 0.62);
   font-size: 0.76rem;
   line-height: 1.5;
   text-align: center;
+  overflow-wrap: anywhere;
 }
-.lp-phone__caption-link { display: block; margin-top: 0.25rem; color: var(--lp-amber); font-weight: 700; text-decoration: none; }
+/* The link is its own centred target under the disclaimer, not a full-width block. */
+.lp-phone__caption-link {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.15rem;
+  padding: 0 0.35rem;
+  color: var(--lp-amber);
+  font-weight: 700;
+  text-decoration: none;
+}
 .lp-phone__caption-link:hover { text-decoration: underline; }
 
 /* ── Story ──────────────────────────────────────────────────────────────── */
@@ -2775,15 +2826,27 @@ button:focus-visible {
   transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 .lp-benefit:hover { transform: translateY(-3px); border-color: rgba(240, 160, 60, 0.5); }
+/*
+ * Every benefit icon is the same box: 2.6rem square with 0.55rem of padding, one radius, and the
+ * glyph centred on both axes. It is a flex container rather than an inline-grid so it cannot be
+ * squeezed by a long title or pick up a text baseline below itself, and `flex: 0 0 auto` keeps the
+ * square intact and the icon on its own line when the card wraps.
+ */
 .lp-benefit__icon {
-  display: inline-grid;
+  display: flex;
+  flex: 0 0 auto;
   width: 2.6rem;
   height: 2.6rem;
-  place-items: center;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
   border-radius: 0.8rem;
   background: rgba(240, 160, 60, 0.14);
+  padding: 0.55rem;
   color: var(--lp-amber);
+  line-height: 0;
 }
+.lp-benefit__icon svg { display: block; width: 100%; height: 100%; }
 .lp-benefit__title { margin-top: 0.8rem !important; color: var(--lp-cream); font-size: 0.98rem; font-weight: 750; }
 .lp-benefit__body { margin-top: 0.35rem !important; color: rgba(247, 242, 232, 0.68); font-size: 0.88rem; line-height: 1.6; }
 @media (min-width: 640px) { .lp-benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -2945,7 +3008,24 @@ button:focus-visible {
 
 /* ── Pricing ────────────────────────────────────────────────────────────── */
 
-.lp-pricing .lp-plans { margin-top: 2rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.9rem; }
+/*
+ * Every plan card is the same shape, eight rows deep: name, badge (optional), price, billing
+ * period, description (optional), features, call to action, fine print.
+ *
+ * Where subgrid is supported the four cards share those rows, so plan names, prices, periods,
+ * feature lists and calls to action sit on the same line across the row — even when an operator's
+ * stored plan name wraps to two lines or a card carries no badge. Without subgrid the flex column
+ * below is the fallback: the same markup, equal-height cards, call to action pinned to the bottom.
+ * No row is reserved twice, and nothing is positioned with fixed pixel heights, so the layout keeps
+ * working for plan names of any length.
+ */
+.lp-pricing .lp-plans {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-top: 2rem;
+  padding-top: 0.25rem;
+}
 .lp-plan {
   display: flex;
   min-width: 0;
@@ -2953,17 +3033,24 @@ button:focus-visible {
   border: 1px solid var(--lp-line-light);
   border-radius: 1.2rem;
   background: linear-gradient(180deg, rgba(247, 242, 232, 0.06), rgba(247, 242, 232, 0.015));
-  padding: 1.25rem;
+  padding: 1.25rem 1.25rem 1.5rem;
 }
 .lp-plan[data-featured="true"] {
   border-color: rgba(240, 160, 60, 0.6);
   background: linear-gradient(180deg, rgba(240, 160, 60, 0.16), rgba(240, 160, 60, 0.03));
   box-shadow: 0 24px 60px rgba(240, 160, 60, 0.12);
 }
-.lp-plan__top { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; }
-.lp-plan__name { color: var(--lp-cream); font-size: 0.9rem; font-weight: 700; line-height: 1.35; }
+.lp-plan__name {
+  color: var(--lp-cream);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .lp-plan__badge {
-  flex: 0 0 auto;
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: 0.4rem !important;
   border-radius: 999px;
   background: rgba(240, 160, 60, 0.18);
   padding: 0.2rem 0.55rem;
@@ -2974,9 +3061,18 @@ button:focus-visible {
   text-transform: uppercase;
   white-space: nowrap;
 }
+.lp-plan__price {
+  margin-top: 0.5rem !important;
+  color: var(--lp-cream);
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
 .lp-plan__period { margin-top: 0.15rem !important; color: rgba(247, 242, 232, 0.6); font-size: 0.76rem; }
 .lp-plan__blurb { margin-top: 0.55rem !important; color: rgba(247, 242, 232, 0.74); font-size: 0.84rem; line-height: 1.5; }
-.lp-plan__includes { display: grid; gap: 0.4rem; margin-top: 0.9rem !important; }
+/* Shared rows stretch the list box; the extra height goes after the last item, not between items. */
+.lp-plan__includes { display: grid; gap: 0.4rem; align-content: start; margin-top: 0.9rem !important; }
 .lp-plan__includes li { display: flex; gap: 0.45rem; color: rgba(247, 242, 232, 0.82); font-size: 0.82rem; line-height: 1.5; }
 .lp-plan__tick { flex: 0 0 auto; color: var(--lp-amber); font-weight: 800; }
 .lp-plan__cta {
@@ -2985,12 +3081,14 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   margin-top: auto;
+  margin-bottom: 0.5rem;
   border-radius: 999px;
   background: rgba(247, 242, 232, 0.92);
   padding: 0.6rem 1rem;
   color: #1a140d;
   font-size: 0.88rem;
   font-weight: 750;
+  text-align: center;
   text-decoration: none;
   transition: background-color 0.16s ease, transform 0.16s ease;
 }
@@ -2998,11 +3096,7 @@ button:focus-visible {
 .lp-plan[data-featured="true"] .lp-plan__cta { background: var(--lp-amber); }
 .lp-plan[data-featured="true"] .lp-plan__cta:hover { background: #f7b45c; }
 .lp-plan__fine { margin-top: 0.6rem !important; color: rgba(247, 242, 232, 0.55); font-size: 0.68rem; line-height: 1.5; text-align: center; }
-.lp-plans { padding-top: 0.25rem; }
-.lp-plan__includes li:first-child { margin-top: 0; }
-.lp-plan > :last-child { margin-bottom: 0; }
-.lp-plan { padding-bottom: 1.5rem; }
-.lp-plan__cta { margin-bottom: 0.5rem; }
+
 .lp-pricing__note {
   max-width: 48rem;
   margin: 1.5rem auto 0 !important;
@@ -3013,6 +3107,34 @@ button:focus-visible {
 }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1080px) { .lp-pricing .lp-plans { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/*
+ * Side-by-side cards share their rows. Only from 620px up: stacked cards are read one at a time
+ * and need no shared rows, so the phone layout keeps its natural card heights.
+ */
+@media (min-width: 620px) {
+  @supports (grid-template-rows: subgrid) {
+    /* Row gap becomes the cards' own margin-bottom, so the shared card rows are spaced by margins
+       rather than by the gutter the grid needs between rows of cards. */
+    .lp-pricing .lp-plans { gap: 0 0.9rem; }
+    .lp-plan {
+      display: grid;
+      grid-row: span 8;
+      grid-template-rows: subgrid;
+      margin-bottom: 0.9rem;
+    }
+    .lp-plan__name { grid-row: 1; }
+    .lp-plan__badge { grid-row: 2; }
+    .lp-plan__price { grid-row: 3; }
+    .lp-plan__period { grid-row: 4; }
+    .lp-plan__blurb { grid-row: 5; }
+    .lp-plan__includes { grid-row: 6; }
+    .lp-plan__cta { grid-row: 7; margin-top: 1.1rem; margin-bottom: 0; }
+    .lp-plan__fine { grid-row: 8; }
+    /* The cards' own bottom margin replaces the grid gutter the note used to clear. */
+    .lp-pricing__note { margin-top: 0.6rem !important; }
+  }
+}
 
 /* ── Steps ──────────────────────────────────────────────────────────────── */
 
@@ -3360,10 +3482,11 @@ button:focus-visible {
 .lp-hero__copy > *:nth-child(4) { animation-delay: 0.24s; }
 .lp-hero__copy > *:nth-child(5) { animation-delay: 0.32s; }
 .lp-hero__media img { animation: lp-hero-drift 28s ease-in-out infinite alternate; }
+/* Vertical drift only: a tilted mock cannot keep its rows on one left edge. */
 .lp-phone { animation: lp-float 10s ease-in-out infinite alternate; }
 @keyframes lp-rise { from { opacity: 0; transform: translate3d(0, 14px, 0); } to { opacity: 1; transform: none; } }
 @keyframes lp-hero-drift { from { transform: scale(1.02) translate3d(0, 0, 0); } to { transform: scale(1.1) translate3d(-1.5%, -1%, 0); } }
-@keyframes lp-float { from { transform: translate3d(0, 0, 0) rotate(-1.2deg); } to { transform: translate3d(0, -10px, 0) rotate(-1.2deg); } }
+@keyframes lp-float { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -8px, 0); } }
 
 /* ── Reduced motion: content first, motion optional ─────────────────────── */
 
