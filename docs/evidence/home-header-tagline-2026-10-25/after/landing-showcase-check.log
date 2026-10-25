@@ -1,0 +1,63 @@
+PASS narrow-android (320px): no horizontal overflow — 320px content / 320px viewport
+FAIL narrow-android: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS narrow-android: every image has an alt attribute
+PASS narrow-android: one <h1> and one <main id="main"> — h1=1 main=1
+PASS narrow-android: primary CTA present
+PASS narrow-android: no page errors
+PASS android (360px): no horizontal overflow — 360px content / 360px viewport
+FAIL android: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS android: every image has an alt attribute
+PASS android: one <h1> and one <main id="main"> — h1=1 main=1
+PASS android: primary CTA present
+PASS android: no page errors
+PASS large-phone (414px): no horizontal overflow — 414px content / 414px viewport
+PASS large-phone: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS large-phone: every image has an alt attribute
+PASS large-phone: one <h1> and one <main id="main"> — h1=1 main=1
+PASS large-phone: primary CTA present
+PASS large-phone: no page errors
+PASS tablet (768px): no horizontal overflow — 768px content / 768px viewport
+PASS tablet: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS tablet: every image has an alt attribute
+PASS tablet: one <h1> and one <main id="main"> — h1=1 main=1
+PASS tablet: primary CTA present
+PASS tablet: no page errors
+PASS laptop (1024px): no horizontal overflow — 1024px content / 1024px viewport
+PASS laptop: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS laptop: every image has an alt attribute
+PASS laptop: one <h1> and one <main id="main"> — h1=1 main=1
+PASS laptop: primary CTA present
+PASS laptop: no page errors
+PASS desktop (1440px): no horizontal overflow — 1440px content / 1440px viewport
+PASS desktop: every visible photograph decoded — 2 visible of 6 (the rest are lazy panels)
+PASS desktop: every image has an alt attribute
+PASS desktop: one <h1> and one <main id="main"> — h1=1 main=1
+PASS desktop: primary CTA present
+PASS desktop: no page errors
+PASS showcase renders one tab per demo business — 4 tabs
+PASS all demo cards link only to server-marked available destinations — [{"slug":"nyumbani-kitchen","available":false,"href":null},{"slug":"marys-beauty-studio","available":false,"href":null},{"slug":"kamau-auto-care","available":false,"href":null},{"slug":"john-kamau-properties","available":false,"href":null}]
+PASS first fictional demo panel is visible with sample services — {"hidden":false,"services":3,"routeAvailable":false,"link":null,"alt":"A plate of Kenyan pilau with beef, kachumbari and folded chapati on a wooden table. Illustrative photograph for the Nyumbani Kitchen example page — not a photo of the business.","height":557}
+PASS demo page link follows verified-demo and published/active/services eligibility — {"hidden":false,"services":3,"routeAvailable":false,"link":null,"alt":"A plate of Kenyan pilau with beef, kachumbari and folded chapati on a wooden table. Illustrative photograph for the Nyumbani Kitchen example page — not a photo of the business.","height":557}
+PASS fallback demo card does not link to an unavailable route
+PASS demo panel photography is labelled illustrative
+PASS clicking a tab switches the visible panel — {"clicked":true,"third":{"hidden":false,"services":3,"routeAvailable":false,"link":null,"alt":"A silver sedan on a Nairobi road at dusk with headlights on. Illustrative photograph for the Kamau Auto Care example page — not a photo of the business.","height":557},"first":{"hidden":true,"services":3,"routeAvailable":false,"link":null,"alt":"A plate of Kenyan pilau with beef, kachumbari and folded chapati on a wooden table. Illustrative photograph for the Nyumbani Kitchen example page — not a photo of the business.","height":0}}
+PASS switching panels does not shift the page above the showcase — 2367px → 2367px
+PASS ArrowRight moves to the next demo and its panel — demo-tab-john-kamau-properties
+PASS Home returns to the first demo
+PASS no uncaught page errors during showcase interactions
+PASS mobile menu is closed until the summary is pressed — {"open":false,"visible":false,"navRight":360,"viewport":360}
+PASS the navigation bar fits the phone width — 360px of 360px
+PASS mobile menu opens with every section link inside the viewport — {"visible":true,"links":["#product","#benefits","#demo","#pricing","#faq","/login","/register"],"left":74,"right":346,"width":272,"viewport":360}
+PASS reduced motion: .lp-hero__media img is static — {"selector":".lp-hero__media img","animation":"none","opacity":"1","visibility":"visible","height":179}
+PASS reduced motion: .lp-hero__media img stays visible
+PASS reduced motion: .lp-marquee__track is static — {"selector":".lp-marquee__track","animation":"none","opacity":"1","visibility":"visible","height":26}
+PASS reduced motion: .lp-marquee__track stays visible
+PASS reduced motion: .lp-phone is static — {"selector":".lp-phone","animation":"none","opacity":"1","visibility":"visible","height":499}
+PASS reduced motion: .lp-phone stays visible
+PASS reduced motion: .lp-hero__copy > * is static — {"selector":".lp-hero__copy > *","animation":"none","opacity":"1","visibility":"visible","height":47}
+PASS reduced motion: .lp-hero__copy > * stays visible
+
+56/58 checks passed
+Failures:
+ - narrow-android: every visible photograph decoded 2 visible of 6 (the rest are lazy panels)
+ - android: every visible photograph decoded 2 visible of 6 (the rest are lazy panels)
