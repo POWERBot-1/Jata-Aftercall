@@ -12,6 +12,7 @@
 
 import { useOfflineSync } from "@/lib/pos/offline/useOfflineSync";
 import type { OfflineSaleRecord } from "@/lib/pos/offline/types";
+import { formatDateTime } from "@/lib/dateFormat";
 import { OfflineBadge } from "@/components/ui/StateBlocks";
 
 function statusLabel(record: OfflineSaleRecord): { text: string; tone: string } {
@@ -91,7 +92,7 @@ export function OfflineSyncPanel({ businessId }: { businessId: string }) {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
                     {record.paymentKind === "pending" ? "Unconfirmed payment · " : ""}
-                    recorded {new Date(record.recordedAt).toLocaleString()}
+                    recorded {formatDateTime(record.recordedAt)}
                   </p>
                   <p className="pos-note">
                     {record.request.items.length} item(s) ·{" "}

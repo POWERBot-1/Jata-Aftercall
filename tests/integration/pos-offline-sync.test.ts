@@ -38,11 +38,8 @@ vi.mock("@/lib/auth", () => ({
 
 import { activateSubscriptionForPayment } from "@/lib/paystack";
 import type { FakeDb } from "@/tests/helpers/posFakeDb";
-import {
-  GET as syncGet,
-  POST as syncPost,
-  OFFLINE_SYNC_ACTOR_ID,
-} from "@/app/api/pos/[businessId]/sync/route";
+import { GET as syncGet, POST as syncPost } from "@/app/api/pos/[businessId]/sync/route";
+import { OFFLINE_SYNC_ACTOR_ID } from "@/lib/pos/offline/syncClient";
 import { POST as configPost } from "@/app/api/pos/[businessId]/configuration/route";
 import type { OfflineSaleRecord } from "@/lib/pos/offline/types";
 

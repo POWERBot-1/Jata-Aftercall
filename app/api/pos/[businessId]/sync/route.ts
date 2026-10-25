@@ -10,6 +10,7 @@ import { createSale } from "@/lib/pos/sales";
 import * as store from "@/lib/pos/store";
 import { logPosAudit } from "@/lib/pos/audit";
 import type { OfflineSaleRecord, OfflineSyncResult, OfflineSyncSummary } from "@/lib/pos/offline/types";
+import { OFFLINE_SYNC_ACTOR_ID } from "@/lib/pos/offline/syncClient";
 
 /**
  * Offline-first POS — server synchronization (§6, §25, §27).
@@ -31,8 +32,8 @@ import type { OfflineSaleRecord, OfflineSyncResult, OfflineSyncSummary } from "@
 
 export const dynamic = "force-dynamic";
 
-/** Stable identifier the offline replay key is scoped to (§6, §27). Not a real user id. */
-export const OFFLINE_SYNC_ACTOR_ID = "offline-sync";
+// The offline replay actor identity lives in lib/pos/offline/syncClient so it stays out of the
+// route's exported surface (Next.js type-checks that route modules only export handlers/config).
 
 /** Hard cap on records per batch so a corrupted or hostile client cannot DoS the endpoint. */
 const MAX_BATCH = 100;

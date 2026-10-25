@@ -27,6 +27,14 @@ import {
 } from "./queueStore";
 import type { OfflineSaleRecord, OfflineSyncResult, OfflineSyncSummary } from "./types";
 
+/**
+ * Actor identity used for replayed (offline) sales. Offline queue records have no device-side
+ * user session, so the sync endpoint tags the resulting sale, its idempotency record and every
+ * audit event with this stable actor instead of a person. It is deliberately distinct from any
+ * `userId`, so a queue replay can never be mistaken for an online sale by the same operator.
+ */
+export const OFFLINE_SYNC_ACTOR_ID = "offline-sync";
+
 export type OfflineSubmitResult = {
   offline: boolean;
   offlineId?: string;

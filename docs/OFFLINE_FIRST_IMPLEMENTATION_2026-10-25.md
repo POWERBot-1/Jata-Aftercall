@@ -71,6 +71,20 @@ flushOfflineQueue()                     │    → per-record result
 - `GET /api/pos/[businessId]/sync` — returns `{ syncedOfflineIds: string[] }` for cross-device
   reconciliation. Requires `VIEW_SALES`.
 
+## Build & hydration constraints
+
+Two non-obvious constraints surfaced by the release gate and are now encoded in the code:
+
+- **Route modules must not export non-handler values.** Next.js type-checks that an App Router
+  `route.ts` only exports route handlers / config. Exporting `OFFLINE_SYNC_ACTOR_ID` from the sync
+  route failed `next build` with `TS2344 ... Property 'OFFLINE_SYNC_ACTOR_ID' is incompatible with
+  index signature`. The constant therefore lives in `lib/pos/offline/syncClient.ts` and is imported
+  by the route (and the test).
+- **Client components must format with `@/lib/dateFormat`.** `toLocaleString`/`toLocaleDateString`
+  in a client component breaks hydration determinism (and is banned by
+  `tests/unit/hydration-determinism.test.ts` and `tests/unit/booking-time-display.test.ts`). The
+  recovery list renders `recordedAt` via `formatDateTime`.
+
 ## Schema / migrations
 
 **None.** Provenance is encoded in sale notes + the existing audit log; the `PosIdempotencyRecord`
