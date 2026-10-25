@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { validatePaymentEvidence } from "@/lib/paymentVerification";
 import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -77,6 +78,31 @@ export async function POST(req: Request) {
               targetType: "PAYMENT",
               targetId: refundPayment.id,
               metadata: JSON.stringify({ reason: "REFUNDED" }),
+            },
+          });
+        } else if (changed.count && refundPayment.businessId && isAutopilotPlanKey(refundPlanKey)) {
+          const suspendedSub = await tx.autopilotSubscription.updateMany({
+            where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
+            data: { status: "SUSPENDED" },
+          });
+          if (suspendedSub.count > 0) {
+            await tx.autopilotEntitlement.updateMany({
+              where: { businessId: refundPayment.businessId },
+              data: { status: "SUSPENDED" },
+            });
+          }
+          await tx.autopilotAuditEvent.create({
+            data: {
+              businessId: refundPayment.businessId,
+              actorKind: "SYSTEM",
+              actorUserId: refundPayment.userId,
+              action: "autopilot.subscription.suspended_refund",
+              targetType: "Payment",
+              targetId: refundPayment.id,
+              metadataJson: JSON.stringify({
+                reason: "REFUNDED",
+                subscriptionSuspended: suspendedSub.count > 0,
+              }),
             },
           });
         } else if (changed.count && refundPayment.businessId) {

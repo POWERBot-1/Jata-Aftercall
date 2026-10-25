@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
+import { assertBusinessOwnership, assertBusinessRole, TenantError } from "@/lib/tenant";
 import { initializeTransaction, toKobo } from "@/lib/paystack";
 import { getBaseUrl } from "@/lib/url";
 import { generatePaymentReference } from "@/lib/paymentReference";
 import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
 import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experience/entitlement";
 import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
+import { isAutopilotPlanKey, assertAutopilotPlanPricing } from "@/lib/autopilot/entitlement";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -46,6 +47,12 @@ export async function POST(req: Request) {
     // configures the charge, and a misconfigured plan fails closed instead of undercharging.
     if (plan.key === POS_PLAN_KEY && !assertPosPlanPricing(plan)) {
       return NextResponse.json({ error: "Business POS pricing configuration is invalid." }, { status: 500 });
+    }
+    if (isAutopilotPlanKey(plan.key)) {
+      await assertBusinessRole(businessId, session, "manage_billing");
+      if (!assertAutopilotPlanPricing(plan).ok) {
+        return NextResponse.json({ error: "JATA Autopilot pricing configuration is invalid." }, { status: 500 });
+      }
     }
     if (!user?.email) return NextResponse.json({ error: "Your account needs a valid email before checkout." }, { status: 400 });
 

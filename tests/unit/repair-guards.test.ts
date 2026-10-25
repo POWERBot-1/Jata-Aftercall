@@ -62,7 +62,9 @@ describe("runtime and schema guards", () => {
     const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
-    const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
+    const migrations = readdirSync(path.join(root, "prisma/migrations"))
+      .filter((name) => name !== "migration_lock.toml")
+      .sort();
     // The additional migrations are authorised, all purely additive: the Stage 2 referral
     // attribution schema, the commerce baseline the platform always needed, the Interactive
     // Business package schema, the Configurable Business POS schema, the Website Studio AI
@@ -81,7 +83,9 @@ describe("runtime and schema guards", () => {
     // instant and its meaning and no historical row is rewritten or backfilled), the media version
     // counter (one defaulted integer for strict compare-and-swap), and password recovery (additive
     // token table, per-account cooldown, and a defaulted session revocation counter), and the
-    // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only).
+    // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only),
+    // and the additive JATA Autopilot foundation (tenant-scoped Autopilot* tables, indexes, and
+    // foreign keys only).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -104,6 +108,7 @@ describe("runtime and schema guards", () => {
       "20261017000000_media_asset_version",
       "20261018000000_password_reset_security",
       "20261023000000_pos_publication_resolution",
+      "20261025000000_jata_autopilot_foundation",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -144,6 +149,7 @@ describe("runtime and schema guards", () => {
       "20261017000000_media_asset_version",
       "20261018000000_password_reset_security",
       "20261023000000_pos_publication_resolution",
+      "20261025000000_jata_autopilot_foundation",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -285,6 +291,38 @@ describe("runtime and schema guards", () => {
     expect(sql).not.toMatch(/ALTER TABLE "(?!Pos)/);
     expect(schema).toContain("posConfiguration         PosConfiguration?");
     expect(schema).toContain("posSales                 PosSale[]");
+  });
+
+  it("adds JATA Autopilot as new tenant-scoped tables and touches no existing table", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261025000000_jata_autopilot_foundation/migration.sql"),
+      "utf8",
+    );
+
+    const autopilotModels = [
+      "AutopilotSubscription",
+      "AutopilotEntitlement",
+      "AutopilotConfiguration",
+      "AutopilotUsageLedger",
+      "AutopilotCustomerProfile",
+      "AutopilotConsentRecord",
+      "AutopilotSession",
+      "AutopilotMessage",
+      "AutopilotIngestionRecord",
+      "AutopilotActionProposal",
+      "AutopilotAuditEvent",
+    ];
+    for (const model of autopilotModels) {
+      expect(schema).toContain(`model ${model} {`);
+      const start = schema.indexOf(`model ${model} {`);
+      const block = schema.slice(start, schema.indexOf("\n}", start));
+      expect(block).toContain("businessId");
+      expect(block).toContain("@@index([businessId");
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS "${model}"`);
+    }
+    expect(sql).not.toMatch(/ALTER TABLE "(?!Autopilot)/);
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE "|ALTER COLUMN/);
   });
 
   it("extends the schema additively for the Interactive Business package", () => {

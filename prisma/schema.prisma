@@ -146,6 +146,19 @@ model Business {
   paymentRefunds           Refund[]
   paymentAuditEvents       PaymentAuditEvent[]
 
+  // ── JATA Autopilot (additive, separate subscription & entitlement) ──
+  autopilotSubscription    AutopilotSubscription?
+  autopilotEntitlement     AutopilotEntitlement?
+  autopilotConfiguration   AutopilotConfiguration?
+  autopilotUsageLedger     AutopilotUsageLedger[]
+  autopilotCustomers       AutopilotCustomerProfile[]
+  autopilotConsents        AutopilotConsentRecord[]
+  autopilotSessions        AutopilotSession[]
+  autopilotMessages        AutopilotMessage[]
+  autopilotIngestions      AutopilotIngestionRecord[]
+  autopilotActionProposals AutopilotActionProposal[]
+  autopilotAuditEvents     AutopilotAuditEvent[]
+
   @@index([ownerId])
   @@index([slug])
 }
@@ -2107,3 +2120,246 @@ model PaymentAuditEvent {
   @@index([businessId, action])
   @@index([transactionId, createdAt])
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JATA Autopilot — Additive Tenant-Scoped Foundation
+// Separate subscription & entitlement from AFTERCALL and Business POS so
+// subscribing, pausing, or lapsing Autopilot never disturbs existing plans.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AutopilotSubscription {
+  id               String    @id @default(cuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  // JATA_AUTOPILOT | JATA_AUTOPILOT_PRO | JATA_AUTOPILOT_ENTERPRISE
+  planKey          String    @default("JATA_AUTOPILOT")
+  // PENDING | ACTIVE | EXPIRING | PAST_DUE | EXPIRED | SUSPENDED | CANCELLED
+  status           String    @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([userId])
+}
+
+model AutopilotEntitlement {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String    @default("JATA_AUTOPILOT")
+  // STANDARD | PRO | ENTERPRISE
+  tier        String    @default("STANDARD")
+  // NONE | ACTIVE | GRACE | SUSPENDED | EXPIRED | CANCELLED
+  status      String    @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+model AutopilotConfiguration {
+  id                    String   @id @default(cuid())
+  businessId            String   @unique
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // ASSISTED | SUPERVISED | ADVANCED
+  autonomyMode          String   @default("ASSISTED")
+  // LIVE | PAUSED
+  operationalStatus     String   @default("LIVE")
+  industryPackKey       String   @default("generic_custom")
+  quietHoursStart       String   @default("20:00")
+  quietHoursEnd         String   @default("07:00")
+  timezone              String   @default("Africa/Nairobi")
+  dailySpendCapMinorKES Int      @default(25000)
+  maxBatchRecipients    Int      @default(50)
+  maxAutoDiscountPct    Int      @default(0)
+  voiceEnabled          Boolean  @default(false)
+  configJson            String?  @db.Text
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([businessId, operationalStatus])
+}
+
+model AutopilotUsageLedger {
+  id                    String   @id @default(cuid())
+  businessId            String
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  periodKey             String
+  dayKey                String
+  // LLM_REASONING | VISION_EXTRACT | VOICE_STT | VOICE_TTS | OUTBOUND_MSG | WORKFLOW_STEP
+  capability            String
+  provider              String
+  unitsIn               Int      @default(0)
+  unitsOut              Int      @default(0)
+  estimatedCostMinorKES Int      @default(0)
+  idempotencyKey        String   @unique
+  createdAt             DateTime @default(now())
+
+  @@index([businessId, periodKey])
+  @@index([businessId, dayKey])
+}
+
+model AutopilotCustomerProfile {
+  id                    String                   @id @default(cuid())
+  businessId            String
+  business              Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  displayName           String?
+  phoneNormalized       String?
+  emailNormalized       String?
+  // NEW_LEAD | ENQUIRED | BOOKED_OR_ORDERED | REPEAT | VIP | AT_RISK | DORMANT
+  lifecycleStage        String                   @default("NEW_LEAD")
+  tagsJson              String                   @default("[]") @db.Text
+  notesSummary          String?                  @db.Text
+  lastInteractionAt     DateTime?
+  totalOrdersSnapshot   Int                      @default(0)
+  totalSpentSnapshotKES Int                      @default(0)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  consents              AutopilotConsentRecord[]
+
+  @@unique([businessId, phoneNormalized])
+  @@unique([businessId, emailNormalized])
+  @@index([businessId, lifecycleStage])
+}
+
+model AutopilotConsentRecord {
+  id                String                   @id @default(cuid())
+  businessId        String
+  business          Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerProfileId String
+  customerProfile   AutopilotCustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  // WHATSAPP | SMS | EMAIL | VOICE
+  channel           String
+  // TRANSACTIONAL | MARKETING
+  scope             String                   @default("TRANSACTIONAL")
+  // OPTED_IN | OPTED_OUT | UNSUBSCRIBED_KEYWORD
+  status            String                   @default("OPTED_IN")
+  source            String
+  recordedByUserId  String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@unique([businessId, customerProfileId, channel, scope], map: "AutopilotConsentRecord_biz_profile_channel_scope_key")
+  @@index([businessId, status])
+}
+
+model AutopilotSession {
+  id          String             @id @default(cuid())
+  businessId  String
+  business    Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUserId String
+  surface     String             @default("COMMAND_CENTER")
+  title       String?
+  status      String             @default("ACTIVE")
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  messages    AutopilotMessage[]
+
+  @@index([businessId, createdAt])
+}
+
+model AutopilotMessage {
+  id              String           @id @default(cuid())
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessionId       String
+  session         AutopilotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  // USER | ASSISTANT | SYSTEM
+  role            String
+  // TEXT | VOICE_TRANSCRIPT | DOCUMENT_EXTRACT
+  modality        String           @default("TEXT")
+  content         String           @db.Text
+  diagnosticsJson String?          @db.Text
+  createdAt       DateTime         @default(now())
+
+  @@index([businessId, sessionId, createdAt])
+}
+
+model AutopilotIngestionRecord {
+  id                   String   @id @default(cuid())
+  businessId           String
+  business             Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploadedByUserId     String
+  fileName             String
+  mimeType             String
+  byteSize             Int
+  sha256Hash           String
+  // MENU | CATALOGUE | PRICE_LIST | INVOICE | EXPENSE_RECEIPT | PAYMENT_SCREENSHOT_CLAIM | FAQ_DOC | OTHER
+  documentKind         String
+  extractedJson        String   @db.Text
+  confidence           String   @default("medium")
+  // NONE | UNVERIFIED_CLAIM_NEVER_PROOF
+  paymentClaimSafeFlag String   @default("NONE")
+  // PENDING_REVIEW | APPLIED | REJECTED
+  status               String   @default("PENDING_REVIEW")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, sha256Hash])
+}
+
+model AutopilotActionProposal {
+  id                       String    @id @default(cuid())
+  businessId               String
+  business                 Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessionId                String?
+  // CREATE_OR_UPDATE_OFFER | RESOLVE_UNANSWERED_FAQ | QUEUE_CONSENTED_FOLLOWUP
+  actionType               String
+  // READ_ONLY | LOW_RISK_DRAFT | MEDIUM_RISK_REVERSIBLE | HIGH_RISK_LOCKED
+  riskCategory             String    @default("LOW_RISK_DRAFT")
+  autonomyModeAtCreation   String    @default("ASSISTED")
+  // PROPOSED | APPROVED | EXECUTING | EXECUTED | REJECTED | EXPIRED | FAILED | ROLLED_BACK
+  status                   String    @default("PROPOSED")
+  title                    String
+  rationale                String    @db.Text
+  expectedImpact           String?   @db.Text
+  payloadJson              String    @db.Text
+  beforeSnapshotJson       String?   @db.Text
+  afterSnapshotJson        String?   @db.Text
+  rollbackSupported        Boolean   @default(true)
+  voiceTranscriptConfirmed Boolean   @default(false)
+  idempotencyKey           String
+  proposedBy               String    @default("AUTOPILOT")
+  decidedByUserId          String?
+  decidedAt                DateTime?
+  executedAt               DateTime?
+  rolledBackAt             DateTime?
+  expiresAt                DateTime?
+  lastError                String?   @db.Text
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+}
+
+model AutopilotAuditEvent {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // OWNER | STAFF | AUTOPILOT | SYSTEM | KILL_SWITCH
+  actorKind    String
+  actorUserId  String?
+  action       String
+  targetType   String?
+  targetId     String?
+  proposalId   String?
+  metadataJson String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([action])
+}
+

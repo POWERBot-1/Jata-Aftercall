@@ -5,6 +5,8 @@ import { isProviderTransactionId, isSettleablePaymentStatus, subscriptionWindow 
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
+import { isAutopilotPlanKey } from "./autopilot/entitlement";
+import { settleAutopilotPayment } from "./autopilot/settlement";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -105,16 +107,27 @@ export async function activateSubscriptionForPayment(
     if (!payment.businessId || !payment.planId) throw new Error("PAYMENT_CONTEXT_INVALID");
     if (payment.currency !== PAYMENT_CURRENCY) throw new Error("PAYMENT_CURRENCY_MISMATCH");
 
+    const planHint = await tx.planConfig?.findUnique?.({ where: { id: payment.planId } });
+    const isAutopilotPlan = isAutopilotPlanKey(planHint?.key);
+
     if (eventId) {
       const alreadySeen = await tx.processedWebhook.findUnique({ where: { id: eventId } });
       if (alreadySeen) {
-        return { subscription: await tx.subscription.findUnique({ where: { businessId: payment.businessId } }), alreadySettled: true };
+        const existingSub = isAutopilotPlan
+          ? await tx.autopilotSubscription.findUnique({ where: { businessId: payment.businessId } })
+          : await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
+        return { subscription: existingSub, alreadySettled: true };
       }
     }
 
-    const current = await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
-    const repairingLegacyPaidPayment = payment.status === "PAID" && !current;
-    if (payment.status === "PAID" && current) {
+    const current = isAutopilotPlan
+      ? await tx.autopilotSubscription.findUnique({ where: { businessId: payment.businessId } })
+      : await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
+    const alreadySettledThisPayment = isAutopilotPlan
+      ? Boolean(current && (current as { paymentId?: string | null }).paymentId === payment.id)
+      : Boolean(current);
+    const repairingLegacyPaidPayment = payment.status === "PAID" && !alreadySettledThisPayment;
+    if (payment.status === "PAID" && alreadySettledThisPayment) {
       if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
       return { subscription: current, alreadySettled: true };
     }
@@ -152,6 +165,9 @@ export async function activateSubscriptionForPayment(
     // guards. Every other plan key keeps exactly the behaviour it had before (§80).
     if (plan.key === POS_PLAN_KEY) {
       return settlePosPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
+    }
+    if (isAutopilotPlanKey(plan.key)) {
+      return settleAutopilotPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
     }
 
     const now = new Date();

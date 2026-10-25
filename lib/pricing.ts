@@ -34,7 +34,12 @@ export async function getActivePlans(): Promise<Plan[]> {
  * `homepagePlanCards`). Showing that card grants nothing: the POS still switches on only from
  * PlanConfig and confirmed payment inside the workspace.
  */
-export const PRIVATE_PLAN_KEYS = ["BUSINESS_POS"];
+export const PRIVATE_PLAN_KEYS = [
+  "BUSINESS_POS",
+  "JATA_AUTOPILOT",
+  "JATA_AUTOPILOT_PRO",
+  "JATA_AUTOPILOT_ENTERPRISE",
+];
 
 export function isPubliclyListedPlan(key: string): boolean {
   return !PRIVATE_PLAN_KEYS.includes(key);
@@ -190,11 +195,20 @@ export function assertBusinessPosPricing(plan: Plan | null): asserts plan is Pla
   }
 }
 
+export async function getJataAutopilotPlan(
+  key: "JATA_AUTOPILOT" | "JATA_AUTOPILOT_PRO" | "JATA_AUTOPILOT_ENTERPRISE" = "JATA_AUTOPILOT",
+): Promise<Plan | null> {
+  return getPlanByKey(key);
+}
+
 export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
   { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
   { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
   { key: "INTERACTIVE_BUSINESS", name: "Website Studio — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
-  // Private plan: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
+  // Private plans: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
   { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30, isActive: true },
 ];
