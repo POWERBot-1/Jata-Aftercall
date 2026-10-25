@@ -135,49 +135,91 @@ New regression tests — `tests/unit/workspace-design.test.ts` (23 assertions) �
 page's `PageHeader`, the loading screen's `LoadingBlock`); its intent (shared primitives, single
 `main` landmark, one toast surface, no raw enums) is preserved and extended.
 
-### 3.2 Visual verification — status: **partially blocked**
+### 3.2 Visual verification — status: **PASS** (rendered browser, 390 px + 1440 px)
 
-A headless Chromium was obtained for this session (`@sparticuz/chromium`), but it cannot start in
-this sandbox: three shared libraries are missing (`libnspr4.so`, `libnss3.so`,
-`libnssutil3.so`), and the sandbox has network access to npm/PyPI/GitHub only — the OS package
-repositories and the browser download hosts are unreachable. No alternative rendering engine was
-available, so I could not capture viewport screenshots at 390 px and 1440 px.
+Chromium runs in this sandbox through a locally supplied binary (`CHROME_PATH=/tmp/chromium` with
+`LD_LIBRARY_PATH=/tmp/nssstub`), and `scripts/verification/workspace-screenshots.mjs` photographs
+the **production build** against the disposable `jata_e2e` database: it registers synthetic owners
+through the real `/register` and `/login` forms, provisions entitlement/website/POS data through the
+application's own APIs, then captures every mission route at both widths.
 
-What was verified instead:
+Latest run: **148 screenshots, every capture HTTP 200, 0 structural flags** (no horizontal overflow
+at 390 px or 1440 px, no broken images, no runtime or console errors, exactly one `<main>`).
 
-* every changed route renders server-side without error at request time (smoke test above);
-* the compiled stylesheet contains both palettes (`--ws-cream: #f7f2e8` and `#171412`) and every
-  `ws-*` component class the markup references (checked in the emitted CSS);
-* mobile safety is enforced structurally, not eyeballed: the section rail is the only
-  horizontally scrolling element (`overflow-x: auto`, `scroll-snap`), cards/metrics/plans use
-  `minmax(0, 1fr)` grids and `min-width: 0`, long names use `overflow-wrap: anywhere`, and every
-  image reserves its box via `width`/`height` or an `aspect-ratio` container.
+| Group | Routes captured |
+| --- | --- |
+| Public | `/`, `/login`, `/register`, `/forgot-password`, `/reset-password`, the three seeded demo business pages |
+| Storefront | published salon home / shop / book, published retail home / shop, published professional enquiry form |
+| Account | `/onboarding` (signed-in owner, draft restored), `/dashboard`, `/dashboard/subscription`, `/dashboard/studio` |
+| Business | `/dashboard/businesses/[id]` + `insights, items, orders, bookings, canvas, design, photos, preview, sections, theme` |
+| POS | `/dashboard/pos`, `[businessId]` + `sell, products, inventory, sales, orders, customers, suppliers, staff, branches, settings, configure, plan, preview, appointments, menu, jobs, produce, projects, credit` |
+| AI | `/dashboard/ai` (unentitled and entitled), cockpit tabs |
+| Admin | `/admin`, `businesses`, `customers`, `payments`, `payments/wallet`, `plans`, `subscriptions` |
 
-**To see it in a browser:** the dev server for this branch is served as a live preview by Arena.
-Open `/login` and `/register` (public), or `/dev/workspace-preview` for the populated workspace
-(fixtures are labelled synthetic and the route 404s in production).
+Defects found in this pass by looking at the renders, and fixed:
 
-This is the main outstanding verification item; it needs one round of real screenshots on a
-machine with a working Chromium before merge.
+* **Storefront header clipped its own CTA on a phone.** A two-word primary action ("Book a
+  consultation") could not fit beside the brand at 390 px and was cut by the screen edge. The
+  header now drops the CTA below 640 px, where the fixed action bar already carries the same action
+  in full (`app/globals.css`).
+* **Duplicated catalogue count.** The shop header printed "3 products" and the grid printed
+  "3 products" again; the grid line now speaks only when a filter or search has narrowed the list.
+* **Priceless fixtures (harness bug, not app).** The storefront product API takes `basePriceKES`
+  while the POS API takes `priceKES`; the harness sent the POS name to both, so the public
+  catalogue rendered "Request a quote" instead of a price. Fixed in the harness; real prices and
+  `ADD TO BASKET` now appear.
+* **Two identical "Live" pills** on the studio business card (business state + experience state).
+  The site-state pill is now rendered only when it adds information (hidden site, or disagreement
+  with the business record).
+* **Onboarding had no step illustration or step guidance** — added `components/onboarding/
+  StepIllustration.tsx`: seven token-coloured SVG scenes (shopfront, phone, map pin, catalogue,
+  swatches, plan card, launch) plus two "what this step needs" bullets, decorative and
+  `aria-hidden`, styled by an `.ob-step` block that follows the active appearance.
+* **Hero copy sat on the brightest part of the photograph.** The scrim ramps more gradually and the
+  subtitle/meta opacities were raised for AA contrast.
+* **Out-of-stock POS tiles** read "0 piece"; they now read "Out of stock" (still selectable, because
+  the server — not the tile — is the oversell authority).
 
----
+### 3.3 Functional regression suite
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run` (unit/integration) | **217 files, 2687 tests passed, 0 failed** with the disposable database attached; 205 files / 2609 tests with it detached (the difference is the Prisma-backed suites, which skip without a database) |
+| `npm run test:e2e` / `test:e2e:pos` | 17 + 22 passed |
+| `npm run test:browser:studio-hydration` | 25 passed, 0 failed |
+| `npm run test:browser:studio-authenticated` | **436 passed, 0 failed**; hydration gate `M418 GATE PASS` (15/15 required samples) |
+| `npx eslint app components lib` | 0 errors, 40 warnings (pre-existing patterns) |
+| `npx tsc --noEmit` | clean |
 
 ## 4. Remaining work (not done in this pass)
 
-Deliberately left for a follow-up increment, in priority order:
+1. **Checkout / receipt / storefront artwork.** The customer-facing storefront is theme-driven by
+   the business's own document; it was deliberately not restyled beyond the header/CTA fixes above.
+   `.pos-receipt` is pinned to white/black on purpose — it is a print artefact.
+2. **Manual assistive-technology pass.** Keyboard order, focus rings, 44 px targets and a
+   `prefers-reduced-motion` block are enforced in CSS and covered by unit tests, but no screen
+   reader (VoiceOver/TalkBack) session was run; that needs a human with the device.
+3. **Media upload pipeline.** The harness cannot exercise uploads (no storage provider in this
+   sandbox) and writes a first-party image reference directly; the upload flow itself is unproven
+   here.
+4. **Public AI front desk route.** `/b/<slug>/ai` needs a business that is *published* (Interactive
+   Business plan) *and* holds the AI package; those plans are mutually exclusive in the current
+   plan matrix, so the harness cannot compose a fixture that satisfies both. The cockpit itself is
+   captured on an AI-entitled account; the customer-facing route is **NOT TESTED** in the harness.
+5. **Admin console pagination.** `/admin/businesses` lists every row on one page. Correct, but it
+   will not stay usable as the table grows.
 
-1. **POS inner screens** (`/dashboard/pos/[businessId]/**`, 30 routes) and the **Website Studio
-   editor panels** (canvas, sections, items, photos, design, theme, orders, bookings, insights).
-   They inherit the new chrome, palette and tokens, but their internals still use the older
-   tailwind/`jata-*` compositions and have not been art-directed individually.
-2. **Admin screens** (`/admin/**`): untouched.
-3. **Checkout / receipt / storefront**: untouched on purpose — customer-facing and theme-driven.
-4. **Onboarding wizard internals** (step illustrations, plan step visual parity with the new
-   `PlanCard`): the shell is new, the steps are not.
-5. **AI Front Desk cockpit internals**: the shell and duplicate chrome were fixed; the tab
-   content, conversation list and readiness visuals are still the original console styling.
-6. **Screenshot evidence** and a manual accessibility pass (VoiceOver/TalkBack, 200 % zoom,
-   reduced motion) on a machine with a browser.
+---
 
-Nothing above was merged or deployed. No pull request was merged and no production deployment was
-performed; that requires the owner's explicit authorisation.
+## 5. Release record
+
+* **Branch:** `arena/321c76ed-jata-aftercall` — one PR (#60), no force-push, no replacement PR.
+* **Evidence harness:** `scripts/verification/workspace-screenshots.mjs`. The temporary
+  `.github/workflows/verification-artifacts.yml` used to shuttle screenshots out of CI was deleted,
+  as was its `ci/verification-artifacts` branch — it was tooling, never part of the product.
+* **Screenshots:** `.cache/verification/workspace-screenshots/` (git-ignored; 148 JPEGs and
+  `report.md` with the per-route table).
+
+Payment/provider behaviour was not exercised: this sandbox cannot reach Paystack, so the fixtures
+hold a stored synthetic entitlement that is labelled as such, and no screen claims a provider
+confirmed a payment.

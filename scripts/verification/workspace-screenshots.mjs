@@ -123,8 +123,6 @@ async function main() {
   for (const slug of ["marys-beauty-studio", "kamau-auto-care", "john-kamau-properties"]) {
     await capture(anonymousPage, `public-${slug}`, `/b/${slug}`, { anonymous: true });
   }
-  await capture(anonymousPage, "public-shop", "/b/kamau-auto-care/shop", { anonymous: true });
-  await capture(anonymousPage, "public-book", "/b/marys-beauty-studio/book", { anonymous: true });
   await anonymousContext.close();
 
   // ── synthetic owners ────────────────────────────────────────────────────────────────────────
@@ -159,6 +157,12 @@ async function main() {
       { name: "Linen apron", priceKES: 1450, category: "Home", quantity: 6, sku: "QA-APRON" },
       { name: "Beeswax candle", priceKES: 900, category: "Home", quantity: 0, sku: "QA-CANDLE" },
     ],
+    // A retail website, published through the app's own create/edit/publish endpoints, so the
+    // public shop route photographs a genuinely published catalogue rather than a 404.
+    website: {
+      categoryKey: "retail",
+      patch: { themeKey: "lime-spark", brand: { tagline: "Everyday goods, counted and ready" } },
+    },
     posAnswers: {
       business_type: "retail", sells: ["products"], payment_methods: ["cash", "mpesa"],
       keeps_stock: true, keeps_customers: true, has_staff: true, multi_branch: false,
@@ -172,6 +176,41 @@ async function main() {
     profile: { phone: "0712 000 333", whatsapp: "0712 000 333", location: "Westlands, Nairobi",
       description: "Synthetic acceptance fixture for visual verification — not a real business." },
     services: [{ title: "Initial consultation", priceFrom: 2000, pricingType: "FIXED", durationMinutes: 45, bookingEnabled: true }],
+  });
+
+  // Public catalogue + enquiry surfaces need a *published* page, and publishing is plan-gated to
+  // the Interactive Business plan. These two fixtures therefore publish their own category's
+  // storefront through the real create/edit/publish endpoints.
+  const retailOwner = await provision(provisioningPage, {
+    label: "retail", name: "QA Retail Owner", businessName: `QA Retail ${runId}`, category: "retail",
+    planKey: "INTERACTIVE_BUSINESS",
+    profile: { phone: "0712 000 555", whatsapp: "0712 000 555", location: "Eastleigh, Nairobi",
+      description: "Synthetic acceptance fixture for visual verification — not a real business." },
+    // No stock quantities and no POS operating profile: this fixture exists to publish a public
+    // catalogue, and stock/POS writes belong to the BUSINESS_POS plan the `pos` fixture holds.
+    products: [
+      { name: "Maasai sandals", priceKES: 2400, category: "Footwear", sku: "QA-SANDAL" },
+      { name: "Kikoy towel", priceKES: 1100, category: "Home", sku: "QA-KIKOY" },
+      { name: "Soapstone bowl", priceKES: 1650, category: "Gifts", sku: "QA-BOWL" },
+    ],
+    website: {
+      categoryKey: "retail",
+      patch: { themeKey: "lime-spark", brand: { tagline: "Handmade goods, honestly priced" } },
+    },
+  });
+  const proOwner = await provision(provisioningPage, {
+    label: "pro", name: "QA Advisory Owner", businessName: `QA Advisory ${runId}`, category: "professional",
+    planKey: "INTERACTIVE_BUSINESS",
+    profile: { phone: "0712 000 666", whatsapp: "0712 000 666", location: "Upper Hill, Nairobi",
+      description: "Synthetic acceptance fixture for visual verification — not a real business." },
+    services: [
+      { title: "Tax advisory retainer", priceFrom: 15000, pricingType: "QUOTE", bookingEnabled: false },
+      { title: "Books clean-up", priceFrom: 9000, pricingType: "FIXED", durationMinutes: 90, bookingEnabled: true },
+    ],
+    website: {
+      categoryKey: "professional",
+      patch: { themeKey: "emerald-ink", brand: { tagline: "Ask before you commit" } },
+    },
   });
 
   const adminOwner = await provision(provisioningPage, {
@@ -190,8 +229,13 @@ async function main() {
   await capture(publicPage, "storefront", `/b/${studioOwner.slug}`, { anonymous: true });
   await capture(publicPage, "storefront-shop", `/b/${studioOwner.slug}/shop`, { anonymous: true });
   await capture(publicPage, "storefront-book", `/b/${studioOwner.slug}/book`, { anonymous: true });
-  await capture(publicPage, "storefront-enquire", `/b/${studioOwner.slug}/enquire`, { anonymous: true });
-  await capture(publicPage, "storefront-ai", `/b/${studioOwner.slug}/ai`, { anonymous: true });
+  // Enquiry and the AI front desk are category features, not universal routes: each demo business
+  // mirrors one of them, so the 404s on a salon storefront are the product's own scoping.
+  // Category-scoped customer surfaces, each photographed on the fixture whose own category owns
+  // it: a retail catalogue, a professional request-only enquiry form, and the paid AI front desk.
+  await capture(publicPage, "storefront-shop-retail", `/b/${retailOwner.slug}/shop`, { anonymous: true });
+  await capture(publicPage, "storefront-enquire", `/b/${proOwner.slug}/enquire`, { anonymous: true });
+  await capture(publicPage, "storefront-retail", `/b/${retailOwner.slug}`, { anonymous: true });
   await publicContext.close();
 
   // ── studio + account surfaces ────────────────────────────────────────────────────────────
@@ -343,9 +387,12 @@ async function provision(visitorPage, spec) {
     // The POS catalogue and the storefront catalogue are different products on purpose; seed the
     // one the screens being photographed actually read.
     const path = spec.planKey === "BUSINESS_POS" ? `/api/pos/${business.id}/products` : "/api/products";
+    // The two catalogues have different field names: the POS product API takes `priceKES`, the
+    // storefront catalogue API takes `basePriceKES`. Sending the wrong one is silently accepted
+    // and stores a priceless product, which is what the first version of this fixture did.
     const payload = spec.planKey === "BUSINESS_POS"
       ? { name: product.name, priceKES: product.priceKES, category: product.category, sku: product.sku, kind: "PRODUCT", trackInventory: true, reorderLevel: 5 }
-      : { businessId: business.id, isActive: true, ...product };
+      : { businessId: business.id, isActive: true, ...product, basePriceKES: product.priceKES, priceKES: undefined };
     const created2 = await api(path, "POST", payload);
     seedLog.push(`${spec.label}: product "${product.name}" ${created2.status} ${created2.status >= 400 ? JSON.stringify(created2.body).slice(0, 140) : ""}`);
     if (spec.planKey === "BUSINESS_POS" && created2.status < 300 && product.quantity > 0) {
@@ -467,7 +514,13 @@ async function capture(page, name, path, options = {}) {
   const listeners = {
     console: (message) => { if (message.type() === "error") consoleErrors.push(message.text().replace(/\s+/g, " ").slice(0, 200)); },
     pageerror: (error) => pageErrors.push(String(error.message).replace(/\s+/g, " ").slice(0, 200)),
-    requestfailed: (request) => failedRequests.push(`${request.method()} ${new URL(request.url()).pathname} ${request.failure()?.errorText || ""}`.slice(0, 160)),
+    // Next's prefetch requests are cancelled by design when a navigation supersedes them; an
+    // ERR_ABORTED on a prefetch is not a failure and must not be reported as one.
+    requestfailed: (request) => {
+      const reason = request.failure()?.errorText || "";
+      if (reason.includes("ERR_ABORTED")) return;
+      failedRequests.push(`${request.method()} ${new URL(request.url()).pathname} ${reason}`.slice(0, 160));
+    },
   };
   page.on("console", listeners.console);
   page.on("pageerror", listeners.pageerror);

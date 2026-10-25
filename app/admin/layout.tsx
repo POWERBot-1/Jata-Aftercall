@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="ws-shell">
-      <a href="#main" className="jata-skip">Skip to content</a>
+      <a href="#main" className="jata-skip-link">Skip to content</a>
       <header className="ws-chrome">
         <div className="ws-chrome__row">
           <Link href="/admin" className="flex items-center gap-2" aria-label="JATA admin overview">

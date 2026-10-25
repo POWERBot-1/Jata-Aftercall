@@ -121,7 +121,12 @@ export default async function StudioIndexPage() {
                       <StatusPill tone={business.isPublished ? "success" : "neutral"} icon={<Globe size={11} />}>
                         {business.isPublished ? "Live" : "Draft"}
                       </StatusPill>
-                      <StatusPill tone={state.tone}>{state.label}</StatusPill>
+                      {/* The business pill already says Live/Draft. Render the site-state pill only
+                          when it adds information — a hidden site, or a site state that disagrees
+                          with the business record — never as a second identical "Live". */}
+                      {state.label !== (business.isPublished ? "Live" : "Draft") ? (
+                        <StatusPill tone={state.tone}>{state.label}</StatusPill>
+                      ) : null}
                       <StatusPill tone={entitlement.tone}>Package: {entitlement.label}</StatusPill>
                       {hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
                       {experience ? <StatusPill tone="neutral">Version {experience.publishedVersion}</StatusPill> : null}

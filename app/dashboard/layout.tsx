@@ -27,13 +27,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect("/login");
 
+  // A brand-new account is sent to onboarding. A *member* of someone else's business (staff, or
+  // an invited collaborator) is not: they already have a workspace to open, and sending them to
+  // "create a business" would invite a duplicate. `businessMember` is the same membership the
+  // business routes authorise against, so this is consistent with them.
   let owned: number | null = null;
+  let member = false;
   try {
     owned = await prisma.business.count({ where: { ownerId: session.userId } });
+    if (owned === 0) {
+      member = Boolean(await prisma.businessMember.findFirst({ where: { userId: session.userId }, select: { id: true } }));
+    }
   } catch {
     owned = null;
   }
-  if (owned !== null) {
+  if (owned !== null && !member) {
     const dest = dashboardRedirectTarget(owned);
     if (dest) redirect(dest);
   }

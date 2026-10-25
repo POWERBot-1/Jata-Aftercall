@@ -706,6 +706,52 @@ button:focus-visible {
   transition: width 0.2s ease;
 }
 .product-theme-root .jata-stepper-bar > span { background: var(--color-primary); }
+
+/* Onboarding step illustration + guidance. The scene is drawn with `currentColor` and the action
+   token, so it inherits whichever appearance the workspace is in instead of being a fixed bitmap. */
+.ob-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 1rem;
+  background: var(--jata-soft);
+}
+.ob-step__scene { flex: 0 0 auto; width: 3.4rem; height: 3.4rem; }
+.ob-step__body { min-width: 0; }
+.ob-step__title {
+  margin: 0;
+  font-family: var(--jata-display, inherit);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--jata-ink);
+}
+.ob-step__hints {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--jata-muted);
+}
+.ob-step__hints li { display: flex; gap: 0.4rem; }
+.ob-step__hints li::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.32rem;
+  height: 0.32rem;
+  margin-top: 0.42rem;
+  border-radius: 999px;
+  background: var(--jata-action);
+}
+@media (max-width: 480px) {
+  .ob-step__scene { width: 2.8rem; height: 2.8rem; }
+}
 .product-theme-root .bg-red-50 { background-color: var(--color-error-surface); }
 .product-theme-root .text-red-700 { color: var(--color-error); }
 
@@ -860,6 +906,10 @@ button:focus-visible {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* The brand is the only part of the header allowed to give way. Without `min-width: 0` the
+     flex child keeps its intrinsic width, so a long business name plus a two-word CTA used to
+     push the primary button past the right edge on a 390 px screen. */
+  min-width: 0;
 }
 .eb-nav__links {
   display: none;
@@ -876,6 +926,14 @@ button:focus-visible {
 }
 .eb-nav--pill .eb-nav__link:hover { background: var(--eb-surface-muted); }
 .eb-nav__cta { flex-shrink: 0; }
+@media (max-width: 640px) {
+  /* On a phone the header CTA is redundant and dangerous: the fixed action bar below the fold
+     already carries the same primary action in full, thumb-reachable wording, while a two-word
+     label like "Book a consultation" cannot fit beside the brand and used to be clipped by the
+     edge of the screen. The brand keeps the row to itself. */
+  .eb-nav__inner { gap: 0.75rem; min-height: 3.5rem; }
+  .eb-nav__cta { display: none; }
+}
 
 /* ── Buttons ── */
 .eb-btn {
@@ -4303,9 +4361,12 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -1;
+  /* Coverage is deliberately heavier than "a photo with a gradient": the subtitle and the meta
+     line run to the middle of the card, over the brightest part of the city lights, so the scrim
+     has to still be near-opaque there for the body copy to clear AA contrast. */
   background:
-    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.86) 44%, rgba(20, 17, 15, 0.38) 100%),
-    linear-gradient(0deg, rgba(20, 17, 15, 0.72), transparent 62%);
+    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.9) 42%, rgba(20, 17, 15, 0.74) 68%, rgba(20, 17, 15, 0.42) 100%),
+    linear-gradient(0deg, rgba(20, 17, 15, 0.7), transparent 62%);
 }
 .ws-hero__inner { position: relative; display: grid; gap: 1rem; max-width: 46rem; }
 .ws-hero__title {
@@ -4318,9 +4379,9 @@ button:focus-visible {
   text-wrap: balance;
 }
 .ws-hero__title em { font-style: italic; color: var(--ws-amber); }
-.ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.76); font-size: 0.92rem; line-height: 1.6; }
+.ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.88); font-size: 0.92rem; line-height: 1.6; }
 .ws-hero__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
-.ws-hero__meta { color: rgba(247, 242, 232, 0.6); font-size: 0.75rem; }
+.ws-hero__meta { color: rgba(247, 242, 232, 0.78); font-size: 0.75rem; }
 .ws-hero__stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4954,6 +5015,146 @@ html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-secondary:hover:not(:disa
 html[data-jata-theme="lime-spark"] .ws-hero { border-color: rgba(247, 242, 232, 0.16); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-plan__includes svg,
 html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var(--ws-jade); }
+
+/* ── Admin console ────────────────────────────────────────────────────────
+   The console is the same product, so it borrows the workspace tokens rather than inventing a
+   second palette. These are the four surfaces its pages need: an editorial page head, a search
+   row, one record card and the scrollable table skin. */
+
+.ws-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+.ws-page-title {
+  margin: 0.15rem 0 0;
+  font-family: var(--ws-display);
+  font-size: clamp(1.45rem, 3.4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  color: var(--ws-text);
+  text-wrap: balance;
+}
+.ws-page-sub { margin: 0.3rem 0 0; max-width: 58ch; color: var(--ws-muted); font-size: 0.86rem; line-height: 1.55; }
+.ws-page-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.ws-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-search input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  background: var(--ws-solid);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.ws-search input::placeholder { color: var(--ws-faint); }
+.ws-search input:focus-visible { outline: 2px solid var(--ws-amber-deep); outline-offset: 2px; }
+
+.ws-record {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.ws-record__title {
+  margin: 0;
+  font-family: var(--ws-display);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ws-text);
+  overflow-wrap: anywhere;
+}
+.ws-record__sub { margin: 0.2rem 0 0; color: var(--ws-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.ws-record__facts {
+  display: grid;
+  gap: 0.4rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ws-line-soft);
+}
+.ws-record__facts dt { color: var(--ws-faint); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.ws-record__facts dd { margin: 0.1rem 0 0; color: var(--ws-text); font-size: 0.82rem; overflow-wrap: anywhere; }
+.ws-record__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--ws-line);
+  padding: 0.1rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-status[data-tone="success"] { border-color: color-mix(in srgb, var(--ws-jade) 45%, var(--ws-line)); background: color-mix(in srgb, var(--ws-jade) 14%, transparent); color: var(--ws-jade); }
+.ws-status[data-tone="warning"] { border-color: color-mix(in srgb, var(--ws-amber) 55%, var(--ws-line)); background: color-mix(in srgb, var(--ws-amber) 16%, transparent); color: var(--ws-amber-deep); }
+.ws-status[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 45%, var(--ws-line)); background: color-mix(in srgb, #dc2626 12%, transparent); color: color-mix(in srgb, #dc2626 70%, var(--ws-text)); }
+.ws-status[data-tone="neutral"] { background: var(--ws-wash); color: var(--ws-muted); }
+
+.ws-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: 0.84rem; }
+.ws-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--ws-line);
+  background: var(--ws-cream-2);
+  color: var(--ws-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-table tbody td { padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--ws-line-soft); color: var(--ws-text); vertical-align: top; }
+.ws-table tbody tr:last-child td { border-bottom: 0; }
+.ws-table tbody tr:hover td { background: var(--ws-wash); }
+.ws-table .ws-table__num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ws-table .ws-table__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; overflow-wrap: anywhere; }
+
+/* The outline button is drawn for an ink surface; inside the console it sits on paper. */
+.ws-btn-outline--ink {
+  min-height: 2.4rem;
+  border-color: var(--ws-line);
+  background: var(--ws-solid);
+  color: var(--ws-text);
+  font-size: 0.8rem;
+}
+.ws-btn-outline--ink:hover { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
+
 
 /* ── Motion & accessibility ────────────────────────────────────────────── */
 

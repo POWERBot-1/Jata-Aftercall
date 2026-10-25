@@ -122,9 +122,12 @@ export function PreviewClient({
       </p>
 
       <div className="flex justify-center">
+        {/* `maxWidth` stays the device's own pixel width — the authenticated browser gate reads it
+            back to prove the frame really is a 390/834/1280 px viewport. `min-w-0` is what lets the
+            wrapper shrink inside a narrow phone column instead of forcing the page to scroll. */}
         <div
           className="w-full min-w-0 overflow-hidden rounded-2xl border bg-zinc-100"
-          style={{ width: "100%", maxWidth: `min(100%, ${active.width}px)` }}
+          style={{ width: "100%", maxWidth: active.width }}
         >
           <iframe
             key={`${mode}-${device}-${nonce}`}

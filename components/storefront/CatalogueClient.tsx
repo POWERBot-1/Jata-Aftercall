@@ -76,6 +76,10 @@ export function CatalogueClient({
     return result;
   }, [items, category, priceBand, availability, query, duration, requestType, filters.priceBands]);
 
+  const narrowed = Boolean(
+    query.trim() || category || priceBand || duration !== "ALL" || requestType !== "ALL" || availability !== "ALL",
+  );
+
   return (
     <div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center", marginBottom: "1.5rem" }}>
@@ -158,8 +162,13 @@ export function CatalogueClient({
         </div>
       ) : null}
 
-      <p className="eb-muted" style={{ marginBottom: "1rem" }} aria-live="polite">
-        {visible.length} {visible.length === 1 ? filters.itemNoun.toLowerCase() : filters.itemNounPlural.toLowerCase()}
+      {/* The page header already states the unfiltered total, so this line only speaks when a
+          filter or search has actually narrowed the catalogue — otherwise it repeats the header
+          verbatim. It stays in the DOM as the polite live region that announces the new count. */}
+      <p className="eb-muted" style={{ marginBottom: narrowed ? "1rem" : 0 }} aria-live="polite">
+        {narrowed
+          ? `${visible.length} ${visible.length === 1 ? filters.itemNoun.toLowerCase() : filters.itemNounPlural.toLowerCase()} match`
+          : ""}
       </p>
 
       {visible.length === 0 ? (
