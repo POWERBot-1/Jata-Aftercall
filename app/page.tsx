@@ -111,11 +111,10 @@ export default async function HomePage() {
                 const featured = p.key === "ANNUAL";
                 return (
                   <article key={p.key} className="lp-plan" data-featured={featured} aria-label={planDisplayName(p)}>
-                    <div className="lp-plan__top">
-                      <p className="lp-plan__name">{planDisplayName(p)}</p>
-                      {badge ? <span className="lp-plan__badge">{badge}</span> : null}
-                    </div>
-                    <p className="mt-1 text-3xl font-bold">KES {formatNumber(p.priceKES)}</p>
+                    {/* One direct child per card row, so the cards can share those rows (see `.lp-plan` in globals.css). */}
+                    <p className="lp-plan__name">{planDisplayName(p)}</p>
+                    {badge ? <span className="lp-plan__badge">{badge}</span> : null}
+                    <p className="lp-plan__price">KES {formatNumber(p.priceKES)}</p>
                     <p className="lp-plan__period">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
                     {p.key === "INTERACTIVE_BUSINESS" ? <p className="lp-plan__blurb">Build, edit and preview your interactive business website.</p> : null}
                     {includes.length > 0 ? (

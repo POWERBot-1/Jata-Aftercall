@@ -44,8 +44,8 @@ export function Hero() {
             For Kenyan micro &amp; small businesses
           </p>
           <h1 id="hero-title" className="lp-hero__title">
-            Make the next step after a customer interaction{" "}
-            <span className="lp-hero__accent">easy to find.</span>
+            Turn every customer conversation{" "}
+            <span className="lp-hero__accent">into action.</span>
           </h1>
           <p className="lp-hero__lede">
             JATA AFTERCALL gives your business a light, mobile-first page for the moment <em>after</em> a customer
