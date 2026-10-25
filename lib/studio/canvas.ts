@@ -65,7 +65,9 @@ export function setSectionVisible(document: ExperienceDocument, sectionId: strin
 
 /** Edit the copy the outline shows and the preview renders. Title only, so prices are never touched. */
 export function setSectionTitle(document: ExperienceDocument, sectionId: string, title: string): ExperienceDocument {
-  const clean = title.slice(0, 120);
+  // 90 is the server's own cap (normalizeSection → safeText(raw.title, 90)); matching it here
+  // means the optimistic value and the saved value cannot disagree.
+  const clean = title.slice(0, 90);
   return {
     ...document,
     sections: document.sections.map((section) => (section.id === sectionId ? { ...section, title: clean } : section)),
@@ -117,14 +119,49 @@ function fallbackTitle(type: SectionType, source: "data" | "content" | "mixed"):
   return `${sectionLabel(type)} — add your own words`;
 }
 
+/**
+ * Which section fields the Canvas can actually persist.
+ *
+ * `normalizeSection` keeps a known set of top-level keys and the `cta` object. A field whose key
+ * is not one of those would render an input that accepts typing and then saves nothing — the
+ * worst kind of defect, because it looks like it worked. Only persistable fields are offered.
+ */
+const PERSISTABLE_TEXT_KEYS = new Set(["title", "subtitle", "body", "imageUrl", "layout", "filter", "limit"]);
+
 /** Fields the inspector can edit in place, in the order an owner would fill them in. */
 export function inspectorFieldsFor(section: ExperienceSection | null) {
   if (!section) return [];
   const definition = sectionDefinition(section.type);
   if (!definition) return [];
-  // `items` is a repeatable sub-editor; the Canvas sends the owner to the catalogue for those,
-  // so a data section can never be duplicated into the website document.
-  return definition.fields.filter((field) => field.type !== "items");
+  return definition.fields.filter((field) => {
+    // `items` is a repeatable sub-editor owned by the catalogue; images are managed in Photos.
+    if (field.type === "items" || field.type === "image") return false;
+    if (field.key === "cta.label") return true;
+    return PERSISTABLE_TEXT_KEYS.has(field.key);
+  });
+}
+
+/** Read a field for the inspector, including the nested CTA label. */
+export function fieldValueFor(section: ExperienceSection, key: string): string | number | boolean {
+  if (key === "cta.label") return section.cta?.label ?? "";
+  const value = (section as unknown as Record<string, unknown>)[key];
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  return "";
+}
+
+/**
+ * Build the patch for one edited field, or `null` when the key cannot be persisted.
+ *
+ * The CTA label lives at `section.cta.label`, so it must be written as a whole object; writing a
+ * literal "cta.label" key is dropped by normalisation and the edit silently disappears.
+ */
+export function patchForField(section: ExperienceSection, key: string, value: unknown): Partial<ExperienceSection> | null {
+  if (key === "cta.label") {
+    const label = String(value ?? "").slice(0, 40);
+    return { cta: { label, href: section.cta?.href ?? "" } };
+  }
+  if (!PERSISTABLE_TEXT_KEYS.has(key)) return null;
+  return { [key]: value } as Partial<ExperienceSection>;
 }
 
 /** Whether an in-place edit of this section is worth offering at all. */
@@ -142,6 +179,41 @@ export function canvasPreviewSrc(options: { slug: string; mode: "draft" | "live"
   const revision = Number.isFinite(options.revision) ? Math.max(0, Math.trunc(options.revision)) : 0;
   const query = options.mode === "draft" ? `preview=draft&v=${revision}` : `v=${revision}`;
   return `/b/${encodeURIComponent(slug)}?${query}`;
+}
+
+/**
+ * Normalise the `PATCH /api/experience` response.
+ *
+ * The route returns the new draft version at `experience.draftVersion`, not at the top level.
+ * Reading the wrong field leaves the editor sending a stale `expectedDraftVersion`, so every
+ * edit after the first is refused with a 409 and the owner's change is rolled back. This helper
+ * exists so that contract is asserted by a test instead of being re-discovered in production,
+ * and it accepts either shape so a future response change cannot reintroduce the bug.
+ */
+export type SaveResponse = {
+  ok: boolean;
+  document: ExperienceDocument | null;
+  draftVersion: number | null;
+  error: string | null;
+  code: string | null;
+};
+
+export function readSaveResponse(httpOk: boolean, payload: unknown): SaveResponse {
+  const body = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+  const experience = (body.experience && typeof body.experience === "object" ? body.experience : {}) as Record<string, unknown>;
+
+  const candidates = [experience.draftVersion, body.draftVersion];
+  const draftVersion = candidates.find((value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0) ?? null;
+
+  const document = body.document && typeof body.document === "object" ? (body.document as ExperienceDocument) : null;
+
+  return {
+    ok: httpOk,
+    document,
+    draftVersion,
+    error: typeof body.error === "string" ? body.error : null,
+    code: typeof body.code === "string" ? body.code : null,
+  };
 }
 
 export type CanvasSaveState = "idle" | "saving" | "saved" | "error";

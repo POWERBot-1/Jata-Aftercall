@@ -28,9 +28,12 @@ import {
   canvasPreviewSrc,
   directionApplyPayload,
   directionSwatches,
+  fieldValueFor,
   inspectorFieldsFor,
   isSaveShortcut,
+  patchForField,
   moveSectionTo,
+  readSaveResponse,
   resolveCanvasDevice,
   saveStatusText,
   saveStatusTone,
@@ -84,6 +87,9 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [addType, setAddType] = useState("");
   const statusRef = useRef<HTMLParagraphElement | null>(null);
+  // One save at a time. Two overlapping writes would both send the same expectedDraftVersion;
+  // the second would be refused (409) and its optimistic change rolled back for no reason.
+  const inFlight = useRef(false);
 
   // The server is the source of truth after a `router.refresh()` or a conflict. Adjusting state
   // during render (rather than in an effect) re-renders once, immediately, and keeps the editor
@@ -114,12 +120,15 @@ export function StudioCanvas(props: StudioCanvasProps) {
   /** One write path for every edit: optimistic local change, then the versioned draft save. */
   const persist = useCallback(
     async (payload: Record<string, unknown>, optimistic: (doc: ExperienceDocument) => ExperienceDocument) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
       const before = document;
       setDocument((current) => optimistic(current));
       setDirty(true);
       setMessage(null);
 
       if (demo) {
+        inFlight.current = false;
         setSave("saved");
         setRevision((value) => value + 1);
         return;
@@ -132,24 +141,24 @@ export function StudioCanvas(props: StudioCanvasProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ businessId, ...payload, expectedDraftVersion: version }),
         });
-        const data = (await response.json().catch(() => ({}))) as {
-          error?: string; code?: string; draftVersion?: number; document?: ExperienceDocument;
-        };
-        if (!response.ok) {
+        const saved = readSaveResponse(response.ok, await response.json().catch(() => ({})));
+        if (!saved.ok) {
           setDocument(before); // never leave an unsaved change looking saved
           setSave("error");
-          const conflict = data.code === "draft_version_conflict";
+          const conflict = saved.code === "draft_version_conflict";
           setMessage({
             tone: "error",
             text: conflict
               ? "Your website changed in another window. Reloading the latest draft — nothing was overwritten."
-              : data.error || "We couldn’t save that change. Your previous version is still live.",
+              : saved.error || "We couldn’t save that change. Your previous version is still live.",
           });
           if (conflict) router.refresh();
           return;
         }
-        if (data.document) setDocument(data.document);
-        if (typeof data.draftVersion === "number") setVersion(data.draftVersion);
+        if (saved.document) setDocument(saved.document);
+        // The authoritative new version must advance here, or the next edit sends a stale
+        // expectedDraftVersion and is refused with a 409.
+        if (saved.draftVersion !== null) setVersion(saved.draftVersion);
         setSave("saved");
         setDirty(true);
         setRevision((value) => value + 1);
@@ -157,6 +166,8 @@ export function StudioCanvas(props: StudioCanvasProps) {
         setDocument(before);
         setSave("error");
         setMessage({ tone: "error", text: "We couldn’t reach the server. Check your connection and try again — nothing was lost." });
+      } finally {
+        inFlight.current = false;
       }
     },
     [businessId, demo, document, router, version],
@@ -181,6 +192,12 @@ export function StudioCanvas(props: StudioCanvasProps) {
     if (!type) return;
     setAddType("");
     void persist({ op: "add", type }, (doc) => doc);
+  };
+  /** Commit one inspector field through the persistable-key contract (dotted keys included). */
+  const commitField = (section: ExperienceSection, key: string, value: unknown) => {
+    const patch = patchForField(section, key, value);
+    if (!patch) return;
+    patchSection(section.id, patch);
   };
   const patchSection = (id: string, patch: Partial<ExperienceSection>) =>
     void persist({ op: "update", sectionId: id, patch }, (doc) => ({
@@ -242,13 +259,14 @@ export function StudioCanvas(props: StudioCanvasProps) {
         </div>
       </header>
 
-      <div className="jc-mobile-panes" role="tablist" aria-label="Canvas panes">
+      {/* A segmented control rather than a tablist: the three regions are already visible
+          landmarks, and claiming role="tab" without a tabpanel misleads screen readers. */}
+      <div className="jc-mobile-panes" role="group" aria-label="Which pane to show">
         {(["outline", "preview", "edit"] as MobilePane[]).map((entry) => (
           <button
             key={entry}
             type="button"
-            role="tab"
-            aria-selected={pane === entry}
+            aria-pressed={pane === entry}
             className="jc-segment"
             onClick={() => setPane(entry)}
           >
@@ -365,9 +383,9 @@ export function StudioCanvas(props: StudioCanvasProps) {
 
         {/* ------------------------------ inspector ------------------------------ */}
         <section className="jc-inspector" aria-label="Editing panel">
-          <div className="jc-tabs" role="tablist" aria-label="Editing panel sections">
-            <button type="button" role="tab" aria-selected={panel === "section"} className="jc-tab" onClick={() => setPanel("section")}>This section</button>
-            <button type="button" role="tab" aria-selected={panel === "design"} className="jc-tab" onClick={() => setPanel("design")}>Design</button>
+          <div className="jc-tabs" role="group" aria-label="Editing panel sections">
+            <button type="button" aria-pressed={panel === "section"} className="jc-tab" onClick={() => setPanel("section")}>This section</button>
+            <button type="button" aria-pressed={panel === "design"} className="jc-tab" onClick={() => setPanel("design")}>Design</button>
           </div>
 
           {message ? (
@@ -396,12 +414,12 @@ export function StudioCanvas(props: StudioCanvasProps) {
                         <textarea
                           id={`jc-field-${field.key}`}
                           className="jc-input jc-input--area"
-                          defaultValue={(selected as Record<string, unknown>)[field.key] as string ?? ""}
+                          defaultValue={String(fieldValueFor(selected, field.key))}
                           placeholder={field.placeholder}
                           maxLength={field.maxLength}
                           onBlur={(event) => {
-                            if (event.target.value !== ((selected as Record<string, unknown>)[field.key] ?? "")) {
-                              patchSection(selected.id, { [field.key]: event.target.value } as Partial<ExperienceSection>);
+                            if (event.target.value !== String(fieldValueFor(selected, field.key))) {
+                              commitField(selected, field.key, event.target.value);
                             }
                           }}
                         />
@@ -409,8 +427,8 @@ export function StudioCanvas(props: StudioCanvasProps) {
                         <select
                           id={`jc-field-${field.key}`}
                           className="jc-input"
-                          value={((selected as Record<string, unknown>)[field.key] as string) ?? ""}
-                          onChange={(event) => patchSection(selected.id, { [field.key]: event.target.value } as Partial<ExperienceSection>)}
+                          value={String(fieldValueFor(selected, field.key))}
+                          onChange={(event) => commitField(selected, field.key, event.target.value)}
                         >
                           <option value="">Default</option>
                           {(field.options ?? []).map((option) => (
@@ -424,10 +442,10 @@ export function StudioCanvas(props: StudioCanvasProps) {
                           type="number"
                           min={field.min}
                           max={field.max}
-                          defaultValue={((selected as Record<string, unknown>)[field.key] as number) ?? ""}
+                          defaultValue={Number(fieldValueFor(selected, field.key)) || ""}
                           onBlur={(event) => {
                             const parsed = Number(event.target.value);
-                            if (Number.isFinite(parsed)) patchSection(selected.id, { [field.key]: parsed } as Partial<ExperienceSection>);
+                            if (Number.isFinite(parsed)) commitField(selected, field.key, parsed);
                           }}
                         />
                       ) : field.type === "toggle" ? (
@@ -435,29 +453,24 @@ export function StudioCanvas(props: StudioCanvasProps) {
                           id={`jc-field-${field.key}`}
                           type="checkbox"
                           className="jc-checkbox"
-                          defaultChecked={Boolean((selected as Record<string, unknown>)[field.key])}
-                          onChange={(event) => patchSection(selected.id, { [field.key]: event.target.checked } as Partial<ExperienceSection>)}
+                          defaultChecked={Boolean(fieldValueFor(selected, field.key))}
+                          onChange={(event) => commitField(selected, field.key, event.target.checked)}
                         />
                       ) : (
                         <input
                           id={`jc-field-${field.key}`}
                           className="jc-input"
-                          defaultValue={((selected as Record<string, unknown>)[field.key] as string) ?? ""}
+                          defaultValue={String(fieldValueFor(selected, field.key))}
                           placeholder={field.placeholder}
                           maxLength={field.maxLength}
                           onBlur={(event) => {
-                            if (event.target.value !== ((selected as Record<string, unknown>)[field.key] ?? "")) {
-                              patchSection(selected.id, { [field.key]: event.target.value } as Partial<ExperienceSection>);
+                            if (event.target.value !== String(fieldValueFor(selected, field.key))) {
+                              commitField(selected, field.key, event.target.value);
                             }
                           }}
                         />
                       )}
                       {field.help ? <p className="jc-help">{field.help}</p> : null}
-                      {field.type === "image" ? (
-                        <p className="jc-help">
-                          <Link className="jc-link" href={`/dashboard/businesses/${businessId}/photos`}>Upload or choose a photo →</Link>
-                        </p>
-                      ) : null}
                     </div>
                   ))
                 )}

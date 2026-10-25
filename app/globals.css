@@ -3831,7 +3831,7 @@ button:focus-visible {
   color: #71717a;
   cursor: pointer;
 }
-.jc-tab[aria-selected="true"] { color: #18181b; border-bottom-color: #18181b; }
+.jc-tab[aria-pressed="true"] { color: #18181b; border-bottom-color: #18181b; }
 .jc-tab:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: -2px; }
 
 .jc-panel { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -3929,7 +3929,7 @@ button:focus-visible {
     color: #52525b;
     cursor: pointer;
   }
-  .jc-segment[aria-selected="true"] { background: #fff; color: #18181b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .jc-segment[aria-pressed="true"] { background: #fff; color: #18181b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
   .jc-segment:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; }
 
   .jc-grid > section { display: none; }

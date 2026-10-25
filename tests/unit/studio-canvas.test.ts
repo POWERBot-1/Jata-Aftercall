@@ -16,10 +16,13 @@ import {
   canvasPreviewSrc,
   directionApplyPayload,
   directionSwatches,
+  fieldValueFor,
   inspectorFieldsFor,
   isSaveShortcut,
   moveSectionTo,
   moveSectionToTop,
+  patchForField,
+  readSaveResponse,
   resolveCanvasDevice,
   saveStatusText,
   saveStatusTone,
@@ -102,11 +105,13 @@ describe("visibility and title edits", () => {
     expect(setSectionVisible(document, document.sections[0].id, true)).toBe(document);
   });
 
-  it("caps an over-long title instead of storing an unbounded string", () => {
+  it("caps an over-long title at the server's own limit so optimistic and saved values agree", () => {
     const document = sampleDocument();
     const id = document.sections[0].id;
     const result = setSectionTitle(document, id, "x".repeat(500));
-    expect(result.sections[0].title).toHaveLength(120);
+    // normalizeSection stores title with safeText(raw.title, 90); matching it here avoids a
+    // value that visibly changes length only after the save round-trip.
+    expect(result.sections[0].title).toHaveLength(90);
   });
 });
 
@@ -165,6 +170,61 @@ describe("inspectorFieldsFor", () => {
   });
 });
 
+describe("field persistence contract", () => {
+  // Regression: a field whose key normalisation drops renders an input that accepts typing and
+  // saves nothing. Only persistable keys are offered, and the CTA label is written as an object.
+  it("writes the CTA label as a whole cta object, never as a literal 'cta.label' key", () => {
+    const document = sampleDocument();
+    const hero = document.sections.find((section) => section.type === "hero")!;
+    const withCta = { ...hero, cta: { label: "Book now", href: "/book" } };
+
+    const patch = patchForField(withCta, "cta.label", "Call us");
+    expect(patch).toEqual({ cta: { label: "Call us", href: "/book" } });
+    expect(patch && "cta.label" in patch).toBe(false);
+  });
+
+  it("keeps the existing href when only the label changes, and caps the label at 40", () => {
+    const document = sampleDocument();
+    const hero = document.sections.find((section) => section.type === "hero")!;
+    const patch = patchForField({ ...hero, cta: { label: "x", href: "/shop" } }, "cta.label", "y".repeat(80)) as { cta: { label: string; href: string } };
+    expect(patch.cta.href).toBe("/shop");
+    expect(patch.cta.label).toHaveLength(40);
+  });
+
+  it("refuses to patch a key that cannot be stored", () => {
+    const document = sampleDocument();
+    const hero = document.sections.find((section) => section.type === "hero")!;
+    expect(patchForField(hero, "items", [])).toBeNull();
+    expect(patchForField(hero, "madeUpField", "x")).toBeNull();
+  });
+
+  it("patches ordinary top-level keys", () => {
+    const document = sampleDocument();
+    const hero = document.sections.find((section) => section.type === "hero")!;
+    expect(patchForField(hero, "title", "Welcome")).toEqual({ title: "Welcome" });
+  });
+
+  it("reads a field value, including the nested CTA label, as a primitive", () => {
+    const document = sampleDocument();
+    const hero = document.sections.find((section) => section.type === "hero")!;
+    expect(fieldValueFor({ ...hero, cta: { label: "Book", href: "/b" } }, "cta.label")).toBe("Book");
+    expect(fieldValueFor({ ...hero, title: "Hi" }, "title")).toBe("Hi");
+    expect(fieldValueFor(hero, "notAField")).toBe("");
+  });
+
+  it("only offers fields the Canvas can actually persist", () => {
+    const document = sampleDocument();
+    for (const section of document.sections) {
+      for (const field of inspectorFieldsFor(section)) {
+        expect(patchForField(section, field.key, "value")).not.toBeNull();
+      }
+    }
+    // items/images editors live elsewhere, so a data section never edits catalogue rows here.
+    const allKeys = document.sections.flatMap((section) => inspectorFieldsFor(section).map((field) => field.key));
+    expect(allKeys).not.toContain("items");
+  });
+});
+
 describe("canvasPreviewSrc", () => {
   it("asks for the draft and busts the cache with the revision", () => {
     expect(canvasPreviewSrc({ slug: "marys-beauty", mode: "draft", revision: 4 })).toBe("/b/marys-beauty?preview=draft&v=4");
@@ -180,6 +240,43 @@ describe("canvasPreviewSrc", () => {
 
   it("treats a non-numeric revision as zero", () => {
     expect(canvasPreviewSrc({ slug: "shop", mode: "draft", revision: Number.NaN })).toBe("/b/shop?preview=draft&v=0");
+  });
+});
+
+describe("readSaveResponse — the contract that keeps repeated edits working", () => {
+  // Regression: the route returns { experience: { draftVersion }, document }. Reading a
+  // top-level `draftVersion` left the editor on a stale version, so the second and every
+  // later edit was refused with a 409 and rolled back.
+  it("reads the new draft version from experience.draftVersion", () => {
+    const parsed = readSaveResponse(true, { experience: { draftVersion: 13 }, document: { sections: [] }, saved: true });
+    expect(parsed.ok).toBe(true);
+    expect(parsed.draftVersion).toBe(13);
+    expect(parsed.document).toEqual({ sections: [] });
+    expect(parsed.error).toBeNull();
+  });
+
+  it("still accepts a top-level draftVersion so a response change cannot silently regress", () => {
+    expect(readSaveResponse(true, { draftVersion: 7 }).draftVersion).toBe(7);
+  });
+
+  it("ignores a draft version that is not a positive integer", () => {
+    expect(readSaveResponse(true, { experience: { draftVersion: "13" } }).draftVersion).toBeNull();
+    expect(readSaveResponse(true, { experience: { draftVersion: 0 } }).draftVersion).toBeNull();
+    expect(readSaveResponse(true, { experience: { draftVersion: 1.5 } }).draftVersion).toBeNull();
+    expect(readSaveResponse(true, {}).draftVersion).toBeNull();
+  });
+
+  it("surfaces a conflict code and message from a failed save", () => {
+    const parsed = readSaveResponse(false, { code: "draft_version_conflict", error: "changed elsewhere" });
+    expect(parsed.ok).toBe(false);
+    expect(parsed.code).toBe("draft_version_conflict");
+    expect(parsed.error).toBe("changed elsewhere");
+    expect(parsed.document).toBeNull();
+  });
+
+  it("survives a non-object payload instead of throwing", () => {
+    expect(readSaveResponse(false, null).ok).toBe(false);
+    expect(readSaveResponse(true, "nonsense").draftVersion).toBeNull();
   });
 });
 
