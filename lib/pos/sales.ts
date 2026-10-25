@@ -89,6 +89,10 @@ export type SaleOutcome = {
   changeKES?: number;
   balanceKES?: number;
   shortages?: { name: string; requested: number; available: number; unitKey?: string }[];
+  /** Set when a replay key was already spent: the sale the first request created (§27). */
+  duplicateOfSaleId?: string;
+  /** True when the reused key carried the same request as the one that won. */
+  duplicateRequestHashMatches?: boolean;
 };
 
 function problem(code: string, message: string, warnings: string[] = []): SaleOutcome {
@@ -404,8 +408,14 @@ export async function createSale(params: {
    * its own transaction: a second request carrying the same key cannot also create a sale, so a
    * double tap charges the customer once and moves stock once. A request without a key behaves
    * exactly as it did before.
+   *
+   * `actorIdOverride` re-scopes the claim to a stable identifier instead of the acting user. Offline
+   * sales (§6) need this: the same offline basket can be replayed by a *different* person after a
+   * shift handover or on a second device, and the guard must still suppress the duplicate. The
+   * override only affects which row the replay key is spent on — the sale and its audit trail are
+   * still attributed to the real `actor`.
    */
-  idempotency?: { key: string | null; requestHash: string } | null;
+  idempotency?: { key: string | null; requestHash: string; actorIdOverride?: string | null } | null;
 }): Promise<SaleOutcome> {
   const { businessId, business, configuration, actor, request } = params;
   const client: PosClient = params.client ?? prisma;
@@ -552,7 +562,7 @@ export async function createSale(params: {
       await store.claimIdempotencyKey(
         {
           businessId,
-          actorId: actor.actorId,
+          actorId: params.idempotency?.actorIdOverride ?? actor.actorId,
           scope: store.IDEMPOTENCY_SCOPES.saleCreate,
           key: idempotencyKey,
           requestHash: idempotencyHash,
@@ -736,7 +746,7 @@ export async function createSale(params: {
       await store.completeIdempotencyKey(
         {
           businessId,
-          actorId: actor.actorId,
+          actorId: params.idempotency?.actorIdOverride ?? actor.actorId,
           scope: store.IDEMPOTENCY_SCOPES.saleCreate,
           key: idempotencyKey,
           requestHash: idempotencyHash,
@@ -774,7 +784,7 @@ export async function createSale(params: {
     // answers with the sale that won (§27, §32, §54).
     if (idempotencyKey && isUniqueConstraintError(error)) {
       const existing = await store.findIdempotencyRecord(
-        { businessId, actorId: actor.actorId, scope: store.IDEMPOTENCY_SCOPES.saleCreate, key: idempotencyKey, requestHash: idempotencyHash },
+        { businessId, actorId: params.idempotency?.actorIdOverride ?? actor.actorId, scope: store.IDEMPOTENCY_SCOPES.saleCreate, key: idempotencyKey, requestHash: idempotencyHash },
         client,
       );
       if (existing) {

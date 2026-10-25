@@ -5,6 +5,7 @@ import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 import { loadWallet, type WalletView } from "@/lib/payments/wallet";
 import { TillClient } from "@/components/pos/TillClient";
+import { OfflineSyncPanel } from "@/components/pos/OfflineSyncPanel";
 import type { WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 
 /**
@@ -123,6 +124,8 @@ export default async function PosSellPage({ params }: Props) {
             })),
         }}
       />
+
+      <OfflineSyncPanel businessId={businessId} />
     </div>
   );
 }
