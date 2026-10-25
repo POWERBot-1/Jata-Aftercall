@@ -12,6 +12,11 @@ name: Verification artifacts (tooling transfer)
 # request check and cannot influence branch protection.
 
 on:
+  # Dispatch is impossible from a feature branch (GitHub only registers workflow_dispatch on the
+  # default branch), so the trigger is a push that touches this file on a non-default branch.
+  push:
+    branches-ignore: [main]
+    paths: [".github/workflows/verification-artifacts.yml"]
   workflow_dispatch:
 
 permissions:
