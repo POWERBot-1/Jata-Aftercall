@@ -107,13 +107,31 @@ async function main() {
   seedLog.push(`browser ${await browser.version()} against ${origin}`);
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const visitors = await browser.createBrowserContext();
-  const visitorPage = await pageFor(visitors);
-  // A fetch from about:blank has no origin, so the visitor page must already be on the app.
-  await visitorPage.goto(`${origin}/login`, { waitUntil: "domcontentloaded" });
+  // Logged-out evidence first, on a context that never holds a session: registering a fixture
+  // from the same browser context would silently turn every "anonymous" screenshot into a
+  // signed-in redirect (which is exactly what the first pass of this harness produced).
+  const anonymousContext = await browser.createBrowserContext();
+  const anonymousPage = await pageFor(anonymousContext);
+  await capture(anonymousPage, "home", "/", { anonymous: true });
+  await capture(anonymousPage, "login", "/login", { anonymous: true });
+  await capture(anonymousPage, "register", "/register", { anonymous: true });
+  await capture(anonymousPage, "forgot-password", "/forgot-password", { anonymous: true });
+  await capture(anonymousPage, "reset-password", "/reset-password?token=qa-fixture-token", { anonymous: true });
+  await capture(anonymousPage, "admin-anonymous", "/admin", { anonymous: true });
+  await capture(anonymousPage, "dashboard-anonymous", "/dashboard", { anonymous: true });
+  // Public customer pages of the four seeded demo businesses are real, published data.
+  for (const slug of ["marys-beauty-studio", "kamau-auto-care", "john-kamau-properties"]) {
+    await capture(anonymousPage, `public-${slug}`, `/b/${slug}`, { anonymous: true });
+  }
+  await capture(anonymousPage, "public-shop", "/b/kamau-auto-care/shop", { anonymous: true });
+  await capture(anonymousPage, "public-book", "/b/marys-beauty-studio/book", { anonymous: true });
+  await anonymousContext.close();
 
   // ── synthetic owners ────────────────────────────────────────────────────────────────────────
-  const studioOwner = await provision(visitorPage, {
+  // One context per fixture so a registration cookie can never leak into another role.
+  const provisioningPage = await pageFor(await browser.createBrowserContext());
+  await provisioningPage.goto(`${origin}/login`, { waitUntil: "domcontentloaded" });
+  const studioOwner = await provision(provisioningPage, {
     label: "studio", name: "QA Studio Owner", businessName: `QA Atelier ${runId}`, category: "salon",
     planKey: "INTERACTIVE_BUSINESS",
     profile: { phone: "0712 000 111", whatsapp: "0712 000 111", location: "Kilimani, Nairobi",
@@ -123,9 +141,13 @@ async function main() {
       { title: "Gel manicure", priceFrom: 1200, pricingType: "FIXED", durationMinutes: 60, bookingEnabled: true },
       { title: "Bridal glam", priceFrom: 6000, pricingType: "QUOTE", bookingEnabled: false },
     ],
-    experience: { themeKey: "warm", photographyStyle: "editorial", designDirectionKey: "warm-hospitality" },
+    website: {
+      categoryKey: "salon",
+      patch: { themeKey: "warm", photographyStyle: "editorial", designDirectionKey: "warm-hospitality",
+        brand: { tagline: "Braids, nails and bridal glam in Kilimani" } },
+    },
   });
-  const posOwner = await provision(visitorPage, {
+  const posOwner = await provision(provisioningPage, {
     label: "pos", name: "QA Shop Owner", businessName: `QA Duka ${runId}`, category: "retail",
     planKey: "BUSINESS_POS",
     profile: { phone: "0712 000 222", whatsapp: "0712 000 222", location: "Ngara, Nairobi",
@@ -137,9 +159,14 @@ async function main() {
       { name: "Linen apron", priceKES: 1450, category: "Home", quantity: 6, sku: "QA-APRON" },
       { name: "Beeswax candle", priceKES: 900, category: "Home", quantity: 0, sku: "QA-CANDLE" },
     ],
+    posAnswers: {
+      business_type: "retail", sells: ["products"], payment_methods: ["cash", "mpesa"],
+      keeps_stock: true, keeps_customers: true, has_staff: true, multi_branch: false,
+      tracks_expenses: true, has_suppliers: true,
+    },
     posSale: true,
   });
-  const aiOwner = await provision(visitorPage, {
+  const aiOwner = await provision(provisioningPage, {
     label: "ai", name: "QA Frontdesk Owner", businessName: `QA Clinic ${runId}`, category: "professional",
     planKey: "AI_BUSINESS_FRONT_DESK",
     profile: { phone: "0712 000 333", whatsapp: "0712 000 333", location: "Westlands, Nairobi",
@@ -147,21 +174,30 @@ async function main() {
     services: [{ title: "Initial consultation", priceFrom: 2000, pricingType: "FIXED", durationMinutes: 45, bookingEnabled: true }],
   });
 
-  // ── logged-out surfaces ───────────────────────────────────────────────────────────────────
-  await capture(visitorPage, "home", "/", { anonymous: true });
-  await capture(visitorPage, "login", "/login", { anonymous: true });
-  await capture(visitorPage, "register", "/register", { anonymous: true });
-  await capture(visitorPage, "forgot-password", "/forgot-password", { anonymous: true });
-  await capture(visitorPage, "onboarding-redirect", "/onboarding", { anonymous: true, expectRedirect: true });
-  await capture(visitorPage, "storefront", `/b/${studioOwner.slug}`, { anonymous: true });
-  await capture(visitorPage, "storefront-shop", `/b/${studioOwner.slug}/shop`, { anonymous: true });
-  await capture(visitorPage, "storefront-book", `/b/${studioOwner.slug}/book`, { anonymous: true });
-  await capture(visitorPage, "admin-refused", "/admin", { anonymous: true, expectRedirect: true });
+  const adminOwner = await provision(provisioningPage, {
+    label: "admin", name: "QA Platform Admin", businessName: `QA Admin Co ${runId}`, category: "retail",
+    planKey: "MONTHLY",
+    profile: { phone: "0712 000 444", whatsapp: "0712 000 444", location: "Nairobi CBD",
+      description: "Synthetic acceptance fixture for visual verification — not a real business." },
+  });
+  // Role escalation on the disposable workflow database only, to photograph the admin-only routes.
+  await prisma.user.update({ where: { email: adminOwner.email }, data: { role: "ADMIN" } });
+  seedLog.push("admin: role set to ADMIN on the disposable database (fixture only)");
+
+  // ── public pages of the freshly published synthetic site ──────────────────────────────────
+  const publicContext = await browser.createBrowserContext();
+  const publicPage = await pageFor(publicContext);
+  await capture(publicPage, "storefront", `/b/${studioOwner.slug}`, { anonymous: true });
+  await capture(publicPage, "storefront-shop", `/b/${studioOwner.slug}/shop`, { anonymous: true });
+  await capture(publicPage, "storefront-book", `/b/${studioOwner.slug}/book`, { anonymous: true });
+  await capture(publicPage, "storefront-enquire", `/b/${studioOwner.slug}/enquire`, { anonymous: true });
+  await capture(publicPage, "storefront-ai", `/b/${studioOwner.slug}/ai`, { anonymous: true });
+  await publicContext.close();
 
   // ── studio + account surfaces ────────────────────────────────────────────────────────────
   const studioPage = await pageFor(await browser.createBrowserContext());
   await signIn(studioPage, studioOwner.email);
-  await capture(studioPage, "onboarding-signed-in", "/onboarding", { expectRedirect: true });
+  await capture(studioPage, "onboarding-signed-in-owner", "/onboarding", {});
   await capture(studioPage, "dashboard", "/dashboard");
   await capture(studioPage, "dashboard-subscription", "/dashboard/subscription");
   await capture(studioPage, "dashboard-studio", "/dashboard/studio");
@@ -183,6 +219,13 @@ async function main() {
     "/purchases", "/expenses", "/reports", "/payments", "/staff", "/branches", "/settings", "/configure",
     "/plan", "/preview", "/appointments", "/menu", "/jobs", "/produce", "/projects", "/credit"]) {
     await capture(posPage, `pos${name.replaceAll("/", "-") || "-home"}`, `${posBase}${name}`);
+  }
+
+  // ── admin console ────────────────────────────────────────────────────────────────────────
+  const adminPage = await pageFor(await browser.createBrowserContext());
+  await signIn(adminPage, adminOwner.email);
+  for (const name of ["", "/businesses", "/customers", "/payments", "/payments/wallet", "/plans", "/subscriptions"]) {
+    await capture(adminPage, `admin${name.replaceAll("/", "-") || "-home"}`, `/admin${name}`);
   }
 
   // ── AI cockpit ───────────────────────────────────────────────────────────────────────────
@@ -233,28 +276,6 @@ async function provision(visitorPage, spec) {
     const profile = await api("/api/business", "PATCH", { businessId: business.id, ...spec.profile });
     seedLog.push(`${spec.label}: profile ${profile.status}`);
   }
-  for (const service of spec.services || []) {
-    const created2 = await api("/api/services", "POST", { businessId: business.id, isActive: true, ...service });
-    seedLog.push(`${spec.label}: service "${service.title}" ${created2.status}`);
-  }
-  for (const product of spec.products || []) {
-    // The POS catalogue and the storefront catalogue are different products on purpose; seed the
-    // one the screens being photographed actually read.
-    const path = spec.planKey === "BUSINESS_POS" ? `/api/pos/${business.id}/products` : "/api/products";
-    const payload = spec.planKey === "BUSINESS_POS"
-      ? { name: product.name, priceKES: product.priceKES, category: product.category, sku: product.sku, kind: "PRODUCT", trackInventory: true, reorderLevel: 5 }
-      : { businessId: business.id, isActive: true, ...product };
-    const created2 = await api(path, "POST", payload);
-    seedLog.push(`${spec.label}: product "${product.name}" ${created2.status} ${created2.status >= 400 ? JSON.stringify(created2.body).slice(0, 140) : ""}`);
-    if (spec.planKey === "BUSINESS_POS" && created2.status < 300 && product.quantity > 0) {
-      // Real stock receipt, through the inventory endpoint — not a fabricated quantity in the row.
-      const stock = await api(`/api/pos/${business.id}/inventory`, "POST", {
-        productId: created2.body?.product?.id ?? created2.body?.id, quantity: product.quantity, reason: "Opening stock (QA fixture)", kind: "RECEIVE",
-      });
-      seedLog.push(`${spec.label}: opening stock "${product.name}" ${stock.status} ${stock.status >= 400 ? JSON.stringify(stock.body).slice(0, 140) : ""}`);
-    }
-  }
-
   // Plan activation. First through the application's own checkout + verify path — but the
   // provider-free test settlement is deliberately closed when NODE_ENV=production, and this script
   // photographs a production build, so in practice that call is refused (which is correct). The
@@ -304,25 +325,75 @@ async function provision(visitorPage, spec) {
     }
   }
 
-  if (spec.experience) {
-    const current = await prisma.businessExperience.findUnique({ where: { businessId: business.id }, select: { draftVersion: true } });
-    if (current) {
-      const patched = await api("/api/experience", "PATCH", { businessId: business.id, expectedDraftVersion: current.draftVersion, ...spec.experience });
-      seedLog.push(`${spec.label}: experience patch ${patched.status} ${JSON.stringify(patched.body).slice(0, 160)}`);
-      const published = await api("/api/experience/publish", "POST", { businessId: business.id });
-      seedLog.push(`${spec.label}: publish ${published.status} ${JSON.stringify(published.body).slice(0, 160)}`);
+  for (const service of spec.services || []) {
+    const created2 = await api("/api/services", "POST", { businessId: business.id, isActive: true, ...service });
+    seedLog.push(`${spec.label}: service "${service.title}" ${created2.status}`);
+  }
+  if (spec.posAnswers) {
+    // The real "tell JATA how your business works" step, then the entitled publish that turns the
+    // draft configuration into the operating profile. Stock tracking, payments and the generated
+    // navigation all come from this answer set — nothing is switched on behind the API's back.
+    const saved = await api(`/api/pos/${business.id}/configuration`, "POST", { answers: spec.posAnswers });
+    seedLog.push(`${spec.label}: pos configuration ${saved.status} ${saved.status >= 400 ? JSON.stringify(saved.body).slice(0, 200) : ""}`);
+    const published = await api(`/api/pos/${business.id}/configuration/publish`, "POST", { note: "QA fixture configuration" });
+    seedLog.push(`${spec.label}: pos configuration publish ${published.status} ${published.status >= 400 ? JSON.stringify(published.body).slice(0, 200) : ""}`);
+  }
+
+  for (const product of spec.products || []) {
+    // The POS catalogue and the storefront catalogue are different products on purpose; seed the
+    // one the screens being photographed actually read.
+    const path = spec.planKey === "BUSINESS_POS" ? `/api/pos/${business.id}/products` : "/api/products";
+    const payload = spec.planKey === "BUSINESS_POS"
+      ? { name: product.name, priceKES: product.priceKES, category: product.category, sku: product.sku, kind: "PRODUCT", trackInventory: true, reorderLevel: 5 }
+      : { businessId: business.id, isActive: true, ...product };
+    const created2 = await api(path, "POST", payload);
+    seedLog.push(`${spec.label}: product "${product.name}" ${created2.status} ${created2.status >= 400 ? JSON.stringify(created2.body).slice(0, 140) : ""}`);
+    if (spec.planKey === "BUSINESS_POS" && created2.status < 300 && product.quantity > 0) {
+      // Real stock receipt, through the inventory endpoint — not a fabricated quantity in the row.
+      const stock = await api(`/api/pos/${business.id}/inventory`, "POST", {
+        productId: created2.body?.product?.id ?? created2.body?.id, quantity: product.quantity, reason: "OPENING",
+      });
+      seedLog.push(`${spec.label}: opening stock "${product.name}" ${stock.status} ${stock.status >= 400 ? JSON.stringify(stock.body).slice(0, 140) : ""}`);
+    }
+  }
+
+  if (spec.website) {
+    // Create the draft website through the app's own create path, then edit and publish it. The
+    // publish call is the application's real entitlement-gated publication, including the
+    // expectedDraftVersion precondition — nothing here writes the experience row directly.
+    const createdDoc = await api("/api/experience", "POST", { businessId: business.id, categoryKey: spec.website.categoryKey });
+    seedLog.push(`${spec.label}: website create ${createdDoc.status} ${createdDoc.status >= 400 ? JSON.stringify(createdDoc.body).slice(0, 160) : ""}`);
+    // A published site needs a primary visual. The media upload pipeline needs a storage provider,
+    // which this provider-free harness refuses; the fixture therefore stores a first-party image
+    // reference directly and the report says so. The upload pipeline itself is NOT verified here.
+    await prisma.business.update({
+      where: { id: business.id },
+      data: { logoUrl: "/workspace/hero-workspace.jpg", coverUrl: "/workspace/hero-workspace.jpg" },
+    });
+    seedLog.push(`${spec.label}: fixture logo/cover set to a first-party asset (upload pipeline not exercised)`);
+    const row = await prisma.businessExperience.findUnique({ where: { businessId: business.id }, select: { draftVersion: true } });
+    if (row) {
+      const edited = await api("/api/experience", "PATCH", { businessId: business.id, expectedDraftVersion: row.draftVersion, ...spec.website.patch });
+      seedLog.push(`${spec.label}: website edit ${edited.status} ${edited.status >= 400 ? JSON.stringify(edited.body).slice(0, 160) : ""}`);
+      const current = await prisma.businessExperience.findUnique({ where: { businessId: business.id }, select: { draftVersion: true } });
+      const published = await api("/api/experience/publish", "POST", { businessId: business.id, expectedDraftVersion: current?.draftVersion });
+      seedLog.push(`${spec.label}: website publish ${published.status} ${JSON.stringify(published.body).slice(0, 200)}`);
     }
   }
 
   if (spec.posSale) {
     const catalogue = await prisma.posProduct.findMany({ where: { businessId: business.id }, select: { id: true, name: true, priceKES: true }, take: 3 });
     if (catalogue.length) {
-      const basket = catalogue.map((product) => ({ productId: product.id, name: product.name, quantity: 1, unitPriceKES: product.priceKES }));
-      const total = basket.reduce((sum, item) => sum + item.unitPriceKES, 0);
-      const sale = await api(`/api/pos/${business.id}/sales`, "POST", { items: basket, payments: [{ method: "cash", amountKES: total }], channel: "counter" });
-      seedLog.push(`${spec.label}: pos sale ${sale.status} ${JSON.stringify(sale.body).slice(0, 160)}`);
       const customer = await api(`/api/pos/${business.id}/customers`, "POST", { name: "QA Walk-in Customer", phone: "0700000001" });
       seedLog.push(`${spec.label}: pos customer ${customer.status}`);
+      const customerId = customer.body?.customer?.id ?? customer.body?.id ?? null;
+      const basket = catalogue.map((product) => ({ productId: product.id, name: product.name, quantity: 1, unitPriceKES: product.priceKES }));
+      const total = basket.reduce((sum, item) => sum + item.unitPriceKES, 0);
+      const sale = await api(`/api/pos/${business.id}/sales`, "POST", {
+        items: basket, payments: [{ method: "cash", amountKES: total }], channel: "counter",
+        ...(customerId ? { customerId } : {}),
+      });
+      seedLog.push(`${spec.label}: pos sale ${sale.status} ${JSON.stringify(sale.body).slice(0, 160)}`);
     }
   }
 
@@ -455,9 +526,12 @@ async function captureTabs(page, name) {
     for (const [widthLabel, width] of [["390", MOBILE], ["1440", DESKTOP]]) {
       await page.setViewport({ width, height: width === MOBILE ? 900 : 1000, deviceScaleFactor: 1, isMobile: width === MOBILE, hasTouch: width === MOBILE });
       await settle(page);
+      const metrics = await measure(page).catch(() => ({}));
       const file = `${OUT_DIR}/${name}-${slugify(label)}-${widthLabel}.jpg`;
       await page.screenshot({ path: file, fullPage: true, type: "jpeg", quality: 72 }).catch(() => {});
-      results.push({ name: `${name}-${slugify(label)}`, path: "/dashboard/ai", width, file, tab: label, status: 200 });
+      results.push({ name: `${name}-${slugify(label)}`, path: "/dashboard/ai", width, file, tab: label, status: 200,
+        horizontalOverflow: metrics.horizontalOverflow, brokenImages: metrics.brokenImages, h1: metrics.h1,
+        headings: metrics.headings, mains: metrics.mains, textLength: metrics.textLength });
     }
   }
 }
