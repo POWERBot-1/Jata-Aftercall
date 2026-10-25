@@ -3012,7 +3012,7 @@ button:focus-visible {
  * Every plan card is the same shape, eight rows deep: name, badge (optional), price, billing
  * period, description (optional), features, call to action, fine print.
  *
- * Where subgrid is supported the four cards share those rows, so plan names, prices, periods,
+ * Where subgrid is supported the cards in a row share those rows, so plan names, prices, periods,
  * feature lists and calls to action sit on the same line across the row — even when an operator's
  * stored plan name wraps to two lines or a card carries no badge. Without subgrid the flex column
  * below is the fallback: the same markup, equal-height cards, call to action pinned to the bottom.
@@ -3106,7 +3106,18 @@ button:focus-visible {
   text-align: center;
 }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1080px) { .lp-pricing .lp-plans { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/*
+ * Five plans, one grid: three across on a desktop, with the fourth and fifth cards centred under
+ * the first row (3 + 2) instead of stretched into five narrow columns or left with a hole.
+ * Six equal tracks let every card span two, so all five cards stay exactly one third of the row
+ * wide — the same card width in both rows.
+ */
+@media (min-width: 1080px) {
+  .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .lp-pricing .lp-plans .lp-plan { grid-column: span 2; }
+  .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(4) { grid-column: 2 / span 2; }
+  .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(5) { grid-column: 4 / span 2; }
+}
 
 /*
  * Side-by-side cards share their rows. Only from 620px up: stacked cards are read one at a time

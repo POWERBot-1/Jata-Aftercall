@@ -6,11 +6,10 @@ import { DemoShowcase } from "@/components/landing/DemoShowcase";
 import { FaqSection, LandingFooter } from "@/components/landing/FaqAndFooter";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { formatKES, formatNumber } from "@/lib/format";
-import { FALLBACK_PLANS, orderHomepagePlans, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
-// The Business POS price is a server-side constant, never a number written into this page (§45).
-import { POS_PLAN_PRICE_KES } from "@/lib/pos/entitlement";
-import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_INCLUDES, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
+import { formatNumber } from "@/lib/format";
+import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_INCLUDES, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
 import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 
@@ -24,25 +23,26 @@ export const dynamic = "force-dynamic";
  * demo tab switcher; everything else — including the phone, marquee and reveal motion — is CSS.
  *
  * Data rules that predate this redesign and still hold:
- *   • Plans are read from the database and filtered with `publiclyListedPlans()`; the private
- *     Business POS plan is never a card (§67). Marketing order comes from `orderHomepagePlans()`.
+ *   • Plans are read from the database; the private Business POS never becomes a payable choice.
+ *     Marketing order comes from `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • The POS keeps its own separate entry and its price comes from the server constant.
+ *   • The Business POS card is the fifth card in the same grid. It links to the authenticated
+ *     `/dashboard/pos` flow — never to `/register` or checkout — and its price is the stored plan
+ *     price, so showing the card grants nothing.
  *   • The four fictional demo cards show active services only; fallback content is labelled
  *     synthetic. Links require the dedicated demo owner, no non-demo payment rows, and a published
  *     ACTIVE business with active services — not a matching slug alone.
  */
 export default async function HomePage() {
   const session = await getSession();
-  let plans: { key: string; name: string; priceKES: number; durationDays: number }[] = [];
+  let storedPlans: HomepagePlanCard[] = [];
   try {
-    plans = orderHomepagePlans(publiclyListedPlans(await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } })));
+    storedPlans = await prisma.planConfig.findMany({ where: { isActive: true }, orderBy: { priceKES: "asc" } });
   } catch {
-    plans = [];
+    storedPlans = [];
   }
-  if (plans.length === 0) {
-    plans = orderHomepagePlans(publiclyListedPlans(FALLBACK_PLANS));
-  }
+  // An unreadable or empty plan table falls back to every advertised plan, POS included.
+  const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS);
 
   let demoRows: LandingDemoRow[] = [];
   try {
@@ -104,19 +104,33 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="lp-plans">
+            <div className="lp-plans" data-plan-count={plans.length}>
               {plans.map((p) => {
-                const includes = PLAN_INCLUDES[p.key] ?? [];
-                const badge = PLAN_BADGES[p.key];
+                // The POS is a card in this grid but never a page-plan purchase: it keeps its own
+                // copy and CTA, and the four page-plan maps in lib/landing.ts never mention it.
+                const isPos = p.key === POS_PLAN_KEY;
+                const includes = isPos ? POS_PLAN_CARD.includes : PLAN_INCLUDES[p.key] ?? [];
+                const badge = isPos ? POS_PLAN_CARD.badge : PLAN_BADGES[p.key];
+                const blurb = isPos
+                  ? POS_PLAN_CARD.blurb
+                  : p.key === "INTERACTIVE_BUSINESS"
+                    ? "Build, edit and preview your interactive business website."
+                    : null;
                 const featured = p.key === "ANNUAL";
                 return (
-                  <article key={p.key} className="lp-plan" data-featured={featured} aria-label={planDisplayName(p)}>
+                  <article
+                    key={p.key}
+                    className="lp-plan"
+                    data-featured={featured}
+                    data-plan={p.key}
+                    aria-label={planDisplayName(p)}
+                  >
                     {/* One direct child per card row, so the cards can share those rows (see `.lp-plan` in globals.css). */}
                     <p className="lp-plan__name">{planDisplayName(p)}</p>
                     {badge ? <span className="lp-plan__badge">{badge}</span> : null}
                     <p className="lp-plan__price">KES {formatNumber(p.priceKES)}</p>
                     <p className="lp-plan__period">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
-                    {p.key === "INTERACTIVE_BUSINESS" ? <p className="lp-plan__blurb">Build, edit and preview your interactive business website.</p> : null}
+                    {blurb ? <p className="lp-plan__blurb">{blurb}</p> : null}
                     {includes.length > 0 ? (
                       <ul className="lp-plan__includes">
                         {includes.map((item) => (
@@ -127,15 +141,21 @@ export default async function HomePage() {
                         ))}
                       </ul>
                     ) : null}
-                    <Link href="/register" className="lp-plan__cta">Get my business page</Link>
-                    <p className="lp-plan__fine">Secure Paystack checkout. Your plan starts once payment is confirmed.</p>
+                    {/* The POS opens the existing authenticated flow; nothing here sells or activates it. */}
+                    <Link href={isPos ? "/dashboard/pos" : "/register"} className="lp-plan__cta">
+                      {isPos ? POS_PLAN_CARD.cta : "Get my business page"}
+                    </Link>
+                    <p className="lp-plan__fine">
+                      {isPos ? POS_PLAN_CARD.fine : "Secure Paystack checkout. Your plan starts once payment is confirmed."}
+                    </p>
                   </article>
                 );
               })}
             </div>
             <p className="lp-pricing__note">
               Prices are shown in Kenyan shillings. Plans renew for the period you choose and can be changed from your
-              dashboard. The owner-only Business POS is a separate product and is not part of these four plans.
+              dashboard. The owner-only Business POS is a separate product, sold per business: it is not part of your
+              page plan and it switches on only once Paystack confirms the payment.
             </p>
           </div>
         </section>
@@ -178,55 +198,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/*
-          Business POS — the owner's operating system, sold separately from the AFTERCALL page plans.
-          This is an entry point only: it links into the existing POS flow (/dashboard/pos), where the
-          business is chosen, configured, previewed and paid for. Nothing here activates or claims to
-          activate a POS, and the existing plan cards above are untouched (§67 exception, 2026-10-03).
-        */}
-        <section aria-labelledby="business-pos-heading" className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:flex sm:items-center sm:gap-5">
-            <span
-              aria-hidden="true"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.8}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                focusable="false"
-              >
-                <rect x="3" y="3.5" width="18" height="12" rx="2.5" />
-                <path d="M7.5 11.5V8.5" />
-                <path d="M11.5 11.5V6.5" />
-                <path d="M15.5 11.5V9.5" />
-                <path d="M6 19.5h12" />
-              </svg>
-            </span>
-            <div className="mt-3 min-w-0 sm:mt-0 sm:flex-1">
-              <h3 id="business-pos-heading" className="text-sm font-semibold">Business POS</h3>
-              {/* One text node, so the price and its period read as a single string (§45). */}
-              <p className="mt-1 text-2xl font-bold">{`${formatKES(POS_PLAN_PRICE_KES)}/month`}</p>
-              <p className="mt-2 text-sm text-zinc-600">
-                A point-of-sale for your counter, configured around how your business works — sales,
-                stock, credit and reports. Per business. This is separate from your JATA AFTERCALL page plan.
-                It is owner-only: sign in to open it, and set it up from your own dashboard.
-              </p>
-            </div>
-            <div className="mt-4 sm:mt-0 sm:w-60 sm:shrink-0">
-              <Link href="/dashboard/pos" className="inline-flex w-full justify-center rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white">
-                Open Business POS
-              </Link>
-              <p className="mt-2 text-center text-xs text-zinc-600">
-                Sign in, answer a few questions and see your POS. It switches on only once Paystack confirms the payment.
-              </p>
-            </div>
-          </div>
-        </section>
       </main>
 
       <LandingFooter availableDemoSlugs={availableDemoSlugs} />
