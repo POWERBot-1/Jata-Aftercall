@@ -81,6 +81,10 @@ async function main() {
   });
 
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  // The runner that hosts this job has just finished a full database journey and eight browser
+  // suites; a first-paint stall is infrastructure, not a hydration finding. Neither of these
+  // timeouts is an assertion — the verdict below is still driven only by reproduced #418 counts.
+  const NAV_TIMEOUT_MS = Number(process.env.HYDRATION_RACE_NAV_TIMEOUT_MS || 60000);
   const summary = { synthetic: { arms: [] }, forced: { iterations: 0, errors418: 0, otherErrors: 0, details: [] }, control: { iterations: 0, errors418: 0, otherErrors: 0, details: [] } };
 
   try {
@@ -119,8 +123,10 @@ async function main() {
     for (const [label, bodyHtml] of arms) {
       const page = await browser.newPage();
       const errors = collectErrors(page);
-      await page.setContent(`<!DOCTYPE html><html><head><title>s</title></head><body>${bodyHtml}</body></html>`, { waitUntil: "networkidle0" });
-      await page.addScriptTag({ content: bundleSource });
+      // A `setContent` document has no subresources, so waiting for "networkidle0" only adds a
+      // failure mode (a loaded host makes the idle window expire) without adding evidence.
+      await page.setContent(`<!DOCTYPE html><html><head><title>s</title></head><body>${bodyHtml}</body></html>`, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+      await page.addScriptTag({ content: bundleSource, timeout: NAV_TIMEOUT_MS });
       await page.waitForFunction(() => window.fixtureHydrated === true, { timeout: 10000 }).catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 400));
       const recovered = await page.evaluate(() => window.hydrationErrors || []);
@@ -136,9 +142,10 @@ async function main() {
         if (arm === "forced") await page.evaluateOnNewDocument(delayHook);
         for (const path of PATHS) {
           try {
-            await page.goto(`${origin}${path}`, { waitUntil: "networkidle0", timeout: 30000 });
+            await page.goto(`${origin}${path}`, { waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS });
             await new Promise((resolve) => setTimeout(resolve, 1200)); // cover the deferred swap window
           } catch (error) {
+            summary[arm].navigationFailures = (summary[arm].navigationFailures || 0) + 1;
             summary[arm].details.push({ i, path, navigation: String(error).slice(0, 100) });
           }
         }
@@ -156,6 +163,12 @@ async function main() {
     server.kill("SIGTERM");
   }
 
+  if ((summary.forced.navigationFailures || 0) > 0 || (summary.control.navigationFailures || 0) > 0) {
+    // A load that never completed produced no sample. That is missing evidence, and missing
+    // evidence must never read as a clean run.
+    console.error(`BLOCKED / NOT RUN: ${summary.forced.navigationFailures || 0} forced / ${summary.control.navigationFailures || 0} control page loads did not complete; no clean-run claim.`);
+    process.exit(2);
+  }
   const asserted = (process.env.HYDRATION_RACE_ASSERT || "").trim().toLowerCase();
   if (asserted === "clean" && summary.forced.errors418 > 0) {
     console.error("REGRESSION: hydration #418 reproduced under the widened $RC/$RV gap.");

@@ -363,7 +363,11 @@ export function TillClient({
                   <strong>{product.name}</strong>
                   <span>KES {formatNumber(product.priceKES)}</span>
                   <small>
-                    {typeof product.stock === "number" ? `${product.stock} ${product.unitKey}` : product.unitKey}
+                    {typeof product.stock !== "number"
+                      ? product.unitKey
+                      : product.stock <= 0
+                        ? "Out of stock"
+                        : `${product.stock} ${product.unitKey}`}
                   </small>
                 </button>
               );

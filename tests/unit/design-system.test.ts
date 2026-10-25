@@ -95,8 +95,12 @@ describe("dashboard uses the shared design system", () => {
     for (const primitive of ["Card", "StatusPill", "Metric", "AnalyticsChart", "DataTable", "EmptyState", "Reveal"]) {
       expect(dashboard, primitive).toContain(primitive);
     }
-    // The page shell owns the single h1 and the page-level actions.
-    expect(read("app/dashboard/page.tsx")).toContain("PageHeader");
+    // The route owns the data, the hero owns the single h1, and the account chrome is the shell.
+    expect(read("app/dashboard/page.tsx")).not.toContain("PageHeader");
+    expect(dashboard).toContain("WorkspaceHero");
+    expect(dashboard).toContain("WorkspaceStat");
+    expect(dashboard).toContain("WorkspaceEmpty");
+    expect(dashboard).toContain("WorkspacePanel");
   });
 
   it("mounts one notification surface and one main landmark in the shell", () => {
@@ -111,7 +115,8 @@ describe("dashboard uses the shared design system", () => {
   });
 
   it("has loading and error states that do not block the customer", () => {
-    expect(read("app/dashboard/loading.tsx")).toContain("LoadingBlock");
+    expect(read("app/dashboard/loading.tsx")).toContain("WorkspaceSkeleton");
+    expect(read("app/dashboard/loading.tsx")).toContain('aria-busy="true"');
     expect(read("app/dashboard/error.tsx")).toContain("ErrorState");
   });
 });

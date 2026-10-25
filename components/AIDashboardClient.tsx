@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import DashboardNav from "@/components/DashboardNav";
 import { PREVIEW_TEST_QUESTIONS } from "@/lib/ai-grounding";
 
 type SectionTab =
@@ -201,10 +200,11 @@ export default function AIDashboardClient({
   const qr = dashboard?.qr;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <DashboardNav isAdmin={Boolean(isAdmin)} />
-
-      <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    // The AI cockpit is a dark product surface inside the (light) workspace shell: one rounded
+    // panel, no second navigation. The workspace chrome above already owns the section rail, so
+    // this component renders its own header, tabs and content only.
+    <div className="ai-cockpit overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-slate-100 shadow-[0_40px_80px_-60px_rgba(0,0,0,0.9)]" data-admin={Boolean(isAdmin) ? "true" : undefined}>
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-5 sm:px-6 sm:py-6">
         {/* Top Header + Emergency Controls (§44, §45) */}
         <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
           <div>
@@ -218,7 +218,7 @@ export default function AIDashboardClient({
                 </span>
               )}
             </div>
-            <h1 className="mt-1 text-2xl font-bold text-white">{businessName}</h1>
+            <h2 className="mt-1 text-2xl font-bold text-white">{businessName}</h2>
             <p className="text-xs text-slate-300">
               Shareable AI Link:{" "}
               <Link href={`/b/${businessSlug}/ai`} className="text-emerald-300 underline">

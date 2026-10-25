@@ -1,9 +1,36 @@
+/**
+ * `<img>` is used deliberately where the image URL is owner-supplied (a business cover or
+ * logo) or comes from a fixed local registry with explicit width/height. next/image would
+ * require the optimizer to fetch arbitrary remote URLs and would not respect the aspect-ratio
+ * container these images fill, so the raw element with `loading="lazy"` is the safer choice.
+ */
+/* eslint-disable @next/next/no-img-element */
 "use client";
+
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, Eye, MessageCircle, Phone, Share2, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  CalendarDays,
+  ChartColumn,
+  Check,
+  CreditCard,
+  ExternalLink,
+  Eye,
+  Globe,
+  MapPin,
+  MessageCircle,
+  Navigation,
+  Phone,
+  Share2,
+  Sparkles,
+  Store,
+  TrendingUp,
+  Wand2,
+} from "lucide-react";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHead, CardTitle, SectionHeading } from "@/components/ui/Card";
@@ -17,9 +44,27 @@ import { SAFE_ERRORS } from "@/lib/safeError";
 import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
 import { nextActionFor } from "@/lib/nextAction";
 import { businessStatusLabel, subscriptionStatusLabel } from "@/lib/statusLabels";
-import { formatDate, formatNumber } from "@/lib/dateFormat";
+import { daysUntil, formatDate, formatNumber } from "@/lib/dateFormat";
 import { Reveal } from "@/components/ui/Reveal";
 import ReferralShareCard from "@/components/ReferralShareCard";
+import {
+  WorkspaceEmpty,
+  WorkspaceFact,
+  WorkspaceFacts,
+  WorkspaceHero,
+  WorkspaceHeroStat,
+  WorkspacePanel,
+  WorkspaceSectionHead,
+  WorkspaceStat,
+} from "@/components/workspace/WorkspaceUI";
+import {
+  WORKSPACE_HERO_PHOTO,
+  WORKSPACE_PHOTOS,
+  businessInitials,
+  categoryLabel,
+  photoForCategory,
+  safeImageUrl,
+} from "@/lib/workspaceImagery";
 
 // Recharts is a large dependency and a chart is never on the critical path: it loads after the
 // owner can already read their numbers, and never blocks a payment or a publish.
@@ -28,7 +73,9 @@ const AnalyticsChart = dynamic(() => import("@/components/ui/AnalyticsChart"), {
   loading: () => <Skeleton variant="block" className="h-52" />,
 });
 
-type Biz = {
+type ServiceRow = { id: string; title: string; priceLabel: string | null; priceFrom: number | null };
+
+export type Biz = {
   id: string;
   slug: string;
   name: string;
@@ -43,11 +90,17 @@ type Biz = {
   lng?: number | null;
   description?: string | null;
   aftercallMsg?: string | null;
+  logoUrl?: string | null;
+  coverUrl?: string | null;
+  createdAt?: string | null;
   publicUrl: string;
   /** Stage 2: the owner's own referral link, when the page is eligible to share one. */
   referralUrl?: string | null;
   subscription: { status: string; expiresAt: string | null; planName: string } | null;
+  lastPayment?: { status: string; createdAt: string } | null;
+  services?: ServiceRow[];
   servicesCount: number;
+  offer?: { title: string; subtitle: string | null; isActive: boolean } | null;
   hasOffer: boolean;
   /** Interactive Business state (§15) — optional so every business card keeps working. */
   hasExperience?: boolean;
@@ -63,6 +116,11 @@ export const EMPTY_METRICS: Metrics = { views: 0, whatsapp: 0, calls: 0, directi
 
 function totalResponses(m: Metrics) {
   return (m.views || 0) + (m.whatsapp || 0) + (m.calls || 0) + (m.directions || 0) + (m.shares || 0) + (m.serviceClicks || 0);
+}
+
+function waLink(value?: string | null) {
+  const digits = (value || "").replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : null;
 }
 
 /**
@@ -81,7 +139,23 @@ function NoticeBar({ notice }: { notice: Notice }) {
   );
 }
 
-export default function DashboardClient({ businesses, metricsMap }: { businesses: Biz[]; metricsMap: Record<string, Metrics> }) {
+/**
+ * The workspace overview.
+ *
+ * Layout: hero band (real totals) → portfolio comparison (only for multiple businesses) →
+ * one rich card per business. Each card leads with the business's own photograph (or the
+ * category illustration when the owner has not uploaded one), then its real response
+ * numbers, then its next step, then the controls that change it.
+ */
+export default function DashboardClient({
+  businesses,
+  metricsMap,
+  accountEmail,
+}: {
+  businesses: Biz[];
+  metricsMap: Record<string, Metrics>;
+  accountEmail?: string;
+}) {
   const totals = useMemo(
     () =>
       businesses.reduce<Metrics>(
@@ -103,41 +177,134 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
 
   if (businesses.length === 0) {
     return (
-      <Card className="mt-2" labelledBy="dashboard-empty-title">
-        <CardBody>
-          <EmptyState
-            title="No business page yet"
-            actions={
-              <>
-                <Button href="/onboarding">Start setup</Button>
-                <Button href="/dashboard/subscription" variant="secondary">
-                  See plans
-                </Button>
-              </>
-            }
-          >
-            <span id="dashboard-empty-title">Set one up in seven short steps. Your page goes live once your subscription payment is confirmed.</span>
-          </EmptyState>
-        </CardBody>
-      </Card>
+      <div className="ws-stack">
+        <WorkspaceHero
+          kicker="Your workspace"
+          title={
+            <>
+              Start with <em>one page</em> customers can act on.
+            </>
+          }
+          subtitle="Set up your business, choose a plan and share one link. WhatsApp, Call, Directions and your services sit on it — no website build, no developer."
+          photo={WORKSPACE_HERO_PHOTO}
+          actions={
+            <>
+              <Link href="/onboarding" className="ws-btn-amber">
+                Start setup <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+              <Link href="/dashboard/subscription" className="ws-btn-outline">
+                See plans
+              </Link>
+            </>
+          }
+          meta="Seven short steps · your answers save as you go · pay with M-Pesa or card"
+        />
+        <WorkspaceEmpty
+          title="No business page yet"
+          text="Your workspace fills up as soon as you add a business: the page, its plan, its AI front desk, its website and its till all live here."
+          photo={WORKSPACE_PHOTOS.retail}
+          actions={
+            <>
+              <Button href="/onboarding">Start setup</Button>
+              <Button href="/dashboard/subscription" variant="secondary">
+                See plans
+              </Button>
+            </>
+          }
+        />
+      </div>
     );
   }
 
   const multiple = businesses.length > 1;
+  const liveCount = businesses.filter((business) => business.isPublished).length;
+  const responseTotal = totalResponses(totals);
+  const firstName = businesses[0]?.name || "your business";
 
   return (
-    <div className="space-y-6">
-      {multiple ? <PortfolioSummary totals={totals} count={businesses.length} /> : null}
+    <div className="ws-stack">
+      <WorkspaceHero
+        kicker="Your workspace"
+        title={
+          multiple ? (
+            <>
+              Everything for <em>{businesses.length} businesses</em>, in one place.
+            </>
+          ) : (
+            <>
+              Everything for <em>{firstName}</em>, in one place.
+            </>
+          )
+        }
+        subtitle={
+          multiple
+            ? "Each business keeps its own page, plan, website and till. The numbers below are the real counts recorded across all of them."
+            : "Your public page, your AI front desk, your website studio and your till, side by side. Customers see the page; you see what they do on it."
+        }
+        photo={WORKSPACE_HERO_PHOTO}
+        stats={
+          <>
+            <WorkspaceHeroStat label="Page views" value={formatNumber(totals.views)} />
+            <WorkspaceHeroStat label="WhatsApp taps" value={formatNumber(totals.whatsapp)} />
+            <WorkspaceHeroStat label="Calls" value={formatNumber(totals.calls)} />
+            <WorkspaceHeroStat label="Directions" value={formatNumber(totals.directions)} />
+          </>
+        }
+        actions={
+          <>
+            <Link href="/dashboard/studio" className="ws-btn-amber">
+              <Wand2 size={16} aria-hidden="true" /> Open Website Studio
+            </Link>
+            <Link href="/dashboard/subscription" className="ws-btn-outline">
+              <CreditCard size={16} aria-hidden="true" /> Manage plan
+            </Link>
+            <Link href="/onboarding" className="ws-btn-quiet">
+              <Sparkles size={16} aria-hidden="true" /> Add a business
+            </Link>
+          </>
+        }
+        meta={`${liveCount} of ${businesses.length} ${businesses.length === 1 ? "page" : "pages"} live to customers · ${
+          responseTotal ? `${formatNumber(responseTotal)} recorded customer responses` : "no customer responses recorded yet"
+        }${accountEmail ? ` · signed in as ${accountEmail}` : ""}`}
+      />
 
+      {multiple ? <PortfolioSummary totals={totals} count={businesses.length} /> : null}
       {multiple ? <BusinessTable businesses={businesses} metricsMap={metricsMap} /> : null}
 
-      <div className="space-y-6">
+      <div className="ws-stack">
         {businesses.map((b, index) => (
           <Reveal key={b.id} as="div" delay={index * 0.03}>
             <BusinessCard b={b} m={metricsMap[b.id] || EMPTY_METRICS} />
           </Reveal>
         ))}
       </div>
+
+      <WorkspacePanel title="What each number means" meta="Every metric is measured, never estimated">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MeaningRow icon={<Eye size={15} />} label="Page views" text="Times a customer opened your public page." />
+          <MeaningRow icon={<MessageCircle size={15} />} label="WhatsApp taps" text="Times a customer tapped your WhatsApp button." />
+          <MeaningRow icon={<Phone size={15} />} label="Calls" text="Times a customer tapped to call your number." />
+          <MeaningRow icon={<Navigation size={15} />} label="Directions" text="Times a customer asked for directions to you." />
+        </div>
+        <p className="ws-muted ws-tiny mt-3">
+          These are counts recorded by your own pages. We do not estimate visitors, infer customers or show a number we cannot
+          measure — an empty chart means no responses have been recorded yet.
+        </p>
+      </WorkspacePanel>
+    </div>
+  );
+}
+
+function MeaningRow({ icon, label, text }: { icon: React.ReactNode; label: string; text: string }) {
+  return (
+    <div className="rounded-xl border border-[color:var(--ws-line)] bg-white px-3 py-2.5">
+      <p className="flex items-center gap-1.5 text-[0.78rem] font-bold">
+        <span aria-hidden="true" className="text-[color:var(--ws-amber-deep)]">
+          {icon}
+        </span>
+        {label}
+      </p>
+      <p className="ws-muted ws-tiny mt-0.5">{text}</p>
     </div>
   );
 }
@@ -146,12 +313,13 @@ export default function DashboardClient({ businesses, metricsMap }: { businesses
 function PortfolioSummary({ totals, count }: { totals: Metrics; count: number }) {
   const total = totalResponses(totals);
   return (
-    <Card labelledBy="portfolio-title">
+    <Card labelledBy="portfolio-title" raised>
       <CardHead>
-        <CardTitle id="portfolio-title">All {count} businesses</CardTitle>
-        <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--jata-muted)]">
-          {total ? `${formatNumber(total)} customer responses` : "No responses yet"}
-        </p>
+        <div>
+          <CardTitle id="portfolio-title">All {count} businesses</CardTitle>
+          <p className="ws-muted ws-tiny mt-0.5">Combined, from the same recorded events as each card below.</p>
+        </div>
+        <StatusPill tone={total ? "success" : "neutral"}>{total ? `${formatNumber(total)} responses` : "No responses yet"}</StatusPill>
       </CardHead>
       <CardBody className="space-y-5">
         <MetricGrid label="Customer responses across all businesses">
@@ -165,11 +333,11 @@ function PortfolioSummary({ totals, count }: { totals: Metrics; count: number })
           <AnalyticsChart
             title="Responses"
             series={[
-              { label: "Views", value: totals.views, colour: "var(--jata-accent)" },
-              { label: "WhatsApp", value: totals.whatsapp, colour: "var(--jata-live)" },
+              { label: "Views", value: totals.views, colour: "var(--ws-amber)" },
+              { label: "WhatsApp", value: totals.whatsapp, colour: "var(--ws-jade)" },
               { label: "Calls", value: totals.calls, colour: "var(--jata-info)" },
-              { label: "Directions", value: totals.directions, colour: "#7c3aed" },
-              { label: "Shares", value: totals.shares, colour: "#0891b2" },
+              { label: "Directions", value: totals.directions, colour: "var(--ws-ember)" },
+              { label: "Shares", value: totals.shares, colour: "#7c3aed" },
             ]}
           />
         </div>
@@ -220,7 +388,7 @@ function BusinessTable({ businesses, metricsMap }: { businesses: Biz[]; metricsM
     <Card labelledBy="business-table-title">
       <CardHead>
         <CardTitle id="business-table-title">Compare your businesses</CardTitle>
-        <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--jata-muted)]">Sortable</p>
+        <p className="ws-section-head__meta">Sortable</p>
       </CardHead>
       <CardBody>
         <DataTable rows={rows} columns={columns} initialSort={{ id: "views", desc: true }} caption="Your businesses by page activity" />
@@ -250,6 +418,12 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     hasUnpublishedChanges: b.hasUnpublishedChanges,
     entitlementStatus: b.entitlementStatus ?? null,
   });
+
+  const coverUrl = safeImageUrl(b.coverUrl);
+  const logoUrl = safeImageUrl(b.logoUrl);
+  const photo = photoForCategory(b.category);
+  const whatsappHref = waLink(b.whatsapp || b.phone);
+  const days = b.subscription?.expiresAt ? daysUntil(b.subscription.expiresAt) : null;
 
   async function patch(body: Record<string, unknown>, success = "Saved.") {
     if (busy) return false;
@@ -328,151 +502,249 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
   }
 
   const responseSeries = [
-    { label: "Views", value: m.views || 0, colour: "var(--jata-accent)" },
-    { label: "WhatsApp", value: m.whatsapp || 0, colour: "var(--jata-live)" },
+    { label: "Views", value: m.views || 0, colour: "var(--ws-amber)" },
+    { label: "WhatsApp", value: m.whatsapp || 0, colour: "var(--ws-jade)" },
     { label: "Calls", value: m.calls || 0, colour: "var(--jata-info)" },
-    { label: "Directions", value: m.directions || 0, colour: "#7c3aed" },
+    { label: "Directions", value: m.directions || 0, colour: "#c2410c" },
   ];
 
+  const activity = [
+    b.createdAt ? { title: "Business created", meta: formatDate(b.createdAt), icon: <Sparkles size={12} /> } : null,
+    b.isPublished ? { title: "Page live to customers", meta: `Shared at /b/${b.slug}`, icon: <Globe size={12} /> } : { title: "Page is a private draft", meta: "Publish to show it to customers", icon: <Eye size={12} /> },
+    b.lastPayment ? { title: "Latest plan payment", meta: formatDate(b.lastPayment.createdAt), icon: <CreditCard size={12} /> } : null,
+    b.subscription?.expiresAt ? { title: "Plan access ends", meta: formatDate(b.subscription.expiresAt), icon: <CalendarDays size={12} /> } : null,
+    b.hasUnpublishedChanges ? { title: "Website changes saved, not published", meta: "Review and publish them", icon: <Wand2 size={12} /> } : null,
+  ].filter(Boolean) as Array<{ title: string; meta: string; icon: React.ReactNode }>;
+
   return (
-    <Card as="article" labelledBy={`biz-${b.id}-name`} interactive>
-      <CardHead>
-        <div className="min-w-0">
-          <h2 id={`biz-${b.id}-name`} className="jata-surface__title [overflow-wrap:anywhere]">
-            {b.name}
-          </h2>
-          <p className="mt-0.5 text-[0.8rem] text-[color:var(--jata-muted)] [overflow-wrap:anywhere]">
-            {b.category} · /b/{b.slug}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <StatusPill tone={b.isPublished ? "success" : "neutral"} icon={b.isPublished ? <Eye size={12} /> : undefined}>
+    <article className="ws-biz" aria-labelledby={`biz-${b.id}-name`}>
+      <div className="ws-biz__cover">
+        {coverUrl ? (
+          // The owner's own cover photograph: the strongest possible thumbnail for their page.
+          // Decorative — the business name and facts are directly below it.
+          <img src={coverUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        ) : (
+          <WorkspaceCover photo={photo} />
+        )}
+        <div className="ws-biz__cover-top">
+          <div className="ws-cover-pills">
+            <StatusPill tone={b.isPublished ? "success" : "neutral"} icon={b.isPublished ? <Eye size={11} /> : undefined}>
               {b.isPublished ? "Live" : "Draft"}
             </StatusPill>
-            <StatusPill tone={sub.tone}>Plan: {sub.label}</StatusPill>
-            {b.status === "SUSPENDED" ? <StatusPill tone={bizStatus.tone}>{bizStatus.label}</StatusPill> : null}
+            <StatusPill tone={sub.tone}>{sub.label === "No subscription" ? "No plan yet" : sub.label}</StatusPill>
             {b.hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
+            {b.status === "SUSPENDED" ? <StatusPill tone={bizStatus.tone}>{bizStatus.label}</StatusPill> : null}
           </div>
         </div>
-      </CardHead>
+        <div className="ws-biz__cover-id">
+          <span className="ws-avatar" aria-hidden="true">
+            {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full rounded-[inherit] object-cover" loading="lazy" /> : businessInitials(b.name)}
+          </span>
+          <div className="min-w-0">
+            <h2 id={`biz-${b.id}-name`} className="ws-biz__name">
+              {b.name}
+            </h2>
+            <p className="ws-biz__meta">
+              {categoryLabel(b.category)}
+              {b.location ? ` · ${b.location}` : ""} · /b/{b.slug}
+            </p>
+          </div>
+        </div>
+      </div>
 
-      <CardBody className="space-y-5">
+      <div className="ws-biz__body">
         {notice ? <NoticeBar notice={notice} /> : null}
 
         {/* Next step — exactly one, always the highest-priority action. */}
-        <section aria-label="Next step" className="jata-surface jata-surface--muted p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[0.72rem] font-bold uppercase tracking-wider text-[color:var(--jata-muted)]">Next step</p>
-              <p className="mt-0.5 font-semibold">{action.title}</p>
-              <p className="text-sm text-[color:var(--jata-muted)]">{action.detail}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {actionControl()}
-              <Button href={`/dashboard/businesses/${b.id}`} variant="secondary" icon={<TrendingUp size={15} />}>
-                Open studio
-              </Button>
-            </div>
+        <section aria-label="Next step" className="ws-next">
+          <div className="ws-next__copy">
+            <p className="ws-next__label">
+              <TrendingUp size={12} aria-hidden="true" /> Next step
+            </p>
+            <p className="ws-next__title">{action.title}</p>
+            <p className="ws-next__detail">{action.detail}</p>
+          </div>
+          <div className="ws-next__actions">
+            {actionControl()}
+            <Button href={`/dashboard/businesses/${b.id}`} variant="secondary">
+              Open studio
+            </Button>
           </div>
         </section>
 
-        {/* Subscription */}
-        <section aria-label="Subscription" className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <p className="min-w-0">
-            <span className="font-semibold">Subscription:</span>{" "}
-            {b.subscription
-              ? `${b.subscription.planName} — ${sub.label}${b.subscription.expiresAt ? ` · until ${formatDate(b.subscription.expiresAt)}` : ""}`
-              : "No plan yet. Choose a plan to unlock publishing."}
-            {sub.help ? ` ${sub.help}` : ""}
-          </p>
-          {action.key !== "renew" && action.key !== "subscribe" ? (
-            <Link href={getSubscriptionPageUrl(b.id)} className="jata-btn jata-btn-ghost underline">
-              Manage plan
-            </Link>
-          ) : null}
-        </section>
-
-        {b.referralUrl ? <ReferralShareCard url={b.referralUrl} /> : null}
-
-        {/* Activity */}
+        {/* Real response numbers. */}
         <section aria-labelledby={`biz-${b.id}-activity`}>
-          <SectionHeading id={`biz-${b.id}-activity`} title="Activity" meta="Since your page went live" />
-          <MetricGrid label={`Activity for ${b.name}`}>
-            <Metric label="Views" value={formatNumber(m.views)} />
-            <Metric label="WhatsApp" value={formatNumber(m.whatsapp)} />
-            <Metric label="Calls" value={formatNumber(m.calls)} />
-            <Metric label="Directions" value={formatNumber(m.directions)} />
-          </MetricGrid>
-          <div className="mt-4">
+          <WorkspaceSectionHead id={`biz-${b.id}-activity`} title="How customers respond" meta="Recorded by your page" />
+          <div className="ws-stats ws-stats--5">
+            <WorkspaceStat label="Views" value={formatNumber(m.views)} metric="views" icon={<Eye size={13} />} />
+            <WorkspaceStat label="WhatsApp" value={formatNumber(m.whatsapp)} metric="whatsapp" icon={<MessageCircle size={13} />} />
+            <WorkspaceStat label="Calls" value={formatNumber(m.calls)} metric="calls" icon={<Phone size={13} />} />
+            <WorkspaceStat label="Directions" value={formatNumber(m.directions)} metric="directions" icon={<Navigation size={13} />} />
+            <WorkspaceStat label="Shares" value={formatNumber(m.shares)} metric="shares" icon={<Share2 size={13} />} />
+          </div>
+          <div className="mt-3">
             <AnalyticsChart title="Responses" series={responseSeries} />
           </div>
         </section>
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          <Button href={`/dashboard/businesses/${b.id}`} variant="secondary" icon={<TrendingUp size={15} />}>
-            Website studio
-          </Button>
-          <Button href={`/b/${b.slug}`} variant="secondary" icon={<ExternalLink size={15} />}>
-            {b.isPublished ? "View page" : "Preview"}
-          </Button>
-          {action.key !== "share" ? (
-            <Button variant="secondary" onClick={() => void share()} icon={<Share2 size={15} />}>
-              {b.isPublished ? "Share" : "Copy link"}
-            </Button>
-          ) : null}
-          <Button href={`https://wa.me/${(b.whatsapp || b.phone || "").replace(/\D/g, "")}`} variant="ghost" icon={<MessageCircle size={15} />} ariaLabel={`Message ${b.name} on WhatsApp`}>
-            WhatsApp
-          </Button>
-          {b.phone ? (
-            <Button href={`tel:${b.phone}`} variant="ghost" icon={<Phone size={15} />} ariaLabel={`Call ${b.name}`}>
-              Call
-            </Button>
-          ) : null}
+        {/* Quick actions */}
+        <section aria-label="Quick actions">
+          <WorkspaceSectionHead title="Quick actions" />
+          <div className="ws-actions">
+            <Link href={`/dashboard/businesses/${b.id}`} className="ws-action">
+              <Wand2 size={16} aria-hidden="true" /> Website Studio
+            </Link>
+            <Link href={`/b/${b.slug}`} className="ws-action" data-primary={b.isPublished ? "true" : undefined}>
+              <ExternalLink size={16} aria-hidden="true" /> {b.isPublished ? "View live page" : "Preview page"}
+            </Link>
+            <button type="button" onClick={() => void share()} className="ws-action">
+              <Share2 size={16} aria-hidden="true" /> {b.isPublished ? "Share page" : "Copy link"}
+            </button>
+            {whatsappHref ? (
+              <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className="ws-action">
+                <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+              </a>
+            ) : null}
+            {b.phone ? (
+              <a href={`tel:${b.phone}`} className="ws-action">
+                <Phone size={16} aria-hidden="true" /> Call
+              </a>
+            ) : null}
+            <Link href={`/dashboard/ai?businessId=${b.id}`} className="ws-action">
+              <Bot size={16} aria-hidden="true" /> AI Front Desk
+            </Link>
+            <Link href={`/dashboard/pos/${b.id}`} className="ws-action">
+              <Store size={16} aria-hidden="true" /> Business POS
+            </Link>
+            <Link href={`/dashboard/businesses/${b.id}/insights`} className="ws-action">
+              <ChartColumn size={16} aria-hidden="true" /> Insights
+            </Link>
+            <Link href={getSubscriptionPageUrl(b.id)} className="ws-action">
+              <CreditCard size={16} aria-hidden="true" /> Plan &amp; billing
+            </Link>
+            <Link href={`/dashboard/businesses/${b.id}/photos`} className="ws-action">
+              <Sparkles size={16} aria-hidden="true" /> Photos
+            </Link>
+          </div>
+        </section>
+
+        <div className="ws-grid-2">
+          <div className="ws-col">
+            {/* Facts */}
+            <section aria-labelledby={`biz-${b.id}-facts`}>
+              <WorkspaceSectionHead id={`biz-${b.id}-facts`} title="Page & plan" />
+              <WorkspaceFacts>
+                <WorkspaceFact label="Public address" icon={<Globe size={13} />}>
+                  <Link href={`/b/${b.slug}`} className="underline underline-offset-2">
+                    /b/{b.slug}
+                  </Link>
+                </WorkspaceFact>
+                <WorkspaceFact label="Plan" icon={<CreditCard size={13} />}>
+                  {b.subscription ? b.subscription.planName : "No plan yet"}
+                </WorkspaceFact>
+                <WorkspaceFact label="Plan status" icon={<Check size={13} />}>
+                  {sub.label}
+                  {days !== null && b.subscription?.status === "ACTIVE" ? ` · ${days > 0 ? `${days} days left` : "ends today"}` : ""}
+                </WorkspaceFact>
+                <WorkspaceFact label="Location" icon={<MapPin size={13} />}>
+                  {b.location || "Not added yet"}
+                </WorkspaceFact>
+                <WorkspaceFact label="Services" icon={<Sparkles size={13} />}>
+                  {b.servicesCount} listed
+                </WorkspaceFact>
+                <WorkspaceFact label="Website" icon={<Wand2 size={13} />}>
+                  {b.hasExperience ? (b.hasUnpublishedChanges ? "Saved changes not published" : "Website set up") : "Not started"}
+                </WorkspaceFact>
+              </WorkspaceFacts>
+              {sub.help ? <p className="ws-muted ws-tiny mt-2">{sub.help}</p> : null}
+            </section>
+
+            {b.referralUrl ? <ReferralShareCard url={b.referralUrl} /> : null}
+          </div>
+
+          <div className="ws-col">
+            <section aria-labelledby={`biz-${b.id}-timeline`}>
+              <WorkspaceSectionHead id={`biz-${b.id}-timeline`} title="Activity" meta="Facts, not estimates" />
+              <ol className="ws-timeline">
+                {activity.map((entry) => (
+                  <li key={entry.title}>
+                    <span className="ws-timeline__dot" aria-hidden="true" />
+                    <span>
+                      <span className="ws-timeline__title">{entry.title}</span>
+                      <span className="ws-timeline__meta block">{entry.meta}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
         </div>
 
-        {/* Editing */}
-        <div className="space-y-2">
-          <EditSection title="Edit profile, contact &amp; location" open={open === "profile"} onToggle={(o) => setOpen(o ? "profile" : null)}>
-            <EditForm business={b} busy={busy} onSave={(body) => patch(body, "Profile saved.")} />
-          </EditSection>
-          <EditSection title={`Services (${b.servicesCount} listed)`} open={open === "services"} onToggle={(o) => setOpen(o ? "services" : null)}>
-            <ServiceManager businessId={b.id} onSaved={() => router.refresh()} />
-          </EditSection>
-          <EditSection title={b.hasOffer ? "Offer (live)" : "Offer (none yet)"} open={open === "offer"} onToggle={(o) => setOpen(o ? "offer" : null)}>
-            <OfferManager businessId={b.id} onSaved={() => router.refresh()} />
-          </EditSection>
-        </div>
+        {/* Editing — progressive disclosure, one panel at a time. */}
+        <section aria-label="Edit this business">
+          <WorkspaceSectionHead title="Edit" meta="Changes save to your live data" />
+          <details className="ws-editor" open={open === "profile"} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? "profile" : null)}>
+            <summary>
+              <Sparkles size={15} aria-hidden="true" /> Profile, contact &amp; location
+            </summary>
+            <div className="ws-editor__body">
+              <EditForm business={b} busy={busy} onSave={(body) => patch(body, "Profile saved.")} />
+            </div>
+          </details>
+          <details className="ws-editor" open={open === "services"} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? "services" : null)}>
+            <summary>
+              <Check size={15} aria-hidden="true" /> Services ({b.servicesCount} listed)
+            </summary>
+            <div className="ws-editor__body">
+              <ServiceManager businessId={b.id} services={b.services || []} onSaved={() => router.refresh()} />
+            </div>
+          </details>
+          <details className="ws-editor" open={open === "offer"} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open ? "offer" : null)}>
+            <summary>
+              <TrendingUp size={15} aria-hidden="true" /> Offer {b.offer?.title ? `— ${b.offer.title}` : "(none yet)"}
+            </summary>
+            <div className="ws-editor__body">
+              <OfferManager businessId={b.id} offer={b.offer || null} onSaved={() => router.refresh()} />
+            </div>
+          </details>
+        </section>
 
         {b.isPublished ? (
-          <div className="border-t border-[color:var(--jata-line)] pt-3">
+          <div className="border-t border-[color:var(--ws-line)] pt-3">
             <button
               type="button"
               disabled={busy}
-              className="jata-btn jata-btn-ghost underline"
+              className="jata-btn jata-btn-ghost"
               onClick={() => patch({ isPublished: false }, "Unpublished. Your page is now a private draft.")}
             >
               Unpublish page
             </button>
+            <p className="ws-muted ws-tiny mt-1">
+              Unpublishing hides the page from customers immediately. Your plan, services and website stay saved.
+            </p>
           </div>
         ) : null}
-      </CardBody>
-    </Card>
+      </div>
+    </article>
   );
 }
 
-function EditSection({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: (open: boolean) => void; children: React.ReactNode }) {
+/** The category illustration behind a card that has no owner-uploaded cover. */
+function WorkspaceCover({ photo }: { photo: ReturnType<typeof photoForCategory> }) {
   return (
-    <details
-      className="jata-surface"
-      open={open}
-      onToggle={(e) => {
-        const next = (e.currentTarget as HTMLDetailsElement).open;
-        if (next !== open) onToggle(next);
-      }}
-    >
-      <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">{title}</summary>
-      <div className="border-t border-[color:var(--jata-line)] px-4 pb-4">{children}</div>
-    </details>
+    <picture>
+      {photo.webpSrcSet || photo.webp ? <source type="image/webp" srcSet={photo.webpSrcSet ?? photo.webp} sizes="(min-width: 900px) 78rem, 100vw" /> : null}
+      <img
+        src={photo.src}
+        srcSet={photo.srcSet}
+        sizes="(min-width: 900px) 78rem, 100vw"
+        alt={photo.alt}
+        width={photo.width}
+        height={photo.height}
+        loading="lazy"
+        decoding="async"
+      />
+    </picture>
   );
 }
 
@@ -491,19 +763,21 @@ function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; on
   });
   const [problem, setProblem] = useState("");
   return (
-    <div className="mt-3 space-y-2">
-      <Field id={`${business.id}-name`} label="Business name">
-        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </Field>
-      <Field id={`${business.id}-category`} label="Category">
-        <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-      </Field>
-      <Field id={`${business.id}-phone`} label="Phone">
-        <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-      </Field>
-      <Field id={`${business.id}-whatsapp`} label="WhatsApp">
-        <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
-      </Field>
+    <div className="mt-1 space-y-2">
+      <div className="grid gap-x-3 sm:grid-cols-2">
+        <Field id={`${business.id}-name`} label="Business name">
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field>
+        <Field id={`${business.id}-category`} label="Category">
+          <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+        </Field>
+        <Field id={`${business.id}-phone`} label="Phone">
+          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
+        </Field>
+        <Field id={`${business.id}-whatsapp`} label="WhatsApp">
+          <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} inputMode="tel" />
+        </Field>
+      </div>
       <LocationFields
         idPrefix={business.id}
         value={{ location: form.location, lat: form.lat, lng: form.lng }}
@@ -537,7 +811,7 @@ function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; on
   );
 }
 
-function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: () => void }) {
+function ServiceManager({ businessId, services, onSaved }: { businessId: string; services: ServiceRow[]; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [msg, setMsg] = useState<Notice>(null);
@@ -574,13 +848,29 @@ function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: 
     }
   }
   return (
-    <div className="mt-3 space-y-2">
-      <Field id={`${businessId}-service`} label="Service or product">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </Field>
-      <Field id={`${businessId}-service-price`} label="Price label" hint="For example From KES 1,500.">
-        <input value={price} onChange={(e) => setPrice(e.target.value)} />
-      </Field>
+    <div className="mt-1 space-y-3">
+      {services.length === 0 ? (
+        <EmptyState title="No services yet">Add the services or products customers ask about most, with a price if you have one.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-[color:var(--ws-line-soft)]">
+          {services.map((service) => (
+            <li key={service.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="min-w-0 [overflow-wrap:anywhere]">{service.title}</span>
+              <span className="ws-muted shrink-0 text-[0.78rem]">
+                {service.priceLabel || (typeof service.priceFrom === "number" ? `From KES ${formatNumber(service.priceFrom)}` : "—")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid gap-x-3 sm:grid-cols-2">
+        <Field id={`${businessId}-service`} label="Service or product">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field id={`${businessId}-service-price`} label="Price label" hint="For example From KES 1,500.">
+          <input value={price} onChange={(e) => setPrice(e.target.value)} />
+        </Field>
+      </div>
       <Button loading={saving} onClick={add}>
         Add service
       </Button>
@@ -589,9 +879,9 @@ function ServiceManager({ businessId, onSaved }: { businessId: string; onSaved: 
   );
 }
 
-function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: () => void }) {
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
+function OfferManager({ businessId, offer, onSaved }: { businessId: string; offer: { title: string; subtitle: string | null; isActive: boolean } | null; onSaved: () => void }) {
+  const [title, setTitle] = useState(offer?.title || "");
+  const [subtitle, setSubtitle] = useState(offer?.subtitle || "");
   const [msg, setMsg] = useState<Notice>(null);
   const [saving, setSaving] = useState(false);
   async function save() {
@@ -624,13 +914,23 @@ function OfferManager({ businessId, onSaved }: { businessId: string; onSaved: ()
     }
   }
   return (
-    <div className="mt-3 space-y-2">
-      <Field id={`${businessId}-offer`} label="Offer title">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </Field>
-      <Field id={`${businessId}-offer-sub`} label="Offer detail">
-        <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
-      </Field>
+    <div className="mt-1 space-y-3">
+      {offer?.isActive ? (
+        <p className="ws-muted ws-tiny">
+          Live offer: <strong>{offer.title}</strong>
+          {offer.subtitle ? ` — ${offer.subtitle}` : ""}
+        </p>
+      ) : (
+        <p className="ws-muted ws-tiny">No offer is showing on your page yet. Saving one publishes it immediately.</p>
+      )}
+      <div className="grid gap-x-3 sm:grid-cols-2">
+        <Field id={`${businessId}-offer`} label="Offer title">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field id={`${businessId}-offer-sub`} label="Offer detail">
+          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
+        </Field>
+      </div>
       <Button loading={saving} onClick={save}>
         Save offer
       </Button>

@@ -5,6 +5,7 @@ import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { LocationFields } from "@/components/LocationFields";
 import { OnboardingPreview } from "@/components/OnboardingPreview";
+import { StepIllustration } from "@/components/onboarding/StepIllustration";
 import { SAFE_ERRORS } from "@/lib/safeError";
 import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 import {
@@ -286,6 +287,8 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
             })}
           </ol>
         </nav>
+
+        <StepIllustration step={step} />
 
         <h2 ref={headingRef} tabIndex={-1} className="mt-4 text-lg font-bold outline-hidden">{meta.title}</h2>
         <p className="mt-1 text-sm text-zinc-600">{meta.intro}</p>

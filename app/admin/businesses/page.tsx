@@ -1,8 +1,9 @@
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 import AdminBusinessActions from "@/components/AdminBusinessActions";
-export const dynamic = "force-dynamic";
+import { AdminPage, AdminRecord, AdminSearch, AdminStatus } from "@/components/admin/AdminUI";
 
+export const dynamic = "force-dynamic";
 
 export default async function AdminBusinesses({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireAdminPage();
@@ -12,25 +13,42 @@ export default async function AdminBusinesses({ searchParams }: { searchParams: 
   const businesses = await prisma.business.findMany({ where, orderBy: { createdAt: "desc" }, take: 50, include: { owner: true, subscription: { include: { plan: true } } } });
 
   return (
-    <div>
-      <h1 className="text-lg font-bold">Businesses</h1>
-      <form className="mt-3 flex gap-2">
-        <input name="q" defaultValue={q} placeholder="Search name / slug" className="w-full rounded-xl border px-3 py-2 text-sm" />
-        <button className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Search</button>
-      </form>
-      <div className="mt-4 space-y-3">
-        {businesses.map((b) => (
-          <div key={b.id} className="rounded-2xl border bg-white p-4">
-            <p className="text-sm font-bold">{b.name} — /b/{b.slug}</p>
-            <p className="text-xs text-zinc-500">Owner: {b.owner.email} • {b.category} • {b.theme} • {b.isPublished ? "🟢 LIVE" : "⚪ DRAFT"} • {b.status}</p>
-            <p className="text-xs">Subscription: {b.subscription ? `${b.subscription.status} • ${b.subscription.plan.name}` : "None"}</p>
-            <div className="mt-2 flex gap-2">
-              <a href={`/b/${b.slug}`} target="_blank" className="rounded-full border px-3 py-1 text-xs">View page</a>
-              <AdminBusinessActions businessId={b.id} isPublished={b.isPublished} status={b.status} />
-            </div>
-          </div>
-        ))}
+    <AdminPage
+      kicker="Platform admin"
+      title="Businesses"
+      meta={`${businesses.length} ${businesses.length === 1 ? "business" : "businesses"}${q ? ` matching “${q}”` : ", newest first"}. Publishing and suspension are audited actions.`}
+    >
+      <AdminSearch action="/admin/businesses" defaultValue={q} placeholder="Search name or slug" label="Search businesses by name or slug" />
+      <div className="ws-stack">
+        {businesses.length === 0 ? (
+          <p className="ws-muted">No business matches that search.</p>
+        ) : (
+          businesses.map((b) => (
+            <AdminRecord
+              key={b.id}
+              title={b.name}
+              subtitle={`/b/${b.slug} · ${b.owner.email}`}
+              tone={b.isPublished ? "live" : "draft"}
+              facts={[
+                { label: "Category", value: b.category || "—" },
+                { label: "Business status", value: <AdminStatus value={b.status} /> },
+                {
+                  label: "Subscription",
+                  value: b.subscription ? `${b.subscription.status} · ${b.subscription.plan.name}` : "None",
+                },
+              ]}
+              actions={
+                <>
+                  <a href={`/b/${b.slug}`} target="_blank" rel="noopener noreferrer" className="ws-btn-outline ws-btn-outline--ink">
+                    View page
+                  </a>
+                  <AdminBusinessActions businessId={b.id} isPublished={b.isPublished} status={b.status} />
+                </>
+              }
+            />
+          ))
+        )}
       </div>
-    </div>
+    </AdminPage>
   );
 }
