@@ -195,16 +195,13 @@ h1, h2, h3 {
   font-weight: 700;
 }
 
+/* The tagline is a marketing line, not part of the wordmark: it is off by default and the surfaces
+   that want it turn it on (`.lp-nav` below), so a shared header never carries copy it does not own. */
 .jata-brand-tag {
   display: none;
   color: var(--jata-muted);
   font-size: 0.75rem;
-}
-
-@media (min-width: 640px) {
-  .jata-brand-tag {
-    display: inline;
-  }
+  min-width: 0;
 }
 
 .jata-nav {
@@ -2360,23 +2357,47 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* A long label or a scaled-up root font must wrap onto a second row rather than push the wordmark
+     into the controls sitting next to it. */
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
   max-width: 76rem;
   margin: 0 auto;
   padding: 0.5rem 1rem;
 }
-.lp-nav .jata-brand { min-width: 0; }
+.lp-nav .jata-brand { min-width: 0; flex: 0 1 auto; }
 .lp-nav .jata-brand-name { white-space: nowrap; }
-/* Phone widths: the menu control loses its word first, then the wordmark keeps only "JATA".
-   Without this the sticky bar is wider than a 320 px screen and the open menu is clipped. */
+/* Phone widths: the menu control loses its word first. */
 @media (max-width: 419px) { .lp-nav__compact-label { display: none; } }
-@media (max-width: 379px) {
-  .lp-nav .jata-brand-name { display: none; }
-  /* The menu panel carries the account links at these widths, so the bar stays a single row. */
-  .lp-nav .lp-nav__actions { display: none; }
-}
 @media (max-width: 419px) {
   .lp-nav__inner { padding: 0.5rem 0.85rem; }
   .lp-nav .jata-btn { padding-inline: 0.85rem; font-size: 0.84rem; }
+  /* The account links live in the menu panel at these widths, so the bar stays one row and the
+     wordmark keeps its full text instead of being squeezed underneath the controls. */
+  .lp-nav .lp-nav__actions { display: none; }
+}
+/* The tagline drops to its own line under the wordmark below the tablet breakpoint: the wordmark and
+   the account controls then never share a row, so a narrow phone cannot push them into each other,
+   and the tagline wraps naturally instead of being clipped. The wordmark grows to the space the menu
+   control leaves, so the tagline line is as wide as the bar allows. Above it the tagline stays
+   inline, as it has since the redesign. */
+@media (max-width: 639px) {
+  .lp-nav .jata-brand {
+    flex: 1 1 auto;
+    margin-right: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+  .lp-nav .jata-brand-tag {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+}
+@media (min-width: 640px) {
+  .lp-nav .jata-brand-tag { display: inline; }
 }
 .lp-nav__panel-cta { background: rgba(240, 160, 60, 0.16); color: #f7b45c; }
 .lp-nav .jata-btn { flex: 0 0 auto; }
@@ -2388,7 +2409,7 @@ button:focus-visible {
 .lp-nav__links { display: none; }
 .lp-nav__link { color: rgba(247, 242, 232, 0.74); }
 .lp-nav__link:hover { color: var(--lp-cream); }
-.lp-nav__actions { display: flex; align-items: center; gap: 0.4rem; }
+.lp-nav__actions { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .lp-nav__login { display: none; color: rgba(247, 242, 232, 0.78); }
 .lp-nav .jata-btn-primary { border-color: var(--lp-amber); background: var(--lp-amber); color: #1a140d; }
 .lp-nav .jata-btn-primary:hover:not(:disabled) { border-color: #f7b45c; background: #f7b45c; }
@@ -2453,7 +2474,7 @@ button:focus-visible {
 .lp-nav__panel-link:hover { background: rgba(247, 242, 232, 0.08); }
 .lp-nav__panel-button { width: 100%; background: none; border: 0; text-align: left; }
 @media (min-width: 980px) {
-  .lp-nav__links { display: flex; align-items: center; gap: 0.15rem; }
+  .lp-nav__links { display: flex; align-items: center; gap: 0.15rem; flex-wrap: wrap; row-gap: 0.35rem; min-width: 0; }
   .lp-nav__link { font-size: 0.88rem; padding: 0 0.6rem; }
   .lp-nav__compact { display: none; }
   .lp-nav__login { display: inline-flex; }

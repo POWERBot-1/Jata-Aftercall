@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/Button";
  * hydration, with scripts blocked, and if any animation fails. Every link is a real anchor to a
  * section of this page, or the existing `/login` and `/register` flows — no new routes, and the
  * authenticated state still shows Dashboard / Admin / Logout exactly as before.
+ *
+ * Header contract (see `.lp-nav` in globals.css): the wordmark and its tagline own the left of the
+ * bar, the account controls own the right, and the two never share a row on a phone — below 420 px
+ * the account links live in the menu panel, and below 640 px the tagline drops to its own line under
+ * the wordmark. Nothing here is hidden to fix a collision: the wordmark, the tagline and the menu
+ * control are all rendered at every width.
  */
 const SECTIONS = [
   { href: "#product", label: "Product" },
@@ -37,7 +43,7 @@ export function Navbar({ session }: { session?: { email: string; role: string } 
   return (
     <nav className="jata-nav lp-nav" aria-label="Main">
       <div className="lp-nav__inner">
-        <BrandMark />
+        <BrandMark tagline />
         <div className="lp-nav__links">
           {SECTIONS.map((section) => (
             <a key={section.href} href={section.href} className="jata-nav-link lp-nav__link">
