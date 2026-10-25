@@ -83,9 +83,12 @@ export function PreviewClient({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
+      {/* Both groups wrap and may shrink: on a 390 px phone the device row plus "Open in new tab"
+          used to squeeze that link into a one-character column and push the row wider than the
+          screen. `min-w-0` lets a group shrink instead of forcing the page to scroll sideways. */}
       <div className="jata-toolbar">
-        <div className="flex gap-2" role="group" aria-label="Preview mode">
+        <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Preview mode">
           <button type="button" className={`jata-btn ${mode === "draft" ? "jata-btn-primary" : "jata-btn-secondary"}`} aria-pressed={mode === "draft"} onClick={() => { setMode("draft"); setNonce((value) => value + 1); }}>
             Draft
           </button>
@@ -93,7 +96,7 @@ export function PreviewClient({
             Live
           </button>
         </div>
-        <div className="flex gap-2" role="group" aria-label="Device">
+        <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Device">
           {DEVICES.map((entry) => (
             <button
               key={entry.id}
@@ -106,7 +109,7 @@ export function PreviewClient({
             </button>
           ))}
           <button type="button" className="jata-btn jata-btn-ghost" onClick={() => setNonce((value) => value + 1)}>Reload</button>
-          <a className="jata-btn jata-btn-ghost" href={src} target="_blank" rel="noopener noreferrer">Open in new tab</a>
+          <a className="jata-btn jata-btn-ghost whitespace-nowrap" href={src} target="_blank" rel="noopener noreferrer">Open in new tab</a>
         </div>
       </div>
 
@@ -120,8 +123,8 @@ export function PreviewClient({
 
       <div className="flex justify-center">
         <div
-          className="overflow-hidden rounded-2xl border bg-zinc-100"
-          style={{ width: "100%", maxWidth: active.width }}
+          className="w-full min-w-0 overflow-hidden rounded-2xl border bg-zinc-100"
+          style={{ width: "100%", maxWidth: `min(100%, ${active.width}px)` }}
         >
           <iframe
             key={`${mode}-${device}-${nonce}`}

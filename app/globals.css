@@ -108,6 +108,15 @@
   --jata-card: #ffffff;
   --jata-line: #e4e4e7;
   --jata-muted: #52525b;
+  /* Filled-action, hover and inset-chip surfaces. They exist as tokens because the shared
+     primitives (.jata-btn, .jc-*, .pos-*) used to hard-code #18181b/#fff/#f4f4f5 — a light-theme
+     assumption that painted white-on-white controls as soon as the product ran under the
+     graphite theme. Re-pointed per product theme below. */
+  --jata-action: #18181b;
+  --jata-on-action: #ffffff;
+  --jata-action-hover: #000000;
+  --jata-sunken: #f4f4f5;
+  --jata-soft: #fafafa;
   --jata-accent: #d97706;
   --jata-live: #047857;
   --jata-danger: #b91c1c;
@@ -182,8 +191,8 @@ h1, h2, h3 {
 
 .jata-brand-mark {
   border-radius: 0.55rem;
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   padding: 0.2rem 0.55rem;
   font-size: 0.8rem;
   font-weight: 700;
@@ -304,17 +313,17 @@ button:focus-visible {
 }
 
 .jata-btn-primary {
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
 }
 
 .jata-btn-primary:hover:not(:disabled) {
-  background: black;
+  background: var(--jata-action-hover);
 }
 
 .jata-btn-secondary {
   border: 1px solid var(--jata-line);
-  background: white;
+  background: var(--jata-card);
   color: var(--jata-ink);
 }
 
@@ -397,6 +406,11 @@ button:focus-visible {
   --jata-live: var(--color-success);
   --jata-danger: var(--color-error);
   --jata-focus: var(--color-focus);
+  --jata-action: var(--color-primary);
+  --jata-on-action: var(--color-primary-contrast);
+  --jata-action-hover: var(--color-primary-hover);
+  --jata-sunken: var(--color-surface-muted);
+  --jata-soft: color-mix(in srgb, var(--color-surface-muted) 55%, var(--color-surface));
 }
 .product-theme-root .jata-page { background: var(--color-background); }
 .product-theme-root .jata-landing { background: var(--color-background); color: var(--color-text); }
@@ -665,8 +679,8 @@ button:focus-visible {
   top: -4rem;
   z-index: 60;
   border-radius: 0.75rem;
-  background: var(--jata-ink);
-  color: var(--jata-card);
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   padding: 0.6rem 1rem;
   font-weight: 700;
 }
@@ -1281,7 +1295,12 @@ button:focus-visible {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  /* A toolbar is a row of controls, not a page: it must never make the page scroll sideways.
+     Groups inside it wrap, and `.jata-btn` inside it may not be squeezed below its label. */
+  min-width: 0;
 }
+.jata-toolbar > * { min-width: 0; }
+.jata-toolbar .jata-btn { white-space: nowrap; }
 
 .jata-sheet-scrim {
   position: fixed;
@@ -1378,9 +1397,12 @@ button:focus-visible {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem;
   border-radius: 1rem; border: 1px solid var(--jata-line); padding: 0.75rem 0.9rem; background: var(--jata-card);
 }
-.pos-banner[data-tone="warn"] { border-color: #f0c36d; background: #fffaf0; }
-.pos-banner[data-tone="danger"] { border-color: #e6a3a3; background: #fff6f6; }
-.pos-banner[data-tone="success"] { border-color: #9fd3b0; background: #f4fbf6; }
+.pos-banner[data-tone="warn"] { border-color: color-mix(in srgb, var(--jata-warning) 45%, var(--jata-line)); background: var(--jata-warning-surface); color: var(--jata-warning); }
+.pos-banner[data-tone="danger"] { border-color: color-mix(in srgb, var(--jata-danger) 45%, var(--jata-line)); background: var(--jata-danger-surface); color: var(--jata-danger); }
+.pos-banner[data-tone="success"] { border-color: color-mix(in srgb, var(--jata-live) 45%, var(--jata-line)); background: var(--jata-success-surface); color: var(--jata-live); }
+/* A status banner says what happened; its label and sentence inherit the status ink. */
+.pos-banner[data-tone] .pos-banner-label,
+.pos-banner[data-tone] .pos-banner-text { color: inherit; }
 .pos-banner-label {
   font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--jata-muted); margin: 0;
@@ -1478,8 +1500,8 @@ button:focus-visible {
   font-size: 0.72rem; font-weight: 700; border: 1px solid var(--jata-line); background: rgba(0, 0, 0, 0.03);
 }
 .pos-pill[data-tone="success"] { background: #f0faf3; border-color: #9fd3b0; color: #166534; }
-.pos-pill[data-tone="warn"] { background: #fffaf0; border-color: #f0c36d; color: #8a5b00; }
-.pos-pill[data-tone="danger"] { background: #fff6f6; border-color: #e6a3a3; color: #991b1b; }
+.pos-pill[data-tone="warn"] { background: var(--jata-warning-surface); border-color: color-mix(in srgb, var(--jata-warning) 40%, var(--jata-line)); color: var(--jata-warning); }
+.pos-pill[data-tone="danger"] { background: var(--jata-danger-surface); border-color: color-mix(in srgb, var(--jata-danger) 40%, var(--jata-line)); color: var(--jata-danger); }
 .pos-pill[data-tone="info"] { background: #f4f8ff; border-color: #a9c4ef; color: #1e3a8a; }
 
 /* ── The till (§62 dead-simple first sale) ───────────────────────────────── */
@@ -1504,7 +1526,7 @@ button:focus-visible {
 .pos-line-main strong { display: block; font-size: 0.9rem; }
 .pos-line-main small { display: block; font-size: 0.75rem; color: var(--jata-muted); }
 .pos-qty { display: flex; align-items: center; gap: 0.25rem; }
-.pos-qty button { min-width: 2rem; min-height: 2rem; border-radius: 0.6rem; border: 1px solid var(--jata-line); background: #fff; font-weight: 800; }
+.pos-qty button { min-width: 2rem; min-height: 2rem; border-radius: 0.6rem; border: 1px solid var(--jata-line); background: var(--jata-card); color: var(--jata-ink); font-weight: 800; }
 .pos-qty input { width: 3.4rem; text-align: center; }
 .pos-totals { display: grid; gap: 0.25rem; font-size: 0.9rem; }
 .pos-totals div { display: flex; justify-content: space-between; gap: 0.5rem; }
@@ -1512,7 +1534,7 @@ button:focus-visible {
 .pos-pay { display: grid; gap: 0.5rem; }
 .pos-methods { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .pos-method {
-  border: 1px solid var(--jata-line); border-radius: 0.8rem; padding: 0.55rem 0.8rem; background: #fff;
+  border: 1px solid var(--jata-line); border-radius: 0.8rem; padding: 0.55rem 0.8rem; background: var(--jata-card); color: var(--jata-ink);
   font-weight: 700; font-size: 0.88rem; min-height: 2.8rem; cursor: pointer;
 }
 .pos-method[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
@@ -1521,7 +1543,8 @@ button:focus-visible {
 
 .pos-receipt {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45;
-  background: #fff; border: 1px dashed var(--jata-line); border-radius: 0.6rem; padding: 0.9rem; white-space: pre-wrap;
+  /* A receipt is a printable artefact: paper-white ink on white in every theme. */
+  background: #ffffff; color: #18181b; border: 1px dashed var(--jata-line); border-radius: 0.6rem; padding: 0.9rem; white-space: pre-wrap;
 }
 
 /* ── Boards (§29) ────────────────────────────────────────────────────────── */
@@ -1544,7 +1567,7 @@ button:focus-visible {
 .pos-preview-body { padding: 0.9rem; display: grid; gap: 0.8rem; }
 .pos-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .pos-tab {
-  border: 1px solid var(--jata-line); border-radius: 999px; padding: 0.35rem 0.75rem; background: #fff;
+  border: 1px solid var(--jata-line); border-radius: 999px; padding: 0.35rem 0.75rem; background: var(--jata-card); color: var(--jata-ink);
   font-size: 0.82rem; font-weight: 700; cursor: pointer;
 }
 .pos-tab[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
@@ -1585,8 +1608,8 @@ button:focus-visible {
   min-height: 2.9rem;
   border-radius: 999px;
   padding: 0.6rem 1.1rem;
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   font-size: 0.88rem;
   font-weight: 700;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
@@ -1644,9 +1667,20 @@ button:focus-visible {
   z-index: 40;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
   max-width: calc(100vw - 8.5rem);
+  /* A floating toolbar, not three buttons dropped on the page. It sits in its own opaque dock so
+     whatever scrolls underneath never shows through a label, and it reads as one control group. */
+  padding: 0.35rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--jata-card) 94%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
 }
+.jata-history-bar .jata-btn { border-radius: 999px; }
 
 .jata-history-bar .jata-btn {
   min-height: 2.75rem;
@@ -3557,7 +3591,12 @@ button:focus-visible {
 .jc-page {
   min-height: 100dvh;
   background: var(--jata-paper);
+  color: var(--jata-ink);
   padding: 1rem;
+  /* The studio docks Undo/Redo/History bottom-left and the JATA assistant bottom-right. Those
+     bars are fixed, so the editor reserves their height instead of letting them cover the
+     section list's last control or a preview's footer. */
+  padding-bottom: 6rem;
 }
 
 .jc-root {
@@ -3569,9 +3608,9 @@ button:focus-visible {
 }
 
 .jc-demo-notice {
-  border: 1px solid #fcd34d;
-  background: #fffbeb;
-  color: #78350f;
+  border: 1px solid color-mix(in srgb, var(--jata-warning) 45%, var(--jata-line));
+  background: var(--jata-warning-surface);
+  color: var(--jata-warning);
   padding: 0.6rem 0.85rem;
   border-radius: 0.75rem;
   font-size: 0.85rem;
@@ -3631,8 +3670,8 @@ button:focus-visible {
   border: 1px solid transparent;
 }
 
-.jc-pill--neutral { background: #f4f4f5; color: #3f3f46; border-color: #e4e4e7; }
-.jc-pill--warn { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+.jc-pill--neutral { background: var(--jata-sunken); color: var(--jata-muted); border-color: #e4e4e7; }
+.jc-pill--warn { background: var(--jata-warning-surface); color: var(--jata-warning); border-color: #fdba74; }
 .jc-pill--ok { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
 .jc-pill--busy { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
 .jc-pill--error { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
@@ -3661,13 +3700,13 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  background: linear-gradient(180deg, #fbfbfa 0%, #f4f4f5 100%);
+  background: linear-gradient(180deg, var(--jata-card) 0%, var(--jata-sunken) 100%);
 }
 
 .jc-outline { position: sticky; top: 0.75rem; }
 .jc-inspector { position: sticky; top: 0.75rem; }
 
-.jc-h2 { margin: 0; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #3f3f46; }
+.jc-h2 { margin: 0; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jata-muted); }
 .jc-mt { margin-top: 1rem; }
 .jc-muted { margin: 0; font-size: 0.8rem; color: var(--jata-muted); line-height: 1.45; }
 .jc-help { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--jata-muted); line-height: 1.4; }
@@ -3685,13 +3724,13 @@ button:focus-visible {
   gap: 0.25rem;
   border: 1px solid var(--jata-line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--jata-card);
   padding: 0.2rem 0.25rem 0.2rem 0.1rem;
 }
 
-.jc-row[data-active="true"] { border-color: #18181b; box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.12); }
-.jc-row[data-hidden="true"] { background: repeating-linear-gradient(135deg, #fff, #fff 6px, #fafafa 6px, #fafafa 12px); }
-.jc-row[data-hidden="true"] .jc-row__label { color: #71717a; }
+.jc-row[data-active="true"] { border-color: var(--jata-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--jata-ink) 22%, transparent); }
+.jc-row[data-hidden="true"] { background: repeating-linear-gradient(135deg, var(--jata-card), var(--jata-card) 6px, var(--jata-soft) 6px, var(--jata-soft) 12px); }
+.jc-row[data-hidden="true"] .jc-row__label { color: var(--jata-muted); }
 
 .jc-row__select {
   display: flex;
@@ -3709,8 +3748,8 @@ button:focus-visible {
 .jc-row__select:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
 .jc-row__index { font-size: 0.7rem; font-weight: 700; color: #a1a1aa; font-variant-numeric: tabular-nums; }
 .jc-row__text { display: flex; flex-direction: column; min-width: 0; }
-.jc-row__label { font-size: 0.82rem; font-weight: 700; color: #18181b; }
-.jc-row__title { font-size: 0.72rem; color: #71717a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jc-row__label { font-size: 0.82rem; font-weight: 700; color: var(--jata-ink); }
+.jc-row__title { font-size: 0.72rem; color: var(--jata-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .jc-row__actions { display: flex; gap: 0.1rem; }
 .jc-icon {
@@ -3722,12 +3761,12 @@ button:focus-visible {
   border: 1px solid transparent;
   border-radius: 0.45rem;
   background: transparent;
-  color: #52525b;
+  color: var(--jata-muted);
   font-size: 0.8rem;
   line-height: 1;
   cursor: pointer;
 }
-.jc-icon:hover:not(:disabled) { background: #f4f4f5; border-color: var(--jata-line); }
+.jc-icon:hover:not(:disabled) { background: var(--jata-sunken); border-color: var(--jata-line); }
 .jc-icon:disabled { opacity: 0.3; cursor: default; }
 .jc-icon:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; }
 .jc-icon--danger:hover { background: #fef2f2; color: #b91c1c; }
@@ -3745,17 +3784,17 @@ button:focus-visible {
   padding: 0 0.9rem;
   border-radius: 0.7rem;
   border: 1px solid var(--jata-line);
-  background: #fff;
-  color: #18181b;
+  background: var(--jata-card);
+  color: var(--jata-ink);
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
 }
 .jc-btn:disabled { opacity: 0.45; cursor: default; }
-.jc-btn--primary { background: #18181b; border-color: #18181b; color: #fff; }
-.jc-btn--primary:hover:not(:disabled) { background: #27272a; }
-.jc-btn--quiet:hover:not(:disabled) { background: #fafafa; }
+.jc-btn--primary { background: var(--jata-action); border-color: var(--jata-ink); color: var(--jata-on-action); }
+.jc-btn--primary:hover:not(:disabled) { background: var(--jata-action-hover); }
+.jc-btn--quiet:hover:not(:disabled) { background: var(--jata-soft); }
 .jc-btn:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
 
 .jc-chip {
@@ -3766,13 +3805,13 @@ button:focus-visible {
   padding: 0 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--jata-line);
-  background: #fff;
+  background: var(--jata-card);
   font-size: 0.78rem;
   font-weight: 600;
-  color: #3f3f46;
+  color: var(--jata-muted);
   cursor: pointer;
 }
-.jc-chip[aria-pressed="true"] { background: #18181b; border-color: #18181b; color: #fff; }
+.jc-chip[aria-pressed="true"] { background: var(--jata-action); border-color: var(--jata-ink); color: var(--jata-on-action); }
 .jc-chip:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
 
 /* --------------------------------------------------------------- preview */
@@ -3796,21 +3835,21 @@ button:focus-visible {
   gap: 0.4rem;
   width: 100%;
   padding: 0.3rem 0.6rem;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--jata-line);
   border-bottom: 0;
   border-radius: 1.1rem 1.1rem 0 0;
-  background: #e4e4e7;
+  background: var(--jata-line);
   font-size: 0.68rem;
-  color: #52525b;
+  color: var(--jata-muted);
 }
 .jc-frame__notch { width: 2.5rem; height: 0.3rem; border-radius: 999px; background: #a1a1aa; }
 .jc-frame__url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .jc-frame__iframe {
   display: block;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--jata-line);
   border-radius: 0 0 1.1rem 1.1rem;
-  background: #fff;
+  background: var(--jata-card);
   max-width: 100%;
 }
 
@@ -3828,32 +3867,32 @@ button:focus-visible {
   background: transparent;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #71717a;
+  color: var(--jata-muted);
   cursor: pointer;
 }
-.jc-tab[aria-pressed="true"] { color: #18181b; border-bottom-color: #18181b; }
+.jc-tab[aria-pressed="true"] { color: var(--jata-ink); border-bottom-color: var(--jata-ink); }
 .jc-tab:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: -2px; }
 
 .jc-panel { display: flex; flex-direction: column; gap: 0.6rem; }
 .jc-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .jc-panel__actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; border-top: 1px solid var(--jata-line); padding-top: 0.7rem; }
 
-.jc-tag { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #52525b; background: #f4f4f5; border-radius: 999px; padding: 0.1rem 0.5rem; }
+.jc-tag { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--jata-muted); background: var(--jata-sunken); border-radius: 999px; padding: 0.1rem 0.5rem; }
 
 .jc-field { display: flex; flex-direction: column; }
-.jc-label { font-size: 0.78rem; font-weight: 700; color: #3f3f46; margin-bottom: 0.2rem; }
+.jc-label { font-size: 0.78rem; font-weight: 700; color: var(--jata-muted); margin-bottom: 0.2rem; }
 .jc-input {
   width: 100%;
   min-height: 2.75rem;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--jata-line);
   border-radius: 0.6rem;
-  background: #fff;
+  background: var(--jata-card);
   font-size: 0.88rem;
-  color: #18181b;
+  color: var(--jata-ink);
 }
 .jc-input--area { min-height: 5.5rem; resize: vertical; }
-.jc-input:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; border-color: #18181b; }
+.jc-input:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; border-color: var(--jata-ink); }
 .jc-checkbox { width: 1.35rem; height: 1.35rem; }
 
 .jc-alert {
@@ -3879,11 +3918,11 @@ button:focus-visible {
   padding: 0.5rem;
   border: 1px solid var(--jata-line);
   border-radius: 0.7rem;
-  background: #fff;
+  background: var(--jata-card);
   text-align: left;
   cursor: pointer;
 }
-.jc-direction[aria-pressed="true"] { border-color: #18181b; box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.12); }
+.jc-direction[aria-pressed="true"] { border-color: var(--jata-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--jata-ink) 22%, transparent); }
 .jc-direction:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
 .jc-direction__text { display: flex; flex-direction: column; min-width: 0; }
 .jc-direction__name { font-size: 0.82rem; font-weight: 700; }
@@ -3916,7 +3955,7 @@ button:focus-visible {
     padding: 0.25rem;
     border: 1px solid var(--jata-line);
     border-radius: 0.8rem;
-    background: #f4f4f5;
+    background: var(--jata-sunken);
   }
 
   .jc-segment {
@@ -3926,10 +3965,10 @@ button:focus-visible {
     background: transparent;
     font-size: 0.85rem;
     font-weight: 700;
-    color: #52525b;
+    color: var(--jata-muted);
     cursor: pointer;
   }
-  .jc-segment[aria-pressed="true"] { background: #fff; color: #18181b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .jc-segment[aria-pressed="true"] { background: var(--jata-card); color: var(--jata-ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
   .jc-segment:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; }
 
   .jc-grid > section { display: none; }
@@ -4100,6 +4139,27 @@ button:focus-visible {
 @media (min-width: 900px) { .ws-chrome__tag { display: inline-flex; } }
 
 .ws-chrome__actions { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+
+/* Pushes the right-hand controls to the edge of a chrome row once the left-hand cluster has
+   taken the space it needs; on a narrow phone the row wraps instead of overflowing. */
+.ws-chrome__spacer { flex: 1 1 auto; min-width: 0; }
+
+/* The admin console is the same product, so it uses the same chrome and tokens. This pill is the
+   only thing that marks it as a platform surface rather than an owner's workspace. */
+.ws-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--ws-ink-line);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-pill--admin { border-color: rgba(240, 160, 60, 0.5); color: var(--ws-amber); }
 
 .ws-chrome__account {
   display: none;
