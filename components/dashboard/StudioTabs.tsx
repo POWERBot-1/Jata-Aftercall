@@ -11,6 +11,7 @@ import {
   LayoutTemplate,
   Package,
   Palette,
+  PanelsTopLeft,
   Receipt,
   Settings2,
   UploadCloud,
@@ -34,6 +35,8 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const pathname = usePathname() || "";
   const tabs = [
     { href: base, label: "Home", icon: Home, exact: true },
+    // The Canvas is the editing surface; it sits second so "edit my website" is one tap from Home.
+    { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
     { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
     { href: `${base}/items`, label: "Products & services", icon: Package },
     { href: `${base}/photos`, label: "Photos", icon: ImageIcon },

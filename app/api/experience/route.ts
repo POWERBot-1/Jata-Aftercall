@@ -25,6 +25,7 @@ import {
   removeSection,
   updateSection,
 } from "@/lib/experience/document";
+import { moveSectionTo } from "@/lib/studio/canvas";
 import { isValidThemeKey } from "@/lib/experience/themes";
 import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
 import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
@@ -38,7 +39,7 @@ import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA
 
 export const dynamic = "force-dynamic";
 
-type SectionOp = "add" | "remove" | "move" | "duplicate" | "toggle" | "update" | "studio-fix";
+type SectionOp = "add" | "remove" | "move" | "reorder" | "duplicate" | "toggle" | "update" | "studio-fix";
 
 function parseDocument(json: string | null | undefined, fallbackCategory?: string) {
   if (!json) return null;
@@ -343,6 +344,17 @@ export async function PATCH(req: Request) {
         case "move":
           document = moveSection(document, sectionId, body?.direction === "up" ? "up" : "down");
           break;
+        case "reorder": {
+          // Absolute position from the Canvas outline (drag or "move to top"). Same versioned,
+          // tenant-scoped write path as every other edit, so it is recorded as a revision and
+          // Undo restores the previous order. The index is clamped by moveSectionTo.
+          const toIndex = Number(body?.toIndex);
+          if (!Number.isInteger(toIndex)) {
+            return NextResponse.json({ error: "That position is not valid. Nothing was changed." }, { status: 400 });
+          }
+          document = moveSectionTo(document, sectionId, toIndex);
+          break;
+        }
         case "duplicate":
           document = duplicateSection(document, sectionId);
           break;

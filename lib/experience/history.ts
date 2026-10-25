@@ -148,6 +148,8 @@ export function describeDraftChange(op: string | null, detail?: { type?: string;
       return detail?.label ? `Removed the ${detail.label} section` : "Removed a section";
     case "move":
       return detail?.label ? `Moved the ${detail.label} section` : "Reordered sections";
+    case "reorder":
+      return detail?.label ? `Moved the ${detail.label} section to a new position` : "Reordered sections";
     case "duplicate":
       return detail?.label ? `Duplicated the ${detail.label} section` : "Duplicated a section";
     case "toggle":
