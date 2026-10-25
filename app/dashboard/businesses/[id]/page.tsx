@@ -10,6 +10,10 @@ import { CreateExperienceForm } from "@/components/dashboard/CreateExperienceFor
 import { WebsiteHealth } from "@/components/dashboard/WebsiteHealth";
 import { EnquiryBoard } from "@/components/dashboard/EnquiryBoard";
 import { usesServiceEnquiries } from "@/lib/experience/enquiries";
+import { WorkspaceHero } from "@/components/workspace/WorkspaceUI";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { photoForCategory, categoryLabel } from "@/lib/workspaceImagery";
+import { ExternalLink, Eye, Globe, UploadCloud } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -34,16 +38,37 @@ export default async function StudioHomePage({ params }: Props) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <p className="jata-kicker">Website studio</p>
-        <h1 className="text-xl font-bold">{business.name}</h1>
-        <p className="text-sm text-zinc-600">
-          {profile.label} ·{" "}
-          <a className="underline" href={publicUrl} target="_blank" rel="noopener noreferrer">
-            {publicUrl}
-          </a>
-        </p>
-      </header>
+      <WorkspaceHero
+        compact
+        kicker="Website studio"
+        title={business.name}
+        subtitle={`${categoryLabel(business.category)} · ${profile.label}. Edit the site your customers see, then publish when you are ready — nothing reaches them before that.`}
+        photo={photoForCategory(business.category)}
+        actions={
+          <>
+            <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="ws-btn-amber">
+              <ExternalLink size={16} aria-hidden="true" /> {business.isPublished ? "View live site" : "Preview site"}
+            </a>
+            <Link href={`/dashboard/businesses/${business.id}/preview`} className="ws-btn-outline">
+              <Eye size={16} aria-hidden="true" /> Phone &amp; desktop preview
+            </Link>
+            <Link href={`/dashboard/businesses/${business.id}#publish`} className="ws-btn-quiet">
+              <UploadCloud size={16} aria-hidden="true" /> Publish
+            </Link>
+          </>
+        }
+        meta={`${hasUnpublishedChanges ? "Unpublished changes are saved" : "No unpublished changes"} · draft version ${experience?.draftVersion ?? 0} · published version ${experience?.publishedVersion ?? 0}`}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill tone={business.isPublished ? "success" : "neutral"} icon={<Globe size={11} />}>
+          {business.isPublished ? "Live" : "Draft"}
+        </StatusPill>
+        <StatusPill tone={entitlement.entitled ? "success" : "warning"}>
+          Package: {entitlement.entitled ? "Active" : "Not active"}
+        </StatusPill>
+        {hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
+      </div>
 
       <StudioTabs businessId={business.id} capabilities={profile.capabilities} />
 

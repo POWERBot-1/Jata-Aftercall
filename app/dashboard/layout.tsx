@@ -10,12 +10,18 @@ import { Toaster } from "@/components/ui/Toaster";
 export const dynamic = "force-dynamic";
 
 /**
- * The dashboard shell.
+ * The workspace shell.
  *
- * Owns the platform's account chrome so it is identical on every owner screen: the brand, the
- * signed-in account, the section navigation and the single notification surface (toasts). The
- * `<main id="main">` landmark is here, matching the skip link, so keyboard users can jump past
- * the navigation on every page.
+ * Owns the platform's account chrome so it is identical on every owner screen: the graphite
+ * header (brand, workspace label, signed-in account, Home, Log out), the single section rail
+ * and the one notification surface (toasts).
+ *
+ * Layout rules enforced here:
+ *   • It is the only place the owner chrome is rendered, so no screen can drift from it.
+ *   • The `<main id="main">` landmark lives here, matching the skip link, so keyboard users
+ *     can jump past the navigation on every page.
+ *   • The shell is scoped to `.ws-shell`, which carries the workspace design tokens. Generated
+ *     customer websites and public pages never inherit them.
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -32,17 +38,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     if (dest) redirect(dest);
   }
 
+  const accountName = session.email || "Account";
+
   return (
-    <div className="jata-page min-h-screen">
+    <div className="ws-shell min-h-screen">
       <a href="#main" className="jata-skip-link">
         Skip to content
       </a>
-      <nav className="jata-nav" aria-label="Account">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2">
+      <header className="ws-chrome">
+        <div className="ws-chrome__row">
           <BrandMark href="/dashboard" compact />
-          <div className="flex items-center gap-2 text-sm">
-            <span className="hidden max-w-[16rem] truncate text-[color:var(--jata-muted)] sm:inline" title={session.email}>
-              {session.email}
+          <span className="ws-chrome__tag">Workspace</span>
+          <div className="ws-chrome__actions">
+            <span className="ws-chrome__account" title={accountName}>
+              <span aria-hidden="true">●</span>
+              {accountName}
             </span>
             <Link href="/" className="jata-btn jata-btn-secondary">
               Home
@@ -53,8 +63,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
         <DashboardNav isAdmin={session.role === "ADMIN"} />
-      </nav>
-      <main id="main" className="mx-auto max-w-6xl px-4 py-6">
+      </header>
+      <main id="main" className="ws-main">
         {children}
       </main>
       <Toaster />

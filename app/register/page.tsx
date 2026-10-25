@@ -2,7 +2,8 @@ import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import RegisterForm from "@/components/RegisterForm";
-import { PageShell } from "@/components/ui/PageShell";
+import Link from "next/link";
+import { WorkspaceAuthShell } from "@/components/workspace/WorkspaceAuthShell";
 import type { Metadata } from "next";
 import {
   REFERRAL_COOKIE_NAME,
@@ -52,15 +53,40 @@ export default async function RegisterPage({ searchParams }: { searchParams?: Pr
   const invite = await resolveInvite(params.ref);
 
   return (
-    <PageShell title="Create your account" subtitle="We'll open a draft business page with you as the owner. Publish once your subscription payment is confirmed.">
+    <WorkspaceAuthShell
+      title="Create your account"
+      subtitle="We open a draft business page with you as the owner. Your page goes live once your subscription payment is confirmed."
+      asideTitle={
+        <>
+          One page your customers can <em>act on</em>.
+        </>
+      }
+      asideCopy="Seven short steps: name, contact, location, services, look, plan and publish. Your answers save as you go, so you can finish today or come back tomorrow."
+      points={[
+        "No website build and no developer",
+        "Pay with M-Pesa or card on Paystack",
+        "Shareable link at /b/your-business",
+      ]}
+      backHref="/"
+      backLabel="Home"
+      footnote={
+        <>
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-[color:var(--ws-amber-deep)] underline">
+            Log in
+          </Link>
+        </>
+      }
+    >
       {invite && (
-        <p role="status" className="jata-card mt-6 border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          You were invited by <span className="font-semibold">{invite.businessName}</span>. You still create your own
-          account, your own page and your own plan — nothing is shared between your pages.
+        <p role="status" className="jata-alert mb-3 text-sm" data-tone="success">
+          <span>
+            You were invited by <span className="font-semibold">{invite.businessName}</span>. You still create your own account,
+            your own page and your own plan — nothing is shared between your pages.
+          </span>
         </p>
       )}
       <RegisterForm refCode={params.ref ? String(params.ref) : null} />
-      <p className="mt-4 text-center text-xs text-zinc-500">Already have an account? <a href="/login" className="font-semibold underline">Login</a></p>
-    </PageShell>
+    </WorkspaceAuthShell>
   );
 }
