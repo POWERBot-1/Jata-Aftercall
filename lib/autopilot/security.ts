@@ -5,6 +5,8 @@
  * - Treats every chat message, uploaded CSV/document, OCR extract, and voice
  *   transcript as untrusted data, never system authority.
  * - Never persists `data:image/*` or raw binary blobs in PostgreSQL.
+ * - Never fabricates synthetic zero-byte buffers or fake SHA-256 digests:
+ *   verified SHA-256 digests require actual artifact bytes.
  * - Never treats uploaded M-PESA / bank receipt screenshots or customer claims
  *   as proof of payment (`UNVERIFIED_CLAIM_NEVER_PROOF`).
  */
@@ -13,9 +15,10 @@ import crypto from "crypto";
 import prisma from "@/lib/db";
 import { assertNoInlineImagePersistence } from "@/lib/media/persistence-policy";
 
-export const MAX_INGEST_BYTES = 5 * 1024 * 1024; // 5 MB strict ceiling
+export const MAX_INGEST_BYTES = 5 * 1024 * 1024; // 5 MB strict ceiling (5,242,880 bytes)
+export const UNVERIFIED_METADATA_SENTINEL = "UNVERIFIED_METADATA_ONLY";
 
-const ALLOWED_INGEST_MIMES = new Set([
+export const ALLOWED_INGEST_MIMES: ReadonlySet<string> = new Set([
   "text/plain",
   "text/csv",
   "application/csv",
@@ -26,6 +29,10 @@ const ALLOWED_INGEST_MIMES = new Set([
   "image/png",
   "image/webp",
 ]);
+
+export function normalizeIngestMime(rawMime: string): string {
+  return rawMime.trim().toLowerCase().split(";")[0].trim();
+}
 
 const PROMPT_INJECTION_PATTERNS: Array<{ code: string; regex: RegExp }> = [
   {
@@ -106,6 +113,7 @@ export function redactAutopilotObject<T>(value: T): T {
 
 export interface IngestedArtifactResult {
   ok: boolean;
+  httpStatus?: number;
   errorCode?: string;
   error?: string;
   record?: {
@@ -113,7 +121,9 @@ export interface IngestedArtifactResult {
     fileName: string;
     mimeType: string;
     byteSize: number;
-    sha256Hash: string;
+    sha256Hash: string | null;
+    sha256Verified: boolean;
+    digestStatus: "VERIFIED_SHA256" | "UNVERIFIED_NO_BYTES";
     documentKind:
       | "MENU"
       | "CATALOGUE"
@@ -158,50 +168,202 @@ export async function ingestMultimodalArtifact(params: {
   mimeType: string;
   textContent?: string;
   rawBytes?: Uint8Array;
+  declaredByteSize?: number;
+  metadataOnly?: boolean;
   declaredKind?: string;
+  requirePersistence?: boolean;
 }): Promise<IngestedArtifactResult> {
-  const cleanMime = params.mimeType.trim().toLowerCase().split(";")[0];
+  if (!params.fileName || typeof params.fileName !== "string" || !params.fileName.trim() || params.fileName.includes("\0")) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      errorCode: "INVALID_INGEST_REQUEST",
+      error: "A valid non-empty fileName is required.",
+    };
+  }
+
+  const cleanMime = normalizeIngestMime(params.mimeType);
   if (!ALLOWED_INGEST_MIMES.has(cleanMime)) {
     return {
       ok: false,
+      httpStatus: 400,
       errorCode: "UNSUPPORTED_MEDIA_TYPE",
       error: `Unsupported file type (${cleanMime}). Upload CSV, JSON, plain text, PDF, or standard JPEG/PNG/WebP.`,
     };
   }
 
+  if (params.declaredByteSize !== undefined) {
+    if (
+      typeof params.declaredByteSize !== "number" ||
+      !Number.isFinite(params.declaredByteSize) ||
+      !Number.isInteger(params.declaredByteSize) ||
+      params.declaredByteSize < 0
+    ) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "INVALID_BYTE_SIZE",
+        error: "byteSize must be a finite positive integer.",
+      };
+    }
+    if (params.declaredByteSize === 0) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "EMPTY_ARTIFACT",
+        error: "Uploaded file or text payload is empty.",
+      };
+    }
+    if (params.declaredByteSize > MAX_INGEST_BYTES) {
+      return {
+        ok: false,
+        httpStatus: 413,
+        errorCode: "FILE_TOO_LARGE",
+        error: `Declared artifact size (${params.declaredByteSize} bytes) exceeds the 5 MB safety limit (${MAX_INGEST_BYTES} bytes).`,
+      };
+    }
+  }
+
+  const hasRawBytes = params.rawBytes instanceof Uint8Array;
+  const hasTextParam = params.textContent !== undefined;
   const textBody = params.textContent ?? "";
-  // Enforce the repository-wide no-inline-image-in-Neon policy before any processing.
-  try {
-    assertNoInlineImagePersistence(textBody);
-  } catch {
+
+  if (hasTextParam) {
+    try {
+      assertNoInlineImagePersistence(textBody);
+    } catch {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "INLINE_IMAGE_DATA_FORBIDDEN",
+        error: "Inline base64 image data URLs are prohibited in database records.",
+      };
+    }
+  }
+
+  let effectiveByteSize: number;
+  let verifiedSha256: string | null = null;
+  let sha256Verified = false;
+  let digestStatus: "VERIFIED_SHA256" | "UNVERIFIED_NO_BYTES";
+
+  if (params.metadataOnly === true) {
+    if (hasRawBytes || (hasTextParam && textBody.length > 0)) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "MALFORMED_INGEST_REQUEST",
+        error: "metadataOnly cannot be combined with inline file bytes or textContent.",
+      };
+    }
+    if (params.declaredByteSize === undefined) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "MISSING_DECLARED_BYTE_SIZE",
+        error: "metadataOnly ingestion requires a valid positive integer byteSize.",
+      };
+    }
+    effectiveByteSize = params.declaredByteSize;
+    verifiedSha256 = null;
+    sha256Verified = false;
+    digestStatus = "UNVERIFIED_NO_BYTES";
+  } else if (hasRawBytes) {
+    const byteBuffer = Buffer.from(params.rawBytes!);
+    if (byteBuffer.byteLength === 0) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "EMPTY_ARTIFACT",
+        error: "Uploaded file payload is empty.",
+      };
+    }
+    if (byteBuffer.byteLength > MAX_INGEST_BYTES) {
+      return {
+        ok: false,
+        httpStatus: 413,
+        errorCode: "FILE_TOO_LARGE",
+        error: `Artifact exceeds the 5 MB safety limit (${byteBuffer.byteLength} bytes > ${MAX_INGEST_BYTES} bytes).`,
+      };
+    }
+    if (
+      params.declaredByteSize !== undefined &&
+      params.declaredByteSize !== byteBuffer.byteLength
+    ) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "BYTE_SIZE_MISMATCH",
+        error: `Declared byteSize (${params.declaredByteSize}) does not match actual byte length (${byteBuffer.byteLength}).`,
+      };
+    }
+    // Check UTF-8 text projection for inline data:image/* if text/json/csv
+    if (!cleanMime.startsWith("image/") && cleanMime !== "application/pdf") {
+      try {
+        assertNoInlineImagePersistence(byteBuffer.toString("utf8"));
+      } catch {
+        return {
+          ok: false,
+          httpStatus: 400,
+          errorCode: "INLINE_IMAGE_DATA_FORBIDDEN",
+          error: "Inline base64 image data URLs are prohibited in database records.",
+        };
+      }
+    }
+    effectiveByteSize = byteBuffer.byteLength;
+    verifiedSha256 = crypto.createHash("sha256").update(byteBuffer).digest("hex");
+    sha256Verified = true;
+    digestStatus = "VERIFIED_SHA256";
+  } else if (hasTextParam) {
+    const byteBuffer = Buffer.from(textBody, "utf8");
+    if (byteBuffer.byteLength === 0 || textBody.trim().length === 0) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "EMPTY_ARTIFACT",
+        error: "Uploaded text payload is empty.",
+      };
+    }
+    if (byteBuffer.byteLength > MAX_INGEST_BYTES) {
+      return {
+        ok: false,
+        httpStatus: 413,
+        errorCode: "FILE_TOO_LARGE",
+        error: `Artifact exceeds the 5 MB safety limit (${byteBuffer.byteLength} bytes > ${MAX_INGEST_BYTES} bytes).`,
+      };
+    }
+    if (
+      params.declaredByteSize !== undefined &&
+      params.declaredByteSize !== byteBuffer.byteLength
+    ) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        errorCode: "BYTE_SIZE_MISMATCH",
+        error: `Declared byteSize (${params.declaredByteSize}) does not match actual UTF-8 byte length (${byteBuffer.byteLength}).`,
+      };
+    }
+    effectiveByteSize = byteBuffer.byteLength;
+    verifiedSha256 = crypto.createHash("sha256").update(byteBuffer).digest("hex");
+    sha256Verified = true;
+    digestStatus = "VERIFIED_SHA256";
+  } else {
     return {
       ok: false,
-      errorCode: "INLINE_IMAGE_DATA_FORBIDDEN",
-      error: "Inline base64 image data URLs are prohibited in database records.",
+      httpStatus: 400,
+      errorCode: "MISSING_ARTIFACT_BYTES",
+      error:
+        "Actual artifact bytes (contentBase64 or multipart file) or non-empty textContent are required for verified SHA-256 ingestion.",
     };
   }
 
-  const byteBuffer = params.rawBytes
-    ? Buffer.from(params.rawBytes)
-    : Buffer.from(textBody, "utf8");
+  const inspectableText =
+    hasTextParam && textBody
+      ? textBody
+      : hasRawBytes && !cleanMime.startsWith("image/") && cleanMime !== "application/pdf"
+        ? Buffer.from(params.rawBytes!).toString("utf8")
+        : "";
 
-  if (byteBuffer.byteLength === 0) {
-    return {
-      ok: false,
-      errorCode: "EMPTY_ARTIFACT",
-      error: "Uploaded file or text payload is empty.",
-    };
-  }
-  if (byteBuffer.byteLength > MAX_INGEST_BYTES) {
-    return {
-      ok: false,
-      errorCode: "FILE_TOO_LARGE",
-      error: `Artifact exceeds the 5 MB safety limit (${byteBuffer.byteLength} bytes).`,
-    };
-  }
-
-  const sha256Hash = crypto.createHash("sha256").update(byteBuffer).digest("hex");
-  const combinedInspectable = `${params.fileName}\n${textBody}`;
+  const combinedInspectable = `${params.fileName}\n${inspectableText}`;
   const injectionScan = scanForPromptInjection(combinedInspectable);
 
   const isPaymentClaim =
@@ -224,12 +386,12 @@ export async function ingestMultimodalArtifact(params: {
     : "NONE";
 
   let extractedItems: Array<Record<string, unknown>> = [];
-  if (injectionScan.safe && textBody) {
-    if (cleanMime.includes("csv") || textBody.includes(",")) {
-      extractedItems = parseSimpleCsvRows(textBody);
+  if (injectionScan.safe && inspectableText) {
+    if (cleanMime.includes("csv") || inspectableText.includes(",")) {
+      extractedItems = parseSimpleCsvRows(inspectableText);
     } else if (cleanMime === "application/json") {
       try {
-        const parsed = JSON.parse(textBody);
+        const parsed = JSON.parse(inspectableText);
         extractedItems = Array.isArray(parsed)
           ? parsed.slice(0, 50).map((r) => redactAutopilotObject(r))
           : [redactAutopilotObject(parsed)];
@@ -237,7 +399,7 @@ export async function ingestMultimodalArtifact(params: {
         extractedItems = [];
       }
     } else {
-      const lines = textBody
+      const lines = inspectableText
         .split(/\r?\n/)
         .map((l) => redactAutopilotText(l.trim()))
         .filter(Boolean)
@@ -253,39 +415,51 @@ export async function ingestMultimodalArtifact(params: {
       : null;
 
   const isBinaryWithoutOcrText =
-    (cleanMime.startsWith("image/") || cleanMime === "application/pdf") && !textBody.trim();
+    (cleanMime.startsWith("image/") || cleanMime === "application/pdf") &&
+    !inspectableText.trim();
 
   const summary = isPaymentClaim
     ? "Classified as an unverified customer payment claim. Order and subscription settlement states remain unchanged."
     : !injectionScan.safe
       ? "Quarantined untrusted instructions inside uploaded content; extracted 0 executable commands."
-      : isBinaryWithoutOcrText
-        ? "Recorded file metadata and SHA-256 digest safely (raw media discarded). Live OCR vision extraction requires configured multimodal provider credentials; paste CSV/JSON/text for immediate parsing."
-        : `Extracted ${extractedItems.length} structured item(s) for owner review before any catalogue or FAQ update.`;
+      : params.metadataOnly === true
+        ? "Recorded unverified metadata entry only (no file bytes supplied; SHA-256 digest is unverified)."
+        : isBinaryWithoutOcrText
+          ? "Verified file byte length and SHA-256 digest (raw binary discarded). Live OCR vision extraction requires configured multimodal provider credentials; paste CSV/JSON/text for immediate parsing."
+          : `Extracted ${extractedItems.length} structured item(s) for owner review before any catalogue or FAQ update.`;
 
   const confidence: "high" | "medium" | "low" =
-    extractedItems.length > 0 ? "high" : isBinaryWithoutOcrText ? "low" : "medium";
+    extractedItems.length > 0 ? "high" : isBinaryWithoutOcrText || params.metadataOnly ? "low" : "medium";
 
   const structuredPayload = {
     summary,
     securityWarning,
     extractedItems,
+    sha256Verified,
+    digestStatus,
     canSettlePaymentOrOrder: false as const,
   };
 
-  // Validate again right before persistence so no nested field can carry inline image data.
   assertNoInlineImagePersistence(structuredPayload);
 
-  let persistedId = `ing_${sha256Hash.slice(0, 16)}`;
+  const persistedDigestColumn = verifiedSha256 ?? UNVERIFIED_METADATA_SENTINEL;
+  const fallbackIdSeed =
+    verifiedSha256 ??
+    crypto
+      .createHash("sha256")
+      .update(`meta:${params.businessId}:${params.fileName}:${cleanMime}:${effectiveByteSize}`)
+      .digest("hex");
+  let persistedId = `ing_${fallbackIdSeed.slice(0, 16)}`;
+
   try {
     const saved = await prisma.autopilotIngestionRecord.create({
       data: {
         businessId: params.businessId,
         uploadedByUserId: params.uploadedByUserId,
-        fileName: params.fileName.slice(0, 180),
+        fileName: params.fileName.trim().slice(0, 180),
         mimeType: cleanMime,
-        byteSize: byteBuffer.byteLength,
-        sha256Hash,
+        byteSize: effectiveByteSize,
+        sha256Hash: persistedDigestColumn,
         documentKind,
         extractedJson: JSON.stringify(structuredPayload),
         confidence,
@@ -294,18 +468,23 @@ export async function ingestMultimodalArtifact(params: {
       },
     });
     if (saved?.id) persistedId = saved.id;
-  } catch {
-    // Offline fallback preserves deterministic preview output without failing closed on missing DB.
+  } catch (err) {
+    if (params.requirePersistence) {
+      throw err;
+    }
+    // Pure unit-test / offline classifier callers retain deterministic non-persisted output.
   }
 
   return {
     ok: true,
     record: {
       id: persistedId,
-      fileName: params.fileName.slice(0, 180),
+      fileName: params.fileName.trim().slice(0, 180),
       mimeType: cleanMime,
-      byteSize: byteBuffer.byteLength,
-      sha256Hash,
+      byteSize: effectiveByteSize,
+      sha256Hash: verifiedSha256,
+      sha256Verified,
+      digestStatus,
       documentKind,
       confidence,
       paymentClaimSafeFlag,

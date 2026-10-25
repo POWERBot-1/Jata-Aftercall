@@ -273,9 +273,23 @@ function safeJsonParse(raw: unknown): any {
   }
 }
 
+const ALLOWED_FOLLOWUP_PAYLOAD_KEYS = new Set([
+  "actionType",
+  "recipientName",
+  "recipientPhone",
+  "recipientEmail",
+  "channel",
+  "scope",
+  "subject",
+  "body",
+  "discountPercent",
+  "batchRecipientCount",
+]);
+
 export function validateAutopilotActionPayload(
   actionType: AutopilotActionType,
   payload: unknown,
+  options?: { maxBatchRecipients?: number },
 ): { ok: true; payload: AutopilotActionPayload } | { ok: false; code: string; error: string } {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return {
@@ -351,6 +365,24 @@ export function validateAutopilotActionPayload(
   }
 
   if (actionType === "QUEUE_CONSENTED_FOLLOWUP") {
+    if (Object.prototype.hasOwnProperty.call(p, "recipientCount")) {
+      return {
+        ok: false,
+        code: "MISMATCHED_RECIPIENT_COUNT_FIELD",
+        error:
+          "Follow-up field 'recipientCount' is not accepted; use 'batchRecipientCount' exclusively.",
+      };
+    }
+    for (const key of Object.keys(p)) {
+      if (!ALLOWED_FOLLOWUP_PAYLOAD_KEYS.has(key)) {
+        return {
+          ok: false,
+          code: "UNKNOWN_FOLLOWUP_PAYLOAD_FIELD",
+          error: `Unexpected field '${key}' in QUEUE_CONSENTED_FOLLOWUP payload.`,
+        };
+      }
+    }
+
     const channel = p.channel;
     const scope = p.scope;
     const body = typeof p.body === "string" ? p.body.trim() : "";
@@ -376,18 +408,52 @@ export function validateAutopilotActionPayload(
       };
     }
     if (
-      p.recipientCount !== undefined &&
-      (typeof p.recipientCount !== "number" ||
-        !Number.isInteger(p.recipientCount) ||
-        p.recipientCount < 1)
+      p.discountPercent !== undefined &&
+      (typeof p.discountPercent !== "number" ||
+        !Number.isFinite(p.discountPercent) ||
+        p.discountPercent < 0 ||
+        p.discountPercent > 100)
     ) {
       return {
         ok: false,
-        code: "INVALID_RECIPIENT_COUNT",
-        error: "Follow-up recipientCount must be a positive integer.",
+        code: "INVALID_FOLLOWUP_DISCOUNT",
+        error: "Follow-up discountPercent must be between 0 and 100.",
       };
     }
-    return { ok: true, payload: payload as AutopilotActionPayload };
+    if (
+      p.batchRecipientCount !== undefined &&
+      (typeof p.batchRecipientCount !== "number" ||
+        !Number.isFinite(p.batchRecipientCount) ||
+        !Number.isInteger(p.batchRecipientCount) ||
+        p.batchRecipientCount < 1)
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_BATCH_RECIPIENT_COUNT",
+        error: "Follow-up batchRecipientCount must be a finite positive integer >= 1.",
+      };
+    }
+    const effectiveBatchCount = (p.batchRecipientCount as number | undefined) ?? 1;
+    if (options?.maxBatchRecipients !== undefined) {
+      if (
+        typeof options.maxBatchRecipients !== "number" ||
+        !Number.isFinite(options.maxBatchRecipients) ||
+        !Number.isInteger(options.maxBatchRecipients) ||
+        options.maxBatchRecipients < 1 ||
+        effectiveBatchCount > options.maxBatchRecipients
+      ) {
+        return {
+          ok: false,
+          code: "BATCH_RECIPIENT_CAP_EXCEEDED",
+          error: `Follow-up batch size (${effectiveBatchCount}) exceeds tenant safety cap (${options.maxBatchRecipients}).`,
+        };
+      }
+    }
+    const normalizedPayload: AutopilotActionPayload = {
+      ...(payload as AutopilotActionPayload & { actionType: "QUEUE_CONSENTED_FOLLOWUP" }),
+      batchRecipientCount: effectiveBatchCount,
+    };
+    return { ok: true, payload: normalizedPayload };
   }
 
   return {
@@ -451,7 +517,27 @@ export async function proposeAutopilotAction(params: {
     getAutopilotEntitlement(params.businessId, params.now),
   ]);
 
-  const riskCategory = defaultRiskCategoryForAction(params.actionType, params.payload);
+  const capCheck = validateAutopilotActionPayload(params.actionType, payloadCheck.payload, {
+    maxBatchRecipients: config.maxBatchRecipients,
+  });
+  if (capCheck.ok === false) {
+    await recordAutopilotAudit({
+      businessId: params.businessId,
+      actorKind: "SYSTEM",
+      actorUserId: params.actorUserId,
+      action: "autopilot.proposal.blocked_by_policy",
+      metadata: { code: capCheck.code, reason: capCheck.error, actionType: params.actionType },
+    });
+    return {
+      ok: false,
+      code: capCheck.code,
+      error: capCheck.error,
+      status: capCheck.code === "BATCH_RECIPIENT_CAP_EXCEEDED" ? 409 : 400,
+    };
+  }
+  const validatedPayload = capCheck.payload;
+
+  const riskCategory = defaultRiskCategoryForAction(params.actionType, validatedPayload);
   const policy = evaluateAutopilotActionPolicy({
     phase: "PROPOSE",
     actorRole: params.actorRole,
@@ -461,7 +547,7 @@ export async function proposeAutopilotAction(params: {
     industryPackKey: config.industryPackKey,
     actionType: params.actionType,
     riskCategory,
-    payload: params.payload,
+    payload: validatedPayload,
     modality: params.modality,
     voiceTranscriptConfirmed: params.voiceTranscriptConfirmed,
     maxAutoDiscountPct: config.maxAutoDiscountPct,
@@ -507,7 +593,7 @@ export async function proposeAutopilotAction(params: {
     return { ok: true, proposal: existing, autoExecuted: false, duplicate: true };
   }
 
-  const sanitizedPayload = redactAutopilotObject(params.payload);
+  const sanitizedPayload = redactAutopilotObject(validatedPayload);
   let created: any;
   try {
     created = await prisma.autopilotActionProposal.create({
@@ -571,7 +657,7 @@ export async function proposeAutopilotAction(params: {
     industryPackKey: config.industryPackKey,
     actionType: params.actionType,
     riskCategory: policy.effectiveRiskCategory,
-    payload: params.payload,
+    payload: validatedPayload,
     modality: params.modality,
     voiceTranscriptConfirmed: params.voiceTranscriptConfirmed,
     maxAutoDiscountPct: config.maxAutoDiscountPct,
@@ -716,12 +802,33 @@ export async function approveAndExecuteProposal(params: {
       error: payloadValidation.error,
     };
   }
-  const payload = payloadValidation.payload;
-
   const [config, entitlement] = await Promise.all([
     getAutopilotConfig(params.businessId),
     getAutopilotEntitlement(params.businessId, now),
   ]);
+
+  const capValidation = validateAutopilotActionPayload(
+    proposal.actionType as AutopilotActionType,
+    payloadValidation.payload,
+    { maxBatchRecipients: config.maxBatchRecipients },
+  );
+  if (capValidation.ok === false) {
+    await recordAutopilotAudit({
+      businessId: params.businessId,
+      actorKind: "SYSTEM",
+      actorUserId: params.actorUserId,
+      action: "autopilot.execution.blocked_by_policy",
+      proposalId: proposal.id,
+      metadata: { code: capValidation.code, reason: capValidation.error },
+    });
+    return {
+      ok: false,
+      code: capValidation.code,
+      status: capValidation.code === "BATCH_RECIPIENT_CAP_EXCEEDED" ? 409 : 400,
+      error: capValidation.error,
+    };
+  }
+  const payload = capValidation.payload;
 
   const policy = evaluateAutopilotActionPolicy({
     phase: "EXECUTE",
@@ -765,15 +872,25 @@ export async function approveAndExecuteProposal(params: {
     provider: "jata-autopilot-executor",
     idempotencyKey: budgetIdempotencyKey,
     dailySpendCapMinorKES: config.dailySpendCapMinorKES,
-    unitsIn: 1,
+    unitsIn:
+      payload.actionType === "QUEUE_CONSENTED_FOLLOWUP"
+        ? (payload.batchRecipientCount ?? 1)
+        : 1,
     unitsOut: 1,
+    allowZeroCostReadOnlyPreviewFallback: false,
     now,
   });
   if (budget.allowed === false) {
+    const budgetStatus =
+      budget.code === "BUDGET_VERIFICATION_UNAVAILABLE"
+        ? 503
+        : budget.code === "IDEMPOTENCY_TENANT_CONFLICT"
+          ? 409
+          : 429;
     return {
       ok: false,
       code: budget.code,
-      status: 429,
+      status: budgetStatus,
       error: budget.reason,
     };
   }
@@ -854,7 +971,7 @@ export async function approveAndExecuteProposal(params: {
           where: { id: payload.unansweredQuestionId, businessId: params.businessId },
         });
         if (!priorUnanswered) {
-          await releaseAutopilotBudgetReservation(budgetIdempotencyKey);
+          await releaseAutopilotBudgetReservation(budgetIdempotencyKey, params.businessId);
           await prisma.autopilotActionProposal.update({
             where: { id: proposal.id },
             data: { status: "FAILED", lastError: "Unanswered question does not belong to this business." },
@@ -917,7 +1034,7 @@ export async function approveAndExecuteProposal(params: {
         now,
       });
       if (consentCheck.allowed === false) {
-        await releaseAutopilotBudgetReservation(budgetIdempotencyKey);
+        await releaseAutopilotBudgetReservation(budgetIdempotencyKey, params.businessId);
         await prisma.autopilotActionProposal.update({
           where: { id: proposal.id },
           data: { status: "FAILED", lastError: consentCheck.reason },
@@ -983,7 +1100,7 @@ export async function approveAndExecuteProposal(params: {
 
     return { ok: true, proposal: finalized };
   } catch (err) {
-    await releaseAutopilotBudgetReservation(budgetIdempotencyKey);
+    await releaseAutopilotBudgetReservation(budgetIdempotencyKey, params.businessId);
     const safeMsg = err instanceof Error ? err.message.slice(0, 240) : "Execution error";
     await prisma.autopilotActionProposal.update({
       where: { id: proposal.id },
@@ -1348,6 +1465,27 @@ export async function dispatchQueuedAutopilotFollowup(params: {
       ok: true,
       deliveryState: "STAGED_AWAITING_PROVIDER",
       providerMessageId: null,
+    };
+  }
+
+  const dispatchBudgetKey = notif.referenceId
+    ? `exec_${notif.referenceId}`
+    : `dispatch_${notif.id}`;
+  const dispatchBudget = await reserveAutopilotBudget({
+    businessId: params.businessId,
+    tierKey: entitlement.tier,
+    capability: "OUTBOUND_MSG",
+    provider: "external-messaging-gateway",
+    idempotencyKey: dispatchBudgetKey,
+    dailySpendCapMinorKES: config.dailySpendCapMinorKES,
+    allowZeroCostReadOnlyPreviewFallback: false,
+    now,
+  });
+  if (dispatchBudget.allowed === false) {
+    return {
+      ok: false,
+      code: dispatchBudget.code,
+      reason: dispatchBudget.reason,
     };
   }
 

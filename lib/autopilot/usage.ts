@@ -3,6 +3,11 @@
  *
  * Separates variable AI/messaging costs from fixed SaaS billing so no runaway
  * loop, abusive upload, or noisy trigger can bankrupt a tenant or platform margin.
+ *
+ * Paid-provider operations and state-mutating executions fail closed whenever
+ * database-backed budget verification or reservation fails. Zero-cost fallback
+ * is permitted strictly for read-only deterministic `jata-local` previews with
+ * no external provider calls, mutations, or side effects.
  */
 
 import prisma from "@/lib/db";
@@ -90,83 +95,53 @@ export interface UsageBudgetSummary {
   monthlySpendCapMinorKES: number;
   capabilityUsedThisMonth: Record<AutopilotUsageCapability, number>;
   capabilityLimits: AutopilotQuotaAllowances;
+  verificationAvailable?: boolean;
 }
 
-export async function getAutopilotUsageSummary(params: {
-  businessId: string;
+function buildEmptyUsageSummary(params: {
   tierKey: AutopilotTier | "PREVIEW";
   dailySpendCapMinorKES?: number;
   now?: Date;
-}): Promise<UsageBudgetSummary> {
+  verificationAvailable: boolean;
+}): UsageBudgetSummary {
   const { periodKey, dayKey } = currentPeriodAndDayKeys(params.now);
   const limits = QUOTA_BY_AUTOPILOT_TIER[params.tierKey];
   const dailySpendCapMinorKES = params.dailySpendCapMinorKES ?? 25_000;
-
-  const used: Record<AutopilotUsageCapability, number> = {
-    LLM_REASONING: 0,
-    VISION_EXTRACT: 0,
-    VOICE_STT: 0,
-    VOICE_TTS: 0,
-    OUTBOUND_MSG: 0,
-    WORKFLOW_STEP: 0,
-  };
-  let monthlySpendMinorKES = 0;
-  let dailySpendMinorKES = 0;
-
-  try {
-    const rows = await prisma.autopilotUsageLedger.findMany({
-      where: { businessId: params.businessId, periodKey },
-    });
-    for (const row of rows) {
-      const cap = row.capability as AutopilotUsageCapability;
-      if (cap in used) used[cap] += 1;
-      monthlySpendMinorKES += Number(row.estimatedCostMinorKES || 0);
-      if (row.dayKey === dayKey) {
-        dailySpendMinorKES += Number(row.estimatedCostMinorKES || 0);
-      }
-    }
-  } catch {
-    // Offline fallback returns 0 usage without inventing data.
-  }
-
   return {
     periodKey,
     dayKey,
     tierKey: params.tierKey,
-    dailySpendMinorKES,
+    dailySpendMinorKES: 0,
     dailySpendCapMinorKES,
-    monthlySpendMinorKES,
+    monthlySpendMinorKES: 0,
     monthlySpendCapMinorKES: limits.monthlyIncludedSpendCapMinorKES,
-    capabilityUsedThisMonth: used,
+    capabilityUsedThisMonth: {
+      LLM_REASONING: 0,
+      VISION_EXTRACT: 0,
+      VOICE_STT: 0,
+      VOICE_TTS: 0,
+      OUTBOUND_MSG: 0,
+      WORKFLOW_STEP: 0,
+    },
     capabilityLimits: limits,
+    verificationAvailable: params.verificationAvailable,
   };
 }
 
-export async function evaluateAutopilotBudget(params: {
-  businessId: string;
-  tierKey: AutopilotTier | "PREVIEW";
+function evaluateStaticBudgetViolation(params: {
+  summary: UsageBudgetSummary;
   capability: AutopilotUsageCapability;
-  dailySpendCapMinorKES?: number;
-  estimatedCallCostMinorKES?: number;
-  now?: Date;
-}): Promise<{ allowed: true; summary: UsageBudgetSummary } | { allowed: false; code: string; reason: string; summary: UsageBudgetSummary }> {
-  const summary = await getAutopilotUsageSummary({
-    businessId: params.businessId,
-    tierKey: params.tierKey,
-    dailySpendCapMinorKES: params.dailySpendCapMinorKES,
-    now: params.now,
-  });
-
-  const callCost =
-    params.estimatedCallCostMinorKES ?? ESTIMATED_MINOR_KES_PER_CALL[params.capability];
-  const capAllowance = summary.capabilityLimits[params.capability];
-  const capUsed = summary.capabilityUsedThisMonth[params.capability];
+  callCost: number;
+}): { allowed: true } | { allowed: false; code: string; reason: string; summary: UsageBudgetSummary } {
+  const { summary, capability, callCost } = params;
+  const capAllowance = summary.capabilityLimits[capability];
+  const capUsed = summary.capabilityUsedThisMonth[capability];
 
   if (capUsed >= capAllowance) {
     return {
       allowed: false,
       code: "MONTHLY_CAPABILITY_QUOTA_REACHED",
-      reason: `Monthly ${params.capability} allowance (${capUsed}/${capAllowance}) reached for ${params.tierKey}. Deterministic diagnostics remain available without extra AI charges.`,
+      reason: `Monthly ${capability} allowance (${capUsed}/${capAllowance}) reached for ${summary.tierKey}. Deterministic diagnostics remain available without extra AI charges.`,
       summary,
     };
   }
@@ -186,7 +161,127 @@ export async function evaluateAutopilotBudget(params: {
       summary,
     };
   }
-  return { allowed: true, summary };
+  return { allowed: true };
+}
+
+export async function getAutopilotUsageSummary(params: {
+  businessId: string;
+  tierKey: AutopilotTier | "PREVIEW";
+  dailySpendCapMinorKES?: number;
+  now?: Date;
+  strict?: boolean;
+  client?: any;
+}): Promise<UsageBudgetSummary> {
+  const dbClient = params.client ?? prisma;
+  const base = buildEmptyUsageSummary({
+    tierKey: params.tierKey,
+    dailySpendCapMinorKES: params.dailySpendCapMinorKES,
+    now: params.now,
+    verificationAvailable: true,
+  });
+
+  try {
+    const rows = await dbClient.autopilotUsageLedger.findMany({
+      where: { businessId: params.businessId, periodKey: base.periodKey },
+    });
+    const used = { ...base.capabilityUsedThisMonth };
+    let monthlySpendMinorKES = 0;
+    let dailySpendMinorKES = 0;
+    for (const row of rows) {
+      const cap = row.capability as AutopilotUsageCapability;
+      if (cap in used) used[cap] += 1;
+      monthlySpendMinorKES += Number(row.estimatedCostMinorKES || 0);
+      if (row.dayKey === base.dayKey) {
+        dailySpendMinorKES += Number(row.estimatedCostMinorKES || 0);
+      }
+    }
+    return {
+      ...base,
+      dailySpendMinorKES,
+      monthlySpendMinorKES,
+      capabilityUsedThisMonth: used,
+      verificationAvailable: true,
+    };
+  } catch (err) {
+    if (params.strict) throw err;
+    // Read-only overview dashboard rendering returns 0 usage without inventing data.
+    return {
+      ...base,
+      verificationAvailable: false,
+    };
+  }
+}
+
+export async function evaluateAutopilotBudget(params: {
+  businessId: string;
+  tierKey: AutopilotTier | "PREVIEW";
+  capability: AutopilotUsageCapability;
+  provider?: string;
+  dailySpendCapMinorKES?: number;
+  estimatedCallCostMinorKES?: number;
+  allowZeroCostReadOnlyPreviewFallback?: boolean;
+  client?: any;
+  now?: Date;
+}): Promise<
+  | { allowed: true; zeroCostPreviewFallback?: boolean; summary: UsageBudgetSummary }
+  | { allowed: false; code: string; reason: string; summary: UsageBudgetSummary }
+> {
+  const callCost =
+    params.estimatedCallCostMinorKES ?? ESTIMATED_MINOR_KES_PER_CALL[params.capability];
+  const unverifiedSummary = buildEmptyUsageSummary({
+    tierKey: params.tierKey,
+    dailySpendCapMinorKES: params.dailySpendCapMinorKES,
+    now: params.now,
+    verificationAvailable: false,
+  });
+
+  // Deterministic static boundary check (catches impossible calls even before DB lookup).
+  const staticCheck = evaluateStaticBudgetViolation({
+    summary: unverifiedSummary,
+    capability: params.capability,
+    callCost,
+  });
+  if (staticCheck.allowed === false) {
+    return staticCheck;
+  }
+
+  try {
+    const summary = await getAutopilotUsageSummary({
+      businessId: params.businessId,
+      tierKey: params.tierKey,
+      dailySpendCapMinorKES: params.dailySpendCapMinorKES,
+      now: params.now,
+      strict: true,
+      client: params.client,
+    });
+    const verifiedCheck = evaluateStaticBudgetViolation({
+      summary,
+      capability: params.capability,
+      callCost,
+    });
+    if (verifiedCheck.allowed === false) {
+      return verifiedCheck;
+    }
+    return { allowed: true, summary };
+  } catch {
+    const canFallbackZeroCostPreview =
+      params.allowZeroCostReadOnlyPreviewFallback === true &&
+      params.provider === "jata-local";
+    if (canFallbackZeroCostPreview) {
+      return {
+        allowed: true,
+        zeroCostPreviewFallback: true,
+        summary: unverifiedSummary,
+      };
+    }
+    return {
+      allowed: false,
+      code: "BUDGET_VERIFICATION_UNAVAILABLE",
+      reason:
+        "Unable to verify tenant Autopilot budget in the database. Paid provider calls and state-mutating operations fail closed until database accounting is available.",
+      summary: unverifiedSummary,
+    };
+  }
 }
 
 const tenantBudgetMutex = new Map<string, Promise<void>>();
@@ -220,18 +315,46 @@ export async function reserveAutopilotBudget(params: {
   estimatedCallCostMinorKES?: number;
   unitsIn?: number;
   unitsOut?: number;
+  allowZeroCostReadOnlyPreviewFallback?: boolean;
+  client?: any;
   now?: Date;
 }): Promise<
-  | { allowed: true; alreadyRecorded: boolean; summary: UsageBudgetSummary }
+  | {
+      allowed: true;
+      alreadyRecorded: boolean;
+      zeroCostPreviewFallback?: boolean;
+      summary: UsageBudgetSummary;
+    }
   | { allowed: false; code: string; reason: string; summary: UsageBudgetSummary }
 > {
+  const callCost =
+    params.estimatedCallCostMinorKES ?? ESTIMATED_MINOR_KES_PER_CALL[params.capability];
+  const unverifiedSummary = buildEmptyUsageSummary({
+    tierKey: params.tierKey,
+    dailySpendCapMinorKES: params.dailySpendCapMinorKES,
+    now: params.now,
+    verificationAvailable: false,
+  });
+
+  // Static impossibility check runs even before acquiring locks or opening a DB transaction.
+  const staticCheck = evaluateStaticBudgetViolation({
+    summary: unverifiedSummary,
+    capability: params.capability,
+    callCost,
+  });
+  if (staticCheck.allowed === false) {
+    return staticCheck;
+  }
+
   return withTenantBudgetLock(params.businessId, async () => {
+    const rootDb = params.client ?? prisma;
+
     const runCheckAndInsert = async (dbClient: any) => {
       if (typeof dbClient.$executeRaw === "function") {
         try {
           await dbClient.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`autopilot_budget:${params.businessId}`}))`;
         } catch {
-          // Non-Postgres or mock client; in-process per-tenant mutex still serializes concurrent callers.
+          // Non-Postgres mock client; in-process per-tenant mutex still serializes concurrent callers.
         }
       }
 
@@ -274,40 +397,28 @@ export async function reserveAutopilotBudget(params: {
         monthlySpendCapMinorKES: limits.monthlyIncludedSpendCapMinorKES,
         capabilityUsedThisMonth: used,
         capabilityLimits: limits,
+        verificationAvailable: true,
       };
 
       if (existing) {
+        if (existing.businessId !== params.businessId) {
+          return {
+            allowed: false as const,
+            code: "IDEMPOTENCY_TENANT_CONFLICT",
+            reason: "Budget reservation idempotency key conflicts with another tenant boundary.",
+            summary,
+          };
+        }
         return { allowed: true as const, alreadyRecorded: true, summary };
       }
 
-      const callCost =
-        params.estimatedCallCostMinorKES ?? ESTIMATED_MINOR_KES_PER_CALL[params.capability];
-      const capAllowance = summary.capabilityLimits[params.capability];
-      const capUsed = summary.capabilityUsedThisMonth[params.capability];
-
-      if (capUsed >= capAllowance) {
-        return {
-          allowed: false as const,
-          code: "MONTHLY_CAPABILITY_QUOTA_REACHED",
-          reason: `Monthly ${params.capability} allowance (${capUsed}/${capAllowance}) reached for ${params.tierKey}. Deterministic diagnostics remain available without extra AI charges.`,
-          summary,
-        };
-      }
-      if (summary.dailySpendMinorKES + callCost > summary.dailySpendCapMinorKES) {
-        return {
-          allowed: false as const,
-          code: "DAILY_SPEND_CAP_REACHED",
-          reason: `Tenant daily AI spend cap (KES ${(summary.dailySpendCapMinorKES / 100).toFixed(2)}) reached for ${summary.dayKey}. Increase the daily cap or wait until tomorrow (EAT).`,
-          summary,
-        };
-      }
-      if (summary.monthlySpendMinorKES + callCost > summary.monthlySpendCapMinorKES) {
-        return {
-          allowed: false as const,
-          code: "MONTHLY_SPEND_CAP_REACHED",
-          reason: `Monthly included AI budget ceiling (KES ${(summary.monthlySpendCapMinorKES / 100).toFixed(2)}) reached for ${summary.periodKey}. Upgrade tier to expand monthly capacity.`,
-          summary,
-        };
+      const verifiedCheck = evaluateStaticBudgetViolation({
+        summary,
+        capability: params.capability,
+        callCost,
+      });
+      if (verifiedCheck.allowed === false) {
+        return verifiedCheck;
       }
 
       try {
@@ -326,11 +437,23 @@ export async function reserveAutopilotBudget(params: {
         });
       } catch (err: any) {
         if (err?.code === "P2002") {
-          return { allowed: true as const, alreadyRecorded: true, summary };
+          const raced = await dbClient.autopilotUsageLedger.findUnique({
+            where: { idempotencyKey: params.idempotencyKey },
+          });
+          if (raced && raced.businessId === params.businessId) {
+            return { allowed: true as const, alreadyRecorded: true, summary };
+          }
+          return {
+            allowed: false as const,
+            code: "IDEMPOTENCY_TENANT_CONFLICT",
+            reason: "Budget reservation idempotency key conflicts with another tenant boundary.",
+            summary,
+          };
         }
         throw err;
       }
 
+      const capUsed = summary.capabilityUsedThisMonth[params.capability];
       return {
         allowed: true as const,
         alreadyRecorded: false,
@@ -347,22 +470,47 @@ export async function reserveAutopilotBudget(params: {
     };
 
     try {
-      if (typeof (prisma as any).$transaction === "function") {
-        return await (prisma as any).$transaction((tx: any) => runCheckAndInsert(tx));
+      if (typeof rootDb.$transaction === "function") {
+        return await rootDb.$transaction((tx: any) => runCheckAndInsert(tx));
       }
-      return await runCheckAndInsert(prisma);
+      return await runCheckAndInsert(rootDb);
     } catch {
-      const fallback = await evaluateAutopilotBudget(params);
-      if (fallback.allowed === false) return fallback;
-      return { allowed: true, alreadyRecorded: false, summary: fallback.summary };
+      const canFallbackZeroCostPreview =
+        params.allowZeroCostReadOnlyPreviewFallback === true &&
+        params.provider === "jata-local";
+      if (canFallbackZeroCostPreview) {
+        return {
+          allowed: true,
+          alreadyRecorded: false,
+          zeroCostPreviewFallback: true,
+          summary: unverifiedSummary,
+        };
+      }
+      return {
+        allowed: false,
+        code: "BUDGET_VERIFICATION_UNAVAILABLE",
+        reason:
+          "Unable to verify or reserve tenant Autopilot budget in the database. Paid provider calls and state-mutating executions fail closed until database accounting is available.",
+        summary: unverifiedSummary,
+      };
     }
   });
 }
 
-export async function releaseAutopilotBudgetReservation(idempotencyKey: string): Promise<void> {
+export async function releaseAutopilotBudgetReservation(
+  idempotencyKey: string,
+  businessId?: string,
+  client?: any,
+): Promise<void> {
+  const dbClient = client ?? prisma;
   try {
-    if (typeof (prisma.autopilotUsageLedger as any).deleteMany === "function") {
-      await prisma.autopilotUsageLedger.deleteMany({ where: { idempotencyKey } });
+    if (typeof (dbClient.autopilotUsageLedger as any)?.deleteMany === "function") {
+      await dbClient.autopilotUsageLedger.deleteMany({
+        where: {
+          idempotencyKey,
+          ...(businessId ? { businessId } : {}),
+        },
+      });
     }
   } catch {
     // Non-fatal best-effort release when downstream step aborts prior to provider invocation.

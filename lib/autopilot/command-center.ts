@@ -274,6 +274,8 @@ export async function handleOwnerCommandTurn(params: {
   let reply = buildDeterministicExecutiveBrief(diagnosis, createdProposal);
 
   const textProvider = resolveProvider("text");
+  const isZeroCostReadOnlyPreview =
+    textProvider.key === "jata-local" && !createdProposal;
   const budget = await reserveAutopilotBudget({
     businessId: params.businessId,
     tierKey,
@@ -283,10 +285,23 @@ export async function handleOwnerCommandTurn(params: {
     dailySpendCapMinorKES: config.dailySpendCapMinorKES,
     unitsIn: cleanMessage.length,
     unitsOut: reply.length,
+    allowZeroCostReadOnlyPreviewFallback: isZeroCostReadOnlyPreview,
     now,
   });
 
-  if (budget.allowed && textProvider.key !== "jata-local") {
+  if (budget.allowed === false) {
+    if (
+      budget.code === "BUDGET_VERIFICATION_UNAVAILABLE" ||
+      budget.code === "IDEMPOTENCY_TENANT_CONFLICT"
+    ) {
+      return {
+        ok: false,
+        reply: budget.reason,
+        providerUsed: "jata-budget-guard",
+        blockedCode: budget.code,
+      };
+    }
+  } else if (textProvider.key !== "jata-local") {
     try {
       const groundedFacts = [
         diagnosis.healthSummary,
@@ -320,7 +335,7 @@ export async function handleOwnerCommandTurn(params: {
         providerUsed = textProvider.key;
       }
     } catch {
-      await releaseAutopilotBudgetReservation(turnIdempotencyKey);
+      await releaseAutopilotBudgetReservation(turnIdempotencyKey, params.businessId);
       providerUsed = "jata-local";
     }
   }

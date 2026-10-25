@@ -83,6 +83,8 @@ export type PolicyDecision =
         | "ENTITLEMENT_REQUIRED"
         | "VOICE_CONFIRMATION_REQUIRED"
         | "REGULATED_INDUSTRY_BLOCK"
+        | "INVALID_BATCH_RECIPIENT_COUNT"
+        | "MISMATCHED_RECIPIENT_COUNT_FIELD"
         | "BATCH_RECIPIENT_CAP_EXCEEDED"
         | "AUTO_DISCOUNT_CAP_EXCEEDED"
         | "MODE_REQUIRES_HUMAN_APPROVAL";
@@ -152,15 +154,43 @@ export function evaluateAutopilotActionPolicy(
   }
 
   const maxBatch = input.maxBatchRecipients ?? 50;
-  if (
-    input.payload.actionType === "QUEUE_CONSENTED_FOLLOWUP" &&
-    (input.payload.batchRecipientCount ?? 1) > maxBatch
-  ) {
-    return {
-      allowed: false,
-      code: "BATCH_RECIPIENT_CAP_EXCEEDED",
-      reason: `Follow-up batch size (${input.payload.batchRecipientCount}) exceeds tenant safety cap (${maxBatch}).`,
-    };
+  if (input.payload.actionType === "QUEUE_CONSENTED_FOLLOWUP") {
+    if (Object.prototype.hasOwnProperty.call(input.payload, "recipientCount")) {
+      return {
+        allowed: false,
+        code: "MISMATCHED_RECIPIENT_COUNT_FIELD",
+        reason:
+          "Follow-up payload field 'recipientCount' is prohibited; use 'batchRecipientCount' exclusively.",
+      };
+    }
+    const rawBatchCount = input.payload.batchRecipientCount;
+    if (
+      rawBatchCount !== undefined &&
+      (typeof rawBatchCount !== "number" ||
+        !Number.isFinite(rawBatchCount) ||
+        !Number.isInteger(rawBatchCount) ||
+        rawBatchCount < 1)
+    ) {
+      return {
+        allowed: false,
+        code: "INVALID_BATCH_RECIPIENT_COUNT",
+        reason: "Follow-up batchRecipientCount must be a finite positive integer >= 1.",
+      };
+    }
+    const effectiveBatchCount = rawBatchCount ?? 1;
+    if (
+      typeof maxBatch !== "number" ||
+      !Number.isFinite(maxBatch) ||
+      !Number.isInteger(maxBatch) ||
+      maxBatch < 1 ||
+      effectiveBatchCount > maxBatch
+    ) {
+      return {
+        allowed: false,
+        code: "BATCH_RECIPIENT_CAP_EXCEEDED",
+        reason: `Follow-up batch size (${effectiveBatchCount}) exceeds tenant safety cap (${maxBatch}).`,
+      };
+    }
   }
 
   if ((input.phase === "EXECUTE" || input.phase === "AUTO_EXECUTE") && !input.entitled) {

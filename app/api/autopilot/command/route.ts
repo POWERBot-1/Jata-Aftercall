@@ -55,9 +55,11 @@ export async function POST(req: Request) {
       ? 200
       : result.blockedCode === "RBAC_FORBIDDEN"
         ? 403
-        : result.requiresVoiceConfirmation
-          ? 409
-          : 422;
+        : result.blockedCode === "BUDGET_VERIFICATION_UNAVAILABLE"
+          ? 503
+          : result.requiresVoiceConfirmation
+            ? 409
+            : 422;
 
     return NextResponse.json(result, { status });
   } catch (err) {
