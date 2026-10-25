@@ -51,7 +51,11 @@ export type LandingIconKey =
   | "spark"
   | "chart"
   | "shield"
-  | "bolt";
+  | "bolt"
+  | "calendar"
+  | "bot"
+  | "wand"
+  | "store";
 
 export const LANDING_BENEFITS: readonly LandingBenefit[] = [
   { icon: "phone", title: "WhatsApp & Call in one tap", body: "Large, thumb-sized contact buttons above the fold. Customers can reach you without filling in a form." },
@@ -114,6 +118,24 @@ export const PLAN_BADGES: Record<string, string> = {
 };
 
 /**
+ * One recognisable icon per advertised plan, keyed by the stable plan key.
+ *
+ * The glyphs mirror the workspace rail (`components/DashboardNav.tsx`): the page plans keep the
+ * phone/calendar story, the AI Business Front Desk is the bot, Website Studio is the wand, the
+ * Business POS is the storefront and JATA Autopilot is the spark — the same mark the dashboard
+ * and the Autopilot Command Center already use for that product. Every card renders its icon, so
+ * the shared card rows stay aligned; the icon is decorative (`aria-hidden`) because the plan name
+ * beside it is the accessible label. The two owner-only cards carry their icon in their own card
+ * copy below, next to the rest of their wording.
+ */
+export const PLAN_ICONS: Record<string, LandingIconKey> = {
+  MONTHLY: "phone",
+  ANNUAL: "calendar",
+  AI_BUSINESS_FRONT_DESK: "bot",
+  INTERACTIVE_BUSINESS: "wand",
+};
+
+/**
  * The Business POS card — copy only, deliberately outside `PLAN_INCLUDES`/`PLAN_BADGES`.
  *
  * Those two maps describe the four page plans, and a page plan must never read as including the
@@ -122,6 +144,7 @@ export const PLAN_BADGES: Record<string, string> = {
  * authenticated `/dashboard/pos` flow. Its price and billing period come from `PlanConfig`.
  */
 export const POS_PLAN_CARD = {
+  icon: "store" as LandingIconKey,
   badge: "Owner-only",
   blurb:
     "A point-of-sale for your counter — sales, stock, credit and reports. Per business, separate from your page plan. It is owner-only.",
@@ -132,6 +155,36 @@ export const POS_PLAN_CARD = {
   ],
   cta: "Open Business POS",
   fine: "Sign in from your dashboard. It switches on only once Paystack confirms the payment.",
+} as const;
+
+/**
+ * The JATA Autopilot card — copy only, deliberately outside `PLAN_INCLUDES`/`PLAN_BADGES`, for
+ * exactly the reason the POS card is: those maps describe the four page plans, and a page plan
+ * must never read as including Autopilot.
+ *
+ * JATA Autopilot is a separate, per-business owner product. This card advertises only the
+ * standard package (`JATA_AUTOPILOT` in `AUTOPILOT_PLAN_CATALOG`): its price and billing period
+ * come from `PlanConfig`, never from this copy, and its call to action leads into the
+ * authenticated `/dashboard/autopilot` flow, where the free preview, the Command Center and the
+ * existing Paystack checkout already live. The wording stays inside what the product verifiably
+ * does today — business health diagnosis with the 15 industry packs, draft offer/FAQ actions in
+ * an approval queue where nothing runs without the owner's approval, and a free preview before
+ * paying. It does not promise live customer messaging: outbound sending stays behind consent,
+ * spend and provider controls inside the product.
+ */
+export const AUTOPILOT_PLAN_CARD = {
+  icon: "spark" as LandingIconKey,
+  badge: "Owner-only add-on",
+  blurb:
+    "A supervised assistant that checks your business health and drafts actions for your approval. Per business, separate from your page plan. It is owner-only.",
+  includes: [
+    "Business health diagnosis with 15 industry packs",
+    "Draft offer and FAQ actions in an approval queue",
+    "Nothing runs without your approval",
+    "Preview it free in your dashboard before you pay",
+  ],
+  cta: "Open JATA Autopilot",
+  fine: "Sign in from your dashboard. The preview is free; live actions switch on only once Paystack confirms the payment.",
 } as const;
 
 /* ── FAQ ─────────────────────────────────────────────────────────────────── */
@@ -168,6 +221,11 @@ export const LANDING_FAQ: readonly LandingFaq[] = [
     question: "Is the Business POS part of these plans?",
     answer:
       "No. The Business POS is a separate owner-only point-of-sale that is configured and paid for inside your dashboard, per business. It is not included in, and not required for, the four page plans.",
+  },
+  {
+    question: "Is JATA Autopilot part of these plans?",
+    answer:
+      "No. JATA Autopilot is a separate owner-only add-on that checks your business health and drafts actions for your approval. You can preview it free inside your dashboard; it is paid for per business and live actions start only after Paystack confirms the payment. It is not included in, and not required for, the four page plans.",
   },
   {
     question: "How do I pay for a plan?",

@@ -30,9 +30,10 @@ export async function getActivePlans(): Promise<Plan[]> {
  * and checkout all resolve their choices through `publiclyListedPlans()`.
  *
  * The one presentation exception is the homepage pricing grid, which shows the POS as a fifth,
- * clearly-labelled owner-only card that links into the authenticated `/dashboard/pos` flow (see
- * `homepagePlanCards`). Showing that card grants nothing: the POS still switches on only from
- * PlanConfig and confirmed payment inside the workspace.
+ * clearly-labelled owner-only card that links into the authenticated `/dashboard/pos` flow, and
+ * the standard JATA Autopilot package as a sixth card linking into `/dashboard/autopilot` (see
+ * `homepagePlanCards`). Showing those cards grants nothing: each product still switches on only
+ * from PlanConfig and confirmed payment inside the workspace.
  */
 export const PRIVATE_PLAN_KEYS = [
   "BUSINESS_POS",
@@ -51,15 +52,25 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
 }
 
 /** Marketing order only; never changes stored IDs, prices, durations or checkout selection. */
-export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS"] as const;
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "JATA_AUTOPILOT"] as const;
 
 /**
- * The owner-only plan the homepage advertises last, without ever making it a payable choice.
+ * The owner-only POS plan the homepage advertises fifth, without ever making it a payable choice.
  * A literal rather than an import: `lib/pos/entitlement.ts` imports this module, so importing its
  * `POS_PLAN_KEY` here would be a cycle. Both name the same stored key, and
  * `assertBusinessPosPricing`/`assertPosPlanPricing` still guard the price itself.
  */
 export const HOMEPAGE_POS_PLAN_KEY = "BUSINESS_POS";
+
+/**
+ * The standard JATA Autopilot package the homepage advertises last (Stage C Phase 4), without
+ * ever making it a payable choice. A literal rather than an import for the same cycle reason as
+ * the POS key above: it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
+ * `lib/autopilot/entitlement.ts`, and `assertAutopilotPlanPricing` still guards the price itself
+ * (KES 2,499 / 30 days) at checkout. Only the standard package is advertised here; the Pro and
+ * Enterprise tiers stay inside the authenticated Autopilot flow and are never homepage cards.
+ */
+export const HOMEPAGE_AUTOPILOT_PLAN_KEY = "JATA_AUTOPILOT";
 
 export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[]): T[] {
   const rank = (key: string) => {
@@ -73,27 +84,33 @@ export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[
 export type HomepagePlanCard = { key: string; name: string; priceKES: number; durationDays: number };
 
 /**
- * The five plans the homepage advertises, in marketing order.
+ * The six plans the homepage advertises, in marketing order.
  *
  * The four page plans come from `publiclyListedPlans()` as before; the owner-only Business POS is
- * appended as the fifth card so an owner can see the whole product range in one grid instead of a
- * separate promotional block below it (owner request, 2026-10-25). This is presentation only:
+ * appended as the fifth card (owner request, 2026-10-25) and the standard JATA Autopilot package
+ * as the sixth (Stage C Phase 4), so an owner can see the whole product range in one grid instead
+ * of separate promotional blocks below it. This is presentation only:
  *
- *   • POS stays in `PRIVATE_PLAN_KEYS`, so it is still absent from onboarding, the AFTERCALL
- *     subscription screen and every payable list — the card links to `/dashboard/pos`, not to
- *     `/register` or checkout.
- *   • Its price and duration are the stored `PlanConfig` row when it can be read, and the
- *     canonical `FALLBACK_PLANS` row (KES 499 / 30 days) when the database is unavailable —
- *     never a number written into the page.
- *   • If the plan row is missing entirely the canonical row still fills the fifth slot, so the
- *     grid is never left with a hole and never invents a different price.
+ *   • POS and Autopilot stay in `PRIVATE_PLAN_KEYS`, so they are still absent from onboarding,
+ *     the AFTERCALL subscription screen and every payable list — the cards link to
+ *     `/dashboard/pos` and `/dashboard/autopilot`, not to `/register` or checkout. The Autopilot
+ *     Pro/Enterprise tiers are never appended: only the standard package is advertised.
+ *   • Each owner-only card's price and duration are the stored `PlanConfig` row when it can be
+ *     read, and the canonical `FALLBACK_PLANS` row (POS KES 499 / 30 days; Autopilot standard
+ *     KES 2,499 / 30 days, guarded by `assertAutopilotPlanPricing`) when the database is
+ *     unavailable — never a number written into the page.
+ *   • If a plan row is missing entirely the canonical row still fills its slot, so the grid is
+ *     never left with a hole and never invents a different price.
  */
 export function homepagePlanCards(plans: readonly HomepagePlanCard[]): HomepagePlanCard[] {
   const listed = publiclyListedPlans([...plans]);
   const storedPos = plans.find((plan) => plan.key === HOMEPAGE_POS_PLAN_KEY);
   const pos = storedPos ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_POS_PLAN_KEY);
+  const storedAutopilot = plans.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
+  const autopilot = storedAutopilot ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
   const cards: HomepagePlanCard[] = [...listed];
   if (pos && !cards.some((card) => card.key === HOMEPAGE_POS_PLAN_KEY)) cards.push(pos);
+  if (autopilot && !cards.some((card) => card.key === HOMEPAGE_AUTOPILOT_PLAN_KEY)) cards.push(autopilot);
   return orderHomepagePlans(cards);
 }
 

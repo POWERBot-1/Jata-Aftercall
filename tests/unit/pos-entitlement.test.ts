@@ -118,7 +118,8 @@ describe("the POS plan is never advertised publicly (§67)", () => {
       { key: "MONTHLY", name: "Monthly", priceKES: 149, durationDays: 30 },
       { key: POS_PLAN_KEY, name: POS_PLAN_NAME, priceKES: 499, durationDays: 30 },
     ]);
-    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", POS_PLAN_KEY]);
+    // Stage C Phase 4: the standard JATA Autopilot package fills the sixth slot after the POS.
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", POS_PLAN_KEY, "JATA_AUTOPILOT"]);
     // The POS row is still not a member of the publicly listed set.
     expect(publiclyListedPlans(cards).map((card) => card.key)).toEqual(["MONTHLY"]);
   });

@@ -16,7 +16,9 @@ import {
   LANDING_FAQ,
   LANDING_STEPS,
   LANDING_STORY,
+  AUTOPILOT_PLAN_CARD,
   PLAN_BADGES,
+  PLAN_ICONS,
   PLAN_INCLUDES,
   POS_PLAN_CARD,
   buildLandingDemoCards,
@@ -59,6 +61,10 @@ const marketingCopy = () =>
     POS_PLAN_CARD.blurb,
     POS_PLAN_CARD.fine,
     ...POS_PLAN_CARD.includes,
+    AUTOPILOT_PLAN_CARD.badge,
+    AUTOPILOT_PLAN_CARD.blurb,
+    AUTOPILOT_PLAN_CARD.fine,
+    ...AUTOPILOT_PLAN_CARD.includes,
   ].join("\n");
 
 describe("landing copy makes no unverified claim", () => {
@@ -144,6 +150,21 @@ describe("landing copy makes no unverified claim", () => {
     expect(Object.values(PLAN_INCLUDES).flat().join(" ")).not.toMatch(/point of sale|point-of-sale|POS/i);
   });
 
+  it("never puts the private JATA Autopilot plans into a plan card", () => {
+    for (const key of ["JATA_AUTOPILOT", "JATA_AUTOPILOT_PRO", "JATA_AUTOPILOT_ENTERPRISE"]) {
+      expect(Object.keys(PLAN_INCLUDES), key).not.toContain(key);
+      expect(Object.keys(PLAN_BADGES), key).not.toContain(key);
+    }
+    expect(Object.values(PLAN_INCLUDES).flat().join(" ")).not.toMatch(/autopilot/i);
+  });
+
+  it("gives every advertised plan its established product icon", () => {
+    expect(Object.keys(PLAN_ICONS)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
+    // The owner-only cards carry the marks the workspace already uses for those products.
+    expect(POS_PLAN_CARD.icon).toBe("store");
+    expect(AUTOPILOT_PLAN_CARD.icon).toBe("spark");
+  });
+
   it("answers the POS question in the FAQ by separating it from the page plans", () => {
     const faq = LANDING_FAQ.find((item) => item.question.includes("POS"));
     expect(faq).toBeTruthy();
@@ -190,6 +211,38 @@ describe("the owner-only POS stays owner-only", () => {
     expect(POS_PLAN_CARD.fine).toMatch(/switches on only once Paystack confirms the payment/i);
     const faq = LANDING_FAQ.find((item) => item.question.includes("POS"))!;
     expect(faq.answer).toMatch(/separate owner-only point-of-sale/);
+    expect(faq.answer).toMatch(/not included in, and not required for, the four page plans/i);
+  });
+});
+
+describe("the owner-only JATA Autopilot stays owner-only", () => {
+  const page = readFileSync(path.join(root, "app/page.tsx"), "utf8");
+
+  it("links into the authenticated Autopilot flow and nothing else", () => {
+    expect(page).toContain('"/dashboard/autopilot"');
+    expect(page).not.toMatch(/dashboard\/autopilot\//);
+    expect(page).not.toContain("/checkout");
+    expect(readFileSync(path.join(root, "lib/landing.ts"), "utf8")).toContain("It is owner-only");
+  });
+
+  it("is still gated by the existing server-side sign-in redirect", () => {
+    const route = readFileSync(path.join(root, "app/dashboard/autopilot/page.tsx"), "utf8");
+    expect(route).toContain('if (!session) redirect("/login")');
+  });
+
+  it("keeps the card copy inside verified capability and separate from the page plans", () => {
+    expect(AUTOPILOT_PLAN_CARD.badge).toBe("Owner-only add-on");
+    expect(AUTOPILOT_PLAN_CARD.blurb).toMatch(/separate from your page plan/i);
+    expect(AUTOPILOT_PLAN_CARD.fine).toMatch(/preview is free/i);
+    expect(AUTOPILOT_PLAN_CARD.fine).toMatch(/only once Paystack confirms the payment/i);
+    const cardCopy = [AUTOPILOT_PLAN_CARD.blurb, ...AUTOPILOT_PLAN_CARD.includes].join(" ");
+    // Approval-first is the shipped behaviour; live customer messaging is never promised here.
+    expect(cardCopy).toMatch(/nothing runs without your approval/i);
+    expect(cardCopy).not.toMatch(/sends? (whatsapp|sms|messages?)/i);
+    expect(cardCopy).not.toMatch(/KES\s?[\d,]+/);
+    const faq = LANDING_FAQ.find((item) => item.question.includes("Autopilot"))!;
+    expect(faq).toBeTruthy();
+    expect(faq.answer).toMatch(/separate owner-only add-on/);
     expect(faq.answer).toMatch(/not included in, and not required for, the four page plans/i);
   });
 });

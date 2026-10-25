@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 /**
- * Pricing grid browser check — all five plans in one grid (2026-10-25).
+ * Pricing grid browser check — all six plans in one grid (2026-10-25; JATA Autopilot sixth card,
+ * Stage C Phase 4).
  *
  *   CHROME_PATH=/path/to/chromium BASE_URL=http://localhost:3000 npm run test:browser:pricing
  *
  * Requires a running server (dev or `next start`). What it proves, in a real browser at the
  * widths the brief names (320, 360, 390, 414, 768, 1024, 1280, 1440):
- *   1. Exactly five `.lp-plan` cards, all inside the single `.lp-plans` grid — none rendered
+ *   1. Exactly six `.lp-plan` cards, all inside the single `.lp-plans` grid — none rendered
  *      outside it in a separate section.
  *   2. No horizontal overflow (`documentElement.scrollWidth` within the viewport) and no card
  *      crossing the viewport edge at any width.
  *   3. The grid resolves to one column on a phone, two on a tablet, and a three-across desktop
- *      arrangement with the last two cards centred beneath it. The desktop grid is described by
- *      six equal tracks (every card spans two), so the column count is read from how many cards
- *      actually sit side by side, and the track maths is checked against it.
- *   4. Cards in the same row share a width, and their name/price/period/feature/CTA rows line up.
+ *      arrangement in two even rows. The desktop grid is described by six equal tracks (every
+ *      card spans two), so the column count is read from how many cards actually sit side by
+ *      side, and the track maths is checked against it.
+ *   4. Cards in the same row share a width, and their icon/name/price/period/feature/CTA rows
+ *      line up; every card renders a visible product icon.
  *   5. The order, prices, billing periods and CTA destinations are the authoritative ones, with
- *      the Business POS card ending in `/dashboard/pos` and the page plans in `/register`.
+ *      the Business POS card ending in `/dashboard/pos`, the JATA Autopilot card in
+ *      `/dashboard/autopilot` and the page plans in `/register`.
  *
  * Set SHOT_DIR to write screenshots (JPEG) for review. Exits 2 when Chrome is missing, so a run
  * without a browser is reported as NOT RUN rather than as a pass.
@@ -61,6 +64,7 @@ const EXPECTED = [
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
   { key: "INTERACTIVE_BUSINESS", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "BUSINESS_POS", price: "KES 499", period: "per 30 days", cta: "/dashboard/pos" },
+  { key: "JATA_AUTOPILOT", price: "KES 2,499", period: "per 30 days", cta: "/dashboard/autopilot" },
 ];
 
 const browser = await puppeteer.launch({
@@ -94,7 +98,14 @@ const facts = (page) =>
         name: text(".lp-plan__name"),
         ctaText: text(".lp-plan__cta"),
         ctaHref: card.querySelector(".lp-plan__cta")?.getAttribute("href") ?? "",
+        iconVisible: (() => {
+          const icon = card.querySelector(".lp-plan__icon svg");
+          if (!icon) return false;
+          const r = icon.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        })(),
         rows: {
+          icon: row(".lp-plan__icon"),
           name: row(".lp-plan__name"),
           price: row(".lp-plan__price"),
           period: row(".lp-plan__period"),
@@ -130,7 +141,8 @@ for (const viewport of VIEWPORTS) {
   await page.evaluate(() => document.querySelector("#pricing")?.scrollIntoView());
   const f = await facts(page);
 
-  check(`${viewport.label}px: one pricing grid holds exactly five plan cards`, f.gridCount === 1 && f.cards.length === 5 && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length}`);
+  check(`${viewport.label}px: one pricing grid holds exactly six plan cards`, f.gridCount === 1 && f.cards.length === 6 && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length}`);
+  check(`${viewport.label}px: every card renders a visible product icon`, f.cards.every((c) => c.iconVisible), f.cards.map((c) => `${c.key}:${c.iconVisible}`).join(" | "));
   check(`${viewport.label}px: no separate POS section`, !f.separatePosSection);
   check(`${viewport.label}px: no horizontal overflow`, f.docScrollWidth <= f.viewport && f.cards.every((c) => c.box.right <= f.viewport + 0.5 && c.box.left >= -0.5), `scrollWidth=${f.docScrollWidth} viewport=${f.viewport}`);
   check(`${viewport.label}px: no card content spills outside its card`, f.cards.every((c) => !c.overflowsCard));
@@ -162,7 +174,7 @@ for (const viewport of VIEWPORTS) {
   const aligned = [...byRow.values()].every((row) =>
     Object.keys(row[0].rows).every((key) => new Set(row.map((card) => card.rows[key])).size === 1),
   );
-  check(`${viewport.label}px: price, period, feature and CTA rows line up across a row`, aligned);
+  check(`${viewport.label}px: icon, name, price, period, feature and CTA rows line up across a row`, aligned);
 
   check(
     `${viewport.label}px: order, prices, periods and CTA destinations are authoritative`,
@@ -172,7 +184,8 @@ for (const viewport of VIEWPORTS) {
     }),
     f.cards.map((card) => `${card.key}:${card.price}:${card.ctaHref}`).join(" | "),
   );
-  check(`${viewport.label}px: the POS card is the last card and keeps its own CTA`, f.cards[4]?.key === "BUSINESS_POS" && f.cards[4]?.ctaText === "Open Business POS", f.cards[4]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the POS card is fifth and keeps its own CTA`, f.cards[4]?.key === "BUSINESS_POS" && f.cards[4]?.ctaText === "Open Business POS", f.cards[4]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the JATA Autopilot card is last and keeps its own CTA`, f.cards[5]?.key === "JATA_AUTOPILOT" && f.cards[5]?.ctaText === "Open JATA Autopilot" && f.cards[5]?.name.includes("JATA Autopilot"), f.cards[5]?.ctaText ?? "missing");
 
   await shot(page, `pricing-${viewport.label}`);
   await page.close();

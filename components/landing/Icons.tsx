@@ -56,6 +56,45 @@ const paths: Record<LandingIconKey, React.ReactNode> = {
     </>
   ),
   bolt: <path d="M13.5 3 6 13.5h4.5L10 21l7.5-10.5H13Z" />,
+  calendar: (
+    <>
+      <rect x="4" y="5.5" width="16" height="15" rx="2" />
+      <path d="M4 10h16" />
+      <path d="M8 3.5v4" />
+      <path d="M16 3.5v4" />
+      <path d="M8 14h3" />
+      <path d="M8 17h5" />
+    </>
+  ),
+  bot: (
+    <>
+      <path d="M12 8V5" />
+      <circle cx="12" cy="3.8" r="1.1" />
+      <rect x="5" y="8" width="14" height="10" rx="2.5" />
+      <path d="M9.3 12.8h.01" />
+      <path d="M14.7 12.8h.01" />
+      <path d="M9.5 15.5h5" />
+      <path d="M3 13v2" />
+      <path d="M21 13v2" />
+    </>
+  ),
+  wand: (
+    <>
+      <path d="m5.5 18.5 8-8" />
+      <path d="M17.2 3.2l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8Z" />
+      <path d="M20.5 11.5h.01" />
+      <path d="M14.5 14.5h.01" />
+      <path d="M19 16.5h.01" />
+    </>
+  ),
+  store: (
+    <>
+      <path d="M4.6 7.4 5.9 4h12.2l1.3 3.4" />
+      <path d="M4.4 7.4h15.2a2.5 2.5 0 0 1-5 .6 2.7 2.7 0 0 1-5.2 0 2.5 2.5 0 0 1-5-.6Z" />
+      <path d="M5.5 10.2V20h13v-9.8" />
+      <path d="M9.5 20v-5h5v5" />
+    </>
+  ),
 };
 
 export function LandingIcon({ name, className = "" }: { name: LandingIconKey; className?: string }) {
