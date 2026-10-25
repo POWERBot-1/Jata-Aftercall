@@ -7,8 +7,9 @@
  * 2. When the plan read failed the page fell back to Monthly and Annual only, silently dropping
  *    two advertised products. The fallback now lists every advertised plan.
  *
- * 2026-10-25: the Business POS is the fifth card of the same pricing grid (owner request), so the
- * page renders five cards in one grid; the POS is still never a payable plan choice (§67).
+ * 2026-10-25: the Business POS is the fifth card of the same pricing grid (owner request); Stage C
+ * Phase 4 adds the standard JATA Autopilot package as the sixth. The page renders six cards in one
+ * grid; the POS and Autopilot are still never payable plan choices (§67).
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -62,23 +63,24 @@ describe("planDisplayName", () => {
 });
 
 describe("homepage plan cards", () => {
-  const expectedOrder = ["Monthly — KES 149/month", "Annual — KES 999/year", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month", "JATA AFTERCALL — Business POS"];
+  const expectedOrder = ["Monthly — KES 149/month", "Annual — KES 999/year", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month", "JATA AFTERCALL — Business POS", "JATA Autopilot — KES 2,499/month"];
   const assertOrder = (html: string) => {
     const positions = expectedOrder.map((name) => html.indexOf(name));
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    // All five cards live in the one grid, and the POS has no separate heading of its own.
+    // All six cards live in the one grid, and the POS has no separate heading of its own.
     const grid = html.slice(html.indexOf('class="lp-plans"'), html.indexOf('class="lp-pricing__note"'));
     for (const name of expectedOrder) expect(grid, name).toContain(name);
     expect(html).not.toContain('id="business-pos-heading"');
-    expect(html.match(/class="lp-plan"/g)).toHaveLength(5);
+    expect(html.match(/class="lp-plan"/g)).toHaveLength(6);
     expect(html).not.toContain(">Interactive Business<");
   };
 
-  it("orders database-backed cards Monthly → Annual → AI Front Desk → Website Studio → Business POS in one grid", async () => {
+  it("orders database-backed cards Monthly → Annual → AI Front Desk → Website Studio → Business POS → JATA Autopilot in one grid", async () => {
     state.fail = false;
     state.rows = [
       { key: "AI_BUSINESS_FRONT_DESK", name: expectedOrder[2], priceKES: 499, durationDays: 30 },
+      { key: "JATA_AUTOPILOT", name: expectedOrder[5], priceKES: 2499, durationDays: 30 },
       { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30 },
       { key: "MONTHLY", name: expectedOrder[0], priceKES: 149, durationDays: 30 },
       { key: "ANNUAL", name: expectedOrder[1], priceKES: 999, durationDays: 365 },
@@ -124,29 +126,34 @@ describe("homepage plan cards", () => {
     expect(html).toContain("JATA AFTERCALL — Business POS");
   });
 
-  it("falls back to all five advertised plans when plans cannot be read", async () => {
+  it("falls back to all six advertised plans when plans cannot be read", async () => {
     state.fail = true;
     const html = await render();
     state.fail = false;
     for (const name of ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Annual — KES 999/year", "Website Studio — KES 999/month"]) {
       expect(html, name).toContain(name);
     }
-    // The POS card is filled from the canonical plan row, with its own CTA.
+    // The POS and JATA Autopilot cards are filled from their canonical plan rows, with their own CTAs.
     expect(html).toContain("JATA AFTERCALL — Business POS");
     expect(html).toContain("Open Business POS");
     expect(html).toContain('href="/dashboard/pos"');
-    expect(html.match(/class="lp-plan"/g)).toHaveLength(5);
+    expect(html).toContain("JATA Autopilot — KES 2,499/month");
+    expect(html).toContain("Open JATA Autopilot");
+    expect(html).toContain('href="/dashboard/autopilot"');
+    expect(html.match(/class="lp-plan"/g)).toHaveLength(6);
   });
 
-  it("advertises all five plans in one list, with the POS last", () => {
+  it("advertises all six plans in one list, with JATA Autopilot last", () => {
     expect([...HOMEPAGE_PLAN_ORDER]).toEqual([
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "JATA_AUTOPILOT",
     ]);
     const input = [
+      { key: "JATA_AUTOPILOT", name: "JATA Autopilot", priceKES: 2499, durationDays: 30 },
       { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS", priceKES: 499, durationDays: 30 },
       { key: "INTERACTIVE_BUSINESS", name: "Website Studio", priceKES: 999, durationDays: 30 },
       { key: "ANNUAL", name: "Annual", priceKES: 999, durationDays: 365 },
@@ -159,21 +166,26 @@ describe("homepage plan cards", () => {
     expect(cards.map((card) => card.key)).toEqual([...HOMEPAGE_PLAN_ORDER]);
     // Marketing order only: no stored field is rewritten, and the input list is untouched.
     expect(input).toEqual(before);
-    expect(cards.map((card) => card.priceKES)).toEqual([149, 999, 499, 999, 499]);
-    expect(cards.map((card) => card.durationDays)).toEqual([30, 365, 30, 30, 30]);
-    // The POS is in the grid but still not a publicly listed (payable) plan.
+    expect(cards.map((card) => card.priceKES)).toEqual([149, 999, 499, 999, 499, 2499]);
+    expect(cards.map((card) => card.durationDays)).toEqual([30, 365, 30, 30, 30, 30]);
+    // The POS and Autopilot are in the grid but still not publicly listed (payable) plans.
     expect(publiclyListedPlans(cards).map((card) => card.key)).not.toContain("BUSINESS_POS");
+    expect(publiclyListedPlans(cards).map((card) => card.key)).not.toContain("JATA_AUTOPILOT");
   });
 
-  it("fills the fifth slot from the canonical plan row when the POS row is missing", () => {
+  it("fills the owner-only slots from the canonical plan rows when the POS and Autopilot rows are missing", () => {
     const cards = homepagePlanCards([
       { key: "MONTHLY", name: "Monthly", priceKES: 149, durationDays: 30 },
       { key: "ANNUAL", name: "Annual", priceKES: 999, durationDays: 365 },
     ]);
     const canonical = FALLBACK_PLANS.find((plan) => plan.key === "BUSINESS_POS")!;
-    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "ANNUAL", "BUSINESS_POS"]);
+    const canonicalAutopilot = FALLBACK_PLANS.find((plan) => plan.key === "JATA_AUTOPILOT")!;
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "ANNUAL", "BUSINESS_POS", "JATA_AUTOPILOT"]);
     expect(cards[2]).toMatchObject({ priceKES: canonical.priceKES, durationDays: canonical.durationDays });
     expect(cards[2].priceKES).toBe(499);
     expect(cards[2].durationDays).toBe(30);
+    expect(cards[3]).toMatchObject({ priceKES: canonicalAutopilot.priceKES, durationDays: canonicalAutopilot.durationDays });
+    expect(cards[3].priceKES).toBe(2499);
+    expect(cards[3].durationDays).toBe(30);
   });
 });

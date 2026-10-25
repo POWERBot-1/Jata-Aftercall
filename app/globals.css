@@ -3153,7 +3153,25 @@ button:focus-visible {
   background: linear-gradient(180deg, rgba(240, 160, 60, 0.16), rgba(240, 160, 60, 0.03));
   box-shadow: 0 24px 60px rgba(240, 160, 60, 0.12);
 }
+/* Product mark, in the same amber chip as the benefit icons. Rendered on every card, so it is a
+   shared row like the name and price; decorative (`aria-hidden`) next to the plan name. */
+.lp-plan__icon {
+  display: flex;
+  width: 2.6rem;
+  height: 2.6rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  border-radius: 0.8rem;
+  background: rgba(240, 160, 60, 0.14);
+  padding: 0.55rem;
+  color: var(--lp-amber);
+  line-height: 0;
+}
+.lp-plan__icon svg { display: block; width: 100%; height: 100%; }
 .lp-plan__name {
+  margin-top: 0.7rem !important;
   color: var(--lp-cream);
   font-size: 0.9rem;
   font-weight: 700;
@@ -3220,10 +3238,11 @@ button:focus-visible {
 }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /*
- * Five plans, one grid: three across on a desktop, with the fourth and fifth cards centred under
- * the first row (3 + 2) instead of stretched into five narrow columns or left with a hole.
- * Six equal tracks let every card span two, so all five cards stay exactly one third of the row
- * wide — the same card width in both rows.
+ * Six plans, one grid: three across on a desktop in two even rows (3 + 3) instead of stretched
+ * into six narrow columns. Six equal tracks let every card span two, so all six cards stay
+ * exactly one third of the row wide — the same card width in both rows. The count-5 centring
+ * below is kept for the degraded case where a stored plan row is missing and only five cards
+ * render: the fourth and fifth then centre under the first row instead of leaving a hole.
  */
 @media (min-width: 1080px) {
   .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -3243,18 +3262,19 @@ button:focus-visible {
     .lp-pricing .lp-plans { gap: 0 0.9rem; }
     .lp-plan {
       display: grid;
-      grid-row: span 8;
+      grid-row: span 9;
       grid-template-rows: subgrid;
       margin-bottom: 0.9rem;
     }
-    .lp-plan__name { grid-row: 1; }
-    .lp-plan__badge { grid-row: 2; }
-    .lp-plan__price { grid-row: 3; }
-    .lp-plan__period { grid-row: 4; }
-    .lp-plan__blurb { grid-row: 5; }
-    .lp-plan__includes { grid-row: 6; }
-    .lp-plan__cta { grid-row: 7; margin-top: 1.1rem; margin-bottom: 0; }
-    .lp-plan__fine { grid-row: 8; }
+    .lp-plan__icon { grid-row: 1; }
+    .lp-plan__name { grid-row: 2; }
+    .lp-plan__badge { grid-row: 3; }
+    .lp-plan__price { grid-row: 4; }
+    .lp-plan__period { grid-row: 5; }
+    .lp-plan__blurb { grid-row: 6; }
+    .lp-plan__includes { grid-row: 7; }
+    .lp-plan__cta { grid-row: 8; margin-top: 1.1rem; margin-bottom: 0; }
+    .lp-plan__fine { grid-row: 9; }
     /* The cards' own bottom margin replaces the grid gutter the note used to clear. */
     .lp-pricing__note { margin-top: 0.6rem !important; }
   }

@@ -263,12 +263,31 @@ try {
       check(`${model}: unsupported/unsafe GLB graph retains image, no canvas or uncaught errors`, value.imageVisible && value.canvasCount === 0 && errors.length === 0, JSON.stringify(value));
     });
   }
+  // Restoring the static view mounts a fresh lazy/async-decoded <img>, so "canvas removed" and
+  // "img complete with pixels" complete at different instants. Sampling once, the moment the
+  // canvas unmounts, therefore races the image load (Stage C Phase 4: this exact one-shot sample
+  // failed run 40231250386 on a tree byte-identical to the passing pre-merge run). Wait for the
+  // full restored predicate with a bounded timeout, then sample: the assertion below is
+  // unchanged, and an image that never restores still fails after the timeout.
+  const restored = (page) =>
+    page
+      .waitForFunction(
+        () => {
+          const img = document.querySelector("#product-preview img");
+          return (
+            document.querySelectorAll("#product-preview canvas").length === 0 &&
+            Boolean(img && img.offsetWidth > 0 && img.complete && img.naturalWidth > 0)
+          );
+        },
+        { timeout: 15000 },
+      )
+      .catch(() => {});
   for (const constraint of ["reduce", "save-data"]) {
     await scenario(browser, `live constraint (${constraint})`, {}, "/dev/immersive-preview?model=ok", async (page, errors) => {
       await page.waitForFunction(() => document.querySelector("#product-preview canvas") && !document.querySelector("#product-preview div[hidden]"), { timeout: 15000 });
       if (constraint === "reduce") await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
       else await page.evaluate(() => { window.__qaNet.saveData = true; window.__qaNet.dispatchEvent(new Event("change")); });
-      await page.waitForFunction(() => document.querySelectorAll("#product-preview canvas").length === 0);
+      await restored(page);
       const value = await state(page);
       check(`${constraint}: live change disposes3D and restores static immediately`, value.imageVisible && value.canvasCount === 0 && value.reason === (constraint === "reduce" ? "reduced-motion" : "save-data") && errors.length === 0, JSON.stringify(value));
     });
@@ -276,7 +295,7 @@ try {
   await scenario(browser, "context lost", {}, "/dev/immersive-preview?model=ok", async (page, errors) => {
     await page.waitForFunction(() => document.querySelector("#product-preview canvas") && !document.querySelector("#product-preview div[hidden]"));
     await page.evaluate(() => document.querySelector("#product-preview canvas").dispatchEvent(new Event("webglcontextlost", { cancelable: true })));
-    await page.waitForFunction(() => document.querySelectorAll("#product-preview canvas").length === 0);
+    await restored(page);
     const value = await state(page);
     check("context loss: static image, removed canvas, no uncaught exception", value.imageVisible && value.canvasCount === 0 && errors.length === 0, JSON.stringify(value));
   });

@@ -63,7 +63,7 @@ const gridMarkup = (html: string) => {
 };
 
 describe("the homepage renders the Business POS in the shared pricing grid (2026-10-25)", () => {
-  it("puts all five plans in one grid, in marketing order, with the POS last", async () => {
+  it("keeps the POS fifth in the one grid, ahead of only JATA Autopilot (Stage C Phase 4)", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
@@ -73,10 +73,11 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "JATA_AUTOPILOT",
     ]);
-    // One grid container holds all five cards.
+    // One grid container holds all six cards.
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="5"');
+    expect(html).toContain('data-plan-count="6"');
     expect(gridMarkup(html)).toContain('data-plan="BUSINESS_POS"');
   });
 
@@ -100,13 +101,13 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     const pos = cards.find((card) => card.key === "BUSINESS_POS")!;
     const pagePlan = cards.find((card) => card.key === "MONTHLY")!;
 
-    for (const part of ["lp-plan__name", "lp-plan__badge", "lp-plan__price", "lp-plan__period", "lp-plan__blurb", "lp-plan__includes", "lp-plan__cta", "lp-plan__fine"]) {
+    for (const part of ["lp-plan__icon", "lp-plan__name", "lp-plan__badge", "lp-plan__price", "lp-plan__period", "lp-plan__blurb", "lp-plan__includes", "lp-plan__cta", "lp-plan__fine"]) {
       expect(pos.inner, part).toContain(part);
     }
     // Same building blocks in the same order for both cards.
     // Positions of the parts a card actually has (a card without a badge or blurb has no such row).
     const order = (inner: string) =>
-      ["lp-plan__name", "lp-plan__badge", "lp-plan__price", "lp-plan__period", "lp-plan__blurb", "lp-plan__includes", "lp-plan__cta", "lp-plan__fine"]
+      ["lp-plan__icon", "lp-plan__name", "lp-plan__badge", "lp-plan__price", "lp-plan__period", "lp-plan__blurb", "lp-plan__includes", "lp-plan__cta", "lp-plan__fine"]
         .map((part) => inner.indexOf(part))
         .filter((index) => index >= 0);
     expect(order(pos.inner)).toEqual([...order(pos.inner)].sort((a, b) => a - b));
@@ -175,7 +176,7 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     expect(cards.find((card) => card.key === "BUSINESS_POS")!.inner).not.toContain('href="/register"');
   });
 
-  it("still renders all five cards when the database is unavailable (the existing fallback)", async () => {
+  it("still renders all six cards when the database is unavailable (the existing fallback)", async () => {
     const db = await import("@/lib/db");
     const findMany = db.default.planConfig.findMany as unknown as { mockImplementationOnce: (fn: () => Promise<never>) => void };
     findMany.mockImplementationOnce(async () => {
@@ -189,6 +190,7 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "JATA_AUTOPILOT",
     ]);
     expect(html).toContain("Monthly — KES 149/month");
     expect(html).toContain("Annual — KES 999/year");

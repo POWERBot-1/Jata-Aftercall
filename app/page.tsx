@@ -7,9 +7,10 @@ import { FaqSection, LandingFooter } from "@/components/landing/FaqAndFooter";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { formatNumber } from "@/lib/format";
-import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { FALLBACK_PLANS, HOMEPAGE_AUTOPILOT_PLAN_KEY, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
-import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_INCLUDES, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
+import { LandingIcon } from "@/components/landing/Icons";
+import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
 import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 
@@ -23,12 +24,13 @@ export const dynamic = "force-dynamic";
  * demo tab switcher; everything else — including the phone, marquee and reveal motion — is CSS.
  *
  * Data rules that predate this redesign and still hold:
- *   • Plans are read from the database; the private Business POS never becomes a payable choice.
- *     Marketing order comes from `homepagePlanCards()`.
+ *   • Plans are read from the database; the private Business POS and JATA Autopilot plans never
+ *     become payable choices. Marketing order comes from `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • The Business POS card is the fifth card in the same grid. It links to the authenticated
- *     `/dashboard/pos` flow — never to `/register` or checkout — and its price is the stored plan
- *     price, so showing the card grants nothing.
+ *   • The Business POS card is the fifth card in the same grid and the standard JATA Autopilot
+ *     package is the sixth. They link to the authenticated `/dashboard/pos` and
+ *     `/dashboard/autopilot` flows — never to `/register` or checkout — and their prices are the
+ *     stored plan prices, so showing the cards grants nothing.
  *   • The four fictional demo cards show active services only; fallback content is labelled
  *     synthetic. Links require the dedicated demo owner, no non-demo payment rows, and a published
  *     ACTIVE business with active services — not a matching slug alone.
@@ -106,16 +108,22 @@ export default async function HomePage() {
 
             <div className="lp-plans" data-plan-count={plans.length}>
               {plans.map((p) => {
-                // The POS is a card in this grid but never a page-plan purchase: it keeps its own
-                // copy and CTA, and the four page-plan maps in lib/landing.ts never mention it.
+                // The POS and JATA Autopilot are cards in this grid but never page-plan purchases:
+                // each keeps its own copy and CTA, and the four page-plan maps in lib/landing.ts
+                // never mention them.
                 const isPos = p.key === POS_PLAN_KEY;
-                const includes = isPos ? POS_PLAN_CARD.includes : PLAN_INCLUDES[p.key] ?? [];
-                const badge = isPos ? POS_PLAN_CARD.badge : PLAN_BADGES[p.key];
-                const blurb = isPos
-                  ? POS_PLAN_CARD.blurb
+                const isAutopilot = p.key === HOMEPAGE_AUTOPILOT_PLAN_KEY;
+                const ownerCard = isPos ? POS_PLAN_CARD : isAutopilot ? AUTOPILOT_PLAN_CARD : null;
+                const includes = ownerCard ? ownerCard.includes : PLAN_INCLUDES[p.key] ?? [];
+                const badge = ownerCard ? ownerCard.badge : PLAN_BADGES[p.key];
+                const blurb = ownerCard
+                  ? ownerCard.blurb
                   : p.key === "INTERACTIVE_BUSINESS"
                     ? "Build, edit and preview your interactive business website."
                     : null;
+                // Every card renders its product icon (decorative; the plan name is the label),
+                // so the shared card rows stay aligned and each product is recognisable at a glance.
+                const icon = ownerCard ? ownerCard.icon : PLAN_ICONS[p.key] ?? "tag";
                 const featured = p.key === "ANNUAL";
                 return (
                   <article
@@ -126,6 +134,9 @@ export default async function HomePage() {
                     aria-label={planDisplayName(p)}
                   >
                     {/* One direct child per card row, so the cards can share those rows (see `.lp-plan` in globals.css). */}
+                    <span className="lp-plan__icon" aria-hidden="true">
+                      <LandingIcon name={icon} />
+                    </span>
                     <p className="lp-plan__name">{planDisplayName(p)}</p>
                     {badge ? <span className="lp-plan__badge">{badge}</span> : null}
                     <p className="lp-plan__price">KES {formatNumber(p.priceKES)}</p>
@@ -141,12 +152,12 @@ export default async function HomePage() {
                         ))}
                       </ul>
                     ) : null}
-                    {/* The POS opens the existing authenticated flow; nothing here sells or activates it. */}
-                    <Link href={isPos ? "/dashboard/pos" : "/register"} className="lp-plan__cta">
-                      {isPos ? POS_PLAN_CARD.cta : "Get my business page"}
+                    {/* Owner-only products open their existing authenticated flows; nothing here sells or activates them. */}
+                    <Link href={isPos ? "/dashboard/pos" : isAutopilot ? "/dashboard/autopilot" : "/register"} className="lp-plan__cta">
+                      {ownerCard ? ownerCard.cta : "Get my business page"}
                     </Link>
                     <p className="lp-plan__fine">
-                      {isPos ? POS_PLAN_CARD.fine : "Secure Paystack checkout. Your plan starts once payment is confirmed."}
+                      {ownerCard ? ownerCard.fine : "Secure Paystack checkout. Your plan starts once payment is confirmed."}
                     </p>
                   </article>
                 );
@@ -154,8 +165,8 @@ export default async function HomePage() {
             </div>
             <p className="lp-pricing__note">
               Prices are shown in Kenyan shillings. Plans renew for the period you choose and can be changed from your
-              dashboard. The owner-only Business POS is a separate product, sold per business: it is not part of your
-              page plan and it switches on only once Paystack confirms the payment.
+              dashboard. The owner-only Business POS and JATA Autopilot are separate products, sold per business: they
+              are not part of your page plan and each switches on only once Paystack confirms the payment.
             </p>
           </div>
         </section>
