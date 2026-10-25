@@ -1,0 +1,183 @@
+PASS 320px: document does not scroll horizontally — scrollWidth=320 clientWidth=320
+PASS 320px: no header overlap — nav 320px
+PASS 320px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 320px: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 320px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 320px: no horizontal overflow — clientWidth=320 viewport=320
+PASS 320px: hero starts below the header — heroCopyTop=348.1 navBottom=144.1
+PASS 320px: one <h1> with the hero headline — Turn every customer conversation into action.
+FAIL 320px: no new page errors — console: Failed to load resource: the server responded with a status of 404 ()
+PASS 320px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 360px: document does not scroll horizontally — scrollWidth=360 clientWidth=360
+PASS 360px: no header overlap — nav 360px
+PASS 360px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 360px: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 360px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 360px: no horizontal overflow — clientWidth=360 viewport=360
+PASS 360px: hero starts below the header — heroCopyTop=348.1 navBottom=144.1
+PASS 360px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 360px: no new page errors
+PASS 360px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 390px: document does not scroll horizontally — scrollWidth=390 clientWidth=390
+PASS 390px: no header overlap — nav 390px
+PASS 390px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 390px: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 390px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 390px: no horizontal overflow — clientWidth=390 viewport=390
+PASS 390px: hero starts below the header — heroCopyTop=351.5 navBottom=144.1
+PASS 390px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 390px: no new page errors
+PASS 390px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 414px: document does not scroll horizontally — scrollWidth=414 clientWidth=414
+PASS 414px: no header overlap — nav 414px
+PASS 414px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 414px: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 414px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 414px: no horizontal overflow — clientWidth=414 viewport=414
+PASS 414px: hero starts below the header — heroCopyTop=362.5 navBottom=144.1
+PASS 414px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 414px: no new page errors
+PASS 414px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 768px: document does not scroll horizontally — scrollWidth=768 clientWidth=768
+PASS 768px: no header overlap — nav 768px
+PASS 768px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":24.8,"right":58.2,"top":80.8,"bottom":95.8,"width":33.4,"height":15} name={"left":75,"right":181.2,"top":80.2,"bottom":96.2,"width":106.3,"height":16} squeezed=none
+PASS 768px: tagline visible, unclipped and inside the header — paint={"left":189.2,"right":426.1,"top":81.4,"bottom":95.4,"width":236.9,"height":14}
+PASS 768px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 768px: no horizontal overflow — clientWidth=768 viewport=768
+PASS 768px: hero starts below the header — heroCopyTop=419.4 navBottom=119.4
+PASS 768px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 768px: no new page errors
+PASS 768px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 1024px: document does not scroll horizontally — scrollWidth=1024 clientWidth=1024
+PASS 1024px: no header overlap — nav 1024px
+PASS 1024px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":48.8,"right":82.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":99,"right":205.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1024px: tagline visible, unclipped and inside the header — paint={"left":213.2,"right":450.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1024px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1024px: no horizontal overflow — clientWidth=1024 viewport=1024
+PASS 1024px: hero starts below the header — heroCopyTop=268.7 navBottom=171.4
+PASS 1024px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1024px: no new page errors
+PASS 1024px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 1280px: document does not scroll horizontally — scrollWidth=1280 clientWidth=1280
+PASS 1280px: no header overlap — nav 1280px
+PASS 1280px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":80.8,"right":114.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":131,"right":237.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1280px: tagline visible, unclipped and inside the header — paint={"left":245.2,"right":482.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1280px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1280px: no horizontal overflow — clientWidth=1280 viewport=1280
+PASS 1280px: hero starts below the header — heroCopyTop=198.8 navBottom=121
+PASS 1280px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1280px: no new page errors
+PASS 1280px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 1440px: document does not scroll horizontally — scrollWidth=1440 clientWidth=1440
+PASS 1440px: no header overlap — nav 1440px
+PASS 1440px: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":160.8,"right":194.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":211,"right":317.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1440px: tagline visible, unclipped and inside the header — paint={"left":325.2,"right":562.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1440px: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1440px: no horizontal overflow — clientWidth=1440 viewport=1440
+PASS 1440px: hero starts below the header — heroCopyTop=198.8 navBottom=121
+PASS 1440px: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1440px: no new page errors
+PASS 1440px: menu panel offers the account links — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Log in","href":"/login"},{"label":"Get started","href":"/register"}]
+PASS 320px signed-in: no header overlap — nav 320px
+PASS 320px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 320px signed-in: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 320px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 320px signed-in: no horizontal overflow — clientWidth=320 viewport=320
+PASS 320px signed-in: hero starts below the header — heroCopyTop=348.1 navBottom=144.1
+PASS 320px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 320px signed-in: no new page errors
+PASS 320px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 320px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=false
+PASS 360px signed-in: no header overlap — nav 360px
+PASS 360px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 360px signed-in: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 360px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 360px signed-in: no horizontal overflow — clientWidth=360 viewport=360
+PASS 360px signed-in: hero starts below the header — heroCopyTop=348.1 navBottom=144.1
+PASS 360px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 360px signed-in: no new page errors
+PASS 360px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 360px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=false
+PASS 390px signed-in: no header overlap — nav 390px
+PASS 390px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 390px signed-in: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 390px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 390px signed-in: no horizontal overflow — clientWidth=390 viewport=390
+PASS 390px signed-in: hero starts below the header — heroCopyTop=351.5 navBottom=144.1
+PASS 390px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 390px signed-in: no new page errors
+PASS 390px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 390px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=false
+PASS 414px signed-in: no header overlap — nav 414px
+PASS 414px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":22.4,"right":55.8,"top":71.6,"bottom":86.6,"width":33.4,"height":15} name={"left":13.6,"right":119.8,"top":96.3,"bottom":112.3,"width":106.3,"height":16} squeezed=none
+PASS 414px signed-in: tagline visible, unclipped and inside the header — paint={"left":13.6,"right":250.5,"top":119.1,"bottom":133.1,"width":236.9,"height":14}
+PASS 414px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 414px signed-in: no horizontal overflow — clientWidth=414 viewport=414
+PASS 414px signed-in: hero starts below the header — heroCopyTop=362.5 navBottom=144.1
+PASS 414px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 414px signed-in: no new page errors
+PASS 414px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 414px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=false
+PASS 768px signed-in: no header overlap — nav 768px
+PASS 768px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":24.8,"right":58.2,"top":80.8,"bottom":95.8,"width":33.4,"height":15} name={"left":75,"right":181.2,"top":80.2,"bottom":96.2,"width":106.3,"height":16} squeezed=none
+PASS 768px signed-in: tagline visible, unclipped and inside the header — paint={"left":189.2,"right":426.1,"top":81.4,"bottom":95.4,"width":236.9,"height":14}
+PASS 768px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 768px signed-in: no horizontal overflow — clientWidth=768 viewport=768
+PASS 768px signed-in: hero starts below the header — heroCopyTop=469.8 navBottom=169.8
+PASS 768px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 768px signed-in: no new page errors
+PASS 768px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 768px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=true
+PASS 1024px signed-in: no header overlap — nav 1024px
+PASS 1024px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":48.8,"right":82.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":99,"right":205.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1024px signed-in: tagline visible, unclipped and inside the header — paint={"left":213.2,"right":450.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1024px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1024px signed-in: no horizontal overflow — clientWidth=1024 viewport=1024
+PASS 1024px signed-in: hero starts below the header — heroCopyTop=260.7 navBottom=163.4
+PASS 1024px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1024px signed-in: no new page errors
+PASS 1024px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 1024px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=true
+PASS 1280px signed-in: no header overlap — nav 1280px
+PASS 1280px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":80.8,"right":114.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":131,"right":237.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1280px signed-in: tagline visible, unclipped and inside the header — paint={"left":245.2,"right":482.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1280px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1280px signed-in: no horizontal overflow — clientWidth=1280 viewport=1280
+PASS 1280px signed-in: hero starts below the header — heroCopyTop=198.8 navBottom=121
+PASS 1280px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1280px signed-in: no new page errors
+PASS 1280px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 1280px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=true
+PASS 1440px signed-in: no header overlap — nav 1440px
+PASS 1440px signed-in: "JATA AFTERCALL" visible, unclipped and inside the header — mark={"left":160.8,"right":194.2,"top":81.6,"bottom":96.6,"width":33.4,"height":15} name={"left":211,"right":317.2,"top":81,"bottom":97,"width":106.3,"height":16} squeezed=none
+PASS 1440px signed-in: tagline visible, unclipped and inside the header — paint={"left":325.2,"right":562.1,"top":82.2,"bottom":96.2,"width":236.9,"height":14}
+PASS 1440px signed-in: tagline rendered exactly once — rendered=1 leafNodes=1
+PASS 1440px signed-in: no horizontal overflow — clientWidth=1440 viewport=1440
+PASS 1440px signed-in: hero starts below the header — heroCopyTop=198.8 navBottom=121
+PASS 1440px signed-in: one <h1> with the hero headline — Turn every customer conversation into action.
+PASS 1440px signed-in: no new page errors
+PASS 1440px signed-in: Dashboard link keeps /dashboard — {"label":"Dashboard","href":"/dashboard"}
+PASS 1440px signed-in: actions group is either visible and clear of the brand, or moved into the menu — actionsVisible=true
+PASS 320px: open menu does not overlap the brand — 0 overlap(s)
+PASS 320px: open menu stays inside the viewport — panelRight=306
+PASS 320px: open menu offers Dashboard at /dashboard — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Get started","href":"/register"},{"label":"Dashboard","href":"/dashboard"},{"label":"Admin","href":"/admin"},{"label":"Logout","href":null}]
+PASS 390px: open menu does not overlap the brand — 0 overlap(s)
+PASS 390px: open menu stays inside the viewport — panelRight=376
+PASS 390px: open menu offers Dashboard at /dashboard — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Get started","href":"/register"},{"label":"Dashboard","href":"/dashboard"},{"label":"Admin","href":"/admin"},{"label":"Logout","href":null}]
+PASS 414px: open menu does not overlap the brand — 0 overlap(s)
+PASS 414px: open menu stays inside the viewport — panelRight=400
+PASS 414px: open menu offers Dashboard at /dashboard — [{"label":"Product","href":"#product"},{"label":"Benefits","href":"#benefits"},{"label":"Demos","href":"#demo"},{"label":"Pricing","href":"#pricing"},{"label":"FAQ","href":"#faq"},{"label":"Get started","href":"/register"},{"label":"Dashboard","href":"/dashboard"},{"label":"Admin","href":"/admin"},{"label":"Logout","href":null}]
+PASS 320px @ 125% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=320
+PASS 390px @ 125% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=390
+PASS 768px @ 125% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=768
+PASS 320px @ 150% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=320
+PASS 390px @ 150% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=390
+PASS 768px @ 150% root font: no overlap, tagline visible, no overflow — overlaps=0 tagline=true scrollWidth=768
+PASS 390px: keyboard path reaches skip link, brand and menu control — SUMMARY in product-theme-picker → jata-skip-link in jata-skip-link → jata-brand in jata-brand → SUMMARY in lp-nav__compact → lp-btn lp-btn--primary → lp-btn lp-btn--ghost → lp-phone__caption-link → lp-demo__tab lp-demo__tab--steam → lp-btn lp-btn--ghost → lp-plan__cta
+PASS 390px: menu control opens with the keyboard and the first panel link takes focus — open=true focused=lp-nav__panel-link
+PASS 390px: skip link and nav carry accessible names
+PASS anonymous /dashboard/pos redirects to login — status=200 final=/login
+PASS anonymous /dashboard redirects to login — status=200 final=/login
+
+179/180 checks passed
+FAIL: 1 check(s) failed
