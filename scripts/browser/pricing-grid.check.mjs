@@ -11,7 +11,9 @@
  *   2. No horizontal overflow (`documentElement.scrollWidth` within the viewport) and no card
  *      crossing the viewport edge at any width.
  *   3. The grid resolves to one column on a phone, two on a tablet, and a three-across desktop
- *      arrangement with the last two cards centred beneath it.
+ *      arrangement with the last two cards centred beneath it. The desktop grid is described by
+ *      six equal tracks (every card spans two), so the column count is read from how many cards
+ *      actually sit side by side, and the track maths is checked against it.
  *   4. Cards in the same row share a width, and their name/price/period/feature/CTA rows line up.
  *   5. The order, prices, billing periods and CTA destinations are the authoritative ones, with
  *      the Business POS card ending in `/dashboard/pos` and the page plans in `/register`.
@@ -132,7 +134,6 @@ for (const viewport of VIEWPORTS) {
   check(`${viewport.label}px: no separate POS section`, !f.separatePosSection);
   check(`${viewport.label}px: no horizontal overflow`, f.docScrollWidth <= f.viewport && f.cards.every((c) => c.box.right <= f.viewport + 0.5 && c.box.left >= -0.5), `scrollWidth=${f.docScrollWidth} viewport=${f.viewport}`);
   check(`${viewport.label}px: no card content spills outside its card`, f.cards.every((c) => !c.overflowsCard));
-  check(`${viewport.label}px: grid resolves to ${viewport.columns} column(s)`, f.columns === viewport.columns, `gridTemplateColumns=${f.columns}`);
 
   // Cards group into rows by their top offset; every row must share one card width.
   const byRow = new Map();
@@ -140,10 +141,22 @@ for (const viewport of VIEWPORTS) {
     const key = card.box.top;
     byRow.set(key, [...(byRow.get(key) ?? []), card]);
   }
+  const rowCardCounts = [...byRow.values()].map((row) => row.length);
+  const maxPerRow = Math.max(...rowCardCounts);
+  // Columns are how many cards actually sit side by side — not the raw track count, because the
+  // desktop grid is six equal tracks with every card spanning two of them.
+  check(
+    `${viewport.label}px: grid resolves to ${viewport.columns} card(s) per row`,
+    maxPerRow === viewport.columns,
+    `rows=${rowCardCounts.join("+")} tracks=${f.columns}`,
+  );
+  check(
+    `${viewport.label}px: grid tracks are a whole multiple of the cards in a row`,
+    maxPerRow > 0 && f.columns % maxPerRow === 0,
+    `tracks=${f.columns} cardsPerRow=${maxPerRow}`,
+  );
   const rowWidths = [...byRow.values()].map((row) => new Set(row.map((card) => card.box.width)));
   check(`${viewport.label}px: cards in a row share one width`, rowWidths.every((widths) => widths.size === 1), [...byRow.values()].map((row) => row.map((card) => card.box.width).join("/")).join(" | "));
-  const maxPerRow = Math.max(...[...byRow.values()].map((row) => row.length));
-  check(`${viewport.label}px: at most ${viewport.columns} cards per row`, maxPerRow <= viewport.columns, `rows=${[...byRow.values()].map((row) => row.length).join("+")}`);
 
   // Shared rows: within a row, names, prices, periods, features and CTAs start on the same line.
   const aligned = [...byRow.values()].every((row) =>

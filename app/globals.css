@@ -3114,7 +3114,7 @@ button:focus-visible {
  */
 @media (min-width: 1080px) {
   .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .lp-plan { grid-column: span 2; }
+  .lp-pricing .lp-plans .lp-plan { grid-column: span 2; }
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(4) { grid-column: 2 / span 2; }
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(5) { grid-column: 4 / span 2; }
 }
