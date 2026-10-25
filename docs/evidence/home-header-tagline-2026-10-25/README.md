@@ -65,18 +65,48 @@ Screenshots: `after/header-<width>.jpg` (top of the page) and `after/menu-<width
 * `npm run lint` — 0 errors (36 pre-existing warnings, none in the changed files).
 * `npm run typecheck` — one error, `tests/prisma/experience-boundary.test.ts(34,19)`, caused by the
   ungenerated Prisma client (offline). It is identical on the unmodified baseline (verified with the
-  changes stashed), so it is environmental, not introduced here.
-* `npm run build` — the repository's build gate runs `prisma generate` first; offline it fails and the
-  TypeScript step then reports that same pre-existing Prisma error. To obtain a runnable production
-  server for the browser verification above, the build was run once with `typescript.ignoreBuildErrors`
-  set in `next.config.js`; that setting was reverted immediately afterwards and is not part of the
-  change. `next build --webpack` itself compiles cleanly and the server serves the page.
+  changes stashed), so it is environmental, not introduced here. **Resolved in the final re-validation
+  below with the real generated client: 0 errors.**
+* `npm run build` — offline, the repository's build gate runs `prisma generate` first and the
+  TypeScript step then reports that same pre-existing Prisma error. **The final re-validation below
+  proves the normal gate succeeds with the real client; no `ignoreBuildErrors` workaround was needed
+  for it.**
+
+## Final candidate re-validation (production build, real Prisma client)
+
+The sandbox cannot reach `binaries.prisma.sh`, so `prisma generate` cannot run there and the earlier
+runs above used the repository's offline fallbacks. To validate the exact candidate commit with the
+real generated client, the client was produced by the repository's normal generation workflow
+(`npm ci` → postinstall `prisma generate` → `npx prisma generate`) inside the supported CI environment
+(where the engines are available) and fetched over git into `node_modules/.prisma/client`. No source
+change was needed for this: the repository is correct, the sandbox simply lacked engine-download
+access (identical TS2694 on the unmodified baseline).
+
+Re-run against the production build (`npm run build` → `npm start`, port 3100):
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck` | **0 errors** (the earlier TS2694 came from the stub client) |
+| `npm run lint` | 0 errors (36 pre-existing warnings) |
+| `npm run test` | 202 files passed, 14 skipped; 2535 tests passed, 118 skipped, 0 failed |
+| `npm run build` (`scripts/build.sh`) | **succeeded** — `.next/BUILD_ID` written; the in-sandbox `prisma generate` step still fails (no engine host) and takes its documented offline fallback, but the build type-checks and compiles the real client |
+| `scripts/browser/home-header-tagline.check.mjs` | **180/180 passed** (`final/home-header-check.log`) |
+| `scripts/browser/pricing-grid.check.mjs` | **80/80 passed** (`final/pricing-grid-check.log`) |
+| `scripts/browser/landing-showcase.check.mjs ONLY=home` | 56/58 — the same two pre-existing lazy-photo decode failures as the baseline |
+| Smoke: `/health`, `/register`, `/login`, `/` | all 200; anonymous `/dashboard/pos` → 307 `/login` (`final/smoke.log`) |
+
+Fresh screenshots from this run: `final/header-<width>.jpg` and `final/menu-<width>.jpg`.
 
 ## Outstanding risks
 
-* The two pre-existing landing-showcase image-decode failures and the offline Prisma type error are
-  environmental; CI's PostgreSQL-backed gates are the authority on those.
+* The two pre-existing landing-showcase image-decode failures are environmental (lazy demo
+  photography never enters the viewport during the walk); CI's PostgreSQL-backed gates are the
+  authority on the database-backed suites, which self-skip in this sandbox.
+* The in-sandbox `prisma generate` step still cannot download engines; the build takes its documented
+  offline fallback there. The supported build path (CI, Vercel) generates the real client — proven by
+  the passing `Static (install, generate, lint, typecheck, audit)` and `Production build path on
+  PostgreSQL 18` gates on this exact head.
 * The tagline now sits on its own line under the wordmark below 640 px. That is the smallest change
   that keeps the wordmark, the tagline and the controls readable at 320 px; the desktop arrangement
   (tagline inline after the wordmark) is unchanged.
-* No deployment was made: the branch is unmerged and `main` is untouched.
+* No deployment was made from this branch: `main` is untouched until the merge.

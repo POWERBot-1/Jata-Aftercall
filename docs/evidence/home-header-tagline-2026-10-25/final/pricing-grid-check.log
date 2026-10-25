@@ -1,0 +1,82 @@
+PASS 320px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 320px: no separate POS section
+PASS 320px: no horizontal overflow — scrollWidth=320 viewport=320
+PASS 320px: no card content spills outside its card
+PASS 320px: grid resolves to 1 card(s) per row — rows=1+1+1+1+1 tracks=1
+PASS 320px: grid tracks are a whole multiple of the cards in a row — tracks=1 cardsPerRow=1
+PASS 320px: cards in a row share one width — 280 | 280 | 280 | 280 | 280
+PASS 320px: price, period, feature and CTA rows line up across a row
+PASS 320px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 320px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 360px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 360px: no separate POS section
+PASS 360px: no horizontal overflow — scrollWidth=360 viewport=360
+PASS 360px: no card content spills outside its card
+PASS 360px: grid resolves to 1 card(s) per row — rows=1+1+1+1+1 tracks=1
+PASS 360px: grid tracks are a whole multiple of the cards in a row — tracks=1 cardsPerRow=1
+PASS 360px: cards in a row share one width — 320 | 320 | 320 | 320 | 320
+PASS 360px: price, period, feature and CTA rows line up across a row
+PASS 360px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 360px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 390px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 390px: no separate POS section
+PASS 390px: no horizontal overflow — scrollWidth=390 viewport=390
+PASS 390px: no card content spills outside its card
+PASS 390px: grid resolves to 1 card(s) per row — rows=1+1+1+1+1 tracks=1
+PASS 390px: grid tracks are a whole multiple of the cards in a row — tracks=1 cardsPerRow=1
+PASS 390px: cards in a row share one width — 350 | 350 | 350 | 350 | 350
+PASS 390px: price, period, feature and CTA rows line up across a row
+PASS 390px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 390px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 414px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 414px: no separate POS section
+PASS 414px: no horizontal overflow — scrollWidth=414 viewport=414
+PASS 414px: no card content spills outside its card
+PASS 414px: grid resolves to 1 card(s) per row — rows=1+1+1+1+1 tracks=1
+PASS 414px: grid tracks are a whole multiple of the cards in a row — tracks=1 cardsPerRow=1
+PASS 414px: cards in a row share one width — 374 | 374 | 374 | 374 | 374
+PASS 414px: price, period, feature and CTA rows line up across a row
+PASS 414px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 414px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 768px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 768px: no separate POS section
+PASS 768px: no horizontal overflow — scrollWidth=768 viewport=768
+PASS 768px: no card content spills outside its card
+PASS 768px: grid resolves to 2 card(s) per row — rows=2+2+1 tracks=2
+PASS 768px: grid tracks are a whole multiple of the cards in a row — tracks=2 cardsPerRow=2
+PASS 768px: cards in a row share one width — 356.8/356.8 | 356.8/356.8 | 356.8
+PASS 768px: price, period, feature and CTA rows line up across a row
+PASS 768px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 768px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 1024px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 1024px: no separate POS section
+PASS 1024px: no horizontal overflow — scrollWidth=1024 viewport=1024
+PASS 1024px: no card content spills outside its card
+PASS 1024px: grid resolves to 2 card(s) per row — rows=2+2+1 tracks=2
+PASS 1024px: grid tracks are a whole multiple of the cards in a row — tracks=2 cardsPerRow=2
+PASS 1024px: cards in a row share one width — 464.8/464.8 | 464.8/464.8 | 464.8
+PASS 1024px: price, period, feature and CTA rows line up across a row
+PASS 1024px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 1024px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 1280px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 1280px: no separate POS section
+PASS 1280px: no horizontal overflow — scrollWidth=1280 viewport=1280
+PASS 1280px: no card content spills outside its card
+PASS 1280px: grid resolves to 3 card(s) per row — rows=3+2 tracks=6
+PASS 1280px: grid tracks are a whole multiple of the cards in a row — tracks=6 cardsPerRow=3
+PASS 1280px: cards in a row share one width — 369.1/369.1/369.1 | 369.1/369.1
+PASS 1280px: price, period, feature and CTA rows line up across a row
+PASS 1280px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 1280px: the POS card is the last card and keeps its own CTA — Open Business POS
+PASS 1440px: one pricing grid holds exactly five plan cards — grids=1 cards=5
+PASS 1440px: no separate POS section
+PASS 1440px: no horizontal overflow — scrollWidth=1440 viewport=1440
+PASS 1440px: no card content spills outside its card
+PASS 1440px: grid resolves to 3 card(s) per row — rows=3+2 tracks=6
+PASS 1440px: grid tracks are a whole multiple of the cards in a row — tracks=6 cardsPerRow=3
+PASS 1440px: cards in a row share one width — 369.1/369.1/369.1 | 369.1/369.1
+PASS 1440px: price, period, feature and CTA rows line up across a row
+PASS 1440px: order, prices, periods and CTA destinations are authoritative — MONTHLY:KES 149:/register | ANNUAL:KES 999:/register | AI_BUSINESS_FRONT_DESK:KES 499:/register | INTERACTIVE_BUSINESS:KES 999:/register | BUSINESS_POS:KES 499:/dashboard/pos
+PASS 1440px: the POS card is the last card and keeps its own CTA — Open Business POS
+
+80/80 checks passed
