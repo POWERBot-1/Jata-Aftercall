@@ -29,6 +29,14 @@ const nextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
+      {
+        // Owner push-to-talk voice briefs inside JATA Autopilot Command Center (§9).
+        // Every other route retains `microphone=()` from the global rule above.
+        source: "/dashboard/autopilot/:path*",
+        headers: [
+          { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=(self)" },
+        ],
+      },
     ];
   },
   images: {

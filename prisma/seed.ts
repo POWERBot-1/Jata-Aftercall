@@ -21,6 +21,10 @@ async function main() {
     // Private plan: it is never listed on a public or customer-facing surface (§67), so it is
     // seeded here and sold only from inside the authenticated POS workspace.
     { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30 },
+    // JATA Autopilot workspace add-on plans (sold inside the authenticated Autopilot workspace).
+    { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30 },
+    { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30 },
+    { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });

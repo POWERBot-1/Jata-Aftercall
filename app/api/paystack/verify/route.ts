@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { classifyProviderStatus, isSettleablePaymentStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 import { getPlanById } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
 import { verifyOrderPayment } from "@/lib/experience/payments";
 
 export async function GET(req: Request) {
@@ -23,9 +24,15 @@ export async function GET(req: Request) {
   // to return to sends the owner back to the POS they just paid for instead of a page that does
   // not mention it (§43, §67). Both are derived server-side from the stored plan — never from a
   // query string, so there is nothing a caller can aim at another business.
-  const isPosPayment = (await planKeyOf(payment.planId)) === POS_PLAN_KEY;
+  const resolvedPlanKey = await planKeyOf(payment.planId);
+  const isPosPayment = resolvedPlanKey === POS_PLAN_KEY;
+  const isAutopilotPayment = isAutopilotPlanKey(resolvedPlanKey);
   const posBusinessId = isPosPayment ? payment.businessId ?? null : null;
-  const posReturn = posBusinessId ? { posBusinessId } : {};
+  const autopilotBusinessId = isAutopilotPayment ? payment.businessId ?? null : null;
+  const posReturn = {
+    ...(posBusinessId ? { posBusinessId } : {}),
+    ...(autopilotBusinessId ? { autopilotBusinessId } : {}),
+  };
   if (payment.userId !== session.userId && session.role !== "ADMIN") {
     return NextResponse.json({ error: "You are not authorized to view this payment." }, { status: 403 });
   }
@@ -47,7 +54,9 @@ export async function GET(req: Request) {
     const subscription = payment.businessId
       ? posBusinessId
         ? await prisma.posSubscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
-        : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
+        : autopilotBusinessId
+          ? await prisma.autopilotSubscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
+          : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
       : null;
     if (payment.businessId && !subscription) {
       try {

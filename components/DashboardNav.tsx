@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Bot, CreditCard, LayoutGrid, PlusCircle, ShieldCheck, Store, Wand2 } from "lucide-react";
+import { BarChart3, Bot, CreditCard, LayoutGrid, PlusCircle, ShieldCheck, Sparkles, Store, Wand2 } from "lucide-react";
 
 /**
  * The workspace section rail.
@@ -19,6 +19,7 @@ const LINKS = [
   { href: "/dashboard/ai", label: "AI Front Desk", icon: Bot },
   { href: "/dashboard/studio", label: "Website Studio", icon: Wand2 },
   { href: "/dashboard/pos", label: "Business POS", icon: Store },
+  { href: "/dashboard/autopilot", label: "Autopilot", icon: Sparkles },
   { href: "/onboarding", label: "Add a business", icon: PlusCircle },
 ] as const;
 
