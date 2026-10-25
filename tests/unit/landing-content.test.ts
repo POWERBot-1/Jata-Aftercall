@@ -18,6 +18,7 @@ import {
   LANDING_STORY,
   PLAN_BADGES,
   PLAN_INCLUDES,
+  POS_PLAN_CARD,
   buildLandingDemoCards,
 } from "@/lib/landing";
 import { DEMO_BUSINESSES, DEMO_OWNER_EMAIL, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
@@ -54,6 +55,10 @@ const marketingCopy = () =>
     ...LANDING_STEPS,
     ...Object.values(PLAN_INCLUDES).flat(),
     ...Object.values(PLAN_BADGES),
+    POS_PLAN_CARD.badge,
+    POS_PLAN_CARD.blurb,
+    POS_PLAN_CARD.fine,
+    ...POS_PLAN_CARD.includes,
   ].join("\n");
 
 describe("landing copy makes no unverified claim", () => {
@@ -157,9 +162,12 @@ describe("the owner-only POS stays owner-only", () => {
   const page = readFileSync(path.join(root, "app/page.tsx"), "utf8");
 
   it("links into the authenticated POS flow and nothing else", () => {
-    const hrefs = [...page.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
-    expect(hrefs.filter((href) => /pos/i.test(href))).toEqual(["/dashboard/pos"]);
-    expect(page).toContain("It is owner-only");
+    // The card's destination is the existing authenticated route; the page knows no other POS path.
+    expect(page).toContain('"/dashboard/pos"');
+    expect(page).not.toMatch(/dashboard\/pos\//);
+    expect(page).not.toContain("/checkout");
+    // The card says in words that it is owner-only (copy lives in lib/landing.ts).
+    expect(readFileSync(path.join(root, "lib/landing.ts"), "utf8")).toContain("It is owner-only");
   });
 
   it("is still gated by the existing server-side sign-in redirect", () => {
@@ -168,17 +176,21 @@ describe("the owner-only POS stays owner-only", () => {
     expect(route).toContain("getOwnedBusinessIds");
   });
 
-  it("never appears as a fifth plan card and never on a demo page", () => {
-    expect(page).toContain("publiclyListedPlans");
+  it("sits in the shared pricing grid but never on a demo or customer-facing page", () => {
+    // 2026-10-25: the POS is the homepage's fifth card; payable choices still come only from
+    // publiclyListedPlans(), which keeps excluding it.
+    expect(page).toContain("homepagePlanCards");
+    expect(readFileSync(path.join(root, "lib/pricing.ts"), "utf8")).toContain("publiclyListedPlans");
     for (const file of ["components/BusinessPage.tsx", "components/storefront/DemoShowcaseBand.tsx", "lib/demoShowcase.ts"]) {
       expect(readFileSync(path.join(root, file), "utf8"), file).not.toMatch(/Business POS|BUSINESS_POS/);
     }
-    // The only place the landing copy names it is the FAQ answer that separates it from the plans.
-    const landingCopy = readFileSync(path.join(root, "lib/landing.ts"), "utf8");
-    const mentions = landingCopy.split("\n").filter((line) => /Business POS/.test(line));
-    expect(mentions).toHaveLength(2); // the FAQ question and its answer
-    expect(mentions.join(" ")).toMatch(/separate owner-only point-of-sale/);
-    expect(mentions.join(" ")).toMatch(/not included in, and not required for, the four page plans/i);
+    // The card copy and the FAQ answer both keep it separate from the four page plans.
+    expect(POS_PLAN_CARD.badge).toBe("Owner-only");
+    expect(POS_PLAN_CARD.blurb).toMatch(/separate from your page plan/i);
+    expect(POS_PLAN_CARD.fine).toMatch(/switches on only once Paystack confirms the payment/i);
+    const faq = LANDING_FAQ.find((item) => item.question.includes("POS"))!;
+    expect(faq.answer).toMatch(/separate owner-only point-of-sale/);
+    expect(faq.answer).toMatch(/not included in, and not required for, the four page plans/i);
   });
 });
 

@@ -44,7 +44,7 @@ import {
   lifecycleWithoutPayment,
 } from "@/lib/pos/entitlement";
 import { settlePosPayment, lapseExpiredPosSubscriptions } from "@/lib/pos/settlement";
-import { getBusinessPosPlan, PRIVATE_PLAN_KEYS, isPubliclyListedPlan, publiclyListedPlans } from "@/lib/pricing";
+import { getBusinessPosPlan, homepagePlanCards, PRIVATE_PLAN_KEYS, isPubliclyListedPlan, publiclyListedPlans } from "@/lib/pricing";
 import { POS_PLAN_KEY as ENGINE_PLAN_KEY } from "@/lib/pos/configuration";
 
 const root = path.resolve(__dirname, "../..");
@@ -97,11 +97,30 @@ describe("the POS plan is never advertised publicly (§67)", () => {
     expect(publiclyListedPlans(plans).map((plan) => plan.key)).toEqual(["MONTHLY"]);
   });
 
-  it("keeps the POS out of the landing page, onboarding and the AFTERCALL subscription screen", () => {
-    for (const file of ["app/page.tsx", "app/onboarding/page.tsx", "app/dashboard/subscription/page.tsx"]) {
+  it("keeps the POS out of every payable plan list", () => {
+    // Onboarding and the AFTERCALL subscription screen choose from publiclyListedPlans() only.
+    for (const file of ["app/onboarding/page.tsx", "app/dashboard/subscription/page.tsx"]) {
       const source = readFileSync(path.join(root, file), "utf8");
       expect(source, file).toContain("publiclyListedPlans");
     }
+    expect(readFileSync(path.join(root, "lib/pricing.ts"), "utf8")).toContain("publiclyListedPlans");
+  });
+
+  it("advertises the POS on the homepage as a card that only opens the authenticated flow", () => {
+    // 2026-10-25: the owner asked for one pricing grid, so the POS is the fifth card. That is a
+    // presentation change only — the card links into /dashboard/pos, never to register or checkout.
+    const page = readFileSync(path.join(root, "app/page.tsx"), "utf8");
+    expect(page).toContain("homepagePlanCards");
+    expect(page).toContain('"/dashboard/pos"');
+    expect(page).not.toContain('"/checkout');
+    expect(page).not.toMatch(/href="\/register"[^>]*POS|POS[^>]*href="\/register"/);
+    const cards = homepagePlanCards([
+      { key: "MONTHLY", name: "Monthly", priceKES: 149, durationDays: 30 },
+      { key: POS_PLAN_KEY, name: POS_PLAN_NAME, priceKES: 499, durationDays: 30 },
+    ]);
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", POS_PLAN_KEY]);
+    // The POS row is still not a member of the publicly listed set.
+    expect(publiclyListedPlans(cards).map((card) => card.key)).toEqual(["MONTHLY"]);
   });
 
   it("never mentions the POS price in customer-facing referral or business-page copy", () => {

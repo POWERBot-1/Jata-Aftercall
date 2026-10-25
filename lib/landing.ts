@@ -113,6 +113,27 @@ export const PLAN_BADGES: Record<string, string> = {
   INTERACTIVE_BUSINESS: "Full website",
 };
 
+/**
+ * The Business POS card — copy only, deliberately outside `PLAN_INCLUDES`/`PLAN_BADGES`.
+ *
+ * Those two maps describe the four page plans, and a page plan must never read as including the
+ * POS. The POS is the owner's operating system: a separate, per-business product whose card sits
+ * in the same pricing grid (owner request, 2026-10-25) but whose call to action leads into the
+ * authenticated `/dashboard/pos` flow. Its price and billing period come from `PlanConfig`.
+ */
+export const POS_PLAN_CARD = {
+  badge: "Owner-only",
+  blurb:
+    "A point-of-sale for your counter — sales, stock, credit and reports. Per business, separate from your page plan. It is owner-only.",
+  includes: [
+    "Sales, stock, credit and reports",
+    "Configured around how your business works",
+    "Per business, opened from your own dashboard",
+  ],
+  cta: "Open Business POS",
+  fine: "Sign in from your dashboard. It switches on only once Paystack confirms the payment.",
+} as const;
+
 /* ── FAQ ─────────────────────────────────────────────────────────────────── */
 
 export type LandingFaq = { question: string; answer: string };
@@ -146,7 +167,7 @@ export const LANDING_FAQ: readonly LandingFaq[] = [
   {
     question: "Is the Business POS part of these plans?",
     answer:
-      "No. The Business POS is a separate owner-only point-of-sale that is configured and paid for inside your dashboard, per business. It is not included in, and not required for, the four page plans above.",
+      "No. The Business POS is a separate owner-only point-of-sale that is configured and paid for inside your dashboard, per business. It is not included in, and not required for, the four page plans.",
   },
   {
     question: "How do I pay for a plan?",
