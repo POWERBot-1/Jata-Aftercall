@@ -111,7 +111,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
                     aria-current={active ? "true" : undefined}
                     className={
                       active
-                        ? "inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--ws-ink)] bg-[color:var(--ws-ink)] px-4 text-sm font-semibold text-[color:var(--ws-cream)]"
+                        ? "inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--ws-ink)] bg-[color:var(--ws-ink)] px-4 text-sm font-semibold text-[color:var(--ws-on-ink)]"
                         : "inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-4 text-sm font-semibold hover:border-[color:var(--ws-amber-deep)]"
                     }
                   >

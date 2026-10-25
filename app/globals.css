@@ -3979,6 +3979,10 @@ button:focus-visible {
   --ws-ink-line: rgba(247, 242, 232, 0.14);
   --ws-cream: #f7f2e8;
   --ws-cream-2: #efe7d7;
+  /* Light text sitting on an *ink* surface. Its own token, because `--ws-cream` is the page
+     background and the graphite variant repoints it to a dark colour: using the background token
+     as a foreground is what once painted the hero headline dark-on-dark. Never redefined. */
+  --ws-on-ink: #f7f2e8;
   --ws-paper: #fffdf8;
   --ws-text: #171310;
   --ws-muted: #5a5148;
@@ -4059,7 +4063,7 @@ button:focus-visible {
   background:
     radial-gradient(90% 220% at 92% -60%, rgba(240, 160, 60, 0.22), transparent 60%),
     linear-gradient(180deg, #1b1512 0%, #14110f 100%);
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   box-shadow: 0 14px 34px -26px rgba(0, 0, 0, 0.9);
 }
 
@@ -4077,7 +4081,7 @@ button:focus-visible {
 
 .ws-chrome .jata-brand { margin-right: auto; min-width: 0; }
 .ws-chrome .jata-brand-mark { background: var(--ws-amber); color: #1a140d; border-radius: 0.55rem; }
-.ws-chrome .jata-brand-name { color: var(--ws-cream); letter-spacing: 0.16em; }
+.ws-chrome .jata-brand-name { color: var(--ws-on-ink); letter-spacing: 0.16em; }
 .ws-chrome .jata-brand-tag { display: none; }
 
 .ws-chrome__tag {
@@ -4119,10 +4123,10 @@ button:focus-visible {
   padding: 0.35rem 0.85rem;
   font-size: 0.82rem;
 }
-.ws-chrome .jata-btn-secondary { border-color: var(--ws-ink-line); background: transparent; color: var(--ws-cream); }
+.ws-chrome .jata-btn-secondary { border-color: var(--ws-ink-line); background: transparent; color: var(--ws-on-ink); }
 .ws-chrome .jata-btn-secondary:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); }
 .ws-chrome .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
-.ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-cream); }
+.ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
 
 /* Section rail — the one navigation row on every owner screen. */
 .ws-rail-wrap { border-top: 1px solid rgba(247, 242, 232, 0.09); background: rgba(255, 253, 248, 0.02); }
@@ -4157,7 +4161,7 @@ button:focus-visible {
   scroll-snap-align: start;
   transition: background-color var(--ws-dur) var(--ws-ease), color var(--ws-dur) var(--ws-ease);
 }
-.ws-rail a:hover { background: rgba(247, 242, 232, 0.08); color: var(--ws-cream); }
+.ws-rail a:hover { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
 .ws-rail a[aria-current="page"] {
   background: var(--ws-amber);
   border-color: var(--ws-amber);
@@ -4217,7 +4221,7 @@ button:focus-visible {
   border: 1px solid rgba(247, 242, 232, 0.1);
   border-radius: var(--ws-radius-xl);
   background: var(--ws-ink);
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   padding: clamp(1.15rem, 3.6vw, 2.5rem);
   box-shadow: var(--ws-elev-3);
 }
@@ -4250,7 +4254,7 @@ button:focus-visible {
   font-weight: 600;
   line-height: 1.06;
   letter-spacing: -0.02em;
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   text-wrap: balance;
 }
 .ws-hero__title em { font-style: italic; color: var(--ws-amber); }
@@ -4304,11 +4308,11 @@ button:focus-visible {
 .ws-btn-outline {
   border-color: rgba(247, 242, 232, 0.28);
   background: rgba(247, 242, 232, 0.04);
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
 }
 .ws-btn-outline:hover { background: rgba(247, 242, 232, 0.12); }
 .ws-btn-quiet { color: rgba(247, 242, 232, 0.78); }
-.ws-btn-quiet:hover { color: var(--ws-cream); background: rgba(247, 242, 232, 0.08); }
+.ws-btn-quiet:hover { color: var(--ws-on-ink); background: rgba(247, 242, 232, 0.08); }
 .ws-btn-amber:active, .ws-btn-outline:active, .ws-btn-quiet:active { transform: translateY(1px); }
 
 /* ── Panels ─────────────────────────────────────────────────────────────── */
@@ -4331,8 +4335,8 @@ button:focus-visible {
 .ws-panel__title { margin: 0; font-family: var(--ws-display); font-size: 1.12rem; font-weight: 600; }
 .ws-panel__body { padding: 0.6rem 1rem 1rem; }
 .ws-panel__body--tight { padding: 0.5rem 1rem 0.8rem; }
-.ws-panel--graphite { border-color: rgba(247, 242, 232, 0.12); background: var(--ws-ink); color: var(--ws-cream); }
-.ws-panel--graphite .ws-panel__title { color: var(--ws-cream); }
+.ws-panel--graphite { border-color: rgba(247, 242, 232, 0.12); background: var(--ws-ink); color: var(--ws-on-ink); }
+.ws-panel--graphite .ws-panel__title { color: var(--ws-on-ink); }
 .ws-panel--graphite .ws-section-head__meta, .ws-panel--graphite .ws-muted { color: rgba(247, 242, 232, 0.64); }
 
 .ws-muted { color: var(--ws-muted); }
@@ -4402,7 +4406,7 @@ button:focus-visible {
 }
 .ws-biz__name {
   margin: 0;
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   font-family: var(--ws-display);
   font-size: clamp(1.25rem, 3vw, 1.6rem);
   font-weight: 600;
@@ -4505,7 +4509,7 @@ button:focus-visible {
 }
 .ws-action:hover { border-color: rgba(180, 83, 9, 0.4); background: var(--ws-amber-soft); transform: translateY(-1px); }
 .ws-action svg { flex: 0 0 auto; color: var(--ws-amber-deep); }
-.ws-action[data-primary="true"] { border-color: var(--ws-ink); background: var(--ws-ink); color: var(--ws-cream); }
+.ws-action[data-primary="true"] { border-color: var(--ws-ink); background: var(--ws-ink); color: var(--ws-on-ink); }
 .ws-action[data-primary="true"]:hover { border-color: #241d18; background: #241d18; color: #fff; }
 .ws-action[data-primary="true"] svg { color: var(--ws-amber); }
 
@@ -4628,7 +4632,7 @@ button:focus-visible {
 .ws-shell .jata-btn-primary {
   border-color: var(--ws-ink);
   background: var(--ws-ink);
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   box-shadow: 0 14px 28px -20px rgba(20, 17, 15, 0.9);
 }
 .ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #241d18; background: #241d18; color: #fff; }
@@ -4746,7 +4750,7 @@ button:focus-visible {
   display: none;
   overflow: hidden;
   background: var(--ws-ink);
-  color: var(--ws-cream);
+  color: var(--ws-on-ink);
   padding: 2.5rem;
 }
 @media (min-width: 960px) { .ws-auth__aside { display: flex; flex-direction: column; justify-content: space-between; gap: 2rem; } }

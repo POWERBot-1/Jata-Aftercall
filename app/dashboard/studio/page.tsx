@@ -177,7 +177,7 @@ function Step({ n, title, text }: { n: number; title: string; text: string }) {
   return (
     <li className="rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-3 py-2.5">
       <p className="flex items-center gap-2 text-[0.82rem] font-bold">
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-[color:var(--ws-ink)] text-[0.7rem] text-[color:var(--ws-cream)]">{n}</span>
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-[color:var(--ws-ink)] text-[0.7rem] text-[color:var(--ws-on-ink)]">{n}</span>
         {title}
       </p>
       <p className="ws-muted ws-tiny mt-1">{text}</p>

@@ -62,6 +62,7 @@ describe("workspace design tokens", () => {
     "--ws-amber",
     "--ws-amber-deep",
     "--ws-jade",
+    "--ws-on-ink",
     "--ws-display",
     "--ws-radius-sm",
     "--ws-radius-md",
@@ -112,6 +113,20 @@ describe("workspace design tokens", () => {
     }
     // Nothing in the dark variant may fall back to a light card background.
     expect(dark).not.toContain("--ws-paper: #fff");
+  });
+
+  it("never paints ink-surface text with the page-background token", () => {
+    // Regression guard: `--ws-cream` is the *background* and the graphite variant repoints it to
+    // #171412. Using it as a foreground made the dashboard hero render its headline dark-on-dark.
+    // Light text on an ink surface must go through `--ws-on-ink`, which no variant redefines.
+    const shell = css.match(/\.ws-shell\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    expect(shell).toContain("--ws-on-ink: #f7f2e8;");
+    const graphite = css.slice(css.indexOf('The workspace has one art direction'));
+    expect(graphite.slice(0, graphite.indexOf("/* Semantic fills"))).not.toContain("--ws-on-ink:");
+    for (const selector of [".ws-hero", ".ws-hero__title", ".ws-panel--graphite", ".ws-biz__name", ".ws-auth__aside"]) {
+      const block = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{[^}]*\\}`))?.[0] ?? "";
+      expect(block, selector).not.toMatch(/color:\s*var\(--ws-cream\)/);
+    }
   });
 
   it("keeps every surface colour on a token so both variants share one rule set", () => {
