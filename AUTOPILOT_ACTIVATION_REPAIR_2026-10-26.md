@@ -144,7 +144,8 @@ export HTTP handlers, and the tests and confirmation page share these values).
 | `npx vitest run tests/integration/autopilot-activation.test.ts` | **27 passed** |
 | `npx vitest run tests/unit/autopilot-checkout-client.test.ts` | **10 passed** |
 | `npx vitest run tests/unit/autopilot-activation-ui.test.ts` | **7 passed** |
-| `npx vitest run tests/integration/checkout-route.test.ts tests/integration/payment-settlement.test.ts tests/integration/payment-verification-route.test.ts tests/integration/paystack-webhook-route.test.ts` | **48 passed** (8 checkout + 17 settlement + 9 verification + 14 webhook) |
+| 8 suites in one run: the three new files + `checkout-route`, `payment-settlement`, `payment-verification-route`, `paystack-webhook-route`, `autopilot-controls-repair` | **106 passed** (27 + 10 + 7 + 8 + 17 + 9 + 14 + 14) |
+| `npx vitest run tests/unit/autopilot-entitlement-and-packs.test.ts tests/unit/checkout-status.test.ts` | **15 passed** (entitlement/cancellation states + callback status mapping) |
 | `npm test` (full suite) | **2750 passed, 1 failed, 121 skipped** (2872). The single failure is `Prisma.dmmf` in `tests/unit/autopilot-phase1-hardening.test.ts` — pre-existing in this offline sandbox (no generated Prisma client) and identical on unmodified `main` |
 | `npm run lint` | **0 errors, 40 warnings** (same warning set as `main`) |
 | `npx tsc --noEmit` | 4 errors, **all pre-existing offline-Prisma gaps in test files** (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). Verified identical on a stashed clean `main` |
@@ -168,6 +169,10 @@ export HTTP handlers, and the tests and confirmation page share these values).
 | Release gate (aggregate) | pass |
 | Vercel (preview build) | pass |
 
+Re-verified at head `1b3e2ab` on 2026-10-26 (each job `success`, including *Journey against a real
+database* — which runs the browser journeys against a real PostgreSQL 16 service, and *Static …
+typecheck*, which type-checks with a generated Prisma client).
+
 **Payment-security regression results:** unverified payments cannot settle (`PAYMENT_EVIDENCE_REQUIRED`),
 amount/currency mismatches reject (`PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_CURRENCY_MISMATCH`),
 settlement covers only the paying tenant, is idempotent under webhook replay, extends an active
@@ -176,20 +181,53 @@ The existing webhook, verification, settlement and order/payment suites all stil
 
 ## 7. Blockers / owner actions
 
-1. **Confirm the three plan rows exist in production** (read-only; no secrets involved):
+1. **Confirm the three plan rows exist in production** — read-only, no secrets in the query.
+   Run it in the Neon SQL editor (or `psql` with a read-only role) and do not paste the
+   connection string into a chat or a ticket:
+
    ```sql
    SELECT key, "priceKES", "durationDays", "isActive"
    FROM "PlanConfig"
-   WHERE key IN ('JATA_AUTOPILOT','JATA_AUTOPILOT_PRO','JATA_AUTOPILOT_ENTERPRISE');
+   WHERE key IN ('JATA_AUTOPILOT','JATA_AUTOPILOT_PRO','JATA_AUTOPILOT_ENTERPRISE')
+   ORDER BY "priceKES";
    ```
-   If any row is missing or inactive, run **`npm run seed`** against production (idempotent
-   upsert; it does not delete data). The build/migrate gate intentionally never seeds, so this is
-   the only step that creates the three plans. Until it is done the fixed UI will say
-   “JATA Autopilot plans are not configured in this deployment yet …”, which is the honest state —
-   no payment can be taken and none will be reported as successful.
-2. **End-to-end payment check with a real test-mode Paystack transaction** must be performed by
-   the owner (or with explicit authorisation). This work made none.
-3. `PAYSTACK_SECRET_KEY` must remain set in Vercel; without it the route fails closed with
+
+   Expected: three rows, `2499 / 6999 / 19999`, `durationDays = 30`, `isActive = true`.
+   This cannot be established from the deployed site: the homepage renders
+   `homepagePlanCards()`, which substitutes the canonical fallback row whenever the table is
+   unavailable or a row is missing, so identical prices on the public page are **not** evidence
+   that the rows exist.
+
+2. **Do not run `npm run seed` against production to fix missing rows.** `prisma/seed.ts` has no
+   scope flag: besides the plans it also upserts the page themes, four demo businesses, a demo
+   customer, and an ADMIN user derived from `ADMIN_EMAILS` whose **created** password is the
+   well-known `Admin123!`. Point 1's query decides whether anything is needed; if it is, the
+   minimal idempotent repair below touches only the three plan rows (it keeps any existing `id`,
+   so historical `Payment.planId` references stay valid):
+
+   ```sql
+   INSERT INTO "PlanConfig" ("id","key","name","priceKES","durationDays","isActive","createdAt","updatedAt")
+   VALUES
+     ('plan_jata_autopilot','JATA_AUTOPILOT','JATA Autopilot — KES 2,499/month',2499,30,true,now(),now()),
+     ('plan_jata_autopilot_pro','JATA_AUTOPILOT_PRO','JATA Autopilot Pro — KES 6,999/month',6999,30,true,now(),now()),
+     ('plan_jata_autopilot_enterprise','JATA_AUTOPILOT_ENTERPRISE','JATA Autopilot Enterprise — KES 19,999/month',19999,30,true,now(),now())
+   ON CONFLICT ("key") DO UPDATE SET
+     "priceKES" = EXCLUDED."priceKES",
+     "durationDays" = EXCLUDED."durationDays",
+     "isActive" = true,
+     "updatedAt" = now();
+   ```
+
+   This is a production write and needs your explicit authorisation; nothing in this branch ran it.
+
+   Until the rows exist and are active the repaired UI says
+   “JATA Autopilot plans are not configured in this deployment yet …” inline — the honest state:
+   no payment is taken and none can be reported as successful.
+
+3. **End-to-end payment check with a real test-mode Paystack transaction** must be performed by
+   the owner (or with explicit authorisation). This work made none, and no provider session exists.
+
+4. `PAYSTACK_SECRET_KEY` must remain set in Vercel; without it the route fails closed with
    `503 PAYMENTS_UNAVAILABLE` (now shown inline).
 
 ## 8. Changed files
