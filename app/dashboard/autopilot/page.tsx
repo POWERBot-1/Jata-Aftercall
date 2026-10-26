@@ -57,6 +57,30 @@ export default async function AutopilotIndexPage() {
 
   const activeCount = entitlements.filter((e) => e?.entitled).length;
 
+  // The hero's primary action must do what its label says. With one business it opens that
+  // business's Command Center directly; with none it starts business creation; only with
+  // several does it scroll to the chooser — and then it is labelled as choosing, not opening.
+  // (Previously it always pointed at the on-page anchor, so for zero businesses the target
+  // section did not exist and the button did nothing at all.)
+  const onlyBusiness = businesses.length === 1 ? businesses[0] : null;
+  const heroPrimary = onlyBusiness ? (
+    <Link
+      href={`/dashboard/autopilot/${encodeURIComponent(onlyBusiness.id)}`}
+      className="ws-btn-amber"
+    >
+      <Sparkles size={16} aria-hidden="true" />{" "}
+      {entitlements[0]?.entitled ? "Open Command Center" : "Preview Command Center"}
+    </Link>
+  ) : businesses.length === 0 ? (
+    <Link href="/onboarding" className="ws-btn-amber">
+      <Sparkles size={16} aria-hidden="true" /> Add a business
+    </Link>
+  ) : (
+    <Link href="#autopilot-businesses" className="ws-btn-amber">
+      <Sparkles size={16} aria-hidden="true" /> Choose a business
+    </Link>
+  );
+
   return (
     <div className="ws-stack">
       <WorkspaceHero
@@ -73,9 +97,7 @@ export default async function AutopilotIndexPage() {
         photo={WORKSPACE_HERO_PHOTO}
         actions={
           <>
-            <Link href="#autopilot-businesses" className="ws-btn-amber">
-              <Sparkles size={16} aria-hidden="true" /> Open Command Center
-            </Link>
+            {heroPrimary}
             <Link href="/dashboard" className="ws-btn-outline">
               Back to overview
             </Link>
