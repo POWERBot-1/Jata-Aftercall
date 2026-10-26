@@ -3,23 +3,29 @@
  *
  * Selection is server-side configuration only (JATA_STORAGE_PROVIDER). When unset, the legacy
  * inline identifier is retained for read/capability compatibility, but its `put` operation fails
- * closed. No durable write provider is configured. Selecting an unimplemented provider fails
- * loudly rather than silently falling back and putting image bytes in Neon.
+ * closed. One durable provider is implemented — Cloudflare R2, per the owner decision of
+ * 2026-10-26 — and it is usable only when its server-side variables are fully configured;
+ * selecting it without them fails loudly rather than silently falling back and putting image
+ * bytes in Neon. Implemented is not activated: production enablement remains a separate,
+ * explicit owner gate (see STORAGE_DECISION.md addendum and R2_SETUP.md).
  */
 
 import { createInlineStorage, INLINE_PROVIDER_ID } from "./inline";
+import { createR2Storage, R2_PROVIDER_ID } from "./r2";
 import { StorageCapabilityError, StorageNotConfiguredError, type ObjectStorageProvider, type StorageKind } from "./types";
 
 export { INLINE_PROVIDER_ID } from "./inline";
+export { R2_PROVIDER_ID, R2_REQUIRED_ENV, missingR2Env } from "./r2";
 export * from "./types";
 export { objectKeyFor, keyBelongsToTenant, MAX_BYTES_BY_KIND, CONTENT_TYPES_BY_KIND, tenantPrefix } from "./keys";
 
-/** Durable providers this build can currently write to. No provider is configured or approved. */
-export const IMPLEMENTED_PROVIDERS: readonly string[] = [];
+/** Durable providers this build can write to when configured. Configuration is still required. */
+export const IMPLEMENTED_PROVIDERS: readonly string[] = [R2_PROVIDER_ID];
 
 export function resolveStorageProvider(env: NodeJS.ProcessEnv = process.env): ObjectStorageProvider {
   const requested = (env.JATA_STORAGE_PROVIDER || INLINE_PROVIDER_ID).trim();
   if (requested === INLINE_PROVIDER_ID) return createInlineStorage();
+  if (requested === R2_PROVIDER_ID) return createR2Storage(env);
   if (requested === "vercel-blob") {
     throw new StorageNotConfiguredError(
       "Vercel Blob is evaluated but not enabled in this build. See STORAGE_DECISION.md before configuring it.",
@@ -32,11 +38,10 @@ export function resolveStorageProvider(env: NodeJS.ProcessEnv = process.env): Ob
  * The configured provider when — and only when — it can durably hold image bytes, else null.
  *
  * Never throws: callers that must fail closed (media uploads, the AI image lab, the creative
- * capability matrix) ask this instead of `resolveStorageProvider`, so an unapproved or
- * unimplemented `JATA_STORAGE_PROVIDER` value reads as "no durable storage" rather than
- * crashing a request. This does not approve any provider: with no adapter implemented it
- * always returns null today, and it starts returning a provider only after the owner selects
- * one and its adapter ships behind this same interface (see STORAGE_DECISION.md §7.5).
+ * capability matrix) ask this instead of `resolveStorageProvider`, so an unselected or
+ * incompletely configured `JATA_STORAGE_PROVIDER` value reads as "no durable storage" rather
+ * than crashing a request. It returns the Cloudflare R2 provider only when R2 is both selected
+ * and fully configured server-side; every other state is null (fail-closed).
  */
 export function resolveDurableStorageProvider(env: NodeJS.ProcessEnv = process.env): ObjectStorageProvider | null {
   try {
