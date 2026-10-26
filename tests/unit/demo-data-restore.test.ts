@@ -66,7 +66,19 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => null }));
 vi.mock("@/lib/referral", () => ({ ensureReferralCode: async () => null, referralPath: () => "/r/x" }));
-vi.mock("@/lib/ai-entitlement", () => ({ getAIPackageStatus: async () => ({ entitled: h.ai.entitled }) }));
+// The public business page now asks for the derived lifecycle, not the raw entitlement row:
+// a live link needs a published, activated, entitled Front Desk (lib/ai-publication.ts).
+vi.mock("@/lib/ai-publication", () => ({
+  getAIFrontDeskPublication: async () => ({
+    state: h.ai.entitled ? "LIVE" : "SUSPENDED",
+    publiclyOperational: h.ai.entitled,
+    isPublished: h.ai.entitled,
+    operationalStatus: h.ai.entitled ? "LIVE" : "DRAFT",
+    entitled: h.ai.entitled,
+    entitlementStatus: h.ai.entitled ? "ACTIVE" : "NONE",
+    reason: h.ai.entitled ? "Live." : "Not entitled.",
+  }),
+}));
 
 import { DEMO_BUSINESSES, DEMO_OWNER_EMAIL, DEMO_SLUGS, restoreDemoBusinesses } from "@/lib/demoData";
 import { normalizeKePhone } from "@/lib/phone";

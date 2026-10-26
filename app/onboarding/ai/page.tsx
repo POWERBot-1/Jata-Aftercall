@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import AIConfigForm from "@/components/AIConfigForm";
@@ -48,11 +49,22 @@ export default async function AIOnboardingPage({
   return (
     <main id="main" className="min-h-screen bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-4xl space-y-6">
-        <header>
-          <h1 className="text-2xl font-bold">AI Business Front Desk — Self-Service Setup</h1>
-          <p className="mt-1 text-sm text-slate-300">
-            Tell JATA how your business works. The answers become this business&apos;s digital front desk.
-          </p>
+        <header className="space-y-3">
+          <Link href="/dashboard/ai" className="text-xs font-semibold text-amber-300 underline">
+            ← Back to the guided AI Front Desk setup
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">Detailed configuration</h1>
+            <p className="mt-1 text-sm text-slate-300">
+              Everything the front desk may say, in one form: catalogue, delivery zones, payment
+              instructions, policies and notification numbers. The guided setup covers the common
+              case; this page is for the rest.
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              Switching this desk LIVE still requires an active AI Business Front Desk subscription
+              verified by our server — saving this form with LIVE selected is refused otherwise.
+            </p>
+          </div>
         </header>
 
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Onboarding steps">

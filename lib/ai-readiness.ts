@@ -309,7 +309,9 @@ export async function publishAIBusinessFrontDesk(params: {
 
   let publishedConfig: Awaited<ReturnType<typeof publishAIConfigSnapshot>>;
   try {
-    publishedConfig = await publishAIConfigSnapshot(params.businessId);
+    // Activation is explicit and re-verified inside publishAIConfigSnapshot; the readiness gate
+    // above already required `subscription.entitled`, so this is defence in depth, not the gate.
+    publishedConfig = await publishAIConfigSnapshot(params.businessId, { activateLive: true });
   } catch (error) {
     if (previousPublication && prisma.business?.update) {
       await prisma.business

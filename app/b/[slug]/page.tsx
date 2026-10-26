@@ -6,7 +6,7 @@ import { resolveTheme } from "@/lib/themes";
 import BusinessPage from "@/components/BusinessPage";
 import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from "@/lib/publication";
 import { ensureReferralCode, referralPath } from "@/lib/referral";
-import { getAIPackageStatus } from "@/lib/ai-entitlement";
+import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
@@ -73,7 +73,10 @@ const classicPageExtras = requestCache(async (businessId: string) => {
   const code = await ensureReferralCode(businessId);
   let aiFrontDeskLive = false;
   try {
-    aiFrontDeskLive = (await getAIPackageStatus(businessId)).entitled === true;
+    // The link is offered only for a Front Desk that would actually answer: published, switched
+    // on and covered by a server-verified subscription. An entitled-but-draft desk 404s at
+    // /b/<slug>/ai, so linking it would hand the customer a dead button.
+    aiFrontDeskLive = (await getAIFrontDeskPublication(businessId)).publiclyOperational === true;
   } catch {
     aiFrontDeskLive = false;
   }

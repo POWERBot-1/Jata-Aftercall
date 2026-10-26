@@ -103,7 +103,9 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
   const [branchName, setBranchName] = useState("");
   const [branchLocation, setBranchLocation] = useState("");
 
-  const [operationalStatus, setOperationalStatus] = useState<"LIVE" | "PAUSED" | "MAINTENANCE">("LIVE");
+  // Default is DRAFT, not LIVE (P0 remediation). Seeding LIVE meant the detailed form claimed the
+  // desk was answering customers before a single byte of server state had been read.
+  const [operationalStatus, setOperationalStatus] = useState<"LIVE" | "PAUSED" | "MAINTENANCE" | "DRAFT">("DRAFT");
   const [pauseAllOrdering, setPauseAllOrdering] = useState(false);
   const [pausedMessage, setPausedMessage] = useState("");
   const [greetingMessage, setGreetingMessage] = useState("");
@@ -203,8 +205,19 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
       setAfterHoursBehavior(ext.afterHoursBehavior || "message_only");
       setPausedMessage(ext.pausedMessage || "");
       if (ext.templateCategory) setTemplateCategory(ext.templateCategory);
-      if (ext.operationalStatus === "PAUSED" || ext.operationalStatus === "MAINTENANCE" || ext.operationalStatus === "LIVE") {
-        setOperationalStatus(ext.operationalStatus);
+      if (
+        ext.operationalStatus === "PAUSED" ||
+        ext.operationalStatus === "MAINTENANCE" ||
+        ext.operationalStatus === "LIVE" ||
+        ext.operationalStatus === "DRAFT" ||
+        ext.operationalStatus === "CONFIGURED" ||
+        ext.operationalStatus === "PREVIEW"
+      ) {
+        setOperationalStatus(
+          ext.operationalStatus === "PAUSED" || ext.operationalStatus === "MAINTENANCE" || ext.operationalStatus === "LIVE"
+            ? ext.operationalStatus
+            : "DRAFT",
+        );
       }
       setPauseAllOrdering(Boolean(ext.pauseAllOrdering));
       if (Array.isArray(ext.bulkPricing)) setBulkPricing(ext.bulkPricing);
@@ -574,8 +587,9 @@ export default function AIConfigForm({ businessId, businessSlug }: AIConfigFormP
       <div className="grid gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3 sm:grid-cols-2">
         <label className="text-xs">
           Operational status
-          <select value={operationalStatus} onChange={(e) => setOperationalStatus(e.target.value as "LIVE" | "PAUSED" | "MAINTENANCE")} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm">
-            <option value="LIVE">LIVE — Active & Answering</option>
+          <select value={operationalStatus} onChange={(e) => setOperationalStatus(e.target.value as "LIVE" | "PAUSED" | "MAINTENANCE" | "DRAFT")} className="mt-1 w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm">
+            <option value="DRAFT">DRAFT — Not answering customers</option>
+            <option value="LIVE">LIVE — Active & Answering (needs verified payment)</option>
             <option value="PAUSED">PAUSED — Temporarily Paused</option>
             <option value="MAINTENANCE">MAINTENANCE — Human Handoff Only</option>
           </select>

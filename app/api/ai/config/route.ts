@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { assertBusinessRole, canAccessBusiness } from "@/lib/tenant";
 import { assertStoredAIConfigIsMediaSafe, getExtendedAIConfig, saveExtendedAIConfig } from "@/lib/ai-config";
+import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { assertNoInlineImagePersistence, containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, InlineMediaPersistenceError } from "@/lib/media/persistence-policy";
 import { AI_BUSINESS_TEMPLATES } from "@/lib/ai-templates";
 import { logAudit } from "@/lib/audit";
@@ -31,10 +32,13 @@ export async function GET(req: Request) {
     ]);
 
     const extendedConfig = await getExtendedAIConfig(businessId, config, business?.category);
+    // Server-authoritative lifecycle, so no screen has to guess whether this desk is live.
+    const publication = await getAIFrontDeskPublication(businessId);
 
     return NextResponse.json({
       config: config || {},
       extendedConfig,
+      publication,
       templates: AI_BUSINESS_TEMPLATES,
     });
   } catch (err: unknown) {
@@ -99,6 +103,26 @@ export async function POST(req: Request) {
     }
     if (containsInlineImageDataUrl(body)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
+
+    // A configuration save must never be a covert activation path: the owner-tier role check
+    // above proves *who* is asking, not that the business has paid. Switching the desk LIVE (or
+    // saving a snapshot that claims LIVE) needs the same server-verified entitlement as
+    // publication, so an unpaid tenant cannot reach live operation through this route either.
+    if (String(operationalStatus || "").toUpperCase() === "LIVE") {
+      const publication = await getAIFrontDeskPublication(businessId);
+      if (!publication.entitled || !publication.isPublished) {
+        return NextResponse.json(
+          {
+            error: publication.entitled
+              ? "Publish the AI Front Desk before switching it LIVE — publication records the version customers will see."
+              : "An active AI Business Front Desk subscription (verified by our server) is required before the desk can be switched LIVE.",
+            code: publication.entitled ? "NOT_PUBLISHED" : "SUBSCRIPTION_REQUIRED",
+            publication,
+          },
+          { status: 402 },
+        );
+      }
     }
 
     const previousConfig = await prisma.aIConfiguration.findUnique({ where: { businessId } }).catch(() => null);

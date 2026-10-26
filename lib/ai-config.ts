@@ -6,6 +6,7 @@
  */
 
 import prisma from "./db";
+import { getAIPackageStatus } from "./ai-entitlement";
 import { assertNoInlineImagePersistence, containsInlineImageDataUrl, InlineMediaPersistenceError } from "./media/persistence-policy";
 import {
   resolveTemplateForCategory,
@@ -582,7 +583,11 @@ export async function getExtendedAIConfig(
     orderRules: merged.orderRules ?? null,
     offerType: (merged.offerType as OfferTypeKey) || tpl.offerType,
     orderingMode: (merged.orderingMode as OrderingModeKey) || tpl.orderingMode,
-    operationalStatus: (merged.operationalStatus as OperationalStatus) || "LIVE",
+    // Default is DRAFT, never LIVE (P0 remediation): an unconfigured business used to read back
+    // `LIVE` simply because no operational status had been saved yet, which is exactly the
+    // "LIVE because a record exists" defect. LIVE is only ever written by the publish path after
+    // the readiness gate and a server-verified entitlement pass (lib/ai-readiness.ts).
+    operationalStatus: (merged.operationalStatus as OperationalStatus) || "DRAFT",
     pauseAllOrdering: Boolean(merged.pauseAllOrdering),
     templateKey: merged.templateKey || tpl.key,
     templateCategory: merged.templateCategory || tpl.label,
@@ -708,12 +713,45 @@ export async function saveExtendedAIConfig(
   return next;
 }
 
-export async function publishAIConfigSnapshot(businessId: string): Promise<ExtendedAIConfig> {
+/**
+ * Promotes the owner's draft snapshot to the published version.
+ *
+ * Publishing used to force `operationalStatus` to LIVE, so simply getting through the publish
+ * route — or any future caller of this function — produced a LIVE desk regardless of the
+ * subscription. Publication and activation are separate facts, so this function only promotes
+ * the version. Activation is opt-in (`activateLive`) and re-verified here against the
+ * server-side entitlement, so a caller cannot activate by claiming to be authorised.
+ */
+export async function publishAIConfigSnapshot(
+  businessId: string,
+  options?: { activateLive?: boolean },
+): Promise<ExtendedAIConfig> {
   const current = await getExtendedAIConfig(businessId);
+
+  let operationalStatus = current.operationalStatus;
+  if (options?.activateLive) {
+    const entitlement = await getAIPackageStatus(businessId).catch(() => null);
+    // `entitled` is the server-verified answer: it already requires an ACTIVE/EXPIRING subscription
+    // backed by a PAID payment and, when present, a live grace window (lib/ai-entitlement.ts).
+    const mayActivate = entitlement?.entitled === true;
+    if (!mayActivate) {
+      // Fail closed: publish the version, leave the desk exactly as paused/draft as it was.
+      operationalStatus =
+        current.operationalStatus === "PAUSED" || current.operationalStatus === "MAINTENANCE"
+          ? current.operationalStatus
+          : "DRAFT";
+    } else {
+      operationalStatus =
+        current.operationalStatus === "PAUSED" || current.operationalStatus === "MAINTENANCE"
+          ? current.operationalStatus
+          : "LIVE";
+    }
+  }
+
   return saveExtendedAIConfig(
     businessId,
     {
-      operationalStatus: current.operationalStatus === "PAUSED" ? "PAUSED" : "LIVE",
+      operationalStatus,
       publishedVersion: current.draftVersion || 1,
       publishedAt: new Date().toISOString(),
     },

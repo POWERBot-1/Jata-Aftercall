@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
-import { getAIPackageStatus } from "@/lib/ai-entitlement";
+import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { DEFAULT_SUGGESTED_ACTIONS } from "@/lib/ai-front-desk";
 import { generateAILinkQRCodeSvg, getShareableAILink } from "@/lib/qr";
 import AIFrontDeskCustomerClient from "@/components/AIFrontDeskCustomerClient";
@@ -41,20 +41,25 @@ const getAIBusiness = requestCache(async (slug: string) =>
 // redirect()/notFound(); the loader only reports flags.
 const loadAIPageData = requestCache(async (slug: string, isPreviewRequested: boolean) => {
   const business = await getAIBusiness(slug);
-  if (!business) return { business: null, user: null, allowed: false, entitled: false, brain: null, blocked: "missing" as const };
+  if (!business) return { business: null, user: null, allowed: false, entitled: false, publication: null, brain: null, blocked: "missing" as const };
   if (isPreviewRequested) {
     const user = await getCurrentUser().catch(() => null);
-    if (!user) return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "login" as const };
+    if (!user) return { business, user: null, allowed: false, entitled: false, publication: null, brain: null, blocked: "login" as const };
     const allowed = await canAccessBusiness(user.id, business.id, user.role);
-    if (!allowed) return { business, user, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
-    return { business, user, allowed: true, entitled: false, brain: await getBusinessBrain(business.id), blocked: null };
+    if (!allowed) return { business, user, allowed: false, entitled: false, publication: null, brain: null, blocked: "forbidden" as const };
+    // The owner's private preview is reachable without a subscription (setup policy), but it is
+    // labelled PREVIEW and never LIVE, because nothing has been published or paid for yet.
+    const publication = await getAIFrontDeskPublication(business.id, { preview: true }).catch(() => null);
+    return { business, user, allowed: true, entitled: false, publication, brain: await getBusinessBrain(business.id), blocked: null };
   }
-  if (!business.isPublished) return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
-  const entitlement = await getAIPackageStatus(business.id).catch(() => null);
-  if (!entitlement || entitlement.entitled !== true) {
-    return { business, user: null, allowed: false, entitled: false, brain: null, blocked: "forbidden" as const };
+  // The single source of truth: published + activated + server-verified entitlement. A LIVE desk
+  // is the only thing a customer may reach, so DRAFT/PREVIEW/PAUSED/MAINTENANCE/SUSPENDED all
+  // resolve to notFound() here — exactly like an unpublished page.
+  const publication = await getAIFrontDeskPublication(business.id).catch(() => null);
+  if (!publication || publication.publiclyOperational !== true) {
+    return { business, user: null, allowed: false, entitled: false, publication, brain: null, blocked: "forbidden" as const };
   }
-  return { business, user: null, allowed: true, entitled: true, brain: await getBusinessBrain(business.id), blocked: null };
+  return { business, user: null, allowed: true, entitled: true, publication, brain: await getBusinessBrain(business.id), blocked: null };
 });
 
 export async function generateMetadata({
@@ -108,6 +113,7 @@ export default async function PublicAIFrontDeskPage({
     notFound();
   }
   const brain = data.brain!;
+  const publicationState = data.publication?.state ?? (isPreviewRequested ? "PREVIEW" : "DRAFT");
   const share = getShareableAILink(business.slug);
   const qrSvg = generateAILinkQRCodeSvg(share.url, 180);
   const greeting =
@@ -138,6 +144,7 @@ export default async function PublicAIFrontDeskPage({
           ? brain.extendedConfig.operationalStatus
           : "LIVE"
       }
+      publicationState={publicationState}
       pauseAllOrdering={brain.extendedConfig.pauseAllOrdering}
       qrSvg={qrSvg}
       shareUrl={share.url}
