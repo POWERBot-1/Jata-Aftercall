@@ -233,3 +233,76 @@ header banner), `.env.example` (capability notes).
 
 Untouched, deliberately: `prisma/schema.prisma` and migrations, pricing/billing/Paystack
 code, POS sales/money/offline code, publication gates, auth/session code.
+
+## 7. Continuation (2026-10-26, same PR) — category completeness + activation-ready storage
+
+**Audit first.** PR/branch/head/main/CI were re-verified live before any change: PR #67 open
+and mergeable, head `4e31ab1…`, `origin/main` still `5f4a82d…`, all 12 checks green.
+`STORAGE_DECISION.md` §5–§7.5 requires (a) a priced comparison, (b) explicit provider
+selection + budget cap, (c) a *separate* authorization for the vendor adapter. The owner has
+not yet made that selection, so this continuation implements only the safe, vendor-agnostic
+parts and leaves activation **BLOCKED on the owner decision** — no provider enabled, no
+account created, no token, no spend, no production change.
+
+**Category completeness (Phase 4) — done.** The three worlds that previously borrowed
+related-trade images now have dedicated AI-generated, visually QA'd photography
+(`public/category/{salon,technical,grocery}*`, 720 jpg 71–86 KB / 1200 webp 111–143 KB):
+a premium Kenyan salon/barber interior, a fundi/technician with toolbox, and a stocked
+minimart checkout. Registry now covers **21 visual worlds**; Studio `salon`→salon and
+`technical`→technical; POS `salon`/`barber`→salon, `grocery`/`supermarket`/
+`convenience_shop`→grocery; free-text keeps "Mama mboga" on produce while
+grocery/mini-mart, hair/salon/barber, and repair/electrician/plumber/fundi resolve to their
+new dedicated worlds ("Beauty products & cosmetics" still resolves to beauty). All 16 Studio
+profiles and 56 POS types remain covered by the registry-derived tests; picker, focal,
+persistence and POS checkout behaviour are unchanged. `tests/unit/category-imagery.test.ts`
+updated + extended (34/34 with workspace-design). The owner can review every category at
+`/dev/category-gallery` (404 in production).
+
+**Durable storage (Phase 2) — comparison done, activation BLOCKED.** Verified 2026-10-26
+against official pricing pages; full analysis in `STORAGE_COMPARISON_2026-10-26.md`.
+Recommendation: **Vercel Blob** ($0.023/GB-month storage, $0.05/GB transfer — at JATA's
+scale ≈ $0–5/mo, same vendor/bill/dashboard as hosting, smallest adapter). Cloudflare R2 is
+cheaper at >1 TB/mo delivery but adds a second vendor; S3 needs the most assembly;
+Cloudinary jumps to $99/mo. **Owner must still:** choose the provider, approve a budget cap
++ alert, separately authorize the adapter, create the token personally (`BLOB_READ_WRITE_TOKEN`,
+server-side only), and set `JATA_STORAGE_PROVIDER`. Neither the agent nor this PR can do
+any of those steps.
+
+**Creative engine plumbing (Phase 3, safe subset) — done and tested.** The engine is now
+genuinely *activation-ready* without pretending to be active:
+
+- `lib/storage`: `resolveDurableStorageProvider()` / `hasDurableStorage()` — never-throwing,
+  capability-derived; `vercel-blob` selection still refused (existing test untouched), no
+  provider implemented (`IMPLEMENTED_PROVIDERS` unchanged, still empty).
+- `lib/ai/assetStore.ts`: builds the image lab's `ImageAssetStore` over any durable provider
+  — server-side byte re-validation, tenant-prefixed keys, durable-URL-only metadata rows
+  with provenance, inline-data scan before insert, orphan cleanup on DB failure, refusal of
+  cross-tenant or data-URL provider responses.
+- `/api/studio/ai/image`, `/api/studio/ai/enhance`, `/api/studio/creative` (generate + edit
+  paths) now pass `resolveImageAssetStore()`; `/api/media` stores validated upload bytes
+  with the durable provider when one is configured. With none configured (today) every one
+  of these returns the **identical fail-closed 503 as before** — proven by the untouched
+  503 suites plus new tests (`tests/unit/durable-asset-store.test.ts`, 8;
+  `tests/integration/media-durable-upload.test.ts`, 5 — happy path 201 with durable URL,
+  wrong-tenant provider and provider-down both write nothing, invalid bytes and tenant-guard
+  refusals happen before storage).
+- `lib/creative/capabilities.ts` derives `durableStorage` from the resolved provider, so the
+  UI truth table flips automatically on activation — and still reports unavailable today.
+
+So once the owner completes the five steps in the comparison doc, generation, iterative
+edits, enhancement saves and uploads become real **with no further feature code** beyond the
+small vendor adapter itself. Speech input remains browser feature-detected; animation/video
+remain **unavailable** (no provider, no claims made).
+
+**Verification (Phase 5).** Full suite: **2,911 passed** (2,897 + 14 new), 1 pre-existing
+sandbox-only failure (`Prisma.dmmf` stub client, proven identical on base), 121 skipped.
+Typecheck: only the same 4 pre-existing stub-client errors (CI generates the real client and
+passed on this PR). ESLint clean on all touched files. Production build: "Compiled
+successfully" locally; build type-check stops only on those stub errors. Dev smoke:
+`/dev/category-gallery` 200 rendering all three new worlds, new images 200, creative + media
+APIs 401 unauthenticated. Browser screenshots / real-device mobile checks remain
+**NOT TESTED** (no browser in the sandbox) — use `/dev/category-gallery` on a phone.
+
+**Still BLOCKED / owner actions, in order:** (1) storage provider choice + budget cap →
+adapter authorization → token + `JATA_STORAGE_PROVIDER`; (2) optional `OPENAI_API_KEY` or
+`GEMINI_API_KEY` for photographic generation; (3) animation/video provider + per-video cost.

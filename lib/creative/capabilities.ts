@@ -13,7 +13,7 @@
  */
 
 import { providerStatus, resolveImageEditor } from "@/lib/ai/registry";
-import { IMPLEMENTED_PROVIDERS } from "@/lib/storage";
+import { hasDurableStorage } from "@/lib/storage";
 import type { CreativeMediaType } from "./intent";
 
 export type CreativeCapabilityState = "available" | "unavailable" | "browser-dependent";
@@ -45,7 +45,9 @@ const VENDOR_ACTION =
 export function creativeCapabilities(): CreativeCapabilityMatrix {
   const status = providerStatus();
   const editor = resolveImageEditor();
-  const durableStorage = IMPLEMENTED_PROVIDERS.length > 0;
+  // Derived from the actually-configured provider: flips on its own the moment an approved
+  // durable provider is configured behind `lib/storage` — false (fail-closed) until then.
+  const durableStorage = hasDurableStorage();
   const vendorConnected = status.vendorConnected;
   const canGenerateAndSave = durableStorage && status.image.imageGeneration;
   const canEditWithAiAndSave = durableStorage && Boolean(editor);

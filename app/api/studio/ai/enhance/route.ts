@@ -22,6 +22,7 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { rateLimit } from "@/lib/rate-limit";
 import { enhanceStudioImage } from "@/lib/ai/imageLab";
+import { resolveImageAssetStore } from "@/lib/ai/assetStore";
 import { MAX_UPLOAD_CHARS } from "@/lib/media/imageFormat";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +67,8 @@ export async function POST(req: Request) {
       ownerNotes: typeof body?.ownerNotes === "string" ? body.ownerNotes.slice(0, 300) : null,
       applied: Array.isArray(body?.applied) ? (body.applied as string[]).map((entry) => String(entry).slice(0, 60)).slice(0, 6) : undefined,
       strength: typeof body?.strength === "string" ? body.strength.slice(0, 20) : null,
-    });
+      // Undefined until a durable storage provider is approved: the lab then fails closed.
+    }, { assetStore: resolveImageAssetStore() });
 
     if (outcome.status !== "ok") {
       return NextResponse.json({ error: outcome.error, code: outcome.code, retryable: outcome.retryable }, { status: outcome.httpStatus });

@@ -27,6 +27,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { parseCreativeInstruction, type CreativeMediaType } from "@/lib/creative/intent";
 import { capabilityForMediaType, creativeCapabilities } from "@/lib/creative/capabilities";
 import { enhanceStudioImage, generateStudioImages } from "@/lib/ai/imageLab";
+import { resolveImageAssetStore } from "@/lib/ai/assetStore";
 import { MAX_UPLOAD_CHARS } from "@/lib/media/imageFormat";
 
 export const dynamic = "force-dynamic";
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
         mode: "provider",
         ownerNotes: instruction,
         applied: intent.editOperations,
-      });
+      }, { assetStore: resolveImageAssetStore() });
       if (outcome.status !== "ok") {
         return NextResponse.json(
           { status: "failed", intent, capability, error: outcome.error, code: outcome.code, retryable: outcome.retryable ?? true },
@@ -136,7 +137,9 @@ export async function POST(req: Request) {
       referenceDataUrl,
       count: 2,
       refresh: body?.refresh === true,
-    });
+      // Undefined until a durable storage provider is approved: generation then fails closed
+      // with the same truthful "unavailable" the capability matrix already reported.
+    }, { assetStore: resolveImageAssetStore() });
     if (outcome.status !== "ok") {
       return NextResponse.json(
         { status: outcome.httpStatus === 503 ? "unavailable" : "failed", intent, capability, error: outcome.error, code: outcome.code, retryable: outcome.retryable ?? true },
