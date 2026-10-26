@@ -66,6 +66,19 @@ const EXPERIENCE: Record<string, StatusLabel> = {
   UNPUBLISHED: { label: "Hidden", tone: "neutral", help: "Customers cannot see your website right now." },
 };
 
+/**
+ * Derived AI Front Desk states (lib/ai-publication.ts). A pill label is never the stored
+ * operational switch on its own: `LIVE` here means published *and* entitled *and* switched on.
+ */
+const AI_FRONT_DESK: Record<string, StatusLabel> = {
+  DRAFT: { label: "Draft", tone: "neutral", help: "No customer can reach the Front Desk yet." },
+  PREVIEW: { label: "Private preview", tone: "warning", help: "Only you can see this. Publish to let customers in." },
+  LIVE: { label: "Live", tone: "success", help: "Published and covered by an active subscription." },
+  PAUSED: { label: "Paused", tone: "warning", help: "Customers are handed to a person until you resume." },
+  MAINTENANCE: { label: "Maintenance", tone: "warning", help: "Customers are handed to a person until you finish." },
+  SUSPENDED: { label: "Not live", tone: "error", help: "A verified, active subscription is required for the Front Desk to serve customers." },
+};
+
 const UNKNOWN: StatusLabel = { label: "Unknown", tone: "neutral" };
 
 export function subscriptionStatusLabel(status: string | null | undefined): StatusLabel {
@@ -106,4 +119,10 @@ export function entitlementStatusLabel(status: string | null | undefined): Statu
 export function experienceStatusLabel(status: string | null | undefined): StatusLabel {
   if (!status) return EXPERIENCE.DRAFT;
   return EXPERIENCE[status] || UNKNOWN;
+}
+
+/** Human label for a derived AI Front Desk state (see lib/ai-publication.ts). */
+export function aiFrontDeskStatusLabel(status: string | null | undefined): StatusLabel {
+  if (!status) return AI_FRONT_DESK.DRAFT;
+  return AI_FRONT_DESK[String(status).toUpperCase()] || UNKNOWN;
 }

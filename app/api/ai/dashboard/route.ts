@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness, getBusinessRoleForUser } from "@/lib/tenant";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
 import { evaluateAIReadiness } from "@/lib/ai-readiness";
+import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { publicProductPrice, withPublicPricing } from "@/lib/ai-public-products";
 import { listConversationsForBusiness } from "@/lib/ai-conversation";
 import { listLeadsForBusiness } from "@/lib/leads";
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
     const [
       brain,
       readiness,
+      frontDesk,
       orders,
       preorders,
       leads,
@@ -56,6 +58,10 @@ export async function GET(req: Request) {
     ] = await Promise.all([
       getBusinessBrain(businessId),
       evaluateAIReadiness(businessId),
+      // Derived lifecycle: published + activated + server-verified entitlement. The console shows
+      // this, never the stored switch on its own, so an unpaid or unpublished desk cannot be
+      // painted LIVE by the client.
+      getAIFrontDeskPublication(businessId),
       prisma.order?.findMany?.({
         where: { businessId },
         include: { items: true },
@@ -149,6 +155,7 @@ export async function GET(req: Request) {
       },
       notifications,
       readiness,
+      frontDesk,
       qr: {
         sharePath: shareLink.path,
         shareUrl: shareLink.url,

@@ -102,6 +102,7 @@ import { GET as cartGet } from "@/app/api/cart/route";
 import { POST as leadsPost } from "@/app/api/ai/leads/route";
 import { GET as merchantPaymentGet } from "@/app/api/merchant-payment/route";
 import { POST as aiChatPost } from "@/app/api/ai/chat/route";
+import { resetInMemoryAIConfigForTests, saveExtendedAIConfig } from "@/lib/ai-config";
 
 const TENANT_A = "biz_tenant_a";
 const TENANT_B = "biz_tenant_b";
@@ -302,6 +303,7 @@ describe("Live AI Front Desk requires a verified KES 499 entitlement (§2, §3, 
     state.paidPayment = null;
     state.plan = null;
     state.notificationRecipients = [];
+    resetInMemoryAIConfigForTests();
     state.businesses.set(TENANT_A, {
       id: TENANT_A,
       slug: "tenant-a-shop",
@@ -317,11 +319,15 @@ describe("Live AI Front Desk requires a verified KES 499 entitlement (§2, §3, 
     aiChatPost(jsonPost({ businessId, message: "How much is a cake?", channel: "web_chat" }));
 
   it("a published business with no AI entitlement is not served live AI", async () => {
+    // Refused before the engine runs: no live answer, no conversation row, no order path. The
+    // status is 402 (payment required) and the customer still gets a polite message to show.
     const res = await customerChat(TENANT_A);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(402);
     const body = await res.json();
+    expect(body.blocked).toBe(true);
+    expect(body.code).toBe("SUBSCRIPTION_REQUIRED");
     expect(body.source).toBe("fallback");
-    expect(body.error).toContain("unavailable");
+    expect(body.reply).toContain("connect you with the business");
   });
 
   it("a pending (unpaid) entitlement is not served live AI", async () => {
@@ -333,6 +339,8 @@ describe("Live AI Front Desk requires a verified KES 499 entitlement (§2, §3, 
     };
     const res = await customerChat(TENANT_A);
     const body = await res.json();
+    expect(res.status).toBe(402);
+    expect(body.blocked).toBe(true);
     expect(body.source).toBe("fallback");
   });
 
@@ -349,6 +357,8 @@ describe("Live AI Front Desk requires a verified KES 499 entitlement (§2, §3, 
 
     const res = await customerChat(TENANT_A);
     const body = await res.json();
+    expect(res.status).toBe(402);
+    expect(body.blocked).toBe(true);
     expect(body.source).toBe("fallback");
   });
 
@@ -362,12 +372,30 @@ describe("Live AI Front Desk requires a verified KES 499 entitlement (§2, §3, 
     state.subscription = { status: "ACTIVE", expiresAt: new Date(Date.now() + 30 * 86_400_000), planId: "plan_ai" };
     state.paidPayment = { status: "PAID", planId: "plan_ai" };
     state.plan = { id: "plan_ai", key: "AI_BUSINESS_FRONT_DESK", priceKES: 499, durationDays: 30 };
+    // The operational switch is part of the derived state: an entitled business that has not
+    // activated (and published) its desk is still not serving customers.
+    await saveExtendedAIConfig(TENANT_A, { operationalStatus: "LIVE" });
 
     const res = await customerChat(TENANT_A);
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.source).not.toBe("fallback");
+    expect(body.blocked).toBeUndefined();
     expect(typeof body.reply).toBe("string");
+  });
+
+  it("an expired subscription stops serving live AI even though the stored switch still says LIVE", async () => {
+    // Previously published, then the subscription lapsed: the persisted operational status must
+    // not keep the desk answering. This is the "LIVE because a record exists" defect.
+    await saveExtendedAIConfig(TENANT_A, { operationalStatus: "LIVE" });
+    state.subscription = { status: "EXPIRED", expiresAt: new Date(Date.now() - 86_400_000), planId: "plan_ai" };
+    state.paidPayment = { status: "PAID", planId: "plan_ai" };
+    state.plan = { id: "plan_ai", key: "AI_BUSINESS_FRONT_DESK", priceKES: 499, durationDays: 30 };
+
+    const res = await customerChat(TENANT_A);
+    const body = await res.json();
+    expect(res.status).toBe(402);
+    expect(body.blocked).toBe(true);
   });
 
   it("owner Preview Mode stays available without an entitlement", async () => {

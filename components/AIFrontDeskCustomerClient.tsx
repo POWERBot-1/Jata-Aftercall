@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { formatOpeningHours } from "@/lib/openingHours";
+import { aiFrontDeskStatusLabel } from "@/lib/statusLabels";
 
 type ProductSummary = {
   id: string;
@@ -55,6 +56,22 @@ type ChatMessage = {
   escalatedToHuman?: boolean;
 };
 
+/**
+ * The customer-facing AI Front Desk.
+ *
+ * Presentation follows the JATA AFTERCALL homepage — cream paper, ink text, amber accent, soft
+ * cards and a serif display line — instead of the generic dark chat template, and it is built for
+ * a narrow Android screen first: the conversation is the first thing in the reading order, the
+ * composer is a full-width control, and the order summary stacks underneath.
+ *
+ * The status pill is not the owner's stored switch: `publicationState` is derived on the server
+ * (published + entitled + switched on), so a private preview says so plainly and can never be
+ * mistaken for a live, paid Front Desk.
+ *
+ * The fallback is deliberately DRAFT, not LIVE. A missing, null or unrecognised publication state
+ * means "we were not told this desk is live", and the only safe rendering of that is the state
+ * that promises a customer nothing. LIVE is only ever painted from a state the server supplied.
+ */
 export default function AIFrontDeskCustomerClient({
   business,
   products,
@@ -63,6 +80,7 @@ export default function AIFrontDeskCustomerClient({
   greetingMessage,
   suggestedActions,
   operationalStatus,
+  publicationState = "DRAFT",
   pauseAllOrdering,
   qrSvg,
   shareUrl,
@@ -85,6 +103,8 @@ export default function AIFrontDeskCustomerClient({
   greetingMessage: string;
   suggestedActions: string[];
   operationalStatus: "LIVE" | "PAUSED" | "MAINTENANCE";
+  /** Server-derived lifecycle: DRAFT | PREVIEW | LIVE | PAUSED | MAINTENANCE | SUSPENDED. */
+  publicationState?: "DRAFT" | "PREVIEW" | "LIVE" | "PAUSED" | "MAINTENANCE" | "SUSPENDED";
   pauseAllOrdering: boolean;
   qrSvg: string;
   shareUrl: string;
@@ -206,238 +226,317 @@ export default function AIFrontDeskCustomerClient({
     }
   }
 
+  const status = aiFrontDeskStatusLabel(publicationState);
+  const hoursLine =
+    business.openingHours
+      ? formatOpeningHours(business.openingHours)
+          .map((row) => (row.label ? `${row.label} ${row.value}` : row.value))
+          .join(" · ")
+      : "";
+  const whatsappHref = business.whatsapp
+    ? `https://wa.me/${business.whatsapp.replace(/\D/g, "").replace(/^0/, "254")}`
+    : null;
+
   return (
-    <main id="main" className="min-h-screen bg-slate-950 text-slate-100">
+    <main id="main" className="jata-page min-h-screen">
       {previewMode && (
-        <div className="bg-amber-500/20 border-b border-amber-400/40 px-4 py-2 text-center text-xs font-medium text-amber-200">
-          PREVIEW MODE — Isolated sandbox. No real customer charges, orders, or live owner notifications are sent.
+        <div className="border-b border-[color:var(--jata-accent)]/30 bg-[color:var(--jata-accent)]/10 px-4 py-2 text-center text-xs font-semibold text-[color:var(--jata-accent)]">
+          Private preview — only you can see this. Nothing is charged, no live order is placed, and
+          no customer notification is sent.
         </div>
       )}
 
-      <div className="mx-auto max-w-4xl px-4 py-6">
-        {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
-                AI Front Desk • {operationalStatus}
-              </span>
-              <span className="text-xs text-slate-300">{business.category}</span>
+      <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-5 sm:px-6">
+        {/* Identity + honest status */}
+        <header className="overflow-hidden rounded-[1.6rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] shadow-[var(--jata-shadow)]">
+          <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em]"
+                  style={{
+                    borderColor:
+                      status.tone === "success"
+                        ? "rgba(4,120,87,0.28)"
+                        : status.tone === "error"
+                          ? "rgba(185,28,28,0.28)"
+                          : "var(--jata-line)",
+                    color:
+                      status.tone === "success"
+                        ? "var(--jata-live)"
+                        : status.tone === "error"
+                          ? "var(--jata-danger)"
+                          : "var(--jata-accent)",
+                    background: "transparent",
+                  }}
+                >
+                  <span aria-hidden="true">●</span>
+                  AI Front Desk · {status.label}
+                </span>
+                <span className="rounded-full bg-[color:var(--jata-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[color:var(--jata-muted)]">
+                  {business.category}
+                </span>
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{business.name}</h1>
+              <p className="mt-1 text-sm text-[color:var(--jata-muted)]">
+                {business.location ? `${business.location}` : "Ask about products, prices, delivery and orders"}
+                {hoursLine ? ` · ${hoursLine}` : ""}
+              </p>
+              {business.description ? (
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--jata-muted)]">
+                  {business.description}
+                </p>
+              ) : null}
             </div>
-            <h1 className="mt-1 text-xl font-bold text-white">{business.name}</h1>
-            <p className="text-xs text-slate-300">
-              {business.location ? `${business.location} • ` : ""}
-              {business.openingHours
-                ? `Hours: ${formatOpeningHours(business.openingHours).map((row) => (row.label ? `${row.label} ${row.value}` : row.value)).join(" · ") || "Ask about products, prices, delivery & orders"}`
-                : "Ask about products, prices, delivery & orders"}
-            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {whatsappHref ? (
+                <a href={whatsappHref} className="jata-btn jata-btn-secondary jata-btn-sm" rel="noopener noreferrer">
+                  WhatsApp
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setShowQr((prev) => !prev)}
+                aria-expanded={showQr}
+                className="jata-btn jata-btn-secondary jata-btn-sm"
+              >
+                {showQr ? "Hide QR" : "Share / QR"}
+              </button>
+              <Link href={`/b/${business.slug}`} className="jata-btn jata-btn-ghost jata-btn-sm">
+                Business page
+              </Link>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowQr((prev) => !prev)}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
-            >
-              {showQr ? "Hide QR" : "Share / QR"}
-            </button>
-            <Link
-              href={`/b/${business.slug}`}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
-            >
-              Business Page
-            </Link>
-          </div>
+          {showQr && (
+            <section className="flex flex-col items-center justify-between gap-4 border-t border-[color:var(--jata-line)] bg-[color:var(--jata-soft)] p-4 sm:flex-row sm:px-6">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold">Shareable AI Front Desk link</h2>
+                <p className="mt-1 text-xs text-[color:var(--jata-muted)]">
+                  Print this on counters, packaging, receipts or your social bios so customers can
+                  reach your front desk directly.
+                </p>
+                <code className="mt-2 inline-block max-w-full break-all rounded-lg bg-[color:var(--jata-card)] px-2.5 py-1 text-xs text-[color:var(--jata-accent)]">
+                  {shareUrl}
+                </code>
+              </div>
+              <div className="rounded-xl bg-white p-2" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+            </section>
+          )}
         </header>
 
-        {showQr && (
-          <section className="mt-4 flex flex-col items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:flex-row">
-            <div>
-              <h2 className="text-sm font-semibold text-white">Shareable AI Front Desk Link & QR</h2>
-              <p className="mt-1 text-xs text-slate-300">
-                Scan or share this link on counters, packaging, receipts, or social bios:
-              </p>
-              <code className="mt-2 inline-block rounded-sm bg-slate-950 px-2.5 py-1 text-xs text-emerald-300">
-                {shareUrl}
-              </code>
-            </div>
-            <div
-              className="rounded-xl bg-white p-2"
-              dangerouslySetInnerHTML={{ __html: qrSvg }}
-            />
-          </section>
-        )}
-
-        {/* Suggested Action Chips (§26) */}
-        <section className="mt-4 flex flex-wrap gap-2" aria-label="Suggested actions">
-          {suggestedActions.map((action) => (
-            <button
-              key={action}
-              type="button"
-              onClick={() => sendMessage(action)}
-              disabled={sending}
-              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
-            >
-              {action}
-            </button>
-          ))}
+        {/* Suggested questions, phrased from this business's own catalogue */}
+        <section className="mt-4" aria-label="Suggested questions">
+          <p className="jata-kicker">Try asking</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestedActions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => sendMessage(action)}
+                disabled={sending}
+                className="min-h-11 rounded-full border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] px-3.5 text-xs font-semibold text-[color:var(--jata-ink)] transition hover:border-[color:var(--jata-accent)] hover:text-[color:var(--jata-accent)] disabled:opacity-50"
+              >
+                {action}
+              </button>
+            ))}
+          </div>
         </section>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          {/* Conversation Stream */}
-          <section className="flex flex-col rounded-2xl border border-slate-800 bg-slate-900 lg:col-span-2">
-            <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: "460px" }}>
+          {/* The conversation comes first in the reading order on a phone. */}
+          <section
+            className="flex flex-col overflow-hidden rounded-[1.4rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] shadow-[var(--jata-shadow)] lg:col-span-2"
+            aria-label="Conversation"
+          >
+            <div className="flex items-center justify-between border-b border-[color:var(--jata-line)] px-4 py-3">
+              <h2 className="text-sm font-semibold">Conversation</h2>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--jata-muted)]">
+                Answers from saved business data
+              </span>
+            </div>
+
+            <div
+              className="flex-1 space-y-3 overflow-y-auto p-4"
+              style={{ maxHeight: "460px" }}
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
+              aria-label="Conversation with the front desk"
+            >
               {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`flex ${m.role === "customer" ? "justify-end" : "justify-start"}`}
-                >
+                <div key={m.id} className={`flex ${m.role === "customer" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                       m.role === "customer"
-                        ? "bg-emerald-600 text-white"
-                        : "border border-slate-800 bg-slate-950 text-slate-100"
+                        ? "bg-[color:var(--jata-ink)] text-[color:var(--jata-card)]"
+                        : "border border-[color:var(--jata-line)] bg-[color:var(--jata-soft)] text-[color:var(--jata-ink)]"
                     }`}
                   >
                     <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
-                    {m.role === "assistant" && m.responseType && (
-                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
-                        <span className="rounded-sm bg-slate-800 px-1.5 py-0.5 font-mono">
-                          {m.responseType}
-                        </span>
-                        {m.escalatedToHuman && (
-                          <span className="text-amber-300">Human Handoff Ready</span>
-                        )}
-                      </div>
+                    {m.role === "assistant" && m.escalatedToHuman && (
+                      <p className="mt-1.5 text-[11px] font-semibold text-[color:var(--jata-accent)]">
+                        A person from {business.name} will follow up.
+                      </p>
                     )}
                   </div>
                 </div>
               ))}
+              {sending && (
+                <p role="status" className="text-xs text-[color:var(--jata-muted)]">
+                  Checking the business records…
+                </p>
+              )}
             </div>
 
-            {/* Message Input */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 sendMessage();
               }}
-              className="flex gap-2 border-t border-slate-800 p-3"
+              className="flex gap-2 border-t border-[color:var(--jata-line)] p-3"
             >
+              <label htmlFor="ai-front-desk-message" className="sr-only">
+                Your question
+              </label>
               <input
+                id="ai-front-desk-message"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about prices, stock, delivery, or type your order (English / Kiswahili)..."
-                className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:border-emerald-500 focus:outline-hidden"
+                placeholder="Ask about prices, stock, delivery, or place an order…"
+                className="jata-input flex-1"
+                autoComplete="off"
               />
-              <button
-                type="submit"
-                disabled={sending || !input.trim()}
-                className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {sending ? "Sending..." : "Send"}
+              <button type="submit" disabled={sending || !input.trim()} className="jata-btn jata-btn-primary">
+                {sending ? "Sending…" : "Send"}
               </button>
             </form>
           </section>
 
-          {/* Conversational Cart & Verified Catalogue Sidebar */}
           <aside className="space-y-4">
-            {/* Conversational Cart (§27) */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <h2 className="text-sm font-semibold text-white">Conversational Order Summary</h2>
+            <div className="rounded-[1.4rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] p-4 shadow-[var(--jata-shadow)]">
+              <h2 className="text-sm font-semibold">Your order</h2>
               {pauseAllOrdering ? (
-                <p className="mt-2 text-xs text-amber-300">
-                  Ordering is temporarily paused by the business. You can still ask questions or request a human callback.
+                <p className="mt-2 text-xs leading-relaxed text-[color:var(--jata-muted)]">
+                  Ordering is paused by the business right now. You can still ask questions or ask
+                  for a person to call you back.
                 </p>
               ) : cart && cart.lineItems.length > 0 ? (
                 <div className="mt-3 space-y-2 text-xs">
                   {cart.lineItems.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-slate-200">
-                      <span>
+                    <div key={idx} className="flex justify-between gap-2">
+                      <span className="text-[color:var(--jata-ink)]">
                         {item.quantity} × {item.name}
                       </span>
-                      <span className="font-semibold">KES {item.lineSubtotalKES}</span>
+                      <span className="font-semibold tabular-nums">KES {item.lineSubtotalKES}</span>
                     </div>
                   ))}
-                  <div className="border-t border-slate-800 pt-2 flex justify-between text-slate-300">
+                  <div className="flex justify-between border-t border-[color:var(--jata-line)] pt-2 text-[color:var(--jata-muted)]">
                     <span>Subtotal</span>
-                    <span>KES {cart.subtotalKES}</span>
+                    <span className="tabular-nums">KES {cart.subtotalKES}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-emerald-300 text-sm">
+                  <div className="flex justify-between text-sm font-bold">
                     <span>Total</span>
-                    <span>KES {cart.totalKES}</span>
+                    <span className="tabular-nums">KES {cart.totalKES}</span>
                   </div>
 
-                  <div className="pt-2 space-y-2">
+                  <div className="space-y-2 pt-2">
+                    <label htmlFor="ai-order-name" className="sr-only">
+                      Your name
+                    </label>
                     <input
+                      id="ai-order-name"
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="Your name"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                      className="jata-input w-full"
+                      autoComplete="name"
                     />
+                    <label htmlFor="ai-order-phone" className="sr-only">
+                      Your phone number
+                    </label>
                     <input
+                      id="ai-order-phone"
                       type="tel"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       placeholder="Phone (e.g. 0712345678)"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                      className="jata-input w-full"
+                      autoComplete="tel"
                     />
                     {deliveryZones.length > 0 && (
-                      <select
-                        value={selectedZone}
-                        onChange={(e) => setSelectedZone(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
-                      >
-                        {deliveryZones.map((z) => (
-                          <option key={z.name} value={z.name}>
-                            {z.name} (+KES {z.feeKES})
-                          </option>
-                        ))}
-                      </select>
+                      <div>
+                        <label htmlFor="ai-order-zone" className="jata-label">
+                          Delivery area
+                        </label>
+                        <select
+                          id="ai-order-zone"
+                          value={selectedZone}
+                          onChange={(e) => setSelectedZone(e.target.value)}
+                          className="jata-input w-full"
+                        >
+                          {deliveryZones.map((z) => (
+                            <option key={z.name} value={z.name}>
+                              {z.name} (+KES {z.feeKES})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                     <button
                       type="button"
                       onClick={handleConfirmOrder}
                       disabled={sending}
-                      className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+                      className="jata-btn jata-btn-primary jata-btn-block"
                     >
-                      Confirm Order
+                      Confirm order
                     </button>
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-slate-300">
-                  Say e.g. &ldquo;I want two {products[0]?.name || "items"}&rdquo; in chat to build your order automatically.
+                <p className="mt-2 text-xs leading-relaxed text-[color:var(--jata-muted)]">
+                  Say e.g. &ldquo;I want two {products[0]?.name || "items"}&rdquo; in the conversation and
+                  your order is built automatically.
                 </p>
               )}
 
               {orderNotice && (
-                <p className="mt-2 rounded-lg bg-slate-950 p-2 text-xs text-emerald-300">
+                <p role="status" className="mt-2 rounded-lg bg-[color:var(--jata-soft)] p-2 text-xs leading-relaxed">
                   {orderNotice}
                 </p>
               )}
             </div>
 
-            {/* Verified Catalogue Quick List */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <h2 className="text-sm font-semibold text-white">Verified Catalogue</h2>
+            <div className="rounded-[1.4rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] p-4 shadow-[var(--jata-shadow)]">
+              <h2 className="text-sm font-semibold">From the catalogue</h2>
               <div className="mt-2 space-y-2 text-xs">
                 {products.slice(0, 6).map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 border-b border-slate-800/70 pb-1.5">
-                    <div>
-                      <p className="font-medium text-slate-100">{p.name}</p>
-                      <span className="text-[11px] text-slate-300">{p.stockStatus}</span>
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 border-b border-[color:var(--jata-line)] pb-1.5 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{p.name}</p>
+                      <span className="text-[11px] text-[color:var(--jata-muted)]">
+                        {p.stockStatus.replace(/_/g, " ").toLowerCase()}
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => sendMessage(`How much is ${p.name}?`)}
-                      className="rounded-sm bg-slate-800 px-2 py-1 font-semibold text-emerald-300 hover:bg-slate-700"
+                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg bg-[color:var(--jata-soft)] px-3 font-semibold text-[color:var(--jata-ink)] hover:text-[color:var(--jata-accent)]"
                     >
                       {p.priceKES != null ? (
                         <>
                           KES {p.priceKES}
-                          {p.wasPriceKES != null ? <span className="ml-1 text-[10px] text-slate-400 line-through">KES {p.wasPriceKES}</span> : null}
+                          {p.wasPriceKES != null ? (
+                            <span className="ml-1 text-[10px] text-[color:var(--jata-muted)] line-through">
+                              KES {p.wasPriceKES}
+                            </span>
+                          ) : null}
                         </>
                       ) : (
                         "Price on request"
@@ -446,18 +545,31 @@ export default function AIFrontDeskCustomerClient({
                   </div>
                 ))}
                 {services.slice(0, 4).map((s) => (
-                  <div key={s.id} className="flex items-center justify-between gap-2 border-b border-slate-800/70 pb-1.5">
-                    <span className="font-medium text-slate-100">{s.title}</span>
-                    <span className="text-emerald-300">KES {s.priceFrom ?? 0}</span>
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between gap-2 border-b border-[color:var(--jata-line)] pb-1.5 last:border-b-0"
+                  >
+                    <span className="truncate font-medium">{s.title}</span>
+                    <span className="shrink-0 text-[color:var(--jata-accent)]">
+                      {s.priceFrom != null ? `From KES ${s.priceFrom}` : "Ask for a quote"}
+                    </span>
                   </div>
                 ))}
                 {products.length === 0 && services.length === 0 && (
-                  <p className="text-slate-300">Ask our front desk for current offerings.</p>
+                  <p className="text-[color:var(--jata-muted)]">Ask the front desk what is available today.</p>
                 )}
               </div>
             </div>
           </aside>
         </div>
+
+        <p className="mt-5 text-center text-[11px] leading-relaxed text-[color:var(--jata-muted)]">
+          Answers use only what {business.name} saved — products, prices, delivery zones, opening hours and
+          policies. When something is not on file, you are handed to a person. Operated by JATA
+          AFTERCALL. Status: {status.label}
+          {operationalStatus === "PAUSED" ? " (temporarily paused)" : ""}
+          {operationalStatus === "MAINTENANCE" ? " (maintenance)" : ""}.
+        </p>
       </div>
     </main>
   );

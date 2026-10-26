@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
-import { getAIPackageStatus } from "@/lib/ai-entitlement";
+import { authorizeAIFrontDeskOperation } from "@/lib/ai-publication";
 import { normalizeIncomingChannelMessage, processNormalizedChannelEvent } from "@/lib/ai-channels";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -55,38 +55,48 @@ export async function POST(req: Request) {
         { error: "Authentication required for Preview Mode and Ask My Bot diagnostics." },
         { status: 401 },
       );
-    } else {
-      // Public customer conversation on a published business page: check publication & subscription
-      const biz = await prisma.business?.findUnique?.({
-        where: { id: resolvedBusinessId },
-        select: { id: true, isPublished: true },
-      }).catch(() => null);
+    }
 
-      if (biz && biz.isPublished === false) {
-        return NextResponse.json(
-          { error: "This AI Front Desk is not yet published." },
-          { status: 403 },
-        );
-      }
-
-      const entitlement = await getAIPackageStatus(resolvedBusinessId).catch(() => null);
-      // Live AI Front Desk is the KES 499 / 30-day package: only a business with a
-      // server-verified, currently entitled subscription may serve real customers. This blocks
-      // NONE / PENDING / CANCELLED / SUSPENDED / EXPIRED and fails closed if the check cannot
-      // run. Owner Preview and "Ask My Bot" stay available to the tenant itself (§2, §3, §49).
-      if (!entitlement || entitlement.entitled !== true) {
-        return NextResponse.json(
-          {
-            error: "AI Business Front Desk is currently unavailable for this business.",
-            reply: "I don't have that information yet. Let me connect you with the business.",
-            responseType: "ACTION_REQUIRED",
-            source: "fallback",
-            confidence: "low",
-            escalatedToHuman: true,
-          },
-          { status: 200 },
-        );
-      }
+    // Every non-preview turn is a live customer operation and must pass the same gate,
+    // whether the caller is anonymous or signed in. Before this check, an authenticated owner
+    // (or a logged-in customer of the tenant) skipped the entitlement test entirely, so a
+    // signed-in session — not a paid subscription — decided whether the desk answered for real.
+    // Owner Preview and "Ask My Bot" stay available to the tenant itself (§2, §3, §49).
+    const authorization = await authorizeAIFrontDeskOperation({
+      businessId: resolvedBusinessId,
+      preview: isOwnerConsole,
+    });
+    if (!authorization.allowed) {
+      const reply = "I don't have that information yet. Let me connect you with the business.";
+      // Anonymous customers never learn the tenant's billing situation — only that the desk is
+      // unavailable. The signed-in owner gets the precise reason so they can act on it.
+      const message = user
+        ? authorization.reason
+        : authorization.code === "BILLING_UNAVAILABLE"
+          ? "This AI Front Desk is temporarily unavailable. Please contact the business directly."
+          : "This AI Front Desk is currently unavailable. Please contact the business directly.";
+      return NextResponse.json(
+        {
+          error: message,
+          code: authorization.code,
+          reply,
+          responseType: "ACTION_REQUIRED",
+          source: "fallback",
+          confidence: "low",
+          escalatedToHuman: true,
+          blocked: true,
+        },
+        // 402 = the desk itself is unpaid/paused; 404 = it is not published; 503 = we could not
+        // verify billing and therefore refuse rather than fail open.
+        {
+          status:
+            authorization.code === "SUBSCRIPTION_REQUIRED"
+              ? 402
+              : authorization.code === "BILLING_UNAVAILABLE"
+                ? 503
+                : 404,
+        },
+      );
     }
 
     const normalizedEvent = normalizeIncomingChannelMessage({

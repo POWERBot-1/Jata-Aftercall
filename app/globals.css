@@ -4777,7 +4777,9 @@ button:focus-visible {
   padding: 0.45rem 1.05rem;
   font-weight: 700;
 }
-.ws-shell .jata-btn.jata-btn-sm { min-height: 2.25rem; padding: 0.25rem 0.75rem; font-size: 0.78rem; }
+/* 44px floor on small workspace controls (WCAG 2.5.5 / Android thumb targets). The visual size is
+   kept compact through padding and type, not through a tap target too small to hit on a phone. */
+.ws-shell .jata-btn.jata-btn-sm { min-height: 2.75rem; padding: 0.35rem 0.85rem; font-size: 0.78rem; }
 .ws-shell .jata-btn-primary {
   border-color: var(--ws-ink);
   background: var(--ws-ink);
