@@ -35,6 +35,7 @@
     "diagnose:browser:replay-delay": "node scripts/browser/hydration-delayed-chunk.check.mjs",
     "test:browser:landing": "node scripts/browser/landing-showcase.check.mjs",
     "test:browser:autopilot-controls": "node scripts/browser/autopilot-controls.check.mjs",
+    "test:browser:autopilot-activation": "node scripts/browser/autopilot-activation.check.mjs",
     "test:browser:pricing": "node scripts/browser/pricing-grid.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts"
   },
