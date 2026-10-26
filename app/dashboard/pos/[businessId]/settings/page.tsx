@@ -5,6 +5,7 @@ import { CLONE_SCOPES, TEMPLATE_LIBRARY, describeCloneScope } from "@/lib/pos/te
 import { listVersions } from "@/lib/pos/provisioning";
 import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
 import { SettingsClient } from "@/components/pos/SettingsClient";
+import { PosHeaderImageSettings } from "@/components/pos/PosHeaderImageSettings";
 
 /**
  * Settings (§25, §26, §37, §48).
@@ -75,6 +76,12 @@ export default async function PosSettingsPage({ params }: Props) {
         <h2 className="text-xl font-bold">How your POS is run</h2>
         <p className="pos-note">Publishing, history, copying your setup, and who did what.</p>
       </div>
+
+      <PosHeaderImageSettings
+        businessId={businessId}
+        businessTypeKey={workspace.configuration.business.typeKey}
+        presentation={workspace.configuration.presentation ?? {}}
+      />
 
       <SettingsClient
         businessId={businessId}

@@ -104,7 +104,9 @@ export function validateExperienceDocument(input: unknown, options: { allowLegac
   text(raw.updatedAt, "updatedAt", 40);
 
   const brand = raw.brand === undefined && options.allowLegacy ? {} : record(raw.brand, "brand");
-  keys(brand, ["businessName", "tagline", "logoUrl", "heroImageUrl", "primaryColor", "secondaryColor", "accentColor", "buttonStyle", "fontPairing", "description"], "brand");
+  keys(brand, ["businessName", "tagline", "logoUrl", "heroImageUrl", "heroFocalX", "heroFocalY", "primaryColor", "secondaryColor", "accentColor", "buttonStyle", "fontPairing", "description"], "brand");
+  number(brand.heroFocalX, "brand.heroFocalX", 5, 95, true);
+  number(brand.heroFocalY, "brand.heroFocalY", 5, 95, true);
   for (const [key, max] of Object.entries({ businessName: 80, tagline: 140, fontPairing: 30, description: 400 })) text(brand[key], `brand.${key}`, max);
   for (const key of ["primaryColor", "secondaryColor", "accentColor"]) {
     if (brand[key] !== undefined && !/^#[0-9a-f]{6}$/i.test(String(brand[key]))) issue(`brand.${key}`, "invalid_color", "Use a six-digit brand colour.");

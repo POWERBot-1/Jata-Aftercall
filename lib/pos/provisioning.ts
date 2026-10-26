@@ -11,8 +11,8 @@ import { assertBusinessOwnership } from "../tenant";
 import { SAFE_ERRORS } from "../safeError";
 import type { SessionPayload } from "../auth";
 import {
-  applyTerminologyOverrides, buildConfiguration, configurationFingerprint, configurationSummary,
-  finalize, normalizeConfiguration, validateConfiguration, type BuildContext,
+  applyTerminologyOverrides, baselineConfiguration, buildConfiguration, configurationFingerprint, configurationSummary,
+  finalize, normalizeConfiguration, sanitizePosPresentation, validateConfiguration, type BuildContext,
 } from "./configuration";
 import { configurationReadiness, pruneAnswers, sanitizeAnswers } from "./questionnaire";
 import { POS_PLAN_KEY, syncPosEntitlement } from "./entitlement";
@@ -150,6 +150,9 @@ export async function saveDraft(params: {
   // silently when a legacy row is edited.
   rejectInlineImageInConfigurationRow(existing);
   const previous = toRecord(existing);
+  // Presentation (the owner's header image) is not built from questionnaire answers, so a
+  // rebuild must carry the previous choice forward instead of silently resetting it.
+  configuration.presentation = previous?.draft.presentation ?? {};
   const status: PosLifecycleStatus = previous && isPostPaymentStatus(previous.status)
     ? previous.status
     : readiness.ready && validation.ok
@@ -185,6 +188,73 @@ export async function saveDraft(params: {
     });
   }
   return { record, readiness, validation, changed };
+}
+
+/**
+ * Save the owner's POS header image choice.
+ *
+ * Presentation only: the same sanitized value is written to the draft and (when one exists)
+ * the published configuration so the header updates immediately, without bumping either
+ * version, changing the trading fingerprint, or making the till look unpublished. Sales,
+ * offline sync and entitlements are untouched — a header photo can never block trading.
+ */
+export async function savePosPresentation(params: {
+  businessId: string;
+  actorId: string;
+  presentation: unknown;
+}): Promise<ConfigurationRecord> {
+  const presentation = sanitizePosPresentation(params.presentation);
+  assertNoInlineImagePersistence({ presentation });
+  const existing = await loadConfigurationRow(params.businessId);
+  rejectInlineImageInConfigurationRow(existing);
+  const previous = toRecord(existing);
+
+  if (!existing || !previous) {
+    const configuration = baselineConfiguration();
+    configuration.presentation = presentation;
+    const row = await prisma.posConfiguration.create({
+      data: {
+        businessId: params.businessId,
+        status: DRAFT_STATUS,
+        answersJson: "{}",
+        draftJson: JSON.stringify(configuration),
+        draftVersion: 1,
+        publishedVersion: 0,
+        fingerprint: configurationFingerprint(configuration),
+        configurationStatus: "INCOMPLETE",
+      } as never,
+    });
+    const record = toRecord(row)!;
+    await logPosAudit({
+      businessId: params.businessId,
+      actorId: params.actorId,
+      action: "POS_HEADER_IMAGE_UPDATED",
+      targetType: "POS_CONFIGURATION",
+      targetId: record.id,
+      metadata: { hasImage: Boolean(presentation.headerImageUrl) },
+    });
+    return record;
+  }
+
+  const draft = { ...previous.draft, presentation };
+  const published = previous.published ? { ...previous.published, presentation } : null;
+  const row = await prisma.posConfiguration.update({
+    where: { businessId: params.businessId },
+    data: {
+      draftJson: JSON.stringify(draft),
+      ...(published ? { publishedJson: JSON.stringify(published) } : {}),
+    },
+  });
+  const record = toRecord(row)!;
+  await logPosAudit({
+    businessId: params.businessId,
+    actorId: params.actorId,
+    action: "POS_HEADER_IMAGE_UPDATED",
+    targetType: "POS_CONFIGURATION",
+    targetId: record.id,
+    metadata: { hasImage: Boolean(presentation.headerImageUrl) },
+  });
+  return record;
 }
 
 function isPostPaymentStatus(status: PosLifecycleStatus): boolean {

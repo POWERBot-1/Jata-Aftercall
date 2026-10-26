@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { loadWorkspace } from "@/lib/experience/workspace";
 import { StudioTabs } from "@/components/dashboard/StudioTabs";
 import { MediaLibrary } from "@/components/dashboard/MediaLibrary";
+import { HeroImagePanel } from "@/components/dashboard/HeroImagePanel";
 
-export const metadata: Metadata = { title: "Photos" };
+export const metadata: Metadata = { title: "Gallery" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -23,12 +24,23 @@ export default async function PhotosPage({ params }: { params: Promise<{ id: str
     <div className="space-y-6">
       <header className="space-y-2">
         <p className="jata-kicker">Website studio</p>
-        <h1 className="text-xl font-bold">Photos</h1>
+        <h1 className="text-xl font-bold">Gallery</h1>
         <p className="text-sm text-zinc-600">
-          Your images for {workspace.business.name}. Upload from your phone, or ask JATA to create images that match your brand.
+          Your images for {workspace.business.name} — opening image first, then every photo and created image you have saved.
         </p>
       </header>
       <StudioTabs businessId={id} capabilities={workspace.profile.capabilities} />
+      <HeroImagePanel
+        businessId={id}
+        categoryKey={workspace.profile.key}
+        heroImageUrl={workspace.document.brand.heroImageUrl || null}
+        heroFocal={
+          workspace.document.brand.heroFocalX !== undefined || workspace.document.brand.heroFocalY !== undefined
+            ? { x: workspace.document.brand.heroFocalX ?? 50, y: workspace.document.brand.heroFocalY ?? 45 }
+            : null
+        }
+        draftVersion={workspace.experience?.draftVersion ?? null}
+      />
       <MediaLibrary businessId={id} heroImageUrl={workspace.document.brand.heroImageUrl || null} />
     </div>
   );

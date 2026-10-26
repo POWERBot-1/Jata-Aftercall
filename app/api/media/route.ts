@@ -5,16 +5,18 @@
  * Studio's mobile picker depends on:
  *
  *   POST { businessId, dataUrl | url, alt?, kind?, source?, label?, width?, height? }
- *        `dataUrl` remains a validated legacy input but is refused before persistence; `url`
- *        accepts a hosted or local-path reference and creates metadata only.
+ *        `dataUrl` remains a validated legacy input: its bytes are stored only when an approved
+ *        durable media provider is configured (`lib/storage`), and refused before persistence
+ *        otherwise; `url` accepts a hosted or local-path reference and creates metadata only.
  *   PATCH { id, expectedVersion, alt?, kind?, label? }
  *
  * Metadata edits use a monotonic version counter and a tenant-scoped conditional update, so stale
  * windows cannot silently replace newer descriptions.
  *
  * Legacy `dataUrl` uploads are still validated so clients get accurate format/corruption errors,
- * then refused with 503 because no approved durable media provider is configured. Existing inline
- * assets remain readable. `url` accepts hosted/path references only; it never accepts a data URL.
+ * then either stored with the configured durable provider (bytes never enter Neon) or refused
+ * with 503 when none is configured. Existing inline assets remain readable. `url` accepts
+ * hosted/path references only; it never accepts a data URL.
  *
  * Raster formats are JPEG, PNG, WebP and GIF. SVG is refused outright — it is a script vector,
  * not a photograph. No new image bytes are written to Neon.
@@ -31,7 +33,10 @@ import { sanitizeText } from "@/lib/validation";
 import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, isInlineImageDataUrl } from "@/lib/media/persistence-policy";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, validateImageBytes } from "@/lib/media/imageFormat";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, validateImageBytes, type ImageFacts } from "@/lib/media/imageFormat";
+import { assertCanStore, CONTENT_TYPES_BY_KIND, resolveDurableStorageProvider, type ObjectStorageProvider, type StoredObjectRef } from "@/lib/storage";
+import { checkStorageQuota, storageQuotaMessage } from "@/lib/media/storageQuota";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +48,38 @@ const ASSET_SELECT = {
   id: true, url: true, kind: true, alt: true, width: true, height: true, bytes: true,
   mime: true, source: true, label: true, aiGenerationId: true, createdAt: true, version: true,
 } as const;
+
+/**
+ * Stores validated upload bytes with the configured durable provider, under the caller's own
+ * tenant prefix. Returns null (never throws) when the bytes cannot be stored honestly —
+ * including a provider that answers with inline data or another tenant's key.
+ */
+async function putDurableUpload(
+  provider: ObjectStorageProvider,
+  businessId: string,
+  bytes: Uint8Array,
+  facts: ImageFacts,
+): Promise<StoredObjectRef | null> {
+  const extension = CONTENT_TYPES_BY_KIND["image-original"][facts.mime];
+  if (!extension) return null;
+  try {
+    assertCanStore(provider, "image-original", bytes.length);
+    const ref = await provider.put({
+      businessId,
+      kind: "image-original",
+      name: `upload-${randomUUID()}.${extension}`,
+      contentType: facts.mime,
+      body: bytes,
+    });
+    if (/^data:/i.test(ref.url) || !ref.key.startsWith(`tenants/${businessId}/`)) {
+      await provider.remove({ key: ref.key }).catch(() => undefined);
+      return null;
+    }
+    return ref;
+  } catch {
+    return null;
+  }
+}
 
 const MEDIA_VERSION_INVALID_CODE = "media_version_invalid";
 const MEDIA_VERSION_INVALID_MESSAGE = "The image version is invalid. Reload the page and try again. Nothing was changed.";
@@ -152,10 +189,16 @@ export async function POST(req: Request) {
     const label = normalizeLabel(body?.label);
 
     // Legacy clients may still submit `dataUrl`. Validate supported formats and corruption for
-    // an actionable response, but never write those bytes into Neon. Existing library rows remain
-    // readable through GET; only remote/image-path references can create new metadata rows.
+    // an actionable response, but never write those bytes into Neon. When an approved durable
+    // storage provider is configured the validated bytes go there instead, and the metadata row
+    // below records only the durable URL; without one the upload keeps failing closed (503).
+    // Existing library rows remain readable through GET either way.
     const raw = String(body?.dataUrl || body?.url || "");
     const candidate = raw.trim();
+    let durableProvider: ObjectStorageProvider | null = null;
+    let durableRef: StoredObjectRef | null = null;
+    let durableWidth: number | null = null;
+    let durableHeight: number | null = null;
     if (/^data:/i.test(candidate)) {
       if (candidate.length > MAX_UPLOAD_CHARS) {
         return NextResponse.json(
@@ -174,13 +217,32 @@ export async function POST(req: Request) {
       if (verdict.status !== "ok") {
         return NextResponse.json({ error: verdict.issue.message, code: verdict.issue.code }, { status: verdict.issue.code === "too_large" ? 413 : 400 });
       }
-      return NextResponse.json(
-        { error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE },
-        { status: 503 },
-      );
+      const provider = resolveDurableStorageProvider();
+      if (!provider) {
+        return NextResponse.json(
+          { error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE },
+          { status: 503 },
+        );
+      }
+      // $0-first ceilings (250 MB per business, 5 GB global) are enforced before any byte is
+      // accepted. 507 = the storage itself cannot take more; the message says what to do.
+      const quota = await checkStorageQuota({ businessId, incomingBytes: parsed.bytes.length });
+      if (!quota.ok) {
+        return NextResponse.json(
+          { error: storageQuotaMessage(quota.scope ?? "unavailable"), code: "storage_quota_exceeded", scope: quota.scope ?? "unavailable" },
+          { status: 507 },
+        );
+      }
+      durableProvider = provider;
+      durableRef = await putDurableUpload(provider, businessId, parsed.bytes, verdict.facts);
+      if (!durableRef) {
+        return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+      }
+      durableWidth = verdict.facts.width;
+      durableHeight = verdict.facts.height;
     }
 
-    const url = safeUrl(candidate);
+    const url = durableRef ? durableRef.url : safeUrl(candidate);
     if (!url) {
       return NextResponse.json({ error: "That image could not be read. Upload a JPG, PNG or WebP photo." }, { status: 400 });
     }
@@ -194,10 +256,10 @@ export async function POST(req: Request) {
 
     const widthValue = Number(body?.width);
     const heightValue = Number(body?.height);
-    const width = Number.isFinite(widthValue) && widthValue > 0 ? Math.round(widthValue) : null;
-    const height = Number.isFinite(heightValue) && heightValue > 0 ? Math.round(heightValue) : null;
-    const bytes: number | null = null;
-    const mime: string | null = null;
+    const width = durableWidth ?? (Number.isFinite(widthValue) && widthValue > 0 ? Math.round(widthValue) : null);
+    const height = durableHeight ?? (Number.isFinite(heightValue) && heightValue > 0 ? Math.round(heightValue) : null);
+    const bytes: number | null = durableRef ? durableRef.bytes : null;
+    const mime: string | null = durableRef ? durableRef.contentType : null;
     const assetData = {
       businessId,
       url,
@@ -215,13 +277,21 @@ export async function POST(req: Request) {
     // Check the exact row immediately before persistence: aiGenerationId is caller-controlled
     // metadata, even when the image URL itself is a safe path.
     if (containsInlineImageDataUrl(assetData)) {
+      if (durableProvider && durableRef) await durableProvider.remove({ key: durableRef.key }).catch(() => undefined);
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
-    const asset = await prisma.mediaAsset.create({
-      data: assetData,
-      select: ASSET_SELECT,
-    });
+    let asset;
+    try {
+      asset = await prisma.mediaAsset.create({
+        data: assetData,
+        select: ASSET_SELECT,
+      });
+    } catch (error) {
+      // Metadata could not be recorded: do not leave an orphaned object in durable storage.
+      if (durableProvider && durableRef) await durableProvider.remove({ key: durableRef.key }).catch(() => undefined);
+      throw error;
+    }
     await logAudit({
       actorId: session.userId,
       action: "MEDIA_UPLOADED",

@@ -1445,6 +1445,25 @@ button:focus-visible {
 .pos-subtitle { font-size: 0.8rem; color: var(--jata-muted); margin: 0.15rem 0 0; }
 .pos-header-side { display: flex; align-items: center; gap: 0.5rem; }
 
+/* Category header image: a short, collapsible banner. Fixed heights keep the layout
+   still while it loads; on small phones it stays compact so selling keeps the space. */
+.pos-header-image {
+  position: relative; overflow: hidden; border-radius: 1rem;
+  border: 1px solid var(--jata-line); background: var(--jata-card);
+}
+.pos-header-image img { display: block; width: 100%; height: 7rem; object-fit: cover; }
+@media (min-width: 640px) { .pos-header-image img { height: 9rem; } }
+.pos-header-image[data-collapsed="true"] { height: 2rem; }
+.pos-header-image-toggle {
+  position: absolute; right: 0.45rem; bottom: 0.45rem; display: inline-flex; align-items: center; gap: 0.3rem;
+  min-height: 1.55rem; padding: 0.18rem 0.55rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.62); color: #fff; font-size: 0.68rem; font-weight: 700;
+}
+.pos-header-image[data-collapsed="true"] .pos-header-image-toggle {
+  position: absolute; right: 0.35rem; bottom: 0.28rem; background: var(--jata-card); color: var(--jata-muted);
+  border-color: var(--jata-line);
+}
+
 .pos-nav {
   display: flex; gap: 0.35rem; overflow-x: auto; padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--jata-line); scrollbar-width: thin;
@@ -1658,7 +1677,7 @@ button:focus-visible {
 .pos-empty p { margin: 0.3rem 0 0.8rem; font-size: 0.86rem; color: var(--jata-muted); }
 
 @media print {
-  .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions { display: none !important; }
+  .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions, .pos-header-image { display: none !important; }
   .pos-receipt { border: none; }
 }
 

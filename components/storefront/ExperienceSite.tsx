@@ -26,6 +26,10 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
   const heroImage = hero?.imageUrl || document.brand.heroImageUrl || null;
+  // The owner's chosen crop focal point applies to their brand hero image only.
+  const heroFocal = !hero?.imageUrl && document.brand.heroImageUrl
+    ? { objectPosition: `${document.brand.heroFocalX ?? 50}% ${document.brand.heroFocalY ?? 45}%` }
+    : undefined;
 
   const structuredData = structuredDataFor({
     business,
@@ -41,7 +45,7 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
           {heroImage && theme.treatment.heroStyle !== "split" ? (
             <div className="eb-hero__media">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
+              <img src={heroImage} alt="" fetchPriority="high" decoding="async" style={heroFocal} />
               <div className="eb-hero__scrim" />
             </div>
           ) : null}
@@ -50,7 +54,7 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
               {heroImage && theme.treatment.heroStyle === "split" ? (
                 <div className="eb-hero__media">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
+                  <img src={heroImage} alt="" fetchPriority="high" decoding="async" style={heroFocal} />
                 </div>
               ) : null}
               <div className={theme.treatment.heroStyle === "split" ? "" : "eb-container"}>

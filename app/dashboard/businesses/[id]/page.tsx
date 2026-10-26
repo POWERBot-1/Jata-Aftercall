@@ -13,7 +13,8 @@ import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 import { WorkspaceHero } from "@/components/workspace/WorkspaceUI";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { photoForCategory, categoryLabel } from "@/lib/workspaceImagery";
-import { ExternalLink, Eye, Globe, UploadCloud } from "lucide-react";
+import { focalToObjectPosition, imageForExperienceCategory } from "@/lib/categoryImagery";
+import { ExternalLink, Eye, Globe, Image as ImageIcon, UploadCloud, Wand2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,62 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   await loadWorkspace(id);
   return { title: "Website studio" };
+}
+
+/**
+ * The visual heart of the Studio home: the actual opening image customers will meet,
+ * large, with the three actions an owner most often wants. It renders the owner's saved
+ * draft hero when one exists and the suggested category image otherwise — saying which.
+ */
+function StudioVisualPreview({
+  businessId, categoryKey, heroImageUrl, heroFocalX, heroFocalY, businessName,
+}: {
+  businessId: string;
+  categoryKey: string;
+  heroImageUrl: string | null;
+  heroFocalX?: number;
+  heroFocalY?: number;
+  businessName: string;
+}) {
+  const suggested = imageForExperienceCategory(categoryKey);
+  const usingOwn = Boolean(heroImageUrl);
+  const focal = usingOwn
+    ? focalToObjectPosition({ x: heroFocalX ?? 50, y: heroFocalY ?? 45 })
+    : focalToObjectPosition(suggested.focal);
+  return (
+    <section className="jata-card" aria-label="Your website at a glance">
+      <div className="relative overflow-hidden rounded-2xl border bg-zinc-100">
+        <div className="relative aspect-[16/9] sm:aspect-[21/9]">
+          {usingOwn ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={heroImageUrl as string} alt={`Opening image for ${businessName}`} className="h-full w-full object-cover" style={{ objectPosition: focal }} />
+          ) : (
+            <picture>
+              {suggested.webp ? <source srcSet={suggested.webpSrcSet} type="image/webp" sizes="100vw" /> : null}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={suggested.src} srcSet={suggested.srcSet} sizes="100vw" alt={suggested.alt} width={suggested.width} height={suggested.height}
+                className="h-full w-full object-cover" style={{ objectPosition: focal }} loading="lazy" decoding="async" />
+            </picture>
+          )}
+          <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-semibold text-white">
+            {usingOwn ? "Your opening image (draft)" : `Suggested image · ${suggested.label}`}
+          </span>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link href={`/dashboard/businesses/${businessId}/create`} className="jata-btn jata-btn-primary">
+          <Wand2 size={15} aria-hidden="true" /> Create something visual
+        </Link>
+        <Link href={`/dashboard/businesses/${businessId}/photos`} className="jata-btn jata-btn-secondary">
+          <ImageIcon size={15} aria-hidden="true" /> Change image
+        </Link>
+        <Link href={`/dashboard/businesses/${businessId}/preview`} className="jata-btn jata-btn-ghost">
+          <Eye size={15} aria-hidden="true" /> Preview phone &amp; desktop
+        </Link>
+      </div>
+      <p className="jata-hint mt-2">Draft image — customers see it only after you publish below.</p>
+    </section>
+  );
 }
 
 export default async function StudioHomePage({ params }: Props) {
@@ -73,6 +130,8 @@ export default async function StudioHomePage({ params }: Props) {
       <StudioTabs businessId={business.id} capabilities={profile.capabilities} />
 
       <EntitlementBanner businessId={business.id} entitlement={entitlement} isPublished={business.isPublished} />
+
+      {experience ? <StudioVisualPreview businessId={business.id} categoryKey={profile.key} heroImageUrl={document.brand.heroImageUrl || null} heroFocalX={document.brand.heroFocalX} heroFocalY={document.brand.heroFocalY} businessName={business.name} /> : null}
 
       {!experience ? (
         <CreateExperienceForm businessId={business.id} currentCategory={business.category} />

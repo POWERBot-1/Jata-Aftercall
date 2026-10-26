@@ -40,6 +40,7 @@
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@prisma/client": "^5.22.0",
     "@tanstack/react-table": "^9.3.1",
     "bcryptjs": "^2.4.3",
