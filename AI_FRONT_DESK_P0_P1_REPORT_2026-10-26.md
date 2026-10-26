@@ -251,6 +251,14 @@ CI can download the Prisma engine:
 
 So the app does type-check and build cleanly; only this sandbox cannot prove it, and CI has.
 
+**Run-to-run note.** On run 1 (`e26014a`, the application commit) all 12 checks passed, including
+the storefront Motion/immersive browser regressions inside the “Journey against a real database”
+job. On run 2 (`1631d06`, a docs-only commit with byte-identical application code) the same job
+failed at the *storefront* Motion browser regression step — a storefront-only browser test that
+this change does not touch and that passed on run 1. The failing step's log is not retrievable
+through the GitHub API from this sandbox, so it is recorded as an isolated, non-reproducible
+browser-test failure rather than as a regression of this work.
+
 **Environment limitation in this sandbox, proven not introduced here.** `binaries.prisma.sh` is unreachable from
 this sandbox, so `prisma generate` cannot run and `@prisma/client` stays stubbed. Re-running
 `npx tsc --noEmit` and `npm run build` on the untouched baseline (`git stash -u`) produced the
