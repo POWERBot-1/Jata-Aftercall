@@ -131,7 +131,7 @@ describe("fallbacks and free text", () => {
     expect(imageForCategoryText("Hardware & building supplies").id).toBe("hardware");
     expect(imageForCategoryText("Boda delivery").id).toBe("transport");
     expect(imageForCategoryText("Agrovet").id).toBe("agriculture");
-    expect(imageForCategoryText("Salon & barber").id).toBe("beauty");
+    expect(imageForCategoryText("Salon & barber").id).toBe("salon");
     expect(imageForCategoryText("Phone accessories").id).toBe("electronics");
   });
 });
@@ -153,5 +153,23 @@ describe("registry URL helpers (POS header allow-list)", () => {
     expect(clampFocal(200, 50)).toBe(95);
     expect(clampFocal("42", 50)).toBe(42);
     expect(clampFocal("nope", 50)).toBe(50);
+  });
+});
+
+describe("dedicated worlds added in the continuation", () => {
+  it("salon, technical services and grocery have their own dedicated imagery", () => {
+    expect(imageForExperienceCategory("salon").id).toBe("salon");
+    expect(imageForExperienceCategory("technical").id).toBe("technical");
+    expect(imageForExperienceCategory("beauty").id).toBe("beauty");
+    expect(imageForPosType("salon").id).toBe("salon");
+    expect(imageForPosType("barber").id).toBe("salon");
+    expect(imageForPosType("grocery").id).toBe("grocery");
+    expect(imageForPosType("supermarket").id).toBe("grocery");
+    expect(imageForPosType("convenience_shop").id).toBe("grocery");
+    expect(imageForCategoryText("Phone repair & electrical works").id).toBe("technical");
+    expect(imageForCategoryText("Hair salon & barber shop").id).toBe("salon");
+    expect(imageForCategoryText("Grocery mini-mart").id).toBe("grocery");
+    expect(imageForCategoryText("Mama mboga").id).toBe("produce");
+    expect(imageForCategoryText("Beauty products & cosmetics").id).toBe("beauty");
   });
 });

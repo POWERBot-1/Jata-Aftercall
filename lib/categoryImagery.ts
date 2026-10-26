@@ -90,6 +90,9 @@ function categoryPhoto(id: string, label: string, alt: string, focal = { x: 50, 
 export const CATEGORY_IMAGES: Record<string, CategoryImage> = {
   food: landingPhoto("food", "nyumbani-kitchen", "Food & restaurant", "Illustrative photo of a Kenyan kitchen serving plated food."),
   beauty: landingPhoto("beauty", "marys-beauty-studio", "Beauty & salon", "Illustrative photo of a small beauty studio's braiding and nails work area."),
+  salon: categoryPhoto("salon", "Salon & barber", "Illustrative AI-made image of a stylish Kenyan salon and barbershop with styling chairs, mirrors and warm light."),
+  grocery: categoryPhoto("grocery", "Grocery & minimart", "Illustrative AI-made image of a bright Kenyan minimart with packed shelves and a checkout counter."),
+  technical: categoryPhoto("technical", "Fundi & home services", "Illustrative AI-made image of a Kenyan electrician fundi at work with a toolbox, cables and tools on a bench.", { x: 45, y: 45 }),
   fashion: categoryPhoto("fashion", "Fashion & boutique", "Illustrative AI-made image of a Kenyan clothing boutique with colourful garments on rails and shelves."),
   retail: workspacePhoto("retail", "category-retail", "Shop & retail", "Illustrative photo of a small neighbourhood shop with stocked shelves."),
   produce: workspacePhoto("produce", "category-produce", "Mama mboga & fresh produce", "Illustrative photo of a fresh produce stall with baskets of vegetables and fruit.", { x: 55, y: 50 }),
@@ -113,12 +116,12 @@ export const FALLBACK_CATEGORY_IMAGE: CategoryImage = CATEGORY_IMAGES.produce;
 
 /**
  * Website Studio experience profile key → image id (`lib/experience/categories` keys).
- * Salon shares the beauty-studio photograph on purpose: that photograph *is* a salon.
+ * Every profile has a dedicated world; only the `other` fallback shares (produce).
  */
 export const EXPERIENCE_CATEGORY_IMAGE: Record<string, string> = {
   food: "food",
   beauty: "beauty",
-  salon: "beauty",
+  salon: "salon",
   fashion: "fashion",
   retail: "retail",
   electronics: "electronics",
@@ -130,7 +133,7 @@ export const EXPERIENCE_CATEGORY_IMAGE: Record<string, string> = {
   professional: "professional",
   hospitality: "hospitality",
   education: "education",
-  technical: "hardware",
+  technical: "technical",
   other: "produce",
 };
 
@@ -143,8 +146,8 @@ export const POS_TYPE_IMAGE: Record<string, string> = {
   restaurant: "food", cafe: "food", bar: "food", bakery: "food", butchery: "food", catering: "food",
   hotel: "hospitality",
   // Shops & retail
-  retail: "retail", supermarket: "retail", convenience_shop: "retail", wholesale: "retail",
-  grocery: "produce", florist: "produce",
+  retail: "retail", supermarket: "grocery", convenience_shop: "grocery", wholesale: "retail",
+  grocery: "grocery", florist: "produce",
   electronics: "electronics",
   clothing: "fashion", boutique: "fashion", shoes: "fashion", fashion_designer: "fashion", tailor: "fashion",
   beauty_products: "beauty", furniture: "furniture",
@@ -155,7 +158,7 @@ export const POS_TYPE_IMAGE: Record<string, string> = {
   marketplace_seller: "retail", online_seller: "retail",
   subscription_business: "professional", membership_business: "professional",
   // Beauty & personal care
-  salon: "beauty", barber: "beauty", spa: "beauty",
+  salon: "salon", barber: "salon", spa: "beauty",
   // Motoring & movement
   garage: "automotive", auto_repair: "automotive", car_wash: "automotive", spare_parts: "automotive",
   transport: "transport", courier: "transport",
@@ -173,16 +176,19 @@ export const POS_TYPE_IMAGE: Record<string, string> = {
 /** Free-text fallbacks, mirroring the workspace alias rules, for hand-typed categories. */
 const FREE_TEXT_IMAGE: Array<[RegExp, string]> = [
   [/\b(pharmacy|chemist|clinic|dental|health|vet(erinary)?)\b/, "pharmacy"],
-  [/\b(mama mboga|produce|vegetable|fruit|grocery|greengrocer)\b/, "produce"],
+  [/\b(mama mboga|produce|vegetable|fruit|greengrocer)\b/, "produce"],
+  [/\b(grocery|mini-?mart|supermarket)\b/, "grocery"],
   [/\b(farm|agri\w*|agrovet|livestock|crop|dairy|poultry)\b/, "agriculture"],
   [/\b(transport|taxi|matatu|logistics|courier|delivery|rider|boda)\b/, "transport"],
+  [/\b(technic\w*|repair|welding|electric\w*|plumb\w*|fundi|carpent\w*)\b/, "technical"],
   [/\b(hardware|building|construction|mabati|cement|timber)\b/, "hardware"],
   [/\b(food|restaurant|menu|cafe|café|eatery|bakery|butcher|cater\w*|kitchen|choma)\b/, "food"],
-  [/\b(beauty|salon|spa|nail|braid|makeup|barber|hair|cosmetic)\b/, "beauty"],
+  [/\b(beauty|cosmetic|makeup|spa|skincare)\b/, "beauty"],
+  [/\b(salon|barber|hair|braid|nail)\b/, "salon"],
   [/\b(fashion|clothes|clothing|tailor|boutique|shoe|mitumba)\b/, "fashion"],
   [/\b(electronic|phone|computer|laptop|gadget|accessor)\b/, "electronics"],
   [/\b(auto|car|vehicle|garage|mechanic|spare)\b/, "automotive"],
-  [/\b(technic\w*|repair|welding|electric\w*|plumb\w*|fundi|carpent\w*)\b/, "hardware"],
+  [/\b(handyman|home services)\b/, "technical"],
   [/\b(real ?estate|property|land|rental|letting|agent)\b/, "realestate"],
   [/\b(hotel|hospitality|guest|airbnb|lodge|travel|tour)\b/, "hospitality"],
   [/\b(furniture|interior|decor|woodwork|sofa)\b/, "furniture"],
