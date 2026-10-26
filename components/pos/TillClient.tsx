@@ -6,6 +6,7 @@ import type { MethodOption } from "@/lib/pos/money";
 import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 import type { ReceiptDocument } from "@/lib/pos/types";
 import { formatNumber } from "@/lib/dateFormat";
+import { submitSaleOfflineFirst } from "@/lib/pos/offline";
 
 /**
  * The till (§58, §59, §62).
@@ -55,6 +56,10 @@ type SaleResponse = {
   totals?: { subtotalKES: number; discountKES: number; taxKES: number; totalKES: number; paidKES: number; balanceKES: number; changeKES: number };
   changeKES?: number;
   creditKES?: number;
+  /** True when the sale was recorded on this device because the network was down (§6). */
+  offline?: boolean;
+  /** The device-side identifier of an offline sale; it becomes the server idempotency key on sync. */
+  offlineReference?: string;
 };
 
 export function TillClient({
@@ -208,18 +213,46 @@ export function TillClient({
     };
   }
 
+  /** A local receipt for an offline sale. Totals are the counter's own; the server re-derives them on sync. */
+  function offlineReceiptText(input: {
+    reference: string;
+    subtotal: number;
+    discount: number;
+    total: number;
+    paid: number;
+    change: number;
+    paymentKind: "cash" | "pending";
+  }): string {
+    const lines = [
+      "OFFLINE SALE — SAVED ON THIS DEVICE",
+      `Reference ${input.reference}`,
+      `Items subtotal   KES ${formatNumber(input.subtotal)}`,
+      `Discount         KES ${formatNumber(Math.max(0, input.discount))}`,
+      `Total            KES ${formatNumber(input.total)}`,
+    ];
+    if (input.paymentKind === "cash") {
+      lines.push(`Cash received    KES ${formatNumber(input.paid)}`);
+      lines.push(`Change due       KES ${formatNumber(input.change)}`);
+    } else {
+      lines.push("Payment UNCONFIRMED — will be verified when you reconnect.");
+    }
+    lines.push("This sale will be recorded and given a receipt number when the device syncs.");
+    return lines.join("\n");
+  }
+
   async function complete() {
     setBusy(true);
     setError(null);
     setWarnings([]);
+    const saleBody = {
+      ...payload(),
+      payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
+    };
     try {
       const response = await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...payload(),
-          payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
-        }),
+        body: JSON.stringify(saleBody),
       });
       const data: SaleResponse = await response.json();
       if (!response.ok || data.ok === false) {
@@ -238,7 +271,65 @@ export function TillClient({
       setBusy(false);
       searchRef.current?.focus();
     } catch {
-      setError("We couldn't reach JATA. Check your connection and try again.");
+      // Network unreachable (§6): the sale happened at the counter, so save it on this device and
+      // sync it when connectivity returns. Cash is received now; any other method is unconfirmed.
+      try {
+        const methods = (saleBody.payments ?? []).map((entry) => String(entry.method ?? "").toLowerCase());
+        const paymentKind = methods.some((entry) => entry && entry !== "cash" && entry !== "credit")
+          ? "pending"
+          : "cash";
+        const cash = saleBody.payments.find((entry) => String(entry.method).toLowerCase() === "cash");
+        const cashTendered = paymentKind === "cash" ? Number(cash?.amountKES ?? 0) : 0;
+        const change = paymentKind === "cash" ? Math.max(0, cashTendered - total) : 0;
+        const outcome = await submitSaleOfflineFirst(businessId, {
+          request: saleBody as any,
+          branchId: null,
+          paymentKind,
+          paymentReference: typeof cash?.reference === "string" && cash.reference ? cash.reference : null,
+        });
+        if (outcome.offline) {
+          const offlineId = outcome.offlineId ?? "offline-record";
+          setResult({
+            ok: true,
+            offline: true,
+            offlineReference: offlineId,
+            sale: { id: offlineId, receiptNumber: "OFFLINE", status: "OFFLINE" },
+            totals: {
+              subtotalKES: subtotal,
+              discountKES: Math.max(0, lineDiscounts + discountKES),
+              taxKES: 0,
+              totalKES: total,
+              paidKES: paymentKind === "cash" ? cashTendered : 0,
+              balanceKES: paymentKind === "cash" ? 0 : total,
+              changeKES: change,
+            },
+            receiptText: offlineReceiptText({
+              reference: offlineId,
+              subtotal,
+              discount: lineDiscounts + discountKES,
+              total,
+              paid: paymentKind === "cash" ? cashTendered : 0,
+              change,
+              paymentKind,
+            }),
+            changeKES: change,
+          });
+          setWarnings([
+            paymentKind === "cash"
+              ? "Saved on this device. It will be recorded and given a receipt number when you reconnect."
+              : "Saved on this device. This payment is unconfirmed and will be verified when you reconnect.",
+          ]);
+          setCart([]);
+          setPayments([]);
+          setDiscountKES(0);
+          setFeeKES(0);
+          setNotes("");
+        } else {
+          setError(outcome.error ?? "We couldn't record that sale.");
+        }
+      } catch {
+        setError("We couldn't reach JATA and couldn't save this sale. Check your connection and try again.");
+      }
       setBusy(false);
     }
   }
@@ -284,6 +375,34 @@ export function TillClient({
             ) : (
               <Link className="jata-btn jata-btn-secondary" href={`${basePath}/payments`}>Open payments</Link>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (result?.offline) {
+    return (
+      <div className="space-y-4">
+        <div className="jata-card p-5" data-pos-offline="saved">
+          <p className="jata-kicker">Offline sale saved</p>
+          <h2 className="text-lg font-bold">Reference {result.offlineReference}</h2>
+          <p className="pos-note">
+            {result.totals
+              ? `Total KES ${formatNumber(result.totals.totalKES)}` +
+                (result.changeKES ? ` · Change KES ${formatNumber(result.changeKES)}` : "") +
+                (result.totals.balanceKES ? ` · Still owed KES ${formatNumber(result.totals.balanceKES)}` : "")
+              : ""}
+          </p>
+          {warnings.length ? (
+            <ul className="mt-3 grid gap-1">
+              {warnings.map((warning) => <li key={warning} className="pos-note">• {warning}</li>)}
+            </ul>
+          ) : null}
+          <pre className="pos-receipt mt-4">{result.receiptText}</pre>
+          <div className="pos-form-actions mt-4">
+            <button type="button" className="jata-btn jata-btn-primary" onClick={reset}>New {words.sale.toLowerCase()}</button>
+            <button type="button" className="jata-btn jata-btn-secondary" onClick={() => window.print()}>Print</button>
           </div>
         </div>
       </div>
