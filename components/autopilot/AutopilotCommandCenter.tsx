@@ -176,6 +176,16 @@ function channelStatusTone(status: string): string {
   return "neutral";
 }
 
+/**
+ * Shown when a request never reaches the server (offline, dropped connection).
+ * Every action handler must surface this instead of swallowing the rejection —
+ * a button that silently resets reads as a dead control.
+ */
+const NETWORK_ERROR_NOTICE = {
+  tone: "error",
+  text: "Network error — the request could not reach JATA. Check your connection and try again.",
+} as const;
+
 export function AutopilotCommandCenter({
   businessId,
   initialData,
@@ -207,7 +217,7 @@ export function AutopilotCommandCenter({
   const [consentPhone, setConsentPhone] = useState("");
   const [consentChannel, setConsentChannel] = useState<"WHATSAPP" | "SMS" | "EMAIL">("WHATSAPP");
 
-  async function refreshOverview() {
+  async function refreshOverview({ reportError = false }: { reportError?: boolean } = {}) {
     setBusy(true);
     try {
       const res = await fetch(
@@ -217,7 +227,16 @@ export function AutopilotCommandCenter({
       const json = await res.json().catch(() => null);
       if (res.ok && json) {
         setData(json as AutopilotOverviewPayload);
+      } else if (reportError) {
+        setBannerNotice({
+          tone: "error",
+          text: "Could not refresh the Command Center. Check your connection and try again.",
+        });
       }
+    } catch {
+      // Internal refreshes after a successful action stay quiet (the action's own
+      // notice already told the owner the result); an owner-pressed Refresh reports.
+      if (reportError) setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -240,8 +259,15 @@ export function AutopilotCommandCenter({
         });
         return;
       }
+      // The config route echoes the saved configuration; apply it immediately so the
+      // pause/mode controls reflect the saved state even before the overview refresh.
+      if (json.config) {
+        setData((prev) => ({ ...prev, config: json.config }));
+      }
       setBannerNotice({ tone: "success", text: successMsg });
       await refreshOverview();
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -272,6 +298,8 @@ export function AutopilotCommandCenter({
         return;
       }
       window.location.assign(String(json.authorization_url));
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -313,6 +341,8 @@ export function AutopilotCommandCenter({
             : "Proposal added to your Approval Queue for review.",
       });
       await refreshOverview();
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -351,6 +381,8 @@ export function AutopilotCommandCenter({
               : "Proposal rejected.",
       });
       await refreshOverview();
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -383,6 +415,8 @@ export function AutopilotCommandCenter({
         setCommandInput("");
         await refreshOverview();
       }
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -412,7 +446,17 @@ export function AutopilotCommandCenter({
         setCommandInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
       }
     };
-    rec.start();
+    rec.onerror = () => {
+      setBannerNotice({
+        tone: "info",
+        text: "Voice dictation could not start (microphone unavailable or blocked). Type or paste your spoken brief below and check 'Confirm voice transcript' before running write commands.",
+      });
+    };
+    try {
+      rec.start();
+    } catch {
+      rec.onerror?.(new Event("error"));
+    }
   }
 
   async function handleIngestSubmit(e: React.FormEvent) {
@@ -441,6 +485,8 @@ export function AutopilotCommandCenter({
       }
       setIngestResult(json.record);
       await refreshOverview();
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -480,6 +526,8 @@ export function AutopilotCommandCenter({
         text: "Customer transactional consent recorded.",
       });
       await refreshOverview();
+    } catch {
+      setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
       setBusy(false);
     }
@@ -531,7 +579,7 @@ export function AutopilotCommandCenter({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void refreshOverview()}
+              onClick={() => void refreshOverview({ reportError: true })}
               className="ws-btn-outline"
             >
               <RefreshCw size={15} aria-hidden="true" /> Refresh diagnosis

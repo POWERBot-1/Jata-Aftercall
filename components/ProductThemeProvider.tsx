@@ -18,8 +18,23 @@ export function ProductThemeSelector({
   selected: ProductThemeKey;
   onSelect: (theme: ProductThemeKey) => void;
 }) {
+  const detailsRef = React.useRef<HTMLDetailsElement | null>(null);
+
+  // Choosing a theme applies it immediately, so the picker closes to show the result
+  // instead of staying open over the page. Escape closes it too, matching menu behaviour.
+  function chooseAndClose(theme: ProductThemeKey) {
+    onSelect(theme);
+    detailsRef.current?.removeAttribute("open");
+  }
+
   return (
-    <details className="product-theme-picker">
+    <details
+      className="product-theme-picker"
+      ref={detailsRef}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") detailsRef.current?.removeAttribute("open");
+      }}
+    >
       <summary aria-label="Choose JATA appearance">
         <span aria-hidden="true" className="product-theme-picker-icon">◐</span>
         <span>Appearance</span>
@@ -35,7 +50,7 @@ export function ProductThemeSelector({
               value={theme.key}
               aria-label={`${theme.name} — ${theme.description}`}
               checked={selected === theme.key}
-              onChange={() => onSelect(theme.key)}
+              onChange={() => chooseAndClose(theme.key)}
             />
             <span className="product-theme-swatches" aria-hidden="true">
               <span style={{ backgroundColor: theme.tokens["--color-brand-primary"] }} />

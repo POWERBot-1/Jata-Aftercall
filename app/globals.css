@@ -550,6 +550,14 @@ button:focus-visible {
   min-height: 3.25rem;
   padding: 0.45rem 1rem;
 }
+/* While the Appearance picker is OPEN it must paint above the sticky workspace chrome
+   (z-index 60) and the landing nav (z-index 50). At the closed z-index of 40 the options
+   panel rendered underneath the header: the first theme option was covered and taps on it
+   landed on the navigation rail instead. The toolbar only rises while open, so when the
+   picker is closed modal sheets (z-index 60/61) still cover it as before. */
+.product-theme-toolbar:has(> .product-theme-picker[open]) {
+  z-index: 65;
+}
 .product-theme-picker { position: relative; color: var(--color-text); font-size: 0.8rem; }
 .product-theme-picker summary {
   display: inline-flex;
@@ -4287,7 +4295,7 @@ button:focus-visible {
   flex: 0 0 auto;
   align-items: center;
   gap: 0.42rem;
-  min-height: 2.5rem;
+  min-height: 2.75rem; /* 44px touch target, as DashboardNav documents */
   padding: 0 0.85rem;
   border: 1px solid transparent;
   border-radius: 999px;
