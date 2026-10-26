@@ -38,7 +38,7 @@ export type CreativeCapabilityMatrix = {
 };
 
 const STORAGE_ACTION =
-  "Approve and configure a durable media storage provider (see STORAGE_DECISION.md, e.g. Vercel Blob), then set JATA_STORAGE_PROVIDER. No provider has been approved yet, so uploads and generated images cannot be saved.";
+  "Configure Cloudflare R2 durable media storage (owner-selected 2026-10-26; see R2_SETUP.md): set JATA_STORAGE_PROVIDER=cloudflare-r2 with the R2 server-side variables. Until that configuration exists in this environment, uploads and generated images cannot be saved.";
 const VENDOR_ACTION =
   "Set OPENAI_API_KEY or GEMINI_API_KEY (server-side) to enable photographic generation and AI photo editing. Until then only JATA's built-in branded artwork could be made — and it still needs durable storage to be saved.";
 

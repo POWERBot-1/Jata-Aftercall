@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import prisma from "@/lib/db";
 import { parseImageDataUrl, validateImageBytes } from "@/lib/media/imageFormat";
 import { containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
+import { checkStorageQuota, type StorageQuotaResult } from "@/lib/media/storageQuota";
 import {
   assertCanStore,
   CONTENT_TYPES_BY_KIND,
@@ -70,6 +71,7 @@ function storedName(prefix: string, contentType: string): string | null {
 export function createImageAssetStore(
   provider: ObjectStorageProvider,
   createMediaAsset: CreateMediaAsset = defaultCreateMediaAsset,
+  quotaCheck: (input: { businessId: string; incomingBytes: number }) => Promise<StorageQuotaResult> = checkStorageQuota,
 ): ImageAssetStore {
   return async (input: ImageAssetStoreInput): Promise<StoredAsset | null> => {
     if (!provider.capabilities.durable) return null;
@@ -80,6 +82,11 @@ export function createImageAssetStore(
     if (!parsed) return null;
     const verdict = validateImageBytes(parsed.bytes, { declaredMime: parsed.mime });
     if (verdict.status !== "ok") return null;
+
+    // $0-first ceilings (250 MB per business, 5 GB global): never accept a write that would
+    // push recorded durable usage past them. Fail-closed if usage cannot be read.
+    const quota = await quotaCheck({ businessId: input.businessId, incomingBytes: parsed.bytes.length });
+    if (!quota.ok) return null;
 
     const name = storedName("ai", verdict.facts.mime);
     if (!name) return null;

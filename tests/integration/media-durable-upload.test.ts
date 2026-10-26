@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   removed: [] as string[],
   wrongTenant: false,
   providerDown: false,
+  businessBytes: 0,
+  globalBytes: 0,
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
@@ -41,6 +43,9 @@ vi.mock("@/lib/db", () => ({
         mocks.created.push(asset);
         return asset;
       }),
+      aggregate: vi.fn(async ({ where }: any) => ({
+        _sum: { bytes: where?.businessId ? mocks.businessBytes : mocks.globalBytes },
+      })),
     },
   },
 }));
@@ -78,6 +83,8 @@ beforeEach(() => {
   mocks.removed = [];
   mocks.wrongTenant = false;
   mocks.providerDown = false;
+  mocks.businessBytes = 0;
+  mocks.globalBytes = 0;
   mocks.session = { userId: "user-a", role: "OWNER" };
 });
 
@@ -125,6 +132,37 @@ describe("media upload with durable storage configured", () => {
     });
 
     expect(response.status).toBe(500);
+    expect(mocks.created).toHaveLength(0);
+  });
+
+  it("refuses with 507 when the business storage ceiling is reached, before storing anything", async () => {
+    mocks.businessBytes = 250 * 1024 * 1024;
+    mocks.globalBytes = 250 * 1024 * 1024;
+    const response = await post({
+      businessId: "business-a",
+      dataUrl: dataUrlFor(jpegBytes(), "image/jpeg"),
+      alt: "One photo too many",
+    });
+
+    expect(response.status).toBe(507);
+    const body = await response.json();
+    expect(body.code).toBe("storage_quota_exceeded");
+    expect(body.scope).toBe("business");
+    expect(mocks.puts).toHaveLength(0);
+    expect(mocks.created).toHaveLength(0);
+  });
+
+  it("refuses with 507 (global scope) when the 5 GB global ceiling is reached", async () => {
+    mocks.globalBytes = 5 * 1024 * 1024 * 1024;
+    const response = await post({
+      businessId: "business-a",
+      dataUrl: dataUrlFor(jpegBytes(), "image/jpeg"),
+      alt: "Shop front",
+    });
+
+    expect(response.status).toBe(507);
+    expect((await response.json()).scope).toBe("global");
+    expect(mocks.puts).toHaveLength(0);
     expect(mocks.created).toHaveLength(0);
   });
 

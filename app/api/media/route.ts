@@ -35,6 +35,7 @@ import { safeUrl } from "@/lib/experience/document";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, isInlineImageDataUrl } from "@/lib/media/persistence-policy";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, validateImageBytes, type ImageFacts } from "@/lib/media/imageFormat";
 import { assertCanStore, CONTENT_TYPES_BY_KIND, resolveDurableStorageProvider, type ObjectStorageProvider, type StoredObjectRef } from "@/lib/storage";
+import { checkStorageQuota, storageQuotaMessage } from "@/lib/media/storageQuota";
 import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -221,6 +222,15 @@ export async function POST(req: Request) {
         return NextResponse.json(
           { error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE },
           { status: 503 },
+        );
+      }
+      // $0-first ceilings (250 MB per business, 5 GB global) are enforced before any byte is
+      // accepted. 507 = the storage itself cannot take more; the message says what to do.
+      const quota = await checkStorageQuota({ businessId, incomingBytes: parsed.bytes.length });
+      if (!quota.ok) {
+        return NextResponse.json(
+          { error: storageQuotaMessage(quota.scope ?? "unavailable"), code: "storage_quota_exceeded", scope: quota.scope ?? "unavailable" },
+          { status: 507 },
         );
       }
       durableProvider = provider;

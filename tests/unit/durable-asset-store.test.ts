@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/db", () => ({ default: { mediaAsset: { create: vi.fn(async () => ({ id: "unused" })) } } }));
+vi.mock("@/lib/db", () => ({ default: { mediaAsset: { create: vi.fn(async () => ({ id: "unused" })), aggregate: vi.fn(async () => ({ _sum: { bytes: 0 } })) } } }));
 
 import { createImageAssetStore, resolveImageAssetStore, type CreateMediaAsset } from "@/lib/ai/assetStore";
 import { enhanceStudioImage, generateStudioImages } from "@/lib/ai/imageLab";
@@ -195,6 +195,32 @@ describe("durable storage resolution (today: nothing approved)", () => {
     expect(resolveDurableStorageProvider(env)).toBeNull();
     expect(hasDurableStorage(env)).toBe(false);
     expect(resolveImageAssetStore(env)).toBeUndefined();
+    // Cloudflare R2 is implemented but needs full server-side configuration; selected-but-
+    // unconfigured must still resolve to no store (fail-closed, no throw).
+    const r2Env = { JATA_STORAGE_PROVIDER: "cloudflare-r2" } as unknown as NodeJS.ProcessEnv;
+    expect(resolveDurableStorageProvider(r2Env)).toBeNull();
+    expect(resolveImageAssetStore(r2Env)).toBeUndefined();
+  });
+
+  it("refuses to store when the $0-first quota is exhausted, before the provider is touched", async () => {
+    const provider = new FakeDurableProvider();
+    const store = createImageAssetStore(provider, async () => ({ id: "asset-x" }), async () => ({
+      ok: false as const,
+      scope: "business" as const,
+      usage: { globalBytes: 0, businessBytes: 250 * 1024 * 1024 },
+    }));
+
+    const asset = await store({
+      businessId: BUSINESS,
+      image: generatedJpeg(),
+      alt: null,
+      source: "AI_GENERATED",
+      label: "AI_GENERATED",
+      generationId: null,
+    });
+
+    expect(asset).toBeNull();
+    expect(provider.puts).toHaveLength(0);
   });
 
   it("the image lab still fails closed with 503 when no store is supplied", async () => {
