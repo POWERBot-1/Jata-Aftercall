@@ -108,3 +108,29 @@ Section 4 records a prior Vercel price-list snapshot and illustrative assumption
 3. After selection, separately authorize adapter/read-path implementation and provider-specific secret/identity setup.
 4. Define legacy inventory and remediation; any isolated-copy inventory, real backfill, deletion or production-data action requires its own explicit scope and approval.
 5. Approve visitor-facing 3D (`JATA_IMMERSIVE_ENABLED`) separately from image storage, with its own safety/performance review.
+
+---
+
+## Addendum — owner decision, 2026-10-26 (supersedes "no provider approved" above where they conflict)
+
+- **Provider selected by the owner: Cloudflare R2** (free-first), after the priced comparison
+  in `STORAGE_COMPARISON_2026-10-26.md` (official pricing re-verified 2026-10-26:
+  $0.015/GB-month, Class A $4.50/1M, Class B $0.36/1M, egress free; free tier 10 GB-month +
+  1M/10M operations — an allowance, **not** a billing hard-cap).
+- **Adapter implementation authorized and shipped** behind this same interface
+  (`lib/storage/r2.ts`, `JATA_STORAGE_PROVIDER=cloudflare-r2`): S3-compatible API via AWS
+  SDK v3, tenant-scoped keys via `objectKeyFor`, server-side credentials only, generic
+  leak-free errors, timeouts + retries, idempotent delete for orphan cleanup. Vercel Blob
+  remains evaluated-but-not-implemented; selecting it is still refused.
+- **$0-first application ceilings implemented:** 250 MB stored media per business and 5 GB
+  globally, enforced before writes (`lib/media/storageQuota.ts`), fail-closed when usage
+  cannot be read. These sit far inside the R2 free allowance; vendor billing alerts remain
+  the owner's backstop because the free tier cannot guarantee $0 by itself.
+- **Activation state at the time of this addendum: NOT configured in any environment.**
+  Bucket/token creation and environment variables are owner-only dashboard actions
+  (`R2_SETUP.md`). Preview configuration/testing comes first; **production activation is a
+  separate explicit owner gate** and has not been granted by the adapter authorization.
+- Until an environment is configured, behaviour is unchanged from the original decision:
+  legacy reads work, new byte writes fail closed (503), no bytes enter Neon, capabilities
+  report unavailable honestly. Immersive 3D/models remain separately gated (the R2 adapter
+  declares `models: false`).

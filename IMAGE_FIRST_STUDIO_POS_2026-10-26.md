@@ -306,3 +306,50 @@ APIs 401 unauthenticated. Browser screenshots / real-device mobile checks remain
 **Still BLOCKED / owner actions, in order:** (1) storage provider choice + budget cap →
 adapter authorization → token + `JATA_STORAGE_PROVIDER`; (2) optional `OPENAI_API_KEY` or
 `GEMINI_API_KEY` for photographic generation; (3) animation/video provider + per-video cost.
+
+## 8. Continuation 2 (2026-10-26) — Cloudflare R2 adapter, $0-first ceilings, merge & deploy
+
+**Owner authorization (2026-10-26):** Cloudflare R2 selected (free-first); adapter
+implementation, testing, merge and deployment of the verified code authorized. Production
+storage **activation** remains a separate explicit gate; paid AI remains unapproved. Because
+this working session is bound to one branch, the adapter lands on PR #67 itself (it depends
+on §7's plumbing) — one reviewed head, one merge. Decision recorded in `STORAGE_DECISION.md`
+(addendum) and `R2_SETUP.md` (owner runbook).
+
+**Implemented:**
+- `lib/storage/r2.ts` — R2 via S3-compatible API (`@aws-sdk/client-s3`), behind the existing
+  `ObjectStorageProvider` contract. Keys only from `objectKeyFor`; credentials server-side
+  only and never in errors/logs; 15 s request timeout + SDK retries (3 attempts); idempotent
+  delete confined to the `tenants/` namespace; immutable cache headers; `models: false`
+  (3D still separately gated). Selection: `JATA_STORAGE_PROVIDER=cloudflare-r2` + five R2
+  variables; incomplete config fails loudly naming variables, and durable resolution stays
+  fail-closed. Vercel Blob remains refused (unchanged test).
+- `lib/media/storageQuota.ts` — $0-first ceilings enforced **before** writes in both the AI
+  asset store and `/api/media` (507 + `storage_quota_exceeded`): **250 MB per business,
+  5 GB global**, counted from recorded `MediaAsset.bytes`, fail-closed if usage unreadable.
+  R2's free tier is an allowance, not a billing cap — documented in `R2_SETUP.md` with the
+  vendor-alert backstop.
+- Capability copy updated to the R2 path; capabilities still derive from actual configuration
+  (with R2 env absent — the state of every current environment — Studio truthfully reports
+  uploads/generation unavailable). `.env.example` documents the R2 variables and flags that
+  the legacy OpenAI default model `gpt-image-1` was retired 2026-10-23 (override required
+  if OpenAI is ever enabled; no AI provider/budget has been approved).
+
+**Verification commands + results:** targeted suites (R2 adapter with fake S3 client, quota
+ceilings incl. boundaries, durable asset store incl. quota refusal, media durable upload
+incl. 507s, storage provider, creative engine incl. env-driven capability flip, legacy 503
+suite) — all passing; full suite, typecheck, ESLint and production build as recorded on the
+PR (CI is the source of truth for the exact merged head). **Real-bucket R2 end-to-end is
+BLOCKED** on the owner-only dashboard steps in `R2_SETUP.md` (bucket + scoped token +
+Preview env vars; note the project's Ignored Build Step currently skips preview builds, so
+preview verification also needs the owner's dashboard choice described there). No real
+provider result is claimed anywhere in this report.
+
+**Merge/deploy:** merging to `main` triggers a production deployment under the project's
+current Vercel settings (Production Branch `main`; Ignored Build Step skips previews). The
+deployment carries **no env changes and no schema changes**; with no R2 variables set in
+Production, storage stays fail-closed post-deploy. Merge commit, resulting `main` SHA,
+deployment status/URL and post-deploy smoke results are recorded in the PR #67 release
+comment (this file is part of the merged tree and cannot contain its own merge SHA).
+Rollback: promote the previous Vercel production deployment, or revert the merge commit;
+storage deactivation is env-only (remove `JATA_STORAGE_PROVIDER`, redeploy).
