@@ -3,6 +3,7 @@
 **Date:** 2026-10-26
 **Branch:** `arena/b8a138ba-jata-aftercall`
 **Base:** `main` @ `540180602142f0923be85a50902d33b616d29ab0`
+**Last fully CI-verified code head:** `462ee261a09528e7ec2e9b9d4a7c1c753dda7e20` (the audit doc is committed on top as a documentation-only change) · **PR:** https://github.com/POWERBot-1/Jata-Aftercall/pull/68 (OPEN, `MERGEABLE` / `CLEAN`, **all 12 checks pass**)
 **Scope:** whole-application audit + a focused, test-locked refinement pass (terminology, design-token/dark-theme correctness, journey recovery screens, brand consistency).
 
 ---
@@ -104,8 +105,9 @@ No database migration, no schema change, no environment/infrastructure change, n
 | Type check | `npx tsc --noEmit` | Only the 4 pre-existing **test-file** Prisma-stub errors; **0 errors in app/components/lib** and in the new tests. | PASS (env-only failures) |
 | Lint (build gate) | `npx eslint app components lib` | **0 errors**, 41 warnings — all pre-existing advisory `react-hooks/*` / stale-directive warnings documented in `eslint.config.mjs`. | PASS |
 | Production build (local, offline) | `npx next build --webpack` (engine-dependent test files temporarily set aside, then restored) | "✓ Compiled successfully", type-check + lint + route generation all pass, **exit 0**, full route table emitted incl. new 404/global-error. | PASS |
-| **CI full suite (real Postgres + Prisma engine)** | GitHub Actions `interactive-business-e2e` — Static (install/generate/lint/typecheck/audit), migrations+schema, §66 journey, POS journey, **all vitest suites**, production build, Release gate | **248 files / 3,038 tests passed, 0 failed**; Static, migration, schema, build and aggregate Release-gate jobs all **pass** — the local Prisma-engine errors do not occur in CI. | PASS |
-| **CI authenticated browser journey** | "Authenticated production HTTP browser journey" (Puppeteer, fail-fast) | First push failed **one** check — the 404 noindex/phrase contract (register #9). Fixed in the follow-up commit; the "15 missing M418 samples" were the same fail-fast abort, not a separate defect. Re-run on the updated branch. | PASS after fix |
+| **CI full suite (real Postgres + Prisma engine)** | GitHub Actions `interactive-business-e2e` — Static (install/generate/lint/typecheck/audit), migrations+schema, §66 journey, POS journey, **all vitest suites**, production build, Release gate | Final head run [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004): **248 files / 3,040 tests passed, 0 failed**; Static, migration, schema, build and aggregate Release-gate jobs all **pass** — the local Prisma-engine errors do not occur in CI. | PASS |
+| **CI authenticated browser journey** | "Authenticated production HTTP browser journey" (Puppeteer, fail-fast) | First push (run [40394349981](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40394349981)) failed **one** check — the 404 noindex/phrase contract (register #9); the "15 missing M418 samples" were the same fail-fast abort, not a separate defect. Fixed in `cfe20b6`; the step and every downstream hydration step pass on runs [40397135835](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135835) and [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004). | PASS |
+| **CI flaky-install (not a code defect)** | "Schema reconciliation proposal closes the drift" in Release Validation | Run [40397135784](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135784) failed at the **`npm` "Install dependencies" step before any schema step ran**; 4 sibling jobs in the same run installed cleanly, the branch contains **no** package/lock/schema/migration changes, and the identical workflow passed on the prior push. A fresh run after an empty re-trigger commit passed entirely ([40399282978](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399282978)). | PASS (transient) |
 | Targeted feature tests | `vitest run` for design-system, landing/homepage, experience-publish, entitlement, dashboard-ux, status-labels, AI Front Desk journey/a11y, new suites | All pass. | PASS |
 | Browser/Puppeteer & Postgres E2E (local) | `test:browser:*`, `tests/e2e`, `tests/prisma` | Require a Chrome binary / live Postgres / Prisma engine unavailable in this sandbox; they execute in CI instead (rows above). | NOT TESTED locally (env) |
 
@@ -122,15 +124,26 @@ deletions remain and no config was weakened to obtain the green build.
    pass is recommended before changing them (a Puppeteer recovery smoke exists but needs Chrome).
 2. **`toneClass()` in `lib/statusLabels.ts` (Low).** Legacy Tailwind-class helper, now only referenced within its
    own module and pinned by an existing test; candidate for removal in a separate, test-updated change.
-3. **Prisma engine in CI (Blocker for local full type-check only).** Restore network access to
-   `binaries.prisma.sh` (or run in the normal CI environment) so `prisma generate` produces the full client; the
-   four type errors and one unit failure then disappear with no code change.
-4. Browser/responsive and E2E journeys should be re-run in an environment with Chrome + Postgres to add
-   rendered-device evidence on top of the structural and unit evidence above.
+3. **Prisma engine locally (env-only; already proven green in CI).** The sandbox cannot download the engine from
+   `binaries.prisma.sh`, so four test-file type errors and one `dmmf` unit failure remain locally. CI generates the
+   full client against real Postgres and reports **0 type errors / 3,040 tests passing**, confirming these are
+   environmental, not code, issues.
+4. **Rendered-device/responsive pass (Low).** CI now runs the authenticated Puppeteer journey and both E2E journeys
+   on real Postgres (all green), which covers functional 404/a11y/hydration contracts. A manual multi-device visual
+   pass (phone/tablet/desktop widths, keyboard + screen-reader sweep) on the Vercel preview remains a recommended
+   human check before production; it could not be performed in the headless sandbox.
 
 ## 7. Deployment readiness
 
-* **Code completion:** ready for review — full unit/integration/security suites green (modulo documented env
-  limits), production build compiles and generates all routes, no security/entitlement/tenant control weakened.
+* **CI (final head `462ee26`):** **all 12 PR checks pass** — Static (lint/typecheck/audit), Migrations + schema and
+  candidate migration rehearsal on disposable PostgreSQL 18, schema reconciliation / zero-drift, failure-path
+  controls, production build, the full **248-file / 3,040-test** native-Postgres suite, the §66 experience journey
+  (17), the POS journey (22), the authenticated Puppeteer browser journey with all hydration regressions, the
+  aggregate Release gate, and both Vercel checks. One earlier Release-Validation failure was a transient
+  `npm install` flake (see §5), not a code/schema issue.
+* **Code completion:** ready for review — production build compiles and generates all routes; no security,
+  entitlement, tenant-isolation, Paystack verification or data-integrity control was weakened (see §3). Local
+  limits (no Chrome / Postgres / Prisma-engine download) are fully covered by the CI runs above.
 * **Merge / production deploy:** **not performed**, per the brief. Awaiting explicit owner approval. No production
-  env vars, database, payment settings or infrastructure were touched.
+  env vars, database, payment settings or infrastructure were touched; no new dependency, migration or paid service
+  was introduced.
