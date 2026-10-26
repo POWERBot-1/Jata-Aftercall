@@ -356,3 +356,57 @@ and `/api/ai/config` return `402`/`409` for activation attempts that are not per
 - No secrets, credentials, customer data or tenant data were read, used, logged or committed.
 - POS, Website Studio, JATA Qi, JATA Autopilot and other subscription plans were not modified.
 - No dependency was added; the stack (Next.js, Prisma, Neon PostgreSQL, Tailwind, Vercel) is intact.
+
+---
+
+## 13. Follow-up remediation of review findings F3 and F4
+
+Two findings from the owner review of PR #66 were fixed on the same branch, in the same PR. No
+other finding, product or plan was touched.
+
+### F3 — the customer page defaulted to LIVE (`components/AIFrontDeskCustomerClient.tsx`)
+
+- **Defect:** `publicationState = "LIVE"` was the parameter default. No caller relied on it — the
+  single caller (`app/b/[slug]/ai/page.tsx`) always passes a server-derived value with a `?? "DRAFT"`
+  fallback — so it was unreachable, but it re-introduced the exact anti-pattern this branch removes:
+  one missing prop or one future caller away from painting a live badge on an unpublished, unpaid
+  desk.
+- **Fix:** the default is now `"DRAFT"`. Server-confirmed states are unchanged (`LIVE` still renders
+  live when, and only when, the server says so). No server authorization or lifecycle code changed.
+- **Test:** `tests/unit/ai-front-desk-customer-default-state.test.ts` (7 cases) renders the real
+  component and asserts the absent prop yields the draft pill and never the live pill, that every
+  other server state still renders truthfully, and that the source contains no `"LIVE"` default.
+  Re-introducing `publicationState = "LIVE"` makes 2 of those 7 fail.
+
+### F4 — a billing outage was reported as "subscription not active"
+
+- **Defect:** `getAIPackageStatus` `Promise.all`-ed three billing reads, each `.catch(() => null)`.
+  A failed read therefore produced the same shape as "no subscription", so an outage surfaced as
+  `NONE` / `SUBSCRIPTION_REQUIRED` / HTTP 402 and the console told a paying owner their subscription
+  was not active. Access was correctly denied (fail-closed was never broken); the *diagnosis* and
+  the HTTP contract were wrong.
+- **Fix:** a new `AIBillingVerification = "VERIFIED" | "UNAVAILABLE"` axis on
+  `AIPackageStatusResult` (absent means VERIFIED). Each billing read records its failure; if any
+  read fails the result is `entitled: false, verification: "UNAVAILABLE"` — still fail-closed, but
+  no longer a claim about the customer. `deriveAIEntitlement` (pure, no I/O) always reports
+  VERIFIED. The flag propagates through `lib/ai-publication.ts` as `entitlementStatus: "UNKNOWN"`
+  and through `lib/ai-readiness.ts` as `code: "BILLING_UNAVAILABLE"`.
+- **HTTP contract:** 402 stays for a verified unpaid/inactive subscription, 404 stays for an
+  unpublished public desk, and 503 `BILLING_UNAVAILABLE` is returned only when the records could
+  not be read (`/api/ai/publish`, `/api/ai/status` activation, `/api/ai/config` LIVE save, and the
+  customer chat gate). Errors are generic; no database text reaches a customer.
+- **No writes on a guess:** `syncAIPackageEntitlement` returns early when verification is
+  UNAVAILABLE, so an outage can never downgrade a paying customer's entitlement row.
+- **Console:** the existing billing-unavailable panel now also triggers on the verification flag,
+  and both it and the subscription pill say "could not be verified" instead of "not active", with a
+  retry action and an explicit "do not pay again" instruction.
+- **Tests:** 10 cases in `tests/security/ai-front-desk-publication-enforcement.test.ts`
+  ("billing verification outages are not inactive subscriptions") plus 3 in
+  `tests/unit/ai-front-desk-journey.test.ts`. Reverting the two core files makes 7 of the 10 fail;
+  the two negative controls (a genuinely unpaid business is still 402/NONE, and the documented
+  grace window still works) pass either way, which is what stops the fix from over-correcting.
+
+Validation after the fix: `npx vitest run` 2865 passed / 1 failed / 121 skipped (the single failure
+is the pre-existing `Prisma.dmmf` case, unchanged), `npx tsc --noEmit` 4 errors, all four in
+`tests/**` and identical on `083dfdb`, `npm run lint` 0 errors / 40 warnings (unchanged). Still no
+merge, no deployment, no production migration, no record modified, no customer charged.

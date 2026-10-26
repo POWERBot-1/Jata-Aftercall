@@ -202,6 +202,9 @@ export default async function AIDashboardPage({
         initialEntitlement={{
           status: entitlement?.status || "NONE",
           entitled: entitlement?.entitled === true,
+          // Carried through so the first paint already knows whether the billing records were
+          // readable, instead of showing "not active" for an unverifiable subscription.
+          verification: entitlement?.verification,
           reason: entitlement?.reason || "Choose the AI Business Front Desk plan to go live.",
           priceKES: entitlement?.priceKES,
           currency: entitlement?.currency || "KES",

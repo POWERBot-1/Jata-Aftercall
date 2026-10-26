@@ -64,12 +64,18 @@ export type AIFrontDeskPublication = {
 export function deriveAIFrontDeskPublication(input: {
   isPublished: boolean;
   operationalStatus?: string | null;
-  entitlement?: Pick<AIPackageStatusResult, "entitled" | "status" | "reason"> | null;
+  entitlement?: Pick<AIPackageStatusResult, "entitled" | "status" | "reason" | "verification"> | null;
   preview?: boolean;
 }): AIFrontDeskPublication {
   const operationalStatus = String(input.operationalStatus || "DRAFT").toUpperCase();
   const entitled = input.entitlement?.entitled === true;
-  const entitlementStatus = (input.entitlement?.status as AIEntitlementStatus | undefined) ?? "UNKNOWN";
+  // A failed billing read is reported as UNKNOWN, never as the business's own subscription state:
+  // UNKNOWN is what turns the gate into BILLING_UNAVAILABLE (503) instead of SUBSCRIPTION_REQUIRED
+  // (402). Absent entitlement is UNKNOWN for the same reason — we have nothing to report.
+  const billingVerificationUnavailable = input.entitlement?.verification === "UNAVAILABLE";
+  const entitlementStatus = billingVerificationUnavailable
+    ? ("UNKNOWN" as const)
+    : ((input.entitlement?.status as AIEntitlementStatus | undefined) ?? "UNKNOWN");
   const isPublished = input.isPublished === true;
 
   const base: Omit<AIFrontDeskPublication, "state" | "publiclyOperational" | "reason"> = {
@@ -180,15 +186,16 @@ export async function getAIFrontDeskPublication(
   try {
     entitlement = await getAIPackageStatus(businessId);
   } catch {
-    // Fail closed: an unavailable billing service is not a paid subscription.
+    // Fail closed: an unavailable billing service is not a paid subscription. Reporting it as
+    // `null` (rather than a fabricated status) keeps it classified as UNKNOWN — "we could not
+    // check" — so callers answer 503 instead of claiming the business has not paid.
     entitlement = null;
   }
 
   return deriveAIFrontDeskPublication({
     isPublished,
     operationalStatus,
-    entitlement:
-      entitlement ?? { entitled: false, status: "NONE", reason: "Billing verification is unavailable right now." },
+    entitlement,
     preview: options.preview,
   });
 }

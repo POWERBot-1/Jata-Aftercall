@@ -88,6 +88,18 @@ export async function POST(req: Request) {
     // (PAUSED / MAINTENANCE / DRAFT) stays available at all times.
     if (validStatus === "LIVE") {
       const publication = await getAIFrontDeskPublication(businessId);
+      // An unverifiable subscription is refused like an unpaid one, but reported as an outage:
+      // the owner is asked to retry, not to buy a plan they may already hold.
+      if (publication.entitlementStatus === "UNKNOWN") {
+        return NextResponse.json(
+          {
+            error: "We could not confirm the subscription right now. Please try again in a moment.",
+            code: "BILLING_UNAVAILABLE",
+            publication,
+          },
+          { status: 503 },
+        );
+      }
       const decision = canApplyOperationalStatus("LIVE", {
         entitled: publication.entitled,
       });

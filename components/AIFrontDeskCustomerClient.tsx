@@ -67,6 +67,10 @@ type ChatMessage = {
  * The status pill is not the owner's stored switch: `publicationState` is derived on the server
  * (published + entitled + switched on), so a private preview says so plainly and can never be
  * mistaken for a live, paid Front Desk.
+ *
+ * The fallback is deliberately DRAFT, not LIVE. A missing, null or unrecognised publication state
+ * means "we were not told this desk is live", and the only safe rendering of that is the state
+ * that promises a customer nothing. LIVE is only ever painted from a state the server supplied.
  */
 export default function AIFrontDeskCustomerClient({
   business,
@@ -76,7 +80,7 @@ export default function AIFrontDeskCustomerClient({
   greetingMessage,
   suggestedActions,
   operationalStatus,
-  publicationState = "LIVE",
+  publicationState = "DRAFT",
   pauseAllOrdering,
   qrSvg,
   shareUrl,

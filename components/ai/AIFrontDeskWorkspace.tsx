@@ -60,6 +60,8 @@ export type PublicationSummary = {
 export type EntitlementSummary = {
   status: string;
   entitled: boolean;
+  /** "UNAVAILABLE" means the billing records could not be read — not that nothing was paid. */
+  verification?: "VERIFIED" | "UNAVAILABLE";
   reason: string;
   priceKES?: number;
   currency?: string;
@@ -231,7 +233,10 @@ export default function AIFrontDeskWorkspace({
   // The billing service answering "unknown" is not the same as "not subscribed": we cannot tell
   // whether this business paid, so nothing may be published or reported as live (fail closed).
   const billingUnavailable =
-    statusUnreachable || publication.entitlementStatus === "UNKNOWN" || entitlement.status === "UNKNOWN";
+    statusUnreachable ||
+    publication.entitlementStatus === "UNKNOWN" ||
+    entitlement.status === "UNKNOWN" ||
+    entitlement.verification === "UNAVAILABLE";
   // Which of the eleven UI states the owner is actually in, from server facts only.
   const setupStage: "NOT_CONFIGURED" | "DRAFT_SAVED" | "PREVIEW_READY" | "ELIGIBLE" | "LIVE" =
     publication.state === "LIVE" || publication.state === "PAUSED" || publication.state === "MAINTENANCE"
@@ -600,9 +605,11 @@ export default function AIFrontDeskWorkspace({
               <StatusPill tone={entitlement.entitled ? "success" : "warning"}>
                 {entitlement.entitled
                   ? `Subscription: ${entitlement.status.toLowerCase().replace(/_/g, " ")}`
-                  : entitlement.status === "PENDING"
-                    ? "Subscription: payment not confirmed"
-                    : "Subscription: not active"}
+                  : billingUnavailable
+                    ? "Subscription: could not be verified"
+                    : entitlement.status === "PENDING"
+                      ? "Subscription: payment not confirmed"
+                      : "Subscription: not active"}
               </StatusPill>
               {publication.state === "SUSPENDED" ? (
                 <StatusPill tone="danger" icon={<ShieldAlert size={12} aria-hidden="true" />}>
@@ -674,9 +681,11 @@ export default function AIFrontDeskWorkspace({
                 <ShieldAlert size={15} aria-hidden="true" /> We could not confirm your subscription
               </p>
               <p className="ws-small mt-1 max-w-2xl" style={{ color: "var(--ws-text)" }}>
-                Our billing service did not answer, so we cannot tell whether this front desk is
-                paid for. Nothing was published or switched on, and customers keep seeing exactly
-                what they saw before. Your setup is safe — press refresh to check again.
+                We could not read your billing records just now, so we cannot tell whether this
+                front desk is paid for. This is a checking problem, not a payment problem — nothing
+                was published or switched on, no charge is being asked for, and customers keep
+                seeing exactly what they saw before. Press try again in a moment. If it keeps
+                happening, contact JATA support — do not pay again, we will sort out the check.
               </p>
             </div>
             <button
@@ -1286,6 +1295,7 @@ export default function AIFrontDeskWorkspace({
                   borderColor: entitlement.entitled ? "rgba(15,118,110,0.35)" : "rgba(180,83,9,0.35)",
                   background: entitlement.entitled ? "var(--ws-jade-soft)" : "var(--ws-amber-soft)",
                 }}
+                aria-live="polite"
               >
                 <p className="flex items-center gap-1.5 text-sm font-bold">
                   {entitlement.entitled ? <CheckCircle2 size={16} aria-hidden="true" /> : <Wallet size={16} aria-hidden="true" />}
@@ -1294,11 +1304,31 @@ export default function AIFrontDeskWorkspace({
                 <p className="ws-small mt-1" style={{ color: "var(--ws-text)" }}>
                   {entitlement.entitled
                     ? `Active ${plan?.name || "AI Business Front Desk"} plan${planPrice ? ` · ${planPrice}` : ""}. Verified on our server — you can publish.`
-                    : entitlement.status === "PENDING"
-                      ? "We have a payment record but it is not confirmed yet. Payment is only treated as paid after the provider confirms it — refresh in a moment."
-                      : `Publishing needs the ${plan?.name || "AI Business Front Desk"} plan${planPrice ? ` (${planPrice}${plan ? ` / ${plan.durationDays} days` : ""})` : ""}. Setup and preview stay free.`}
+                    : billingUnavailable
+                      ? "We could not check your subscription with our billing records just now, so we cannot tell whether this front desk is covered. Nothing was published, and no payment is being asked for until we can check again."
+                      : entitlement.status === "PENDING"
+                        ? "We have a payment record but it is not confirmed yet. Payment is only treated as paid after the provider confirms it — refresh in a moment."
+                        : `Publishing needs the ${plan?.name || "AI Business Front Desk"} plan${planPrice ? ` (${planPrice}${plan ? ` / ${plan.durationDays} days` : ""})` : ""}. Setup and preview stay free.`}
                 </p>
-                {!entitlement.entitled ? (
+                {billingUnavailable ? (
+                  // Retry is the only honest action here: paying again would be wrong when we
+                  // simply could not read the records.
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void refresh()}
+                      disabled={refreshing}
+                      aria-busy={refreshing}
+                      className="jata-btn jata-btn-primary jata-btn-sm"
+                    >
+                      {refreshing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+                      <span className="ml-1">{refreshing ? "Checking…" : "Check again"}</span>
+                    </button>
+                    <Link href={subscribeHref} className="jata-btn jata-btn-ghost jata-btn-sm">
+                      View plans
+                    </Link>
+                  </div>
+                ) : !entitlement.entitled ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Link href={subscribeHref} className="jata-btn jata-btn-primary jata-btn-sm">
                       <CreditCard size={14} aria-hidden="true" /> Choose the plan
@@ -1365,7 +1395,12 @@ export default function AIFrontDeskWorkspace({
                   Open the live customer view
                 </Link>
               ) : null}
-              {!entitlement.entitled ? (
+              {billingUnavailable ? (
+                <p className="ws-tiny ws-muted">
+                  Publication stays disabled until we can confirm your subscription. Nothing was
+                  changed.
+                </p>
+              ) : !entitlement.entitled ? (
                 <p className="ws-tiny ws-muted">
                   Publication stays disabled until the payment is verified on our server.
                 </p>

@@ -111,6 +111,17 @@ export async function POST(req: Request) {
     // publication, so an unpaid tenant cannot reach live operation through this route either.
     if (String(operationalStatus || "").toUpperCase() === "LIVE") {
       const publication = await getAIFrontDeskPublication(businessId);
+      if (!publication.entitled && publication.entitlementStatus === "UNKNOWN") {
+        return NextResponse.json(
+          {
+            error:
+              "We could not check your subscription just now, so the desk cannot be switched LIVE. Nothing was saved as live — please try again in a moment.",
+            code: "BILLING_UNAVAILABLE",
+            publication,
+          },
+          { status: 503 },
+        );
+      }
       if (!publication.entitled || !publication.isPublished) {
         return NextResponse.json(
           {

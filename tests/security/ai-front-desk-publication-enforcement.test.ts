@@ -201,6 +201,8 @@ import { POST as publishPost } from "@/app/api/ai/publish/route";
 import { GET as statusGet, POST as statusPost } from "@/app/api/ai/status/route";
 import { GET as configGet, POST as configPost } from "@/app/api/ai/config/route";
 import { POST as chatPost } from "@/app/api/ai/chat/route";
+import { GET as readinessGet } from "@/app/api/ai/readiness/route";
+import { GET as entitlementGet } from "@/app/api/ai/entitlement/route";
 import { authorizeAIFrontDeskOperation, deriveAIFrontDeskPublication } from "@/lib/ai-publication";
 import {
   publishAIConfigSnapshot,
@@ -276,6 +278,28 @@ function seedActiveSubscription(businessId: string) {
     planId: "plan_ai",
     reference: `JATA-AI-${businessId}`,
   });
+}
+
+/**
+ * Makes every billing read throw for the duration of `work`, then restores the in-memory double.
+ *
+ * Unlike `mockRejectedValueOnce`, this models a real outage: every request made while the billing
+ * records are unreachable fails, which is the condition the F4 fix has to classify correctly.
+ */
+async function withBillingOutage<T>(work: () => Promise<T>): Promise<T> {
+  const db = (await import("@/lib/db")).default as any;
+  const targets = [db.aIPackageEntitlement.findUnique, db.subscription.findUnique, db.payment.findFirst] as any[];
+  const originals = targets.map((fn) => fn.getMockImplementation());
+  for (const fn of targets) {
+    fn.mockImplementation(async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:5432");
+    });
+  }
+  try {
+    return await work();
+  } finally {
+    targets.forEach((fn, index) => fn.mockImplementation(originals[index]));
+  }
 }
 
 beforeEach(() => {
@@ -367,19 +391,17 @@ describe("publication requires a verified paid entitlement", () => {
     expect(publication.code).toBe("SUBSCRIPTION_REQUIRED");
   });
 
-  it("fails closed when the billing records cannot be read", async () => {
-    const db = (await import("@/lib/db")).default as any;
-    db.aIPackageEntitlement.findUnique.mockRejectedValueOnce(new Error("billing unavailable"));
-    db.subscription.findUnique.mockRejectedValueOnce(new Error("billing unavailable"));
-    db.payment.findFirst.mockRejectedValueOnce(new Error("billing unavailable"));
-
-    const res = await publishPost(jsonRequest("/api/ai/publish", { businessId: TENANT_A }));
-    expect(res.status).toBe(402);
+  it("refuses publication while the billing records are unreadable and says why", async () => {
+    const res = await withBillingOutage(() =>
+      publishPost(jsonRequest("/api/ai/publish", { businessId: TENANT_A })),
+    );
+    // 503, not 402: the business did not decline to pay, we could not check.
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.code).toBe("BILLING_UNAVAILABLE");
+    expect(body.error).toMatch(/could not check your subscription/i);
     expect(state.businesses.get(TENANT_A).isPublished).toBe(false);
-
-    const chat = await chatPost(jsonRequest("/api/ai/chat", { businessId: TENANT_A, message: "How much is a cake?" }));
-    expect(chat.status).toBeGreaterThanOrEqual(402);
-    expect((await chat.json()).blocked).toBe(true);
+    expect(state.audit.some((event: any) => event.action === "AI_FRONT_DESK_PUBLISHED")).toBe(false);
   });
 
   it("publishes for a valid active paid subscriber and then reports LIVE from the server", async () => {
@@ -525,6 +547,180 @@ describe("live customer access is refused for unpaid or unpublished desks", () =
     );
     // Preview is allowed through the gate; whether the engine answers is a separate concern.
     expect(res.status).not.toBe(402);
+  });
+});
+
+describe("billing verification outages are not inactive subscriptions", () => {
+  it("classifies an unreadable billing record as UNAVAILABLE, not as no subscription", async () => {
+    const { getAIPackageStatus } = await import("@/lib/ai-entitlement");
+
+    const failed = await withBillingOutage(() => getAIPackageStatus(TENANT_A));
+    expect(failed.verification).toBe("UNAVAILABLE");
+    // Fail closed: nothing is known, so nothing is granted.
+    expect(failed.entitled).toBe(false);
+    expect(failed.active).toBe(false);
+
+    const honest = await getAIPackageStatus(TENANT_A);
+    expect(honest.verification).toBe("VERIFIED");
+    expect(honest.entitled).toBe(false);
+    expect(honest.status).toBe("NONE");
+  });
+
+  it("reports UNKNOWN through the publication layer, which is what makes it 503 rather than 402", async () => {
+    // Order of answers is deliberate: an unpublished desk is 404 (publication is knowable without
+    // billing), and only a published desk can reach the billing question.
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+
+    const publication = await withBillingOutage(() =>
+      authorizeAIFrontDeskOperation({ businessId: TENANT_A }),
+    );
+    expect(publication.allowed).toBe(false);
+    expect(publication.code).toBe("BILLING_UNAVAILABLE");
+    expect(publication.publication.entitlementStatus).toBe("UNKNOWN");
+    expect(publication.publication.state).not.toBe("LIVE");
+    expect(publication.publication.publiclyOperational).toBe(false);
+  });
+
+  it("answers a public customer turn with 503 and leaks no billing detail", async () => {
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+    await saveExtendedAIConfig(TENANT_A, { operationalStatus: "LIVE" });
+    state.user = null; // a real customer, not the owner
+
+    const res = await withBillingOutage(() =>
+      chatPost(jsonRequest("/api/ai/chat", { businessId: TENANT_A, message: "How much is a cake?" })),
+    );
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.blocked).toBe(true);
+    expect(body.code).toBe("BILLING_UNAVAILABLE");
+    expect(body.reply).toContain("connect you with the business");
+    // Anonymous customers are told the desk is unavailable, never why.
+    expect(body.error).not.toMatch(/KES|subscri|billing|plan|database|prisma|ECONNREFUSED/i);
+  });
+
+  it("never publishes, activates or serves a customer during an outage", async () => {
+    seedActiveSubscription(TENANT_A); // a genuinely paying customer, mid-outage
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+
+    await withBillingOutage(async () => {
+      const publish = await publishPost(jsonRequest("/api/ai/publish", { businessId: TENANT_A }));
+      expect(publish.status).toBe(503);
+      expect((await publish.json()).code).toBe("BILLING_UNAVAILABLE");
+
+      const activate = await statusPost(
+        jsonRequest("/api/ai/status", { businessId: TENANT_A, operationalStatus: "LIVE" }),
+      );
+      expect(activate.status).toBe(503);
+      expect((await activate.json()).code).toBe("BILLING_UNAVAILABLE");
+
+      const chat = await chatPost(jsonRequest("/api/ai/chat", { businessId: TENANT_A, message: "Hello?" }));
+      expect(chat.status).toBe(503);
+      expect((await chat.json()).blocked).toBe(true);
+
+      const snapshot = await publishAIConfigSnapshot(TENANT_A, { activateLive: true });
+      expect(snapshot.operationalStatus).not.toBe("LIVE");
+    });
+
+    // The outage must not have changed who is entitled…
+    const { getAIPackageStatus } = await import("@/lib/ai-entitlement");
+    const billing = await getAIPackageStatus(TENANT_A);
+    expect(billing.verification).toBe("VERIFIED");
+    expect(billing.entitled).toBe(true);
+
+    // …and the paying customer can publish again the moment verification works. The desk is not
+    // switched live by the outage itself: that stays an explicit, authorised action.
+    const republished = await publishPost(jsonRequest("/api/ai/publish", { businessId: TENANT_A }));
+    expect(republished.status).toBe(200);
+    const status = await (await statusGet(getRequest(`/api/ai/status?businessId=${TENANT_A}`))).json();
+    expect(status.publication.state).toBe("LIVE");
+    expect(status.publication.publiclyOperational).toBe(true);
+  });
+
+  it("does not write a downgraded entitlement row while the records are unreadable", async () => {
+    const db = (await import("@/lib/db")).default as any;
+    const { syncAIPackageEntitlement } = await import("@/lib/ai-entitlement");
+    seedActiveSubscription(TENANT_A);
+    db.aIPackageEntitlement.upsert.mockClear();
+
+    const result = await withBillingOutage(() => syncAIPackageEntitlement(TENANT_A));
+
+    expect(result.verification).toBe("UNAVAILABLE");
+    expect(db.aIPackageEntitlement.upsert).not.toHaveBeenCalled();
+    expect(state.entitlements.get(TENANT_A)?.status).toBe("ACTIVE");
+  });
+
+  it("propagates the outage to the readiness and entitlement payloads the console reads", async () => {
+    await withBillingOutage(async () => {
+      const readiness = await (await readinessGet(getRequest(`/api/ai/readiness?businessId=${TENANT_A}`))).json();
+      expect(readiness.subscription.verification).toBe("UNAVAILABLE");
+      expect(readiness.canPublish).toBe(false);
+
+      const entitlement = await (await entitlementGet(getRequest(`/api/ai/entitlement?businessId=${TENANT_A}`))).json();
+      expect(entitlement.entitlement.verification).toBe("UNAVAILABLE");
+      expect(entitlement.entitlement.entitled).toBe(false);
+    });
+  });
+
+  it("surfaces the verification failure in the owner console payload", async () => {
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+    const res = await withBillingOutage(() => statusGet(getRequest(`/api/ai/status?businessId=${TENANT_A}`)));
+    const body = await res.json();
+    expect(body.publication.entitlementStatus).toBe("UNKNOWN");
+    expect(body.publication.state).not.toBe("LIVE");
+  });
+
+  it("still reports a genuinely unpaid business as unpaid (not as an outage)", async () => {
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+    await saveExtendedAIConfig(TENANT_A, { operationalStatus: "LIVE" });
+
+    const authorization = await authorizeAIFrontDeskOperation({ businessId: TENANT_A });
+    expect(authorization.code).toBe("SUBSCRIPTION_REQUIRED");
+    expect(authorization.publication.entitlementStatus).not.toBe("UNKNOWN");
+
+    const chat = await chatPost(jsonRequest("/api/ai/chat", { businessId: TENANT_A, message: "Price?" }));
+    expect(chat.status).toBe(402);
+
+    const status = await (await statusGet(getRequest(`/api/ai/status?businessId=${TENANT_A}`))).json();
+    expect(status.publication.entitlementStatus).toBe("NONE");
+  });
+
+  it("keeps the documented grace window working while verification succeeds", async () => {
+    // Expired yesterday, still inside the JATA grace window that the settlement path writes.
+    state.plans.push({ id: "plan_ai", key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk", priceKES: 499, durationDays: 30, isActive: true });
+    state.subscriptions.set(TENANT_A, {
+      id: `sub_${TENANT_A}`,
+      businessId: TENANT_A,
+      status: "ACTIVE",
+      planId: "plan_ai",
+      startAt: new Date(Date.now() - 31 * 86_400_000),
+      expiresAt: new Date(Date.now() - 86_400_000),
+      graceUntil: new Date(Date.now() + 2 * 86_400_000),
+    });
+    state.entitlements.set(TENANT_A, {
+      id: `ent_${TENANT_A}`,
+      businessId: TENANT_A,
+      packageKey: "AI_BUSINESS_FRONT_DESK",
+      status: "ACTIVE",
+      expiresAt: new Date(Date.now() - 86_400_000),
+    });
+    state.payments.push({ id: `pay_${TENANT_A}`, businessId: TENANT_A, status: "PAID", planId: "plan_ai", reference: `JATA-AI-${TENANT_A}` });
+    state.businesses.set(TENANT_A, { ...state.businesses.get(TENANT_A), isPublished: true });
+    await saveExtendedAIConfig(TENANT_A, { operationalStatus: "LIVE" });
+
+    const authorization = await authorizeAIFrontDeskOperation({ businessId: TENANT_A });
+    expect(authorization.allowed).toBe(true);
+    expect(authorization.publication.state).toBe("LIVE");
+    expect(authorization.publication.entitlementStatus).toBe("PAST_DUE");
+
+    // …and the window closing still revokes it, without being mistaken for an outage.
+    state.subscriptions.set(TENANT_A, {
+      ...state.subscriptions.get(TENANT_A),
+      graceUntil: new Date(Date.now() - 86_400_000),
+    });
+    const expired = await authorizeAIFrontDeskOperation({ businessId: TENANT_A });
+    expect(expired.allowed).toBe(false);
+    expect(expired.code).toBe("SUBSCRIPTION_REQUIRED");
+    expect(expired.publication.entitlementStatus).toBe("EXPIRED");
   });
 });
 

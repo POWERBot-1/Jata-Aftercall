@@ -400,10 +400,38 @@ describe("the eleven required UI states", () => {
       entitlement: { ...unpaidEntitlement, status: "UNKNOWN", reason: "Billing lookup failed." },
     });
     expect(html).toContain("We could not confirm your subscription");
-    expect(html).toContain("Nothing was published or switched on");
-    expect(html).toContain("Try again");
+    expect(html).toContain("nothing");
+    // F4: an unverifiable subscription is a checking problem, and the copy must not read as a
+    // payment problem, nor as "subscription not active".
+    expect(html).toContain("This is a checking problem, not a payment problem");
+    expect(html).toContain("contact JATA support");
+    expect(html).toContain("do not pay again");
+    expect(html).toContain("Check again");
+    expect(html).not.toContain("Subscription: not active");
     expect(publishButton(html)).toContain("disabled");
     expect(html).not.toMatch(/>Live</);
+  });
+
+  it("11b. a declined/absent subscription still reads as a subscription problem, not an outage", () => {
+    const html = render({
+      publication: { ...draftPublication, entitlementStatus: "NONE", reason: "No active subscription." },
+      entitlement: unpaidEntitlement,
+    });
+    expect(html).toContain("Subscription: not active");
+    expect(html).toContain("Publishing needs the");
+    expect(html).not.toContain("We could not confirm your subscription");
+    expect(html).not.toContain("could not be verified");
+  });
+
+  it("11c. an UNAVAILABLE verification flag alone is enough to show the outage state", () => {
+    const html = render({
+      publication: draftPublication,
+      entitlement: { ...unpaidEntitlement, verification: "UNAVAILABLE" },
+    });
+    expect(html).toContain("We could not confirm your subscription");
+    expect(html).toContain("Subscription: could not be verified");
+    expect(html).not.toContain("Subscription: not active");
+    expect(publishButton(html)).toContain("disabled");
   });
 });
 
