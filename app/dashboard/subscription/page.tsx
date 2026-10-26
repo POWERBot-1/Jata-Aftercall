@@ -163,7 +163,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
                       plan={{ id: plan.id, key: plan.key, name: planDisplayName(plan), priceKES: plan.priceKES, durationDays: plan.durationDays }}
                       includes={PLAN_INCLUDES[plan.key] ?? []}
                       badge={PLAN_BADGES[plan.key]}
-                      blurb={plan.key === "INTERACTIVE_BUSINESS" ? "Build, edit and preview your interactive business website." : null}
+                      blurb={plan.key === "INTERACTIVE_BUSINESS" ? "Build, edit and preview your full business website." : null}
                       href={selected ? getCheckoutUrl(selected.id, plan.id) : undefined}
                       current={selected?.subscription?.planId === plan.id}
                     />

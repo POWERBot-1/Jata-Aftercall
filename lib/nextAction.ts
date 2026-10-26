@@ -1,3 +1,5 @@
+import { WEBSITE_STUDIO_NAME } from "./productNames";
+
 /**
  * The single most useful next step for a business owner, shown at the top of each
  * dashboard card so the owner is never left guessing what to do.
@@ -50,12 +52,12 @@ export function nextActionFor(b: NextActionInput, now: Date = new Date()): NextA
   if (b.hasExperience === false) {
     return {
       key: "start-experience",
-      title: "Start your interactive website",
+      title: `Start your ${WEBSITE_STUDIO_NAME} website`,
       detail: "Choose what kind of business this is and we set up the right sections, fields and wording.",
     };
   }
   if (b.entitlementStatus && b.entitlementStatus !== "ACTIVE" && b.entitlementStatus !== "NONE") {
-    return { key: "renew", title: "Activate Interactive Business", detail: "Your premium website needs an active plan before customers can use it." };
+    return { key: "renew", title: `Activate ${WEBSITE_STUDIO_NAME}`, detail: "Your premium website needs an active plan before customers can use it." };
   }
   if (typeof b.catalogueCount === "number" && b.catalogueCount === 0 && b.hasExperience) {
     return { key: "add-items", title: "Add what you sell", detail: "Customers cannot order or book what they cannot see." };

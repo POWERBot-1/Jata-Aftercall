@@ -17,7 +17,7 @@ import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
 import { WORKSPACE_HERO_PHOTO, WORKSPACE_PHOTOS, categoryLabel, photoForCategory } from "@/lib/workspaceImagery";
 import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, Palette, ShoppingBag, Wand2 } from "lucide-react";
 
-export const metadata: Metadata = { title: "Website studio" };
+export const metadata: Metadata = { title: "Website Studio" };
 export const dynamic = "force-dynamic";
 
 /**

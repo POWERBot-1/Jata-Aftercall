@@ -16,6 +16,7 @@ const globals = readFileSync(path.join(root, "app/globals.css"), "utf8");
 const workspace = readFileSync(path.join(root, "components/ai/AIFrontDeskWorkspace.tsx"), "utf8");
 const console_ = readFileSync(path.join(root, "components/AIDashboardClient.tsx"), "utf8");
 const customer = readFileSync(path.join(root, "components/AIFrontDeskCustomerClient.tsx"), "utf8");
+const noticeComponent = readFileSync(path.join(root, "components/workspace/WorkspaceUI.tsx"), "utf8");
 
 function token(name: string): string {
   const match = globals.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
@@ -117,7 +118,11 @@ describe("screen-reader semantics", () => {
   });
 
   it("announces async results instead of only painting them", () => {
-    expect(workspace).toContain('role={publishNotice.tone === "error" ? "alert" : "status"}');
+    // The error/status role mapping now lives in the shared WorkspaceNotice component (themed and
+    // reused across the guided flows). The workspace keeps its error/success tone split and the
+    // component maps an error to alert and every other result to status.
+    expect(workspace).toContain('<WorkspaceNotice tone={publishNotice.tone === "error" ? "error" : "success"}');
+    expect(noticeComponent).toContain('role={tone === "error" ? "alert" : "status"}');
     expect(workspace).toContain('aria-live="polite"');
     expect(workspace).toContain("aria-busy");
     expect(console_).toContain('role="status"');

@@ -1,3 +1,5 @@
+import { WEBSITE_STUDIO_NAME } from "./productNames";
+
 /** Human-readable labels for internal status codes. Raw enum values are never shown to owners. */
 export type Tone = "success" | "warning" | "error" | "neutral";
 export type StatusLabel = { label: string; tone: Tone; help?: string };
@@ -52,7 +54,7 @@ const BOOKING: Record<string, StatusLabel> = {
 };
 
 const ENTITLEMENT: Record<string, StatusLabel> = {
-  NONE: { label: "No package", tone: "warning", help: "Choose Interactive Business to unlock your premium website." },
+  NONE: { label: "No package", tone: "warning", help: `Choose ${WEBSITE_STUDIO_NAME} to unlock your premium website.` },
   PENDING: { label: "Awaiting payment", tone: "warning" },
   ACTIVE: { label: "Active", tone: "success" },
   PAST_DUE: { label: "Past due", tone: "warning", help: "Renew now to avoid interruption." },

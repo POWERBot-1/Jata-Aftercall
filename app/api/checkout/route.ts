@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     // §26, §59 — the Interactive Business package resolves to KES 999 / 30 days server-side.
     // A client-supplied amount is never used; only the stored plan configures the charge.
     if (plan.key === INTERACTIVE_PLAN_KEY && !assertInteractivePlanPricing(plan)) {
-      return fail(500, "PLAN_PRICING_INVALID", "Interactive Business pricing configuration is invalid.");
+      return fail(500, "PLAN_PRICING_INVALID", "Website Studio pricing configuration is invalid.");
     }
     // POS spec §45 — the Business POS package must resolve to KES 499 / 30 days server-side.
     // As with the packages above, a client-supplied amount is never used: only the stored plan

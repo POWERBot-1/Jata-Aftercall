@@ -4145,6 +4145,14 @@ button:focus-visible {
   --ws-skel-shine: rgba(255, 253, 248, 0.7);
   --ws-plan-tint: #fff8ec;
   --ws-ember: #c2410c;
+  /* Semantic status tokens. Success reuses the jade pair; danger gets its own pair so an error
+     notice or destructive control is themed (and re-pointed for graphite) instead of carrying a
+     hard-coded light-red palette that breaks on a dark surface. */
+  --ws-on-amber: #1a140d;
+  --ws-jade-line: rgba(15, 118, 110, 0.35);
+  --ws-danger: #991b1b;
+  --ws-danger-soft: #fef2f2;
+  --ws-danger-line: rgba(185, 28, 28, 0.35);
   --ws-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
 
   --ws-radius-sm: 0.6rem;
@@ -4810,7 +4818,7 @@ button:focus-visible {
 .ws-shell .jata-btn-secondary:hover:not(:disabled) { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
 .ws-shell .jata-btn-ghost { color: var(--ws-amber-deep); }
 .ws-shell .jata-btn-ghost:hover:not(:disabled) { background: rgba(180, 83, 9, 0.08); }
-.ws-shell .jata-btn-danger { border-color: color-mix(in srgb, #b91c1c 30%, transparent); background: #fef2f2; color: #991b1b; }
+.ws-shell .jata-btn-danger { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
 
 /* ── Charts & tables ────────────────────────────────────────────────────── */
 
@@ -5016,6 +5024,13 @@ html[data-jata-theme="lime-spark"] .ws-shell {
   --ws-amber-soft: rgba(240, 160, 60, 0.14);
   --ws-jade: #4adebc;
   --ws-jade-soft: rgba(15, 118, 110, 0.26);
+  /* Graphite counterparts of the semantic status tokens. Text lightens and the fills turn
+     translucent so a notice keeps AA contrast on a dark surface instead of painting a light box. */
+  --ws-on-amber: #1a140d;
+  --ws-jade-line: rgba(74, 222, 188, 0.35);
+  --ws-danger: #fca5a5;
+  --ws-danger-soft: rgba(220, 38, 38, 0.18);
+  --ws-danger-line: rgba(248, 113, 113, 0.4);
   --ws-elev-1: 0 1px 2px rgba(0, 0, 0, 0.55);
   --ws-elev-2: 0 18px 44px -30px rgba(0, 0, 0, 0.95);
   --ws-elev-3: 0 34px 70px -40px rgba(0, 0, 0, 0.95);
@@ -5162,8 +5177,22 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 }
 .ws-status[data-tone="success"] { border-color: color-mix(in srgb, var(--ws-jade) 45%, var(--ws-line)); background: color-mix(in srgb, var(--ws-jade) 14%, transparent); color: var(--ws-jade); }
 .ws-status[data-tone="warning"] { border-color: color-mix(in srgb, var(--ws-amber) 55%, var(--ws-line)); background: color-mix(in srgb, var(--ws-amber) 16%, transparent); color: var(--ws-amber-deep); }
-.ws-status[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 45%, var(--ws-line)); background: color-mix(in srgb, #dc2626 12%, transparent); color: color-mix(in srgb, #dc2626 70%, var(--ws-text)); }
+.ws-status[data-tone="danger"] { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
 .ws-status[data-tone="neutral"] { background: var(--ws-wash); color: var(--ws-muted); }
+
+/* Inline form/notice message used across the guided workspace flows. Themed through the ws
+   semantic status tokens so a success/error line re-points for graphite instead of carrying a
+   hard-coded light palette that becomes unreadable on a dark surface. */
+.ws-notice {
+  margin: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.ws-notice--success { border-color: var(--ws-jade-line); background: var(--ws-jade-soft); color: var(--ws-jade); }
+.ws-notice--error { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
 
 .ws-table-wrap {
   overflow-x: auto;

@@ -2,12 +2,16 @@ import Link from "next/link";
 import type { EntitlementState } from "@/lib/experience/entitlement";
 import { INTERACTIVE_PRICE_KES } from "@/lib/experience/entitlement";
 import { formatDate } from "@/lib/format";
+import { WEBSITE_STUDIO_NAME } from "@/lib/productNames";
 
 /**
  * Subscription state (§45)
  *
  * Expired or past-due never deletes content: the owner is told what happened and what to do,
  * and the public site falls back gracefully rather than vanishing without explanation.
+ *
+ * Colours come from the workspace tokens (`--ws-*`) so the banner reads correctly in both the
+ * light and the graphite themes — a raw emerald/amber Tailwind palette would not re-point.
  */
 export function EntitlementBanner({
   businessId,
@@ -20,12 +24,15 @@ export function EntitlementBanner({
 }) {
   if (entitlement.status === "ACTIVE") {
     return (
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+      <section className="rounded-2xl border border-[color:var(--ws-jade)] bg-[color:var(--ws-jade-soft)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-emerald-900">
-            Interactive Business is active{entitlement.expiresAt ? ` until ${formatDate(entitlement.expiresAt)}` : ""}
+          <p className="text-sm font-semibold text-[color:var(--ws-jade)]">
+            {WEBSITE_STUDIO_NAME} is active{entitlement.expiresAt ? ` until ${formatDate(entitlement.expiresAt)}` : ""}
           </p>
-          <Link href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`} className="text-sm font-semibold text-emerald-900 underline">
+          <Link
+            href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`}
+            className="text-sm font-semibold text-[color:var(--ws-jade)] underline"
+          >
             Manage plan
           </Link>
         </div>
@@ -33,16 +40,16 @@ export function EntitlementBanner({
     );
   }
 
-  const tone =
-    entitlement.status === "EXPIRED" || entitlement.status === "CANCELLED"
-      ? "border-amber-300 bg-amber-50 text-amber-900"
-      : "border-zinc-200 bg-white text-zinc-800";
+  const isProblem = entitlement.status === "EXPIRED" || entitlement.status === "CANCELLED";
+  const tone = isProblem
+    ? "border-[color:var(--ws-amber-deep)] bg-[color:var(--ws-amber-soft)] text-[color:var(--ws-text)]"
+    : "border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] text-[color:var(--ws-text)]";
 
   return (
     <section className={`rounded-2xl border p-4 ${tone}`}>
       <p className="text-sm font-semibold">{entitlement.reason}</p>
-      {isPublished && (entitlement.status === "EXPIRED" || entitlement.status === "CANCELLED") ? (
-        <p className="mt-1 text-sm">
+      {isPublished && isProblem ? (
+        <p className="mt-1 text-sm text-[color:var(--ws-muted)]">
           Your content is untouched. While the plan is inactive, visitors see your contact details without the premium
           experience. Renewing restores it exactly as it was.
         </p>
