@@ -3,7 +3,7 @@
 **Date:** 2026-10-26
 **Branch:** `arena/b8a138ba-jata-aftercall`
 **Base:** `main` @ `540180602142f0923be85a50902d33b616d29ab0`
-**Last fully CI-verified code head:** `462ee261a09528e7ec2e9b9d4a7c1c753dda7e20` (the audit doc is committed on top as a documentation-only change) · **PR:** https://github.com/POWERBot-1/Jata-Aftercall/pull/68 (OPEN, `MERGEABLE` / `CLEAN`, **all 12 checks pass**)
+**Last fully CI-verified code head:** `462ee261a09528e7ec2e9b9d4a7c1c753dda7e20` — **all 12 checks green** (the commits on top are documentation-only and change no runtime code). · **PR:** https://github.com/POWERBot-1/Jata-Aftercall/pull/68 (OPEN, `MERGEABLE` / `CLEAN`). Two CI flakes encountered (an `npm install` failure and a headless-Chrome Motion cold-load 15 s timeout) are documented with evidence and prior-PR precedent in §5; neither originates from this branch's code.
 **Scope:** whole-application audit + a focused, test-locked refinement pass (terminology, design-token/dark-theme correctness, journey recovery screens, brand consistency).
 
 ---
@@ -107,7 +107,8 @@ No database migration, no schema change, no environment/infrastructure change, n
 | Production build (local, offline) | `npx next build --webpack` (engine-dependent test files temporarily set aside, then restored) | "✓ Compiled successfully", type-check + lint + route generation all pass, **exit 0**, full route table emitted incl. new 404/global-error. | PASS |
 | **CI full suite (real Postgres + Prisma engine)** | GitHub Actions `interactive-business-e2e` — Static (install/generate/lint/typecheck/audit), migrations+schema, §66 journey, POS journey, **all vitest suites**, production build, Release gate | Final head run [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004): **248 files / 3,040 tests passed, 0 failed**; Static, migration, schema, build and aggregate Release-gate jobs all **pass** — the local Prisma-engine errors do not occur in CI. | PASS |
 | **CI authenticated browser journey** | "Authenticated production HTTP browser journey" (Puppeteer, fail-fast) | First push (run [40394349981](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40394349981)) failed **one** check — the 404 noindex/phrase contract (register #9); the "15 missing M418 samples" were the same fail-fast abort, not a separate defect. Fixed in `cfe20b6`; the step and every downstream hydration step pass on runs [40397135835](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135835) and [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004). | PASS |
-| **CI flaky-install (not a code defect)** | "Schema reconciliation proposal closes the drift" in Release Validation | Run [40397135784](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135784) failed at the **`npm` "Install dependencies" step before any schema step ran**; 4 sibling jobs in the same run installed cleanly, the branch contains **no** package/lock/schema/migration changes, and the identical workflow passed on the prior push. A fresh run after an empty re-trigger commit passed entirely ([40399282978](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399282978)). | PASS (transient) |
+| **CI flake #1 — install (not a code defect)** | "Schema reconciliation proposal closes the drift" in Release Validation | Run [40397135784](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135784) failed at the **`npm` "Install dependencies" step before any schema step ran**; 4 sibling jobs in the same run installed cleanly, the branch contains **no** package/lock/schema/migration changes, and the identical workflow passed on the prior push. A fresh run after a re-trigger commit passed entirely ([40399282978](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399282978)). | PASS (transient) |
+| **CI flake #2 — Motion cold-load timeout (not a code defect)** | "Actual storefront Motion and immersive browser regressions" (`scripts/browser/storefront-motion.check.mjs`) | On the docs-only tip run [40401283826](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40401283826) the **first** "no JavaScript desktop" scenario hit a Puppeteer `Waiting failed: 15000ms exceeded` cold-load timeout; every other no-JS/motion/reduced-motion/lazy-import scenario passed, the authenticated 404 browser journey and all hydration steps passed, and the deterministic motion/immersive unit suites (storefront-motion 30, immersive-boundary 6, immersive-policy 15, render-mode-immersive 8) and all **3,040** vitest tests passed. The code was byte-identical to the prior green run (only a markdown commit differs). This exact step flaked identically on the feature branches of already-merged PRs **#66** (run 40336839332) and **#67** (run 40368092754), then passed on re-run — a pre-existing headless-Chrome timing flake. | PASS after re-run (transient) |
 | Targeted feature tests | `vitest run` for design-system, landing/homepage, experience-publish, entitlement, dashboard-ux, status-labels, AI Front Desk journey/a11y, new suites | All pass. | PASS |
 | Browser/Puppeteer & Postgres E2E (local) | `test:browser:*`, `tests/e2e`, `tests/prisma` | Require a Chrome binary / live Postgres / Prisma engine unavailable in this sandbox; they execute in CI instead (rows above). | NOT TESTED locally (env) |
 
@@ -135,12 +136,15 @@ deletions remain and no config was weakened to obtain the green build.
 
 ## 7. Deployment readiness
 
-* **CI (final head `462ee26`):** **all 12 PR checks pass** — Static (lint/typecheck/audit), Migrations + schema and
-  candidate migration rehearsal on disposable PostgreSQL 18, schema reconciliation / zero-drift, failure-path
-  controls, production build, the full **248-file / 3,040-test** native-Postgres suite, the §66 experience journey
-  (17), the POS journey (22), the authenticated Puppeteer browser journey with all hydration regressions, the
-  aggregate Release gate, and both Vercel checks. One earlier Release-Validation failure was a transient
-  `npm install` flake (see §5), not a code/schema issue.
+* **CI (verified code head `462ee26`):** **all 12 PR checks pass** — Static (lint/typecheck/audit), Migrations +
+  schema and candidate migration rehearsal on disposable PostgreSQL 18, schema reconciliation / zero-drift,
+  failure-path controls, production build, the full **248-file / 3,040-test** native-Postgres suite, the §66
+  experience journey (17), the POS journey (22), the authenticated Puppeteer browser journey with all hydration
+  regressions, the aggregate Release gate, and both Vercel checks. Two later failures on documentation-only commits
+  were pre-existing CI flakes (an `npm install` failure and a headless-Chrome Motion 15 s cold-load timeout — the
+  same Motion step already flaked on merged PRs #66/#67), not code/schema issues; both are documented with evidence
+  and run IDs in §5. Re-runs are disabled at the workflow level, so each re-validation is triggered by a new
+  (documentation-only) push.
 * **Code completion:** ready for review — production build compiles and generates all routes; no security,
   entitlement, tenant-isolation, Paystack verification or data-integrity control was weakened (see §3). Local
   limits (no Chrome / Postgres / Prisma-engine download) are fully covered by the CI runs above.
