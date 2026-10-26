@@ -24,8 +24,9 @@ deployment, no production data touched, no customer charged.
 | Unit/integration/security suite | **PASS** | 2847 passed, 1 failed (environment-only, §8) |
 | ESLint | **PASS** | 0 errors, 40 warnings (baseline: 41) |
 | TypeScript — application code | **PASS** | `npx tsc --noEmit`: no findings outside `tests/` |
-| TypeScript — whole project | **BLOCKED** | 4 errors, all from the ungenerated Prisma client; reproduced on the untouched baseline (§8) |
-| `npm run build` | **BLOCKED** (type-check stage) | `✓ Compiled successfully`; fails at `Running TypeScript` with the same 4 pre-existing errors (§8) |
+| TypeScript — whole project | **PASS** (CI) | CI “Static (install, generate, lint, typecheck, audit)”: pass, with a generated Prisma client. Locally the 4 errors come from the ungenerated client (§8) |
+| `npm run build` | **PASS** (CI) | CI “Production build path on PostgreSQL 18”: pass; “Production build against the isolated test database”: pass. Locally the type-check stage is blocked by the same Prisma-engine limitation (§8) |
+| CI on the pull request | **PASS** | 12/12 checks pass, including the full suite against a real PostgreSQL 18 database (§8) |
 | Existing unpaid-LIVE records identified in production | **BLOCKED** (no database access) | Read-only audit script + classification tests delivered; cannot execute without `DATABASE_URL` (§9) |
 | Vercel deploy / merge | **NOT DONE** (not authorised) | §12 |
 
@@ -232,7 +233,25 @@ npm run build
   Failed to type check.
 ```
 
-**Environment limitation, proven not introduced here.** `binaries.prisma.sh` is unreachable from
+### CI result on this pull request (authoritative for build + typecheck)
+
+All 12 required checks pass — this is where the environment limitation below is resolved, because
+CI can download the Prisma engine:
+
+| Check | Result |
+| --- | --- |
+| Static (install, generate, lint, typecheck, audit) | **pass** |
+| Production build path on PostgreSQL 18 | **pass** |
+| Journey against a real database | **pass** (unit, integration and security suites; §66 journey; POS journey; production build against the isolated DB; authenticated HTTP browser journey) |
+| Migrations + schema on PostgreSQL 18 | **pass** |
+| Exact candidate applies on disposable PostgreSQL 18 | **pass** |
+| D2 — build, audit and controls on the candidate tree | **pass** |
+| Migration target guard / Failure paths actually fail / Schema reconciliation proposal | **pass** |
+| Release gate (aggregate) | **pass** |
+
+So the app does type-check and build cleanly; only this sandbox cannot prove it, and CI has.
+
+**Environment limitation in this sandbox, proven not introduced here.** `binaries.prisma.sh` is unreachable from
 this sandbox, so `prisma generate` cannot run and `@prisma/client` stays stubbed. Re-running
 `npx tsc --noEmit` and `npm run build` on the untouched baseline (`git stash -u`) produced the
 *identical* four errors and the same failed type-check stage. The single failing test
@@ -304,8 +323,10 @@ and `/api/ai/config` return `402`/`409` for activation attempts that are not per
    Customer-facing risk is already mitigated: those desks stop being reachable because the gate is
    evaluated per request. The residual risk is misleading copy in the owner console, which the
    derived state also fixes.
-2. **Production build/type-check cannot be verified here** (Prisma engine download blocked) — CI on
-   GitHub (`.github/workflows/release-validation.yml`) is the place to confirm it.
+2. ~~Production build/type-check cannot be verified here~~ — **resolved**: the CI run on this pull
+   request passes the static gate (generate + lint + typecheck + audit) and both production-build
+   jobs. The local failure below is an artefact of the blocked Prisma engine download, not of the
+   change.
 3. **No real-device/screen-reader pass** — source-level accessibility evidence only.
 4. **`/api/business` publishes the site on any paid plan** (existing, documented policy). It cannot
    make the *AI Front Desk* live, because that ignores `isPublished` and requires the AI entitlement.
