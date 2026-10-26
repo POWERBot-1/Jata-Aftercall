@@ -18,6 +18,8 @@
  * and never shifts the layout while it loads.
  */
 
+import { CATEGORY_IMAGES, EXPERIENCE_CATEGORY_IMAGE, imageForCategoryText } from "@/lib/categoryImagery";
+
 export type WorkspacePhoto = {
   /** Fallback JPEG. Always present: WebP can be unsupported and the page still renders. */
   src: string;
@@ -32,32 +34,7 @@ export type WorkspacePhoto = {
   height: number;
 };
 
-const LANDING = "/landing";
 const WORKSPACE = "/workspace";
-
-function landingPhoto(slug: string, alt: string): WorkspacePhoto {
-  return {
-    src: `${LANDING}/${slug}.jpg`,
-    srcSet: `${LANDING}/${slug}-720.jpg 720w, ${LANDING}/${slug}.jpg 1100w`,
-    webp: `${LANDING}/${slug}.webp`,
-    webpSrcSet: `${LANDING}/${slug}-720.webp 720w, ${LANDING}/${slug}.webp 1100w`,
-    alt,
-    width: 1100,
-    height: 684,
-  };
-}
-
-function workspacePhoto(slug: string, alt: string): WorkspacePhoto {
-  return {
-    src: `${WORKSPACE}/${slug}.jpg`,
-    srcSet: `${WORKSPACE}/${slug}-720.jpg 720w, ${WORKSPACE}/${slug}.jpg 1200w`,
-    webp: `${WORKSPACE}/${slug}-1200.webp`,
-    webpSrcSet: `${WORKSPACE}/${slug}-720.webp 720w, ${WORKSPACE}/${slug}-1200.webp 1200w`,
-    alt,
-    width: 1200,
-    height: 670,
-  };
-}
 
 /** The photograph behind the dashboard hero: Nairobi at dusk, graphite and amber. */
 export const WORKSPACE_HERO_PHOTO: WorkspacePhoto = {
@@ -78,24 +55,15 @@ export const WORKSPACE_HERO_PHOTO: WorkspacePhoto = {
  * `resolveExperienceProfile()` first; anything unrecognised lands on the produce-market
  * photograph rather than a broken image or a generic grey box.
  */
-export const CATEGORY_PHOTOS: Record<string, WorkspacePhoto> = {
-  food: landingPhoto("nyumbani-kitchen", "Illustrative photo of a Kenyan kitchen serving plated food."),
-  beauty: landingPhoto("marys-beauty-studio", "Illustrative photo of a small beauty studio's braiding and nails work area."),
-  salon: landingPhoto("marys-beauty-studio", "Illustrative photo of a small salon's styling chairs and mirrors."),
-  fashion: workspacePhoto("category-retail", "Illustrative photo of neatly folded fabrics and garments in a shop."),
-  retail: workspacePhoto("category-retail", "Illustrative photo of a small neighbourhood shop with stocked shelves."),
-  electronics: workspacePhoto("category-retail", "Illustrative photo of a small shop with goods arranged on shelves."),
-  automotive: landingPhoto("kamau-auto-care", "Illustrative photo of a small vehicle workshop bay."),
-  technical: landingPhoto("kamau-auto-care", "Illustrative photo of a small technical workshop with tools."),
-  realestate: landingPhoto("john-kamau-properties", "Illustrative photo of a residential property exterior."),
-  hospitality: landingPhoto("john-kamau-properties-interior", "Illustrative photo of a warm, furnished guest interior."),
-  furniture: landingPhoto("john-kamau-properties-interior", "Illustrative photo of a furnished interior with wooden furniture."),
-  fitness: workspacePhoto("category-fitness", "Illustrative photo of a small studio with mats and weights."),
-  creative: workspacePhoto("category-professional", "Illustrative photo of a calm desk with a laptop and notebook."),
-  professional: workspacePhoto("category-professional", "Illustrative photo of a calm professional office desk."),
-  education: workspacePhoto("category-professional", "Illustrative photo of a quiet desk prepared for study or tutoring."),
-  other: workspacePhoto("category-produce", "Illustrative photo of a fresh produce stall with baskets of vegetables and fruit."),
-};
+/**
+ * Derived from the shared category imagery registry (`lib/categoryImagery`), so the
+ * dashboard, Website Studio and POS can never drift onto different pictures for the same
+ * trade — and unrelated trades no longer share one generic photo (electronics, fashion,
+ * furniture, education and creative each have their own since the 2026-10-26 pass).
+ */
+export const CATEGORY_PHOTOS: Record<string, WorkspacePhoto> = Object.fromEntries(
+  Object.entries(EXPERIENCE_CATEGORY_IMAGE).map(([key, imageId]) => [key, CATEGORY_IMAGES[imageId]]),
+);
 
 /** Category keys for the plan/feature sections that have no single business attached. */
 export const WORKSPACE_PHOTOS = {
@@ -112,32 +80,10 @@ export const WORKSPACE_PHOTOS = {
  * existed, or one with hand-typed text, still gets a real photograph.
  */
 export function photoForCategory(category: string | null | undefined): WorkspacePhoto {
-  const key = (category || "").trim().toLowerCase();
-  if (!key) return CATEGORY_PHOTOS.other;
-  // Direct profile keys ("beauty") and stored labels ("Beauty & Salon") are both handled:
-  // profile keys match the map, labels are matched against the shared alias registry.
-  if (CATEGORY_PHOTOS[key]) return CATEGORY_PHOTOS[key];
-  const aliases: Array<[RegExp, string]> = [
-    [/\b(food|restaurant|menu|cafe|café|hotel|eatery|bakery|butcher|caterer)\b/, "food"],
-    [/\b(beauty|salon|spa|nail|braid|makeup|barber|hair)\b/, "beauty"],
-    [/\b(fashion|clothes|clothing|tailor|boutique|shoe)\b/, "fashion"],
-    [/\b(retail|shop|duka|store|grocery|supermarket|mini-?mart)\b/, "retail"],
-    [/\b(electronic|phone|computer|laptop|gadget)\b/, "electronics"],
-    [/\b(auto|car|vehicle|garage|mechanic|spare)\b/, "automotive"],
-    [/\b(technic\w*|repair|welding|electric\w*|plumb\w*|carpent\w*|hardware)\b/, "technical"],
-    [/\b(real ?estate|property|land|rental|letting)\b/, "realestate"],
-    [/\b(hospitality|guest|airbnb|lodge|travel|tour)\b/, "hospitality"],
-    [/\b(furniture|interior|decor|woodwork)\b/, "furniture"],
-    [/\b(fitness|gym|workout|yoga|trainer)\b/, "fitness"],
-    [/\b(creative|design|photo|music|art)\b/, "creative"],
-    [/\b(professional|consult|law|legal|account|audit|finance|insurance)\b/, "professional"],
-    [/\b(educat|school|tutor|training|college)\b/, "education"],
-    [/\b(farm|agri|produce|grocery|vegetable|fruit|milk)\b/, "other"],
-  ];
-  for (const [pattern, mapped] of aliases) {
-    if (pattern.test(key)) return CATEGORY_PHOTOS[mapped];
-  }
-  return CATEGORY_PHOTOS.other;
+  // Direct profile keys ("beauty"), stored labels ("Beauty & Salon"), POS trade keys and
+  // hand-typed free text ("Hardware & electrical") all resolve through the one registry,
+  // which also knows pharmacy, transport, agriculture and hardware photographs.
+  return imageForCategoryText(category);
 }
 
 /**

@@ -186,6 +186,9 @@ export type ExperienceBrand = {
   tagline?: string;
   logoUrl?: string;
   heroImageUrl?: string;
+  /** Crop focal point for the hero image, in percent (5–95). Absent = the image's own centre. */
+  heroFocalX?: number;
+  heroFocalY?: number;
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;

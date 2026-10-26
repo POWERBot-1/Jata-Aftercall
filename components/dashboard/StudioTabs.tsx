@@ -15,6 +15,7 @@ import {
   Receipt,
   Settings2,
   UploadCloud,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
 
@@ -38,8 +39,9 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
     // The Canvas is the editing surface; it sits second so "edit my website" is one tap from Home.
     { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
     { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
+    { href: `${base}/create`, label: "Create", icon: Wand2 },
     { href: `${base}/items`, label: "Products & services", icon: Package },
-    { href: `${base}/photos`, label: "Photos", icon: ImageIcon },
+    { href: `${base}/photos`, label: "Gallery", icon: ImageIcon },
     { href: `${base}/design`, label: "Design", icon: Palette },
     { href: `${base}/theme`, label: "Brand & settings", icon: Settings2 },
     ...(capabilities.includes("commerce") || capabilities.includes("booking")

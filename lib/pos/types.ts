@@ -337,6 +337,20 @@ export type PosConfiguration = {
     key: string;
     modules: CapabilityKey[];
   };
+  /**
+   * Owner-chosen POS presentation (image-first pass). Presentation-only: it never affects
+   * trading, is excluded from the configuration fingerprint, and takes effect without
+   * republishing — changing a header picture must never look like an unpublished till change.
+   */
+  presentation: PosPresentationConfig;
+};
+
+/** Optional POS header imagery chosen by the owner. Absent fields = the category default. */
+export type PosPresentationConfig = {
+  headerImageUrl?: string;
+  headerImageAlt?: string;
+  headerFocalX?: number;
+  headerFocalY?: number;
 };
 
 // ── Questionnaire (§9, §40, §41) ──────────────────────────────────────────────

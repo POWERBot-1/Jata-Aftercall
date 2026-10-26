@@ -58,6 +58,13 @@ export function safeUrl(value: unknown): string {
   return "";
 }
 
+/** A hero crop focal point: an integer percent inside 5–95, or absent for the image centre. */
+function focalPercent(value: unknown): number | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(5, Math.min(95, Math.round(n)));
+}
+
 function safeText(value: unknown, maxLength: number): string {
   return typeof value === "string" ? sanitizeText(value, maxLength) : "";
 }
@@ -153,6 +160,8 @@ export function normalizeBrand(input: unknown, fallbackName = ""): ExperienceBra
     tagline: safeText(raw.tagline, 140),
     logoUrl: safeUrl(raw.logoUrl),
     heroImageUrl: safeUrl(raw.heroImageUrl),
+    heroFocalX: focalPercent(raw.heroFocalX),
+    heroFocalY: focalPercent(raw.heroFocalY),
     primaryColor: /^#[0-9a-fA-F]{6}$/.test(String(raw.primaryColor || "")) ? String(raw.primaryColor).toUpperCase() : undefined,
     secondaryColor: /^#[0-9a-fA-F]{6}$/.test(String(raw.secondaryColor || "")) ? String(raw.secondaryColor).toUpperCase() : undefined,
     accentColor: /^#[0-9a-fA-F]{6}$/.test(String(raw.accentColor || "")) ? String(raw.accentColor).toUpperCase() : undefined,
