@@ -152,6 +152,22 @@ export HTTP handlers, and the tests and confirmation page share these values).
 | `node --check scripts/browser/autopilot-activation.check.mjs` | syntax OK |
 | `npm run test:browser:autopilot-activation` | **NOT RUN** — requires `CHROME_PATH`, `JATA_SESSION_TOKEN`, `BUSINESS_ID` |
 
+### CI on the pull request (all green)
+
+`gh pr checks 65` — every job passed on this branch:
+
+| Check | Result |
+| --- | --- |
+| Static (install, generate, lint, typecheck, audit) | pass (57s) — type-check passes with a real generated Prisma client |
+| Journey against a real database | pass (11m46s) — PostgreSQL 18 |
+| Production build path on PostgreSQL 18 | pass (1m45s) |
+| Migrations + schema on PostgreSQL 18 | pass (1m39s) |
+| Exact candidate applies on disposable PostgreSQL 18 | pass (2m4s) |
+| D2 — build, audit and controls on the candidate tree | pass (2m11s) |
+| Failure paths actually fail / Schema reconciliation / Migration target guard | pass |
+| Release gate (aggregate) | pass |
+| Vercel (preview build) | pass |
+
 **Payment-security regression results:** unverified payments cannot settle (`PAYMENT_EVIDENCE_REQUIRED`),
 amount/currency mismatches reject (`PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_CURRENCY_MISMATCH`),
 settlement covers only the paying tenant, is idempotent under webhook replay, extends an active
