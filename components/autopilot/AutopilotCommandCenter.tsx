@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -23,6 +23,10 @@ import {
 } from "@/components/workspace/WorkspaceUI";
 import { WORKSPACE_HERO_PHOTO } from "@/lib/workspaceImagery";
 import { formatKES } from "@/lib/format";
+import {
+  beginAutopilotActivation,
+  type ActivationNotice,
+} from "@/lib/autopilot/checkoutClient";
 
 export interface AutopilotOverviewPayload {
   actorRole: string;
@@ -200,6 +204,13 @@ export function AutopilotCommandCenter({
     text: string;
   } | null>(null);
 
+  // Activation (Standard / Pro / Enterprise) state. The notice is rendered next to the plan
+  // buttons, not only in the page banner, because the plans panel sits far below the banner:
+  // feedback that appears off-screen reads exactly like a dead button.
+  const [checkoutPlanKey, setCheckoutPlanKey] = useState<string | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<ActivationNotice | null>(null);
+  const checkoutInFlight = useRef(false);
+
   // Command center prompt + voice state
   const [commandInput, setCommandInput] = useState("");
   const [modality, setModality] = useState<"TEXT" | "VOICE_TRANSCRIPT">("TEXT");
@@ -273,34 +284,23 @@ export function AutopilotCommandCenter({
     }
   }
 
-  async function startCheckout(planId: string | null, planName: string) {
-    if (!planId) {
-      setBannerNotice({
-        tone: "error",
-        text: `${planName} plan record is not seeded in this environment yet. Run database seed to enable live Paystack checkout.`,
-      });
-      return;
-    }
+  async function startCheckout(plan: { key: string }) {
+    // Synchronous in-flight guard: two clicks in the same tick cannot start two checkouts.
+    if (checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
+    setCheckoutPlanKey(plan.key);
+    setCheckoutNotice(null);
     setBusy(true);
-    setBannerNotice(null);
     try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, planId }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.authorization_url) {
-        setBannerNotice({
-          tone: "error",
-          text: json.error || "Checkout could not be started right now.",
-        });
+      const outcome = await beginAutopilotActivation({ businessId, planKey: plan.key });
+      if (outcome.kind === "redirect") {
+        window.location.assign(outcome.url);
         return;
       }
-      window.location.assign(String(json.authorization_url));
-    } catch {
-      setBannerNotice(NETWORK_ERROR_NOTICE);
+      setCheckoutNotice(outcome.notice);
     } finally {
+      checkoutInFlight.current = false;
+      setCheckoutPlanKey(null);
       setBusy(false);
     }
   }
@@ -712,10 +712,34 @@ export function AutopilotCommandCenter({
         title={data.entitlement.banner.headline}
         meta={data.entitlement.banner.detail}
       >
+        {checkoutNotice ? (
+          <div
+            role="alert"
+            aria-live="assertive"
+            data-testid="autopilot-checkout-notice"
+            className="mb-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-[color:var(--ws-on-ink)]"
+          >
+            <p>{checkoutNotice.text}</p>
+            {checkoutNotice.action ? (
+              <a
+                href={checkoutNotice.action.href}
+                className="mt-1 inline-block font-bold underline underline-offset-2"
+              >
+                {checkoutNotice.action.label}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+        {!canManageBilling ? (
+          <p className="mb-3 text-xs opacity-85">
+            Only a business owner or admin can activate or renew a JATA Autopilot plan.
+          </p>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-3">
           {data.plans.map((plan) => {
             const isCurrent =
               data.entitlement.entitled && data.entitlement.planKey === plan.key;
+            const isStarting = checkoutPlanKey === plan.key;
             return (
               <div
                 key={plan.key}
@@ -733,11 +757,16 @@ export function AutopilotCommandCenter({
                 <p className="mt-1 text-xs opacity-85">{plan.description}</p>
                 <button
                   type="button"
-                  disabled={busy || !canManageBilling}
-                  onClick={() => void startCheckout(plan.id, plan.name)}
+                  disabled={busy || !canManageBilling || checkoutPlanKey !== null}
+                  aria-busy={isStarting}
+                  onClick={() => void startCheckout(plan)}
                   className="ws-btn-amber mt-3 min-h-[44px] w-full justify-center"
                 >
-                  {isCurrent ? "Extend 30 days" : `Activate ${formatKES(plan.priceKES)}`}
+                  {isStarting
+                    ? "Starting checkout…"
+                    : isCurrent
+                      ? "Extend 30 days"
+                      : `Activate ${formatKES(plan.priceKES)}`}
                 </button>
               </div>
             );

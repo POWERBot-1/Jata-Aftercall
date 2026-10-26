@@ -99,10 +99,13 @@ describe("Command Center feedback on failed requests", () => {
   });
 
   it("surfaces network errors from every action handler instead of swallowing them", () => {
-    // patchConfig, startCheckout, queueSuggestedProposal, runProposalOperation,
-    // submitOwnerCommand, handleIngestSubmit, handleRecordConsent, refreshOverview.
+    // patchConfig, queueSuggestedProposal, runProposalOperation, submitOwnerCommand,
+    // handleIngestSubmit, handleRecordConsent, refreshOverview.
+    // Activation (startCheckout) reports through lib/autopilot/checkoutClient.ts, which returns
+    // the same network notice as an inline result — see tests/unit/autopilot-checkout-client.test.ts.
     const catches = cc.match(/setBannerNotice\(NETWORK_ERROR_NOTICE\)/g) ?? [];
-    expect(catches.length).toBeGreaterThanOrEqual(8);
+    expect(catches.length).toBeGreaterThanOrEqual(7);
+    expect(cc).toContain("beginAutopilotActivation(");
   });
 
   it("reports a failed owner-pressed refresh", () => {
@@ -117,7 +120,11 @@ describe("Command Center feedback on failed requests", () => {
 
   it("still does not fake success: errors use the server message first", () => {
     expect(cc).toContain('json.error || "Could not update Autopilot settings."');
-    expect(cc).toContain('json.error || "Checkout could not be started right now."');
+    // Checkout reports the server's message through the shared client module, and only treats a
+    // response as success when it carries a checkout URL that passed validation.
+    expect(cc).toContain('outcome.kind === "redirect"');
+    expect(cc).toContain("window.location.assign(outcome.url)");
+    expect(cc).toContain("setCheckoutNotice(outcome.notice)");
   });
 });
 
