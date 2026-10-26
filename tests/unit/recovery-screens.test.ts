@@ -6,12 +6,17 @@
  * way back. These render tests pin the replacement screens: one h1, the main landmark, a skip
  * link and real, safe recovery actions, with no raw error text exposed.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import RootNotFound from "@/app/not-found";
 import BusinessNotFound from "@/app/b/[slug]/not-found";
 import GlobalError from "@/app/global-error";
+
+const root = path.resolve(__dirname, "../..");
+const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
 
 describe("root 404", () => {
   const html = renderToStaticMarkup(createElement(RootNotFound));
@@ -20,6 +25,15 @@ describe("root 404", () => {
     expect(html).toContain("<h1");
     expect(html).toContain('id="main"');
     expect(html).toContain('class="jata-skip-link"');
+  });
+
+  it("keeps the cross-tenant browser contract: the exact not-found phrase and noindex", () => {
+    // The authenticated browser journey asserts the visible phrase and a noindex robots meta on
+    // the boundary rendered when an owner opens another owner's workspace route.
+    expect(html).toContain("could not be found");
+    const source = read("app/not-found.tsx");
+    expect(source).toContain("robots:");
+    expect(source).toContain("index: false");
   });
 
   it("offers real recovery routes for new and returning customers", () => {
@@ -42,6 +56,12 @@ describe("business page 404", () => {
     expect(html).toContain('id="main"');
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/#demo"');
+  });
+
+  it("is marked noindex so an unresolved page never enters the search index", () => {
+    const source = read("app/b/[slug]/not-found.tsx");
+    expect(source).toContain("robots:");
+    expect(source).toContain("index: false");
   });
 });
 

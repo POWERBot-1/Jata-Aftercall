@@ -2,7 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { BrandMark } from "@/components/ui/BrandMark";
 
-export const metadata: Metadata = { title: "Page not found" };
+// A 404 must stay out of the search index: `robots` renders the noindex/nofollow meta that the
+// cross-tenant browser contract (and good SEO for a not-found page) relies on.
+export const metadata: Metadata = {
+  title: "Page not found",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Root 404.
@@ -31,10 +36,10 @@ export default function NotFound() {
         <p className="jata-kicker" style={{ justifyContent: "center" }}>
           Error 404
         </p>
-        <h1 className="jata-title">We can&apos;t find that page</h1>
+        <h1 className="jata-title">That page could not be found.</h1>
         <p className="jata-subtitle">
-          The link may be broken or the page may have moved. Nothing has changed on your account, and no payment or
-          data was affected.
+          The link may be broken or the page may have moved, or you may have followed a link to someone else&apos;s
+          workspace. Nothing has changed on your account, and no payment or data was affected.
         </p>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/" className="jata-btn jata-btn-primary">

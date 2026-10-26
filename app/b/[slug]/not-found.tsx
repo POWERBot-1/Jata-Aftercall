@@ -1,11 +1,18 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { BrandMark } from "@/components/ui/BrandMark";
+
+export const metadata: Metadata = {
+  title: "Page not found",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Shown when a business slug does not resolve to a published, active page.
  *
  * Uses the shared tokens/buttons (not a raw zinc palette) so the screen stays on-brand and
  * adapts to the active theme, and it always offers a real way back instead of dead-ending.
+ * Marked noindex because an unresolved business page must never enter the search index.
  */
 export default function NotFound() {
   return (
