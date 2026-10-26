@@ -28,6 +28,7 @@ import AIFrontDeskWorkspace, {
 } from "@/components/ai/AIFrontDeskWorkspace";
 
 const root = path.resolve(__dirname, "../..");
+const noticeComponent = readFileSync(path.join(root, "components/workspace/WorkspaceUI.tsx"), "utf8");
 
 const profile = {
   name: "Savanna Bakery",
@@ -387,7 +388,10 @@ describe("the eleven required UI states", () => {
 
   it("10. publication failed — the server's reason is shown, and the desk stays unpublished", () => {
     expect(source).toContain("data.error ||");
-    expect(source).toContain('role={publishNotice.tone === "error" ? "alert" : "status"}');
+    // The accessible alert/status mapping lives in the shared WorkspaceNotice; the workspace
+    // keeps its error/success tone split and passes the publish notice's tone straight through.
+    expect(source).toContain('<WorkspaceNotice tone={publishNotice.tone === "error" ? "error" : "success"}');
+    expect(noticeComponent).toContain('role={tone === "error" ? "alert" : "status"}');
     expect(source).toContain("Nothing was changed");
     // A failed publish never rewrites the local publication state to LIVE.
     const handler = source.slice(source.indexOf("async function publish()"), source.indexOf("async function switchOperational"));
@@ -449,7 +453,8 @@ describe("journey implementation guards", () => {
   });
 
   it("keeps every failure message actionable and every request real", () => {
-    expect(source).toContain('role={publishNotice.tone === "error" ? "alert" : "status"}');
+    expect(source).toContain('<WorkspaceNotice tone={publishNotice.tone === "error" ? "error" : "success"}');
+    expect(noticeComponent).toContain('role={tone === "error" ? "alert" : "status"}');
     expect(source).toContain("Publication failed. Nothing was changed");
     expect(source).toContain("Try again when you are back online");
     // No dead ends: the three write paths all hit real API routes.

@@ -191,7 +191,7 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
 
   add(
     "entitlement",
-    "Interactive Business entitlement",
+    "Website Studio entitlement",
     input.entitlement.entitled,
     input.entitlement.reason,
     "/dashboard/subscription",

@@ -10,6 +10,8 @@
  * can see what JATA will do for them *before* paying — but never an unlimited free loop.
  */
 
+import { WEBSITE_STUDIO_NAME } from "../productNames";
+
 export type AiCapability = "IMAGE" | "ENHANCE" | "COPY" | "ALT_TEXT";
 
 export type AiQuota = {
@@ -34,7 +36,7 @@ export const INTERACTIVE_AI_QUOTA: AiQuota = {
   copyPerMonth: 400,
   maxCandidatesPerRequest: 4,
   minIntervalMs: 4_000,
-  label: "Interactive Business",
+  label: WEBSITE_STUDIO_NAME,
 };
 
 /** Preview allowance: enough to try the studio, not enough to run a business on. */

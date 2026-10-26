@@ -26,7 +26,7 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   await loadWorkspace(id);
-  return { title: "Website studio" };
+  return { title: "Website Studio" };
 }
 
 /**

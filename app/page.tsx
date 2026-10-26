@@ -119,7 +119,7 @@ export default async function HomePage() {
                 const blurb = ownerCard
                   ? ownerCard.blurb
                   : p.key === "INTERACTIVE_BUSINESS"
-                    ? "Build, edit and preview your interactive business website."
+                    ? "Build, edit and preview your full business website."
                     : null;
                 // Every card renders its product icon (decorative; the plan name is the label),
                 // so the shared card rows stay aligned and each product is recognisable at a glance.

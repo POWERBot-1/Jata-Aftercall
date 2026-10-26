@@ -42,7 +42,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { WorkspacePhotoImage } from "@/components/workspace/WorkspaceUI";
+import { WorkspacePhotoImage, WorkspaceNotice } from "@/components/workspace/WorkspaceUI";
 import { categoryLabel, photoForCategory, type WorkspacePhoto } from "@/lib/workspaceImagery";
 import { aiFrontDeskStatusLabel } from "@/lib/statusLabels";
 import { formatDate, formatKES } from "@/lib/format";
@@ -551,7 +551,7 @@ export default function AIFrontDeskWorkspace({
                     className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold"
                     style={{
                       background: active ? "var(--ws-amber)" : done ? "var(--ws-jade-soft)" : "var(--ws-cream-2)",
-                      color: active ? "#1a140d" : done ? "var(--ws-jade)" : "var(--ws-muted)",
+                      color: active ? "var(--ws-on-amber)" : done ? "var(--ws-jade)" : "var(--ws-muted)",
                     }}
                   >
                     {done ? "✓" : index + 1}
@@ -929,17 +929,9 @@ export default function AIFrontDeskWorkspace({
                 </button>
               </div>
               {profileNotice ? (
-                <p
-                  role={profileNotice.tone === "error" ? "alert" : "status"}
-                  className="rounded-[var(--ws-radius-sm)] border px-3 py-2 text-sm"
-                  style={{
-                    borderColor: profileNotice.tone === "error" ? "rgba(185,28,28,0.35)" : "rgba(15,118,110,0.35)",
-                    background: profileNotice.tone === "error" ? "#fef2f2" : "var(--ws-jade-soft)",
-                    color: profileNotice.tone === "error" ? "#991b1b" : "var(--ws-jade)",
-                  }}
-                >
+                <WorkspaceNotice tone={profileNotice.tone === "error" ? "error" : "success"}>
                   {profileNotice.text}
-                </p>
+                </WorkspaceNotice>
               ) : null}
             </form>
           </div>
@@ -1123,17 +1115,9 @@ export default function AIFrontDeskWorkspace({
                 </button>
               </div>
               {responseNotice ? (
-                <p
-                  role={responseNotice.tone === "error" ? "alert" : "status"}
-                  className="rounded-[var(--ws-radius-sm)] border px-3 py-2 text-sm"
-                  style={{
-                    borderColor: responseNotice.tone === "error" ? "rgba(185,28,28,0.35)" : "rgba(15,118,110,0.35)",
-                    background: responseNotice.tone === "error" ? "#fef2f2" : "var(--ws-jade-soft)",
-                    color: responseNotice.tone === "error" ? "#991b1b" : "var(--ws-jade)",
-                  }}
-                >
+                <WorkspaceNotice tone={responseNotice.tone === "error" ? "error" : "success"}>
                   {responseNotice.text}
-                </p>
+                </WorkspaceNotice>
               ) : null}
             </form>
           </div>
@@ -1413,17 +1397,9 @@ export default function AIFrontDeskWorkspace({
             </div>
 
             {publishNotice ? (
-              <p
-                role={publishNotice.tone === "error" ? "alert" : "status"}
-                className="mt-3 rounded-[var(--ws-radius-sm)] border px-3 py-2 text-sm"
-                style={{
-                  borderColor: publishNotice.tone === "error" ? "rgba(185,28,28,0.35)" : "rgba(15,118,110,0.35)",
-                  background: publishNotice.tone === "error" ? "#fef2f2" : "var(--ws-jade-soft)",
-                  color: publishNotice.tone === "error" ? "#991b1b" : "var(--ws-jade)",
-                }}
-              >
+              <WorkspaceNotice tone={publishNotice.tone === "error" ? "error" : "success"} className="mt-3">
                 {publishNotice.text}
-              </p>
+              </WorkspaceNotice>
             ) : null}
 
             <div className="mt-4 rounded-[var(--ws-radius-md)] border p-3" style={{ borderColor: "var(--ws-line)", background: "var(--ws-wash)" }}>

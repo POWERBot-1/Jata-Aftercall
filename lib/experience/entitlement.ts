@@ -11,6 +11,7 @@
  */
 
 import prisma from "../db";
+import { WEBSITE_STUDIO_NAME } from "../productNames";
 
 export const INTERACTIVE_PLAN_KEY = "INTERACTIVE_BUSINESS";
 export const INTERACTIVE_PRICE_KES = 999;
@@ -51,14 +52,14 @@ export function deriveEntitlement(input: {
   const planKey = subscription?.plan?.key || subscription?.planKey || null;
 
   if (!subscription) {
-    return { entitled: false, status: "NONE", reason: "Choose the Interactive Business plan to unlock your premium website." };
+    return { entitled: false, status: "NONE", reason: `Choose the ${WEBSITE_STUDIO_NAME} plan to unlock your premium website.` };
   }
   if (planKey && planKey !== INTERACTIVE_PLAN_KEY) {
     return {
       entitled: false,
       status: "NONE",
       planKey,
-      reason: "Your current plan does not include the Interactive Business website. Upgrade to use it.",
+      reason: `Your current plan does not include ${WEBSITE_STUDIO_NAME}. Upgrade to build your premium website.`,
     };
   }
   // Payment must be verified before the premium package is usable (§3). An already-active
@@ -68,7 +69,7 @@ export function deriveEntitlement(input: {
   const subscriptionActive =
     subscription.status === "ACTIVE" || subscription.status === "EXPIRING" || subscription.status === "PAST_DUE";
   if (!verifiedPayment && !subscriptionActive) {
-    return { entitled: false, status: "PENDING", planKey: planKey || undefined, reason: "Complete your KES 999 payment to activate Interactive Business." };
+    return { entitled: false, status: "PENDING", planKey: planKey || undefined, reason: `Complete your KES 999 payment to activate ${WEBSITE_STUDIO_NAME}.` };
   }
   if (input.entitlement?.status === "CANCELLED" || subscription.status === "CANCELLED") {
     return { entitled: false, status: "CANCELLED", planKey: planKey || undefined, reason: "This package was cancelled. Renew to restore your website." };
@@ -84,7 +85,7 @@ export function deriveEntitlement(input: {
       planKey: planKey || undefined,
       expiresAt,
       graceUntil,
-      reason: "Your Interactive Business subscription has expired. Renew to put your website back online.",
+      reason: `Your ${WEBSITE_STUDIO_NAME} subscription has expired. Renew to put your website back online.`,
     };
   }
   if (expiresAt && now.getTime() > new Date(expiresAt).getTime()) {

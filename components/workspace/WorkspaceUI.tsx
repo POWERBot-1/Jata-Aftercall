@@ -4,7 +4,6 @@
  * require the optimizer to fetch arbitrary remote URLs and would not respect the aspect-ratio
  * container these images fill, so the raw element with `loading="lazy"` is the safer choice.
  */
-/* eslint-disable @next/next/no-img-element */
 import type { ReactNode } from "react";
 import { cn } from "@/lib/ui";
 import type { WorkspacePhoto } from "@/lib/workspaceImagery";
@@ -261,4 +260,28 @@ export function WorkspaceFact({ label, children, icon }: { label: ReactNode; chi
 /** Skeleton block for the route-level loading UI. */
 export function WorkspaceSkeleton({ className }: { className?: string }) {
   return <div aria-hidden="true" className={cn("ws-skel", className)} />;
+}
+
+/**
+ * An inline success/error notice for guided workspace forms.
+ *
+ * One replacement for the hand-rolled, hard-coded light-red `<p style={{…}}>` blocks that used
+ * to be copied through the AI Front Desk flow. It renders through the themed `.ws-notice`
+ * tokens, so the same component reads correctly in the light and graphite themes. The role is
+ * `alert` for an error and `status` for a success message, so assistive tech announces it.
+ */
+export function WorkspaceNotice({
+  tone = "success",
+  children,
+  className,
+}: {
+  tone?: "success" | "error";
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <p role={tone === "error" ? "alert" : "status"} className={cn("ws-notice", `ws-notice--${tone}`, className)}>
+      {children}
+    </p>
+  );
 }

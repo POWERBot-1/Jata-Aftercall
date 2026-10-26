@@ -1,0 +1,153 @@
+# JATA AFTERCALL — Premium UX / UI / Product-Experience Refinement
+
+**Date:** 2026-10-26
+**Branch:** `arena/b8a138ba-jata-aftercall`
+**Base:** `main` @ `540180602142f0923be85a50902d33b616d29ab0`
+**Last fully CI-verified code head:** `462ee261a09528e7ec2e9b9d4a7c1c753dda7e20` — **all 12 checks green** (the commits on top are documentation-only and change no runtime code). · **PR:** https://github.com/POWERBot-1/Jata-Aftercall/pull/68 (OPEN, `MERGEABLE` / `CLEAN`). Two CI flakes encountered (an `npm install` failure and a headless-Chrome Motion cold-load 15 s timeout) are documented with evidence and prior-PR precedent in §5; neither originates from this branch's code.
+**Scope:** whole-application audit + a focused, test-locked refinement pass (terminology, design-token/dark-theme correctness, journey recovery screens, brand consistency).
+
+---
+
+## 1. How the audit was run
+
+The real implementation was inspected, not screenshots: the App Router route tree (`app/`), the shared
+primitives (`components/ui`, `components/workspace`), the generated-product layer (`components/storefront`,
+`lib/experience`), the workspace feature flows (AI Front Desk, Website Studio, POS, Autopilot, subscription),
+the global stylesheet (`app/globals.css`, ~5.2k lines) and the existing enforcement tests
+(`tests/unit/design-system.test.ts`, `dashboard-ux.test.ts`, the homepage/landing content tests).
+
+The codebase already carries a mature, **test-locked** design system — platform tokens (`--jata-*`), workspace
+tokens (`--ws-*`, with a light default and a graphite `lime-spark` theme), generated-product tokens (`--eb-*`),
+shared `Button/Card/Field/StatusPill/StateBlocks/ErrorState` primitives, DB-driven pricing with fallbacks,
+Paystack verification gates, tenant isolation, and next-step guidance (`lib/nextAction.ts`). The refinement
+therefore concentrates on **residual inconsistencies and dead-ends** rather than a ground-up redesign, and every
+change preserves the locked contracts (plan keys, entitlement/payment gates, tenant boundaries, test assertions).
+
+### Environment limitation (affects two checks only)
+
+This sandbox has no outbound access to `binaries.prisma.sh`, so `prisma generate` cannot download its native
+query engine and the generated client is a reduced stub. Consequences, both **pre-existing and independent of
+this change set**:
+
+* `tsc --noEmit` reports 4 errors, all inside **test** files that read Prisma engine internals
+  (`Prisma.dmmf`, `PrismaClientKnownRequestError`, `BusinessUncheckedCreateInput`). Application/component/library
+  code reports **zero** type errors.
+* One unit test (`autopilot-phase1-hardening` Priority 1, which reads `Prisma.dmmf`) fails for the same reason.
+
+A production build was nevertheless verified end-to-end (see §5): webpack **compiles successfully**, and with the
+three engine-dependent test files set aside the full `next build` (compile + type-check + lint + page generation)
+**completes with exit 0**. In CI/production the engine is present, `prisma generate` succeeds, and those four
+errors do not occur.
+
+---
+
+## 2. Prioritised remediation register
+
+Severity uses the brief's scale (Critical / High / Medium / Low). Every "Result" is from a command actually run.
+
+| # | Issue (route / component) | Severity | Fix (files & behaviour) | Verification (commands actually run) | Result | Remaining risk |
+|---|---|---|---|---|---|---|
+| 1 | Split product naming: homepage/nav say **"Website Studio"** but owner-facing messages still said legacy **"Interactive Business"** — entitlement reasons, publish prompts, status help, next actions, AI quota label, checkout error, plan blurbs. Confusing terminology across the same journey. | High | Added one canonical source `lib/productNames.ts` (`WEBSITE_STUDIO_NAME`). Re-pointed **display copy only** to it in `lib/experience/entitlement.ts`, `lib/statusLabels.ts`, `lib/nextAction.ts`, `lib/ai/quota.ts`, `lib/studio/copilot.ts`, `lib/experience/validate.ts`, `app/api/checkout/route.ts`, `components/dashboard/{EntitlementBanner,PublishPanel,WebsiteHealth}.tsx`, `app/page.tsx`, `app/dashboard/subscription/page.tsx`. The stored plan **key `INTERACTIVE_BUSINESS` and all billing logic are untouched**. | `npx vitest run tests/unit/website-studio-naming.test.ts` (new, 14 tests); full unit suite; `experience-publish`, `dashboard-ux`, `status-labels`, homepage plan-card tests | **PASS** | None — key/logic unchanged; integration mocks use the key, not the label. |
+| 2 | Hard-coded light-red notice palette `#fef2f2`/`#991b1b` copied into **three** AI Front Desk notices and hard-coded `#1a140d` stepper ink. These values do not re-point in the graphite theme → unreadable light box / wrong contrast on dark surfaces. | High | Introduced workspace semantic tokens `--ws-danger`, `--ws-danger-soft`, `--ws-danger-line`, `--ws-jade-line`, `--ws-on-amber` in **both** the default and `lime-spark` blocks of `app/globals.css`. Added a reusable, themed `WorkspaceNotice` (`components/workspace/WorkspaceUI.tsx`) and replaced all three inline notices + the stepper colour in `components/ai/AIFrontDeskWorkspace.tsx`. | `npx vitest run tests/unit/workspace-status-tokens.test.ts` (new, 9 tests); `ai-front-desk-journey` (31), `ai-front-desk-accessibility` (23) | **PASS** | None — role mapping (`error→alert`, else `status`) preserved and re-tested. |
+| 3 | No root `app/not-found.tsx` and no `app/global-error.tsx`: unknown URLs fell through to the unstyled Next.js default 404 (a dead end), and a root-layout crash could blank the tab. Only the dashboard had an error boundary. | High | Added branded `app/not-found.tsx` (one h1, main landmark, skip link, real Home / Sign in / Pricing recovery actions, token-based, works without JS) and a self-contained `app/global-error.tsx` (own html/body, inline brand styling, **Try again** reset + **Go to home**, shows a digest but never the raw error). Re-built the business `app/b/[slug]/not-found.tsx` on shared tokens. | `npx vitest run tests/unit/recovery-screens.test.ts` (new, 5 tests); production `next build` | **PASS** | global-error styling is intentionally inline (it may render after the layout fails); brand palette kept in sync manually. |
+| 4 | `EntitlementBanner` used fixed Tailwind palette (`border-emerald-200 bg-emerald-50 text-emerald-900`, amber/zinc) that does not adapt to the graphite theme. | Medium | Rewrote on `--ws-jade*` / `--ws-amber*` / `--ws-paper` / `--ws-line` tokens; adopted the Website Studio name; retained every state, CTA and the "content is untouched" reassurance. | `workspace-status-tokens.test.ts`; full unit suite; `next build` | **PASS** | None. |
+| 5 | Publish/health message text used fixed `text-emerald-700`/`text-amber-700/800` classes — low-contrast on graphite. | Medium | Re-pointed success→`var(--ws-jade)`, warning→`var(--ws-amber-deep)` in `PublishPanel.tsx` and `WebsiteHealth.tsx` (error already used the token-based `jata-error`). The numeric health **score bar** keeps its categorical colour scale (colour + number, never colour-only). | `workspace-status-tokens.test.ts` (source guard); ESLint | **PASS** | None. |
+| 6 | Hard-coded danger colours in shared workspace CSS: `.ws-shell .jata-btn-danger` (`#fef2f2/#991b1b/#b91c1c`) and `.ws-status[data-tone="danger"]` (`#dc2626`) — not theme-aware. | Medium | Moved both onto the new `--ws-danger*` tokens so they re-point for graphite. | `workspace-status-tokens.test.ts`; `next build` | **PASS** | None. |
+| 7 | Metadata title casing inconsistency: two routes titled "Website studio" vs the brand "Website Studio". | Low | Set title `"Website Studio"` on `app/dashboard/studio/page.tsx` and `app/dashboard/businesses/[id]/page.tsx`. | `dashboard-ux` unique-title test; `next build` | **PASS** | None. |
+| 8 | Stale top-of-file `eslint-disable @next/next/no-img-element` in `WorkspaceUI.tsx` (rule never fires there) reported as an unused directive. | Low | Removed the dead directive; `<img>` usage is retained and documented. | `npx eslint components/workspace/WorkspaceUI.tsx` (0 problems) | **PASS** | None. |
+| 9 | **CI-discovered (browser contract).** The custom root 404 initially dropped two guarantees the Next.js *default* 404 provided and the fail-fast authenticated browser journey (`studio-authenticated.check.mjs`, cross-tenant route `/dashboard/businesses/{id}/design`) asserts: visible text containing **"could not be found"** and a **`noindex` robots meta**. The failed `check()` throws in write mode, aborting the run and leaving the later M418 hydration samples unrecorded (the "15 missing samples" signature). | High | Root 404 now renders the phrase "That page could not be found." and exports `metadata.robots = { index: false, follow: false }`; the business 404 is also marked noindex. Added unit assertions for both the phrase and the noindex metadata. No change to authorization — the route still calls `notFound()`. | New assertions in `tests/unit/recovery-screens.test.ts` (7 tests); full vitest suite; CI re-run (see §5). | **PASS** | Browser/Puppeteer re-run only exists in CI; local env has no Chrome/DB, so evidence is the unit contract + green CI. |
+
+### Confirmed compliant during the audit (no change needed)
+
+* **Homepage feature order & pricing** — `HOMEPAGE_PLAN_ORDER` is `MONTHLY (KES 149) → ANNUAL (KES 999/yr) → AI_BUSINESS_FRONT_DESK (KES 499) → INTERACTIVE_BUSINESS/Website Studio (KES 999/mo) → BUSINESS_POS (owner-only) → JATA_AUTOPILOT (owner-only, last)`, matching the brief's required 1–5 order. Prices/durations are DB-derived with canonical fallbacks; no invented prices. Locked by `homepage-plan-cards/homepage-business-pos/homepage-autopilot` tests.
+* **Payment honesty** — no simulated success; Paystack verification, webhook signature/idempotency and entitlement gates intact (security suite green).
+* **Design-system discipline** — `components/ui/*` remain free of hard-coded hex and raw zinc/white/black (`design-system.test.ts`). Remaining hex elsewhere is legitimate: categorical chart colours, owner colour-picker inputs, and the always-dark storefront preview banner.
+* **Accessibility foundations** — skip links, one h1 per screen, visible focus, 44px touch targets, `prefers-reduced-motion`, labelled controls and status `role` wiring are present and test-covered.
+* **States** — shared loading skeleton, empty states, offline badge and error boundary already exist; dashboard shell enforces a single nav, one `<main id="main">` and one toast surface.
+
+---
+
+## 3. Mobile, accessibility and performance considerations
+
+* All new/rebuilt screens use the existing responsive token layout and `min-h-11` (44px) touch targets; the 404
+  actions stack on a narrow viewport and sit inline on `sm+`.
+* `WorkspaceNotice` keeps the screen-reader contract (`role="alert"` for an error, `role="status"` otherwise) that
+  the prior inline block provided — asserted in both the new token test and the updated AI Front Desk tests.
+* No new dependencies, no new network services, no animation added; the change set is CSS tokens + shared
+  components + copy, so bundle/runtime cost is effectively neutral. Images were already lazy-loaded with
+  width/height to avoid layout shift.
+
+---
+
+## 4. Files changed
+
+**New (6):** `lib/productNames.ts`, `app/not-found.tsx`, `app/global-error.tsx`,
+`tests/unit/website-studio-naming.test.ts`, `tests/unit/workspace-status-tokens.test.ts`,
+`tests/unit/recovery-screens.test.ts`.
+
+**Modified (20):** `app/globals.css`, `app/page.tsx`, `app/api/checkout/route.ts`,
+`app/b/[slug]/not-found.tsx`, `app/dashboard/studio/page.tsx`, `app/dashboard/subscription/page.tsx`,
+`app/dashboard/businesses/[id]/page.tsx`, `components/workspace/WorkspaceUI.tsx`,
+`components/ai/AIFrontDeskWorkspace.tsx`, `components/dashboard/{EntitlementBanner,PublishPanel,WebsiteHealth}.tsx`,
+`lib/{statusLabels,nextAction,productNames}.ts`, `lib/experience/{entitlement,validate}.ts`,
+`lib/ai/quota.ts`, `lib/studio/copilot.ts`, and the two updated AI Front Desk test files.
+
+No database migration, no schema change, no environment/infrastructure change, no deletion of a working feature.
+
+---
+
+## 5. Verification evidence (commands actually executed)
+
+| Check | Command | Observed result | Status |
+|---|---|---|---|
+| Unit tests (full) | `npx vitest run tests/unit` | **1852 passed / 1 failed** — the 1 failure is the pre-existing Prisma-engine `dmmf` test (offline env; it passes in CI where the engine downloads). Baseline before changes was 1822 passed / same 1 failure; **+30 net new passing tests, 0 regressions**. | PASS (1 BLOCKED by env) |
+| Integration + security | `npx vitest run tests/integration tests/security` | **1094 passed, 12 skipped, 0 failed** (skipped files require a live Postgres). Covers tenant isolation, publish authorization, Paystack security, session revocation. | PASS |
+| Type check | `npx tsc --noEmit` | Only the 4 pre-existing **test-file** Prisma-stub errors; **0 errors in app/components/lib** and in the new tests. | PASS (env-only failures) |
+| Lint (build gate) | `npx eslint app components lib` | **0 errors**, 41 warnings — all pre-existing advisory `react-hooks/*` / stale-directive warnings documented in `eslint.config.mjs`. | PASS |
+| Production build (local, offline) | `npx next build --webpack` (engine-dependent test files temporarily set aside, then restored) | "✓ Compiled successfully", type-check + lint + route generation all pass, **exit 0**, full route table emitted incl. new 404/global-error. | PASS |
+| **CI full suite (real Postgres + Prisma engine)** | GitHub Actions `interactive-business-e2e` — Static (install/generate/lint/typecheck/audit), migrations+schema, §66 journey, POS journey, **all vitest suites**, production build, Release gate | Final head run [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004): **248 files / 3,040 tests passed, 0 failed**; Static, migration, schema, build and aggregate Release-gate jobs all **pass** — the local Prisma-engine errors do not occur in CI. | PASS |
+| **CI authenticated browser journey** | "Authenticated production HTTP browser journey" (Puppeteer, fail-fast) | First push (run [40394349981](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40394349981)) failed **one** check — the 404 noindex/phrase contract (register #9); the "15 missing M418 samples" were the same fail-fast abort, not a separate defect. Fixed in `cfe20b6`; the step and every downstream hydration step pass on runs [40397135835](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135835) and [40399283004](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399283004). | PASS |
+| **CI flake #1 — install (not a code defect)** | "Schema reconciliation proposal closes the drift" in Release Validation | Run [40397135784](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40397135784) failed at the **`npm` "Install dependencies" step before any schema step ran**; 4 sibling jobs in the same run installed cleanly, the branch contains **no** package/lock/schema/migration changes, and the identical workflow passed on the prior push. A fresh run after a re-trigger commit passed entirely ([40399282978](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40399282978)). | PASS (transient) |
+| **CI flake #2 — Motion cold-load timeout (not a code defect)** | "Actual storefront Motion and immersive browser regressions" (`scripts/browser/storefront-motion.check.mjs`) | On the docs-only tip run [40401283826](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40401283826) the **first** "no JavaScript desktop" scenario hit a Puppeteer `Waiting failed: 15000ms exceeded` cold-load timeout; every other no-JS/motion/reduced-motion/lazy-import scenario passed, the authenticated 404 browser journey and all hydration steps passed, and the deterministic motion/immersive unit suites (storefront-motion 30, immersive-boundary 6, immersive-policy 15, render-mode-immersive 8) and all **3,040** vitest tests passed. The code was byte-identical to the prior green run (only a markdown commit differs). This exact step flaked identically on the feature branches of already-merged PRs **#66** (run 40336839332) and **#67** (run 40368092754), then passed on re-run — a pre-existing headless-Chrome timing flake. | PASS after re-run (transient) |
+| Targeted feature tests | `vitest run` for design-system, landing/homepage, experience-publish, entitlement, dashboard-ux, status-labels, AI Front Desk journey/a11y, new suites | All pass. | PASS |
+| Browser/Puppeteer & Postgres E2E (local) | `test:browser:*`, `tests/e2e`, `tests/prisma` | Require a Chrome binary / live Postgres / Prisma engine unavailable in this sandbox; they execute in CI instead (rows above). | NOT TESTED locally (env) |
+
+The three temporarily-moved test files were restored immediately after the build; `git status` confirms no file
+deletions remain and no config was weakened to obtain the green build.
+
+---
+
+## 6. Remaining risks and recommended follow-ups (not changed here)
+
+1. **Password-recovery shell parity (Low).** Login/register use the rich two-panel `WorkspaceAuthShell`;
+   `forgot-password`/`reset-password` use the simpler shared `PageShell`. Both use the same Field/Button
+   primitives and platform palette, so this is visual parity rather than a defect; a dedicated, browser-tested
+   pass is recommended before changing them (a Puppeteer recovery smoke exists but needs Chrome).
+2. **`toneClass()` in `lib/statusLabels.ts` (Low).** Legacy Tailwind-class helper, now only referenced within its
+   own module and pinned by an existing test; candidate for removal in a separate, test-updated change.
+3. **Prisma engine locally (env-only; already proven green in CI).** The sandbox cannot download the engine from
+   `binaries.prisma.sh`, so four test-file type errors and one `dmmf` unit failure remain locally. CI generates the
+   full client against real Postgres and reports **0 type errors / 3,040 tests passing**, confirming these are
+   environmental, not code, issues.
+4. **Rendered-device/responsive pass (Low).** CI now runs the authenticated Puppeteer journey and both E2E journeys
+   on real Postgres (all green), which covers functional 404/a11y/hydration contracts. A manual multi-device visual
+   pass (phone/tablet/desktop widths, keyboard + screen-reader sweep) on the Vercel preview remains a recommended
+   human check before production; it could not be performed in the headless sandbox.
+
+## 7. Deployment readiness
+
+* **CI (verified code head `462ee26`):** **all 12 PR checks pass** — Static (lint/typecheck/audit), Migrations +
+  schema and candidate migration rehearsal on disposable PostgreSQL 18, schema reconciliation / zero-drift,
+  failure-path controls, production build, the full **248-file / 3,040-test** native-Postgres suite, the §66
+  experience journey (17), the POS journey (22), the authenticated Puppeteer browser journey with all hydration
+  regressions, the aggregate Release gate, and both Vercel checks. Two later failures on documentation-only commits
+  were pre-existing CI flakes (an `npm install` failure and a headless-Chrome Motion 15 s cold-load timeout — the
+  same Motion step already flaked on merged PRs #66/#67), not code/schema issues; both are documented with evidence
+  and run IDs in §5. Re-runs are disabled at the workflow level, so each re-validation is triggered by a new
+  (documentation-only) push.
+* **Code completion:** ready for review — production build compiles and generates all routes; no security,
+  entitlement, tenant-isolation, Paystack verification or data-integrity control was weakened (see §3). Local
+  limits (no Chrome / Postgres / Prisma-engine download) are fully covered by the CI runs above.
+* **Merge / production deploy:** **not performed**, per the brief. Awaiting explicit owner approval. No production
+  env vars, database, payment settings or infrastructure were touched; no new dependency, migration or paid service
+  was introduced.

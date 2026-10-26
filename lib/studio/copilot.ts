@@ -18,6 +18,7 @@
  */
 
 import { getExperienceProfile } from "../experience/categories";
+import { WEBSITE_STUDIO_NAME } from "../productNames";
 import { navigationFor } from "../experience/document";
 import { sectionDefinition } from "../experience/sections";
 import { designDirections } from "./designDirections";
@@ -433,7 +434,7 @@ export function buildCopilotReply(message: string, context: CopilotContext): Cop
       return {
         intent,
         message: context.entitled === false
-          ? "Your website is ready to publish as soon as the Interactive Business plan is active — your content is saved and safe until then."
+          ? `Your website is ready to publish as soon as the ${WEBSITE_STUDIO_NAME} plan is active — your content is saved and safe until then.`
           : blockers.length > 0
             ? `Before you publish, ${blockers.length} thing${blockers.length === 1 ? "" : "s"} still need attention: ${blockers.map((check) => check.label.toLowerCase()).join(", ")}.`
             : "Everything checks out. Publish from the Overview page and your site goes live at your JATA address.",
