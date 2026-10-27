@@ -11,6 +11,10 @@ current tip and the commit list; this document deliberately does not pin a SHA t
 **This revision replaces the earlier "database blocked" revision.** A disposable PostgreSQL 16.2
 database was provisioned inside the build sandbox, the migration was executed, and a real-database
 suite was added. Three defects that the mocked suites could not see were found and fixed (section 6).
+The branch now also has its own CI: run
+[40585281750](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40585281750) is **green** on
+both jobs (static and database), so the native-engine path and `prisma migrate deploy` have been
+exercised too.
 
 ---
 
@@ -30,7 +34,7 @@ control is only reasoned about, it is `NOT TESTED`.
 
 | Missing | Consequence |
 | --- | --- |
-| Prisma's native query engine (binaries.prisma.sh unreachable; GitHub release fallback empty) | `prisma generate` copies no native engine. Client **code** generates (verified, 111 models), and real SQL was executed through Prisma's WASM query engine + `@prisma/adapter-pg` (section 2.4). The native-engine path itself is only exercised in CI. |
+| Prisma's native query engine (binaries.prisma.sh unreachable; GitHub release fallback empty) | `prisma generate` copies no native engine **in this sandbox**. Client code generates (111 models) and real SQL was executed through Prisma's WASM query engine + `@prisma/adapter-pg`. CI supplies the native engine and passes (run 40585281750). |
 | A browser binary | No screenshot could be captured. Layout is verified by compiling, by CSS review and by HTTP status, not by pixels. |
 | Provider credentials (SMS, WhatsApp, KRA eTIMS) | No live message, no live callback, no eTIMS submission. |
 | Any approval to spend money or deploy | Nothing was deployed, no message was sent, nothing was purchased. |
@@ -141,8 +145,10 @@ migrated PostgreSQL 16.2 database, with **Prisma's own query engine compiled to 
 official `@prisma/adapter-pg` driver.
 
 What that proves: real SQL, real constraints, real unique indexes, real transactions and rollbacks.
-What it does **not** prove: the native engine binary path (CI), row-lock concurrency (no two-connection
-race test yet), or the production connection pooler (`sslmode`, Neon's `pgbouncer`).
+The same suite also ran in CI with the **native** engine against a `postgres:16` service container
+after `prisma migrate deploy`, and passed (run 40585281750), so both engine paths are covered.
+What is still **not** proven: row-lock concurrency (no two-connection race test yet) and the
+production connection pooler (Neon's pgbouncer, `sslmode`).
 
 ---
 
@@ -302,7 +308,7 @@ race test yet), or the production connection pooler (`sslmode`, Neon's `pgbounce
 | Responsive screenshots | **BLOCKED** — no browser binary; layout is CSS-verified only |
 | Provider cost comparison | **PASS** — `POS_ERP_PRO_PROVIDER_COSTS.md`, rates unverified |
 | Security review | **PASS (self-review)** — `POS_ERP_PRO_SECURITY_REVIEW.md`, internal only, no external audit |
-| Independent CI | **PASS (workflow committed) / NOT TESTED (never executed)** — `.github/workflows/pos-erp-verify.yml` runs schema, generate, model check, types, unit suite, build, `migrate deploy`, the three migration scenarios and the database suite. It has not run on GitHub yet; see section 8. |
+| Independent CI | **PASS** — `.github/workflows/pos-erp-verify.yml` ran green on this branch: [run 40585281750](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40585281750), job "Schema, types, unit suite, build" 2m13s and job "Migrations and PostgreSQL suite" 1m13s. |
 
 ---
 
@@ -313,9 +319,9 @@ race test yet), or the production connection pooler (`sslmode`, Neon's `pgbounce
 | 1 | Inspect schema, migration history, DB scripts, guard tests | **PASS** | 111 models, 17 migration directories, `scripts/migrate.sh`, `tests/unit/erp-schema.test.ts`, `tests/unit/repair-guards.test.ts` reviewed |
 | 2 | Disposable PostgreSQL using existing tooling | **PASS** | PostgreSQL 16.2 started from the `pgserver` wheel in a throw-away cluster under `/tmp`; no Docker, no root, no production credentials |
 | 3 | Apply the migration: clean DB, upgrade path, rollback/recovery | **PASS** | `scripts/erp/migration-verify.sh all` → 24 PASS, 0 FAIL |
-| 4 | Diagnose and resolve `prisma generate`; verify client matches schema | **PASS (client code) / BLOCKED (native engine)** | Cause: `binaries.prisma.sh` TLS reset + empty GitHub release list. `--no-engine` generation succeeds with stubbed engine paths; `check-models` compares 111 client models to 111 schema models and 76 call sites |
+| 4 | Diagnose and resolve `prisma generate`; verify client matches schema | **PASS** | Cause: `binaries.prisma.sh` TLS reset + empty GitHub release list (sandbox only). `--no-engine` generation succeeds with stubbed engine paths; `check-models` compares 111 client models to 111 schema models and 76 call sites; CI generates with the real engine and passes |
 | 5 | Remove unsafe `any` typing in ERP query paths; make loaders match real models | **PASS (partial)** | `scripts/erp/check-models.ts` now gates every `prisma.<model>` reference and every `lib/db.ts` fallback entry; three real mismatches found and fixed (section 6). Remaining `any` is the deliberate `client: any` injection seam used to keep modules testable |
-| 6 | Independent branch CI: validate, generate, types, migration, Vitest, build | **PASS (workflow) / NOT TESTED (run)** | `.github/workflows/pos-erp-verify.yml`; the existing E2E workflow only triggers on `main`, which is why PR #71 had no test job |
+| 6 | Independent branch CI: validate, generate, types, migration, Vitest, build | **PASS** | `.github/workflows/pos-erp-verify.yml` — green run [40585281750](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40585281750). The pre-existing E2E workflow only triggers on `main`, which is why PR #71 previously had no test job. Three earlier runs failed on workflow-file issues (unquoted step name, missing `DATABASE_URL` for validation); both are fixed and the fourth run is green |
 | 7 | PostgreSQL integration tests for the eight named areas | **PASS** | 16 tests in `tests/integration/erp-pro-postgres.test.ts` covering onboarding persistence, role enforcement, tenant isolation, order transitions, accounting safeguards, messaging idempotency, eTIMS uncertainty and duplicate prevention |
 | 8 | Browser E2E, or an honest limitation | **BLOCKED** | no browser binary is installed and none can be downloaded in this sandbox; no screenshot is claimed |
 | 9 | Re-run everything and report exact commands, exit codes, counts | **PASS** | section 2 |
@@ -359,27 +365,35 @@ The mocked suites could not see any of these; the real database did.
 
 | Priority | Blocker | Owner action |
 | --- | --- | --- |
-| 1 | CI workflow has never executed on GitHub | Watch the first run on PR #71; fix any environment drift it exposes |
-| 2 | No real provider or KRA connection | Commercial decision: register an SMS/WhatsApp provider and a certified eTIMS adapter |
-| 3 | No browser verification | Run the app in a browser (or a hosted preview) and capture the screens |
-| 4 | External security review | Commission one; internal review is not a substitute |
-| 5 | Rate limiter is per-instance memory | Move to a shared store before abuse protection is claimed |
-| 6 | Payables / bank reconciliation / hardware adapters | Not built; disclosed in the UI as planned |
-| 7 | Neon media storage and sale-price rule | Two owner decisions recorded in `RELEASE_DECISIONS.md` |
-| 8 | Concurrency suite | Add two-connection tests for journals, orders and wallet reservations |
+| 1 | No real provider or KRA connection | Commercial decision: register an SMS/WhatsApp provider and a certified eTIMS adapter |
+| 2 | No browser verification | Run the app in a browser (or a hosted preview) and capture the screens |
+| 3 | External security review | Commission one; internal review is not a substitute |
+| 4 | Rate limiter is per-instance memory | Move to a shared store before abuse protection is claimed |
+| 5 | Payables / bank reconciliation / hardware adapters | Not built; disclosed in the UI as planned |
+| 6 | Neon media storage and sale-price rule | Two owner decisions recorded in `RELEASE_DECISIONS.md` |
+| 7 | Concurrency suite | Add two-connection tests for journals, orders and wallet reservations |
+| 8 | Rehearsal on the provider's PostgreSQL | The rehearsal used a local PG 16.2/CI container, not Neon's pooler or extensions |
 
 ---
 
-## 8. How to reproduce the CI result
+## 8. CI result and how to reproduce it
+
+**Green on this branch:** [run 40585281750](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40585281750)
+at `2baf9d5`.
+
+| Job | Result | Steps |
+| --- | --- | --- |
+| Schema, types, unit suite, build | **pass** (2m13s) | install → `prisma validate` → `prisma generate` → `check-models` → typecheck → unit suite → production build |
+| Migrations and PostgreSQL suite | **pass** (1m13s) | `postgres:16` service → create verification DB → `npm ci` → `prisma generate` → `prisma migrate deploy` + `migrate status` → migration scenarios (24 PASS) → ERP PostgreSQL suite (16 tests, no skips) → upload logs |
+
+`gh pr checks 71` therefore shows four green checks: the two jobs above plus the Vercel deployment
+and Vercel Preview Comments.
 
 ```bash
 gh workflow run "POS / ERP - PRO verify" --ref arena/7a3563c1-jata-aftercall
-gh run list --workflow "POS / ERP - PRO verify" --limit 5
-gh run watch <run-id>
+gh run list --workflow "pos-erp-verify.yml" --limit 5
+gh run watch <run-id> --exit-status
 ```
 
-The workflow is also triggered by any pull request. Its database job uses the `postgres:16` service
-container, runs `prisma migrate deploy` and `prisma migrate status`, then the three migration
-scenarios, then the database suite, and fails if the database suite skips.
-
-Until that run is green, treat the CI row as `NOT TESTED`.
+The workflow is triggered by any pull request. Its database job fails if the PostgreSQL suite
+reports a skip, so a green check means the tests actually ran.

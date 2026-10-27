@@ -109,10 +109,12 @@ The script runs three scenarios and prints one `PASS`/`FAIL` line per check:
    tables and their rows still present, then the ERP migration re-applied and 38 tables back.
 
 `prisma migrate deploy` was also run against a freshly created database by the CI workflow
-(`.github/workflows/pos-erp-verify.yml`), so `_prisma_migrations` bookkeeping is exercised there.
-The sandbox could not download Prisma's native schema engine, so locally the SQL was applied with
-`psql` through `scripts/erp/migrate-test-db.sh`; it is the same SQL in the same order, and that
-script does not write `_prisma_migrations`, which is why CI covers the Prisma-managed path.
+(`.github/workflows/pos-erp-verify.yml`) and **passed** (run
+[40585281750](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40585281750), job "Migrations
+and PostgreSQL suite"), together with `prisma migrate status`, so `_prisma_migrations` bookkeeping is
+exercised there. The sandbox could not download Prisma's native schema engine, so locally the SQL was
+applied with `psql` through `scripts/erp/migrate-test-db.sh`; it is the same SQL in the same order,
+and that script does not write `_prisma_migrations`, which is why CI covers the Prisma-managed path.
 
 ## Rollback
 
