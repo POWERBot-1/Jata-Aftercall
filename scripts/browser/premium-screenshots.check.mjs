@@ -650,7 +650,10 @@ if (loginOk) {
     interaction.step = "UI upload honest error";
     const uploadInput = 'input[type="file"][aria-label="Upload your own photo"]';
     await ixPage.waitForSelector(uploadInput, { timeout: 10000 });
-    await ixPage.uploadFile(uploadInput, join(process.cwd(), "public/landing/nyumbani-kitchen-720.jpg"));
+    const fileHandle = await ixPage.$(uploadInput);
+    if (!fileHandle) throw new Error("gallery file input not found");
+    // puppeteer v25 exposes uploadFile on the ElementHandle, not the Page object.
+    await fileHandle.uploadFile(join(process.cwd(), "public/landing/nyumbani-kitchen-720.jpg"));
     await ixPage
       .waitForFunction(
         () =>
