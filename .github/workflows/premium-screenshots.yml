@@ -104,8 +104,27 @@ jobs:
             exit 2
           fi
           echo "Using Chrome: $CHROME_PATH"
+          set +e
           BASE_URL=http://localhost:4100 SHOT_DIR=./premium-shots \
             npm run test:browser:premium-screenshots 2>&1 | tee /tmp/premium-shots.log
+          capture_exit=${PIPESTATUS[0]}
+          set -e
+          # Surface the verdict through the check-run summary (api.github.com is reachable from
+          # restricted egress environments where the Actions log blob host is not).
+          {
+            echo "## Premium screenshot capture (run ${GITHUB_RUN_ID})"
+            echo "Exit code: ${capture_exit}"
+            echo '```'
+            cat premium-shots/summary.log 2>/dev/null || echo "(no summary.log)"
+            echo '```'
+            if [ -f premium-shots/evidence.json ]; then
+              echo "### evidence.json (compact)"
+              echo '```json'
+              jq '{login, navJourney, pages: [.results[] | {viewport, route, access, status, pathname, horizontalOverflow, overflowOffenders, pageErrors, consoleErrors: (.consoleErrors | length), shotMode, h1}]}' premium-shots/evidence.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$capture_exit"
 
       - name: Show evidence summary in the Actions log
         if: always()
@@ -146,6 +165,14 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Diagnostics readable via the check-run summary on api.github.com (log blobs may be
+          # unreachable from restricted networks): what permissions does this token actually hold?
+          {
+            echo "## Evidence publish diagnostics (run ${GITHUB_RUN_ID})"
+            echo '```json'
+            gh api "repos/${GITHUB_REPOSITORY}" --jq '{permissions, default_branch}' 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
           mkdir -p verification/evidence
           rm -rf "verification/evidence/run-${GITHUB_RUN_ID}"
           cp -r premium-shots "verification/evidence/run-${GITHUB_RUN_ID}"
@@ -161,7 +188,14 @@ jobs:
           MD
           git add verification/evidence
           if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
-            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "Evidence push declined (branch protection?) — artifact remains available."
+            if git push origin "HEAD:${GITHUB_REF_NAME}" 2>/tmp/evidence-push.err; then
+              echo "Evidence commit pushed to ${GITHUB_REF_NAME}" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Evidence push declined — workflow artifact remains the evidence channel"
+              {
+                echo '```'; cat /tmp/evidence-push.err; echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
           else
-            echo "Nothing to commit."
+            echo "Nothing to commit." >> "$GITHUB_STEP_SUMMARY"
           fi
