@@ -125,6 +125,26 @@ async function openPage(context, route, viewport) {
     if (document.fonts?.ready) await document.fonts.ready;
     await new Promise((resolve) => setTimeout(resolve, 600));
   });
+  // Full-page screenshots do not trigger IntersectionObserver lazy loads for media far below the
+  // fold: a below-the-fold <img loading="lazy"> stays unloaded and the JPEG shows a blank band.
+  // Scroll through the real viewport in steps (the way a human would), give every lazy image a
+  // bounded chance to decode, then return to the top so the full-page capture starts at the hero.
+  await page.evaluate(async () => {
+    const step = Math.max(200, Math.round(window.innerHeight * 0.8));
+    const max = document.documentElement.scrollHeight;
+    for (let y = 0; y <= max; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    window.scrollTo(0, max);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const settle = Array.from(document.images)
+      .filter((img) => !img.complete)
+      .map((img) => img.decode().catch(() => undefined));
+    await Promise.race([Promise.allSettled(settle), new Promise((resolve) => setTimeout(resolve, 2500))]);
+    window.scrollTo(0, 0);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
   const facts = await page.evaluate(measureFacts);
   const shotPath = `${shotDir}/${viewport.label}__${route.slug}.jpg`;
   let shotMode = "fullPage";
@@ -224,6 +244,35 @@ function measureFacts() {
     hasShare: Array.from(document.querySelectorAll("button")).some((b) => (b.textContent || "").trim() === "Share"),
     comingSoon: Boolean(Array.from(document.querySelectorAll("p")).find((p) => (p.textContent || "").includes("coming soon"))),
   };
+  // Image health for every RENDERED image (hidden panels have zero-size boxes and are skipped).
+  // A blank/broken photograph reports naturalWidth 0 or complete=false after the scroll pass; an
+  // image whose box crosses the viewport or its containing block is the 320px boundary defect.
+  const images = Array.from(document.images)
+    .map((img) => {
+      const rect = img.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return null;
+      const parent = img.closest("figure, section, picture, .jata-showcase__media, .lp-demo__media") || img.parentElement;
+      const parentRect = parent ? parent.getBoundingClientRect() : null;
+      return {
+        src: (img.currentSrc || img.getAttribute("src") || "").split("/").pop().slice(0, 70),
+        complete: img.complete,
+        naturalWidth: img.naturalWidth,
+        w: Math.round(rect.width),
+        h: Math.round(rect.height),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        viewportOverflow: rect.right > window.innerWidth + 1 || rect.left < -1,
+        parent: parent ? `${parent.tagName.toLowerCase()}.${String(parent.className || "").split(" ")[0]}` : "",
+        parentW: parentRect ? Math.round(parentRect.width) : null,
+        exceedsParent: parentRect ? rect.right > parentRect.right + 1 || rect.left < parentRect.left - 1 : false,
+      };
+    })
+    .filter(Boolean);
+  const blankImages = images.filter((img) => !img.complete || img.naturalWidth === 0).map((img) => img.src);
+  const overflowImages = images
+    .filter((img) => img.viewportOverflow || img.exceedsParent)
+    .map((img) => `${img.src} (right=${img.right}, parent=${img.parent}/${img.parentW})`);
+
   return {
     scrollWidth: doc.scrollWidth,
     innerWidth: window.innerWidth,
@@ -251,6 +300,9 @@ function measureFacts() {
     },
     planCards,
     contactLinks,
+    images,
+    blankImages,
+    overflowImages,
     h1: document.querySelector("h1")?.textContent?.trim().slice(0, 120) ?? "",
   };
 }
@@ -384,6 +436,37 @@ for (const r of evidence.results) {
       : "");
   record(r.pageErrors.length === 0, `${label} has no uncaught page errors`, r.pageErrors.join(" | "));
   record(!r.hasErrorOverlay, `${label} has no Next.js error overlay`);
+  // Every rendered photograph must actually decode (no blank showcase bands after the scroll
+  // pass) and stay inside the viewport and its own containing block (the 320px boundary gate).
+  record((r.blankImages || []).length === 0, `${label} has no blank/broken rendered images`,
+    (r.blankImages || []).join(" | "));
+  record((r.overflowImages || []).length === 0, `${label} keeps every image inside its boundary`,
+    (r.overflowImages || []).join(" | "));
+}
+
+// Dedicated showcase evidence at the two smallest phone widths, including the specific demo
+// photographs the owner flagged, with per-image rendered dimensions for the report.
+for (const width of ["320x568", "390x844"]) {
+  const viewportWidth = Number(width.split("x")[0]);
+  const home = evidence.results.find((r) => r.viewport === width && r.route === "home");
+  if (home) {
+    const showcase = (home.images || []).filter((img) => /nyumbani|marys|kamau|john-kamau/.test(img.src));
+    record(showcase.length >= 1, `${width} homepage showcase renders a demo photograph`,
+      showcase.map((img) => `${img.src}=${img.naturalWidth}px`).join(" | "));
+    record(
+      showcase.every((img) => img.complete && img.naturalWidth > 0 && img.w > 200 && img.right <= viewportWidth + 1),
+      `${width} homepage showcase photo is decoded and inside the viewport`,
+      showcase.map((img) => `${img.src} w=${img.w} right=${img.right}`).join(" | "),
+    );
+  }
+  const demo = evidence.results.find((r) => r.viewport === width && r.route === "demo-nyumbani-kitchen");
+  if (demo) {
+    const band = (demo.images || []).filter((img) => /nyumbani/.test(img.src));
+    record(band.length >= 1 && band.every((img) => img.complete && img.naturalWidth > 0),
+      `${width} demo page showcase band photograph decodes`, band.map((img) => `${img.src}=${img.naturalWidth}px`).join(" | "));
+    record((demo.overflowImages || []).length === 0, `${width} demo page images respect the 320px boundary`,
+      (demo.overflowImages || []).join(" | "));
+  }
 }
 
 // Homepage design gates: palette really applies in a real browser, and the six cards keep the
