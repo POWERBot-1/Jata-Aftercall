@@ -137,17 +137,35 @@ async function openPage(context, route, viewport) {
 // Plain named function so puppeteer can serialise it across the browser boundary.
 function measureFacts() {
   const doc = document.documentElement;
+  const classOf = (el) => String(el.getAttribute?.("class") || "").split(" ").slice(0, 3).join(".");
   const offenders = [];
+  let firstOffender = null;
   for (const el of Array.from(document.querySelectorAll("body *"))) {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.right > window.innerWidth + 1) {
-      offenders.push({
-        tag: el.tagName.toLowerCase(),
-        cls: String(el.className || "").split(" ").slice(0, 3).join("."),
-        right: Math.round(r.right),
-      });
+      if (!firstOffender) firstOffender = el;
+      offenders.push({ tag: el.tagName.toLowerCase(), cls: classOf(el), right: Math.round(r.right) });
       if (offenders.length >= 5) break;
     }
+  }
+  // When something overflows, record the containing-block chain of the first offender so the
+  // propagating box can be identified from evidence alone (no devtools in CI).
+  const overflowChain = [];
+  let node = firstOffender;
+  let hops = 0;
+  while (node && hops < 12) {
+    const cs = getComputedStyle(node);
+    overflowChain.push({
+      tag: node.tagName.toLowerCase(),
+      cls: classOf(node),
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      overflowX: cs.overflowX,
+      display: cs.display,
+      position: cs.position,
+    });
+    node = node.parentElement;
+    hops += 1;
   }
   const token = (name) => getComputedStyle(doc).getPropertyValue(name).trim();
   // The landing tokens are scoped to .lp-page, not :root; read --lp-amber where it is declared.
@@ -167,6 +185,7 @@ function measureFacts() {
     innerWidth: window.innerWidth,
     horizontalOverflow: doc.scrollWidth > window.innerWidth,
     overflowOffenders: offenders,
+    overflowChain,
     title: document.title,
     pathname: location.pathname,
     hasErrorOverlay: Boolean(document.querySelector("nextjs-portal")),
@@ -305,7 +324,9 @@ for (const r of evidence.results) {
   record(!r.pathname.startsWith("/login") || r.access === "public" || r.route === "login",
     `${label} did not bounce to sign-in`, r.pathname);
   record(!r.horizontalOverflow, `${label} has no horizontal overflow`,
-    r.horizontalOverflow ? `scrollWidth=${r.scrollWidth} innerWidth=${r.innerWidth} offenders=${JSON.stringify(r.overflowOffenders)}` : "");
+    r.horizontalOverflow
+      ? `scrollWidth=${r.scrollWidth} innerWidth=${r.innerWidth} offenders=${JSON.stringify(r.overflowOffenders)} chain=${JSON.stringify(r.overflowChain)}`
+      : "");
   record(r.pageErrors.length === 0, `${label} has no uncaught page errors`, r.pageErrors.join(" | "));
   record(!r.hasErrorOverlay, `${label} has no Next.js error overlay`);
 }

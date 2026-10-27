@@ -4424,7 +4424,17 @@ button:focus-visible {
 .ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(245, 247, 244, 0.08); color: var(--ws-on-ink); }
 
 /* Section rail — the one navigation row on every owner screen. */
-.ws-rail-wrap { border-top: 1px solid rgba(245, 247, 244, 0.09); background: rgba(255, 255, 255, 0.02); }
+.ws-rail-wrap {
+  border-top: 1px solid rgba(245, 247, 244, 0.09);
+  background: rgba(255, 255, 255, 0.02);
+  /* The rail inside owns the horizontal scroll (overflow-x: auto); this wrapper guarantees its
+     scrollable overflow never propagates to the document on phone widths (real-Chrome evidence,
+     PR #69 six-viewport capture). min-width:0 lets the block shrink below the rail's min-content
+     width instead of expanding the chrome; clip (not hidden) creates no scroll container and
+     does not trap focus or affect the sticky header above it. */
+  min-width: 0;
+  overflow-x: clip;
+}
 .ws-rail {
   display: flex;
   gap: 0.3rem;

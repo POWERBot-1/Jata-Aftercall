@@ -161,6 +161,10 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # On pull_request events the checkout is a synthetic merge ref; evidence must be built
+          # on the real head branch or the push is a non-fast-forward rejection.
+          git fetch --no-tags --depth=1 origin "${evidence_ref}"
+          git checkout -B evidence-publish "origin/${evidence_ref}"
           # Annotations are retrievable through api.github.com even when log blobs are blocked:
           # what permissions does the workflow token actually hold on this repository?
           perms=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.permissions' 2>&1 || echo "gh api failed")
