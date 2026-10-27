@@ -1,7 +1,7 @@
 # PR #69 Owner Correction — Final Report (2026-10-27)
 
 **Branch:** `arena/b45b361f-jata-aftercall` · **PR:** https://github.com/POWERBot-1/Jata-Aftercall/pull/69
-**Base:** `main` @ `b716247` · **Head:** `9198891` · **PR state:** OPEN, MERGEABLE — **not merged, not deployed, no production action taken**
+**Base:** `main` @ `b716247` · **Head:** `ee4c36c` (code-identical to `9198891`; the tip adds only this report, a superseded banner and an empty CI re-trigger commit) · **PR state:** OPEN, MERGEABLE — **not merged, not deployed, no production action taken**
 **Controlling directive:** eight-phase owner correction, 2026-10-27 (restore original design; plan icon lock; complete business-page experience; JATA Qi seam; real-browser evidence; full verification; push only; stop for review).
 
 Verdict legend: **PASS** = executed and verified · **FAIL** = executed and failed · **BLOCKED** = cannot be executed in this environment, with the blocker named · **NOT TESTED** = not executed (distinct from blocked).
@@ -136,7 +136,7 @@ Evidence: `tests/unit/qi-adapter-seam.test.ts` — 20 mocked-contract tests cove
 Workflow: `.github/workflows/premium-screenshots.yml` (unchanged trigger: `pull_request` to main + manual dispatch), running real headless Chrome against a local production build on a disposable PostgreSQL database seeded with the fictional demo dataset — never production.
 
 - **BEFORE (withdrawn design):** run `40434999884`, success — graphite/lime evidence retained as a GitHub Actions artifact (the local `verification/` copy was lost in a sandbox reset; the artifact is authoritative).
-- **AFTER (restored design):** run `40468176220` on head `9198891`, success, **PASS=330 FAIL=0**; earlier restored-design run `40466215353` also green. A failed intermediate run (`40467744255`, 328 PASS / 2 FAIL) correctly caught an over-strict assertion (the page renders three legitimate Directions surfaces); the gate was fixed and the full run then passed — the workflow demonstrably fails on real regressions.
+- **AFTER (restored design):** run `40468176220` on head `9198891`, success, **PASS=330 FAIL=0**; the same workflow is green again on final head `ee4c36c`; earlier restored-design run `40466215353` also green. A failed intermediate run (`40467744255`, 328 PASS / 2 FAIL) correctly caught an over-strict assertion (the page renders three legitimate Directions surfaces); the gate was fixed and the full run then passed — the workflow demonstrably fails on real regressions.
 - Coverage: six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 — exceeding the three required widths) across four public routes, the seeded demo business page and five authenticated member routes, plus a 390px mobile nav journey. Every page is gated on 200/304, no auth bounce, **no horizontal overflow**, no uncaught errors and no Next.js error overlay; pages wait for load/fonts (no skeleton captures).
 - Design gates at 390px and 1366px: root accent `#d97706`, ink `#14110f`, cream `#f7f2e8`, amber `#f0a03c`, deep amber `#b45309`, serif display face, CTA `rgb(240,160,60)` with `rgb(26,20,13)` label, hero `rgb(20,17,15)`, and the six-card plan order.
 - Contact-state gates at 390px and 1366px on the demo page: `wa.me/254724317010`, `tel:` containing `254724317010`, only valid Google Maps Directions links to the demo location, Share present and no "coming soon" placeholder.
@@ -159,7 +159,9 @@ Test growth attributable to this correction: **+52 tests** (22 contact-route, 20
 
 ## 15. CI and pull-request state
 
-All twelve check-runs on head `9198891` are **success**: Release gate (aggregate), Static, Migrations + schema on PostgreSQL 18, Failure paths actually fail, Schema reconciliation, D2 build/audit/controls, Production build path, Exact candidate applies, Migration target guard, Journey against a real database, Real-Chrome six-viewport capture, Vercel Preview Comments. PR #69 is OPEN and MERGEABLE. The PR title/body are updated in the accompanying push to describe the correction rather than the withdrawn redesign. The branch is left exactly here for owner review.
+All twelve check-runs on head `ee4c36c` are **success**: Release gate (aggregate), Static, Migrations + schema on PostgreSQL 18, Failure paths actually fail, Schema reconciliation, D2 build/audit/controls, Production build path, Exact candidate applies, Migration target guard, Journey against a real database, Real-Chrome six-viewport capture, Vercel Preview Comments. PR #69 is OPEN and MERGEABLE. The PR title/body are updated (via the REST API; the GraphQL edit path is broken in this environment by a Projects-classic deprecation) to describe the correction rather than the withdrawn redesign. The branch is left exactly here for owner review.
+
+**Flaky-step note (honest record).** The docs-only commit `37da962` saw one failure in the E2E workflow: step "Actual storefront Motion and immersive browser regressions" (a Puppeteer browser harness), with all 19 preceding steps green. The identical code had been fully green at `9198891`, and this same workflow has shown intermittent browser-step failures earlier in the branch history. The Actions re-run API returns 403 for the available integration, so an empty, clearly-labelled re-trigger commit (`ee4c36c`) was the only re-run channel; the re-execution passed every step. No code changed between the failed and successful runs.
 
 ## 16. BLOCKED / NOT TESTED register and owner decisions requested
 
@@ -181,6 +183,8 @@ Five correction commits on top of `d05def8`:
 | `6a6437a` | Phase 3B: demo number 0724317010 in demo data/seed with boundary tests |
 | `218d887` | Phase 4: fail-closed `lib/qi` seam, env documentation, 20 mocked tests |
 | `e8c9ebd` + `9198891` | Phase 5: demo-page/contact-state capture, AFTER/SHA labelling, Directions gate correction |
+| `37da962` | This 17-section report; superseded banner on the withdrawn redesign doc |
+| `ee4c36c` | Empty commit re-triggering CI after the flaky Motion browser step (see §15); no code change |
 
 New files: `lib/qi/{types,config,client,index}.ts`, `tests/unit/qi-adapter-seam.test.ts`, `tests/integration/business-contact-number-route.test.ts`, `tests/unit/contact-action-fallbacks.test.ts`, `tests/unit/original-design-restoration-2026.test.ts`, `docs/PR69_CORRECTION_BASELINE_2026-10-27.md`, this report. Deleted: `tests/unit/premium-redesign-2026.test.ts` (replaced). Full branch diff vs main: 31 files, +2,587/−90 (the diff includes earlier branch work — the screenshot workflow and audits — which the directive required preserving).
 
