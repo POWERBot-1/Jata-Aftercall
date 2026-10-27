@@ -43,10 +43,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `prisma validate`/`generate` only need the variable to exist; they do not connect. The value
+      # is a placeholder so this job never reaches a real database (and so the build below stays on
+      # the offline/preview path, which is the path this job exists to prove).
       - name: Validate the Prisma schema
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/validate_only?schema=public
         run: npx prisma validate
 
       - name: Generate the Prisma client
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/validate_only?schema=public
         run: npx prisma generate
 
       - name: Check code references against the generated client
