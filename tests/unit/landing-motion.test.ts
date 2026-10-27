@@ -110,7 +110,7 @@ describe("landing motion", () => {
     // The property inset frame keeps its literal lazy attribute. Band: the primary photo is eager
     // (it is the LCP on the demo page), the second property frame is lazy.
     expect(showcase).toContain('loading={index === 0 ? "eager" : "lazy"}');
-    expect(showcase).toContain('fetchpriority: "high"');
+    expect(showcase).toContain('fetchPriority: "high"');
     expect(showcase.match(/loading="lazy"/g)?.length).toBe(1); // inset frame only
     expect(band.match(/loading="lazy"/g)?.length).toBe(1);
     expect(hero).not.toContain('loading="lazy"');

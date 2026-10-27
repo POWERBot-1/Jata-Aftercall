@@ -14,6 +14,7 @@ import { themeRootClassName, themeStyleVars } from "@/lib/experience/themes";
 import { nairobiCalendarDay } from "@/lib/dateFormat";
 import { CartProvider } from "./CartProvider";
 import { ActionBar } from "./ActionBar";
+import { ContactActions } from "./ContactActions";
 import { PageViewTracker } from "./Track";
 
 export function StorefrontShell({
@@ -113,6 +114,25 @@ export function StorefrontShell({
               {document.settings.whatsapp ? <p style={{ opacity: 0.8 }}>WhatsApp {document.settings.whatsapp}</p> : null}
             </div>
           </div>
+          {/* All four contact actions stay visible on desktop, where the fixed mobile bar is
+              hidden. The same destinations/unavailable rules as the classic page apply. */}
+          <div className="eb-container eb-footer__contact-actions">
+            <ContactActions
+              business={{
+                slug: business.slug,
+                name: business.name,
+                category: business.category,
+                whatsapp: document.settings.whatsapp || business.whatsapp,
+                phone: document.settings.phone || business.phone,
+                location: document.settings.location || business.location,
+                lat: document.settings.lat ?? business.lat,
+                lng: document.settings.lng ?? business.lng,
+              }}
+              businessId={business.id}
+              variant="bar"
+              group="footer"
+            />
+          </div>
           <div className="eb-container eb-footer__note">
             © {nairobiCalendarDay().slice(0, 4)} {business.name}. Powered by JATA AFTERCALL.
           </div>
@@ -130,6 +150,7 @@ export function StorefrontShell({
           lng={document.settings.lng}
           primaryLabel={profile.cta.primary}
           showCart={commerce}
+          businessName={document.brand.businessName || business.name}
         />
       </CartProvider>
     </div>

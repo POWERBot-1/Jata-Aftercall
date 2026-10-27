@@ -6,6 +6,7 @@ import { BrandMark } from "@/components/ui/BrandMark";
 import { dashboardRedirectTarget } from "@/lib/ownerFlow";
 import { DashboardNav } from "@/components/DashboardNav";
 import { Toaster } from "@/components/ui/Toaster";
+import { getTeamAccessStatus } from "@/lib/team-access";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const accountName = session.email || "Account";
+  // The label is derived exclusively from the server-side verified entitlement. A client flag,
+  // URL parameter or profile edit cannot produce it.
+  const teamAccess = await getTeamAccessStatus(session.userId);
 
   return (
     <div className="ws-shell min-h-screen">
@@ -58,6 +62,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <BrandMark href="/dashboard" compact />
           <span className="ws-chrome__tag">Workspace</span>
           <div className="ws-chrome__actions">
+            {teamAccess.entitled ? (
+              <span className="ws-pill ws-pill--team" data-team-access="active" title="Verified team entitlement — no subscription or payment required">
+                {teamAccess.label}
+              </span>
+            ) : null}
             <span className="ws-chrome__account" title={accountName}>
               <span aria-hidden="true">●</span>
               {accountName}

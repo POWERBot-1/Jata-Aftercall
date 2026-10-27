@@ -66,6 +66,8 @@ export type PublishValidationInput = {
   entitlement: EntitlementState;
   paidPayment?: { status?: string | null } | null;
   subscription?: { status?: string | null } | null;
+  /** Verified JATA Team Free Access satisfies the commercial checks without a fake payment. */
+  teamFreeAccess?: boolean;
 };
 
 export function validateForPublication(input: PublishValidationInput): PublishValidation {
@@ -175,16 +177,16 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
 
   add(
     "payment",
-    "Payment verified",
-    input.paidPayment?.status === "PAID",
+    input.teamFreeAccess === true ? "Verified team entitlement (no payment required)" : "Payment verified",
+    input.paidPayment?.status === "PAID" || input.teamFreeAccess === true,
     "Complete your KES 999 payment to publish.",
     "/dashboard/subscription",
   );
 
   add(
     "subscription",
-    "Active subscription",
-    input.subscription?.status === "ACTIVE" || input.subscription?.status === "EXPIRING",
+    input.teamFreeAccess === true ? "Team access active" : "Active subscription",
+    input.subscription?.status === "ACTIVE" || input.subscription?.status === "EXPIRING" || input.teamFreeAccess === true,
     "Your subscription is not active. Renew to publish.",
     "/dashboard/subscription",
   );

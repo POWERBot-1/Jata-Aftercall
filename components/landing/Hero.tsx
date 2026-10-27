@@ -30,7 +30,7 @@ export function Hero() {
             height={679}
             decoding="async"
             /* React 18 only forwards the lower-case attribute; the hint still preloads the LCP image. */
-            {...({ fetchpriority: "high" } as Record<string, string>)}
+            {...({ fetchPriority: "high" } as Record<string, string>)}
           />
         </picture>
         <span className="lp-hero__scrim" />

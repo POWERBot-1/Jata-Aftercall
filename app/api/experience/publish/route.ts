@@ -20,6 +20,7 @@ import { validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +107,7 @@ export async function POST(req: Request) {
     }
 
     const isAdmin = session.role === "ADMIN";
+    const teamFreeAccess = isAdmin ? false : await hasTeamFreeAccessForBusiness(businessId);
     const entitlement = await getInteractiveEntitlement(businessId);
     const schema = validateExperienceJson(experience.draftJson, experience.categoryKey);
     if (!schema.ok) {
@@ -130,11 +132,16 @@ export async function POST(req: Request) {
       entitlement,
       paidPayment: context.paidPayment,
       subscription: context.subscription,
+      teamFreeAccess,
     });
 
     // Payment-before-publication is enforced with the existing gate (§3) — not a new one.
-    const verifiedPayment = hasVerifiedPublicationRight({ paidPayment: context.paidPayment, subscription: context.subscription });
-    if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+    const verifiedPayment = hasVerifiedPublicationRight(
+      { paidPayment: context.paidPayment, subscription: context.subscription },
+      new Date(),
+      { teamFreeAccess },
+    );
+    if (!canSetPublished(true, { isAdmin, verifiedPayment, teamFreeAccess })) {
       return NextResponse.json({
         error: SAFE_ERRORS.publishPaymentRequired,
         published: false,
@@ -250,6 +257,7 @@ export async function GET(req: Request) {
     const context: Loaded = await loadPublishContext(businessId);
     if (!context.business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     if (!context.experience) return NextResponse.json({ ready: false, checks: [] });
+    const teamFreeAccess = await hasTeamFreeAccessForBusiness(businessId);
     const entitlement = await getInteractiveEntitlement(businessId);
     const schema = validateExperienceJson(context.experience.draftJson, context.experience.categoryKey);
     if (!schema.ok) {
@@ -269,6 +277,7 @@ export async function GET(req: Request) {
       entitlement,
       paidPayment: context.paidPayment,
       subscription: context.subscription,
+      teamFreeAccess,
     });
     return NextResponse.json({ ...validation, entitlement, version: context.experience.draftVersion, publishedVersion: context.experience.publishedVersion });
   } catch {

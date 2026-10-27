@@ -8,6 +8,7 @@
  */
 
 import prisma from "./db";
+import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "./team-access";
 
 export const AI_FRONT_DESK_PLAN_KEY = "AI_BUSINESS_FRONT_DESK";
 export const AI_FRONT_DESK_PRICE_KES = 499;
@@ -272,6 +273,22 @@ export function deriveAIEntitlement(input: {
   };
 }
 
+/** Synthetic non-billing entitlement for a verified team account (no payment record is created). */
+export function teamFreeAIEntitlement(): AIPackageStatusResult {
+  return {
+    active: true,
+    entitled: true,
+    status: "ACTIVE",
+    priceKES: AI_FRONT_DESK_PRICE_KES,
+    currency: "KES",
+    billingCycleDays: AI_FRONT_DESK_DURATION_DAYS,
+    packageKey: AI_FRONT_DESK_PLAN_KEY,
+    historicalAccessAllowed: true,
+    verification: "VERIFIED",
+    reason: TEAM_FREE_ACCESS_LABEL,
+  };
+}
+
 export async function getAIPackageStatus(businessId: string): Promise<AIPackageStatusResult> {
   if (!businessId) {
     return {
@@ -286,6 +303,7 @@ export async function getAIPackageStatus(businessId: string): Promise<AIPackageS
       reason: "Business ID is required.",
     };
   }
+  if (await hasTeamFreeAccessForBusiness(businessId)) return teamFreeAIEntitlement();
 
   // A failed billing read is NOT an absent entitlement. Each read records its failure so the
   // result can say "we could not verify" instead of "this business has not paid" — the two lead

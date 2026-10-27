@@ -12,6 +12,7 @@ import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { LandingIcon } from "@/components/landing/Icons";
 import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
+import { isPublicDemoRow } from "@/lib/demoContact";
 import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 
 export const dynamic = "force-dynamic";
@@ -67,14 +68,20 @@ export default async function HomePage() {
         offer: { select: { title: true, subtitle: true, isActive: true, validUntil: true } },
       },
     });
-    demoRows = rows.map(({ owner, payments, ...row }) => ({
-      ...row,
-      isVerifiedDemo: isVerifiedDemoRecord({
+    demoRows = rows.map(({ owner, payments, ...row }) => {
+      const identity = {
         slug: row.slug,
+        name: row.name,
         ownerEmail: owner.email,
         paymentReferences: payments.map((payment) => payment.reference),
-      }),
-    }));
+      };
+      return {
+        ...row,
+        // Owner-identity bound OR the narrow public-presentation identity: fixed slug + exact
+        // fictional name + no real payments. Either one makes the existing demo link visible.
+        isVerifiedDemo: isVerifiedDemoRecord(identity) || isPublicDemoRow(identity),
+      };
+    });
   } catch {
     demoRows = [];
   }

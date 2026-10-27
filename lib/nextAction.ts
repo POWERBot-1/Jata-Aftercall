@@ -16,6 +16,8 @@ export type NextActionInput = {
   catalogueCount?: number;
   hasUnpublishedChanges?: boolean;
   entitlementStatus?: string | null;
+  /** Verified JATA Team Free Access: no plan/payment prompt is shown (Phase 5). */
+  teamFreeAccess?: boolean;
 };
 
 export type NextAction = {
@@ -42,10 +44,13 @@ export function nextActionFor(b: NextActionInput, now: Date = new Date()): NextA
     return { key: "add-contact", title: "Add a phone or WhatsApp number", detail: "Customers need a way to reach you before your page is useful." };
   }
   const expiresSoon = b.subscriptionStatus === "ACTIVE" && b.expiresAt ? new Date(b.expiresAt).getTime() - now.getTime() < 7 * DAY : false;
-  if (b.subscriptionStatus === "EXPIRED" || b.subscriptionStatus === "EXPIRING" || b.subscriptionStatus === "SUSPENDED" || expiresSoon) {
+  if (b.teamFreeAccess === true) {
+    // Team access is not a subscription and never expires through billing; ordinary customers
+    // keep every renewal/payment prompt below, unchanged.
+  } else if (b.subscriptionStatus === "EXPIRED" || b.subscriptionStatus === "EXPIRING" || b.subscriptionStatus === "SUSPENDED" || expiresSoon) {
     return { key: "renew", title: "Renew your subscription", detail: "Your plan has ended or ends within 7 days." };
   }
-  if (b.subscriptionStatus !== "ACTIVE") {
+  if (b.teamFreeAccess !== true && b.subscriptionStatus !== "ACTIVE") {
     return { key: "subscribe", title: "Choose a plan", detail: "Choose a plan and pay to unlock publishing and keep your page active." };
   }
   // Interactive Business: guide the owner through set up → content → publish (§15).
@@ -56,7 +61,7 @@ export function nextActionFor(b: NextActionInput, now: Date = new Date()): NextA
       detail: "Choose what kind of business this is and we set up the right sections, fields and wording.",
     };
   }
-  if (b.entitlementStatus && b.entitlementStatus !== "ACTIVE" && b.entitlementStatus !== "NONE") {
+  if (b.teamFreeAccess !== true && b.entitlementStatus && b.entitlementStatus !== "ACTIVE" && b.entitlementStatus !== "NONE") {
     return { key: "renew", title: `Activate ${WEBSITE_STUDIO_NAME}`, detail: "Your premium website needs an active plan before customers can use it." };
   }
   if (typeof b.catalogueCount === "number" && b.catalogueCount === 0 && b.hasExperience) {

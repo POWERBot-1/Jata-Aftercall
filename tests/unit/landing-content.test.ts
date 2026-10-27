@@ -381,11 +381,11 @@ describe("demo cards", () => {
     // IntersectionObserver before it can paint; the three hidden panels stay lazy.
     const cards = buildLandingDemoCards(null);
     const markup = renderToStaticMarkup(createElement(DemoShowcase, { cards }));
-    const eager = markup.match(/<img[^>]*loading="eager"[^>]*>/g) ?? [];
-    const lazy = markup.match(/<img[^>]*loading="lazy"[^>]*>/g) ?? [];
+    const eager: string[] = markup.match(/<img[^>]*loading="eager"[^>]*>/g) ?? [];
+    const lazy: string[] = markup.match(/<img[^>]*loading="lazy"[^>]*>/g) ?? [];
     expect(eager).toHaveLength(1);
     expect(eager[0]).toContain(`${cards[0].image}.jpg`);
-    expect(eager[0]).toContain('fetchpriority="high"');
+    expect(eager[0]).toContain('fetchPriority="high"');
     expect(lazy).toHaveLength(cards.length - 1 + 1); // three hidden panels + the property inset frame
     expect(lazy.every((img) => !img.includes(cards[0].image))).toBe(true);
   });

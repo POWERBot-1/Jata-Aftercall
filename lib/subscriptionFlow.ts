@@ -32,10 +32,13 @@ export function getCheckoutUrlWithPlanOnly(planId: string): string {
 export function resolveOnboardingRedirect(params: {
   ownedBusinessCount: number;
   businesses: BusinessSubscriptionStatus[];
+  /** Verified JATA Team Free Access — no subscription step is required (Phase 5). */
+  teamFreeAccess?: boolean;
 }): string | null {
   const { ownedBusinessCount, businesses } = params;
   if (!Number.isFinite(ownedBusinessCount) || ownedBusinessCount < 0) return null;
   if (ownedBusinessCount === 0) return null;
+  if (params.teamFreeAccess === true) return "/dashboard";
 
   const unsubscribed = businesses.find((b) => !b.hasActiveSubscription);
   if (unsubscribed) {
@@ -73,10 +76,14 @@ export type OnboardingBusinessSource = {
  * The result is never "/onboarding", and only account-with-business states leave onboarding while
  * the dashboard only sends account-without-business states here, so no redirect loop is possible.
  */
-export async function resolveOnboardingDestination(userId: string, source: OnboardingBusinessSource): Promise<string | null> {
+export async function resolveOnboardingDestination(
+  userId: string,
+  source: OnboardingBusinessSource,
+  options: { teamFreeAccess?: boolean } = {},
+): Promise<string | null> {
   try {
     const businesses = await source.listOwnedBusinesses(userId);
-    return resolveOnboardingRedirect({ ownedBusinessCount: businesses.length, businesses });
+    return resolveOnboardingRedirect({ ownedBusinessCount: businesses.length, businesses, ...options });
   } catch {
     // fall through to the count-only fallback
   }

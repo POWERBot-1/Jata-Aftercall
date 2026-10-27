@@ -13,6 +13,7 @@
 import prisma from "../db";
 import { getBusinessPosPlan } from "../pricing";
 import type { PosEntitlementStatus, PosLifecycleStatus } from "./types";
+import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "../team-access";
 
 export const POS_PLAN_KEY = "BUSINESS_POS";
 export const POS_PLAN_NAME = "JATA AFTERCALL — Business POS";
@@ -245,8 +246,24 @@ function posPlanId(): Promise<string | null> {
   return posPlanIdPromise;
 }
 
+/** Synthetic non-billing entitlement for a verified team account (no payment record is created). */
+export function teamFreePosEntitlement(): PosEntitlementState {
+  return {
+    entitled: true,
+    status: "ACTIVE",
+    lifecycle: "LIVE",
+    planKey: POS_PLAN_KEY,
+    priceKES: POS_PLAN_PRICE_KES,
+    expiresAt: null,
+    graceUntil: null,
+    reason: TEAM_FREE_ACCESS_LABEL,
+    nextAction: "none",
+  };
+}
+
 /** Always scoped to one business id, resolved from authenticated membership (§5). */
 export async function getPosEntitlement(businessId: string): Promise<PosEntitlementState> {
+  if (await hasTeamFreeAccessForBusiness(businessId)) return teamFreePosEntitlement();
   const planId = await posPlanId();
   const [subscription, entitlement, paidPayment, configuration] = await Promise.all([
     prisma.posSubscription?.findUnique?.({

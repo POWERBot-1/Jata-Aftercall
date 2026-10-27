@@ -45,10 +45,17 @@ export type PublicationPaymentEvidence = {
 
 /**
  * True only when the business has a verified PAID payment backing a currently-valid
- * subscription (ACTIVE/EXPIRING, not past the grace window). Callers load the two
- * rows server-side; this function stays pure so the gate is unit-testable.
+ * subscription (ACTIVE/EXPIRING, not past the grace window), OR the business owner holds a
+ * verified JATA Team Free Access entitlement (Phase 5). Callers load the rows and resolve the
+ * entitlement server-side; this function stays pure so the gate is unit-testable. The team path
+ * creates no payment, invoice or subscription record.
  */
-export function hasVerifiedPublicationRight(evidence: PublicationPaymentEvidence, now: Date = new Date()): boolean {
+export function hasVerifiedPublicationRight(
+  evidence: PublicationPaymentEvidence,
+  now: Date = new Date(),
+  options: { teamFreeAccess?: boolean } = {},
+): boolean {
+  if (options.teamFreeAccess === true) return true;
   if (!evidence.paidPayment || evidence.paidPayment.status !== "PAID") return false;
   const subscription = evidence.subscription;
   if (!subscription) return false;
@@ -66,10 +73,10 @@ export function hasVerifiedPublicationRight(evidence: PublicationPaymentEvidence
  */
 export function canSetPublished(
   isPublished: boolean,
-  options: { isAdmin?: boolean; verifiedPayment?: boolean } = {},
+  options: { isAdmin?: boolean; verifiedPayment?: boolean; teamFreeAccess?: boolean } = {},
 ): boolean {
   if (typeof isPublished !== "boolean") return false;
   if (!isPublished) return true;
   if (!PUBLISH_REQUIRES_PAYMENT) return true;
-  return options.isAdmin === true || options.verifiedPayment === true;
+  return options.isAdmin === true || options.verifiedPayment === true || options.teamFreeAccess === true;
 }

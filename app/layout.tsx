@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { getBaseUrl } from "@/lib/url";
 import ProductThemeProvider from "@/components/ProductThemeProvider";
 import { productThemeBootScript, productThemeCss } from "@/lib/productThemes";
+import { PwaInstaller } from "@/components/pwa/PwaInstaller";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseUrl()),
@@ -17,6 +18,20 @@ export const metadata: Metadata = {
     description: "Business details and contact options in one mobile-friendly page.",
     type: "website",
   },
+  applicationName: "JATA AFTERCALL",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: { capable: true, title: "AFTERCALL", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#14110f",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
         <ProductThemeProvider>{children}</ProductThemeProvider>
+        <PwaInstaller />
       </body>
     </html>
   );

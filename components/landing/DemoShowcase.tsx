@@ -115,7 +115,7 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
                     width={1100}
                     height={684}
                     loading={index === 0 ? "eager" : "lazy"}
-                    {...(index === 0 ? ({ fetchpriority: "high" } as Record<string, string>) : {})}
+                    {...(index === 0 ? ({ fetchPriority: "high" } as Record<string, string>) : {})}
                     decoding="async"
                   />
                 </picture>

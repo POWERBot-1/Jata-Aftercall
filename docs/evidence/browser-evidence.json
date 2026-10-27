@@ -1,0 +1,2232 @@
+{
+  "generatedAt": "2026-10-27T14:49:44.190Z",
+  "baseUrl": "http://localhost:3000",
+  "browser": "Chromium headless (puppeteer-core)",
+  "checks": {
+    "totalCaptures": 54,
+    "demoCaptures": 24,
+    "allFourActionsEveryDemoViewport": true,
+    "allTouchTargets": true,
+    "allCorrectDestinations": true,
+    "noHorizontalOverflow": true,
+    "noConsoleErrors": true,
+    "shareFallbackWorks": true,
+    "manifestLinked": true
+  },
+  "results": [
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": {
+        "status": "Link copied. Paste it into WhatsApp, SMS or email to share.",
+        "clipboard": "Nyumbani Kitchen — Restaurant in Kilimani, Nairobi. See their services, prices and contact options on JATA AFTERCALL. http://localhost:3000/b/nyumbani-kitchen"
+      }
+    },
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "nyumbani-kitchen",
+      "url": "/dev/contact-actions/nyumbani-kitchen",
+      "kind": "demo",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__nyumbani-kitchen.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Nyumbani Kitchen"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Nyumbani Kitchen"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Nyumbani Kitchen"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Nyumbani Kitchen"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": {
+        "status": "Link copied. Paste it into WhatsApp, SMS or email to share.",
+        "clipboard": "Mary's Beauty Studio — Beauty in Kitengela, Kajiado. See their services, prices and contact options on JATA AFTERCALL. http://localhost:3000/b/marys-beauty-studio"
+      }
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "marys-beauty-studio",
+      "url": "/dev/contact-actions/marys-beauty-studio",
+      "kind": "demo",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__marys-beauty-studio.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Mary's%20Beauty%20Studio%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Mary's Beauty Studio"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Mary's Beauty Studio"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kitengela%2C%20Kajiado",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Mary's Beauty Studio"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Mary's Beauty Studio"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": {
+        "status": "Link copied. Paste it into WhatsApp, SMS or email to share.",
+        "clipboard": "Kamau Auto Care — Mechanic in Westlands, Nairobi. See their services, prices and contact options on JATA AFTERCALL. http://localhost:3000/b/kamau-auto-care"
+      }
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "kamau-auto-care",
+      "url": "/dev/contact-actions/kamau-auto-care",
+      "kind": "demo",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__kamau-auto-care.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20Kamau%20Auto%20Care%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp Kamau Auto Care"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call Kamau Auto Care"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Westlands%2C%20Nairobi",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to Kamau Auto Care"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share Kamau Auto Care"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 117,
+            "height": 53,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 137,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 152,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": {
+        "status": "Link copied. Paste it into WhatsApp, SMS or email to share.",
+        "clipboard": "John Kamau Properties — Real Estate in Kiambu Road, Kiambu. See their services, prices and contact options on JATA AFTERCALL. http://localhost:3000/b/john-kamau-properties"
+      }
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 172,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "john-kamau-properties",
+      "url": "/dev/contact-actions/john-kamau-properties",
+      "kind": "demo",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__john-kamau-properties.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Contact action fixture | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [
+          {
+            "key": "whatsapp",
+            "state": "available",
+            "href": "https://wa.me/254724317010?text=Hi%20John%20Kamau%20Properties%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.",
+            "label": "WhatsApp",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "WhatsApp John Kamau Properties"
+          },
+          {
+            "key": "call",
+            "state": "available",
+            "href": "tel:+254724317010",
+            "label": "Call",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Call John Kamau Properties"
+          },
+          {
+            "key": "directions",
+            "state": "available",
+            "href": "https://www.google.com/maps/dir/?api=1&destination=Kiambu%20Road%2C%20Kiambu",
+            "label": "Directions",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Directions to John Kamau Properties"
+          },
+          {
+            "key": "share",
+            "state": "available",
+            "href": null,
+            "label": "Share",
+            "icon": true,
+            "iconSize": 20,
+            "width": 129,
+            "height": 44,
+            "visible": true,
+            "ariaLabel": "Share John Kamau Properties"
+          }
+        ],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "home",
+      "url": "/",
+      "kind": "marketing",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__home.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "JATA AFTERCALL — Business details and contact options in one page",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "pricing",
+      "url": "/pricing",
+      "kind": "marketing",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__pricing.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "products",
+      "url": "/products",
+      "kind": "marketing",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__products.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Products — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "install",
+      "url": "/install",
+      "kind": "marketing",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__install.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Install JATA AFTERCALL — PWA guide | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "320x568",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/320x568__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 320,
+        "innerWidth": 320,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "360x800",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/360x800__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 360,
+        "innerWidth": 360,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "390x844",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/390x844__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "430x932",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/430x932__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 430,
+        "innerWidth": 430,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "768x1024",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/768x1024__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    },
+    {
+      "page": "privacy",
+      "url": "/privacy",
+      "kind": "marketing",
+      "viewport": "1366x768",
+      "httpStatus": 200,
+      "screenshot": "docs/evidence/screenshots/1366x768__privacy.jpg",
+      "consoleErrors": [],
+      "measured": {
+        "title": "Privacy policy — JATA AFTERCALL | JATA AFTERCALL",
+        "scrollWidth": 1366,
+        "innerWidth": 1366,
+        "overflow": false,
+        "actions": [],
+        "hasServiceWorker": true,
+        "manifestHref": "/manifest.json"
+      },
+      "shareOutcome": null
+    }
+  ]
+}
