@@ -10,6 +10,11 @@ name: Premium Screenshots (visual evidence)
 #
 # The screenshots and evidence.json are uploaded as a workflow artifact for review. This job
 # changes no production setting, touches no deployment secret and cannot deploy anything.
+#
+# Retrieval in restricted-egress environments (artifact blob host blocked): add the `visual-evidence`
+# label to the PR. With that label the run ALSO commits its evidence to the session branch under
+# verification/evidence (a transient, labelled channel — remove the label and reset the commit after
+# review). Without the label, nothing is committed to git.
 
 on:
   workflow_dispatch:
@@ -142,18 +147,23 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      # Retrieval channel for restricted egress environments: the run commits evidence into the
-      # SAME session branch under verification/evidence, reachable through ordinary git transport.
-      # Loop guard: a run whose HEAD is already a bot-authored evidence commit only verifies, it
-      # never re-publishes, so the synchronised run terminates without another push. The commit
-      # is transient by design — the branch is reset to the code-only head after review.
-      - name: Publish visual evidence into the session branch
-        if: always() && github.event_name == 'pull_request'
+      # Retrieval channel for restricted egress environments: when the PR carries the
+      # `visual-evidence` label, the run commits evidence into the SAME session branch under
+      # verification/evidence, reachable through ordinary git transport. It is off by default so
+      # ordinary runs leave no binary artifacts in git — the Actions artifact is the normal
+      # channel. Loop guard: a run whose HEAD is already a bot-authored evidence commit only
+      # verifies, it never re-publishes, so the synchronised run terminates without another push.
+      - name: Publish visual evidence into the session branch (label-gated)
+        if: >-
+          always()
+          && github.event_name == 'pull_request'
+          && contains(github.event.pull_request.labels.*.name, 'visual-evidence')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           trap 'echo "::warning title=Publish step failed::line $LINENO: $BASH_COMMAND"' ERR
+          echo "::notice title=Evidence publish::visual-evidence label present; publishing to head ref"
           if git log -1 --pretty='%an' | grep -q '^github-actions\[bot\]$'; then
             echo "::notice title=Evidence publish::HEAD is already an evidence commit; verifying only, no re-publish."
             exit 0
@@ -185,10 +195,9 @@ jobs:
 
           Real-Chrome screenshots produced by `.github/workflows/premium-screenshots.yml` on a
           disposable PostgreSQL database with the fictional seeded demo user. This directory is
-          pushed by the pull_request run as a retrieval channel for restricted-egress
-          environments and is removed from the branch once reviewed; the workflow never
-          re-publishes on top of its own evidence commit. The durable evidence channel is the
-          workflow artifact (`premium-screenshots-*`).
+          committed only while the PR carries the `visual-evidence` label and is removed from the
+          branch after review; the workflow never re-publishes on top of its own evidence commit.
+          The durable evidence channel is the workflow artifact (`premium-screenshots-*`).
           MD
           git add verification/evidence
           if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
