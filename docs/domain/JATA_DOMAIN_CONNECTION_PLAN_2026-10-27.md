@@ -5,6 +5,13 @@
 attachment) executed on 2026-10-27.
 **Status: NOT CONNECTED — DNS has not been changed.**
 
+> **Update — Phase B attempt (same day):** DNS execution is **BLOCKED** — no authorized
+> HOSTAFRICA/DNS-management route exists in this environment. The canonical host decision also
+> changed in Phase B to **`www.jataaftercall.co.ke`** (apex → 308 → `www`), which supersedes the
+> "apex canonical" choice recorded in §4.4 below. The DNS record values are unchanged by that
+> decision. See `docs/domain/PHASE_B_EXECUTION_REPORT_2026-10-27.md` for the revalidated values,
+> pre-change snapshots, the access audit and the verification matrix.
+
 Evidence labels: **PASS** (verified with direct evidence), **FAIL** (verified as wrong),
 **BLOCKED** (cannot proceed / no access), **NOT TESTED** (not attempted or not observable from this
 environment), **DONE** (executed with approval).

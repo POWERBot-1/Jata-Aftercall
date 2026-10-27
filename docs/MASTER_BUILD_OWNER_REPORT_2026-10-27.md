@@ -334,6 +334,12 @@ green on the base commit (§0).
    (“webserver is functioning normally”); Vercel reports it misconfigured, with nameservers at
    `host-ww.net`, an A record `102.218.215.41`, and recommends `76.76.21.21` or
    `cname.vercel-dns.com.`. Document intended records and a rollback plan before any DNS change.
+   **Superseded 2026-10-27:** both custom domains are now attached to the project, and the
+   project-specific values are `A 216.198.79.1` + `A 64.29.17.1` and
+   `CNAME 2da49677b2414cfd.vercel-dns-017.com.` — **not** the generic `76.76.21.21` /
+   `cname.vercel-dns.com.` (Vercel ranks those second for this project). DNS execution is blocked
+   pending an authorized HOSTAFRICA route. See
+   `docs/domain/PHASE_B_EXECUTION_REPORT_2026-10-27.md`.
 7. **Publish a verified support channel** (email/phone/ticketing) and a full self-service account
    deletion path; both are honestly disclosed as missing on `/contact` and `/privacy`.
 8. **Commission a Kenyan data-protection / legal review** of the privacy and terms disclosures;
