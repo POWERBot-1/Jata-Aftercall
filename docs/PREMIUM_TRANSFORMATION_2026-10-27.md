@@ -1,5 +1,12 @@
 # Premium Transformation — evidence register (2026-10-27)
 
+> **SUPERSEDED — do not implement from this document.** The owner directive of 2026-10-27
+> rejected the graphite/electric-lime direction described below and ordered the original
+> espresso/cream/amber JATA AFTERCALL design restored from Git history. This register is retained
+> only as the evidence record of the withdrawn work and the BEFORE baseline. The controlling
+> documents are `docs/PR69_CORRECTION_BASELINE_2026-10-27.md` and
+> `docs/PR69_OWNER_CORRECTION_REPORT_2026-10-27.md`.
+
 Branch: `arena/b45b361f-jata-aftercall` · base: `origin/main` @ `b716247` · PR: review-only,
 no merge/deploy/migration.
 
