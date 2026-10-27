@@ -150,19 +150,31 @@ function measureFacts() {
   }
   // When something overflows, record the containing-block chain of the first offender so the
   // propagating box can be identified from evidence alone (no devtools in CI).
+  // The rail links are early in DOM order but live inside a proper overflow:auto container, so
+  // they can be red herrings. Independently find the element(s) whose right edge actually defines
+  // documentElement.scrollWidth — those are the boxes widening the page.
+  const pageWideners = [];
+  for (const el of Array.from(document.querySelectorAll("body *"))) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.right >= doc.scrollWidth - 2) {
+      pageWideners.push({ t: el.tagName.toLowerCase(), c: classOf(el), r: Math.round(r.right), w: Math.round(r.width) });
+      if (pageWideners.length >= 6) break;
+    }
+  }
+  // Compact keys keep the full chain inside a single check annotation.
   const overflowChain = [];
   let node = firstOffender;
   let hops = 0;
   while (node && hops < 12) {
     const cs = getComputedStyle(node);
     overflowChain.push({
-      tag: node.tagName.toLowerCase(),
-      cls: classOf(node),
-      clientWidth: node.clientWidth,
-      scrollWidth: node.scrollWidth,
-      overflowX: cs.overflowX,
-      display: cs.display,
-      position: cs.position,
+      t: node.tagName.toLowerCase(),
+      c: classOf(node),
+      cw: node.clientWidth,
+      sw: node.scrollWidth,
+      ox: cs.overflowX,
+      d: cs.display,
+      p: cs.position,
     });
     node = node.parentElement;
     hops += 1;
@@ -185,6 +197,7 @@ function measureFacts() {
     innerWidth: window.innerWidth,
     horizontalOverflow: doc.scrollWidth > window.innerWidth,
     overflowOffenders: offenders,
+    pageWideners,
     overflowChain,
     title: document.title,
     pathname: location.pathname,
@@ -325,7 +338,7 @@ for (const r of evidence.results) {
     `${label} did not bounce to sign-in`, r.pathname);
   record(!r.horizontalOverflow, `${label} has no horizontal overflow`,
     r.horizontalOverflow
-      ? `scrollWidth=${r.scrollWidth} innerWidth=${r.innerWidth} offenders=${JSON.stringify(r.overflowOffenders)} chain=${JSON.stringify(r.overflowChain)}`
+      ? `docSW=${r.scrollWidth} win=${r.innerWidth} wideners=${JSON.stringify(r.pageWideners)} chain=${JSON.stringify(r.overflowChain)}`
       : "");
   record(r.pageErrors.length === 0, `${label} has no uncaught page errors`, r.pageErrors.join(" | "));
   record(!r.hasErrorOverlay, `${label} has no Next.js error overlay`);
