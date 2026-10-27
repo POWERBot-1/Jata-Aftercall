@@ -148,3 +148,21 @@ Known gaps in this change:
 - `app/api/ai/brain/route.ts` and `app/api/ai/dashboard/route.ts` still return raw product fields and do not return the effective price.
 
 Release decision: **BLOCKED** until the mandatory DB-backed and browser gates pass at the final SHA, with an authorized maintainer CI run whose head SHA is verified.
+
+## POS / ERP - PRO (added 2026-10-27)
+
+The premium ERP product is additive and is **off by default**; it does not change the POS, the
+wallet, the storefront checkout or any existing migration. Its own blockers, with the same evidence
+rules as above:
+
+| # | Item | Status | Evidence / action |
+|---|------|--------|-------------------|
+| E1 | `prisma/migrations/20261027000000_pos_erp_pro` applied to a real database | **Open (no database)** | 38 `CREATE TABLE IF NOT EXISTS`, 136 indexes, 38 guarded foreign keys, zero `ALTER`/`DROP`/`UPDATE`. Asserted by `tests/unit/erp-schema.test.ts` (13) and by `tests/unit/repair-guards.test.ts`, but never executed. Backup, apply and rollback steps: `docs/POS_ERP_PRO_MIGRATION_PLAN.md`. |
+| E2 | Loader and server-action query shapes | **Open (no client)** | `prisma generate` cannot run in this sandbox, so every `prisma.*` call compiles against `any`. 38 models are stubbed in `lib/db.ts` and a test asserts the stub list matches the schema, but field-level correctness is unverified until E1/E3 run. |
+| E3 | Database-backed ERP suites | **Not run here** | The 94 skipped suites cover PostgreSQL behaviour the fake client cannot model (isolation, rollback, concurrent posting). |
+| E4 | Screenshots and visual review | **Open (no browser)** | Same sandbox limit as item 8. Screens are verified by `npm run build` and by HTTP status/redirect checks only. |
+| E5 | Live messaging, live eTIMS, live payments | **Open (no credentials, no approval)** | `MESSAGING_LIVE_ENABLED` is unset and no live adapter is registered; `ETIMS_LIVE_ENABLED` is unset and no certified adapter ships; the shop takes no payment in this release. |
+| E6 | External security review | **Open** | Self-review only: `docs/POS_ERP_PRO_SECURITY_REVIEW.md`, 6 findings, of which F-1 (in-process rate limiter) and F-2 (no row-level security) are accepted risks for launch. |
+
+Full status table: `docs/POS_ERP_PRO_EVIDENCE.md`. Nothing here is a claim that the product is
+production-ready.

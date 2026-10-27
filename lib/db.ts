@@ -16,6 +16,25 @@ declare global {
 let prismaInstance: any;
 
 function createFallbackPrisma(): any {
+  // Reads return empty and writes refuse. A stub that invented successful writes would let the
+  // ERP appear to save records that do not exist, so every mutating call fails loudly instead.
+  const emptyModel = () => ({
+    findUnique: async () => null,
+    findUniqueOrThrow: async () => null,
+    findFirst: async () => null,
+    findMany: async () => [],
+    count: async () => 0,
+    aggregate: async () => ({}),
+    groupBy: async () => [],
+    create: async () => { throw new Error("DB not available (fallback)"); },
+    createMany: async () => { throw new Error("DB not available (fallback)"); },
+    update: async () => { throw new Error("DB not available (fallback)"); },
+    updateMany: async () => { throw new Error("DB not available (fallback)"); },
+    upsert: async () => { throw new Error("DB not available (fallback)"); },
+    delete: async () => { throw new Error("DB not available (fallback)"); },
+    deleteMany: async () => { throw new Error("DB not available (fallback)"); },
+  });
+
   // Minimal stub that satisfies the Prisma API used in the app but returns empty data.
   // All methods return sensible defaults so build and unit tests pass without a DB.
   const stub = {
@@ -453,6 +472,45 @@ function createFallbackPrisma(): any {
       create: async () => ({ id: "mock" }),
       count: async () => 0,
     },
+    // POS / ERP - PRO and messaging models (38). Same contract as the rest of the stub.
+    erpConfiguration: emptyModel(),
+    erpSubscription: emptyModel(),
+    erpEntitlement: emptyModel(),
+    erpSequence: emptyModel(),
+    erpAuditEvent: emptyModel(),
+    erpIdempotencyRecord: emptyModel(),
+    erpAccount: emptyModel(),
+    erpPeriod: emptyModel(),
+    erpJournal: emptyModel(),
+    erpJournalLine: emptyModel(),
+    erpInvoice: emptyModel(),
+    erpInvoiceLine: emptyModel(),
+    erpPayment: emptyModel(),
+    erpPaymentAllocation: emptyModel(),
+    erpCreditNote: emptyModel(),
+    erpExpense: emptyModel(),
+    erpSupplierBill: emptyModel(),
+    erpTaxRule: emptyModel(),
+    erpComplianceProfile: emptyModel(),
+    erpStoreOrder: emptyModel(),
+    erpStoreOrderItem: emptyModel(),
+    erpNotification: emptyModel(),
+    erpAutomationRule: emptyModel(),
+    erpAutomationRun: emptyModel(),
+    erpKycDocument: emptyModel(),
+    msgChannelConnection: emptyModel(),
+    msgSenderId: emptyModel(),
+    msgSenderIdEvent: emptyModel(),
+    msgContact: emptyModel(),
+    msgConsentRecord: emptyModel(),
+    msgSuppression: emptyModel(),
+    msgAudience: emptyModel(),
+    msgTemplate: emptyModel(),
+    msgCampaign: emptyModel(),
+    msgCampaignRecipient: emptyModel(),
+    msgMessageEvent: emptyModel(),
+    msgWallet: emptyModel(),
+    msgLedgerEntry: emptyModel(),
     $transaction: async () => {
       throw new Error("DB not available (fallback)");
     },
