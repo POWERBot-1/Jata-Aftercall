@@ -23,6 +23,8 @@ tsconfig.tsbuildinfo
 
 # logs
 npm-debug.log*
+# CI writes its evidence logs here (see .github/workflows/pos-erp-verify.yml)
+ci-logs/
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
