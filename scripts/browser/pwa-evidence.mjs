@@ -35,6 +35,12 @@ const browser = await puppeteer.launch({
 const errors = [];
 const notFound = [];
 const page = await browser.newPage();
+// This dedicated harness WANTS the service worker active. Puppeteer sets navigator.webdriver,
+// which makes the app skip registration for other automated journeys; override it here so the
+// real PWA behaviour is what gets measured.
+await page.evaluateOnNewDocument(() => {
+  Object.defineProperty(navigator, "webdriver", { get: () => false, configurable: true });
+});
 await page.setViewport({ width: 390, height: 844 });
 page.on("response", (res) => { if (res.status() === 404) notFound.push(new URL(res.url()).pathname); });
 page.on("console", (m) => { if (m.type() === "error" && PHASE === "prime") errors.push(m.text().slice(0, 200)); });

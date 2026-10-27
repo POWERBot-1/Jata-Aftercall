@@ -85,6 +85,7 @@ local build of this branch (see §F and `docs/evidence/README.md`).
 | B6 | No secure team entitlement existed. | Feature absent. | See §D / §E. | `tests/unit/team-free-access.test.ts` (23 tests) | Targeted tests PASS; no production grant made. |
 | B7 | `next.config.js` broke the vm-based header test after adding the client/server bundle guard. | A top-level `require("node:path")` was added; the test evaluates config in a context without `require`. | `next.config.js` (now uses `process.cwd()` lazily) | `tests/unit/local-preview-headers.test.ts` | PASS. |
 | B8 | Six new lint errors and one new warning from new JSX/PWA code. | Unescaped apostrophes; `setState` inside an effect. | New marketing/team/PWA files; `PwaInstaller` now uses `useSyncExternalStore`. | `npm run lint` | 0 errors, 41 warnings — identical warning count to baseline. |
+| B9 | PR #70's required `Journey against a real database` CI check failed at `retail: actual SSR UTC home` (340 passed, 1 failed). | The new service worker controlled navigations; Chrome reports `null` instead of an HTTP response for SW-served navigations when `navigator.webdriver` is set, so the repository's real-DB browser harness saw `undefined !== 200`. | `components/pwa/PwaInstaller.tsx` skips SW registration in automated browser contexts; `scripts/browser/pwa-evidence.mjs` overrides `navigator.webdriver` to keep measuring the real PWA; evidence README documents the boundary. | Local reproduction with Chromium: with `webdriver=true`, `/privacy` returned 200 and no controller; with the override, the SW registered/activated and offline notice still served. CI rerun is recorded on PR #70. | Reproduced and fixed locally; see §H for the authoritative CI status at review time. |
 
 **Not fixed / out of scope (verified but not changed):** stale production demo copy still says
 “Today only”, “This week only”, “verified listings, no brokers” and “viewing this weekend” on
@@ -279,6 +280,7 @@ green on the base commit (§0).
 | 12 | `node scripts/browser/contact-actions-evidence.mjs` (real Chromium, local dev server) | **0 — PASS** | 54 captures; `allFourActionsEveryDemoViewport`, `allTouchTargets`, `allCorrectDestinations`, `noHorizontalOverflow`, `noConsoleErrors`, `shareFallbackWorks`, `manifestLinked` all true. |
 | 13 | `node scripts/browser/pwa-evidence.mjs` phases `prime` + `offline` (real Chromium, local production build, server stopped for offline) | **0 — PASS** | `manifestValid`, `serviceWorkerRegistered`, `assetsReachable`, `noApiOrHtmlCached`, `onlySafeAssetsCached`, `noConsoleErrors`, `offlineNoticeServed` all true. |
 | 14 | `npx next start -p 3002` + `curl` route smoke against the final production build | **PASS** | `/products`, `/pricing`, `/faq`, `/help`, `/contact`, `/install`, `/privacy`, `/terms`, `/products/business-page`, `/manifest.json`, `/sw.js`, `/offline.html` all HTTP 200; dev-only `/dev/contact-actions` and `/dev/contact-actions/nyumbani-kitchen` correctly HTTP 404. |
+| 15 | PR #70 GitHub Actions (initial run, then rerun after the B9 fix) | **See PR #70** | Initial run: 12 checks passed, `Journey against a real database` **FAILED** and `Real-Chrome six-viewport capture` pending; the failure was reproduced locally and fixed (B9). The rerun and its authoritative conclusion are recorded on the PR; this report does not claim a pass before it is observed. |
 
 ### PASS / FAIL / BLOCKED / NOT TESTED matrix (requested areas)
 
@@ -367,8 +369,8 @@ No later stage is marked complete because an earlier stage passed.
 Filled after the push and PR creation; these values are factual, not predicted.
 
 - **Implementation commit SHA:** `a09f913f0bb2e0dddb3ddefe99904145fa3c924e` — contains all source, tests, evidence and the four documents.
+- **Follow-up commits:** `d42298a16b974c4ee0a9923f8291c5e5110d30e6` records the PR URL in this report; a further commit applies the B9 service-worker/automation fix and final report updates. The **final PR head SHA** is reported in the final owner message (`git rev-parse HEAD`) and in `gh pr view 70`.
 - **PR URL:** <https://github.com/POWERBot-1/Jata-Aftercall/pull/70>
 - **PR:** #70, base `main`, head `arena/12e0b318-jata-aftercall`, state **OPEN**.
-- **Final PR head:** a documentation-only follow-up commit updates this §K section; its SHA is reported in the final owner message (`git rev-parse HEAD`). It changes no application code.
 - **Merge/deploy:** **NOT PERFORMED**. Owner authorization is required separately for each.
 - **Production data, DNS, environment, storage, billing, store:** **NOT CHANGED**.

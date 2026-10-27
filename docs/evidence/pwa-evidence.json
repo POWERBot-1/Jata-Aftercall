@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-27T14:59:57.445Z",
-  "baseUrl": "http://localhost:3001",
+  "generatedAt": "2026-10-27T16:21:27.107Z",
+  "baseUrl": "http://localhost:3004",
   "checks": {
     "manifestValid": true,
     "serviceWorkerRegistered": true,
@@ -24,7 +24,7 @@
       "supported": true,
       "registered": true,
       "controlled": true,
-      "scope": "http://localhost:3001/",
+      "scope": "http://localhost:3004/",
       "state": "activated"
     },
     "asset/icons/icon-192.png": {
@@ -62,15 +62,15 @@
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         "/icons/apple-touch-icon.png",
-        "/_next/static/css/2ab10cbcda9f3d31.css",
         "/_next/static/chunks/webpack-43de90f550bda7b4.js",
+        "/_next/static/css/2ab10cbcda9f3d31.css",
         "/_next/static/chunks/4bd1b696-8cd12253b448cc13.js",
-        "/_next/static/chunks/main-app-aaf611ef28a97c8f.js",
         "/_next/static/chunks/3794-04350b0fcecd82e5.js",
+        "/_next/static/chunks/main-app-aaf611ef28a97c8f.js",
         "/_next/static/chunks/8500-63a4afbeacab3b52.js",
-        "/_next/static/chunks/app/layout-a1941d6d6067e824.js",
-        "/_next/static/chunks/app/install/page-b4e9c55e32962090.js",
-        "/_next/static/chunks/app/global-error-dd35cdf3c6a707ce.js"
+        "/_next/static/chunks/app/layout-5439d9d29265a5e1.js",
+        "/_next/static/chunks/app/global-error-dd35cdf3c6a707ce.js",
+        "/_next/static/chunks/app/install/page-b4e9c55e32962090.js"
       ]
     },
     "consoleErrors": [],

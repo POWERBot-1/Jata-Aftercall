@@ -60,6 +60,13 @@ node scripts/browser/pwa-evidence.mjs
 production environment variable, key, token, cookie, customer record or database row was read or
 written by these scripts. No screenshot contains a secret.
 
+**Automation boundary.** Chrome reports `null` instead of an HTTP response for navigations served
+by a service worker when `navigator.webdriver` is set. The repository's real-database browser
+harnesses assert `response.status === 200`, so `components/pwa/PwaInstaller.tsx` deliberately
+skips service-worker registration in automated browser contexts. Real users still receive the
+PWA. `pwa-evidence.mjs` explicitly overrides `navigator.webdriver` to `false` before page load,
+so the PWA evidence below measures the real registered service worker rather than a bypass.
+
 ## 3. Verified local results
 
 From `browser-evidence.json` (`checks`):
