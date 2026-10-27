@@ -158,6 +158,43 @@ describe("VIEWER media permissions", () => {
   });
 });
 
+describe("a signed-in user with no membership (IDOR / tenant isolation)", () => {
+  // Owner directive 2026-10-27 Phase 3D: knowing another tenant's asset or business id must never
+  // be enough to read, replace or remove their media. The real guard runs against the mocked
+  // membership table, so this user resolves to no role on biz-a at all.
+  beforeEach(() => signIn("stranger-x"));
+
+  it("cannot read the other tenant's library", async () => {
+    const response = await GET(new Request("https://jata.test/api/media?businessId=biz-a"));
+    expect(response.status).not.toBe(200);
+    expect(state.assets).toHaveLength(1);
+  });
+
+  it("cannot register an upload against the other tenant", async () => {
+    const response = await POST(jsonRequest("POST", { businessId: "biz-a", dataUrl: image, alt: "intrusion" }));
+    expect(response.status).toBe(403);
+    expect(state.created).toHaveLength(0);
+  });
+
+  it("cannot replace metadata on an asset id it guessed", async () => {
+    const response = await PATCH(jsonRequest("PATCH", { id: "asset-a", alt: "hijacked", expectedVersion: 0 }));
+    expect(response.status).toBe(403);
+    expect(state.updated).toHaveLength(0);
+  });
+
+  it("cannot remove a single asset or a whole generation from the other tenant", async () => {
+    const one = await DELETE(new Request("https://jata.test/api/media?id=asset-a", { method: "DELETE" }));
+    expect(one.status).toBe(403);
+    expect(state.deleted).toHaveLength(0);
+
+    const generation = await DELETE(
+      new Request("https://jata.test/api/media?businessId=biz-a&generationId=generation-a", { method: "DELETE" }),
+    );
+    expect(generation.status).toBe(403);
+    expect(state.deletedMany).toHaveLength(0);
+  });
+});
+
 describe("MANAGER media permissions", () => {
   it("allows a manager to register a local-path image reference using the configure permission", async () => {
     signIn("manager-a");

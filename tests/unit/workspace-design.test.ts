@@ -150,6 +150,17 @@ describe("workspace design tokens", () => {
     expect(rail).toContain("overflow-x: auto");
     expect(css).toContain(".ws-shell :where(ul, ol) { padding: 0; list-style: none; }");
   });
+
+  it("keeps the workspace stack and rail wrapper from widening the page on phones", () => {
+    // Real-Chrome evidence (PR #69 six-viewport capture, 320–430px): the implicit auto grid
+    // track on .ws-stack honoured the min-content of hero surfaces and the AI Front Desk snap
+    // stepper, pushing documentElement.scrollWidth past the viewport. The track needs a zero
+    // minimum; the rail wrapper must clip rather than propagate the rail's scroll overflow.
+    const stack = css.match(/\.ws-stack\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(stack).toContain("grid-template-columns: minmax(0, 1fr)");
+    const railWrap = css.match(/\.ws-rail-wrap\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(railWrap).toContain("overflow-x: clip");
+  });
 });
 
 describe("workspace imagery", () => {

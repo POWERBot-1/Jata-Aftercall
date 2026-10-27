@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Pricing grid browser check — all six plans in one grid (2026-10-25; JATA Autopilot sixth card,
- * Stage C Phase 4).
+ * Pricing grid browser check — all six plans in one grid (2026-10-27 owner order: Monthly,
+ * Annual, AI Front Desk, JATA Autopilot, Website Studio, Business POS).
  *
  *   CHROME_PATH=/path/to/chromium BASE_URL=http://localhost:3000 npm run test:browser:pricing
  *
@@ -57,14 +57,15 @@ const VIEWPORTS = [
   { label: "1440", width: 1440, height: 900, columns: 3 },
 ];
 
-// The authoritative commercial data this change must not alter.
+// The authoritative commercial data this change must not alter. Order is the owner-mandated
+// 2026-10-27 homepage sequence: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS.
 const EXPECTED = [
   { key: "MONTHLY", price: "KES 149", period: "per 30 days", cta: "/register" },
   { key: "ANNUAL", price: "KES 999", period: "per year", cta: "/register" },
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
+  { key: "JATA_AUTOPILOT", price: "KES 2,499", period: "per 30 days", cta: "/dashboard/autopilot" },
   { key: "INTERACTIVE_BUSINESS", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "BUSINESS_POS", price: "KES 499", period: "per 30 days", cta: "/dashboard/pos" },
-  { key: "JATA_AUTOPILOT", price: "KES 2,499", period: "per 30 days", cta: "/dashboard/autopilot" },
 ];
 
 const browser = await puppeteer.launch({
@@ -184,8 +185,8 @@ for (const viewport of VIEWPORTS) {
     }),
     f.cards.map((card) => `${card.key}:${card.price}:${card.ctaHref}`).join(" | "),
   );
-  check(`${viewport.label}px: the POS card is fifth and keeps its own CTA`, f.cards[4]?.key === "BUSINESS_POS" && f.cards[4]?.ctaText === "Open Business POS", f.cards[4]?.ctaText ?? "missing");
-  check(`${viewport.label}px: the JATA Autopilot card is last and keeps its own CTA`, f.cards[5]?.key === "JATA_AUTOPILOT" && f.cards[5]?.ctaText === "Open JATA Autopilot" && f.cards[5]?.name.includes("JATA Autopilot"), f.cards[5]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the Autopilot card is fourth and keeps its own CTA`, f.cards[3]?.key === "JATA_AUTOPILOT" && f.cards[3]?.ctaText === "Open JATA Autopilot" && f.cards[3]?.name.includes("JATA Autopilot"), f.cards[3]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the POS card is sixth (last) and keeps its own CTA`, f.cards[5]?.key === "BUSINESS_POS" && f.cards[5]?.ctaText === "Open Business POS", f.cards[5]?.ctaText ?? "missing");
 
   await shot(page, `pricing-${viewport.label}`);
   await page.close();

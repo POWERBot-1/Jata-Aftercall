@@ -5,8 +5,9 @@
  * was deployed and reachable from the dashboard, but an owner had no way to find it from the public
  * site. That entry used to be a standalone promotional block below the pricing section.
  *
- * Product decision (2026-10-25): the POS is now the fifth card of the *same* pricing grid as the
- * four page plans, so no plan is isolated in its own section. The commercial and security behaviour
+ * Product decision (2026-10-25, revised 2026-10-27): the POS is the sixth (last) card of the
+ * *same* pricing grid as the four page plans, so no plan is isolated in its own section. The
+ * commercial and security behaviour
  * is unchanged: the card names the product, shows the price the server owns, says plainly that the
  * POS switches on only after Paystack confirms payment, and links into the existing
  * `/dashboard/pos` flow. The POS is still a private plan key (`PRIVATE_PLAN_KEYS`), so it is not a
@@ -26,7 +27,7 @@ vi.mock("@/lib/db", () => ({
         { id: "p2", key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
         { id: "p3", key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
         { id: "p4", key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
-        // The private POS plan is active in production; it now fills the fifth grid slot.
+        // The private POS plan is active in production; under the 2026-10-27 order it fills the sixth (last) grid slot.
         { id: "plan_pos", key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
       ]),
     },
@@ -63,7 +64,7 @@ const gridMarkup = (html: string) => {
 };
 
 describe("the homepage renders the Business POS in the shared pricing grid (2026-10-25)", () => {
-  it("keeps the POS fifth in the one grid, ahead of only JATA Autopilot (Stage C Phase 4)", async () => {
+  it("keeps the POS sixth (last) in the one grid under the 2026-10-27 owner order", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
@@ -71,9 +72,9 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
+      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
-      "JATA_AUTOPILOT",
     ]);
     // One grid container holds all six cards.
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
@@ -188,9 +189,9 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
+      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
-      "JATA_AUTOPILOT",
     ]);
     expect(html).toContain("Monthly — KES 149/month");
     expect(html).toContain("Annual — KES 999/year");

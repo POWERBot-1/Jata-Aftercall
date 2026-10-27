@@ -4302,7 +4302,17 @@ button:focus-visible {
 .ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
 
 /* Section rail — the one navigation row on every owner screen. */
-.ws-rail-wrap { border-top: 1px solid rgba(247, 242, 232, 0.09); background: rgba(255, 253, 248, 0.02); }
+.ws-rail-wrap {
+  border-top: 1px solid rgba(247, 242, 232, 0.09);
+  background: rgba(255, 253, 248, 0.02);
+  /* The rail inside owns the horizontal scroll (overflow-x: auto); this wrapper guarantees its
+     scrollable overflow never propagates to the document on phone widths (real-Chrome evidence,
+     PR #69 six-viewport capture). min-width:0 lets the block shrink below the rail's min-content
+     width instead of expanding the chrome; clip creates no scroll container and does not trap
+     focus or affect the sticky header. */
+  min-width: 0;
+  overflow-x: clip;
+}
 .ws-rail {
   display: flex;
   gap: 0.3rem;
@@ -4351,7 +4361,12 @@ button:focus-visible {
 }
 @media (min-width: 900px) { .ws-main { padding: 1.75rem 2.5rem 5rem; } }
 
-.ws-stack { display: grid; gap: 1.1rem; }
+/* Explicit minmax(0, 1fr) track: the implicit `auto` track honours grid items' min-content, so
+   wide children (the AI Front Desk snap stepper, hero surfaces, metric grids) expanded the track
+   past phone viewports and pushed documentElement.scrollWidth past 100% — real-Chrome evidence
+   (PR #69 six-viewport capture, 320–430px). A zero-minimum track keeps the single-column stack
+   at container width; the children's own overflow:auto/hidden then scroll or clip inside it. */
+.ws-stack { display: grid; gap: 1.1rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 900px) { .ws-stack { gap: 1.5rem; } }
 
 /* ── Editorial headings ─────────────────────────────────────────────────── */

@@ -5,8 +5,9 @@
  * never advertised it: the three Autopilot plan keys are private (`PRIVATE_PLAN_KEYS`, §67) and
  * `homepagePlanCards()` only re-appended the Business POS as a presentation card, so no
  * Autopilot card or icon ever rendered. The standard package (`JATA_AUTOPILOT`, KES 2,499 /
- * 30 days per `AUTOPILOT_PLAN_CATALOG`, the seed and `FALLBACK_PLANS`) is now the sixth card of
- * the same grid, with the spark mark the workspace already uses for this product.
+ * 30 days per `AUTOPILOT_PLAN_CATALOG`, the seed and `FALLBACK_PLANS`) is the fourth card of
+ * the same grid under the owner-mandated 2026-10-27 homepage order, with the spark mark the
+ * workspace already uses for this product.
  *
  * Commercial and security behaviour is unchanged: the card names the product, shows the price
  * the server owns, says the preview is free and live actions start only after Paystack confirms
@@ -59,7 +60,7 @@ const planCards = (html: string) =>
   }));
 
 describe("the homepage renders the standard JATA Autopilot package in the shared pricing grid", () => {
-  it("puts JATA Autopilot sixth, after the Business POS, in the one grid", async () => {
+  it("puts JATA Autopilot fourth in the one grid under the 2026-10-27 owner order", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
@@ -67,9 +68,9 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
+      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
-      "JATA_AUTOPILOT",
     ]);
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
     expect(html).toContain('data-plan-count="6"');
@@ -88,7 +89,7 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
       { key: "JATA_AUTOPILOT_PRO", name: "Pro", priceKES: 6999, durationDays: 30 },
       { key: "JATA_AUTOPILOT_ENTERPRISE", name: "Enterprise", priceKES: 19999, durationDays: 30 },
     ]);
-    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "BUSINESS_POS", "JATA_AUTOPILOT"]);
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "JATA_AUTOPILOT", "BUSINESS_POS"]);
   });
 
   it("gives the Autopilot card its product icon and the same structure as every other card", async () => {

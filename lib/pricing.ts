@@ -29,11 +29,12 @@ export async function getActivePlans(): Promise<Plan[]> {
  * POS plan is never part of a payable plan list: onboarding, the AFTERCALL subscription screen
  * and checkout all resolve their choices through `publiclyListedPlans()`.
  *
- * The one presentation exception is the homepage pricing grid, which shows the POS as a fifth,
- * clearly-labelled owner-only card that links into the authenticated `/dashboard/pos` flow, and
- * the standard JATA Autopilot package as a sixth card linking into `/dashboard/autopilot` (see
- * `homepagePlanCards`). Showing those cards grants nothing: each product still switches on only
- * from PlanConfig and confirmed payment inside the workspace.
+ * The one presentation exception is the homepage pricing grid, which shows the POS as the sixth
+ * (last), clearly-labelled owner-only card that links into the authenticated `/dashboard/pos`
+ * flow, and the standard JATA Autopilot package as the fourth card linking into
+ * `/dashboard/autopilot` (2026-10-27 owner order; see `homepagePlanCards`). Showing those cards
+ * grants nothing: each product still switches on only from PlanConfig and confirmed payment
+ * inside the workspace.
  */
 export const PRIVATE_PLAN_KEYS = [
   "BUSINESS_POS",
@@ -51,21 +52,27 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
   return plans.filter((plan) => isPubliclyListedPlan(plan.key));
 }
 
-/** Marketing order only; never changes stored IDs, prices, durations or checkout selection. */
-export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "JATA_AUTOPILOT"] as const;
+/**
+ * Marketing order only; never changes stored IDs, prices, durations or checkout selection.
+ *
+ * Owner-mandated homepage sequence (2026-10-27): Monthly → Annual → AI Business Front Desk →
+ * JATA Autopilot → Website Studio (INTERACTIVE_BUSINESS) → Business POS. The three owner-only
+ * products keep their stored plan keys and their own CTAs; only the presentation rank moves.
+ */
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "JATA_AUTOPILOT", "INTERACTIVE_BUSINESS", "BUSINESS_POS"] as const;
 
 /**
- * The owner-only POS plan the homepage advertises fifth, without ever making it a payable choice.
- * A literal rather than an import: `lib/pos/entitlement.ts` imports this module, so importing its
- * `POS_PLAN_KEY` here would be a cycle. Both name the same stored key, and
+ * The owner-only POS plan the homepage advertises sixth (last card), without ever making it a
+ * payable choice. A literal rather than an import: `lib/pos/entitlement.ts` imports this module,
+ * so importing its `POS_PLAN_KEY` here would be a cycle. Both name the same stored key, and
  * `assertBusinessPosPricing`/`assertPosPlanPricing` still guard the price itself.
  */
 export const HOMEPAGE_POS_PLAN_KEY = "BUSINESS_POS";
 
 /**
- * The standard JATA Autopilot package the homepage advertises last (Stage C Phase 4), without
- * ever making it a payable choice. A literal rather than an import for the same cycle reason as
- * the POS key above: it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
+ * The standard JATA Autopilot package the homepage advertises fourth, without ever making it a
+ * payable choice. A literal rather than an import for the same cycle reason as the POS key above:
+ * it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
  * `lib/autopilot/entitlement.ts`, and `assertAutopilotPlanPricing` still guards the price itself
  * (KES 2,499 / 30 days) at checkout. Only the standard package is advertised here; the Pro and
  * Enterprise tiers stay inside the authenticated Autopilot flow and are never homepage cards.
@@ -86,10 +93,10 @@ export type HomepagePlanCard = { key: string; name: string; priceKES: number; du
 /**
  * The six plans the homepage advertises, in marketing order.
  *
- * The four page plans come from `publiclyListedPlans()` as before; the owner-only Business POS is
- * appended as the fifth card (owner request, 2026-10-25) and the standard JATA Autopilot package
- * as the sixth (Stage C Phase 4), so an owner can see the whole product range in one grid instead
- * of separate promotional blocks below it. This is presentation only:
+ * The four page plans come from `publiclyListedPlans()` as before; under the 2026-10-27 owner
+ * order the standard JATA Autopilot package is the fourth card and the owner-only Business POS
+ * the sixth (last), so an owner can see the whole product range in one grid instead of separate
+ * promotional blocks below it. This is presentation only:
  *
  *   • POS and Autopilot stay in `PRIVATE_PLAN_KEYS`, so they are still absent from onboarding,
  *     the AFTERCALL subscription screen and every payable list — the cards link to

@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { slugify, validateSlug } from "@/lib/slug";
 import { sanitizeText, validatePhone } from "@/lib/validation";
+import { isValidKePhone } from "@/lib/phone";
 import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
@@ -14,6 +15,24 @@ import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA
 
 function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
+}
+
+const CONTACT_NUMBER_ERROR = "Enter a valid Kenyan mobile number (e.g. 0724 317 010).";
+
+/**
+ * Owner-supplied contact numbers must produce working Kenyan tel/wa.me destinations. The generic
+ * length gate (validatePhone) is kept, and the same KE rule used when the public page builds
+ * contact links (isValidKePhone -> lib/phone) is enforced at write time. Empty input clears the
+ * field; any other invalid value is a hard 400. Stored values keep the owner's display format —
+ * normalisation to 254XXXXXXXXX stays at point of use, as it did before.
+ */
+function parseContactNumber(value: unknown): { value: string | null; error: string | null } {
+  if (value === null || value === undefined || value === "") return { value: null, error: null };
+  if (typeof value !== "string") return { value: null, error: CONTACT_NUMBER_ERROR };
+  const trimmed = value.trim();
+  if (!trimmed) return { value: null, error: null };
+  if (!validatePhone(trimmed) || !isValidKePhone(trimmed)) return { value: null, error: CONTACT_NUMBER_ERROR };
+  return { value: trimmed, error: null };
 }
 
 /**
@@ -58,8 +77,12 @@ export async function POST(req: Request) {
     }
     const nameRaw = sanitizeText(body.name || "", 80);
     const category = sanitizeText(body.category || "Other", 40);
-    const phone = (body.phone || "").trim();
-    const whatsapp = (body.whatsapp || body.phone || "").trim();
+    const parsedPhone = parseContactNumber(body.phone);
+    if (parsedPhone.error) return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+    const parsedWhatsapp = parseContactNumber(body.whatsapp);
+    if (parsedWhatsapp.error) return NextResponse.json({ error: parsedWhatsapp.error }, { status: 400 });
+    const phone = parsedPhone.value ?? "";
+    const whatsapp = parsedWhatsapp.value ?? "";
     if (body.location !== undefined && body.location !== null && typeof body.location !== "string") {
       return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });
     }
@@ -107,8 +130,6 @@ export async function POST(req: Request) {
 
     const resolvedTheme = resolveTheme(theme).key;
 
-    if (phone && !validatePhone(phone)) return NextResponse.json({ error: "Valid phone required" }, { status: 400 });
-
     let business;
     try {
       business = await prisma.business.create({
@@ -120,6 +141,7 @@ export async function POST(req: Request) {
         category: category || "Other",
         phone: phone || null,
         whatsapp: whatsapp || phone || null,
+        // Phone/whatsapp were validated above through parseContactNumber (KE gate + length gate).
         location: location || null,
         lat: coordinates.lat,
         lng: coordinates.lng,
@@ -186,8 +208,16 @@ export async function PATCH(req: Request) {
       data.name = n;
     }
     if (body.category !== undefined) data.category = sanitizeText(body.category, 40);
-    if (body.phone !== undefined) data.phone = (body.phone || "").trim() || null;
-    if (body.whatsapp !== undefined) data.whatsapp = (body.whatsapp || "").trim() || null;
+    if (body.phone !== undefined) {
+      const parsed = parseContactNumber(body.phone);
+      if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      data.phone = parsed.value;
+    }
+    if (body.whatsapp !== undefined) {
+      const parsed = parseContactNumber(body.whatsapp);
+      if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      data.whatsapp = parsed.value;
+    }
     if (body.location !== undefined) {
       if (body.location !== null && typeof body.location !== "string") {
         return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });

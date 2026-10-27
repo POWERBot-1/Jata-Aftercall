@@ -110,16 +110,19 @@ describe("demo data definitions", () => {
     expect([...DEMO_SLUGS]).toEqual(["nyumbani-kitchen", "marys-beauty-studio", "kamau-auto-care", "john-kamau-properties"]);
   });
 
-  it("uses placeholder contact numbers that are valid, unique and not real-looking", () => {
-    const phones = DEMO_BUSINESSES.map((d) => d.phone);
-    expect(new Set(phones).size).toBe(4);
+  it("uses the official JATA AFTERCALL demonstration number 0724317010 on every demo business", () => {
+    // Owner directive 2026-10-27: the four fictional demo businesses share one official
+    // demonstration contact. It normalises to 254724317010 for generated wa.me/tel destinations.
     for (const d of DEMO_BUSINESSES) {
-      expect(d.phone).toMatch(/^070000000\d$/);
-      expect(normalizeKePhone(d.phone)).not.toBeNull();
+      expect(d.phone).toBe("0724317010");
+      expect(d.whatsapp).toBe("0724317010");
+      expect(normalizeKePhone(d.phone)).toBe("254724317010");
+      expect(normalizeKePhone(d.whatsapp)).toBe("254724317010");
       expect(d.description).toMatch(/fictional/i);
       expect(d.services.length).toBeGreaterThanOrEqual(3);
     }
   });
+
 });
 
 describe("restoreDemoBusinesses", () => {
@@ -169,6 +172,9 @@ describe("restoreDemoBusinesses", () => {
       h.tables.payment,
     ]);
     expect(protectedAfter).toBe(protectedBefore);
+    // Owner directive 2026-10-27: the official demonstration number must never leak onto a real
+    // business row, even one restored alongside the demo slugs.
+    expect(h.tables.business.find((r) => r.id === "real-1")!.phone).not.toBe("0724317010");
   });
 
   it("creates no user or admin, and no subscription or payment", async () => {
@@ -207,7 +213,7 @@ describe("restoreDemoBusinesses", () => {
     expect(report.outcomes.find((o) => o.slug === "nyumbani-kitchen")).toMatchObject({ action: "skipped" });
     expect(h.tables.business.find((r) => r.slug === "nyumbani-kitchen")!.phone).toBeNull();
     expect(h.tables.service.filter((s) => s.businessId === "demo-0")).toHaveLength(0);
-    expect(h.tables.business.find((r) => r.slug === "kamau-auto-care")!.phone).toBe("0700000003");
+    expect(h.tables.business.find((r) => r.slug === "kamau-auto-care")!.phone).toBe("0724317010");
   });
 
   it("treats the seed's fabricated demo- payments as demo data, not real customer money", async () => {
