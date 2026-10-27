@@ -448,13 +448,23 @@ if (loginOk) {
   // ---- Authenticated interaction evidence (owner directive 2026-10-27, item 3) ---------------
   // All writes target the workflow's disposable database. The page owns a real session, so the
   // same tenant guards and server validation as production apply; nothing here calls production.
-  const interaction = { contact: {}, media: {}, errors: [] };
+  const interaction = { contact: {}, media: {}, errors: [], step: "start" };
   evidence.interaction = interaction;
   const ixPage = await memberContext.newPage();
   ixPage.on("pageerror", (error) => interaction.errors.push(String(error).slice(0, 250)));
   // Media removal confirms through window.confirm; accept every prompt deterministically.
   ixPage.on("dialog", (dialog) => void dialog.accept());
+  // Every click scrolls its target into the centre first so sticky headers/offsets can never
+  // make Puppeteer classify a real, visible control as "not clickable".
+  const scrollIntoView = (selector) =>
+    ixPage.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      el.scrollIntoView({ block: "center", inline: "center" });
+      return true;
+    }, selector);
   try {
+    interaction.step = "open dashboard";
     await ixPage.setCacheEnabled(false);
     await ixPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await ixPage.goto(`${base}/dashboard`, { waitUntil: "load", timeout: 45000 });
@@ -463,25 +473,33 @@ if (loginOk) {
     interaction.contact.businessHref = businessHref;
 
     const openContactEditor = async () => {
-      const summary = await ixPage.evaluateHandle(() =>
-        Array.from(document.querySelectorAll("details.ws-editor summary")).find((s) =>
+      interaction.step = "open contact editor";
+      const opened = await ixPage.evaluate(() => {
+        const summary = Array.from(document.querySelectorAll("details.ws-editor summary")).find((s) =>
           (s.textContent || "").includes("Profile, contact"),
-        ),
-      );
-      await summary.asElement()?.click();
-      await ixPage.waitForSelector('input[id$="-phone"]', { timeout: 10000 });
+        );
+        if (!summary) return false;
+        summary.scrollIntoView({ block: "center" });
+        summary.click();
+        return true;
+      });
+      if (!opened) throw new Error("Profile, contact & location editor summary not found");
+      await ixPage.waitForSelector('input[id$="-phone"]', { visible: true, timeout: 10000 });
     };
 
     await openContactEditor();
-    await ixPage.waitForSelector('input[id$="-phone"]');
-    const phoneInput = () => ixPage.$('input[id$="-phone"]');
+    const phoneSelector = 'input[id$="-phone"]';
+    await ixPage.waitForSelector(phoneSelector, { visible: true });
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
     // Invalid number: the client mirror of the server KE rule must block before any PATCH.
-    await (await phoneInput()).click({ clickCount: 3 });
-    await (await phoneInput()).type("123");
+    interaction.step = "invalid number attempt";
+    await scrollIntoView(phoneSelector);
+    await ixPage.click(phoneSelector, { clickCount: 3 });
+    await ixPage.type(phoneSelector, "123");
     await ixPage.evaluate(() => {
       const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
+      button?.scrollIntoView({ block: "center" });
       button?.click();
     });
     await ixPage.waitForSelector('.jata-error[role="alert"]', { timeout: 10000 });
@@ -490,10 +508,13 @@ if (loginOk) {
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-invalid.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
     // Valid number: save, wait for the announced success, then prove persistence after reload.
-    await (await phoneInput()).click({ clickCount: 3 });
-    await (await phoneInput()).type("0724317010");
+    interaction.step = "valid number save";
+    await scrollIntoView(phoneSelector);
+    await ixPage.click(phoneSelector, { clickCount: 3 });
+    await ixPage.type(phoneSelector, "0724317010");
     await ixPage.evaluate(() => {
       const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
+      button?.scrollIntoView({ block: "center" });
       button?.click();
     });
     await ixPage.waitForFunction(
@@ -501,6 +522,7 @@ if (loginOk) {
       { timeout: 15000 },
     );
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-saved.jpg`, type: "jpeg", quality: 74, fullPage: false });
+    interaction.step = "reload and verify persistence";
     await ixPage.reload({ waitUntil: "load" });
     await openContactEditor();
     const persistedPhone = await ixPage.$eval('input[id$="-phone"]', (el) => el.value);
@@ -513,6 +535,7 @@ if (loginOk) {
     await ixPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
 
     // ---- Gallery: fallback imagery, honest storage gate, metadata replace/remove -------------
+    interaction.step = "open gallery";
     const photosHref = `${businessHref}/photos`;
     await ixPage.goto(`${base}${photosHref}`, { waitUntil: "load", timeout: 45000 });
     await ixPage.waitForSelector("h1", { timeout: 15000 });
@@ -546,6 +569,7 @@ if (loginOk) {
       });
       return { status: response.status, body: await response.json().catch(() => ({})) };
     }, businessHref);
+    interaction.step = "durable upload gate probe";
     interaction.media.durableUploadProbe = blocked;
     record(
       blocked.status === 503 && blocked.body?.code === "inline_media_persistence_disabled",
@@ -554,6 +578,7 @@ if (loginOk) {
     );
 
     // Metadata-only references (hosted/path URLs) remain supported and exercise replace/remove.
+    interaction.step = "create metadata reference";
     const reference = await ixPage.evaluate(async (href) => {
       const businessId = href.split("/").filter(Boolean).pop();
       const response = await fetch("/api/media", {
@@ -569,9 +594,11 @@ if (loginOk) {
     await ixPage.waitForSelector(".jata-card img", { timeout: 15000 });
     await ixPage.screenshot({ path: `${shotDir}/390x844__photos-metadata-asset.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
+    interaction.step = "delete metadata asset";
     const removed = await ixPage.evaluate(() => {
       const button = Array.from(document.querySelectorAll(".jata-card button")).find((b) => (b.textContent || "").trim() === "Delete");
       if (!button) return false;
+      button.scrollIntoView({ block: "center" });
       button.click();
       return true;
     });
@@ -583,8 +610,8 @@ if (loginOk) {
     record(removed === true, "metadata asset is removed through the gallery Delete control", `clicked=${removed}`);
     await ixPage.screenshot({ path: `${shotDir}/390x844__photos-after-delete.jpg`, type: "jpeg", quality: 74, fullPage: false });
   } catch (error) {
-    interaction.errors.push(`interaction: ${String(error).slice(0, 250)}`);
-    record(false, "authenticated interaction capture completed without errors", String(error).slice(0, 250));
+    interaction.errors.push(`interaction at step "${interaction.step}": ${String(error).slice(0, 250)}`);
+    record(false, `authenticated interaction capture completed without errors (step: ${interaction.step})`, String(error).slice(0, 250));
   }
   record(interaction.errors.length === 0, "interaction capture raised no page errors", interaction.errors.join(" | "));
   await ixPage.close();
