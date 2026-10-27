@@ -10,8 +10,8 @@ import { BarChart3, Bot, CreditCard, LayoutGrid, PlusCircle, ShieldCheck, Sparkl
  * One row of sections (Overview, Subscription, AI Front Desk, Website Studio, Business POS)
  * plus "Add a business" and, for admins, Admin. It lives inside the graphite chrome, scrolls
  * horizontally on a phone, keeps a 44px touch target per link and marks the current section
- * with `aria-current="page"` plus a filled electric-lime pill — so the owner always knows
- * where they are without a hover-only menu hiding a product behind it.
+ * with `aria-current="page"` plus a filled amber pill — so the owner always knows where they
+ * are without a hover-only menu hiding a product behind it.
  */
 const LINKS = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },

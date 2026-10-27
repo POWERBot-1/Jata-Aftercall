@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Premium transformation visual evidence capture (2026-10-27 redesign, PR #69).
+ * Six-viewport visual evidence capture for PR #69 (2026-10-27 owner correction: the original
+ * espresso/cream/amber JATA AFTERCALL design is restored; this harness now asserts the ORIGINAL
+ * palette and design tokens rather than the withdrawn graphite/lime direction).
  *
  *   CHROME_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:4100 \
  *   SHOT_DIR=./premium-shots npm run test:browser:premium-screenshots
  *
- * Why this exists: the six-viewport visual verification could not run in the authoring sandbox
+ * Why this exists: the six-viewport visual verification cannot run in the authoring sandbox
  * (no browser binary). This script runs in GitHub Actions on a real Chrome against a local
  * production build seeded with the fictional demo dataset, and uploads its screenshots as a
  * workflow artifact. It never points at production and never changes a setting: it only logs in
@@ -220,10 +222,13 @@ function measureFacts() {
     pathname: location.pathname,
     hasErrorOverlay: Boolean(document.querySelector("nextjs-portal")),
     tokens: {
-      jataLime: token("--jata-lime"),
-      jataGraphite: token("--jata-graphite"),
+      // Original JATA AFTERCALL design (restored 2026-10-27): espresso/cream/amber.
+      jataAccent: token("--jata-accent"),
+      lpInk: lpToken("--lp-ink"),
+      lpCream: lpToken("--lp-cream"),
       lpAmber: lpToken("--lp-amber"),
-      wsAmber: token("--ws-amber"),
+      lpAmberDeep: lpToken("--lp-amber-deep"),
+      lpDisplay: lpToken("--lp-display"),
     },
     css: {
       primaryCtaBg: css(".lp-btn--primary", "backgroundColor"),
@@ -373,15 +378,20 @@ for (const width of ["390x844", "1366x768"]) {
   record(keys.length === 6 && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
     `homepage plan order at ${width}: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS`,
     keys.join(" > "));
-  record(home.tokens.jataLime === "#b6ff2e", `electric-lime token applies at ${width}`, home.tokens.jataLime);
-  record(home.tokens.jataGraphite === "#16181d", `graphite token applies at ${width}`, home.tokens.jataGraphite);
-  record(home.tokens.lpAmber === "#b6ff2e", `landing accent token (scoped to .lp-page) maps to electric lime at ${width}`, String(home.tokens.lpAmber));
-  record(home.css.primaryCtaBg === "rgb(182, 255, 46)",
-    `primary CTA renders electric lime at ${width}`, home.css.primaryCtaBg ?? "no .lp-btn--primary");
-  record(home.css.primaryCtaColor === "rgb(27, 30, 36)",
-    `primary CTA label is graphite on lime at ${width}`, home.css.primaryCtaColor ?? "");
-  record(home.css.heroBg === "rgb(22, 24, 29)",
-    `hero band renders graphite at ${width}`, home.css.heroBg ?? "");
+  // Original design tokens, scoped where the original stylesheet declares them.
+  record(home.tokens.jataAccent === "#d97706", `root accent is the original amber at ${width}`, String(home.tokens.jataAccent));
+  record(home.tokens.lpInk === "#14110f", `landing espresso ink token applies at ${width}`, String(home.tokens.lpInk));
+  record(home.tokens.lpCream === "#f7f2e8", `landing cream token applies at ${width}`, String(home.tokens.lpCream));
+  record(home.tokens.lpAmber === "#f0a03c", `landing amber token (scoped to .lp-page) applies at ${width}`, String(home.tokens.lpAmber));
+  record(home.tokens.lpAmberDeep === "#b45309", `landing deep-amber token applies at ${width}`, String(home.tokens.lpAmberDeep));
+  record(typeof home.tokens.lpDisplay === "string" && home.tokens.lpDisplay.includes("serif"),
+    `editorial serif display face is in use at ${width}`, String(home.tokens.lpDisplay));
+  record(home.css.primaryCtaBg === "rgb(240, 160, 60)",
+    `primary CTA renders original amber at ${width}`, home.css.primaryCtaBg ?? "no .lp-btn--primary");
+  record(home.css.primaryCtaColor === "rgb(26, 20, 13)",
+    `primary CTA label is the original dark espresso on amber at ${width}`, home.css.primaryCtaColor ?? "");
+  record(home.css.heroBg === "rgb(20, 17, 15)",
+    `hero band renders original espresso at ${width}`, home.css.heroBg ?? "");
 }
 
 writeFileSync(`${shotDir}/evidence.json`, JSON.stringify(evidence, null, 2));
