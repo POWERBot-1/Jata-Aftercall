@@ -5,7 +5,7 @@ Plan: `ERP_PRO`, **KES 3,000 / 30 days**, grace window 3 days after a paid month
 Existing Business POS (`KES 499 / 30 days`) is untouched.
 
 Report date: **2026-10-27**. Branch: `arena/7a3563c1-jata-aftercall`. Base commit: `77e35ce`.
-Head commit: `df196ac` (feature commit `367032c`). Pull request: [#71](https://github.com/POWERBot-1/Jata-Aftercall/pull/71)
+Head commit: `1964de7` (feature commit `367032c`). Pull request: [#71](https://github.com/POWERBot-1/Jata-Aftercall/pull/71)
 (open, mergeable, not merged).
 
 ---
@@ -250,7 +250,7 @@ Per-suite counts (all green):
 | Responsive screenshots | **BLOCKED** — no browser binary; layout is CSS-verified only |
 | Provider cost comparison | **PASS** — `POS_ERP_PRO_PROVIDER_COSTS.md`, rates unverified |
 | Security review | **PASS (self-review)** — `POS_ERP_PRO_SECURITY_REVIEW.md`, 6 findings, no external audit |
-| PR links / SHAs / CI results | **PASS (partial)** — commits `367032c` + `df196ac`, PR [#71](https://github.com/POWERBot-1/Jata-Aftercall/pull/71) (mergeable), Vercel preview check `pass`. The repository has no test workflow that runs on this branch, so **no CI test result exists** — the green suite is from the local run in section 2. |
+| PR links / SHAs / CI results | **PASS (partial)** — commits `367032c` + docs `df196ac`/`1964de7`, PR [#71](https://github.com/POWERBot-1/Jata-Aftercall/pull/71) (mergeable), Vercel preview check `pass`. The repository has no test workflow that runs on this branch, so **no CI test result exists** — the green suite is from the local run in section 2. |
 
 ---
 
@@ -269,7 +269,7 @@ Per-suite counts (all green):
    behaviour, not by looking at them.
 6. **Tax and statutory positions are unverified.** The default rates carry `verified: false`; no
    accountant or KRA publication was used as a signed source.
-7. **Nothing was merged or deployed.** The work is committed as `367032c` (docs follow-up `df196ac`) and pushed to
+7. **Nothing was merged or deployed.** The work is committed as `367032c` (docs follow-ups `df196ac`, `1964de7`) and pushed to
    `arena/7a3563c1-jata-aftercall`; PR #71 is open against `arena/33ebb805-jata-aftercall` and has not
    been merged. The only automated check on the PR is a Vercel preview deployment; there is no test
    workflow wired to this branch, so CI has not independently run the suite.
