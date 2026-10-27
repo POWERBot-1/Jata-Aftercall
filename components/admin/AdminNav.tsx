@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeCheck, Building2, CreditCard, LayoutGrid, ListChecks, Users, Wallet } from "lucide-react";
+import { BadgeCheck, Building2, CreditCard, LayoutGrid, ListChecks, ShieldCheck, Users, Wallet } from "lucide-react";
 
 /**
  * The admin section rail.
@@ -20,6 +20,7 @@ const LINKS = [
   { href: "/admin/payments/wallet", label: "Wallet", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: BadgeCheck },
   { href: "/admin/plans", label: "Plans", icon: ListChecks },
+  { href: "/admin/team-access", label: "Team access", icon: ShieldCheck },
 ] as const;
 
 export function AdminNav() {

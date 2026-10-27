@@ -152,10 +152,13 @@ export default function DashboardClient({
   businesses,
   metricsMap,
   accountEmail,
+  teamFreeAccess = false,
 }: {
   businesses: Biz[];
   metricsMap: Record<string, Metrics>;
   accountEmail?: string;
+  /** Verified server-side entitlement; the client never decides this. */
+  teamFreeAccess?: boolean;
 }) {
   const totals = useMemo(
     () =>
@@ -275,7 +278,7 @@ export default function DashboardClient({
       <div className="ws-stack">
         {businesses.map((b, index) => (
           <Reveal key={b.id} as="div" delay={index * 0.03}>
-            <BusinessCard b={b} m={metricsMap[b.id] || EMPTY_METRICS} />
+            <BusinessCard b={b} m={metricsMap[b.id] || EMPTY_METRICS} teamFreeAccess={teamFreeAccess} />
           </Reveal>
         ))}
       </div>
@@ -400,7 +403,7 @@ function BusinessTable({ businesses, metricsMap }: { businesses: Biz[]; metricsM
 
 type Section = "profile" | "services" | "offer" | null;
 
-function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
+function BusinessCard({ b, m, teamFreeAccess = false }: { b: Biz; m: Metrics; teamFreeAccess?: boolean }) {
   const router = useRouter();
   const [notice, setNotice] = useState<Notice>(null);
   const [open, setOpen] = useState<Section>(null);
@@ -418,6 +421,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     catalogueCount: b.catalogueCount,
     hasUnpublishedChanges: b.hasUnpublishedChanges,
     entitlementStatus: b.entitlementStatus ?? null,
+    teamFreeAccess,
   });
 
   const coverUrl = safeImageUrl(b.coverUrl);

@@ -1,9 +1,36 @@
+/**
+ * Browser-bundle boundary for JATA Team Free Access (Phase 5).
+ *
+ * Four entitlement getters are shared with client components (for example DashboardClient →
+ * lib/ai-config → lib/ai-entitlement). Statically importing the real server module there would
+ * emit the authorised allowlist, the audit queries and `node:crypto` into a frontend chunk — and
+ * webpack cannot compile `node:` imports for the browser. In the CLIENT compilation only, every
+ * request for `lib/team-access.ts` is rewritten to the fail-closed stub. Server pages, route
+ * handlers, middleware and tests always use the real module.
+ */
+class ServerOnlyTeamAccessPlugin {
+  apply(compiler) {
+    compiler.hooks.normalModuleFactory.tap("ServerOnlyTeamAccessPlugin", (factory) => {
+      factory.hooks.beforeResolve.tap("ServerOnlyTeamAccessPlugin", (result) => {
+        if (!result || typeof result.request !== "string") return;
+        // Requests arrive without the file extension (e.g. "./team-access" or
+        // "@/lib/team-access"), so match the module stem, not the .ts filename.
+        if (/team-access(?:\.ts)?$/.test(result.request)) {
+          result.request = `${process.cwd()}/lib/teamAccessStub.ts`;
+        }
+      });
+    });
+  }
+}
+
 // Explicit local QA only. Production cannot opt into this with an environment flag.
 const localArenaPreview = process.env.NODE_ENV === "development" && process.env.ARENA_LIVE_PREVIEW === "1";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...(localArenaPreview ? { allowedDevOrigins: ["*.e2b.app"] } : {}),
   reactStrictMode: true,
+  // Dev-only browser evidence: hide the Next.js floating indicator from screenshots.
+  devIndicators: false,
   poweredByHeader: false,
   async headers() {
     return [
@@ -43,6 +70,10 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**" },
     ],
+  },
+  webpack(config, { isServer }) {
+    if (!isServer) config.plugins.push(new ServerOnlyTeamAccessPlugin());
+    return config;
   },
 };
 

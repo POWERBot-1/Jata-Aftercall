@@ -6,6 +6,7 @@ import DashboardClient from "@/components/DashboardClient";
 import { ensureReferralCode, referralLink } from "@/lib/referral";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { getTeamAccessStatus } from "@/lib/team-access";
 
 export const metadata: Metadata = { title: "Workspace" };
 export const dynamic = "force-dynamic";
@@ -93,6 +94,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       accountEmail={session.email || ""}
+      teamFreeAccess={(await getTeamAccessStatus(session.userId)).entitled}
       businesses={businesses.map((b) => ({
         id: b.id,
         slug: b.slug,

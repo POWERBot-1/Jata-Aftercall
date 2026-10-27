@@ -8,6 +8,7 @@
  */
 
 import prisma from "@/lib/db";
+import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "@/lib/team-access";
 import {
   AUTOPILOT_PLAN_KEYS,
   type AutopilotEntitlementStatus,
@@ -344,10 +345,33 @@ export function deriveAutopilotEntitlement(
   };
 }
 
+/** Synthetic non-billing entitlement for a verified team account (no payment record is created). */
+export function teamFreeAutopilotEntitlement(now: Date = new Date()): AutopilotEntitlementDecision {
+  return {
+    entitled: true,
+    previewMode: false,
+    readHistoryAllowed: true,
+    tier: "STANDARD",
+    planKey: "JATA_AUTOPILOT",
+    subscriptionStatus: "ACTIVE",
+    entitlementStatus: "ACTIVE",
+    expiresAt: null,
+    graceUntil: null,
+    daysRemaining: null,
+    banner: {
+      tone: "active",
+      headline: TEAM_FREE_ACCESS_LABEL,
+      detail: `Full Autopilot features are included with your verified team entitlement as of ${now.toISOString().slice(0, 10)}. No payment or renewal is required.`,
+      ctaLabel: null,
+    },
+  };
+}
+
 export async function getAutopilotEntitlement(
   businessId: string,
   now: Date = new Date(),
 ): Promise<AutopilotEntitlementDecision> {
+  if (await hasTeamFreeAccessForBusiness(businessId)) return teamFreeAutopilotEntitlement(now);
   try {
     const sub = await prisma.autopilotSubscription.findUnique({ where: { businessId } });
     return deriveAutopilotEntitlement(sub, now);
@@ -361,7 +385,9 @@ export async function syncAutopilotEntitlement(
   now: Date = new Date(),
 ): Promise<AutopilotEntitlementDecision> {
   const sub = await prisma.autopilotSubscription.findUnique({ where: { businessId } });
-  const decision = deriveAutopilotEntitlement(sub, now);
+  const decision = (await hasTeamFreeAccessForBusiness(businessId))
+    ? teamFreeAutopilotEntitlement(now)
+    : deriveAutopilotEntitlement(sub, now);
   await prisma.autopilotEntitlement.upsert({
     where: { businessId },
     create: {

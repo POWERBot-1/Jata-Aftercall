@@ -10,6 +10,7 @@ import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
@@ -242,15 +243,18 @@ export async function PATCH(req: Request) {
         // Payment-before-publication is enforced here, server-side. The UI is not the boundary:
         // a direct API request while unpaid is rejected the same way.
         const isAdmin = session.role === "ADMIN";
+        // Verified team entitlement is resolved server-side from the business owner's audit
+        // chain. It satisfies the publication gate without creating a payment/subscription row.
+        const teamFreeAccess = isAdmin ? false : await hasTeamFreeAccessForBusiness(businessId);
         let verifiedPayment = false;
-        if (!isAdmin && PUBLISH_REQUIRES_PAYMENT) {
+        if (!isAdmin && !teamFreeAccess && PUBLISH_REQUIRES_PAYMENT) {
           const [paidPayment, subscription] = await Promise.all([
             prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
             prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } }),
           ]);
           verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription });
         }
-        if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+        if (!canSetPublished(true, { isAdmin, verifiedPayment, teamFreeAccess })) {
           return NextResponse.json({ error: SAFE_ERRORS.publishPaymentRequired }, { status: 403 });
         }
         data.isPublished = true;

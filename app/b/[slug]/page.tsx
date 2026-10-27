@@ -15,6 +15,7 @@ import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
 import { buildDemoShowcase } from "@/lib/demoShowcase";
 import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
+import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
 
 export const dynamic = "force-dynamic";
 
@@ -50,11 +51,13 @@ function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>
 }
 
 function verifiedDemoFixture(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>) {
-  const verified = isVerifiedDemoRecord({
+  const identity = {
     slug: business.slug,
+    name: business.name,
     ownerEmail: business.owner?.email,
     paymentReferences: business.payments?.map((payment) => payment.reference) ?? [],
-  });
+  };
+  const verified = isVerifiedDemoRecord(identity) || isPublicDemoRow(identity);
   return verified ? DEMO_BUSINESSES.find((demo) => demo.slug === business.slug) : undefined;
 }
 
@@ -202,6 +205,18 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   const demoFixture = verifiedDemoFixture(business);
   const isDemoBusiness = Boolean(demoFixture);
   const isPropertyDemo = demoFixture?.slug === "john-kamau-properties";
+  // Read-only presentation resolution for VERIFIED fictional demo rows whose production data
+  // still holds the historical 0700 000 00x placeholders. No database write, no effect on a real
+  // customer row, and no invented number for an unverifiable business (Phase 15 proposal only).
+  const displayedContacts = resolveDemoContacts(
+    {
+      slug: business.slug,
+      name: business.name,
+      ownerEmail: business.owner?.email,
+      paymentReferences: business.payments?.map((payment) => payment.reference) ?? [],
+    },
+    { phone: business.phone, whatsapp: business.whatsapp },
+  );
   const activeServices = business.services.filter(
     (service) => service.isActive === true && Boolean(service.title?.trim()),
   );
@@ -261,8 +276,8 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
           slug: business.slug,
           name: business.name,
           category: business.category,
-          phone: business.phone,
-          whatsapp: business.whatsapp,
+          phone: displayedContacts.phone,
+          whatsapp: displayedContacts.whatsapp,
           location: business.location,
           lat: business.lat,
           lng: business.lng,

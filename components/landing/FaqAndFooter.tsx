@@ -68,6 +68,16 @@ export function LandingFooter({ availableDemoSlugs }: { availableDemoSlugs: read
             <Link href="/login">Log in</Link>
             <Link href="/dashboard">Dashboard</Link>
           </nav>
+          <nav className="lp-footer__col" aria-label="Support and policies">
+            <p className="lp-footer__heading">Support</p>
+            <Link href="/products">All products</Link>
+            <Link href="/pricing">Plans &amp; billing</Link>
+            <Link href="/install">Install the app</Link>
+            <Link href="/help">Help</Link>
+            <Link href="/contact">Contact &amp; support</Link>
+            <Link href="/privacy">Privacy policy</Link>
+            <Link href="/terms">Terms of service</Link>
+          </nav>
         </div>
         <div className="lp-footer__base">
           <p>© {year} JATA AFTERCALL. All example business pages are demonstrations.</p>

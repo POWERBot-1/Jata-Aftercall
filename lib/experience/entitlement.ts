@@ -12,6 +12,7 @@
 
 import prisma from "../db";
 import { WEBSITE_STUDIO_NAME } from "../productNames";
+import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "../team-access";
 
 export const INTERACTIVE_PLAN_KEY = "INTERACTIVE_BUSINESS";
 export const INTERACTIVE_PRICE_KES = 999;
@@ -112,8 +113,21 @@ export function deriveEntitlement(input: {
   };
 }
 
+/** The synthetic, non-billing state a verified team account receives. No row is written. */
+export function teamFreeEntitlementState(): EntitlementState {
+  return {
+    entitled: true,
+    status: "ACTIVE",
+    planKey: INTERACTIVE_PLAN_KEY,
+    expiresAt: null,
+    graceUntil: null,
+    reason: TEAM_FREE_ACCESS_LABEL,
+  };
+}
+
 /** Server-side read. Always scoped to one business id — never a client-supplied tenant. */
 export async function getInteractiveEntitlement(businessId: string): Promise<EntitlementState> {
+  if (await hasTeamFreeAccessForBusiness(businessId)) return teamFreeEntitlementState();
   const [subscription, entitlement, paidPayment] = await Promise.all([
     prisma.subscription.findUnique({
       where: { businessId },

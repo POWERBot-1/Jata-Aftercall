@@ -49,7 +49,7 @@ export function DemoShowcaseBand(props: DemoShowcaseProps) {
             height={684}
             decoding="async"
             /* React 18 only forwards the lower-case attribute; the hint still preloads the LCP image. */
-            {...({ fetchpriority: "high" } as Record<string, string>)}
+            {...({ fetchPriority: "high" } as Record<string, string>)}
             className="jata-showcase__img"
           />
         </picture>
