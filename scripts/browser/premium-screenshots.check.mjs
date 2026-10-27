@@ -571,6 +571,25 @@ if (loginOk) {
     await ixPage.screenshot({ path: `${shotDir}/1366x768__contact-editor-saved.jpg`, type: "jpeg", quality: 74, fullPage: false });
     await ixPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
 
+    // The Photos starter gallery only renders once a website draft exists. Create the disposable
+    // demo business's draft through the same authenticated API the Studio UI uses.
+    interaction.step = "ensure experience draft";
+    const draft = await ixPage.evaluate(async (href) => {
+      const businessId = href.split("/").filter(Boolean).pop();
+      const response = await fetch("/api/experience", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, categoryKey: "food" }),
+      });
+      return { status: response.status, body: await response.json().catch(() => ({})) };
+    }, businessHref);
+    interaction.media.draft = { status: draft.status, code: draft.body.code ?? null };
+    record(
+      draft.status === 201 || draft.status === 428,
+      "experience draft exists for the gallery (created 201, or already present 428)",
+      `status=${draft.status} code=${draft.body.code ?? "-"}`,
+    );
+
     // ---- Gallery: fallback imagery, honest storage gate, metadata replace/remove -------------
     interaction.step = "open gallery";
     const photosHref = `${businessHref}/photos`;
