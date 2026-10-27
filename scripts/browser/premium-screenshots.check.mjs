@@ -507,20 +507,39 @@ if (loginOk) {
     record(/Kenyan mobile/i.test(invalidText), "contact editor rejects an invalid number with the KE rule inline", invalidText);
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-invalid.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
-    // Valid number: save, wait for the announced success, then prove persistence after reload.
+    // Valid number: save, capture the real PATCH response, then wait for either announcement.
     interaction.step = "valid number save";
     await scrollIntoView(phoneSelector);
     await ixPage.click(phoneSelector, { clickCount: 3 });
     await ixPage.type(phoneSelector, "0724317010");
+    const typedPhone = await ixPage.$eval(phoneSelector, (el) => el.value);
+    interaction.contact.typedPhone = typedPhone;
+    const patchPromise = ixPage
+      .waitForResponse((r) => r.url().includes("/api/business") && r.request().method() === "PATCH", { timeout: 15000 })
+      .catch(() => null);
     await ixPage.evaluate(() => {
       const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
       button?.scrollIntoView({ block: "center" });
       button?.click();
     });
-    await ixPage.waitForFunction(
-      () => Array.from(document.querySelectorAll('[role="status"]')).some((el) => (el.textContent || "").includes("Profile saved")),
-      { timeout: 15000 },
-    );
+    const patchResponse = await patchPromise;
+    const patchStatus = patchResponse ? patchResponse.status() : "no-request";
+    const patchBody = patchResponse ? await patchResponse.json().catch(() => ({})) : {};
+    interaction.contact.patch = { status: patchStatus, error: patchBody.error ?? null };
+    record(patchStatus === 200, "valid save reaches PATCH /api/business and returns 200", `status=${patchStatus} error=${patchBody.error ?? "-"}`);
+    await ixPage
+      .waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll('[role="status"], [role="alert"]')).some((el) =>
+            (el.textContent || "").includes("Profile saved"),
+          ),
+        { timeout: 10000 },
+      )
+      .catch(() => undefined);
+    const saveAnnouncement = await ixPage
+      .evaluate(() => Array.from(document.querySelectorAll('[role="status"], [role="alert"]')).map((el) => el.textContent).join(" | "))
+      .catch(() => "");
+    record(/Profile saved/.test(saveAnnouncement), "contact editor announces the successful save", saveAnnouncement.slice(0, 200));
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-saved.jpg`, type: "jpeg", quality: 74, fullPage: false });
     interaction.step = "reload and verify persistence";
     await ixPage.reload({ waitUntil: "load" });
