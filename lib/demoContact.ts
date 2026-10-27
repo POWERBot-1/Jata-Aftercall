@@ -55,7 +55,8 @@ export function isPublicDemoRow(row: PublicDemoRowIdentity): boolean {
   if (!DEMO_BUSINESSES.some((demo) => demo.slug === row.slug && demo.name.toLowerCase() === String(row.name || "").trim().toLowerCase())) {
     return false;
   }
-  if (!row.paymentReferences.every((reference) => String(reference).startsWith(DEMO_PAYMENT_PREFIX))) return false;
+  const references = Array.isArray(row.paymentReferences) ? row.paymentReferences : [];
+  if (!references.every((reference) => String(reference).startsWith(DEMO_PAYMENT_PREFIX))) return false;
   return true;
 }
 

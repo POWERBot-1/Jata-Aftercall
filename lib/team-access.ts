@@ -49,6 +49,16 @@ export const TEAM_AUDIT_ACTIONS = Object.freeze({
   ACCESS_REVOKED: "JATA_TEAM_FREE_ACCESS_REVOKED",
 } as const);
 const ALL_TEAM_ACTIONS: readonly string[] = Object.values(TEAM_AUDIT_ACTIONS);
+/**
+ * Security-critical events must never be truncated out of the decision window: a later flood of
+ * failed-attempt events must not be able to hide a revocation or a consumed OTP. These are read
+ * with their own generous bound, independently of the recent-event window.
+ */
+const DURABLE_TEAM_ACTIONS: readonly string[] = [
+  TEAM_AUDIT_ACTIONS.PHONE_VERIFIED,
+  TEAM_AUDIT_ACTIONS.ACCESS_GRANTED,
+  TEAM_AUDIT_ACTIONS.ACCESS_REVOKED,
+];
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 const MAX_VERIFICATION_ATTEMPTS = 5;
@@ -118,12 +128,16 @@ export function deriveTeamFreeAccess(input: {
     return { entitled: false, label: null, reason: "PHONE_CHANGED" };
   }
 
+  const grantChallengeId = terminal.metadata?.challengeId;
   const grantTime = timeOf(terminal);
   const verification = events.find((event) =>
     event.action === TEAM_AUDIT_ACTIONS.PHONE_VERIFIED &&
     timeOf(event) <= grantTime &&
     event.metadata?.phoneFingerprint === input.fingerprint &&
-    typeof event.metadata?.challengeId === "string",
+    typeof event.metadata?.challengeId === "string" &&
+    // Bind the grant to the SAME one-time challenge. A verification from another challenge must
+    // never be reused as evidence for a different grant.
+    event.metadata.challengeId === grantChallengeId,
   );
   if (!verification) return { entitled: false, label: null, reason: "UNVERIFIED" };
 
@@ -152,13 +166,35 @@ function parseMetadata(raw: unknown): Record<string, unknown> | null {
 }
 
 async function readTeamEvents(userId: string): Promise<TeamAccessEvent[]> {
-  const rows = await prisma.auditEvent.findMany({
-    where: { targetType: AUDIT_TARGET, targetId: userId, action: { in: [...ALL_TEAM_ACTIONS] } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: { action: true, createdAt: true, metadata: true },
-  });
-  return (rows || []).map((row) => ({ action: row.action, createdAt: row.createdAt, metadata: parseMetadata(row.metadata) }));
+  const baseWhere = { targetType: AUDIT_TARGET, targetId: userId };
+  const select = { action: true, createdAt: true, metadata: true } as const;
+  // Two bounded reads: durable grant/revoke/consumption evidence, plus the recent challenge and
+  // failed-attempt window. Merging (and de-duplicating) both means a burst of OTP failures can
+  // never make an old revocation or an already-used code disappear from the decision.
+  const [durableRows, recentRows] = await Promise.all([
+    prisma.auditEvent.findMany({
+      where: { ...baseWhere, action: { in: [...DURABLE_TEAM_ACTIONS] } },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      select,
+    }),
+    prisma.auditEvent.findMany({
+      where: { ...baseWhere, action: { in: [...ALL_TEAM_ACTIONS] } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select,
+    }),
+  ]);
+  const seen = new Set<string>();
+  return [...(durableRows || []), ...(recentRows || [])]
+    .filter((row) => {
+      const stamp = row.createdAt instanceof Date ? row.createdAt.getTime() : String(row.createdAt);
+      const key = `${row.action}|${stamp}|${String(row.metadata ?? "")}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((row) => ({ action: row.action, createdAt: row.createdAt, metadata: parseMetadata(row.metadata) }));
 }
 
 /** Server-side read for one authenticated account. Never trusts a request-supplied identifier. */
@@ -292,6 +328,23 @@ export async function verifyTeamPhoneCode(userId: string, submittedCode: unknown
   }
   if (Date.now() > expiresAt) {
     return { ok: false, status: 400, error: "That verification code expired. Ask an administrator to start a new one." };
+  }
+  // A successful verification writes PHONE_VERIFIED with this challengeId. Treat that append-only
+  // event as the consumption marker: without it the same six-digit code could be replayed within
+  // its 10-minute window to mint another grant (including after an administrator revocation).
+  const alreadyUsed = events.some(
+    (event) => event.action === TEAM_AUDIT_ACTIONS.PHONE_VERIFIED && event.metadata?.challengeId === challengeId,
+  );
+  if (alreadyUsed) {
+    return { ok: false, status: 400, error: "That verification code has already been used. Ask an administrator to start a new one." };
+  }
+  // A revocation must invalidate any challenge issued BEFORE it. Otherwise a team member holding
+  // an unused, unexpired code from before the revocation could silently regain access.
+  const latestRevocation = events
+    .filter((event) => event.action === TEAM_AUDIT_ACTIONS.ACCESS_REVOKED)
+    .sort((a, b) => timeOf(b) - timeOf(a))[0];
+  if (latestRevocation && timeOf(latestRevocation) >= timeOf(challenge)) {
+    return { ok: false, status: 400, error: "That verification is no longer valid. Ask an administrator to start a new one." };
   }
   const failedAttempts = events.filter(
     (event) => event.action === TEAM_AUDIT_ACTIONS.VERIFICATION_FAILED && event.metadata?.challengeId === challengeId,

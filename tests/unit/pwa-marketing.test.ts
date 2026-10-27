@@ -53,6 +53,11 @@ describe("installable PWA", () => {
     expect(installer).toContain('data-pwa-online="false"');
     expect(installer).toContain("beforeinstallprompt");
     expect(installer).not.toContain("toLocale");
+    // Real users still get the service worker; only automated browser harnesses are skipped,
+    // and the dedicated PWA harness opts back in so it measures the real registration.
+    expect(installer).toContain("navigator.webdriver === true");
+    const harness = read("scripts/browser/pwa-evidence.mjs");
+    expect(harness).toContain('Object.defineProperty(navigator, "webdriver"');
   });
 
   it("caches only safe public static assets and never HTML, APIs or private pages", () => {

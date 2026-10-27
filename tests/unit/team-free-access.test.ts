@@ -21,7 +21,18 @@ vi.mock("@/lib/db", () => ({
     user: { findUnique: vi.fn(async () => mocks.user) },
     business: { findUnique: vi.fn(async () => mocks.business) },
     auditEvent: {
-      findMany: vi.fn(async () => [...mocks.events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())),
+      // Respect the action filter and `take` bound, exactly as Prisma would. This makes the
+      // bounded-history regressions below meaningful instead of silently seeing every event.
+      findMany: vi.fn(async (args?: any) => {
+        const where = args?.where ?? {};
+        const actions: string[] | undefined = where.action?.in;
+        const rows = [...mocks.events]
+          .filter((event) => event.targetType === where.targetType && event.targetId === where.targetId)
+          .filter((event) => !actions || actions.includes(event.action))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        const limited = typeof args?.take === "number" ? rows.slice(0, args.take) : rows;
+        return limited.map(({ action, createdAt, metadata }) => ({ action, createdAt, metadata }));
+      }),
     },
   },
 }));
@@ -122,6 +133,14 @@ describe("pure decision function", () => {
     expect(deriveTeamFreeAccess({ ...base, events: [] }).reason).toBe("NO_GRANT");
   });
 
+  it("binds a grant to the SAME one-time challenge as its verification", () => {
+    const otherChallenge = { ...verified, metadata: { ...verified.metadata, challengeId: "c2" } };
+    const otherGrant = { ...granted, metadata: { ...granted.metadata, challengeId: "c2" } };
+    expect(deriveTeamFreeAccess({ ...base, events: [otherChallenge, granted] }).entitled).toBe(false);
+    expect(deriveTeamFreeAccess({ ...base, events: [verified, otherGrant] }).entitled).toBe(false);
+    expect(deriveTeamFreeAccess({ ...base, events: [otherChallenge, otherGrant] }).entitled).toBe(true);
+  });
+
   it("never honours a grant alone, a URL-style flag or an unverified signup number", () => {
     expect(deriveTeamFreeAccess({ phone: "0712345678", fingerprint: fp("0712345678"), events: [verified, granted] }).reason).toBe("NOT_ALLOWLISTED");
     expect(deriveTeamFreeAccess({ ...base, events: [{ action: "SOME_OTHER_EVENT", createdAt: new Date(), metadata: { teamFreeAccess: true } }] }).entitled).toBe(false);
@@ -135,6 +154,19 @@ describe("pure decision function", () => {
 });
 
 describe("trusted server-side verification chain", () => {
+  function pushRecentNoise(count: number) {
+    const later = Date.now() + 10_000;
+    for (let i = 0; i < count; i += 1) {
+      mocks.events.push({
+        action: TEAM_AUDIT_ACTIONS.VERIFICATION_FAILED,
+        targetType: "USER",
+        targetId: "user-1",
+        metadata: JSON.stringify({ challengeId: `noise-${i}`, attempt: i }),
+        createdAt: new Date(later + i),
+      });
+    }
+  }
+
   it("stores only a hash of the code and never a plaintext number or privilege flag", async () => {
     const start = await startTeamPhoneVerification("admin-1", "user-1");
     expect(start.ok).toBe(true);
@@ -184,6 +216,91 @@ describe("trusted server-side verification chain", () => {
     expect((await getTeamAccessStatus("user-1")).reason).toBe("REVOKED");
     expect(hasVerifiedPublicationRight({ paidPayment: null, subscription: null })).toBe(false);
     expect(canSetPublished(true, { verifiedPayment: false })).toBe(false);
+  });
+
+  it("rejects replay of a used one-time code and cannot re-grant after revocation", async () => {
+    const start = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!start.ok) throw new Error("start failed");
+    expect((await verifyTeamPhoneCode("user-1", start.code)).ok).toBe(true);
+    const grantsBefore = mocks.events.filter((event) => event.action === TEAM_AUDIT_ACTIONS.ACCESS_GRANTED).length;
+    const replay = await verifyTeamPhoneCode("user-1", start.code);
+    expect(replay.ok).toBe(false);
+    expect(replay.error).toMatch(/already been used/i);
+    expect(mocks.events.filter((event) => event.action === TEAM_AUDIT_ACTIONS.ACCESS_GRANTED).length).toBe(grantsBefore);
+
+    expect((await revokeTeamAccess("admin-1", "user-1")).ok).toBe(true);
+    const replayAfterRevoke = await verifyTeamPhoneCode("user-1", start.code);
+    expect(replayAfterRevoke.ok).toBe(false);
+    expect((await getTeamAccessStatus("user-1")).reason).toBe("REVOKED");
+  });
+
+  it("invalidates a challenge issued before a revocation and requires a fresh admin challenge", async () => {
+    const stale = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!stale.ok) throw new Error("start failed");
+    expect((await revokeTeamAccess("admin-1", "user-1")).ok).toBe(true);
+    const staleUse = await verifyTeamPhoneCode("user-1", stale.code);
+    expect(staleUse.ok).toBe(false);
+    expect(staleUse.error).toMatch(/no longer valid|new one/i);
+    expect((await getTeamAccessStatus("user-1")).entitled).toBe(false);
+
+    // A deliberate NEW admin-initiated verification (after the revocation) can restore access.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const fresh = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!fresh.ok) throw new Error("fresh start failed");
+    expect((await verifyTeamPhoneCode("user-1", fresh.code)).ok).toBe(true);
+    expect((await getTeamAccessStatus("user-1")).entitled).toBe(true);
+  });
+
+  it("enforces the five-attempt limit and rejects an expired code", async () => {
+    const start = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!start.ok) throw new Error("start failed");
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await verifyTeamPhoneCode("user-1", "000000")).ok).toBe(false);
+    }
+    expect((await verifyTeamPhoneCode("user-1", start.code)).status).toBe(429);
+    expect((await getTeamAccessStatus("user-1")).entitled).toBe(false);
+
+    // Fresh challenge, then force its expiry in the append-only metadata.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!second.ok) throw new Error("second start failed");
+    const event = mocks.events.find((row) => row.action === TEAM_AUDIT_ACTIONS.VERIFICATION_STARTED && JSON.parse(row.metadata).challengeId === second.challengeId);
+    const meta = JSON.parse(event.metadata);
+    meta.expiresAt = new Date(Date.now() - 1000).toISOString();
+    event.metadata = JSON.stringify(meta);
+    const expired = await verifyTeamPhoneCode("user-1", second.code);
+    expect(expired.status).toBe(400);
+    expect(expired.error).toMatch(/expired/i);
+    expect((await getTeamAccessStatus("user-1")).entitled).toBe(false);
+  });
+
+  it("keeps a revocation effective beyond the bounded recent-event window", async () => {
+    const start = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!start.ok) throw new Error("start failed");
+    expect((await verifyTeamPhoneCode("user-1", start.code)).ok).toBe(true);
+    expect((await getTeamAccessStatus("user-1")).entitled).toBe(true);
+    expect((await revokeTeamAccess("admin-1", "user-1")).ok).toBe(true);
+
+    // A later flood of failed-attempt audit rows must not push the revocation out of the
+    // decision window and silently restore a lapsed grant.
+    pushRecentNoise(150);
+    const status = await getTeamAccessStatus("user-1");
+    expect(status.reason).toBe("REVOKED");
+    expect(status.entitled).toBe(false);
+  });
+
+  it("keeps a consumed OTP rejected beyond the bounded recent-event window", async () => {
+    const start = await startTeamPhoneVerification("admin-1", "user-1");
+    if (!start.ok) throw new Error("start failed");
+    expect((await verifyTeamPhoneCode("user-1", start.code)).ok).toBe(true);
+    const grantsBefore = mocks.events.filter((event) => event.action === TEAM_AUDIT_ACTIONS.ACCESS_GRANTED).length;
+
+    pushRecentNoise(150);
+    const replay = await verifyTeamPhoneCode("user-1", start.code);
+    expect(replay.ok).toBe(false);
+    expect(replay.status).toBe(400);
+    expect(mocks.events.filter((event) => event.action === TEAM_AUDIT_ACTIONS.ACCESS_GRANTED).length).toBe(grantsBefore);
+    expect(mocks.events.filter((event) => event.action === TEAM_AUDIT_ACTIONS.PHONE_VERIFIED).length).toBe(1);
   });
 
   it("fails closed when the audit store cannot be read", async () => {

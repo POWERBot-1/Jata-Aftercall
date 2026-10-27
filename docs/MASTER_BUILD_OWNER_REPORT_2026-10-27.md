@@ -2,7 +2,7 @@
 
 **Audience:** repository owner / release approver.
 **Branch:** `arena/12e0b318-jata-aftercall` (base `main` at `d8aa996e432374af8176bb81858c0d1d85dc6525`).
-**Status:** development work and evidence prepared; **NOT merged, NOT deployed, NOT published**.
+**Status:** final independent review complete; remediation applied on the PR #70 branch. Merge and production deployment are **conditionally authorised by the owner for PR #70 only**, subject to all mandatory release gates passing on the final head. At the time this addendum was written the merge/deploy had **not yet been executed**; authoritative post-merge results are in the task completion message.
 No production data, billing, DNS, environment variable, storage configuration or external account was
 changed. No payment was made and no store account was accessed.
 
@@ -82,10 +82,11 @@ local build of this branch (see §F and `docs/evidence/README.md`).
 | B3 | React console warning `Invalid DOM property fetchpriority. Did you mean fetchPriority?` on homepage in real Chrome. | Three landing components used the lowercase attribute via a cast; Next 16's React 19 expects camelCase. | `components/landing/Hero.tsx`, `components/landing/DemoShowcase.tsx`, `components/storefront/DemoShowcaseBand.tsx`; matching source-contract tests updated. | `tests/unit/demo-contact-actions.test.ts`, `tests/unit/landing-content.test.ts`, `tests/unit/landing-motion.test.ts` | `noConsoleErrors = true` in all 54 Chromium captures. A React 18 SSR warning still appears in vitest because the workspace `react` package is 18.3 while Next 16's runtime is React 19; this is a test-environment artefact, not a browser error. |
 | B4 | Share fell back to a manual “copy this link” message even when a clipboard was available in headless/Android-like contexts. | Only `navigator.share` and `navigator.clipboard.writeText` were attempted. | `lib/contactActions.ts`, `lib/shareClipboard.ts`, both contact components. | `tests/unit/demo-contact-actions.test.ts` (native, clipboard, legacy, manual, cancelled cases) | Real Chrome Share click produced “Link copied…” on all four demos at 390×844. |
 | B5 | No working demo links on the homepage and demo pages not labelled as fictional. | Owner-bound verifier mismatch (inference, **NOT VERIFIED** via DB). | `lib/demoContact.ts#isPublicDemoRow` (fixed slug + exact fictional name + no real payments), `app/page.tsx`, `app/b/[slug]/page.tsx` | `tests/unit/demo-contact-actions.test.ts` | Code-level and local-browser PASS; production **NOT VERIFIED**. |
-| B6 | No secure team entitlement existed. | Feature absent. | See §D / §E. | `tests/unit/team-free-access.test.ts` (23 tests) | Targeted tests PASS; no production grant made. |
+| B6 | No secure team entitlement existed. | Feature absent. | See §D / §E. | `tests/unit/team-free-access.test.ts` (29 tests after final review) | Targeted tests PASS; no production grant made. |
 | B7 | `next.config.js` broke the vm-based header test after adding the client/server bundle guard. | A top-level `require("node:path")` was added; the test evaluates config in a context without `require`. | `next.config.js` (now uses `process.cwd()` lazily) | `tests/unit/local-preview-headers.test.ts` | PASS. |
 | B8 | Six new lint errors and one new warning from new JSX/PWA code. | Unescaped apostrophes; `setState` inside an effect. | New marketing/team/PWA files; `PwaInstaller` now uses `useSyncExternalStore`. | `npm run lint` | 0 errors, 41 warnings — identical warning count to baseline. |
 | B9 | PR #70's required `Journey against a real database` CI check failed at `retail: actual SSR UTC home` (340 passed, 1 failed). | The new service worker controlled navigations; Chrome reports `null` instead of an HTTP response for SW-served navigations when `navigator.webdriver` is set, so the repository's real-DB browser harness saw `undefined !== 200`. | `components/pwa/PwaInstaller.tsx` skips SW registration in automated browser contexts; `scripts/browser/pwa-evidence.mjs` overrides `navigator.webdriver` to keep measuring the real PWA; evidence README documents the boundary. | Local reproduction with Chromium: with `webdriver=true`, `/privacy` returned 200 and no controller; with the override, the SW registered/activated and offline notice still served. CI rerun is recorded on PR #70. | Reproduced and fixed locally; see §H for the authoritative CI status at review time. |
+| B10 | Independent final review of PR #70 found that `verifyTeamPhoneCode` allowed replay of an already-consumed one-time code within its TTL, could re-grant after revocation using an unused stale challenge, and that `readTeamEvents`' single 100-row window could let later failed attempts hide a revocation or consumed OTP. Separately, `isPublicDemoRow` assumed `paymentReferences` was always an array, the Terms page implied a self-service full account deletion screen that does not exist, and the PWA automation guard was not pinned by a source test. | OTP consumption and challenge lifetime were not bound to grant validity; audit-history truncation was treated as harmless; defensive input and honest legal copy were missing. | `lib/team-access.ts` (challenge-bound grants, consumed-code rejection, pre-revocation challenge invalidation, durable grant/revoke/consumption reads), `lib/demoContact.ts`, `app/terms/page.tsx`, `tests/unit/team-free-access.test.ts`, `tests/unit/pwa-marketing.test.ts`. | 6 new team-access regressions (replay, post-revocation replay, stale challenge, fresh challenge, bounded-window revocation, bounded-window consumed OTP) and 1 new PWA automation-boundary test; existing 22 team-access tests retained. | Targeted suite PASS; see §H for full-suite, CI and release-gate results on the final head. No production grant, migration or data change was made. |
 
 **Not fixed / out of scope (verified but not changed):** stale production demo copy still says
 “Today only”, “This week only”, “verified listings, no brokers” and “viewing this weekend” on
@@ -266,8 +267,8 @@ green on the base commit (§0).
 
 | # | Command | Exit | Genuine result |
 | --- | --- | --- | --- |
-| 1 | `npx vitest run <17 targeted files>` (new contact/team/PWA tests + publication, subscription, AI, POS, Autopilot, Qi, R2, admin, landing suites) | **0 — PASS** | 17 files, **282 passed**, 0 failed. |
-| 2 | `npm test` (`vitest run`, full suite) | **1 — FAIL (pre-existing)** | 258 files: 242 passed, 15 skipped, **1 failed**; 3221 tests: 3099 passed, 121 skipped, **1 failed**. Sole failure: `tests/unit/autopilot-phase1-hardening.test.ts` — `Prisma.dmmf` undefined because engines cannot be generated offline. The file is unchanged from `main`; running it alone reproduces the same `TypeError`. |
+| 1 | `npx vitest run <17 targeted files>` (new contact/team/PWA tests + publication, subscription, AI, POS, Autopilot, Qi, R2, admin, landing suites) | **0 — PASS** | 17 files, **288 passed**, 0 failed (after the B10 regressions were added). |
+| 2 | `npm test` (`vitest run`, full suite) | **1 — FAIL (pre-existing)** | 258 files: 242 passed, 15 skipped, **1 failed**; 3227 tests: 3105 passed, 121 skipped, **1 failed**. Sole failure: `tests/unit/autopilot-phase1-hardening.test.ts` — `Prisma.dmmf` undefined because engines cannot be generated offline. The file is unchanged from `main`; running it alone reproduces the same `TypeError`. |
 | 3 | `npm run lint` | **0 — PASS** | 0 errors, **41 warnings** — the same warning count as baseline. Six new `react/no-unescaped-entities` errors and one new `setState-in-effect` warning introduced during development were fixed. |
 | 4 | `npm run typecheck` (`tsc --noEmit`) | **2 — FAIL (pre-existing)** | 4 errors, all in `tests/prisma/*` and the DMMF unit test, all caused by the ungenerated Prisma client. No application or component type errors. |
 | 5 | `npm run build` | **1 — FAIL (pre-existing type-check)** | `✓ Compiled successfully` (webpack) then 4 pre-existing TypeScript errors. No new error from this work (one temporary `never[]` inference error in `tests/unit/landing-content.test.ts` was fixed by annotating `string[]`). |
@@ -276,11 +277,12 @@ green on the base commit (§0).
 | 8 | `npm run test:e2e:pos` | **0 — PASS (self-skipped)** | 22 skipped without a real database. Real-DB E2E remains **NOT TESTED** here; CI `Journey against a real database` passed on the base commit. |
 | 9 | `npm audit --omit=dev` / `npm audit --json` | **0 — PASS** | 0 vulnerabilities (production and full trees). |
 | 10 | `git diff --check` (with `git add -N .` so untracked files are included) | **0 — PASS** | No whitespace errors. |
-| 11 | Client-bundle grep over `.next/static` | **PASS** | 0 files matched any authorised team number, `AUTHORIZED_TEAM_PHONES`, `TEAM_AUDIT_ACTIONS`, `node:crypto`, `writeAuditEvent` or internal verification action names. |
+| 11 | Client-bundle grep over `.next/static` for **actual privileged values** (`JATA_TEAM_*` action strings, the three allowlisted numbers in 07/254 forms, `node:crypto`, `prisma.auditEvent`, `writeAuditEvent`) | **PASS** | **0 files matched.** One chunk contains the intentional fail-closed `lib/teamAccessStub.ts` with `TEAM_AUDIT_ACTIONS` keys mapped to empty strings and `AUTHORIZED_TEAM_PHONES = Object.freeze([])`; that is the designed client/server boundary, not a leak. The real server action values and allowlist are absent. |
 | 12 | `node scripts/browser/contact-actions-evidence.mjs` (real Chromium, local dev server) | **0 — PASS** | 54 captures; `allFourActionsEveryDemoViewport`, `allTouchTargets`, `allCorrectDestinations`, `noHorizontalOverflow`, `noConsoleErrors`, `shareFallbackWorks`, `manifestLinked` all true. |
 | 13 | `node scripts/browser/pwa-evidence.mjs` phases `prime` + `offline` (real Chromium, local production build, server stopped for offline) | **0 — PASS** | `manifestValid`, `serviceWorkerRegistered`, `assetsReachable`, `noApiOrHtmlCached`, `onlySafeAssetsCached`, `noConsoleErrors`, `offlineNoticeServed` all true. |
 | 14 | `npx next start -p 3002` + `curl` route smoke against the final production build | **PASS** | `/products`, `/pricing`, `/faq`, `/help`, `/contact`, `/install`, `/privacy`, `/terms`, `/products/business-page`, `/manifest.json`, `/sw.js`, `/offline.html` all HTTP 200; dev-only `/dev/contact-actions` and `/dev/contact-actions/nyumbani-kitchen` correctly HTTP 404. |
-| 15 | PR #70 GitHub Actions (initial run, then rerun after the B9 fix) | **See PR #70** | Initial run: 12 checks passed, `Journey against a real database` **FAILED** and `Real-Chrome six-viewport capture` pending; the failure was reproduced locally and fixed (B9). The rerun and its authoritative conclusion are recorded on the PR; this report does not claim a pass before it is observed. |
+| 15 | PR #70 GitHub Actions (initial run, then rerun after the B9 fix) | **PASS on `f16194c`** | Initial run: 12 checks passed, `Journey against a real database` **FAILED** and `Real-Chrome six-viewport capture` pending; the failure was reproduced locally and fixed (B9). The rerun on `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` produced **14/14 checks PASS**, including `Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, `Static (install, generate, lint, typecheck, audit)`, `Real-Chrome six-viewport capture on a disposable database` and `Vercel`. |
+| 16 | Final independent-review remediation (B10) — authoritative CI, merge and deployment | **See final owner message** | A dedicated remediation commit follows `f16194c`. Its final head SHA, per-check CI conclusion, merge SHA/method/state, Vercel production deployment identity and read-only smoke results are reported in the task completion message and on PR #70; this report does not predict a green result before it is observed. |
 
 ### PASS / FAIL / BLOCKED / NOT TESTED matrix (requested areas)
 
@@ -304,7 +306,8 @@ green on the base commit (§0).
 | Google Play / App Store build, submission, publication | **BLOCKED / NOT STARTED** |
 | Accessibility (labels, focus, touch targets, contrast) | **PASS** for measured controls locally; full WCAG audit **NOT TESTED** |
 | Dependency security | **PASS** (`npm audit`) |
-| Full unit suite / build gate | **FAIL** — one pre-existing offline DMMF test and four pre-existing offline Prisma type errors; webpack compile and all new tests **PASS** |
+| Full unit suite / build gate (local offline) | **FAIL** — one pre-existing offline DMMF test and four pre-existing offline Prisma type errors; webpack compile and all new tests **PASS** |
+| Full unit suite / build gate (CI with generated Prisma) | **MANDATORY GATE** — must be **PASS** on the final head before merge; `f16194c` achieved 14/14 including `Static`, `Journey against a real database` and `Release gate (aggregate)` |
 
 ---
 
@@ -350,11 +353,11 @@ green on the base commit (§0).
 | --- | --- |
 | Development complete (implemented scope) | **YES** |
 | PR ready | **YES — see §K** |
-| Approved for merge | **NO** — owner authorization required |
-| Merged | **NO** |
-| Approved for deployment | **NO** — separate explicit authorization required |
-| Deployed | **NO** — production still serves `d8aa996` |
-| Production verified after this change | **NO — NOT VERIFIED** |
+| Approved for merge | **YES (conditional)** — owner authorized PR #70 merge only after all mandatory release gates pass on the final head |
+| Merged | **NO at time of writing** — see final owner message |
+| Approved for deployment | **YES (conditional)** — same owner directive authorizes deploying the resulting approved `main` commit, with no env/DNS/billing/data changes |
+| Deployed | **NO at time of writing** — see final owner message |
+| Production verified after this change | **NO at time of writing — NOT VERIFIED**; see final owner message for post-deploy smoke results |
 | Submitted to Google Play | **NO** |
 | Published on Google Play | **NO** |
 | Submitted to Apple App Store | **NO** |
@@ -369,8 +372,45 @@ No later stage is marked complete because an earlier stage passed.
 Filled after the push and PR creation; these values are factual, not predicted.
 
 - **Implementation commit SHA:** `a09f913f0bb2e0dddb3ddefe99904145fa3c924e` — contains all source, tests, evidence and the four documents.
-- **Follow-up commits:** `d42298a16b974c4ee0a9923f8291c5e5110d30e6` records the PR URL in this report; a further commit applies the B9 service-worker/automation fix and final report updates. The **final PR head SHA** is reported in the final owner message (`git rev-parse HEAD`) and in `gh pr view 70`.
+- **Follow-up commits:** `d42298a16b974c4ee0a9923f8291c5e5110d30e6` records the PR URL in this report; `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` applies the B9 service-worker/automation fix and final report updates (14/14 CI checks PASS). A dedicated B10 independent-review remediation commit follows it; its SHA and the **final PR head SHA** are reported in the final owner message (`git rev-parse HEAD`) and in `gh pr view 70`.
 - **PR URL:** <https://github.com/POWERBot-1/Jata-Aftercall/pull/70>
 - **PR:** #70, base `main`, head `arena/12e0b318-jata-aftercall`, state **OPEN**.
-- **Merge/deploy:** **NOT PERFORMED**. Owner authorization is required separately for each.
+- **Merge/deploy:** conditional owner authorization received for PR #70 only; **NOT PERFORMED at the time of writing**. Authoritative result is in the final owner message and §J.
 - **Production data, DNS, environment, storage, billing, store:** **NOT CHANGED**.
+
+---
+
+## L. Final independent-review addendum (2026-10-27)
+
+An independent final review of the complete `main...HEAD` diff was performed after PR #70 had reached
+14/14 green checks on `f16194c`. It found and fixed the substantiated defects recorded as **B10**
+above. No pricing, customer entitlement, original design-system, allowlist, billing, DNS, email,
+storage, production data or migration was changed.
+
+Local verification on the remediation tree (exact commands and exit codes in §H):
+
+- Targeted 17-file suite: **PASS**, 288 tests, exit 0.
+- Full `npm test`: **FAIL (pre-existing, environment-only)** — 3105 passed / 121 skipped / 1 failed;
+  the single failure is the unchanged `Prisma.dmmf` test that cannot run because the sandbox blocks
+  Prisma engine downloads. CI with a generated client is the authoritative gate.
+- `npm run lint`: **PASS**, 0 errors / 41 warnings, exit 0.
+- `npm run typecheck`: **FAIL (pre-existing, environment-only)** — the same four ungenerated-Prisma
+  errors, no application or component type errors, exit 2.
+- `npm run build`: **FAIL (pre-existing, environment-only)** — webpack `✓ Compiled successfully`,
+  then the same four typecheck errors, exit 1. A diagnostic build with `tests/**` temporarily
+  excluded from `tsconfig.json` completed successfully earlier; it is not a CI proposal.
+- `npm audit --omit=dev`: **PASS**, 0 vulnerabilities, exit 0.
+- `git diff --check`: **PASS**, exit 0.
+- Client-bundle scan: **PASS** — no real allowlisted number, server audit action value, Node crypto
+  import, Prisma audit query or `writeAuditEvent` in `.next/static`; only the intentional empty
+  fail-closed stub keys appear in one chunk.
+- `npm run test:e2e` / `test:e2e:pos`: **PASS (self-skipped)** without a real database; the CI
+  `Journey against a real database` check is the authoritative real-DB result.
+
+**Release rule applied:** because the local full-suite/typecheck/build failures are caused solely by
+the offline Prisma stub, merge is permitted **only if the final remediation head passes all required
+CI checks in the generated-Prisma environment**, including `Static`, `Journey against a real
+database`, `Migration target guard`, `Release gate (aggregate)`, `Real-Chrome six-viewport capture`
+and `Vercel`. The exact final-head CI conclusion, merge SHA/method/state, Vercel production
+deployment identity and read-only production smoke results are reported in the task completion
+message rather than predicted here. Authenticated production write journeys remain **NOT TESTED**.
