@@ -16,13 +16,14 @@ on:
   pull_request:
     branches: [main]
 
-# Only one run per PR at a time; a newer push supersedes the older run.
+# Only one run per trigger kind at a time; dispatch and pull_request runs use separate groups so
+# an evidence-publishing dispatch run is not cancelled by the PR run its push synchronises.
 concurrency:
-  group: premium-screenshots-${{ github.ref }}
+  group: premium-screenshots-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   screenshots:
@@ -106,6 +107,15 @@ jobs:
           BASE_URL=http://localhost:4100 SHOT_DIR=./premium-shots \
             npm run test:browser:premium-screenshots 2>&1 | tee /tmp/premium-shots.log
 
+      - name: Show evidence summary in the Actions log
+        if: always()
+        run: |
+          if [ -f premium-shots/summary.log ]; then
+            cat premium-shots/summary.log
+          else
+            echo "No summary.log produced (capture did not start)."
+          fi
+
       - name: Upload screenshot evidence artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -114,3 +124,37 @@ jobs:
           path: premium-shots/
           retention-days: 14
           if-no-files-found: error
+
+      # Retrieval channel for restricted egress environments: dispatch runs commit the evidence
+      # into the SAME session branch under verification/evidence (a pull_request-triggered run
+      # never does this, so there is no push/run loop). The commit is transient by design — the
+      # branch is reset to the code-only head after evidence is retrieved; it is not product code.
+      - name: Publish visual evidence into the session branch (dispatch only)
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -d premium-shots ] || [ -z "$(ls -A premium-shots 2>/dev/null)" ]; then
+            echo "No evidence captured; skipping branch publish."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p verification/evidence
+          rm -rf "verification/evidence/run-${GITHUB_RUN_ID}"
+          cp -r premium-shots "verification/evidence/run-${GITHUB_RUN_ID}"
+          cat > verification/evidence/README.md <<'MD'
+          # Transient visual evidence (not product code)
+
+          Real-Chrome screenshots produced by `.github/workflows/premium-screenshots.yml` on a
+          disposable PostgreSQL database with the fictional seeded demo user. This directory is
+          pushed only by manually dispatched runs and is removed from the branch once reviewed.
+          The durable evidence channel is the workflow artifact (`premium-screenshots-*`).
+          MD
+          git add verification/evidence
+          if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
+            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "Evidence push declined (branch protection?) — artifact remains available."
+          else
+            echo "Nothing to commit."
+          fi
