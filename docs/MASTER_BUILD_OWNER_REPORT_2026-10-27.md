@@ -197,8 +197,8 @@ production admin/member journeys.
   multiple dedicated feature branches could not be honoured without leaving the tracked branch).
 - **Base / HEAD:** `main` at `d8aa996e432374af8176bb81858c0d1d85dc6525`; working tree changes
   are uncommitted at the time of writing and will be recorded below after commit.
-- **Commit SHA:** *PENDING FINAL COMMIT — see §K, added after push.*
-- **PR URL:** *PENDING PR CREATION — see §K, added after push.*
+- **Implementation commit SHA:** `a09f913f0bb2e0dddb3ddefe99904145fa3c924e` (see §K).
+- **PR URL:** <https://github.com/POWERBot-1/Jata-Aftercall/pull/70> (see §K).
 - **Changed files:** 133 files (including 56 screenshots and 2 machine-readable evidence files).
   Core source changes are grouped in §B–D and §F; no `package.json`, `package-lock.json`,
   `prisma/schema.prisma`, migration, `.env*`, Paystack route, webhook, plan price or entitlement
@@ -364,9 +364,11 @@ No later stage is marked complete because an earlier stage passed.
 
 ## K. Commit and PR record
 
-*Filled after the final push and PR creation; the values below are factual, not predicted.*
+Filled after the push and PR creation; these values are factual, not predicted.
 
-- Commit SHA: **PENDING**
-- PR URL: **PENDING**
-- PR state: **PENDING**
-- Merge/deploy: **NOT PERFORMED**
+- **Implementation commit SHA:** `a09f913f0bb2e0dddb3ddefe99904145fa3c924e` — contains all source, tests, evidence and the four documents.
+- **PR URL:** <https://github.com/POWERBot-1/Jata-Aftercall/pull/70>
+- **PR:** #70, base `main`, head `arena/12e0b318-jata-aftercall`, state **OPEN**.
+- **Final PR head:** a documentation-only follow-up commit updates this §K section; its SHA is reported in the final owner message (`git rev-parse HEAD`). It changes no application code.
+- **Merge/deploy:** **NOT PERFORMED**. Owner authorization is required separately for each.
+- **Production data, DNS, environment, storage, billing, store:** **NOT CHANGED**.
