@@ -145,6 +145,70 @@ can stall TLS), CAA (absence is what permits automatic certificate issuance), an
 
 ---
 
+## 4.1 Continuation pass — integration route audit (re-run 2026-10-27)
+
+The blocker was re-investigated against every plausible authorized route. **No route exists.** This
+is a negative result about the *platform*, not an untried step.
+
+### 4.1.1 Connector inventory — all probes returned `unsupported`
+
+| Connector slug probed | Result |
+| --- | --- |
+| `hostafrica` | **unsupported** |
+| `cloudflare` | **unsupported** |
+| `namecheap` | **unsupported** |
+| `godaddy` | **unsupported** |
+| `hostinger` | **unsupported** |
+| `route53` | **unsupported** |
+| `aws` | **unsupported** |
+| `dns` (generic) | **unsupported** |
+
+Connected apps available to this workflow remain: gmail, google_docs, google_drive, google_sheets,
+google_slides, vercel. **None of them can edit DNS at an external provider.**
+
+Why Vercel cannot substitute: the Vercel connector exposes **no DNS-record tools at all** (only
+domain attach/detach/config), and the domain object reports `zone: false`, `serviceType: external`.
+Vercel's DNS editor requires the domain to use **Vercel nameservers**, which the owner has
+prohibited. This route is closed by design, not by missing tooling.
+
+### 4.1.2 CI / repository route — no authorized path
+
+| Probe | Result |
+| --- | --- |
+| Workflows touching DNS (`grep -i dns\|hostafrica\|cloudflare` over `.github/workflows/`) | **none** — 5 workflows, all build/test/smoke |
+| Actions secret names (`gh secret list`) | **HTTP 403 — Resource not accessible by integration** (token lacks Actions read scope) |
+| DNS provider credentials in repo / `.env.example` | **none** — the only "Cloudflare" references are R2 object storage |
+| DNS credentials in Vercel project env | **none** |
+
+Writing a new workflow to apply DNS changes would require (a) a credential whose existence cannot
+even be enumerated, and (b) a workflow/commit change. Neither is authorized, and it would be an
+attempt to route around an access boundary rather than a legitimate authorized integration.
+
+### 4.1.3 Consequence
+
+**Phase B remains BLOCKED. Exactly one thing is missing: an authorized HOSTAFRICA DNS-management
+credential or connection presented to this workflow.** Nothing else about the task is unresolved —
+the change set is confirmed, the baseline is captured, and the rollback state is exact.
+
+### 4.1.4 State re-verified in the continuation pass — nothing drifted
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Both domains still attached to `jata-aftercall` | **PASS** | both `verified: true`, `redirect: null` |
+| Rank-1 values unchanged | **PASS** | `216.198.79.1`, `64.29.17.1`, `2da49677b2414cfd.vercel-dns-017.com.` |
+| Apex/`www` still at HOSTAFRICA | **PASS** | `102.218.215.41` on both |
+| Zone unchanged since baseline | **PASS** | SOA serial still **`2026100802`** |
+| Email records unchanged | **PASS** | MX `10 mail.…`, SPF identical, NS `dan1–dan4`, `mail`/`smtp`/`pop`/`ftp` all `.41` |
+| No DKIM / DMARC appeared | **PASS** | `_dmarc`, `default._domainkey`, `mail._domainkey` → NXDOMAIN |
+| `www` still not connected | **FAIL (as expected)** | returns **"webserver is functioning normally"** (HOSTAFRICA placeholder) |
+| Generated-URL origin unchanged | **PASS** | `robots.txt` → `sitemap: https://jata-aftercall.vercel.app/sitemap.xml` |
+
+TTL drift observed in this pass (apex 1885 s, `www` 1909 s, SPF 2900 s) is ordinary recursive-cache
+decay of 3600 s records, **not** a zone edit — the SOA serial proves the zone itself is untouched.
+
+
+---
+
 ## 5. Post-execution verification — all NOT TESTED
 
 Nothing was executed, so every live check is **NOT TESTED**. These are the exact checks to run after
