@@ -375,6 +375,20 @@ describe("demo cards", () => {
       expect(card.story).not.toMatch(/KES\s?[\d,]+/);
     }
   });
+
+  it("eager-loads the active showcase panel and lazy-loads the hidden panels", () => {
+    // Regression for the blank showcase image: the first panel must not depend on an
+    // IntersectionObserver before it can paint; the three hidden panels stay lazy.
+    const cards = buildLandingDemoCards(null);
+    const markup = renderToStaticMarkup(createElement(DemoShowcase, { cards }));
+    const eager = markup.match(/<img[^>]*loading="eager"[^>]*>/g) ?? [];
+    const lazy = markup.match(/<img[^>]*loading="lazy"[^>]*>/g) ?? [];
+    expect(eager).toHaveLength(1);
+    expect(eager[0]).toContain(`${cards[0].image}.jpg`);
+    expect(eager[0]).toContain('fetchpriority="high"');
+    expect(lazy).toHaveLength(cards.length - 1 + 1); // three hidden panels + the property inset frame
+    expect(lazy.every((img) => !img.includes(cards[0].image))).toBe(true);
+  });
 });
 
 describe("landing imagery on disk", () => {

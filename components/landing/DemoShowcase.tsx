@@ -104,6 +104,9 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
                     endpoint is not part of this deployment. Both sources are lazy so a slow
                     connection only fetches the panel the visitor actually opens.
                   */}
+                  {/* The active (first) panel is the one visitors meet when they scroll to the
+                      section: eager loading avoids a blank cream band on slow connections and
+                      makes the LCP-adjacent media deterministic; hidden panels stay lazy. */}
                   <img
                     src={`${card.image}.jpg`}
                     srcSet={`${card.image}-720.jpg 720w, ${card.image}.jpg 1100w`}
@@ -111,7 +114,8 @@ export function DemoShowcase({ cards }: { cards: LandingDemoCard[] }) {
                     alt={card.imageAlt}
                     width={1100}
                     height={684}
-                    loading="lazy"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    {...(index === 0 ? ({ fetchpriority: "high" } as Record<string, string>) : {})}
                     decoding="async"
                   />
                 </picture>

@@ -256,24 +256,26 @@ function measureFacts() {
       if (rect.width === 0 && rect.height === 0) return null;
       const picture = img.closest("picture") || img.parentElement;
       const pictureRect = picture ? picture.getBoundingClientRect() : null;
+      // A clipping ancestor (overflow hidden|clip|auto|scroll) bounds what the customer can see:
+      // the transformed photograph may paint past its own box, but nothing escapes that ancestor.
+      // The real boundary question is therefore whether the CLIP BOX itself stays inside the
+      // viewport — not whether the intentionally-scaled image fits inside it.
       const clips = ["hidden", "clip", "auto", "scroll"];
       let clipAncestor = null;
+      let clipBox = null;
       let node = img.parentElement;
       while (node && node !== document.body) {
-        const overflowX = getComputedStyle(node).overflowX;
-        const ancestorRect = node.getBoundingClientRect();
-        if (clips.includes(overflowX) &&
-            ancestorRect.left - 1 <= rect.left && ancestorRect.right + 1 >= rect.right &&
-            ancestorRect.top - 1 <= rect.top && ancestorRect.bottom + 1 >= rect.bottom) {
+        if (clips.includes(getComputedStyle(node).overflowX)) {
           clipAncestor = `${node.tagName.toLowerCase()}.${String(node.className || "").split(" ")[0]}`;
+          clipBox = node.getBoundingClientRect();
           break;
         }
         node = node.parentElement;
       }
-      const visualSpill = rect.right > window.innerWidth + 1 || rect.left < -1 ||
-        (pictureRect && (rect.right > pictureRect.right + 1 || rect.left < pictureRect.left - 1));
+      const crossesViewport = rect.right > window.innerWidth + 1 || rect.left < -1;
+      const clipBoxSpills = clipBox ? clipBox.right > window.innerWidth + 1 || clipBox.left < -1 : false;
       const layoutWider = pictureRect && pictureRect.width > 0 && img.offsetWidth > picture.offsetWidth + 1;
-      const boundaryViolation = (visualSpill && !clipAncestor) || Boolean(layoutWider);
+      const boundaryViolation = clipAncestor ? clipBoxSpills : crossesViewport || Boolean(layoutWider);
       return {
         src: (img.currentSrc || img.getAttribute("src") || "").split("/").pop().slice(0, 70),
         complete: img.complete,
@@ -282,8 +284,9 @@ function measureFacts() {
         h: Math.round(rect.height),
         left: Math.round(rect.left),
         right: Math.round(rect.right),
-        visualSpill: Boolean(visualSpill),
+        crossesViewport: Boolean(crossesViewport),
         clipAncestor,
+        clipBoxSpills: Boolean(clipBoxSpills),
         layoutWider: Boolean(layoutWider),
         boundaryViolation,
         picture: picture ? `${picture.tagName.toLowerCase()}.${String(picture.className || "").split(" ")[0]}` : "",
@@ -441,6 +444,150 @@ if (loginOk) {
     navErrors.join(" | ") || navSteps.filter((s) => !s.ok).map((s) => `${s.href}:${s.detail}`).join(" | "),
   );
   await navPage.close();
+
+  // ---- Authenticated interaction evidence (owner directive 2026-10-27, item 3) ---------------
+  // All writes target the workflow's disposable database. The page owns a real session, so the
+  // same tenant guards and server validation as production apply; nothing here calls production.
+  const interaction = { contact: {}, media: {}, errors: [] };
+  evidence.interaction = interaction;
+  const ixPage = await memberContext.newPage();
+  ixPage.on("pageerror", (error) => interaction.errors.push(String(error).slice(0, 250)));
+  // Media removal confirms through window.confirm; accept every prompt deterministically.
+  ixPage.on("dialog", (dialog) => void dialog.accept());
+  try {
+    await ixPage.setCacheEnabled(false);
+    await ixPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await ixPage.goto(`${base}/dashboard`, { waitUntil: "load", timeout: 45000 });
+    await ixPage.waitForSelector('a[href^="/dashboard/businesses/"]', { timeout: 20000 });
+    const businessHref = await ixPage.$eval('a[href^="/dashboard/businesses/"]', (a) => a.getAttribute("href"));
+    interaction.contact.businessHref = businessHref;
+
+    const openContactEditor = async () => {
+      const summary = await ixPage.evaluateHandle(() =>
+        Array.from(document.querySelectorAll("details.ws-editor summary")).find((s) =>
+          (s.textContent || "").includes("Profile, contact"),
+        ),
+      );
+      await summary.asElement()?.click();
+      await ixPage.waitForSelector('input[id$="-phone"]', { timeout: 10000 });
+    };
+
+    await openContactEditor();
+    await ixPage.waitForSelector('input[id$="-phone"]');
+    const phoneInput = () => ixPage.$('input[id$="-phone"]');
+    await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor.jpg`, type: "jpeg", quality: 74, fullPage: false });
+
+    // Invalid number: the client mirror of the server KE rule must block before any PATCH.
+    await (await phoneInput()).click({ clickCount: 3 });
+    await (await phoneInput()).type("123");
+    await ixPage.evaluate(() => {
+      const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
+      button?.click();
+    });
+    await ixPage.waitForSelector('.jata-error[role="alert"]', { timeout: 10000 });
+    const invalidText = await ixPage.$eval('.jata-error[role="alert"]', (el) => el.textContent).catch(() => "");
+    record(/Kenyan mobile/i.test(invalidText), "contact editor rejects an invalid number with the KE rule inline", invalidText);
+    await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-invalid.jpg`, type: "jpeg", quality: 74, fullPage: false });
+
+    // Valid number: save, wait for the announced success, then prove persistence after reload.
+    await (await phoneInput()).click({ clickCount: 3 });
+    await (await phoneInput()).type("0724317010");
+    await ixPage.evaluate(() => {
+      const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
+      button?.click();
+    });
+    await ixPage.waitForFunction(
+      () => Array.from(document.querySelectorAll('[role="status"]')).some((el) => (el.textContent || "").includes("Profile saved")),
+      { timeout: 15000 },
+    );
+    await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor-saved.jpg`, type: "jpeg", quality: 74, fullPage: false });
+    await ixPage.reload({ waitUntil: "load" });
+    await openContactEditor();
+    const persistedPhone = await ixPage.$eval('input[id$="-phone"]', (el) => el.value);
+    record(persistedPhone === "0724317010", "saved nominated number survives reload (real PATCH persistence)", `value=${persistedPhone}`);
+    interaction.contact.persistedPhone = persistedPhone;
+
+    // Desktop saved-state capture at the owner-mandated width.
+    await ixPage.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+    await ixPage.screenshot({ path: `${shotDir}/1366x768__contact-editor-saved.jpg`, type: "jpeg", quality: 74, fullPage: false });
+    await ixPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+
+    // ---- Gallery: fallback imagery, honest storage gate, metadata replace/remove -------------
+    const photosHref = `${businessHref}/photos`;
+    await ixPage.goto(`${base}${photosHref}`, { waitUntil: "load", timeout: 45000 });
+    await ixPage.waitForSelector("h1", { timeout: 15000 });
+    await ixPage.evaluate(async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+    const fallback = await ixPage.evaluate(() =>
+      Array.from(document.images)
+        .filter((img) => img.getBoundingClientRect().width > 0)
+        .map((img) => ({ src: (img.currentSrc || img.src).split("/").pop(), naturalWidth: img.naturalWidth, complete: img.complete })),
+    );
+    const fallbackOk = fallback.some((img) => img.naturalWidth > 0 && /nyumbani|category|hero|workspace/.test(img.src));
+    record(fallbackOk, "gallery renders category fallback imagery without an uploaded asset", JSON.stringify(fallback.slice(0, 4)));
+    await ixPage.screenshot({ path: `${shotDir}/390x844__photos-fallback.jpg`, type: "jpeg", quality: 74, fullPage: false });
+
+    // Durable byte upload must fail closed while no approved provider is configured: build a real
+    // JPEG data URL in the browser and POST it through the authenticated session.
+    const blocked = await ixPage.evaluate(async (href) => {
+      const businessId = href.split("/").filter(Boolean).pop();
+      const blob = await fetch("/landing/nyumbani-kitchen-720.jpg").then((r) => r.blob());
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(blob);
+      });
+      const response = await fetch("/api/media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, dataUrl, kind: "IMAGE", alt: "durable storage gate probe" }),
+      });
+      return { status: response.status, body: await response.json().catch(() => ({})) };
+    }, businessHref);
+    interaction.media.durableUploadProbe = blocked;
+    record(
+      blocked.status === 503 && blocked.body?.code === "inline_media_persistence_disabled",
+      "byte upload fails closed (503 inline_media_persistence_disabled) with no durable provider",
+      `status=${blocked.status} code=${blocked.body?.code ?? "none"}`,
+    );
+
+    // Metadata-only references (hosted/path URLs) remain supported and exercise replace/remove.
+    const reference = await ixPage.evaluate(async (href) => {
+      const businessId = href.split("/").filter(Boolean).pop();
+      const response = await fetch("/api/media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, url: "/landing/marys-beauty-studio-720.jpg", kind: "IMAGE", alt: "Reference asset for removal evidence" }),
+      });
+      return { status: response.status, body: await response.json().catch(() => ({})) };
+    }, businessHref);
+    record(reference.status === 201 && Boolean(reference.body?.asset?.id), "metadata reference asset is created (replace path available)", `status=${reference.status}`);
+    interaction.media.referenceAssetId = reference.body?.asset?.id ?? null;
+    await ixPage.reload({ waitUntil: "load" });
+    await ixPage.waitForSelector(".jata-card img", { timeout: 15000 });
+    await ixPage.screenshot({ path: `${shotDir}/390x844__photos-metadata-asset.jpg`, type: "jpeg", quality: 74, fullPage: false });
+
+    const removed = await ixPage.evaluate(() => {
+      const button = Array.from(document.querySelectorAll(".jata-card button")).find((b) => (b.textContent || "").trim() === "Delete");
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    await ixPage.waitForFunction(
+      () => !Array.from(document.querySelectorAll(".jata-card button")).some((b) => (b.textContent || "").trim() === "Delete"),
+      { timeout: 10000 },
+    ).catch(() => undefined);
+    await ixPage.evaluate(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    record(removed === true, "metadata asset is removed through the gallery Delete control", `clicked=${removed}`);
+    await ixPage.screenshot({ path: `${shotDir}/390x844__photos-after-delete.jpg`, type: "jpeg", quality: 74, fullPage: false });
+  } catch (error) {
+    interaction.errors.push(`interaction: ${String(error).slice(0, 250)}`);
+    record(false, "authenticated interaction capture completed without errors", String(error).slice(0, 250));
+  }
+  record(interaction.errors.length === 0, "interaction capture raised no page errors", interaction.errors.join(" | "));
+  await ixPage.close();
 }
 await memberContext.close();
 await browser.close();

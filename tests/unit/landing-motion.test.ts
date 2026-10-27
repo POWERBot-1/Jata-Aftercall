@@ -104,10 +104,14 @@ describe("landing motion", () => {
     expect(css).toContain(".lp-hero__copy > * { opacity: 1; transform: none; }");
   });
 
-  it("lazy-loads everything except the hero and the band's first photograph", () => {
-    // Cards: lazy. Band: the primary photo is eager (it is the LCP on the demo page), the second
-    // property frame is lazy.
-    expect(showcase.match(/loading="lazy"/g)?.length).toBeGreaterThanOrEqual(2);
+  it("eager-loads only above-the-fold/first-panel media and lazy-loads the rest", () => {
+    // Landing showcase: the ACTIVE first panel is eager with high fetch priority so it can never
+    // paint as a blank band (the 2026-10-27 blank-image defect); the three hidden panels are lazy.
+    // The property inset frame keeps its literal lazy attribute. Band: the primary photo is eager
+    // (it is the LCP on the demo page), the second property frame is lazy.
+    expect(showcase).toContain('loading={index === 0 ? "eager" : "lazy"}');
+    expect(showcase).toContain('fetchpriority: "high"');
+    expect(showcase.match(/loading="lazy"/g)?.length).toBe(1); // inset frame only
     expect(band.match(/loading="lazy"/g)?.length).toBe(1);
     expect(hero).not.toContain('loading="lazy"');
   });
