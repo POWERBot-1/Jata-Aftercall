@@ -16,11 +16,11 @@ on:
   pull_request:
     branches: [main]
 
-# Only one run per trigger kind at a time; dispatch and pull_request runs use separate groups so
-# an evidence-publishing dispatch run is not cancelled by the PR run its push synchronises.
+# Never cancel in-progress runs: this workflow itself pushes an evidence commit near the end,
+# which synchronises a new pull_request run, and cancellation could kill the publishing step.
 concurrency:
   group: premium-screenshots-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -125,16 +125,21 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      # Retrieval channel for restricted egress environments: dispatch runs commit the evidence
-      # into the SAME session branch under verification/evidence (a pull_request-triggered run
-      # never does this, so there is no push/run loop). The commit is transient by design — the
-      # branch is reset to the code-only head after evidence is retrieved; it is not product code.
-      - name: Publish visual evidence into the session branch (dispatch only)
-        if: always() && github.event_name == 'workflow_dispatch'
+      # Retrieval channel for restricted egress environments: the run commits evidence into the
+      # SAME session branch under verification/evidence, reachable through ordinary git transport.
+      # Loop guard: a run whose HEAD is already a bot-authored evidence commit only verifies, it
+      # never re-publishes, so the synchronised run terminates without another push. The commit
+      # is transient by design — the branch is reset to the code-only head after review.
+      - name: Publish visual evidence into the session branch
+        if: always() && github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if git log -1 --pretty='%an' | grep -q '^github-actions\[bot\]$'; then
+            echo "HEAD is already an evidence commit; verifying only, no re-publish."
+            exit 0
+          fi
           if [ ! -d premium-shots ] || [ -z "$(ls -A premium-shots 2>/dev/null)" ]; then
             echo "No evidence captured; skipping branch publish."
             exit 0
@@ -149,8 +154,10 @@ jobs:
 
           Real-Chrome screenshots produced by `.github/workflows/premium-screenshots.yml` on a
           disposable PostgreSQL database with the fictional seeded demo user. This directory is
-          pushed only by manually dispatched runs and is removed from the branch once reviewed.
-          The durable evidence channel is the workflow artifact (`premium-screenshots-*`).
+          pushed by the pull_request run as a retrieval channel for restricted-egress
+          environments and is removed from the branch once reviewed; the workflow never
+          re-publishes on top of its own evidence commit. The durable evidence channel is the
+          workflow artifact (`premium-screenshots-*`).
           MD
           git add verification/evidence
           if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
