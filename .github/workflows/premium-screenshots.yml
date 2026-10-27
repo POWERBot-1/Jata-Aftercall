@@ -1,12 +1,14 @@
 name: Premium Screenshots (visual evidence)
 
-# Additive, evidence-only workflow for the 2026-10-27 premium redesign (PR #69).
+# Additive, evidence-only workflow for PR #69 (2026-10-27 owner correction: original design
+# restoration, nominated contact work and the fail-closed JATA Qi seam).
 #
 # It builds the candidate tree against a DISPOSABLE PostgreSQL service (never a deployment
 # database), seeds the fictional demo dataset, serves a local production build on localhost,
 # drives real Chrome through the public sign-in form with the seeded demo user and captures
 # full-page screenshots at the six owner-mandated viewports plus machine-readable layout
-# evidence (overflow, palette tokens, plan order, page errors, mobile nav journey).
+# evidence (overflow, restored espresso/cream/amber tokens, plan order, demo-business
+# WhatsApp/tel/Directions/Share contact states, page errors, mobile nav journey).
 #
 # The screenshots and evidence.json are uploaded as a workflow artifact for review. This job
 # changes no production setting, touches no deployment secret and cannot deploy anything.

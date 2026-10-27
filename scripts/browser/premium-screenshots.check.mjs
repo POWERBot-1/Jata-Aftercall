@@ -60,6 +60,10 @@ const PUBLIC_ROUTES = [
   { slug: "login", path: "/login" },
   { slug: "register", path: "/register" },
   { slug: "forgot-password", path: "/forgot-password" },
+  // Fictional demo business (seeded in the workflow's disposable database). Its official
+  // demonstration number 0724317010 and location make it the contact-state evidence page:
+  // real WhatsApp/tel/Directions destinations plus the Share fallback.
+  { slug: "demo-nyumbani-kitchen", path: "/b/nyumbani-kitchen" },
 ];
 
 const MEMBER_ROUTES = [
@@ -211,6 +215,15 @@ function measureFacts() {
     name: card.querySelector(".lp-plan__name")?.textContent?.trim() ?? "",
     ctaHref: card.querySelector(".lp-plan__cta")?.getAttribute("href") ?? "",
   }));
+  // Customer contact actions on the public business page. Only genuinely renderable
+  // destinations are expected — the empty/honest-fallback behaviour is pinned by unit tests.
+  const contactLinks = {
+    whatsapp: Array.from(document.querySelectorAll('a[href^="https://wa.me/"]')).map((a) => a.getAttribute("href")),
+    tel: Array.from(document.querySelectorAll('a[href^="tel:"]')).map((a) => a.getAttribute("href")),
+    directions: Array.from(document.querySelectorAll('a[href*="google.com/maps"]')).map((a) => a.getAttribute("href")),
+    hasShare: Array.from(document.querySelectorAll("button")).some((b) => (b.textContent || "").trim() === "Share"),
+    comingSoon: Boolean(Array.from(document.querySelectorAll("p")).find((p) => (p.textContent || "").includes("coming soon"))),
+  };
   return {
     scrollWidth: doc.scrollWidth,
     innerWidth: window.innerWidth,
@@ -237,11 +250,18 @@ function measureFacts() {
       bodyBg: css("body", "backgroundColor"),
     },
     planCards,
+    contactLinks,
     h1: document.querySelector("h1")?.textContent?.trim().slice(0, 120) ?? "",
   };
 }
 
 const evidence = {
+  // Self-identifying labels: every artifact and evidence.json says which design epoch and exact
+  // commit it belongs to. The withdrawn graphite/lime run (2026-10-27 morning) is the BEFORE set;
+  // anything carrying this marker is the AFTER set for the restored original design.
+  designEpoch: "after-original-design-restoration-2026-10-27",
+  beforeAfter: "AFTER",
+  gitSha: process.env.GITHUB_SHA || null,
   base,
   capturedAt: new Date().toISOString(),
   viewports: VIEWPORTS.map((v) => v.label),
@@ -392,6 +412,28 @@ for (const width of ["390x844", "1366x768"]) {
     `primary CTA label is the original dark espresso on amber at ${width}`, home.css.primaryCtaColor ?? "");
   record(home.css.heroBg === "rgb(20, 17, 15)",
     `hero band renders original espresso at ${width}`, home.css.heroBg ?? "");
+}
+
+// Public demo business page — Phase 3C contact actions on a real Chrome render. The seeded demo
+// number 0724317010 must produce working wa.me/tel destinations, Directions must point at Google
+// Maps, and the Share control (native sheet -> clipboard -> visible link fallback) must exist.
+const DEMO_WA = "https://wa.me/254724317010";
+for (const width of ["390x844", "1366x768"]) {
+  const demo = evidence.results.find((r) => r.viewport === width && r.route === "demo-nyumbani-kitchen");
+  if (!demo) {
+    record(false, `demo business contact evidence at ${width} exists`);
+    continue;
+  }
+  const c = demo.contactLinks;
+  record(c.whatsapp.some((href) => href.startsWith(DEMO_WA)),
+    `demo page WhatsApp action opens wa.me/254724317010 at ${width}`, c.whatsapp.join(" | "));
+  record(c.tel.some((href) => href.includes("254724317010")),
+    `demo page Call action dials the normalised demo number at ${width}`, c.tel.join(" | "));
+  record(c.directions.length === 1 && c.directions[0].includes("google.com/maps/dir/"),
+    `demo page offers one Google Maps Directions link at ${width}`, c.directions.join(" | "));
+  record(c.hasShare && !c.comingSoon,
+    `demo page shows Share and no "coming soon" placeholder at ${width}`,
+    `share=${c.hasShare} comingSoon=${c.comingSoon}`);
 }
 
 writeFileSync(`${shotDir}/evidence.json`, JSON.stringify(evidence, null, 2));
