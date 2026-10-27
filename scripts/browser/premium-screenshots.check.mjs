@@ -429,8 +429,15 @@ for (const width of ["390x844", "1366x768"]) {
     `demo page WhatsApp action opens wa.me/254724317010 at ${width}`, c.whatsapp.join(" | "));
   record(c.tel.some((href) => href.includes("254724317010")),
     `demo page Call action dials the normalised demo number at ${width}`, c.tel.join(" | "));
-  record(c.directions.length === 1 && c.directions[0].includes("google.com/maps/dir/"),
-    `demo page offers one Google Maps Directions link at ${width}`, c.directions.join(" | "));
+  // The public page legitimately surfaces Directions in more than one place (header CTA and the
+  // persistent action bar); assert every rendered link is a valid Maps dir URL for the demo's
+  // actual location, never a dead or mis-targeted control.
+  record(
+    c.directions.length >= 1 &&
+      c.directions.every((href) => href.includes("google.com/maps/dir/") && href.includes("destination=") && href.includes("Kilimani")),
+    `demo page renders only valid Google Maps Directions links at ${width}`,
+    `${c.directions.length} link(s): ${c.directions.join(" | ")}`,
+  );
   record(c.hasShare && !c.comingSoon,
     `demo page shows Share and no "coming soon" placeholder at ${width}`,
     `share=${c.hasShare} comingSoon=${c.comingSoon}`);
