@@ -40,6 +40,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { notify } from "@/components/ui/Toaster";
 import { LocationFields, locationError } from "@/components/LocationFields";
+import { isValidKePhone } from "@/lib/phone";
 import { SAFE_ERRORS } from "@/lib/safeError";
 import { getSubscriptionPageUrl } from "@/lib/subscriptionFlow";
 import { nextActionFor } from "@/lib/nextAction";
@@ -505,7 +506,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     { label: "Views", value: m.views || 0, colour: "var(--ws-amber)" },
     { label: "WhatsApp", value: m.whatsapp || 0, colour: "var(--ws-jade)" },
     { label: "Calls", value: m.calls || 0, colour: "var(--jata-info)" },
-    { label: "Directions", value: m.directions || 0, colour: "#4d6b12" },
+    { label: "Directions", value: m.directions || 0, colour: "#c2410c" },
   ];
 
   const activity = [
@@ -771,11 +772,33 @@ function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; on
         <Field id={`${business.id}-category`} label="Category">
           <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
         </Field>
-        <Field id={`${business.id}-phone`} label="Phone">
-          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
+        <Field
+          id={`${business.id}-phone`}
+          label="Nominated contact number"
+          hint="Kenyan mobile, e.g. 0724 317 010. Powers the Call button on your public page."
+        >
+          <input
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="0724 317 010"
+            maxLength={20}
+          />
         </Field>
-        <Field id={`${business.id}-whatsapp`} label="WhatsApp">
-          <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} inputMode="tel" />
+        <Field
+          id={`${business.id}-whatsapp`}
+          label="WhatsApp number"
+          hint="Kenyan mobile. Leave blank to use the nominated contact number above."
+        >
+          <input
+            value={form.whatsapp}
+            onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="0724 317 010"
+            maxLength={20}
+          />
         </Field>
       </div>
       <LocationFields
@@ -801,8 +824,16 @@ function EditForm({ business, busy, onSave }: { business: Biz; busy: boolean; on
         loading={busy}
         onClick={() => {
           const p = locationError(form);
-          setProblem(p);
-          if (!p) void onSave({ ...form, whatsapp: form.whatsapp || form.phone });
+          // Client-side mirror of the server KE gate (parseContactNumber in app/api/business);
+          // the API remains the authoritative boundary for direct requests.
+          const contactProblem =
+            form.phone.trim() && !isValidKePhone(form.phone)
+              ? "Enter a valid Kenyan mobile number for the nominated contact (e.g. 0724 317 010)."
+              : form.whatsapp.trim() && !isValidKePhone(form.whatsapp)
+                ? "Enter a valid Kenyan mobile number for WhatsApp (e.g. 0724 317 010), or leave it blank."
+                : "";
+          setProblem(p || contactProblem);
+          if (!p && !contactProblem) void onSave({ ...form, whatsapp: form.whatsapp || form.phone });
         }}
       >
         Save profile
