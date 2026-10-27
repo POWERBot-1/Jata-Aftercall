@@ -28,6 +28,7 @@
  */
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const executablePath = process.env.CHROME_PATH;
 if (!executablePath || !existsSync(executablePath)) {
@@ -644,6 +645,34 @@ if (loginOk) {
       "byte upload fails closed (503 inline_media_persistence_disabled) with no durable provider",
       `status=${blocked.status} code=${blocked.body?.code ?? "none"}`,
     );
+    // Drive the real product upload control with a real JPEG: the owner-facing error must state
+    // honestly that durable storage is not configured, and nothing may persist.
+    interaction.step = "UI upload honest error";
+    const uploadInput = 'input[type="file"][aria-label="Upload your own photo"]';
+    await ixPage.waitForSelector(uploadInput, { timeout: 10000 });
+    await ixPage.uploadFile(uploadInput, join(process.cwd(), "public/landing/nyumbani-kitchen-720.jpg"));
+    await ixPage
+      .waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll('[role="alert"]')).some((el) =>
+            /durable media provider is configured/i.test(el.textContent || ""),
+          ),
+        { timeout: 20000 },
+      )
+      .catch(() => undefined);
+    const uploadAlert = await ixPage
+      .$$eval('[role="alert"]', (els) => els.map((el) => el.textContent || "").join(" | "))
+      .catch(() => "");
+    record(
+      /durable media provider is configured/i.test(uploadAlert),
+      "gallery upload shows the honest durable-storage message in the real UI",
+      uploadAlert.slice(0, 220),
+    );
+    interaction.media.uiUploadAlert = uploadAlert.slice(0, 220);
+    // Visual evidence that the rejected byte upload persisted nothing: the gallery still shows
+    // only the ready category imagery and the empty-state copy for the owner's own photos.
+    await ixPage.evaluate(() => window.scrollTo(0, 0));
+    await ixPage.screenshot({ path: `${shotDir}/390x844__photos-upload-blocked.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
     // Metadata-only references (hosted/path URLs) remain supported and exercise replace/remove.
     interaction.step = "create metadata reference";
