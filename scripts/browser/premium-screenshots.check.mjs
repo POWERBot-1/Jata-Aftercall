@@ -490,13 +490,28 @@ if (loginOk) {
     await openContactEditor();
     const phoneSelector = 'input[id$="-phone"]';
     await ixPage.waitForSelector(phoneSelector, { visible: true });
+    await scrollIntoView(phoneSelector);
+    await ixPage.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
     await ixPage.screenshot({ path: `${shotDir}/390x844__contact-editor.jpg`, type: "jpeg", quality: 74, fullPage: false });
+
+    // Set a field value through the native input setter so React's controlled state updates
+    // deterministically — repeated triple-clicks do not reliably select existing text.
+    const setPhone = async (value) =>
+      ixPage.evaluate(
+        async (selAndValue) => {
+          const el = document.querySelector(selAndValue.selector);
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+          setter?.call(el, selAndValue.value);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+        { selector: phoneSelector, value },
+      );
 
     // Invalid number: the client mirror of the server KE rule must block before any PATCH.
     interaction.step = "invalid number attempt";
     await scrollIntoView(phoneSelector);
-    await ixPage.click(phoneSelector, { clickCount: 3 });
-    await ixPage.type(phoneSelector, "123");
+    await setPhone("123");
     await ixPage.evaluate(() => {
       const button = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent || "").trim() === "Save profile");
       button?.scrollIntoView({ block: "center" });
@@ -510,8 +525,7 @@ if (loginOk) {
     // Valid number: save, capture the real PATCH response, then wait for either announcement.
     interaction.step = "valid number save";
     await scrollIntoView(phoneSelector);
-    await ixPage.click(phoneSelector, { clickCount: 3 });
-    await ixPage.type(phoneSelector, "0724317010");
+    await setPhone("0724317010");
     const typedPhone = await ixPage.$eval(phoneSelector, (el) => el.value);
     interaction.contact.typedPhone = typedPhone;
     const patchPromise = ixPage
@@ -525,8 +539,12 @@ if (loginOk) {
     const patchResponse = await patchPromise;
     const patchStatus = patchResponse ? patchResponse.status() : "no-request";
     const patchBody = patchResponse ? await patchResponse.json().catch(() => ({})) : {};
-    interaction.contact.patch = { status: patchStatus, error: patchBody.error ?? null };
-    record(patchStatus === 200, "valid save reaches PATCH /api/business and returns 200", `status=${patchStatus} error=${patchBody.error ?? "-"}`);
+    const inlineProblem = await ixPage
+      .$$eval('.jata-error[role="alert"]', (els) => els.map((el) => el.textContent).filter(Boolean).join(" | "))
+      .catch(() => "");
+    interaction.contact.patch = { status: patchStatus, error: patchBody.error ?? null, inlineProblem };
+    record(patchStatus === 200, "valid save reaches PATCH /api/business and returns 200",
+      `status=${patchStatus} error=${patchBody.error ?? "-"} inline=${inlineProblem || "-"} typed=${typedPhone}`);
     await ixPage
       .waitForFunction(
         () =>
@@ -558,16 +576,28 @@ if (loginOk) {
     const photosHref = `${businessHref}/photos`;
     await ixPage.goto(`${base}${photosHref}`, { waitUntil: "load", timeout: 45000 });
     await ixPage.waitForSelector("h1", { timeout: 15000 });
+    // The starter gallery is lazy and below the fold: scroll the page in steps so the category
+    // fallback photographs actually decode before measuring and screenshotting.
     await ixPage.evaluate(async () => {
       if (document.fonts?.ready) await document.fonts.ready;
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const step = Math.max(200, Math.round(window.innerHeight * 0.8));
+      for (let y = 0; y <= document.documentElement.scrollHeight; y += step) {
+        window.scrollTo(0, y);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+      await Promise.race([
+        Promise.allSettled(Array.from(document.images).filter((img) => !img.complete).map((img) => img.decode())),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      window.scrollTo(0, 0);
+      await new Promise((resolve) => setTimeout(resolve, 200));
     });
     const fallback = await ixPage.evaluate(() =>
       Array.from(document.images)
         .filter((img) => img.getBoundingClientRect().width > 0)
-        .map((img) => ({ src: (img.currentSrc || img.src).split("/").pop(), naturalWidth: img.naturalWidth, complete: img.complete })),
+        .map((img) => ({ src: new URL(img.currentSrc || img.src).pathname, naturalWidth: img.naturalWidth, complete: img.complete })),
     );
-    const fallbackOk = fallback.some((img) => img.naturalWidth > 0 && /nyumbani|category|hero|workspace/.test(img.src));
+    const fallbackOk = fallback.some((img) => img.naturalWidth > 0 && /(category|workspace|landing)\//.test(img.src));
     record(fallbackOk, "gallery renders category fallback imagery without an uploaded asset", JSON.stringify(fallback.slice(0, 4)));
     await ixPage.screenshot({ path: `${shotDir}/390x844__photos-fallback.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
@@ -611,6 +641,16 @@ if (loginOk) {
     interaction.media.referenceAssetId = reference.body?.asset?.id ?? null;
     await ixPage.reload({ waitUntil: "load" });
     await ixPage.waitForSelector(".jata-card img", { timeout: 15000 });
+    await ixPage.evaluate(async () => {
+      window.scrollTo(0, document.body.scrollHeight);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await Promise.race([
+        Promise.allSettled(Array.from(document.images).filter((img) => !img.complete).map((img) => img.decode())),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      window.scrollTo(0, 0);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
     await ixPage.screenshot({ path: `${shotDir}/390x844__photos-metadata-asset.jpg`, type: "jpeg", quality: 74, fullPage: false });
 
     interaction.step = "delete metadata asset";
