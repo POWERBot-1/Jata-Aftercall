@@ -2,7 +2,7 @@
 
 **Audience:** repository owner / release approver.
 **Branch:** `arena/12e0b318-jata-aftercall` (base `main` at `d8aa996e432374af8176bb81858c0d1d85dc6525`).
-**Status:** final independent review complete; remediation applied on the PR #70 branch. Merge and production deployment are **conditionally authorised by the owner for PR #70 only**, subject to all mandatory release gates passing on the final head. At the time this addendum was written the merge/deploy had **not yet been executed**; authoritative post-merge results are in the task completion message.
+**Status:** final independent review complete; remediation applied, all mandatory release gates passed, **PR #70 MERGED**, and the resulting `main` commit **DEPLOYED to production and verified read-only**. See §M and the task completion message for exact SHAs, deployment identity and smoke results.
 No production data, billing, DNS, environment variable, storage configuration or external account was
 changed. No payment was made and no store account was accessed.
 
@@ -87,7 +87,7 @@ local build of this branch (see §F and `docs/evidence/README.md`).
 | B8 | Six new lint errors and one new warning from new JSX/PWA code. | Unescaped apostrophes; `setState` inside an effect. | New marketing/team/PWA files; `PwaInstaller` now uses `useSyncExternalStore`. | `npm run lint` | 0 errors, 41 warnings — identical warning count to baseline. |
 | B9 | PR #70's required `Journey against a real database` CI check failed at `retail: actual SSR UTC home` (340 passed, 1 failed). | The new service worker controlled navigations; Chrome reports `null` instead of an HTTP response for SW-served navigations when `navigator.webdriver` is set, so the repository's real-DB browser harness saw `undefined !== 200`. | `components/pwa/PwaInstaller.tsx` skips SW registration in automated browser contexts; `scripts/browser/pwa-evidence.mjs` overrides `navigator.webdriver` to keep measuring the real PWA; evidence README documents the boundary. | Local reproduction with Chromium: with `webdriver=true`, `/privacy` returned 200 and no controller; with the override, the SW registered/activated and offline notice still served. CI rerun is recorded on PR #70. | Reproduced and fixed locally; see §H for the authoritative CI status at review time. |
 | B10 | Independent final review of PR #70 found that `verifyTeamPhoneCode` allowed replay of an already-consumed one-time code within its TTL, could re-grant after revocation using an unused stale challenge, and that `readTeamEvents`' single 100-row window could let later failed attempts hide a revocation or consumed OTP. Separately, `isPublicDemoRow` assumed `paymentReferences` was always an array, the Terms page implied a self-service full account deletion screen that does not exist, and the PWA automation guard was not pinned by a source test. | OTP consumption and challenge lifetime were not bound to grant validity; audit-history truncation was treated as harmless; defensive input and honest legal copy were missing. | `lib/team-access.ts` (challenge-bound grants, consumed-code rejection, pre-revocation challenge invalidation, durable grant/revoke/consumption reads), `lib/demoContact.ts`, `app/terms/page.tsx`, `tests/unit/team-free-access.test.ts`, `tests/unit/pwa-marketing.test.ts`. | 6 new team-access regressions (replay, post-revocation replay, stale challenge, fresh challenge, bounded-window revocation, bounded-window consumed OTP) and 1 new PWA automation-boundary test; existing 22 team-access tests retained. | Targeted suite PASS; see §H for full-suite, CI and release-gate results on the final head. No production grant, migration or data change was made. |
-| B11 | After the B10 remediation commit `440727a`, the required `Journey against a real database` CI check failed at step 20 “Actual storefront Motion and immersive browser regressions”: the two no-JavaScript storefront scenarios timed out waiting for the synthetic SVG image, while the other 13 checks passed. | `scripts/browser/storefront-motion.check.mjs` used Puppeteer's default `requestAnimationFrame` polling inside `page.waitForFunction` on a page where `page.setJavaScriptEnabled(false)` had been called. On a cold headless-Chrome start that rAF scheduler is unreliable, so the 15 s wait expired even though the SVG had already been served (HTTP 200). | `scripts/browser/storefront-motion.check.mjs` — the image wait now uses numeric `polling: 100`; assertion and 15 s timeout are unchanged. No product code, CI workflow, timeout value or check was skipped or weakened. | Local reproduction: first motion run 119 passed / 1 failed (`no JavaScript desktop`), second run 124 passed / 0 failed. After the fix, three consecutive runs each returned 124 passed / 0 failed, and all six step-20 browser scripts passed locally (motion 124, immersive 22, layout 7, actionbar 37, families 167, media-local 29). | CI rerun on the final head is the authoritative gate; see §H row 16 and the final owner message. |
+| B11 | After the B10 remediation commit `440727a`, the required `Journey against a real database` CI check failed at step 20 “Actual storefront Motion and immersive browser regressions”: the two no-JavaScript storefront scenarios timed out waiting for the synthetic SVG image, while the other 13 checks passed. | `scripts/browser/storefront-motion.check.mjs` used Puppeteer's default `requestAnimationFrame` polling inside `page.waitForFunction` on a page where `page.setJavaScriptEnabled(false)` had been called. On a cold headless-Chrome start that rAF scheduler is unreliable, so the 15 s wait expired even though the SVG had already been served (HTTP 200). | `scripts/browser/storefront-motion.check.mjs` — the image wait now uses numeric `polling: 100`; assertion and 15 s timeout are unchanged. No product code, CI workflow, timeout value or check was skipped or weakened. | Local reproduction: first motion run 119 passed / 1 failed (`no JavaScript desktop`), second run 124 passed / 0 failed. After the fix, three consecutive runs each returned 124 passed / 0 failed, and all six step-20 browser scripts passed locally (motion 124, immersive 22, layout 7, actionbar 37, families 167, media-local 29). | CI rerun on final head `915ed70` passed **13/13** checks including the required `Journey against a real database`; see §H row 16 and §M. |
 
 **Not fixed / out of scope (verified but not changed):** stale production demo copy still says
 “Today only”, “This week only”, “verified listings, no brokers” and “viewing this weekend” on
@@ -282,8 +282,8 @@ green on the base commit (§0).
 | 12 | `node scripts/browser/contact-actions-evidence.mjs` (real Chromium, local dev server) | **0 — PASS** | 54 captures; `allFourActionsEveryDemoViewport`, `allTouchTargets`, `allCorrectDestinations`, `noHorizontalOverflow`, `noConsoleErrors`, `shareFallbackWorks`, `manifestLinked` all true. |
 | 13 | `node scripts/browser/pwa-evidence.mjs` phases `prime` + `offline` (real Chromium, local production build, server stopped for offline) | **0 — PASS** | `manifestValid`, `serviceWorkerRegistered`, `assetsReachable`, `noApiOrHtmlCached`, `onlySafeAssetsCached`, `noConsoleErrors`, `offlineNoticeServed` all true. |
 | 14 | `npx next start -p 3002` + `curl` route smoke against the final production build | **PASS** | `/products`, `/pricing`, `/faq`, `/help`, `/contact`, `/install`, `/privacy`, `/terms`, `/products/business-page`, `/manifest.json`, `/sw.js`, `/offline.html` all HTTP 200; dev-only `/dev/contact-actions` and `/dev/contact-actions/nyumbani-kitchen` correctly HTTP 404. |
-| 15 | PR #70 GitHub Actions (initial run, then rerun after the B9 fix) | **PASS on `f16194c`** | Initial run: 12 checks passed, `Journey against a real database` **FAILED** and `Real-Chrome six-viewport capture` pending; the failure was reproduced locally and fixed (B9). The rerun on `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` produced **14/14 checks PASS**, including `Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, `Static (install, generate, lint, typecheck, audit)`, `Real-Chrome six-viewport capture on a disposable database` and `Vercel`. |
-| 16 | Final independent-review remediation (B10/B11) — authoritative CI, merge and deployment | **See final owner message** | `440727a054de02f1abbad4020ca320bd94606fcc` (B10) produced 13/14 checks PASS; the required `Journey against a real database` failed only at step 20 because of the flaky no-JS motion wait documented in B11. A further commit applies the numeric-polling reliability fix. The final head SHA, per-check CI conclusion, merge SHA/method/state, Vercel production deployment identity and read-only smoke results are reported in the task completion message and on PR #70; this report does not predict a green result before it is observed. |
+| 15 | PR #70 GitHub Actions (initial run, then rerun after the B9 fix) | **PASS on `f16194c`** | Initial run: 12 checks passed, `Journey against a real database` **FAILED** and `Real-Chrome six-viewport capture` pending; the failure was reproduced locally and fixed (B9). The rerun on `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` produced **13/13 checks PASS**, including `Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, `Static (install, generate, lint, typecheck, audit)`, `Real-Chrome six-viewport capture on a disposable database` and `Vercel`. |
+| 16 | Final independent-review remediation (B10/B11) — authoritative CI, merge and deployment | **PASS** | `440727a054de02f1abbad4020ca320bd94606fcc` (B10) produced 13/14 checks PASS; the required `Journey against a real database` failed only at step 20 because of the flaky no-JS motion wait documented in B11. Final head `915ed70d00e04ea3c5d274309024441437e58b1a` (B11 reliability fix) then produced **13/13 checks PASS**, including `Journey against a real database` (12m14s), `Migration target guard`, `Release gate (aggregate)`, `Static`, `Real-Chrome six-viewport capture`, `Vercel` and all other required checks. PR #70 merged with method `--merge` as `a04124de6eafb4c1564734b1e9298d2f311b7516`; Vercel production deployment `dpl_FvH6aCnz4RobFDdogG4HKTJst6wp` is READY/PROMOTED on that commit. See §M for full evidence. |
 
 ### PASS / FAIL / BLOCKED / NOT TESTED matrix (requested areas)
 
@@ -308,7 +308,9 @@ green on the base commit (§0).
 | Accessibility (labels, focus, touch targets, contrast) | **PASS** for measured controls locally; full WCAG audit **NOT TESTED** |
 | Dependency security | **PASS** (`npm audit`) |
 | Full unit suite / build gate (local offline) | **FAIL** — one pre-existing offline DMMF test and four pre-existing offline Prisma type errors; webpack compile and all new tests **PASS** |
-| Full unit suite / build gate (CI with generated Prisma) | **MANDATORY GATE** — must be **PASS** on the final head before merge; `f16194c` achieved 14/14 including `Static`, `Journey against a real database` and `Release gate (aggregate)` |
+| Full unit suite / build gate (CI with generated Prisma) | **PASS** — final head `915ed70` achieved 13/13 checks including `Static`, `Journey against a real database`, `Migration target guard` and `Release gate (aggregate)`; production Vercel build also compiled successfully with generated Prisma |
+| Merge / branch protection | **PASS** — PR #70 `MERGEABLE/CLEAN`, 0 required approvals, 0 unresolved review threads, strict required checks all SUCCESS; merged with `gh pr merge 70 --merge` |
+| Production deployment and read-only smoke | **PASS** — Vercel `READY/PROMOTED`, alias `jata-aftercall.vercel.app`, deployed commit `a04124de`; new pages, demo actions, auth redirect, PWA files and sitemap verified; see §M |
 
 ---
 
@@ -354,11 +356,11 @@ green on the base commit (§0).
 | --- | --- |
 | Development complete (implemented scope) | **YES** |
 | PR ready | **YES — see §K** |
-| Approved for merge | **YES (conditional)** — owner authorized PR #70 merge only after all mandatory release gates pass on the final head |
-| Merged | **NO at time of writing** — see final owner message |
-| Approved for deployment | **YES (conditional)** — same owner directive authorizes deploying the resulting approved `main` commit, with no env/DNS/billing/data changes |
-| Deployed | **NO at time of writing** — see final owner message |
-| Production verified after this change | **NO at time of writing — NOT VERIFIED**; see final owner message for post-deploy smoke results |
+| Approved for merge | **YES** — owner authorized PR #70 merge after gates passed; all mandatory gates passed |
+| Merged | **YES** — `gh pr merge 70 --merge`, merge commit `a04124de6eafb4c1564734b1e9298d2f311b7516`, 2026-10-27T18:23:22Z |
+| Approved for deployment | **YES** — same owner directive authorized deploying the resulting approved `main` commit via the existing Vercel workflow |
+| Deployed | **YES** — Vercel production deployment `dpl_FvH6aCnz4RobFDdogG4HKTJst6wp`, READY/PROMOTED, commit `a04124de`, alias assigned 2026-10-27T18:26:24Z |
+| Production verified after this change | **YES (read-only)** — see §M; authenticated write journeys remain **NOT TESTED** |
 | Submitted to Google Play | **NO** |
 | Published on Google Play | **NO** |
 | Submitted to Apple App Store | **NO** |
@@ -373,11 +375,12 @@ No later stage is marked complete because an earlier stage passed.
 Filled after the push and PR creation; these values are factual, not predicted.
 
 - **Implementation commit SHA:** `a09f913f0bb2e0dddb3ddefe99904145fa3c924e` — contains all source, tests, evidence and the four documents.
-- **Follow-up commits:** `d42298a16b974c4ee0a9923f8291c5e5110d30e6` records the PR URL in this report; `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` applies the B9 service-worker/automation fix and final report updates (14/14 CI checks PASS). `440727a054de02f1abbad4020ca320bd94606fcc` is the B10 independent-review remediation (13/14 checks PASS; the required journey failed only at the B11 no-JS motion flake). A further B11 reliability-fix commit follows; the **final PR head SHA** is reported in the final owner message (`git rev-parse HEAD`) and in `gh pr view 70`.
+- **Follow-up commits:** `d42298a16b974c4ee0a9923f8291c5e5110d30e6` records the PR URL; `f16194c2b08921e0d3c04ab0c53f2a6eaee1bce6` applies the B9 service-worker/automation fix (13/13 CI checks PASS). `440727a054de02f1abbad4020ca320bd94606fcc` is the B10 independent-review remediation (13/14; required journey failed only at B11 flake). `915ed70d00e04ea3c5d274309024441437e58b1a` is the B11 reliability fix and **final PR head** (13/13 CI checks PASS).
 - **PR URL:** <https://github.com/POWERBot-1/Jata-Aftercall/pull/70>
-- **PR:** #70, base `main`, head `arena/12e0b318-jata-aftercall`, state **OPEN**.
-- **Merge/deploy:** conditional owner authorization received for PR #70 only; **NOT PERFORMED at the time of writing**. Authoritative result is in the final owner message and §J.
-- **Production data, DNS, environment, storage, billing, store:** **NOT CHANGED**.
+- **PR:** #70, base `main`, head `arena/12e0b318-jata-aftercall`, state **MERGED** at 2026-10-27T18:23:22Z.
+- **Merge:** `gh pr merge 70 --merge` → merge commit `a04124de6eafb4c1564734b1e9298d2f311b7516`; `origin/main` confirmed at that SHA.
+- **Production deployment:** Vercel `dpl_FvH6aCnz4RobFDdogG4HKTJst6wp`, target `production`, state `READY`/`PROMOTED`, deployed commit `a04124de`, alias `jata-aftercall.vercel.app` assigned 2026-10-27T18:26:24Z.
+- **Production data, DNS, environment, storage, billing, store:** **NOT CHANGED**. No migration was applied by this release (`prisma migrate deploy` reported “No pending migrations to apply”; `prisma/` is unchanged from `main`).
 
 ---
 
@@ -420,10 +423,95 @@ the assertion and 15 s timeout. Post-fix local evidence: three consecutive motio
 layout 7, actionbar 37, families 167, media-local 29). No CI workflow, product code, timeout,
 dependency or check was weakened.
 
-**Release rule applied:** because the local full-suite/typecheck/build failures are caused solely by
-the offline Prisma stub, merge is permitted **only if the final remediation head passes all required
-CI checks in the generated-Prisma environment**, including `Static`, `Journey against a real
-database`, `Migration target guard`, `Release gate (aggregate)`, `Real-Chrome six-viewport capture`
-and `Vercel`. The exact final-head CI conclusion, merge SHA/method/state, Vercel production
-deployment identity and read-only production smoke results are reported in the task completion
-message rather than predicted here. Authenticated production write journeys remain **NOT TESTED**.
+**Release rule applied and satisfied:** because the local full-suite/typecheck/build failures are
+caused solely by the offline Prisma stub, merge was permitted only after the final remediation head
+passed all required CI checks in the generated-Prisma environment. That condition was met on
+`915ed70` (13/13 checks PASS). The exact final-head CI conclusion, merge SHA/method/state, Vercel
+production deployment identity and read-only production smoke results are recorded in **§M** and
+the task completion message. Authenticated production write journeys remain **NOT TESTED**.
+
+---
+
+## M. Final release evidence — merge, deployment and production smoke (2026-10-27)
+
+All timestamps below are UTC (local Pacific time is UTC−7 on this date).
+
+### M.1 Mandatory gates and merge
+
+- Final PR head: `915ed70d00e04ea3c5d274309024441437e58b1a`.
+- `gh pr checks 70`: **13/13 PASS** (0 fail, 0 pending). Required strict checks
+  `Journey against a real database` (12m14s), `Migration target guard` (11s) and
+  `Release gate (aggregate)` (4s) all SUCCESS. Other passing checks: `Static (install, generate,
+  lint, typecheck, audit)`, `Real-Chrome six-viewport capture on a disposable database` (5m3s),
+  `Production build path on PostgreSQL 18`, `Migrations + schema on PostgreSQL 18`, `Exact
+  candidate applies on disposable PostgreSQL 18`, `D2 — build, audit and controls on the candidate
+  tree`, `Failure paths actually fail`, `Schema reconciliation proposal closes the drift`, `Vercel`,
+  `Vercel Preview Comments`.
+- `gh pr view 70`: state OPEN before merge, `mergeable = MERGEABLE`, `mergeStateStatus = CLEAN`,
+  `reviewDecision = ""`, `reviews = 0`, 0 unresolved review threads (GraphQL), branch rules
+  required 0 approving reviews and required resolved threads. No approval was fabricated.
+- Merge command: `gh pr merge 70 --merge` (exit 0). PR state **MERGED**,
+  `mergedAt = 2026-10-27T18:23:22Z`, merge commit
+  `a04124de6eafb4c1564734b1e9298d2f311b7516`.
+- `git ls-remote origin refs/heads/main` and `origin/main` both =
+  `a04124de6eafb4c1564734b1e9298d2f311b7516`.
+
+### M.2 Vercel production deployment
+
+- Deployment ID: `dpl_FvH6aCnz4RobFDdogG4HKTJst6wp`.
+- URL: `https://jata-aftercall.vercel.app` (alias assigned `true`); deployment hostname
+  `jata-aftercall-5w6aer4c5-powerbot-1.vercel.app`.
+- Project: `jata-aftercall` (`prj_mXn1031amrZQo4gyaVumKS4FltjW`), team `powerbot-1`.
+- State: **READY**, `readySubstate = PROMOTED`, `target = production`, `buildSkipped = false`.
+- Deployed commit: `a04124de6eafb4c1564734b1e9298d2f311b7516`, ref `main`, source `git`.
+- Created: 2026-10-27T18:23:26Z; ready/alias assigned: 2026-10-27T18:26:24Z
+  (`timeToReady = 177417 ms`).
+- Build evidence: `prisma generate` succeeded, migration guard
+  `OK_ENROLLED_PRODUCTION`, `prisma migrate deploy` reported **“No pending migrations to apply.”**
+  and “Migrations deployed successfully”; `next build` `✓ Compiled successfully in 60s` and
+  TypeScript passed. `prisma/` is unchanged from `main`, so **no production migration was applied**.
+- No environment variable, domain, DNS, email, storage, billing or team-grant change was made.
+  `list_project_domains` still shows only `jata-aftercall.vercel.app` (verified); `list_env_vars`
+  shows only pre-existing variables.
+
+### M.3 Read-only production smoke (PASS unless labelled BLOCKED/NOT TESTED)
+
+`fetch_page` was used because sandbox `curl`/Chromium egress to the production host is blocked.
+
+| Check | Result |
+| --- | --- |
+| `/` | **PASS** — homepage loads; plan order/prices unchanged: Monthly KES 149, Annual KES 999, AI Front Desk KES 499, Autopilot KES 2,499, Website Studio KES 999, Business POS KES 499. |
+| `/products`, `/pricing`, `/faq`, `/help`, `/contact`, `/install`, `/privacy`, `/terms` | **PASS** — all new pages return correct content; `/terms` and `/privacy` contain the honest “no self-service full account-deletion screen” disclosure. |
+| `/products/business-page`, `/products/ai-front-desk`, `/products/website-studio`, `/products/business-pos` | **PASS** — all four product detail pages render with correct prices and entitlement wording. |
+| `/login`, `/register`, `/forgot-password` | **PASS** — auth screens render. |
+| `/dashboard`, `/admin/team-access` | **PASS** — unauthenticated requests redirect to `/login`. |
+| `/api/account/team-access` (GET) | **PASS** — returns `{"error":"Please sign in."}`; unauthenticated access denied. |
+| `/robots.txt`, `/sitemap.xml` | **PASS** — sitemap includes all new marketing/legal/support/product pages and the demo pages. |
+| `/manifest.json`, `/sw.js`, `/offline.html` | **PASS** — valid manifest, privacy-safe SW (no HTML/API/private caching), honest offline notice. |
+| `/b/nyumbani-kitchen`, `/b/marys-beauty-studio`, `/b/kamau-auto-care`, `/b/john-kamau-properties` | **PASS** — all four demos labelled fictional; all four actions present; official demo number `0724317010` / `wa.me/254724317010` / `tel:+254724317010` used (no placeholder `070000000X`). |
+| `/dev/contact-actions` | **PASS** — production returns the 404 page (dev-only route not exposed). |
+| Binary icons `/icons/*.png`, `/favicon.ico` | **BLOCKED** — `fetch_page` cannot parse binary assets (HTTP 500 from the fetch tool) and `curl`/Chromium egress to production is blocked. Local files exist and are referenced by the production manifest; local PWA evidence verified them. |
+| Six-viewport real-browser production screenshots, physical-device PWA install, SW update/offline interaction on production | **NOT TESTED / BLOCKED** — sandbox browser egress to production blocked; CI `Real-Chrome six-viewport capture on a disposable database` passed on the final head, and local PWA evidence passed. |
+| Authenticated production write journeys (registration, OTP grant, payment, publishing, uploads, tenant isolation) | **NOT TESTED** — no safe production test account or separate owner approval for production writes. |
+
+### M.4 Remaining owner actions (unchanged from §I)
+
+- Configure and verify a public support channel and transactional email
+  (`PASSWORD_RESET_SMTP_URL`, `PASSWORD_RESET_FROM`) before relying on password recovery or the
+  contact page for real customers.
+- Provision durable object storage if media uploads must persist; current production fails closed.
+- Fix custom domain `jataaftercall.co.ke` DNS only after a separate owner decision; do not change
+  DNS under this release authorization.
+- Obtain Kenyan-law review of the privacy policy and terms; both are honest product disclosures,
+  not legal opinions.
+- Separately approve any production migration, test account, payment settlement, JATA Qi
+  integration or store submission. Store publication remains **NOT STARTED**.
+
+### M.5 Release verdict
+
+**RELEASE TO PRODUCTION: PASS (read-only verified).** PR #70 was independently reviewed,
+remediated, fully gated, merged and deployed via the existing Vercel workflow. No production data,
+schema migration, DNS, environment, billing, storage or team-grant change was made. The
+deployment is healthy and the new public pages, demo contact actions, PWA files and security
+guards are serving correctly. Authenticated write journeys and physical-device PWA installation
+remain outside the evidence obtained here.
