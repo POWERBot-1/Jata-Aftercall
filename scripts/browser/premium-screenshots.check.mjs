@@ -150,15 +150,32 @@ function measureFacts() {
   }
   // When something overflows, record the containing-block chain of the first offender so the
   // propagating box can be identified from evidence alone (no devtools in CI).
-  // The rail links are early in DOM order but live inside a proper overflow:auto container, so
-  // they can be red herrings. Independently find the element(s) whose right edge actually defines
-  // documentElement.scrollWidth — those are the boxes widening the page.
-  const pageWideners = [];
-  for (const el of Array.from(document.querySelectorAll("body *"))) {
-    const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.right >= doc.scrollWidth - 2) {
-      pageWideners.push({ t: el.tagName.toLowerCase(), c: classOf(el), r: Math.round(r.right), w: Math.round(r.width) });
-      if (pageWideners.length >= 6) break;
+  // The chrome chain (rail/wrap/header) clips correctly, so page-level overflow comes from main
+  // content. Inspect main#main only and skip anything inside a clipping/scroll container so the
+  // real widening element is named rather than a red herring from a scroll region.
+  const mainWideners = [];
+  const main = document.querySelector("main#main") || document.querySelector("main");
+  if (main) {
+    const inClippingAncestor = (el) => {
+      let n = el.parentElement;
+      while (n && n !== document.body) {
+        if (["auto", "scroll", "clip", "hidden"].includes(getComputedStyle(n).overflowX)) return true;
+        n = n.parentElement;
+      }
+      return false;
+    };
+    for (const el of Array.from(main.querySelectorAll("*"))) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.right > window.innerWidth + 1 && !inClippingAncestor(el)) {
+        mainWideners.push({
+          t: el.tagName.toLowerCase(),
+          c: classOf(el),
+          r: Math.round(r.right),
+          w: Math.round(r.width),
+          pc: classOf(el.parentElement),
+        });
+        if (mainWideners.length >= 8) break;
+      }
     }
   }
   // Compact keys keep the full chain inside a single check annotation.
@@ -197,7 +214,7 @@ function measureFacts() {
     innerWidth: window.innerWidth,
     horizontalOverflow: doc.scrollWidth > window.innerWidth,
     overflowOffenders: offenders,
-    pageWideners,
+    mainWideners,
     overflowChain,
     title: document.title,
     pathname: location.pathname,
@@ -338,7 +355,7 @@ for (const r of evidence.results) {
     `${label} did not bounce to sign-in`, r.pathname);
   record(!r.horizontalOverflow, `${label} has no horizontal overflow`,
     r.horizontalOverflow
-      ? `docSW=${r.scrollWidth} win=${r.innerWidth} wideners=${JSON.stringify(r.pageWideners)} chain=${JSON.stringify(r.overflowChain)}`
+      ? `docSW=${r.scrollWidth} win=${r.innerWidth} mainWideners=${JSON.stringify(r.mainWideners)}`
       : "");
   record(r.pageErrors.length === 0, `${label} has no uncaught page errors`, r.pageErrors.join(" | "));
   record(!r.hasErrorOverlay, `${label} has no Next.js error overlay`);
