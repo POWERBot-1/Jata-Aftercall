@@ -446,6 +446,7 @@ CREATE TABLE IF NOT EXISTS "ErpTaxRule" (
     "effectiveTo" TIMESTAMP(3),
     "sourceRef" TEXT,
     "verified" BOOLEAN NOT NULL DEFAULT false,
+    "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpTaxRule_pkey" PRIMARY KEY ("id")

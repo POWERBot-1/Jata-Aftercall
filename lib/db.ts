@@ -86,6 +86,15 @@ function createFallbackPrisma(): any {
       create: async () => { throw new Error("DB not available"); },
       update: async () => { throw new Error("DB not available"); },
     },
+    // Read by app/admin/payments/wallet/page.tsx. Without an entry the offline build throws a
+    // TypeError while rendering the admin wallet page instead of showing an empty history.
+    paymentEvent: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      findFirst: async () => null,
+      count: async () => 0,
+      create: async () => { throw new Error("DB not available"); },
+    },
     subscription: {
       findUnique: async () => null,
       findMany: async () => [],

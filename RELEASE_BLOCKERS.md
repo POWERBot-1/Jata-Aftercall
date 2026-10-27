@@ -149,7 +149,7 @@ Known gaps in this change:
 
 Release decision: **BLOCKED** until the mandatory DB-backed and browser gates pass at the final SHA, with an authorized maintainer CI run whose head SHA is verified.
 
-## POS / ERP - PRO (added 2026-10-27)
+## POS / ERP - PRO (added 2026-10-27, database evidence added 2026-10-27)
 
 The premium ERP product is additive and is **off by default**; it does not change the POS, the
 wallet, the storefront checkout or any existing migration. Its own blockers, with the same evidence
@@ -157,12 +157,14 @@ rules as above:
 
 | # | Item | Status | Evidence / action |
 |---|------|--------|-------------------|
-| E1 | `prisma/migrations/20261027000000_pos_erp_pro` applied to a real database | **Open (no database)** | 38 `CREATE TABLE IF NOT EXISTS`, 136 indexes, 38 guarded foreign keys, zero `ALTER`/`DROP`/`UPDATE`. Asserted by `tests/unit/erp-schema.test.ts` (13) and by `tests/unit/repair-guards.test.ts`, but never executed. Backup, apply and rollback steps: `docs/POS_ERP_PRO_MIGRATION_PLAN.md`. |
-| E2 | Loader and server-action query shapes | **Open (no client)** | `prisma generate` cannot run in this sandbox, so every `prisma.*` call compiles against `any`. 38 models are stubbed in `lib/db.ts` and a test asserts the stub list matches the schema, but field-level correctness is unverified until E1/E3 run. |
-| E3 | Database-backed ERP suites | **Not run here** | The 94 skipped suites cover PostgreSQL behaviour the fake client cannot model (isolation, rollback, concurrent posting). |
-| E4 | Screenshots and visual review | **Open (no browser)** | Same sandbox limit as item 8. Screens are verified by `npm run build` and by HTTP status/redirect checks only. |
+| E1 | `prisma/migrations/20261027000000_pos_erp_pro` applied to a real database | **Closed (disposable database)** | Executed on PostgreSQL 16.2 in this sandbox: 16 migrations, 38 ERP tables, 74 pre-existing tables, 38 foreign keys. Clean install, upgrade from `20261010000200_checkout_idempotency` with existing POS rows, rollback and recovery all pass — `scripts/erp/migration-verify.sh all` → 24 PASS / 0 FAIL. Production still has not been migrated. |
+| E2 | Loader and server-action query shapes | **Closed for model/field mismatches found; residual risk** | `prisma generate --no-engine` now succeeds in this sandbox (engine download is the only blocked part) and `scripts/erp/check-models.ts` reports 111 client models = 111 schema models, 76 call sites all resolving, and every referenced model present in the `lib/db.ts` fallback. The real-database suite found and fixed two field-level defects (`ErpTaxRule.notes`, `PosProduct.priceKES` vs `basePriceKES`). Remaining `any` is the deliberate `client` injection seam; no type-level check of every `select`/`where` key exists. |
+| E3 | Database-backed ERP suites | **Closed for the new ERP suite** | `tests/integration/erp-pro-postgres.test.ts` — 16 tests against real PostgreSQL covering onboarding persistence, role enforcement, tenant isolation, order transitions, duplicate prevention, accounting safeguards, wallet idempotency, contact-import de-duplication and eTIMS uncertainty. The pre-existing 94 skipped suites (POS refunds, wallet races, end-to-end journeys) still do not run in this sandbox and are covered by CI only. |
+| E4 | Screenshots and visual review | **Open (no browser)** | No browser binary is installed and none can be downloaded here. Screens are verified by `npm run build` and HTTP status/redirect checks only; no screenshot is claimed. |
 | E5 | Live messaging, live eTIMS, live payments | **Open (no credentials, no approval)** | `MESSAGING_LIVE_ENABLED` is unset and no live adapter is registered; `ETIMS_LIVE_ENABLED` is unset and no certified adapter ships; the shop takes no payment in this release. |
-| E6 | External security review | **Open** | Self-review only: `docs/POS_ERP_PRO_SECURITY_REVIEW.md`, 6 findings, of which F-1 (in-process rate limiter) and F-2 (no row-level security) are accepted risks for launch. |
+| E6 | External security review | **Open** | Internal review only: `docs/POS_ERP_PRO_SECURITY_REVIEW.md`. Accepted risks include the per-instance rate limiter and the absence of row-level security. |
+| E7 | Independent CI for this branch | **Open (workflow committed, never executed)** | `.github/workflows/pos-erp-verify.yml` adds schema validation, client generation, model-consistency check, typecheck, the unit suite, the production build, `prisma migrate deploy`, the three migration scenarios and the PostgreSQL suite. The previous workflow only runs on `main`, which is why PR #71 had no test job. Until the first GitHub run is green this row stays open. |
+| E8 | Migration rehearsal on the provider's PostgreSQL | **Open** | The rehearsal used a local PostgreSQL 16.2 cluster without Neon's pooler, extensions, backup schedule or restore-from-snapshot. |
 
 Full status table: `docs/POS_ERP_PRO_EVIDENCE.md`. Nothing here is a claim that the product is
 production-ready.

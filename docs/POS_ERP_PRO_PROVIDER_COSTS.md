@@ -1,140 +1,83 @@
-# POS / ERP - PRO — provider and delivery cost comparison
+# POS / ERP - PRO — provider cost comparison
 
-The KES 3,000/month subscription buys the software. It does **not** buy messages, numbers, Sender
-ID registration, eTIMS integration fees, hardware, or payment-processing fees. This document puts
-those costs side by side so a merchant can price a campaign before sending one.
+**What this is.** Public list prices collected on **2026-10-27** from provider pages, to size the
+messaging and compliance side of the product. It is **not** a quote, a contract or a commitment, and
+no provider account, credential or trial was created for this work. Prices change; confirm with the
+provider before quoting a customer.
 
-Everything below is **indicative and dated**. Rates change without notice and depend on route,
-volume tier, destination network and negotiated contract. The product itself never bills a customer
-from this table: campaign cost comes from the tariff rows stored server-side
-(`lib/messaging/billing.ts`), and every campaign shows its estimated cost and asks for confirmation
-before approval.
+**How the product uses these numbers.** Messaging is metered from a prepaid wallet in integer cents.
+The wallet is credited only after a verified payment reference, and no top-up is automatic. The KES
+3,000 / 30-day POS / ERP - PRO subscription is **separate** from these pass-through provider costs:
+message and Sender ID fees are shown to the owner and charged from the wallet, never folded into the
+subscription without a separate, explicit authorisation.
 
-Last checked: **2026-10-27**. Verification status: **unverified against a signed contract.** Nothing
-here is a quote.
+## SMS
 
-## 1. SMS to Kenyan numbers
-
-| Provider type | Indicative rate per SMS (KES) | Notes |
-| --- | --- | --- |
-| Africa's Talking (published tiers) | 0.80 – 1.50 | Their public pricing page lists Safaricom at KES 1.50 on the basic plan and KES 0.80 on toll-free/bulk routes; volume tiers drop to 0.40 at the highest plan |
-| Celcom Africa (published) | 0.25 – 0.60 | Slides with volume; cheapest at very high volumes |
-| Other local bulk aggregators | 0.30 – 0.90 | Wide spread; delivery quality varies with route |
-| International aggregators (Twilio, Plivo, Sinch) | ~KES 0.65 – 4.50 (USD 0.005 – 0.035) | Priced in USD; Kenya termination is not their cheapest corridor |
-| Safaricom direct bulk | 0.11 – 1.06 by volume band | Only reachable through a direct commercial agreement |
-
-**What this product assumes by default:** KES 0.90 per SMS segment, stored as a tariff row marked
-`verified: false`. It is inside the observed range for a legitimate route and deliberately *not* the
-cheapest advertised rate — underestimating cost is the failure mode that surprises a merchant with a
-wallet that empties mid-campaign.
-
-**Segment maths matters more than the headline rate.** A 160-character GSM-7 message is one segment;
-161 characters is two. One non-GSM character (an emoji, a curly quote) switches the whole message to
-UCS-2, where the limit is 70 characters per segment. A 300-character message with one emoji costs
-**five** segments, not two. The composer shows this live, and the API refuses to approve a campaign
-without a confirmed cost.
-
-Worked example — 1,000 recipients, one 160-character GSM-7 message:
-
-```
-1,000 segments × KES 0.90 = KES 900
-```
-
-The same 1,000 recipients with one emoji in the text (UCS-2, 2 segments) = KES 1,800. Neither figure
-includes Sender ID registration.
-
-## 2. Sender ID registration
-
-Sources disagree, so both positions are recorded rather than picking the friendlier one:
-
-| Source | Claim |
-| --- | --- |
-| Africa's Talking pricing page | "It is currently free to raise Sender IDs" |
-| Third-party Kenya SMS pricing summary (2025) | KES 8,700 one-time (KES 7,500 + 16% VAT) for Safaricom and Airtel registration |
-
-**What the product does:** the Sender ID screen discloses the applicable fee, if the deployment
-configures one, and never charges automatically. Applying is one deliberate action per business; a
-second attempt on the same name is refused. No fee is invented in code — `SENDER_ID_FEES` carries a
-`note` and an `amountCents` that defaults to 0 with an explicit "your provider may charge a
-registration fee; this is not charged here" disclosure.
-
-## 3. WhatsApp Business Platform (Kenya)
-
-Meta moved to per-message billing and, from **1 October 2026**, charges for utility messages sent
-inside the 24-hour service window. Kenya sits in Meta's "Rest of Africa" pricing region.
-
-| Category | Rate (USD) | ≈ KES | When charged |
+| Route | Price (KES / segment) | Notes | Source |
 | --- | --- | --- | --- |
-| Marketing template | 0.0225 | ~2.90 – 3.30 | Every delivered marketing message |
-| Utility template | 0.0040 | ~0.52 | Every delivered utility message, including inside the 24-hour window |
-| Authentication template | 0.0040 | ~0.52 | Every delivered authentication message |
-| Service reply inside the 24-hour window | 0.0040 | ~0.52 | After 1,000 free delivered service messages per business number per month |
+| Africa's Talking — Safaricom | 1.50 list, 1.25 at the highest volume plan | Major aggregator; published tiered rate | africastalking.com/pricing |
+| Africa's Talking — toll-free route | 0.80 list, 0.40 at the highest tier | Different sender path | africastalking.com/pricing |
+| Kenya SMS resellers (bulk) | 0.25 – 0.90 by volume tier | Cheaper, quality and delivery SLAs vary widely | reseller price pages (celcomafrica, sent.dm, techweez summaries) |
+| Safaricom direct bulk | 1.06 down to 0.11 at the deepest volume tier | Requires direct commercial agreement | Safaricom bulk SMS rate card (third-party summaries) |
+| Platform reference rate used for estimates | 0.90 Safaricom / 0.85 Airtel / 0.80 Telkom / 0.90 multi | Deliberately a mid-market reference, marked `verified: false` in `lib/messaging/segments.ts` | `DEFAULT_SMS_TARIFFS` |
 
-Sources: Meta's platform pricing documentation, plus Kenyan press coverage of the October 2026
-change (Nation, Nairobi Wire, tech-ish). The KES figure moves with the exchange rate; the USD rate
-is the one to budget in.
+Billing unit: a **segment**, not a message. GSM-7 is 160 characters for a single segment and 153 per
+segment when concatenated; UCS-2 is 70 / 67. Characters in the GSM-7 extension table (e.g. `{`, `}`,
+`€`) cost two septets, so a 160-character "clean" message with one brace is really 161 septets and
+splits. `calculateSegments` implements exactly that and is covered by unit tests.
 
-**Implication for this product:** WhatsApp marketing is roughly **3× the cost of an SMS** per
-message at list rates, but a WhatsApp template can carry an image and a button, and a conversation
-can continue. The composer prices both channels from tariff rows rather than assuming WhatsApp is
-cheaper — it is not.
+**Sender ID registration.** Africa's Talking's pricing page states it is currently free to raise a
+Sender ID; third-party pages quote a one-time KES 8,700 (KES 7,500 + 16% VAT) for Safaricom/Airtel
+registrations. The two sources disagree, so the ERP shows a **KES 0 placeholder with an explicit
+"fee set by the provider and the network, never charged automatically" note** (`SENDER_ID_FEES`) and
+requires the owner to confirm. Branded alphanumeric Sender IDs are outbound-only in this product
+unless the provider and network document replies.
 
-## 4. Payment processing (money the merchant receives)
+## WhatsApp Cloud API
 
-Not part of the KES 3,000, and not marked up by this product.
+Kenya is priced in Meta's "Rest of Africa" region.
 
-| Rail | Typical merchant cost | Notes |
+| Category | USD / delivered message | ≈ KES (at ~130) | Notes |
+| --- | --- | --- | --- |
+| Marketing | 0.0225 | ≈ 3 | Template messages; opt-in required |
+| Utility / authentication | 0.0040 | ≈ 0.52 | Service messages inside a 24-hour window are charged from 2026-10-01; 1,000 free delivered service messages per business number per month |
+
+Source: developers.facebook.com WhatsApp pricing page and Kenyan press coverage, Sept–Oct 2026.
+WhatsApp has **no** per-segment model — it is per delivered message/template category — so the ERP
+labels WhatsApp estimates as estimates and treats the provider invoice as authoritative.
+
+## Kenya eTIMS (compliance, not messaging)
+
+| Item | Cost | Status |
 | --- | --- | --- |
-| M-PESA (Daraja) | Tariffed by Safaricom per transaction band; historically ~0.5 – 1.2% equivalent depending on amount band and paybill vs till | The product never charges a merchant for a payment it did not process |
-| Card (Paystack, as used elsewhere in JATA) | Per-transaction fee + possible FX | Disclosed by the provider, not by this table |
+| OSCU (always-online system-to-system) | No published per-invoice KRA fee found | Requires development, testing, vetting and certification before use |
+| VSCU (bulk/intermittent) | No published per-invoice KRA fee found | Same certification path |
+| eTIMS Lite (portal/app/USSD) | No published fee | Not a system-to-system integration; not what this product uses |
+| Certified integrator | Commercial, quote-based | Not engaged; no cost incurred |
 
-The storefront in this release **takes no payment**. Customers pay on delivery or collection and the
-merchant records the receipt, so there is no gateway fee for a store order until the merchant chooses
-one.
+The ERP ships **no live eTIMS adapter**. `etimsSubmissionPosture().canSubmit` is always `false`, and
+the disabled adapter fails closed with `PROVIDER_NOT_CONFIGURED`. Enabling it needs both
+`ETIMS_LIVE_ENABLED="true"` and an `ETIMS_ADAPTER_KEY` for a certified adapter, and no such key
+exists in this repository.
 
-## 5. eTIMS
+## Cost of running the software itself
 
-| Item | Cost |
-| --- | --- |
-| KRA eTIMS onboarding (self-onboarding via eCitizen/USSD/app) | No fee |
-| Certified system-to-system integration (OSCU/VSCU via a vendor) | Vendor-quoted; commonly monthly or per-invoice. **Not contracted, not quoted, not integrated here.** |
-| This product's eTIMS submission | **No cost, because it does not submit.** Invoices are prepared and validated locally. |
+Nothing in this pass required a paid service. The verification database was a disposable local
+PostgreSQL 16.2 started from the `pgserver` wheel; no queueing infrastructure, no managed
+messaging wallet and no cloud spend was introduced. Hosting remains the existing Next.js + Vercel +
+Neon arrangement, whose cost this document does not attempt to re-price.
 
-A merchant who needs filing should keep using their certified eTIMS solution alongside this product.
-Nothing in this release replaces it, and no invoice is labelled accepted.
+## What would change the numbers
 
-## 6. Infrastructure
+* Volume: every SMS route above is tiered, and the gap between the cheapest reseller and Safaricom
+  direct is roughly 10×, which is a commercial decision rather than an engineering one.
+* Sender ID policy: whether branded IDs are free or KES 8,700 one-time materially changes onboarding
+  cost per business.
+* WhatsApp template category mix: marketing is ~5.6× utility, so campaign composition dominates.
+* Any paid queue: deliberately avoided; the outbox is a table with a claim/lease pattern, not a
+  hosted queue.
 
-| Component | Posture |
-| --- | --- |
-| Queueing | **In-database.** `MsgCampaignRecipient` rows with a compare-and-set claim stand in for a paid queue. No SQS/Cloud Tasks/Redis bill. The trade-off is throughput: batches are claimed by the request that runs them (`≤200` per API call), not by a worker fleet. |
-| Hosting | Existing Vercel deployment. The ERP adds server components and route handlers, no new runtime. |
-| Database | Existing Neon PostgreSQL. 38 new tables, all indexed by `businessId`; no new cluster. |
-| Object storage | None added. Public shop images come from the existing product fields. |
-| Observability | Existing logs plus `ErpAuditEvent`. No paid APM added. |
+## Not claimed
 
-Nothing in this release creates a recurring third-party bill on its own. The first shilling spent is
-a message the merchant explicitly approves, from a wallet the merchant explicitly topped up.
-
-## 7. What a merchant actually pays in month one
-
-| Line | Amount (KES) | Optional? |
-| --- | --- | --- |
-| POS / ERP - PRO subscription | 3,000 / month | No, if they want the ERP |
-| Existing Business POS subscription (if held) | 499 / month | Separate product, untouched |
-| Sender ID registration | 0 – ~8,700 one-time | Yes, and charged by the provider, not here |
-| SMS wallet top-up | Merchant's choice | Yes, no auto top-up |
-| WhatsApp fees | Per delivered message | Yes, requires a connected WhatsApp Business account |
-| eTIMS integration | Quote from a certified vendor | Yes |
-| Card/M-PESA fees on money received | Provider's tariff | Depends on rail used |
-
-## Caveats a reader should keep in mind
-
-1. Rates were read from public pages and news coverage on 2026-10-27, not from contracts.
-2. Volume tiers mean the cheapest published rate is rarely the rate a small merchant gets.
-3. Delivery rate is not the same as billed rate. Providers bill for submitted segments; a message
-   that fails at the handset may still be charged. This product reconciles provider reports rather
-   than assuming every submission was delivered.
-4. Nothing here is a promise about a future price. If a provider changes its card, the tariff row
-   changes and the next campaign is priced at the new rate — the old campaign keeps the cost it was
-   approved at, because the reservation was already made.
+No provider is connected. No price here has been verified by a signed quote. No message was sent and
+no fee was incurred while building or testing this work.

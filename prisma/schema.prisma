@@ -2473,6 +2473,8 @@ model ErpTaxRule {
   effectiveTo  DateTime?
   sourceRef    String?
   verified     Boolean   @default(false)
+  // Shown beside a reference rate: a seeded default is not tax advice and must say so.
+  notes        String?   @db.Text
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

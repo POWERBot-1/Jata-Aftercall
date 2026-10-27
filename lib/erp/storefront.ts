@@ -134,6 +134,22 @@ export function orderAcceptance(settings: StorefrontSettings, now: Date, timeZon
   return { open: true, reason: "Open for orders." };
 }
 
+/**
+ * `PosProduct` stores its list price in `priceKES`, while the shared sale-pricing helper reads the
+ * `basePriceKES` shape used by the public storefront Product model. Without this adapter the helper
+ * sees `undefined` and every catalogue item is reported as "no price", so the shop can never sell
+ * anything. Found by the PostgreSQL integration suite; the mocked unit tests passed because their
+ * fixtures already used `basePriceKES`.
+ */
+function pricedProductForSale(product: any) {
+  return {
+    basePriceKES: typeof product?.priceKES === "number" ? product.priceKES : product?.basePriceKES ?? null,
+    salePriceKES: product?.salePriceKES ?? null,
+    salePriceStartsAt: product?.salePriceStartsAt ?? null,
+    salePriceEndsAt: product?.salePriceEndsAt ?? null,
+  };
+}
+
 export async function loadPublicCatalogue(client: any, slug: string) {
   const configuration = await client.erpConfiguration.findUnique({ where: { storefrontSlug: slug } });
   if (!configuration) throw new StorefrontError("That shop was not found.", 404, "STORE_NOT_FOUND");
@@ -150,7 +166,7 @@ export async function loadPublicCatalogue(client: any, slug: string) {
 
   const visible: PublicProduct[] = [];
   for (const product of products) {
-    const priced = effectiveUnitPrice(product, now);
+    const priced = effectiveUnitPrice(pricedProductForSale(product), now);
     if (!priced || priced.unitPriceKES <= 0) continue;
     const available = stock.get(product.id);
     const availability: PublicProduct["availability"] = !product.trackInventory
@@ -234,7 +250,7 @@ export async function placeStoreOrder(client: any, input: PlaceOrderInput) {
     const productId = resolveProductRef(businessId, String(item.ref ?? ""), products);
     const product: any = productId ? byId.get(productId) : null;
     if (!product || product.isActive === false) throw new StorefrontError("One of the items is no longer available. Refresh the shop and try again.", 409, "PRODUCT_UNAVAILABLE");
-    const priced = effectiveUnitPrice(product, now);
+    const priced = effectiveUnitPrice(pricedProductForSale(product), now);
     if (!priced || priced.unitPriceKES <= 0) throw new StorefrontError(`${product.name} has no price right now.`, 409, "NO_PRICE");
     if (product.trackInventory) {
       const available = stock.get(product.id) ?? 0;
