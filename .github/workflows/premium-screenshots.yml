@@ -179,9 +179,12 @@ jobs:
           workflow artifact (`premium-screenshots-*`).
           MD
           git add verification/evidence
+          # On pull_request events GITHUB_REF_NAME is the synthetic "<pr>/merge" ref, which can
+          # never be pushed; the real head branch is github.head_ref. Dispatch runs use ref_name.
+          evidence_ref="${{ github.head_ref || github.ref_name }}"
           if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
-            if git push origin "HEAD:${GITHUB_REF_NAME}" 2>/tmp/evidence-push.err; then
-              echo "::notice title=Evidence publish::Evidence commit pushed to ${GITHUB_REF_NAME}"
+            if git push origin "HEAD:${evidence_ref}" 2>/tmp/evidence-push.err; then
+              echo "::notice title=Evidence publish::Evidence commit pushed to ${evidence_ref}"
             else
               echo "::error title=Evidence push declined::Workflow artifact remains the evidence channel"
               while IFS= read -r line; do echo "::error title=Push stderr::${line}"; done < /tmp/evidence-push.err
