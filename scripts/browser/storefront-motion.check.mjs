@@ -152,7 +152,11 @@ async function scenario(name, options, test, query = "") {
   const { page, trace } = await newPage(browser, options);
   try {
     await page.goto(`${BASE_URL}/dev/motion-preview${query}`, { waitUntil: "domcontentloaded", timeout: 120000 });
-    await page.waitForFunction(() => document.querySelector(".eb-hero__media img")?.naturalWidth > 0, { timeout: 15000 });
+    // Numeric polling instead of the default `requestAnimationFrame` polling: in a no-JavaScript
+    // page the rAF scheduler is unreliable in headless Chrome, which made the first cold scenario
+    // time out even though the SVG had already been served. The assertion and 15s budget are
+    // unchanged; only the polling mechanism is made deterministic.
+    await page.waitForFunction(() => document.querySelector(".eb-hero__media img")?.naturalWidth > 0, { timeout: 15000, polling: 100 });
     check(`${name}: actual local synthetic illustration loaded`, true);
     await test(page, trace);
     check(`${name}: no uncaught page errors`, trace.pageErrors.length === 0, trace.pageErrors.join(" | "));
