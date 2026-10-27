@@ -4483,7 +4483,13 @@ button:focus-visible {
 }
 @media (min-width: 900px) { .ws-main { padding: 1.75rem 2.5rem 5rem; } }
 
-.ws-stack { display: grid; gap: 1.1rem; }
+/* Explicit minmax(0, 1fr) track: the implicit `auto` track honours grid items' min-content, so
+   wide children (the AI Front Desk snap stepper, hero surfaces, metric grids) expanded the track
+   past phone viewports and pushed documentElement.scrollWidth past 100% — real-Chrome evidence in
+   PR #69 (320–430px). A zero-minimum track keeps the single-column stack at container width; the
+   children's own overflow:auto/hidden then scroll or clip inside it. Desktop is unchanged because
+   the stack is single-column at every width and its content already fits there. */
+.ws-stack { display: grid; gap: 1.1rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 900px) { .ws-stack { gap: 1.5rem; } }
 
 /* ── Editorial headings ─────────────────────────────────────────────────── */
