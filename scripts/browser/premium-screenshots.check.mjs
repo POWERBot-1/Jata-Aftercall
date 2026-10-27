@@ -245,14 +245,35 @@ function measureFacts() {
     comingSoon: Boolean(Array.from(document.querySelectorAll("p")).find((p) => (p.textContent || "").includes("coming soon"))),
   };
   // Image health for every RENDERED image (hidden panels have zero-size boxes and are skipped).
-  // A blank/broken photograph reports naturalWidth 0 or complete=false after the scroll pass; an
-  // image whose box crosses the viewport or its containing block is the 320px boundary defect.
+  // A blank/broken photograph reports naturalWidth 0 or complete=false after the scroll pass.
+  // Boundary logic distinguishes intentional Ken Burns transforms (scale/translate inside an
+  // overflow:hidden/clip ancestor — visually safe) from a real layout spill: a violation is a
+  // visual box escaping every clipping ancestor into the viewport edge, or a transform-free
+  // layout box wider than its picture parent.
   const images = Array.from(document.images)
     .map((img) => {
       const rect = img.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return null;
-      const parent = img.closest("figure, section, picture, .jata-showcase__media, .lp-demo__media") || img.parentElement;
-      const parentRect = parent ? parent.getBoundingClientRect() : null;
+      const picture = img.closest("picture") || img.parentElement;
+      const pictureRect = picture ? picture.getBoundingClientRect() : null;
+      const clips = ["hidden", "clip", "auto", "scroll"];
+      let clipAncestor = null;
+      let node = img.parentElement;
+      while (node && node !== document.body) {
+        const overflowX = getComputedStyle(node).overflowX;
+        const ancestorRect = node.getBoundingClientRect();
+        if (clips.includes(overflowX) &&
+            ancestorRect.left - 1 <= rect.left && ancestorRect.right + 1 >= rect.right &&
+            ancestorRect.top - 1 <= rect.top && ancestorRect.bottom + 1 >= rect.bottom) {
+          clipAncestor = `${node.tagName.toLowerCase()}.${String(node.className || "").split(" ")[0]}`;
+          break;
+        }
+        node = node.parentElement;
+      }
+      const visualSpill = rect.right > window.innerWidth + 1 || rect.left < -1 ||
+        (pictureRect && (rect.right > pictureRect.right + 1 || rect.left < pictureRect.left - 1));
+      const layoutWider = pictureRect && pictureRect.width > 0 && img.offsetWidth > picture.offsetWidth + 1;
+      const boundaryViolation = (visualSpill && !clipAncestor) || Boolean(layoutWider);
       return {
         src: (img.currentSrc || img.getAttribute("src") || "").split("/").pop().slice(0, 70),
         complete: img.complete,
@@ -261,17 +282,19 @@ function measureFacts() {
         h: Math.round(rect.height),
         left: Math.round(rect.left),
         right: Math.round(rect.right),
-        viewportOverflow: rect.right > window.innerWidth + 1 || rect.left < -1,
-        parent: parent ? `${parent.tagName.toLowerCase()}.${String(parent.className || "").split(" ")[0]}` : "",
-        parentW: parentRect ? Math.round(parentRect.width) : null,
-        exceedsParent: parentRect ? rect.right > parentRect.right + 1 || rect.left < parentRect.left - 1 : false,
+        visualSpill: Boolean(visualSpill),
+        clipAncestor,
+        layoutWider: Boolean(layoutWider),
+        boundaryViolation,
+        picture: picture ? `${picture.tagName.toLowerCase()}.${String(picture.className || "").split(" ")[0]}` : "",
+        pictureW: pictureRect ? Math.round(pictureRect.width) : null,
       };
     })
     .filter(Boolean);
   const blankImages = images.filter((img) => !img.complete || img.naturalWidth === 0).map((img) => img.src);
   const overflowImages = images
-    .filter((img) => img.viewportOverflow || img.exceedsParent)
-    .map((img) => `${img.src} (right=${img.right}, parent=${img.parent}/${img.parentW})`);
+    .filter((img) => img.boundaryViolation)
+    .map((img) => `${img.src} (right=${img.right}, clip=${img.clipAncestor ?? "none"}, layoutWider=${img.layoutWider})`);
 
   return {
     scrollWidth: doc.scrollWidth,
@@ -454,9 +477,9 @@ for (const width of ["320x568", "390x844"]) {
     record(showcase.length >= 1, `${width} homepage showcase renders a demo photograph`,
       showcase.map((img) => `${img.src}=${img.naturalWidth}px`).join(" | "));
     record(
-      showcase.every((img) => img.complete && img.naturalWidth > 0 && img.w > 200 && img.right <= viewportWidth + 1),
-      `${width} homepage showcase photo is decoded and inside the viewport`,
-      showcase.map((img) => `${img.src} w=${img.w} right=${img.right}`).join(" | "),
+      showcase.every((img) => img.complete && img.naturalWidth > 0 && img.w > 200 && !img.boundaryViolation),
+      `${width} homepage showcase photo is decoded and inside its clipping boundary`,
+      showcase.map((img) => `${img.src} w=${img.w} right=${img.right} clip=${img.clipAncestor ?? "none"}`).join(" | "),
     );
   }
   const demo = evidence.results.find((r) => r.viewport === width && r.route === "demo-nyumbani-kitchen");
