@@ -198,8 +198,8 @@ describe("the owner-only POS stays owner-only", () => {
   });
 
   it("sits in the shared pricing grid but never on a demo or customer-facing page", () => {
-    // 2026-10-25: the POS is the homepage's fifth card; payable choices still come only from
-    // publiclyListedPlans(), which keeps excluding it.
+    // 2026-10-27 order: the POS is the homepage's sixth (last) card; payable choices still come
+    // only from publiclyListedPlans(), which keeps excluding it.
     expect(page).toContain("homepagePlanCards");
     expect(readFileSync(path.join(root, "lib/pricing.ts"), "utf8")).toContain("publiclyListedPlans");
     for (const file of ["components/BusinessPage.tsx", "components/storefront/DemoShowcaseBand.tsx", "lib/demoShowcase.ts"]) {

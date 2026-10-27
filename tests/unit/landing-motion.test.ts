@@ -60,7 +60,7 @@ describe("landing palette", () => {
       ["heading on ink", palette["--lp-cream"], palette["--lp-ink"]],
       ["kicker on cream", palette["--lp-ember"], palette["--lp-cream"]],
       ["badge text on ink", palette["--lp-amber"], palette["--lp-ink"]],
-      ["primary button label", "#1a140d", palette["--lp-amber"]],
+      ["primary button label", "#1b1e24", palette["--lp-amber"]],
     ];
     for (const [label, foreground, background] of pairs) {
       expect(contrast(foreground, background), `${label} (${foreground} on ${background})`).toBeGreaterThanOrEqual(AA);
@@ -69,11 +69,11 @@ describe("landing palette", () => {
 
   it("keeps the demo band's copy readable over its photographs", () => {
     const AA = 4.5;
-    // The band sits on #12100e under a layered scrim; the brightest copy is the headline.
-    expect(contrast("#f7f2e8", "#12100e")).toBeGreaterThanOrEqual(AA);
-    expect(contrast("#f0a03c", "#12100e")).toBeGreaterThanOrEqual(AA);
+    // The band sits on graphite #101216 under a layered scrim; the brightest copy is the headline.
+    expect(contrast("#f5f7f4", "#101216")).toBeGreaterThanOrEqual(AA);
+    expect(contrast("#b6ff2e", "#101216")).toBeGreaterThanOrEqual(AA);
     // Service rows get their own darker plate so the price text stays legible over any photo.
-    expect(css).toMatch(/\.jata-showcase__service \{[^}]*background: rgba\(18, 16, 14, 0\.62\)/);
+    expect(css).toMatch(/\.jata-showcase__service \{[^}]*background: rgba\(16, 18, 22, 0\.62\)/);
   });
 });
 

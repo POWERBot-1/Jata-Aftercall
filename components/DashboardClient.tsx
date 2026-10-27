@@ -505,7 +505,7 @@ function BusinessCard({ b, m }: { b: Biz; m: Metrics }) {
     { label: "Views", value: m.views || 0, colour: "var(--ws-amber)" },
     { label: "WhatsApp", value: m.whatsapp || 0, colour: "var(--ws-jade)" },
     { label: "Calls", value: m.calls || 0, colour: "var(--jata-info)" },
-    { label: "Directions", value: m.directions || 0, colour: "#c2410c" },
+    { label: "Directions", value: m.directions || 0, colour: "#4d6b12" },
   ];
 
   const activity = [

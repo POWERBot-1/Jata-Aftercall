@@ -103,26 +103,36 @@
 
 
 :root {
-  --jata-ink: #18181b;
-  --jata-paper: #fafaf8;
+  /* Premium 2026: cool graphite neutrals with the electric-lime accent shared with the landing
+     page and Lime Spark product theme. These are the fallback values for surfaces outside a
+     .ws-shell / .product-theme-root scope; both scopes re-point the same names below. */
+  --jata-graphite: #16181d;
+  --jata-graphite-soft: #22262e;
+  --jata-lime: #b6ff2e;
+  --jata-lime-hover: #c8ff5c;
+  --jata-lime-deep: #4d6b12;
+  --jata-lime-tint: #eefad2;
+  --jata-on-lime: #1b1e24;
+  --jata-ink: #181b21;
+  --jata-paper: #f7f8f7;
   --jata-card: #ffffff;
-  --jata-line: #e4e4e7;
-  --jata-muted: #52525b;
+  --jata-line: #e3e6e4;
+  --jata-muted: #525a64;
   /* Filled-action, hover and inset-chip surfaces. They exist as tokens because the shared
      primitives (.jata-btn, .jc-*, .pos-*) used to hard-code #18181b/#fff/#f4f4f5 — a light-theme
      assumption that painted white-on-white controls as soon as the product ran under the
      graphite theme. Re-pointed per product theme below. */
-  --jata-action: #18181b;
+  --jata-action: #181b21;
   --jata-on-action: #ffffff;
   --jata-action-hover: #000000;
-  --jata-sunken: #f4f4f5;
-  --jata-soft: #fafafa;
-  --jata-accent: #d97706;
+  --jata-sunken: #f2f4f2;
+  --jata-soft: #f8faf8;
+  --jata-accent: #4d6b12;
   --jata-live: #047857;
   --jata-danger: #b91c1c;
-  --jata-focus: #18181b;
+  --jata-focus: #435e10;
   --jata-radius: 1rem;
-  --jata-shadow: 0 12px 32px rgba(24, 24, 27, 0.06);
+  --jata-shadow: 0 12px 32px rgba(22, 24, 29, 0.07);
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
@@ -152,7 +162,7 @@ h1, h2, h3 {
 .jata-page {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top right, rgba(217, 119, 6, 0.12), transparent 28rem),
+    radial-gradient(circle at top right, rgba(77, 107, 18, 0.12), transparent 28rem),
     var(--jata-paper);
 }
 
@@ -2400,6 +2410,11 @@ button:focus-visible {
 /* ═══════════════════════════════════════════════════════════════════════════
  * JATA AFTERCALL — 2026 landing page and demo showcase
  *
+ * Premium 2026 reskin (owner directive, 2026-10-27): the warm espresso/cream/amber art
+ * direction was replaced by restrained graphite (#16181d family), electric lime (#b6ff2e,
+ * the same primary as the Lime Spark product theme) and a neutral premium-light paper, with
+ * Inter replacing the serif display face. Selectors and markup hooks are unchanged.
+ *
  * Scope: `.lp-*` (public landing page) and `.jata-showcase*` (the band on the four demo
  * business pages). Nothing here changes a product, dashboard, POS or storefront selector.
  *
@@ -2414,21 +2429,33 @@ button:focus-visible {
  *   • Everything is switched off under `prefers-reduced-motion: reduce` at the end of the block.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Premium 2026 art direction: restrained graphite + electric lime on a light, neutral paper.
+   Legacy variable names are kept (every .lp-* rule and several tests reference them); the
+   --lp-lime* / --lp-graphite* semantic names document what the values now mean. This rule stays
+   comment-free inside the braces so the CSS-variable test parser can read every declaration. */
 .lp-page {
-  --lp-ink: #14110f;
-  --lp-ink-soft: #1d1815;
-  --lp-cream: #f7f2e8;
-  --lp-cream-2: #efe7d7;
-  --lp-paper: #fffdf8;
-  --lp-text: #171310;
-  --lp-text-muted: #5a5148;
-  --lp-line: rgba(23, 19, 16, 0.12);
-  --lp-line-light: rgba(247, 242, 232, 0.16);
-  --lp-amber: #f0a03c;
-  --lp-amber-deep: #b45309;
-  --lp-ember: #c2410c;
-  --lp-jade: #0f766e;
-  --lp-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  --lp-graphite: #16181d;
+  --lp-graphite-soft: #22262e;
+  --lp-graphite-line: #2a2f38;
+  --lp-lime: #b6ff2e;
+  --lp-lime-hover: #c8ff5c;
+  --lp-lime-deep: #4d6b12;
+  --lp-lime-tint: #eefad2;
+  --lp-on-lime: #1b1e24;
+  --lp-ink: #16181d;
+  --lp-ink-soft: #22262e;
+  --lp-cream: #f5f7f4;
+  --lp-cream-2: #e9ede9;
+  --lp-paper: #ffffff;
+  --lp-text: #181b21;
+  --lp-text-muted: #5b626d;
+  --lp-line: rgba(27, 30, 36, 0.12);
+  --lp-line-light: rgba(245, 247, 244, 0.16);
+  --lp-amber: #b6ff2e;
+  --lp-amber-deep: #4d6b12;
+  --lp-ember: #4d6b12;
+  --lp-jade: #4d6b12;
+  --lp-display: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   overflow-x: clip;
   background: var(--lp-cream);
   color: var(--lp-text);
@@ -2450,8 +2477,8 @@ button:focus-visible {
 /* The appearance picker sits directly above the page on every route; align it with this page's
    palette so there is no dead strip of theme background above the navigation. Scoped with :has()
    so no other route's toolbar changes colour. */
-.product-theme-root:has(> .lp-page) { background: #14110f; }
-.product-theme-root:has(> .lp-page) > .product-theme-toolbar { background: #14110f; color: #f7f2e8; }
+.product-theme-root:has(> .lp-page) { background: #16181d; }
+.product-theme-root:has(> .lp-page) > .product-theme-toolbar { background: #16181d; color: #f5f7f4; }
 .lp-page ul, .lp-page ol { padding: 0; list-style: none; }
 .lp-page :focus-visible { outline: 3px solid var(--lp-amber); outline-offset: 3px; border-radius: 4px; }
 .lp-page [id] { scroll-margin-top: 84px; }
@@ -2467,7 +2494,7 @@ button:focus-visible {
   top: 0;
   z-index: 50;
   border-bottom: 1px solid var(--lp-line-light);
-  background: rgba(20, 17, 15, 0.86);
+  background: rgba(22, 24, 29, 0.86);
   -webkit-backdrop-filter: blur(16px) saturate(130%);
   backdrop-filter: blur(16px) saturate(130%);
   color: var(--lp-cream);
@@ -2518,22 +2545,22 @@ button:focus-visible {
 @media (min-width: 640px) {
   .lp-nav .jata-brand-tag { display: inline; }
 }
-.lp-nav__panel-cta { background: rgba(240, 160, 60, 0.16); color: #f7b45c; }
+.lp-nav__panel-cta { background: rgba(182, 255, 46, 0.16); color: #c8ff5c; }
 .lp-nav .jata-btn { flex: 0 0 auto; }
 @media (min-width: 900px) { .lp-nav__inner { padding: 0.55rem 2.5rem; } }
 .lp-nav .jata-brand { margin-right: auto; }
-.lp-nav .jata-brand-mark { background: var(--lp-amber); color: #1a140d; }
+.lp-nav .jata-brand-mark { background: var(--lp-amber); color: #1b1e24; }
 .lp-nav .jata-brand-name { color: var(--lp-cream); letter-spacing: 0.16em; }
-.lp-nav .jata-brand-tag { color: rgba(247, 242, 232, 0.6); }
+.lp-nav .jata-brand-tag { color: rgba(245, 247, 244, 0.6); }
 .lp-nav__links { display: none; }
-.lp-nav__link { color: rgba(247, 242, 232, 0.74); }
+.lp-nav__link { color: rgba(245, 247, 244, 0.74); }
 .lp-nav__link:hover { color: var(--lp-cream); }
 .lp-nav__actions { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
-.lp-nav__login { display: none; color: rgba(247, 242, 232, 0.78); }
-.lp-nav .jata-btn-primary { border-color: var(--lp-amber); background: var(--lp-amber); color: #1a140d; }
-.lp-nav .jata-btn-primary:hover:not(:disabled) { border-color: #f7b45c; background: #f7b45c; }
-.lp-nav .jata-btn-secondary { border-color: rgba(247, 242, 232, 0.28); background: transparent; color: var(--lp-cream); }
-.lp-nav .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
+.lp-nav__login { display: none; color: rgba(245, 247, 244, 0.78); }
+.lp-nav .jata-btn-primary { border-color: var(--lp-amber); background: var(--lp-amber); color: #1b1e24; }
+.lp-nav .jata-btn-primary:hover:not(:disabled) { border-color: #c8ff5c; background: #c8ff5c; }
+.lp-nav .jata-btn-secondary { border-color: rgba(245, 247, 244, 0.28); background: transparent; color: var(--lp-cream); }
+.lp-nav .jata-btn-ghost { color: rgba(245, 247, 244, 0.78); }
 .lp-nav__logout { display: inline-flex; }
 .lp-nav__compact { position: relative; display: block; }
 .lp-nav__compact > summary {
@@ -2543,7 +2570,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid rgba(247, 242, 232, 0.28);
+  border: 1px solid rgba(245, 247, 244, 0.28);
   border-radius: 999px;
   padding: 0.35rem 0.8rem;
   color: var(--lp-cream);
@@ -2575,7 +2602,7 @@ button:focus-visible {
   gap: 0.15rem;
   border: 1px solid var(--lp-line-light);
   border-radius: 1rem;
-  background: #1d1815;
+  background: #22262e;
   padding: 0.6rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
@@ -2590,7 +2617,7 @@ button:focus-visible {
   font-weight: 600;
   text-decoration: none;
 }
-.lp-nav__panel-link:hover { background: rgba(247, 242, 232, 0.08); }
+.lp-nav__panel-link:hover { background: rgba(245, 247, 244, 0.08); }
 .lp-nav__panel-button { width: 100%; background: none; border: 0; text-align: left; }
 @media (min-width: 980px) {
   .lp-nav__links { display: flex; align-items: center; gap: 0.15rem; flex-wrap: wrap; row-gap: 0.35rem; min-width: 0; }
@@ -2605,11 +2632,11 @@ button:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid rgba(247, 242, 232, 0.22);
+  border: 1px solid rgba(245, 247, 244, 0.22);
   border-radius: 999px;
-  background: rgba(247, 242, 232, 0.06);
+  background: rgba(245, 247, 244, 0.06);
   padding: 0.35rem 0.85rem;
-  color: rgba(247, 242, 232, 0.86);
+  color: rgba(245, 247, 244, 0.86);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -2620,7 +2647,7 @@ button:focus-visible {
   height: 0.45rem;
   border-radius: 999px;
   background: var(--lp-amber);
-  box-shadow: 0 0 0 4px rgba(240, 160, 60, 0.18);
+  box-shadow: 0 0 0 4px rgba(182, 255, 46, 0.18);
 }
 .lp-kicker {
   color: var(--lp-ember);
@@ -2649,18 +2676,18 @@ button:focus-visible {
   font-size: clamp(0.98rem, 1.35vw, 1.1rem);
   line-height: 1.65;
 }
-.lp-lede--light { color: rgba(247, 242, 232, 0.78); }
+.lp-lede--light { color: rgba(245, 247, 244, 0.78); }
 .lp-lede--tight { margin-top: 1.25rem !important; }
 .lp-section { position: relative; padding: clamp(3rem, 7vw, 5.5rem) 0; }
 .lp-section--cream { background: var(--lp-cream); }
 .lp-section--paper { background: var(--lp-paper); }
 .lp-section--ink { background: var(--lp-ink); color: var(--lp-cream); }
-.lp-section--ink .lp-lede { color: rgba(247, 242, 232, 0.76); }
+.lp-section--ink .lp-lede { color: rgba(245, 247, 244, 0.76); }
 .lp-section__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1.25rem; }
 
 .lp-code {
   border-radius: 0.4rem;
-  background: rgba(23, 19, 16, 0.07);
+  background: rgba(27, 30, 36, 0.07);
   padding: 0.1rem 0.4rem;
   font-size: 0.9em;
 }
@@ -2682,13 +2709,13 @@ button:focus-visible {
   transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 .lp-btn:hover { transform: translateY(-1px); }
-.lp-btn--primary { background: var(--lp-amber); color: #1a140d; box-shadow: 0 12px 30px rgba(240, 160, 60, 0.26); }
-.lp-btn--primary:hover { background: #f7b45c; }
-.lp-btn--ghost { border-color: rgba(247, 242, 232, 0.32); background: rgba(247, 242, 232, 0.05); color: var(--lp-cream); }
-.lp-btn--ghost:hover { background: rgba(247, 242, 232, 0.12); }
-.lp-btn--amber { background: var(--lp-amber); color: #1a140d; box-shadow: 0 14px 34px rgba(240, 160, 60, 0.32); }
-.lp-btn--outline { border-color: rgba(247, 242, 232, 0.4); color: var(--lp-cream); }
-.lp-btn--outline:hover { background: rgba(247, 242, 232, 0.1); }
+.lp-btn--primary { background: var(--lp-amber); color: #1b1e24; box-shadow: 0 12px 30px rgba(182, 255, 46, 0.26); }
+.lp-btn--primary:hover { background: #c8ff5c; }
+.lp-btn--ghost { border-color: rgba(245, 247, 244, 0.32); background: rgba(245, 247, 244, 0.05); color: var(--lp-cream); }
+.lp-btn--ghost:hover { background: rgba(245, 247, 244, 0.12); }
+.lp-btn--amber { background: var(--lp-amber); color: #1b1e24; box-shadow: 0 14px 34px rgba(182, 255, 46, 0.32); }
+.lp-btn--outline { border-color: rgba(245, 247, 244, 0.4); color: var(--lp-cream); }
+.lp-btn--outline:hover { background: rgba(245, 247, 244, 0.1); }
 
 /* ── Hero ───────────────────────────────────────────────────────────────── */
 
@@ -2706,8 +2733,8 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(20, 17, 15, 0.15) 0%, rgba(20, 17, 15, 0.55) 55%, #14110f 100%),
-    radial-gradient(90% 70% at 84% 18%, rgba(194, 65, 12, 0.28), transparent 62%);
+    linear-gradient(180deg, rgba(22, 24, 29, 0.15) 0%, rgba(22, 24, 29, 0.55) 55%, #16181d 100%),
+    radial-gradient(90% 70% at 84% 18%, rgba(182, 255, 46, 0.28), transparent 62%);
 }
 .lp-hero__grain {
   position: absolute;
@@ -2737,7 +2764,7 @@ button:focus-visible {
   text-wrap: balance;
 }
 .lp-hero__accent {
-  background: linear-gradient(transparent 64%, rgba(240, 160, 60, 0.35) 64%);
+  background: linear-gradient(transparent 64%, rgba(182, 255, 46, 0.35) 64%);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   color: var(--lp-cream);
@@ -2745,14 +2772,14 @@ button:focus-visible {
 .lp-hero__lede {
   max-width: 34rem;
   margin-top: 1.15rem !important;
-  color: rgba(247, 242, 232, 0.78);
+  color: rgba(245, 247, 244, 0.78);
   font-size: clamp(1rem, 1.4vw, 1.12rem);
   line-height: 1.62;
 }
 .lp-hero__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.6rem; }
 .lp-hero__micro {
   margin-top: 1rem !important;
-  color: rgba(247, 242, 232, 0.55);
+  color: rgba(245, 247, 244, 0.55);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -2760,8 +2787,8 @@ button:focus-visible {
   .lp-hero__media { position: absolute; inset: 0; height: auto; }
   .lp-hero__scrim {
     background:
-      linear-gradient(90deg, #14110f 0%, rgba(20, 17, 15, 0.94) 34%, rgba(20, 17, 15, 0.55) 58%, rgba(20, 17, 15, 0.12) 100%),
-      radial-gradient(70% 90% at 96% 4%, rgba(194, 65, 12, 0.22), transparent 60%);
+      linear-gradient(90deg, #16181d 0%, rgba(22, 24, 29, 0.94) 34%, rgba(22, 24, 29, 0.55) 58%, rgba(22, 24, 29, 0.12) 100%),
+      radial-gradient(70% 90% at 96% 4%, rgba(182, 255, 46, 0.22), transparent 60%);
   }
   .lp-hero__inner {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
@@ -2789,14 +2816,14 @@ button:focus-visible {
 }
 .lp-phone__frame {
   border-radius: 2rem;
-  border: 1px solid rgba(247, 242, 232, 0.16);
-  background: linear-gradient(160deg, #2a2320, #171310);
+  border: 1px solid rgba(245, 247, 244, 0.16);
+  background: linear-gradient(160deg, #2a2f38, #181b21);
   padding: 0.6rem;
   box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
 }
 .lp-phone__screen {
   border-radius: 1.5rem;
-  background: #fffdf8;
+  background: #ffffff;
   padding: 1rem;
   color: var(--lp-text);
 }
@@ -2821,8 +2848,8 @@ button:focus-visible {
   height: 2.1rem;
   place-items: center;
   border-radius: 999px;
-  background: #fde8cf;
-  color: #8a4a10;
+  background: #e4f7be;
+  color: #435e10;
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -2835,9 +2862,9 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 0.7rem;
-  background: #171310;
+  background: #181b21;
   padding: 0.5rem;
-  color: #fffdf8;
+  color: #ffffff;
   text-align: center;
   font-size: 0.75rem;
   font-weight: 750;
@@ -2848,12 +2875,12 @@ button:focus-visible {
   display: grid;
   gap: 0.15rem;
   margin-top: 0.7rem;
-  border: 1px solid #f3d3a8;
+  border: 1px solid #c9ef86;
   border-radius: 0.7rem;
-  background: #fdf2e2;
+  background: #eefad2;
   padding: 0.6rem 0.7rem;
 }
-.lp-phone__offer-label { color: #8a4a10; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.lp-phone__offer-label { color: #435e10; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 .lp-phone__offer-title { font-size: 0.82rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
 .lp-phone__offer-sub { color: var(--lp-text-muted); font-size: 0.68rem; line-height: 1.4; }
 .lp-phone__rows { display: grid; gap: 0.32rem; margin-top: 0.65rem; }
@@ -2863,7 +2890,7 @@ button:focus-visible {
   justify-content: space-between;
   gap: 0.5rem;
   border-radius: 0.55rem;
-  background: #f4efe6;
+  background: #f2f4f2;
   padding: 0.42rem 0.55rem;
   font-size: 0.72rem;
   line-height: 1.3;
@@ -2874,7 +2901,7 @@ button:focus-visible {
 .lp-phone__chips > span {
   flex: 1 1 0;
   min-width: 0;
-  border: 1px solid rgba(23, 19, 16, 0.18);
+  border: 1px solid rgba(27, 30, 36, 0.18);
   border-radius: 999px;
   padding: 0.4rem;
   text-align: center;
@@ -2886,7 +2913,7 @@ button:focus-visible {
 .lp-phone__caption {
   width: 100%;
   margin-top: 0.8rem;
-  color: rgba(247, 242, 232, 0.62);
+  color: rgba(245, 247, 244, 0.62);
   font-size: 0.76rem;
   line-height: 1.5;
   text-align: center;
@@ -2943,7 +2970,7 @@ button:focus-visible {
   display: flex;
   gap: 1.1rem;
   padding-right: 1.1rem;
-  color: rgba(23, 19, 16, 0.42);
+  color: rgba(27, 30, 36, 0.42);
   font-family: var(--lp-display);
   font-size: clamp(1.1rem, 2.4vw, 1.6rem);
   white-space: nowrap;
@@ -2961,11 +2988,11 @@ button:focus-visible {
 .lp-benefit {
   border: 1px solid var(--lp-line-light);
   border-radius: 1.1rem;
-  background: linear-gradient(180deg, rgba(247, 242, 232, 0.06), rgba(247, 242, 232, 0.02));
+  background: linear-gradient(180deg, rgba(245, 247, 244, 0.06), rgba(245, 247, 244, 0.02));
   padding: 1.2rem;
   transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
-.lp-benefit:hover { transform: translateY(-3px); border-color: rgba(240, 160, 60, 0.5); }
+.lp-benefit:hover { transform: translateY(-3px); border-color: rgba(182, 255, 46, 0.5); }
 /*
  * Every benefit icon is the same box: 2.6rem square with 0.55rem of padding, one radius, and the
  * glyph centred on both axes. It is a flex container rather than an inline-grid so it cannot be
@@ -2981,14 +3008,14 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 0.8rem;
-  background: rgba(240, 160, 60, 0.14);
+  background: rgba(182, 255, 46, 0.14);
   padding: 0.55rem;
   color: var(--lp-amber);
   line-height: 0;
 }
 .lp-benefit__icon svg { display: block; width: 100%; height: 100%; }
 .lp-benefit__title { margin-top: 0.8rem !important; color: var(--lp-cream); font-size: 0.98rem; font-weight: 750; }
-.lp-benefit__body { margin-top: 0.35rem !important; color: rgba(247, 242, 232, 0.68); font-size: 0.88rem; line-height: 1.6; }
+.lp-benefit__body { margin-top: 0.35rem !important; color: rgba(245, 247, 244, 0.68); font-size: 0.88rem; line-height: 1.6; }
 @media (min-width: 640px) { .lp-benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1000px) { .lp-benefits { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
@@ -3016,11 +3043,11 @@ button:focus-visible {
   scroll-snap-align: start;
   transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
-.lp-demo__tab:hover { border-color: rgba(194, 65, 12, 0.4); }
+.lp-demo__tab:hover { border-color: rgba(182, 255, 46, 0.4); }
 .lp-demo__tab[data-active="true"] {
   border-color: var(--lp-ember);
-  background: #fdf1e8;
-  box-shadow: inset 0 0 0 1px rgba(194, 65, 12, 0.25);
+  background: #eefad2;
+  box-shadow: inset 0 0 0 1px rgba(182, 255, 46, 0.25);
 }
 .lp-demo__tab-name { display: block; color: var(--lp-text); font-size: 0.86rem; font-weight: 750; white-space: nowrap; }
 .lp-demo__tab-meta { display: block; color: var(--lp-text-muted); font-size: 0.72rem; white-space: nowrap; }
@@ -3052,9 +3079,9 @@ button:focus-visible {
   left: 0.6rem;
   bottom: 0.6rem;
   border-radius: 999px;
-  background: rgba(20, 17, 15, 0.72);
+  background: rgba(22, 24, 29, 0.72);
   padding: 0.25rem 0.6rem;
-  color: rgba(247, 242, 232, 0.9);
+  color: rgba(245, 247, 244, 0.9);
   font-size: 0.66rem;
   letter-spacing: 0.02em;
   -webkit-backdrop-filter: blur(6px);
@@ -3067,7 +3094,7 @@ button:focus-visible {
   display: block;
   overflow: hidden;
   width: 38%;
-  border: 2px solid rgba(255, 253, 248, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.9);
   border-radius: 0.8rem;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
   animation: lp-inset-in 0.6s ease both;
@@ -3092,12 +3119,12 @@ button:focus-visible {
   align-items: baseline;
   gap: 0.5rem;
   margin-top: 0.9rem !important;
-  border: 1px solid #f0d3ab;
+  border: 1px solid #c9ef86;
   border-radius: 0.8rem;
-  background: #fdf4e6;
+  background: #eefad2;
   padding: 0.55rem 0.75rem;
 }
-.lp-demo__offer-label { color: #8a4a10; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.lp-demo__offer-label { color: #435e10; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .lp-demo__offer-title { color: var(--lp-text); font-size: 0.92rem; font-weight: 750; }
 .lp-demo__offer-sub { color: var(--lp-text-muted); font-size: 0.78rem; }
 .lp-demo__services { display: grid; gap: 0.4rem; margin-top: 0.9rem !important; }
@@ -3115,12 +3142,12 @@ button:focus-visible {
   text-decoration: none;
   transition: border-color 0.16s ease, background-color 0.16s ease;
 }
-.lp-demo__service:hover { border-color: rgba(194, 65, 12, 0.45); background: #fdf1e8; }
+.lp-demo__service:hover { border-color: rgba(182, 255, 46, 0.45); background: #eefad2; }
 .lp-demo__service-title { font-size: 0.88rem; font-weight: 650; }
 .lp-demo__service-price { flex: 0 0 auto; color: var(--lp-text-muted); font-size: 0.8rem; }
 .lp-demo__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.1rem; }
-.lp-demo__actions .lp-btn--ghost { border-color: rgba(23, 19, 16, 0.25); color: var(--lp-text); background: transparent; }
-.lp-demo__actions .lp-btn--ghost:hover { background: rgba(23, 19, 16, 0.05); }
+.lp-demo__actions .lp-btn--ghost { border-color: rgba(27, 30, 36, 0.25); color: var(--lp-text); background: transparent; }
+.lp-demo__actions .lp-btn--ghost:hover { background: rgba(27, 30, 36, 0.05); }
 .lp-demo__note { margin-top: 0.8rem !important; color: var(--lp-text-muted); font-size: 0.74rem; line-height: 1.5; }
 .lp-demo__index {
   display: flex;
@@ -3172,13 +3199,13 @@ button:focus-visible {
   flex-direction: column;
   border: 1px solid var(--lp-line-light);
   border-radius: 1.2rem;
-  background: linear-gradient(180deg, rgba(247, 242, 232, 0.06), rgba(247, 242, 232, 0.015));
+  background: linear-gradient(180deg, rgba(245, 247, 244, 0.06), rgba(245, 247, 244, 0.015));
   padding: 1.25rem 1.25rem 1.5rem;
 }
 .lp-plan[data-featured="true"] {
-  border-color: rgba(240, 160, 60, 0.6);
-  background: linear-gradient(180deg, rgba(240, 160, 60, 0.16), rgba(240, 160, 60, 0.03));
-  box-shadow: 0 24px 60px rgba(240, 160, 60, 0.12);
+  border-color: rgba(182, 255, 46, 0.6);
+  background: linear-gradient(180deg, rgba(182, 255, 46, 0.16), rgba(182, 255, 46, 0.03));
+  box-shadow: 0 24px 60px rgba(182, 255, 46, 0.12);
 }
 /* Product mark, in the same amber chip as the benefit icons. Rendered on every card, so it is a
    shared row like the name and price; decorative (`aria-hidden`) next to the plan name. */
@@ -3191,7 +3218,7 @@ button:focus-visible {
   justify-content: center;
   justify-self: start;
   border-radius: 0.8rem;
-  background: rgba(240, 160, 60, 0.14);
+  background: rgba(182, 255, 46, 0.14);
   padding: 0.55rem;
   color: var(--lp-amber);
   line-height: 0;
@@ -3210,7 +3237,7 @@ button:focus-visible {
   justify-self: start;
   margin-top: 0.4rem !important;
   border-radius: 999px;
-  background: rgba(240, 160, 60, 0.18);
+  background: rgba(182, 255, 46, 0.18);
   padding: 0.2rem 0.55rem;
   color: var(--lp-amber);
   font-size: 0.62rem;
@@ -3227,11 +3254,11 @@ button:focus-visible {
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
-.lp-plan__period { margin-top: 0.15rem !important; color: rgba(247, 242, 232, 0.6); font-size: 0.76rem; }
-.lp-plan__blurb { margin-top: 0.55rem !important; color: rgba(247, 242, 232, 0.74); font-size: 0.84rem; line-height: 1.5; }
+.lp-plan__period { margin-top: 0.15rem !important; color: rgba(245, 247, 244, 0.6); font-size: 0.76rem; }
+.lp-plan__blurb { margin-top: 0.55rem !important; color: rgba(245, 247, 244, 0.74); font-size: 0.84rem; line-height: 1.5; }
 /* Shared rows stretch the list box; the extra height goes after the last item, not between items. */
 .lp-plan__includes { display: grid; gap: 0.4rem; align-content: start; margin-top: 0.9rem !important; }
-.lp-plan__includes li { display: flex; gap: 0.45rem; color: rgba(247, 242, 232, 0.82); font-size: 0.82rem; line-height: 1.5; }
+.lp-plan__includes li { display: flex; gap: 0.45rem; color: rgba(245, 247, 244, 0.82); font-size: 0.82rem; line-height: 1.5; }
 .lp-plan__tick { flex: 0 0 auto; color: var(--lp-amber); font-weight: 800; }
 .lp-plan__cta {
   display: flex;
@@ -3241,9 +3268,9 @@ button:focus-visible {
   margin-top: auto;
   margin-bottom: 0.5rem;
   border-radius: 999px;
-  background: rgba(247, 242, 232, 0.92);
+  background: rgba(245, 247, 244, 0.92);
   padding: 0.6rem 1rem;
-  color: #1a140d;
+  color: #1b1e24;
   font-size: 0.88rem;
   font-weight: 750;
   text-align: center;
@@ -3252,13 +3279,13 @@ button:focus-visible {
 }
 .lp-plan__cta:hover { background: #fff; transform: translateY(-1px); }
 .lp-plan[data-featured="true"] .lp-plan__cta { background: var(--lp-amber); }
-.lp-plan[data-featured="true"] .lp-plan__cta:hover { background: #f7b45c; }
-.lp-plan__fine { margin-top: 0.6rem !important; color: rgba(247, 242, 232, 0.55); font-size: 0.68rem; line-height: 1.5; text-align: center; }
+.lp-plan[data-featured="true"] .lp-plan__cta:hover { background: #c8ff5c; }
+.lp-plan__fine { margin-top: 0.6rem !important; color: rgba(245, 247, 244, 0.55); font-size: 0.68rem; line-height: 1.5; text-align: center; }
 
 .lp-pricing__note {
   max-width: 48rem;
   margin: 1.5rem auto 0 !important;
-  color: rgba(247, 242, 232, 0.6);
+  color: rgba(245, 247, 244, 0.6);
   font-size: 0.78rem;
   line-height: 1.6;
   text-align: center;
@@ -3384,8 +3411,8 @@ button:focus-visible {
   position: relative;
   overflow: clip;
   background:
-    radial-gradient(70% 120% at 88% 0%, rgba(194, 65, 12, 0.32), transparent 62%),
-    linear-gradient(180deg, #1b1510, #14110f);
+    radial-gradient(70% 120% at 88% 0%, rgba(182, 255, 46, 0.32), transparent 62%),
+    linear-gradient(180deg, #1b1e24, #16181d);
   padding: clamp(2.5rem, 6vw, 4rem) 0;
   color: var(--lp-cream);
 }
@@ -3394,15 +3421,15 @@ button:focus-visible {
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 
-.lp-footer { background: #100d0b; color: rgba(247, 242, 232, 0.72); padding: clamp(2.5rem, 6vw, 4rem) 0 2rem; }
+.lp-footer { background: #0f1114; color: rgba(245, 247, 244, 0.72); padding: clamp(2.5rem, 6vw, 4rem) 0 2rem; }
 .lp-footer__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
 .lp-footer__brand { color: var(--lp-cream); font-size: 1rem; font-weight: 800; letter-spacing: 0.06em; }
 .lp-footer__mark { color: var(--lp-amber); }
 .lp-footer__line { max-width: 24rem; margin-top: 0.5rem !important; font-size: 0.85rem; line-height: 1.6; }
-.lp-footer__line--muted { color: rgba(247, 242, 232, 0.5); }
+.lp-footer__line--muted { color: rgba(245, 247, 244, 0.5); }
 .lp-footer__heading { color: var(--lp-cream); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 .lp-footer__col { display: grid; align-content: start; gap: 0.5rem; margin-top: 0.9rem; }
-.lp-footer__col a { color: rgba(247, 242, 232, 0.72); font-size: 0.86rem; text-decoration: none; }
+.lp-footer__col a { color: rgba(245, 247, 244, 0.72); font-size: 0.86rem; text-decoration: none; }
 .lp-footer__col a:hover { color: var(--lp-amber); text-decoration: underline; }
 .lp-footer__base {
   display: flex;
@@ -3410,9 +3437,9 @@ button:focus-visible {
   justify-content: space-between;
   gap: 0.4rem 1.5rem;
   margin-top: 2.25rem;
-  border-top: 1px solid rgba(247, 242, 232, 0.12);
+  border-top: 1px solid rgba(245, 247, 244, 0.12);
   padding-top: 1rem;
-  color: rgba(247, 242, 232, 0.45);
+  color: rgba(245, 247, 244, 0.45);
   font-size: 0.72rem;
   line-height: 1.6;
 }
@@ -3424,8 +3451,8 @@ button:focus-visible {
   position: relative;
   overflow: clip;
   isolation: isolate;
-  background: #12100e;
-  color: #f7f2e8;
+  background: #101216;
+  color: #f5f7f4;
 }
 .jata-showcase__media { position: absolute; inset: 0; }
 .jata-showcase__media picture,
@@ -3435,7 +3462,7 @@ button:focus-visible {
 .jata-showcase__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(18, 16, 14, 0.35) 0%, rgba(18, 16, 14, 0.72) 46%, #12100e 100%);
+  background: linear-gradient(180deg, rgba(16, 18, 22, 0.35) 0%, rgba(16, 18, 22, 0.72) 46%, #101216 100%);
 }
 .jata-showcase__inner {
   position: relative;
@@ -3452,14 +3479,14 @@ button:focus-visible {
   position: absolute;
   inset: auto 0 0 0;
   height: 78%;
-  background: linear-gradient(180deg, transparent 0%, rgba(18, 16, 14, 0.55) 42%, rgba(18, 16, 14, 0.86) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(16, 18, 22, 0.55) 42%, rgba(16, 18, 22, 0.86) 100%);
 }
 @media (min-width: 900px) {
   .jata-showcase__panel {
     inset: 0 auto 0 0;
     width: 58%;
     height: auto;
-    background: linear-gradient(90deg, rgba(18, 16, 14, 0.88) 0%, rgba(18, 16, 14, 0.62) 58%, transparent 100%);
+    background: linear-gradient(90deg, rgba(16, 18, 22, 0.88) 0%, rgba(16, 18, 22, 0.62) 58%, transparent 100%);
   }
 }
 .jata-showcase__flag {
@@ -3467,11 +3494,11 @@ button:focus-visible {
   align-items: center;
   align-self: flex-start;
   gap: 0.45rem;
-  border: 1px solid rgba(247, 242, 232, 0.26);
+  border: 1px solid rgba(245, 247, 244, 0.26);
   border-radius: 999px;
-  background: rgba(18, 16, 14, 0.6);
+  background: rgba(16, 18, 22, 0.6);
   padding: 0.3rem 0.7rem;
-  color: rgba(247, 242, 232, 0.9);
+  color: rgba(245, 247, 244, 0.9);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3483,13 +3510,13 @@ button:focus-visible {
   width: 0.4rem;
   height: 0.4rem;
   border-radius: 999px;
-  background: #f0a03c;
-  box-shadow: 0 0 0 3px rgba(240, 160, 60, 0.22);
+  background: #b6ff2e;
+  box-shadow: 0 0 0 3px rgba(182, 255, 46, 0.22);
   animation: jata-pulse 3.2s ease-in-out infinite;
 }
 .jata-showcase__kicker {
   margin-top: 0.9rem !important;
-  color: #f0a03c;
+  color: #b6ff2e;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -3497,16 +3524,16 @@ button:focus-visible {
 }
 .jata-showcase__headline {
   margin-top: 0.4rem !important;
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: clamp(1.6rem, 6.4vw, 2.4rem);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.08;
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
 .jata-showcase__lede {
   margin-top: 0.7rem !important;
-  color: rgba(247, 242, 232, 0.8);
+  color: rgba(245, 247, 244, 0.8);
   font-size: 0.95rem;
   line-height: 1.6;
 }
@@ -3517,12 +3544,12 @@ button:focus-visible {
   gap: 0.5rem;
   align-self: flex-start;
   margin-top: 0.9rem !important;
-  border: 1px solid rgba(240, 160, 60, 0.42);
+  border: 1px solid rgba(182, 255, 46, 0.42);
   border-radius: 0.8rem;
-  background: rgba(240, 160, 60, 0.14);
+  background: rgba(182, 255, 46, 0.14);
   padding: 0.45rem 0.75rem;
 }
-.jata-showcase__offer-label { color: #f0a03c; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.jata-showcase__offer-label { color: #b6ff2e; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .jata-showcase__offer-title { font-size: 0.9rem; font-weight: 750; }
 .jata-showcase__services {
   display: grid;
@@ -3537,19 +3564,19 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border: 1px solid rgba(247, 242, 232, 0.24);
+  border: 1px solid rgba(245, 247, 244, 0.24);
   border-radius: 0.7rem;
-  background: rgba(18, 16, 14, 0.62);
+  background: rgba(16, 18, 22, 0.62);
   padding: 0.45rem 0.75rem;
-  color: #f7f2e8;
+  color: #f5f7f4;
   text-decoration: none;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   transition: border-color 0.16s ease, background-color 0.16s ease;
 }
-.jata-showcase__service:hover { border-color: rgba(240, 160, 60, 0.7); background: rgba(240, 160, 60, 0.12); }
+.jata-showcase__service:hover { border-color: rgba(182, 255, 46, 0.7); background: rgba(182, 255, 46, 0.12); }
 .jata-showcase__service-title { font-size: 0.88rem; font-weight: 650; }
-.jata-showcase__service-price { flex: 0 0 auto; color: rgba(247, 242, 232, 0.72); font-size: 0.8rem; }
+.jata-showcase__service-price { flex: 0 0 auto; color: rgba(245, 247, 244, 0.72); font-size: 0.8rem; }
 .jata-showcase__actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1.1rem; }
 .jata-showcase__cta {
   display: inline-flex;
@@ -3557,20 +3584,20 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #f0a03c;
+  background: #b6ff2e;
   padding: 0.6rem 1.15rem;
-  color: #1a140d;
+  color: #1b1e24;
   font-size: 0.88rem;
   font-weight: 750;
   text-decoration: none;
   transition: background-color 0.16s ease, transform 0.16s ease;
 }
-.jata-showcase__cta:hover { background: #f7b45c; transform: translateY(-1px); }
-.jata-showcase__cta--ghost { border: 1px solid rgba(247, 242, 232, 0.34); background: transparent; color: #f7f2e8; }
-.jata-showcase__cta--ghost:hover { background: rgba(247, 242, 232, 0.1); }
+.jata-showcase__cta:hover { background: #c8ff5c; transform: translateY(-1px); }
+.jata-showcase__cta--ghost { border: 1px solid rgba(245, 247, 244, 0.34); background: transparent; color: #f5f7f4; }
+.jata-showcase__cta--ghost:hover { background: rgba(245, 247, 244, 0.1); }
 .jata-showcase__detail {
   margin-top: 0.9rem;
-  border-top: 1px solid rgba(247, 242, 232, 0.16);
+  border-top: 1px solid rgba(245, 247, 244, 0.16);
   padding-top: 0.7rem;
 }
 .jata-showcase__summary {
@@ -3578,7 +3605,7 @@ button:focus-visible {
   min-height: 2.75rem;
   align-items: center;
   gap: 0.4rem;
-  color: rgba(247, 242, 232, 0.86);
+  color: rgba(245, 247, 244, 0.86);
   font-size: 0.82rem;
   font-weight: 650;
   cursor: pointer;
@@ -3594,8 +3621,8 @@ button:focus-visible {
   transition: transform 0.2s ease;
 }
 .jata-showcase__detail[open] .jata-showcase__chevron { transform: rotate(-135deg) translateY(-1px); }
-.jata-showcase__detail-body { margin-top: 0.35rem !important; color: rgba(247, 242, 232, 0.72); font-size: 0.85rem; line-height: 1.62; }
-.jata-showcase__meta { margin-top: 0.8rem !important; color: rgba(247, 242, 232, 0.68); font-size: 0.7rem; line-height: 1.5; }
+.jata-showcase__detail-body { margin-top: 0.35rem !important; color: rgba(245, 247, 244, 0.72); font-size: 0.85rem; line-height: 1.62; }
+.jata-showcase__meta { margin-top: 0.8rem !important; color: rgba(245, 247, 244, 0.68); font-size: 0.7rem; line-height: 1.5; }
 
 /* Band motion — a slow camera move on a real photograph, plus light, never a video payload. */
 .jata-showcase[data-motion="steam"] .jata-showcase__img { animation: jata-zoom 26s ease-in-out infinite alternate; }
@@ -3606,16 +3633,16 @@ button:focus-visible {
 .jata-showcase__glow,
 .jata-showcase__streaks { position: absolute; inset: 0; pointer-events: none; }
 .jata-showcase__steam {
-  background: radial-gradient(38% 42% at 42% 46%, rgba(255, 246, 226, 0.22), transparent 70%);
+  background: radial-gradient(38% 42% at 42% 46%, rgba(182, 255, 46, 0.22), transparent 70%);
   animation: jata-steam 9s ease-in-out infinite alternate;
 }
 .jata-showcase__glow {
-  background: radial-gradient(48% 52% at 68% 26%, rgba(255, 226, 186, 0.22), transparent 70%);
+  background: radial-gradient(48% 52% at 68% 26%, rgba(182, 255, 46, 0.22), transparent 70%);
   animation: jata-glow 11s ease-in-out infinite alternate;
 }
 .jata-showcase__streaks {
   background:
-    linear-gradient(90deg, transparent 0%, rgba(255, 186, 110, 0.16) 32%, transparent 60%),
+    linear-gradient(90deg, transparent 0%, rgba(182, 255, 46, 0.16) 32%, transparent 60%),
     linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.12) 55%, transparent 80%);
   animation: jata-streaks 6s linear infinite;
   mix-blend-mode: screen;
@@ -3639,8 +3666,8 @@ button:focus-visible {
   .jata-showcase__lede { max-width: 36rem; font-size: 1.02rem; }
   .jata-showcase__scrim {
     background:
-      linear-gradient(90deg, #12100e 0%, rgba(18, 16, 14, 0.9) 40%, rgba(18, 16, 14, 0.35) 72%, rgba(18, 16, 14, 0.2) 100%),
-      linear-gradient(180deg, rgba(18, 16, 14, 0.2) 0%, transparent 30%, rgba(18, 16, 14, 0.55) 100%);
+      linear-gradient(90deg, #101216 0%, rgba(16, 18, 22, 0.9) 40%, rgba(16, 18, 22, 0.35) 72%, rgba(16, 18, 22, 0.2) 100%),
+      linear-gradient(180deg, rgba(16, 18, 22, 0.2) 0%, transparent 30%, rgba(16, 18, 22, 0.55) 100%);
   }
   .jata-showcase__img { object-position: center; }
 }
@@ -3683,6 +3710,95 @@ button:focus-visible {
 
 /* Anchors that are off-screen must never create a horizontal scrollbar. */
 .lp-page :target { scroll-margin-top: 84px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Premium 2026 refinement layer — landing & demo showcase
+ *
+ * Additive only: every selector below already exists in this block. The colour sweep above
+ * moved the art direction to graphite + electric lime; these rules add the premium mechanics —
+ * dual-tone focus, type weight/tracking, card elevation, hover choreography and the featured
+ * pricing card — without changing markup, copy or layout. Motion is disabled wholesale by the
+ * reduced-motion block above (`.lp-page * { transition: none !important }`).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Focus must read on both paper and graphite: a lime ring with a graphite halo. */
+.lp-page :focus-visible {
+  outline: 3px solid var(--lp-lime);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px var(--lp-graphite);
+  border-radius: 4px;
+}
+
+/* One confident sans voice: headings gain weight and tighter tracking. */
+.lp-page .lp-h2 { font-weight: 700; letter-spacing: -0.022em; }
+.lp-hero__title { font-weight: 700; letter-spacing: -0.03em; }
+.lp-story__step { letter-spacing: -0.01em; }
+.lp-marquee__row { letter-spacing: -0.015em; }
+
+/* Kicker chip on light sections: lime tint with a deep-lime label (AA on paper). */
+.lp-section--cream .lp-kicker,
+.lp-section--paper .lp-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(77, 107, 18, 0.18);
+  border-radius: 999px;
+  background: var(--lp-lime-tint);
+  padding: 0.32rem 0.75rem;
+  color: var(--lp-lime-deep);
+}
+
+/* Nav: the blurred graphite bar gains a crisp hairline and a solid lime wordmark chip. */
+.jata-nav.lp-nav { border-bottom-color: rgba(245, 247, 244, 0.12); box-shadow: 0 10px 30px -22px rgba(0, 0, 0, 0.8); }
+.lp-nav .jata-brand-mark { border-radius: 0.55rem; box-shadow: inset 0 0 0 1px rgba(27, 30, 36, 0.18); }
+
+/* Hero: a slightly stronger lime accent underline, a hairline under the band, press feedback. */
+.lp-hero__accent { background: linear-gradient(transparent 62%, rgba(182, 255, 46, 0.42) 62%); }
+.lp-hero { border-bottom: 1px solid rgba(245, 247, 244, 0.08); }
+.lp-btn:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+
+/* Light-surface cards: hairline plus a soft lift, never a hard drop shadow. */
+.lp-story__item,
+.lp-step,
+.lp-demo__tab,
+.lp-demo__service {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.lp-story__item:hover,
+.lp-step:hover {
+  transform: translateY(-2px);
+  border-color: rgba(77, 107, 18, 0.35);
+  box-shadow: 0 16px 36px -22px rgba(22, 24, 29, 0.35);
+}
+.lp-demo__tab:hover { border-color: rgba(77, 107, 18, 0.4); }
+
+/* Steps: graphite disc with a lime numeral and a quiet lime ring. */
+.lp-step__num { box-shadow: inset 0 0 0 1px rgba(182, 255, 46, 0.35); }
+
+/* FAQ: an open item picks up the lime-deep hairline and a faint lime wash. */
+.lp-faq__item[open] { border-color: rgba(77, 107, 18, 0.4); background: #fbfdf6; }
+
+/* Pricing cards on graphite: lift on hover; the featured card owns the lime. */
+.lp-plan { transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+.lp-plan:hover {
+  transform: translateY(-4px);
+  border-color: rgba(182, 255, 46, 0.45);
+  box-shadow: 0 28px 60px -32px rgba(0, 0, 0, 0.85);
+}
+.lp-plan[data-featured="true"] {
+  border-color: var(--lp-lime);
+  box-shadow: 0 28px 64px -30px rgba(182, 255, 46, 0.35);
+}
+.lp-plan[data-featured="true"]:hover { box-shadow: 0 32px 70px -30px rgba(182, 255, 46, 0.45); }
+.lp-plan__icon { box-shadow: inset 0 0 0 1px rgba(182, 255, 46, 0.22); }
+.lp-plan__cta:active { transform: scale(0.985); }
+
+/* A lime CTA on paper (demo band) takes a deep-lime shadow instead of a bright lime glow. */
+.lp-demo__actions .lp-btn--primary { box-shadow: 0 16px 32px -14px rgba(77, 107, 18, 0.5); }
+
+/* Final band and footer keep the lime restrained to mark and hover only. */
+.lp-final { border-top: 1px solid rgba(245, 247, 244, 0.08); }
+.lp-footer__mark { letter-spacing: 0.08em; }
 
 /* ============================================================================
  * Studio Canvas — the Website Studio editing surface (§4, §63)
@@ -4116,52 +4232,56 @@ button:focus-visible {
    ========================================================================= */
 
 .ws-shell {
-  /* Brand palette — identical values to the landing page, restated here so the
-     workspace never depends on landing-only classes. */
-  --ws-ink: #14110f;
-  --ws-ink-soft: #1d1815;
-  --ws-ink-line: rgba(247, 242, 232, 0.14);
-  --ws-cream: #f7f2e8;
-  --ws-cream-2: #efe7d7;
+  /* Premium 2026 palette — cool graphite neutrals and the brand's electric lime on neutral
+     light paper, mirroring the landing reskin. Token names are unchanged (components and tests
+     reference them); "amber" tokens now carry the lime values. The workspace never depends on
+     landing-only classes. */
+  --ws-ink: #16181d;
+  --ws-ink-soft: #22262e;
+  --ws-ink-line: rgba(245, 247, 244, 0.14);
+  --ws-cream: #f5f7f4;
+  --ws-cream-2: #e9ede9;
   /* Light text sitting on an *ink* surface. Its own token, because `--ws-cream` is the page
      background and the graphite variant repoints it to a dark colour: using the background token
-     as a foreground is what once painted the hero headline dark-on-dark. Never redefined. */
+     as a foreground is what once painted the hero headline dark-on-dark. Never redefined — the
+     literal value is also pinned by the workspace design tests. */
   --ws-on-ink: #f7f2e8;
-  --ws-paper: #fffdf8;
-  --ws-text: #171310;
-  --ws-muted: #5a5148;
-  --ws-faint: #8a7f73;
-  --ws-line: #e3d8c8;
-  --ws-line-soft: rgba(23, 19, 16, 0.08);
-  --ws-amber: #f0a03c;
-  --ws-amber-deep: #b45309;
-  --ws-amber-soft: #fdf1e0;
+  --ws-paper: #ffffff;
+  --ws-text: #181b21;
+  --ws-muted: #5b626d;
+  --ws-faint: #8b929c;
+  --ws-line: #e2e6e3;
+  --ws-line-soft: rgba(27, 30, 36, 0.08);
+  --ws-amber: #b6ff2e;
+  --ws-amber-deep: #4d6b12;
+  --ws-amber-soft: #eefad2;
   --ws-jade: #0f766e;
   --ws-jade-soft: #e8f5f1;
   /* Surfaces that were literal white/light in the first pass, lifted into tokens so the
      graphite variant below can re-point them without duplicating a single rule. */
   --ws-solid: #ffffff;
-  --ws-wash: rgba(23, 19, 16, 0.03);
-  --ws-skel-shine: rgba(255, 253, 248, 0.7);
-  --ws-plan-tint: #fff8ec;
-  --ws-ember: #c2410c;
+  --ws-wash: rgba(27, 30, 36, 0.03);
+  --ws-skel-shine: rgba(255, 255, 255, 0.7);
+  --ws-plan-tint: #f7fdf0;
+  --ws-ember: #4d6b12;
   /* Semantic status tokens. Success reuses the jade pair; danger gets its own pair so an error
      notice or destructive control is themed (and re-pointed for graphite) instead of carrying a
      hard-coded light-red palette that breaks on a dark surface. */
-  --ws-on-amber: #1a140d;
+  --ws-on-amber: #1b1e24;
   --ws-jade-line: rgba(15, 118, 110, 0.35);
   --ws-danger: #991b1b;
   --ws-danger-soft: #fef2f2;
   --ws-danger-line: rgba(185, 28, 28, 0.35);
-  --ws-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  /* One typographic voice with the landing page: Inter replaces the editorial serif. */
+  --ws-display: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --ws-radius-sm: 0.6rem;
   --ws-radius-md: 0.85rem;
   --ws-radius-lg: 1.15rem;
   --ws-radius-xl: 1.6rem;
-  --ws-elev-1: 0 1px 2px rgba(23, 19, 16, 0.05);
-  --ws-elev-2: 0 18px 44px -30px rgba(23, 19, 16, 0.45);
-  --ws-elev-3: 0 34px 70px -40px rgba(23, 19, 16, 0.55);
+  --ws-elev-1: 0 1px 2px rgba(27, 30, 36, 0.05);
+  --ws-elev-2: 0 18px 44px -30px rgba(27, 30, 36, 0.45);
+  --ws-elev-3: 0 34px 70px -40px rgba(27, 30, 36, 0.55);
   --ws-dur: 220ms;
   --ws-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
@@ -4183,15 +4303,15 @@ button:focus-visible {
 
   min-height: 100vh;
   background:
-    radial-gradient(120% 60% at 100% 0%, rgba(240, 160, 60, 0.08), transparent 55rem),
+    radial-gradient(120% 60% at 100% 0%, rgba(182, 255, 46, 0.1), transparent 55rem),
     var(--ws-cream);
   color: var(--ws-text);
 }
 
 /* The theme toolbar sits above the workspace chrome. Paint the strip in the
    workspace ink so there is never a seam of an unrelated theme colour. */
-.product-theme-root:has(> .ws-shell) { background: var(--ws-ink, #14110f); }
-.product-theme-root:has(> .ws-shell) > .product-theme-toolbar { background: #14110f; color: #f7f2e8; }
+.product-theme-root:has(> .ws-shell) { background: var(--ws-ink, #16181d); }
+.product-theme-root:has(> .ws-shell) > .product-theme-toolbar { background: #16181d; color: #f5f7f4; }
 
 .ws-shell :where(h1, h2, h3, h4) { letter-spacing: -0.015em; }
 /* Zero specificity: Tailwind margin/padding/list utilities used by the POS and the AI cockpit
@@ -4200,7 +4320,9 @@ button:focus-visible {
 .ws-shell :where(ul, ol) { padding: 0; list-style: none; }
 .ws-shell a { -webkit-tap-highlight-color: transparent; }
 .ws-shell :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ws-amber) 70%, transparent);
+  /* --ws-amber-deep is a deep, AA-visible lime on paper and is re-pointed to bright lime on
+     graphite by the dark variant, so one token reads on both surfaces. */
+  outline: 3px solid var(--ws-amber-deep);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -4211,10 +4333,10 @@ button:focus-visible {
   position: sticky;
   top: 0;
   z-index: 60;
-  border-bottom: 1px solid rgba(240, 160, 60, 0.24);
+  border-bottom: 1px solid rgba(182, 255, 46, 0.24);
   background:
-    radial-gradient(90% 220% at 92% -60%, rgba(240, 160, 60, 0.22), transparent 60%),
-    linear-gradient(180deg, #1b1512 0%, #14110f 100%);
+    radial-gradient(90% 220% at 92% -60%, rgba(182, 255, 46, 0.22), transparent 60%),
+    linear-gradient(180deg, #1b1e24 0%, #16181d 100%);
   color: var(--ws-on-ink);
   box-shadow: 0 14px 34px -26px rgba(0, 0, 0, 0.9);
 }
@@ -4232,7 +4354,7 @@ button:focus-visible {
 @media (min-width: 900px) { .ws-chrome__row { padding: 0.6rem 2.5rem; } }
 
 .ws-chrome .jata-brand { margin-right: auto; min-width: 0; }
-.ws-chrome .jata-brand-mark { background: var(--ws-amber); color: #1a140d; border-radius: 0.55rem; }
+.ws-chrome .jata-brand-mark { background: var(--ws-amber); color: var(--ws-on-amber); border-radius: 0.55rem; }
 .ws-chrome .jata-brand-name { color: var(--ws-on-ink); letter-spacing: 0.16em; }
 .ws-chrome .jata-brand-tag { display: none; }
 
@@ -4243,7 +4365,7 @@ button:focus-visible {
   border: 1px solid var(--ws-ink-line);
   border-radius: 999px;
   padding: 0.18rem 0.6rem;
-  color: rgba(247, 242, 232, 0.72);
+  color: rgba(245, 247, 244, 0.72);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -4272,7 +4394,7 @@ button:focus-visible {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.ws-pill--admin { border-color: rgba(240, 160, 60, 0.5); color: var(--ws-amber); }
+.ws-pill--admin { border-color: rgba(182, 255, 46, 0.5); color: var(--ws-amber); }
 
 .ws-chrome__account {
   display: none;
@@ -4283,7 +4405,7 @@ button:focus-visible {
   border: 1px solid var(--ws-ink-line);
   border-radius: 999px;
   padding: 0.3rem 0.7rem;
-  color: rgba(247, 242, 232, 0.78);
+  color: rgba(245, 247, 244, 0.78);
   font-size: 0.78rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4297,12 +4419,12 @@ button:focus-visible {
   font-size: 0.82rem;
 }
 .ws-chrome .jata-btn-secondary { border-color: var(--ws-ink-line); background: transparent; color: var(--ws-on-ink); }
-.ws-chrome .jata-btn-secondary:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); }
-.ws-chrome .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
-.ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
+.ws-chrome .jata-btn-secondary:hover:not(:disabled) { background: rgba(245, 247, 244, 0.08); }
+.ws-chrome .jata-btn-ghost { color: rgba(245, 247, 244, 0.78); }
+.ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(245, 247, 244, 0.08); color: var(--ws-on-ink); }
 
 /* Section rail — the one navigation row on every owner screen. */
-.ws-rail-wrap { border-top: 1px solid rgba(247, 242, 232, 0.09); background: rgba(255, 253, 248, 0.02); }
+.ws-rail-wrap { border-top: 1px solid rgba(245, 247, 244, 0.09); background: rgba(255, 255, 255, 0.02); }
 .ws-rail {
   display: flex;
   gap: 0.3rem;
@@ -4326,7 +4448,7 @@ button:focus-visible {
   padding: 0 0.85rem;
   border: 1px solid transparent;
   border-radius: 999px;
-  color: rgba(247, 242, 232, 0.74);
+  color: rgba(245, 247, 244, 0.74);
   font-size: 0.82rem;
   font-weight: 650;
   text-decoration: none;
@@ -4334,14 +4456,14 @@ button:focus-visible {
   scroll-snap-align: start;
   transition: background-color var(--ws-dur) var(--ws-ease), color var(--ws-dur) var(--ws-ease);
 }
-.ws-rail a:hover { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
+.ws-rail a:hover { background: rgba(245, 247, 244, 0.08); color: var(--ws-on-ink); }
 .ws-rail a[aria-current="page"] {
   background: var(--ws-amber);
   border-color: var(--ws-amber);
-  color: #1a140d;
-  box-shadow: 0 8px 20px -12px rgba(240, 160, 60, 0.9);
+  color: var(--ws-on-amber);
+  box-shadow: 0 8px 20px -12px rgba(182, 255, 46, 0.9);
 }
-.ws-rail a[aria-current="page"] svg { color: #1a140d; }
+.ws-rail a[aria-current="page"] svg { color: var(--ws-on-amber); }
 
 .ws-main {
   width: 100%;
@@ -4391,7 +4513,7 @@ button:focus-visible {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(247, 242, 232, 0.1);
+  border: 1px solid rgba(245, 247, 244, 0.1);
   border-radius: var(--ws-radius-xl);
   background: var(--ws-ink);
   color: var(--ws-on-ink);
@@ -4420,8 +4542,8 @@ button:focus-visible {
      line run to the middle of the card, over the brightest part of the city lights, so the scrim
      has to still be near-opaque there for the body copy to clear AA contrast. */
   background:
-    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.9) 42%, rgba(20, 17, 15, 0.74) 68%, rgba(20, 17, 15, 0.42) 100%),
-    linear-gradient(0deg, rgba(20, 17, 15, 0.7), transparent 62%);
+    linear-gradient(96deg, rgba(22, 24, 29, 0.95) 0%, rgba(22, 24, 29, 0.9) 42%, rgba(22, 24, 29, 0.74) 68%, rgba(22, 24, 29, 0.42) 100%),
+    linear-gradient(0deg, rgba(22, 24, 29, 0.7), transparent 62%);
 }
 .ws-hero__inner { position: relative; display: grid; gap: 1rem; max-width: 46rem; }
 .ws-hero__title {
@@ -4434,9 +4556,9 @@ button:focus-visible {
   text-wrap: balance;
 }
 .ws-hero__title em { font-style: italic; color: var(--ws-amber); }
-.ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.88); font-size: 0.92rem; line-height: 1.6; }
+.ws-hero__sub { max-width: 46ch; color: rgba(245, 247, 244, 0.88); font-size: 0.92rem; line-height: 1.6; }
 .ws-hero__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
-.ws-hero__meta { color: rgba(247, 242, 232, 0.78); font-size: 0.75rem; }
+.ws-hero__meta { color: rgba(245, 247, 244, 0.78); font-size: 0.75rem; }
 .ws-hero__stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4445,14 +4567,14 @@ button:focus-visible {
 }
 @media (min-width: 640px) { .ws-hero__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 36rem; } }
 .ws-hero__stat {
-  border: 1px solid rgba(247, 242, 232, 0.16);
+  border: 1px solid rgba(245, 247, 244, 0.16);
   border-radius: var(--ws-radius-md);
-  background: rgba(247, 242, 232, 0.07);
+  background: rgba(245, 247, 244, 0.07);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   padding: 0.5rem 0.65rem;
 }
-.ws-hero__stat dt { color: rgba(247, 242, 232, 0.66); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.ws-hero__stat dt { color: rgba(245, 247, 244, 0.66); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 .ws-hero__stat dd { margin: 0.1rem 0 0; font-family: var(--ws-display); font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.05; }
 
 /* Compact page hero for secondary workspace screens. */
@@ -4477,18 +4599,18 @@ button:focus-visible {
 }
 .ws-btn-amber {
   background: var(--ws-amber);
-  color: #1a140d;
-  box-shadow: 0 16px 32px -18px rgba(240, 160, 60, 0.95);
+  color: var(--ws-on-amber);
+  box-shadow: 0 16px 32px -18px rgba(182, 255, 46, 0.95);
 }
-.ws-btn-amber:hover { background: #f7b45c; transform: translateY(-1px); }
+.ws-btn-amber:hover { background: #c8ff5c; transform: translateY(-1px); }
 .ws-btn-outline {
-  border-color: rgba(247, 242, 232, 0.28);
-  background: rgba(247, 242, 232, 0.04);
+  border-color: rgba(245, 247, 244, 0.28);
+  background: rgba(245, 247, 244, 0.04);
   color: var(--ws-on-ink);
 }
-.ws-btn-outline:hover { background: rgba(247, 242, 232, 0.12); }
-.ws-btn-quiet { color: rgba(247, 242, 232, 0.78); }
-.ws-btn-quiet:hover { color: var(--ws-on-ink); background: rgba(247, 242, 232, 0.08); }
+.ws-btn-outline:hover { background: rgba(245, 247, 244, 0.12); }
+.ws-btn-quiet { color: rgba(245, 247, 244, 0.78); }
+.ws-btn-quiet:hover { color: var(--ws-on-ink); background: rgba(245, 247, 244, 0.08); }
 .ws-btn-amber:active, .ws-btn-outline:active, .ws-btn-quiet:active { transform: translateY(1px); }
 
 /* ── Panels ─────────────────────────────────────────────────────────────── */
@@ -4511,9 +4633,9 @@ button:focus-visible {
 .ws-panel__title { margin: 0; font-family: var(--ws-display); font-size: 1.12rem; font-weight: 600; }
 .ws-panel__body { padding: 0.6rem 1rem 1rem; }
 .ws-panel__body--tight { padding: 0.5rem 1rem 0.8rem; }
-.ws-panel--graphite { border-color: rgba(247, 242, 232, 0.12); background: var(--ws-ink); color: var(--ws-on-ink); }
+.ws-panel--graphite { border-color: rgba(245, 247, 244, 0.12); background: var(--ws-ink); color: var(--ws-on-ink); }
 .ws-panel--graphite .ws-panel__title { color: var(--ws-on-ink); }
-.ws-panel--graphite .ws-section-head__meta, .ws-panel--graphite .ws-muted { color: rgba(247, 242, 232, 0.64); }
+.ws-panel--graphite .ws-section-head__meta, .ws-panel--graphite .ws-muted { color: rgba(245, 247, 244, 0.64); }
 
 .ws-muted { color: var(--ws-muted); }
 .ws-small { font-size: 0.8rem; line-height: 1.55; }
@@ -4560,7 +4682,7 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(180deg, rgba(20, 17, 15, 0.55) 0%, rgba(20, 17, 15, 0.08) 38%, rgba(20, 17, 15, 0.88) 100%);
+  background: linear-gradient(180deg, rgba(22, 24, 29, 0.55) 0%, rgba(22, 24, 29, 0.08) 38%, rgba(22, 24, 29, 0.88) 100%);
 }
 .ws-biz__cover-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .ws-biz__cover-id { display: flex; align-items: flex-end; gap: 0.7rem; min-width: 0; }
@@ -4573,7 +4695,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 0.85rem;
   background: var(--ws-amber);
-  color: #1a140d;
+  color: var(--ws-on-amber);
   font-family: var(--ws-display);
   font-size: 1.05rem;
   font-weight: 700;
@@ -4590,22 +4712,22 @@ button:focus-visible {
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
-.ws-biz__meta { margin-top: 0.15rem; color: rgba(247, 242, 232, 0.76); font-size: 0.78rem; overflow-wrap: anywhere; }
+.ws-biz__meta { margin-top: 0.15rem; color: rgba(245, 247, 244, 0.76); font-size: 0.78rem; overflow-wrap: anywhere; }
 .ws-biz__body { display: grid; gap: 1rem; padding: 1rem; }
 @media (min-width: 900px) { .ws-biz__body { padding: 1.15rem 1.35rem 1.35rem; gap: 1.15rem; } }
 
 /* Cover pills: semantic tone preserved, glass treatment for the photograph. */
 .ws-cover-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .ws-cover-pills .jata-pill {
-  border-color: rgba(247, 242, 232, 0.24);
-  background: rgba(20, 17, 15, 0.55);
-  color: rgba(247, 242, 232, 0.94);
+  border-color: rgba(245, 247, 244, 0.24);
+  background: rgba(22, 24, 29, 0.55);
+  color: rgba(245, 247, 244, 0.94);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   font-size: 0.68rem;
 }
 .ws-cover-pills .jata-pill[data-tone="success"] { background: rgba(4, 120, 87, 0.82); border-color: rgba(16, 185, 129, 0.4); color: #ecfdf5; }
-.ws-cover-pills .jata-pill[data-tone="warning"] { background: rgba(180, 83, 9, 0.85); border-color: rgba(245, 158, 11, 0.45); color: #fffbeb; }
+.ws-cover-pills .jata-pill[data-tone="warning"] { background: rgba(77, 107, 18, 0.85); border-color: rgba(245, 158, 11, 0.45); color: #fffbeb; }
 .ws-cover-pills .jata-pill[data-tone="danger"] { background: rgba(153, 27, 27, 0.85); border-color: rgba(248, 113, 113, 0.4); color: #fef2f2; }
 
 /* ── Next step ──────────────────────────────────────────────────────────── */
@@ -4616,11 +4738,11 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border: 1px solid rgba(180, 83, 9, 0.24);
+  border: 1px solid rgba(77, 107, 18, 0.24);
   border-radius: var(--ws-radius-md);
   background:
-    radial-gradient(120% 180% at 100% 0%, rgba(240, 160, 60, 0.2), transparent 60%),
-    linear-gradient(120deg, rgba(240, 160, 60, 0.15), rgba(240, 160, 60, 0.03));
+    radial-gradient(120% 180% at 100% 0%, rgba(182, 255, 46, 0.2), transparent 60%),
+    linear-gradient(120deg, rgba(182, 255, 46, 0.15), rgba(182, 255, 46, 0.03));
   padding: 0.85rem 1rem;
 }
 .ws-next__copy { min-width: 0; flex: 1 1 15rem; }
@@ -4660,9 +4782,9 @@ button:focus-visible {
 .ws-stat__hint { color: var(--ws-faint); font-size: 0.68rem; }
 .ws-stat[data-metric="whatsapp"] { --ws-stat-accent: #0f766e; --ws-stat-soft: #e6f4f1; }
 .ws-stat[data-metric="calls"] { --ws-stat-accent: #1d4ed8; --ws-stat-soft: #eaefff; }
-.ws-stat[data-metric="directions"] { --ws-stat-accent: #c2410c; --ws-stat-soft: #fdeee6; }
+.ws-stat[data-metric="directions"] { --ws-stat-accent: #4d6b12; --ws-stat-soft: #eefad2; }
 .ws-stat[data-metric="shares"] { --ws-stat-accent: #7c3aed; --ws-stat-soft: #f1ebfe; }
-.ws-stat[data-metric="views"] { --ws-stat-accent: #b45309; --ws-stat-soft: #fdf1e0; }
+.ws-stat[data-metric="views"] { --ws-stat-accent: #4d6b12; --ws-stat-soft: #eefad2; }
 
 /* ── Quick actions ──────────────────────────────────────────────────────── */
 
@@ -4683,10 +4805,10 @@ button:focus-visible {
   text-decoration: none;
   transition: border-color var(--ws-dur) var(--ws-ease), background-color var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
 }
-.ws-action:hover { border-color: rgba(180, 83, 9, 0.4); background: var(--ws-amber-soft); transform: translateY(-1px); }
+.ws-action:hover { border-color: rgba(77, 107, 18, 0.4); background: var(--ws-amber-soft); transform: translateY(-1px); }
 .ws-action svg { flex: 0 0 auto; color: var(--ws-amber-deep); }
 .ws-action[data-primary="true"] { border-color: var(--ws-ink); background: var(--ws-ink); color: var(--ws-on-ink); }
-.ws-action[data-primary="true"]:hover { border-color: #241d18; background: #241d18; color: #fff; }
+.ws-action[data-primary="true"]:hover { border-color: #22262e; background: #22262e; color: #fff; }
 .ws-action[data-primary="true"] svg { color: var(--ws-amber); }
 
 /* ── Fact list (page/subscription facts) ────────────────────────────────── */
@@ -4811,13 +4933,13 @@ button:focus-visible {
   border-color: var(--ws-ink);
   background: var(--ws-ink);
   color: var(--ws-on-ink);
-  box-shadow: 0 14px 28px -20px rgba(20, 17, 15, 0.9);
+  box-shadow: 0 14px 28px -20px rgba(22, 24, 29, 0.9);
 }
-.ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #241d18; background: #241d18; color: #fff; }
+.ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #22262e; background: #22262e; color: #fff; }
 .ws-shell .jata-btn-secondary { border-color: var(--ws-line); background: var(--ws-paper); color: var(--ws-text); }
 .ws-shell .jata-btn-secondary:hover:not(:disabled) { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
 .ws-shell .jata-btn-ghost { color: var(--ws-amber-deep); }
-.ws-shell .jata-btn-ghost:hover:not(:disabled) { background: rgba(180, 83, 9, 0.08); }
+.ws-shell .jata-btn-ghost:hover:not(:disabled) { background: rgba(77, 107, 18, 0.08); }
 .ws-shell .jata-btn-danger { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
 
 /* ── Charts & tables ────────────────────────────────────────────────────── */
@@ -4826,7 +4948,7 @@ button:focus-visible {
 .ws-shell .recharts-text { font-family: var(--font-sans); }
 .ws-shell .jata-table { background: var(--ws-paper); }
 .ws-shell .jata-table th { background: var(--ws-cream-2); color: var(--ws-muted); }
-.ws-shell .jata-table tbody tr:hover { background: rgba(240, 160, 60, 0.07); }
+.ws-shell .jata-table tbody tr:hover { background: rgba(182, 255, 46, 0.07); }
 .ws-shell .jata-table-wrap { border-color: var(--ws-line); background: var(--ws-paper); }
 
 /* ── Empty states with artwork ──────────────────────────────────────────── */
@@ -4866,9 +4988,9 @@ button:focus-visible {
   box-shadow: var(--ws-elev-1);
   transition: border-color var(--ws-dur) var(--ws-ease), box-shadow var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
 }
-.ws-plan:hover { border-color: rgba(180, 83, 9, 0.4); box-shadow: var(--ws-elev-2); transform: translateY(-2px); }
+.ws-plan:hover { border-color: rgba(77, 107, 18, 0.4); box-shadow: var(--ws-elev-2); transform: translateY(-2px); }
 .ws-plan[data-featured="true"] {
-  border-color: rgba(180, 83, 9, 0.45);
+  border-color: rgba(77, 107, 18, 0.45);
   background: linear-gradient(170deg, var(--ws-plan-tint) 0%, var(--ws-paper) 58%);
 }
 .ws-plan[data-featured="true"]::after {
@@ -4881,7 +5003,7 @@ button:focus-visible {
 }
 .ws-plan__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .ws-plan__icon { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 0.7rem; background: var(--ws-cream-2); color: var(--ws-amber-deep); }
-.ws-plan__badge { border: 1px solid rgba(180, 83, 9, 0.3); border-radius: 999px; background: var(--ws-amber-soft); color: var(--ws-amber-deep); padding: 0.12rem 0.5rem; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.ws-plan__badge { border: 1px solid rgba(77, 107, 18, 0.3); border-radius: 999px; background: var(--ws-amber-soft); color: var(--ws-amber-deep); padding: 0.12rem 0.5rem; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .ws-plan__name { margin-top: 0.15rem; font-family: var(--ws-display); font-size: 1.14rem; font-weight: 600; line-height: 1.15; }
 .ws-plan__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem; }
 .ws-plan__amount { font-family: var(--ws-display); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; }
@@ -4938,13 +5060,13 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(180deg, rgba(20, 17, 15, 0.55), rgba(20, 17, 15, 0.92));
+  background: linear-gradient(180deg, rgba(22, 24, 29, 0.55), rgba(22, 24, 29, 0.92));
 }
 .ws-auth__aside-title { font-family: var(--ws-display); font-size: clamp(1.9rem, 2.6vw, 2.6rem); font-weight: 600; line-height: 1.08; letter-spacing: -0.02em; }
 .ws-auth__aside-title em { color: var(--ws-amber); font-style: italic; }
-.ws-auth__aside-copy { max-width: 34ch; color: rgba(247, 242, 232, 0.78); font-size: 0.92rem; line-height: 1.6; }
+.ws-auth__aside-copy { max-width: 34ch; color: rgba(245, 247, 244, 0.78); font-size: 0.92rem; line-height: 1.6; }
 .ws-auth__aside-list { display: grid; gap: 0.55rem; margin-top: 1.2rem; }
-.ws-auth__aside-list li { display: flex; gap: 0.5rem; align-items: flex-start; color: rgba(247, 242, 232, 0.86); font-size: 0.85rem; }
+.ws-auth__aside-list li { display: flex; gap: 0.5rem; align-items: flex-start; color: rgba(245, 247, 244, 0.86); font-size: 0.85rem; }
 .ws-auth__aside-list svg { flex: 0 0 auto; color: var(--ws-amber); margin-top: 0.1rem; }
 .ws-auth__main { display: flex; flex-direction: column; padding: 1.25rem 1rem 2.5rem; }
 @media (min-width: 640px) { .ws-auth__main { padding: 2rem 1.5rem 3rem; } }
@@ -4974,7 +5096,7 @@ button:focus-visible {
   transition: border-color var(--ws-dur) var(--ws-ease), box-shadow var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
 }
 @media (min-width: 720px) { .ws-door { grid-template-columns: 12rem minmax(0, 1fr); align-items: stretch; } }
-.ws-door:hover { border-color: rgba(180, 83, 9, 0.35); box-shadow: var(--ws-elev-2); transform: translateY(-1px); }
+.ws-door:hover { border-color: rgba(77, 107, 18, 0.35); box-shadow: var(--ws-elev-2); transform: translateY(-1px); }
 .ws-door__media { position: relative; min-height: 7.5rem; background: var(--ws-cream-2); }
 .ws-door__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .ws-door__body { display: grid; align-content: start; gap: 0.5rem; padding: 0.9rem 1rem; }
@@ -4998,35 +5120,38 @@ button:focus-visible {
 
 /* ── Graphite workspace (the "Lime Spark / Graphite" product theme) ───────
    The workspace has one art direction, but it must not ignore the appearance the owner
-   already chose. Under the graphite product theme the same tokens are re-pointed at deep
-   charcoal surfaces with the same warm amber accent, so the dashboard, studio, POS doors and
-   account screens follow the theme instead of contradicting it. Only token values change —
-   every rule above is reused, which is why the two variants cannot drift apart.
+   already chose. Under the graphite product theme the same tokens are re-pointed at the cool
+   graphite surfaces and electric-lime primary defined by the theme's own --color-* contract
+   (#23262f / #b6ff2e), so the dashboard, studio, POS doors and account screens follow the
+   theme instead of contradicting it. Only token values change — every rule above is reused,
+   which is why the two variants cannot drift apart. --ws-on-ink is deliberately never
+   redefined here (see its declaration in the base .ws-shell rule).
    ───────────────────────────────────────────────────────────────────────── */
 
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell,
 html[data-jata-theme="lime-spark"] .ws-shell {
-  --ws-ink: #14110f;
-  --ws-ink-soft: #1d1815;
-  --ws-cream: #171412;
-  --ws-cream-2: #241f1c;
-  --ws-paper: #201c19;
-  --ws-solid: #272220;
-  --ws-text: #f4efe7;
-  --ws-muted: #bcb1a5;
-  --ws-faint: #9a9086;
-  --ws-line: #3b342e;
-  --ws-line-soft: rgba(247, 242, 232, 0.09);
-  --ws-wash: rgba(247, 242, 232, 0.06);
-  --ws-skel-shine: rgba(247, 242, 232, 0.08);
-  --ws-plan-tint: #2b2521;
-  --ws-amber-deep: #f5b566;
-  --ws-amber-soft: rgba(240, 160, 60, 0.14);
+  --ws-ink: #23262f;
+  --ws-ink-soft: #2d313b;
+  --ws-cream: #23262f;
+  --ws-cream-2: #383d48;
+  --ws-paper: #2d313b;
+  --ws-solid: #383d48;
+  --ws-text: #f4f6f0;
+  --ws-muted: #c2c8d1;
+  --ws-faint: #aeb5c0;
+  --ws-line: #454b58;
+  --ws-line-soft: rgba(244, 246, 240, 0.1);
+  --ws-wash: rgba(244, 246, 240, 0.05);
+  --ws-skel-shine: rgba(244, 246, 240, 0.08);
+  --ws-plan-tint: #323742;
+  --ws-amber: #b6ff2e;
+  --ws-amber-deep: #c8ff5c;
+  --ws-amber-soft: rgba(182, 255, 46, 0.14);
   --ws-jade: #4adebc;
   --ws-jade-soft: rgba(15, 118, 110, 0.26);
   /* Graphite counterparts of the semantic status tokens. Text lightens and the fills turn
      translucent so a notice keeps AA contrast on a dark surface instead of painting a light box. */
-  --ws-on-amber: #1a140d;
+  --ws-on-amber: #23262f;
   --ws-jade-line: rgba(74, 222, 188, 0.35);
   --ws-danger: #fca5a5;
   --ws-danger-soft: rgba(220, 38, 38, 0.18);
@@ -5034,9 +5159,9 @@ html[data-jata-theme="lime-spark"] .ws-shell {
   --ws-elev-1: 0 1px 2px rgba(0, 0, 0, 0.55);
   --ws-elev-2: 0 18px 44px -30px rgba(0, 0, 0, 0.95);
   --ws-elev-3: 0 34px 70px -40px rgba(0, 0, 0, 0.95);
-  --jata-card-strong: #272220;
+  --jata-card-strong: #383d48;
   background:
-    radial-gradient(120% 60% at 100% 0%, rgba(240, 160, 60, 0.1), transparent 55rem),
+    radial-gradient(120% 60% at 100% 0%, rgba(182, 255, 46, 0.1), transparent 55rem),
     var(--ws-cream);
   color: var(--ws-text);
 }
@@ -5051,32 +5176,32 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="directions"] 
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="shares"],
 html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="shares"] { --ws-stat-soft: rgba(196, 168, 255, 0.16); --ws-stat-accent: #c4a8ff; }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="views"],
-html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="views"] { --ws-stat-soft: rgba(240, 160, 60, 0.16); --ws-stat-accent: #f0a03c; }
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="views"] { --ws-stat-soft: rgba(182, 255, 46, 0.16); --ws-stat-accent: #b6ff2e; }
 
-/* Primary actions become amber on graphite: a charcoal button on a charcoal page has no
-   separation, and amber-on-ink is the brand's highest-contrast pairing. */
+/* Primary actions become electric lime on graphite: a charcoal button on a charcoal page has no
+   separation, and graphite-on-lime is the brand's highest-contrast pairing. */
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-primary,
 html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-primary {
   border-color: var(--ws-amber);
   background: var(--ws-amber);
-  color: #1a140d;
+  color: var(--ws-on-amber);
 }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-primary:hover:not(:disabled),
-html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #f7b45c; background: #f7b45c; color: #1a140d; }
+html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #c8ff5c; background: #c8ff5c; color: var(--ws-on-amber); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"],
 html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] {
   border-color: var(--ws-amber);
   background: var(--ws-amber);
-  color: #1a140d;
+  color: var(--ws-on-amber);
 }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] svg,
-html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] svg { color: #1a140d; }
+html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] svg { color: var(--ws-on-amber); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"]:hover,
-html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"]:hover { border-color: #f7b45c; background: #f7b45c; color: #1a140d; }
+html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"]:hover { border-color: #c8ff5c; background: #c8ff5c; color: var(--ws-on-amber); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-secondary:hover:not(:disabled),
 html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-secondary:hover:not(:disabled) { background: var(--ws-amber-soft); border-color: var(--ws-amber); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-hero,
-html[data-jata-theme="lime-spark"] .ws-hero { border-color: rgba(247, 242, 232, 0.16); }
+html[data-jata-theme="lime-spark"] .ws-hero { border-color: rgba(244, 246, 240, 0.16); }
 .product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-plan__includes svg,
 html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var(--ws-jade); }
 
@@ -5234,13 +5359,82 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 .ws-btn-outline--ink:hover { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
 
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Premium 2026 workspace refinement
+ *
+ * Additive mechanics on top of the graphite/lime token retune: confident heading
+ * weights for the Inter display face, one hover elevation language for the card
+ * family, a lime-tinted table hover and a restrained kicker chip. No selector or
+ * token is renamed, so every existing component keeps working unchanged.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The serif display face carried weight 600; Inter needs 700 to read as a heading. */
+.ws-hero__title,
+.ws-section-head__title,
+.ws-panel__title,
+.ws-plan__name,
+.ws-door__title,
+.ws-empty__title,
+.ws-auth__title,
+.ws-page-head h1 {
+  font-weight: 700;
+}
+.ws-stat__value,
+.ws-hero__stat dd {
+  font-weight: 700;
+}
+
+/* Kicker: a quiet lime-tint chip on paper; the --light modifier stays plain lime on graphite. */
+.ws-kicker {
+  border: 1px solid color-mix(in srgb, var(--ws-amber-deep) 18%, transparent);
+  border-radius: 999px;
+  background: var(--ws-amber-soft);
+  padding: 0.28rem 0.7rem;
+}
+.ws-kicker--light {
+  border-color: color-mix(in srgb, var(--ws-amber) 28%, transparent);
+  background: color-mix(in srgb, var(--ws-amber) 12%, transparent);
+}
+
+/* One hover elevation language across the card family. */
+@media (hover: hover) {
+  .ws-stat,
+  .ws-biz {
+    transition: box-shadow var(--ws-dur) var(--ws-ease), border-color var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
+  }
+  .ws-stat:hover {
+    border-color: color-mix(in srgb, var(--ws-amber-deep) 35%, var(--ws-line));
+    box-shadow: var(--ws-elev-2);
+    transform: translateY(-2px);
+  }
+  .ws-biz:hover {
+    border-color: color-mix(in srgb, var(--ws-amber-deep) 30%, var(--ws-line));
+  }
+}
+
+/* Table rows pick up a whisper of lime instead of a flat grey wash. */
+.ws-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--ws-amber) 7%, var(--ws-paper));
+}
+.ws-shell .jata-table tbody tr:hover {
+  background: color-mix(in srgb, var(--ws-amber) 7%, transparent);
+}
+
+/* The shared jata card family gets the same radius/elevation rhythm as ws cards. */
+.jata-card {
+  border-radius: var(--jata-radius-lg, 1rem);
+  transition: box-shadow var(--jata-dur-base, 180ms) var(--jata-ease-out, ease), transform var(--jata-dur-base, 180ms) var(--jata-ease-out, ease);
+}
+
 /* ── Motion & accessibility ────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .ws-hero__media img { animation: none; transform: none; }
   .ws-skel::after { animation: none; }
-  .ws-action, .ws-plan, .ws-door, .ws-btn-amber, .ws-btn-outline, .ws-biz__cover img { transition: none; }
-  .ws-action:hover, .ws-plan:hover, .ws-door:hover, .ws-btn-amber:hover { transform: none; }
+  .ws-action, .ws-plan, .ws-door, .ws-btn-amber, .ws-btn-outline, .ws-biz__cover img,
+  .ws-stat, .ws-biz, .jata-card { transition: none; }
+  .ws-action:hover, .ws-plan:hover, .ws-door:hover, .ws-btn-amber:hover,
+  .ws-stat:hover { transform: none; }
 }
 
 /* Small phones: keep the chrome one row and the hero readable. */

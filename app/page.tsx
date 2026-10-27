@@ -27,9 +27,9 @@ export const dynamic = "force-dynamic";
  *   • Plans are read from the database; the private Business POS and JATA Autopilot plans never
  *     become payable choices. Marketing order comes from `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • The Business POS card is the fifth card in the same grid and the standard JATA Autopilot
- *     package is the sixth. They link to the authenticated `/dashboard/pos` and
- *     `/dashboard/autopilot` flows — never to `/register` or checkout — and their prices are the
+ *   • Under the 2026-10-27 owner order the JATA Autopilot card is fourth and the Business POS
+ *     card is sixth (last) in the same grid. They link to the authenticated `/dashboard/autopilot`
+ *     and `/dashboard/pos` flows — never to `/register` or checkout — and their prices are the
  *     stored plan prices, so showing the cards grants nothing.
  *   • The four fictional demo cards show active services only; fallback content is labelled
  *     synthetic. Links require the dedicated demo owner, no non-demo payment rows, and a published
