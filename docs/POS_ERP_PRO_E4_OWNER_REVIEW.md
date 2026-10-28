@@ -90,6 +90,26 @@ Two independent artifacts measure this, and they are not interchangeable:
 The fixture is labelled a fixture everywhere. It can prove the CSS; only the real-app capture can prove
 the product, so **CI's capture is the evidence of record for E4**.
 
+### The real-app captures, and the two defects they caught
+
+The real capture runs on a GitHub runner against the production build and a disposable PostgreSQL
+database. Two runs were inspected image by image (not just by pass counts), published through the
+label-gated `verification/evidence` channel because the artifact blob host is unreachable here:
+
+| Run | Result | What the images showed |
+| --- | --- | --- |
+| `40774913955` | 32/32 pass | Q1/Q3 confirmed at every width — **and a defect the fixture could not see**: at 768×1024 the sidebar clipped text mid-letter ("OVERVIE" for Overview), squashed the business card into a sliver and squeezed the plan footer. |
+| `40775852674` | 32/32 pass | The clipping is **fixed**: the 701–859px rail is a clean glyph strip, the header is one row, KPI cards are two-up. |
+
+That defect is the reason the fixture no longer renders a simplified sidebar: it now mirrors the real
+markup (business card, group headings, footer) and asserts that **nothing inside the sidebar is clipped**,
+which the page-level overflow check cannot see because the sidebar scrolls internally. A fixture proves
+the CSS you wrote; it does not prove the app you shipped.
+
+The published images were removed from the tree afterwards — the channel is explicitly transient, and
+39 MB of screenshots does not belong in a branch that may be merged. They remain retrievable by run id,
+and every CI run re-produces them as the `erp-visual-71` artifact.
+
 ## 3. What I am not asking you
 
 * **Not** asking you to approve the espresso / cream / amber identity again — it is recorded as
