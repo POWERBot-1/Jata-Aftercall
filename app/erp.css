@@ -216,14 +216,17 @@
    The strip is 80px because .erp-brand's mark is 34px and the nav labels need room to wrap inside
    it; the accessible names are unchanged, so a screen reader still gets the full module name. */
 @media (min-width: 701px) and (max-width: 859px) {
-  .erp-layout { grid-template-columns: 72px 1fr; }
-  .erp-sidebar { padding: 16px 8px 24px; }
-  .erp-brand { justify-content: center; padding: 2px 0 8px; }
+  .erp-layout { grid-template-columns: 76px 1fr; }
+  .erp-sidebar { padding: 16px 8px 24px; gap: 12px; overflow-x: hidden; }
+  .erp-brand { justify-content: center; padding: 2px 0 6px; }
   .erp-brand-name, .erp-brand-sub { display: none; }
-  /* A glyph strip: the link keeps its box and its accessible name, the text label is hidden. The
-     markup renders the label inside the link, so hiding the text (not shrinking it) is what stops
-     the words clipping at the rail edge. */
-  .erp-nav-link { justify-content: center; padding: 9px 6px; }
+  /* A glyph rail: the link keeps its box and its accessible name, the text label is hidden. Hiding
+     is deliberate — shrinking it clips words mid-letter ("OVERVIE"), which the 768x1024 capture of
+     the real app showed. Everything that is text-only is hidden rather than allowed to clip:
+     the business card, the group headings and the sidebar footer all move into the page body
+     (`erp-side-business`, `erp-nav-heading`, `erp-side-foot`). */
+  .erp-side-business, .erp-nav-heading, .erp-side-foot { display: none; }
+  .erp-nav-link { justify-content: center; padding: 10px 6px; }
   .erp-nav-link > span:not(.erp-nav-glyph) { display: none; }
   .erp-nav-link .erp-nav-glyph { font-size: 1.05rem; }
 }

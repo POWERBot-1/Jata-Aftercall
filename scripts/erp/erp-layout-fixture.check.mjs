@@ -73,11 +73,13 @@ const HTML = `<!doctype html>
 <div class="erp-layout">
   <aside class="erp-sidebar">
     <div class="erp-brand"><div class="erp-brand-mark">J</div><div><div class="erp-brand-name">POS / ERP - PRO</div><div class="erp-brand-sub">Workspace</div></div></div>
-    <nav>
+    <div class="erp-side-business"><strong>VISUAL CHECK 01DE</strong><span>Retail and shop</span></div>
+    <div class="erp-nav-group"><span class="erp-nav-heading">Overview</span>
       <a class="erp-nav-link" data-active="true" href="#"><span class="erp-nav-glyph" aria-hidden="true">▦</span><span>Requisitions</span></a>
       <a class="erp-nav-link" href="#"><span class="erp-nav-glyph" aria-hidden="true">◲</span><span>Procurement</span></a>
       <a class="erp-nav-link" href="#"><span class="erp-nav-glyph" aria-hidden="true">✓</span><span>Tasks and work</span></a>
-    </nav>
+    </div>
+    <div class="erp-side-foot"><span class="erp-badge">Plan active</span><div>KES 3,000 / month for the ERP workspace.</div></div>
   </aside>
   <div class="erp-main">
     <header class="erp-topbar">
@@ -167,7 +169,14 @@ try {
       // Cards on the same visual row share a top offset; counting distinct tops gives the column count.
       const rows = new Set(kpiCards.map((card) => card.top)).size;
       const columns = rows > 0 ? Math.round(kpiCards.length / rows) : 0;
+      // Text clipped by its own box ("OVERVIE") is a defect the page-level overflow check cannot
+      // see, because the sidebar scrolls internally. Measure it directly.
+      const clipped = [...document.querySelectorAll(".erp-sidebar *")]
+        .filter((element) => element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0)
+        .slice(0, 4)
+        .map((element) => `${element.tagName.toLowerCase()}.${String(element.className || "").split(" ")[0]}`);
       return {
+        sidebarClipped: clipped,
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         sidebar: rect(".erp-sidebar"),
         mobileBar: rect(".erp-mobile-bar"),
@@ -193,6 +202,11 @@ try {
         name: `${viewport.label} no horizontal overflow`,
         ok: facts.overflow <= 0,
         detail: `overflow=${facts.overflow}px`,
+      },
+      {
+        name: `${viewport.label} nothing is clipped inside the sidebar`,
+        ok: (facts.sidebarClipped ?? []).length === 0,
+        detail: (facts.sidebarClipped ?? []).length === 0 ? "no clipped text" : `clipped=${facts.sidebarClipped.join(",")}`,
       },
       {
         name: `${viewport.label} Q1 nav mode is ${expectSidebar ? "sidebar" : "bottom bar"}`,
