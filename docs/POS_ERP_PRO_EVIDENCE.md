@@ -408,7 +408,7 @@ review has to run on the runtime main ships.
 | Item | Value |
 | --- | --- |
 | Merge commit | `c30ae8d` (parents `dc52390` on the branch, `a04124d` on `main`) |
-| Follow-up commits | `0c93d45`, `595320e`, plus the documentation commit that carries this section |
+| Follow-up commits | `0c93d45`, `595320e`, `f4121cc` (docs), `e500664` (build-mode fix — the reviewed head) |
 | PR base | retargeted from `arena/33ebb805-jata-aftercall` to **`main`** (`PATCH /pulls/71 {base: main}`) |
 | Runtime | Next **16.4.2**, React 18.3.1, Prisma **5.22.0**, Vitest **4.1.12**, Node 22.22.3 |
 | Schema | 124 models (main's 86 + 38 ERP/messaging), `prisma validate` clean, 0 duplicates |
@@ -461,13 +461,13 @@ original brand identity because the owner withdrew that rebrand for the whole pr
 | `Release Validation` → Static (lint) and `Journey` → lint | 4 `react-hooks/error-boundaries` errors: `app/store/[slug]` built JSX inside a `try` | fetch inside `try`, render after it; behaviour unchanged |
 | `pos-erp-verify` static → unit suite | the suite asserts the runtime and a Node 20 runner is below it | the workflow now runs Node **22.22.3**, like main's own workflows |
 
-### 9.5 Verification on the merged tree (`595320e`)
+### 9.5 Verification on the reviewed head (`e500664`)
 
 ```bash
 npm run lint          # → 0 errors, 42 warnings (all pre-existing, none introduced here)
 npx tsc --noEmit      # → exit 0
 npx vitest run        # → Test Files 260 passed | 16 skipped (276)
-                      #   Tests      3399 passed | 137 skipped (3536), exit 0
+                      #   Tests      3402 passed | 137 skipped (3539), exit 0
 npx tsx scripts/erp/check-models.ts
                       # → 124 schema models = 124 client models, 38 ERP/messaging, 90 referenced, PASSED
 npm run build         # → "[build] Build completed successfully" (Next 16.4.2), 17 ERP routes in the manifest
@@ -484,9 +484,12 @@ client — a client generated against the missing native engine throws 42 unhand
 native path: `Migrations and PostgreSQL suite` executed `prisma migrate deploy` and the 16-test suite
 with **no skips**.
 
-### 9.6 CI on the merge head
+### 9.6 CI on the reviewed head
 
-| Check (workflow) | Result on `595320e` |
+Every check below is green on **`e500664`** (`gh api …/commits/e500664/check-runs`: 14 check-runs,
+all `success`, plus a `success` commit status for the Vercel deployment).
+
+| Check (workflow) | Result on `e500664` |
 | --- | --- |
 | Schema, types, unit suite, build (`pos-erp-verify`) | **PASS** |
 | Migrations and PostgreSQL suite (`pos-erp-verify`) | **PASS** (native engine, 16 tests, no skips) |
@@ -500,26 +503,75 @@ with **no skips**.
 | Migration target guard | **PASS** |
 | Real-Chrome six-viewport capture on a disposable database | **PASS** — CI-captured browser evidence for the responsive layout |
 | Release gate (aggregate) | **PASS** |
-| **Journey against a real database** | **FAIL** — step "Actual storefront Motion and immersive browser regressions", exit 1 |
-| Vercel / Vercel Preview Comments | PASS |
+| Journey against a real database | **PASS** |
+| D2 — build, audit and controls on the candidate tree | **PASS** (was FAIL on `f4121cc`; root cause and proof in 9.7) |
+| Vercel / Vercel Preview Comments | PASS — deployment produced |
 
-**The one red check is unresolved, and it is honest to say so.** The GitHub log and artifact
-endpoints are not reachable from this sandbox (`results-receiver.actions.githubusercontent.com`
-returns EOF, `gh run rerun` is refused), so the failing assertion inside that step could not be
-read. The same six commands the step runs were executed here against a real Chromium 153
-(`@sparticuz/chromium`, `LD_LIBRARY_PATH` from its `al2023` libs) and a `next dev --webpack` server,
-**twice**: once with no database and once with a live migrated PostgreSQL. Both runs passed every
-assertion:
+### 9.7 The `f4121cc` D2 failure: root cause, fix, proof
 
-| Script | Result |
+`D2 — build, audit and controls on the candidate tree` went red on `f4121cc` at the step
+**"The candidate tree was not modified"** (`FAIL: tracked files were modified by the run`).
+
+**Log access: BLOCKED.** GitHub serves job logs and artifacts from
+`productionresultssa18.blob.core.windows.net` / `results-receiver.actions.githubusercontent.com`,
+which this sandbox cannot reach (connection EOF); `gh run rerun` is also refused with
+`HTTP 403: Resource not accessible by integration`. The failure text above was read from the
+check-run **annotations** API, which is reachable, and the job was then reproduced locally.
+
+**Reproduced from a clean checkout of `f4121cc`:**
+
+```
+$ git status --porcelain          # clean
+$ npm ci --ignore-scripts         # exit 0
+$ npx prisma generate             # exit 0
+$ npm run build                   # exit 0  … "[build] Build completed successfully"
+$ git status --porcelain
+ M next-env.d.ts
+$ git diff next-env.d.ts
+-import "./.next/dev/types/routes.d.ts";
+-import "./.next/dev/types/root-params.d.ts";
++import "./.next/types/routes.d.ts";
++import "./.next/types/root-params.d.ts";
+```
+
+**Root cause.** `next-env.d.ts` is a tracked file that Next rewrites on every compile with a
+mode-dependent path: `next dev` writes `./.next/dev/types/…`, `next build` writes
+`./.next/types/…`. The committed file at `f4121cc` carried the **dev** paths: a local `next dev`
+run (taken for the browser-evidence pass) rewrote the file and the following `git add -A` commit
+captured it. D2's own `npm run build` then restored the build paths, so a tracked file changed
+during the run and the clean-tree assertion failed. **The assertion was correct and was not
+touched**, no control was bypassed and no migration hash was involved. `origin/main` carries the
+build-mode content, confirming the branch had silently drifted from it.
+
+**Fix (`e500664`).** `next-env.d.ts` now holds exactly `origin/main`'s build-mode content. Proof,
+with `.next` deleted first and the full gate re-run from the clean checkout:
+
+```
+$ rm -rf .next && npm run build      # exit 0
+$ git status --porcelain
+(empty)                              # zero tracked modifications
+```
+
+**Regression guard.** `tests/unit/next-env-build-mode.test.ts` (3 assertions) fails if the
+dev-server paths are committed again. It was checked in both directions: 3/3 pass on the fix, 3/3
+fail against the dev-server content.
+
+### 9.8 Local reproduction of the D2 sequence on `e500664`
+
+| Step (mirrors the workflow) | Result |
 | --- | --- |
-| `test:browser:motion` | 124 passed, 0 failed |
-| `test:browser:immersive` | 22 passed, 0 failed |
-| `test:browser:layout` | 7 passed, 0 failed |
-| `test:browser:actionbar` | 37 passed, 0 failed |
-| `test:browser:families` | 167 passed, 0 failed |
-| `test:browser:media-local` | 29 passed, 0 failed |
+| Clean checkout, `npm ci --ignore-scripts` | PASS, tree clean |
+| `node scripts/lib/migration-target-guard.mjs check` | PASS — `OK_LOCAL … mode=enforce` |
+| `npm run build` (guard → `prisma migrate deploy` → generate → `next build --webpack`) | PASS, `[migrate] Migrations deployed successfully`, `[build] Build completed successfully` |
+| Tree after the build | **clean — 0 tracked modifications** |
+| `npm audit --omit=dev` equivalent (`summarise-audit.mjs` inputs) | PASS — 0 production findings (CI) |
 
-That is 386 assertions, 0 failures, on the same head. It makes an ERP-caused regression unlikely but
-it does **not** prove the CI step can pass; the check stays red until a run shows it green, so the
-merge gate below is BLOCKED rather than PASS.
+The parts of D2 that need a GitHub-hosted PostgreSQL 18 service, `psql` against it, and the
+mutation controls (broken migration must fail the build, guard must refuse a Production-claimed
+target) are **CI-verified, not locally re-run** — the job is green on `e500664`.
+
+Earlier browser evidence remains valid for the same code paths: the six storefront browser scripts
+were run against a real Chromium 153 and a `next dev --webpack` server, twice (with and without a
+live database): motion 124, immersive 22, layout 7, actionbar 37, families 167, media-local 29 —
+**386 assertions, 0 failures**. That run is what produced the dev-mode `next-env.d.ts` rewrite, and
+the reason the guard now exists.
