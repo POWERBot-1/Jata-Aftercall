@@ -2,7 +2,7 @@
 
 **Directive:** "Unified Business Operating System" (owner, 2026-10-28) — ~20 integrated modules.
 **Head reviewed:** `e500664` for the original matrix; rows 7, 9, 10 and the notification/dashboard rows
-were re-checked on `e282a48` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
+were re-checked on `0109e7c` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
 **Report date:** 2026-10-28.
 
 This document exists because the directive's scope is much wider than the software, and the gap
@@ -106,7 +106,7 @@ automation `CREATE_TASK` action rewritten to persist (22 domain + 9 render + 13 
 `ErpNotification`, `lib/erp/notifications.ts`, the `/notifications` centre, the shell unread bell, the
 dashboard "What needs you today" widgets, task-assignment and daily-overdue notices, and paginated
 finished work on the board (23 domain + 8 render + 10 PostgreSQL tests).
-`e282a48` added approvals: `ErpApprovalRequest` + `ErpApprovalEvent`, the `APPROVE_SPEND`
+`0109e7c` added approvals: `ErpApprovalRequest` + `ErpApprovalEvent`, the `APPROVE_SPEND`
 permission, `lib/erp/approvals.ts`, the `/approvals` screen, request/decision notifications and the
 dashboard's pending-approval figure (23 domain + 6 render + 10 PostgreSQL tests).
 

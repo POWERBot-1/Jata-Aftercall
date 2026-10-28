@@ -288,7 +288,7 @@ npm run build                        # → [build] Build completed successfully
 
 ---
 
-### 2.7 Approvals (2026-10-30, `e282a48`)
+### 2.7 Approvals (2026-10-30, `0109e7c`)
 
 Approval *limits* already existed (`ERP_APPROVAL_LIMITS_CENTS`), applied inline wherever money moves.
 That is a check, not a workflow: nobody could be asked, and "who approved this" could only be inferred

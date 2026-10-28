@@ -320,7 +320,7 @@ other check-runs; `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
 refused. No merge and no deployment was attempted. Merge remains an owner decision, and E4 (human
 visual review), E5, E6, E8 and E12 below stay open regardless of the green checks.
 
-**Approvals (head `e282a48`), slice-specific gaps:** delegate and escalate are **not built**, an
+**Approvals (head `0109e7c`), slice-specific gaps:** delegate and escalate are **not built**, an
 unanswered request does not rise to a higher role, and there is no settings field for a tenant-wide
 threshold (the domain honours one; nothing stores it). No responsive verification (E4).
 
