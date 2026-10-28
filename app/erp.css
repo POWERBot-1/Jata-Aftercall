@@ -92,13 +92,13 @@
 .erp-hero {
   background: linear-gradient(135deg, var(--erp-espresso) 0%, var(--erp-espresso-soft) 62%, color-mix(in srgb, var(--erp-espresso) 76%, var(--jata-accent)) 100%);
   color: var(--erp-on-espresso); border-radius: 22px; padding: 26px; position: relative; overflow: hidden;
-  border: 1px solid rgba(182, 255, 46, 0.18);
+  border: 1px solid color-mix(in srgb, var(--jata-accent) 32%, transparent);
 }
-.erp-hero::after { content: ""; position: absolute; inset: auto -60px -120px auto; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(182,255,46,0.28), transparent 65%); pointer-events: none; }
+.erp-hero::after { content: ""; position: absolute; inset: auto -60px -120px auto; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--jata-accent) 34%, transparent), transparent 65%); pointer-events: none; }
 .erp-hero h1 { margin: 0 0 6px; font-size: 1.7rem; letter-spacing: -0.035em; }
 .erp-hero p { margin: 0; color: var(--erp-on-espresso-soft); max-width: 64ch; font-size: 0.92rem; }
 .erp-hero .erp-actions { margin-top: 16px; }
-.erp-hero-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(182,255,46,0.14); color: var(--erp-accent); border: 1px solid rgba(182,255,46,0.35); padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+.erp-hero-chip { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--jata-accent) 22%, transparent); color: var(--jata-on-action); border: 1px solid color-mix(in srgb, var(--jata-accent) 45%, transparent); padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
 
 .erp-kpi { background: var(--erp-surface); border: 1px solid var(--erp-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
 .erp-kpi dt { font-size: 0.72rem; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }

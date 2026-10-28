@@ -397,3 +397,129 @@ gh run watch <run-id> --exit-status
 
 The workflow is triggered by any pull request. Its database job fails if the PostgreSQL suite
 reports a skip, so a green check means the tests actually ran.
+
+---
+
+## 9. Merge with `main` — post-merge re-verification (2026-10-28)
+
+The branch was rebased onto main by merging it, because main moved 358 commits ahead and the
+review has to run on the runtime main ships.
+
+| Item | Value |
+| --- | --- |
+| Merge commit | `c30ae8d` (parents `dc52390` on the branch, `a04124d` on `main`) |
+| Follow-up commits | `0c93d45`, `595320e`, plus the documentation commit that carries this section |
+| PR base | retargeted from `arena/33ebb805-jata-aftercall` to **`main`** (`PATCH /pulls/71 {base: main}`) |
+| Runtime | Next **16.4.2**, React 18.3.1, Prisma **5.22.0**, Vitest **4.1.12**, Node 22.22.3 |
+| Schema | 124 models (main's 86 + 38 ERP/messaging), `prisma validate` clean, 0 duplicates |
+| Migrations | 21 in the chain; 87 pre-existing tables; 125 tables total after the ERP migration |
+
+### 9.1 Conflicts and how each was resolved
+
+| File | Resolution |
+| --- | --- |
+| `package.json`, `package-lock.json` | Union of scripts on main's lockfile (`next` 16.4.2, `vitest` 4.1.12) |
+| `lib/db.ts` | Main's stubs plus the 38 ERP/messaging stubs; `passwordResetToken` was missing and was added |
+| `prisma/schema.prisma` | Main's 86 models plus the 38-model ERP block |
+| `tests/unit/repair-guards.test.ts` | Union of the migration lists (5 main + `20261027000000_pos_erp_pro`) |
+| `.env.example` | ERP Pro block, then main's commented JATA Qi seam |
+| `app/globals.css` | Main's stylesheet, **without** the ERP block (see 9.2) |
+| `RELEASE_BLOCKERS.md` | Main's current-worktree disclaimer, then the ERP register |
+
+### 9.2 Design restoration (owner correction)
+
+Main withdrew the graphite/electric-lime rebrand and pinned the original espresso / cream / amber
+identity with `tests/unit/original-design-restoration-2026.test.ts` (bans `#b6ff2e`, `#4d6b12`,
+`#16181d`, `#1b1e24` in `app/globals.css`) and `tests/unit/workspace-status-tokens.test.ts`
+(no hex literal after `.ws-notice {`). ERP Pro therefore no longer ships its own palette:
+
+- the ERP stylesheet moved to **`app/erp.css`**, imported from `app/layout.tsx` after `globals.css`;
+- every ERP colour is now a `--jata-*` alias (`--erp-ink`, `--erp-accent`, `--erp-espresso`,
+  `--erp-on-espresso`, …), so the ERP follows the product theme in light and dark with no second
+  palette to maintain;
+- the withdrawn dark-mode override block is deleted (the aliases inherit the theme);
+- the last lime literals (`rgba(182,255,46,…)` hero border, glow and chip) became
+  `color-mix()` expressions over `--jata-accent`.
+
+**Consequence, stated plainly:** ERP Pro is no longer "premium graphite". It renders in the
+original brand identity because the owner withdrew that rebrand for the whole product.
+
+### 9.3 Hydration determinism
+
+`tests/unit/booking-time-display.test.ts` and `tests/unit/hydration-determinism.test.ts` ban
+`toLocale*` in the ERP surfaces. All **33** call sites now use the pinned helpers:
+`formatDate`, `formatDateTime`, `formatNumber`, `formatKES` and the new `nairobiHour()` in
+`lib/dateFormat.ts` (re-exported from `lib/format.ts`) for the greeting hour.
+
+### 9.4 Defects the merged gates found, and the fixes
+
+| Gate | Finding | Fix |
+| --- | --- | --- |
+| `pos-erp-verify` static → `check-models` | `lib/password-reset.ts` (from main) calls `prisma.passwordResetToken`, which the merged offline fallback did not cover | added the stub: reads empty, writes throw |
+| `migration-verify.sh` (local) | two rollback assertions pinned "74 pre-existing tables"; main's five new migrations make it 87, so a healthy migration reported FAIL | the baseline is now **measured** from the migrations that precede the ERP one |
+| `Release Validation` → drift, reconciliation, candidate rehearsal | 76 findings, two per ERP table: `prisma migrate diff` saw a unique index on `id` that the datamodel never declares | removed the 38 redundant `"<Table>_id_key"` indexes — the primary key already guarantees uniqueness. The migration now creates 38 tables, **34** unique indexes, 64 plain indexes, 38 foreign keys |
+| `Release Validation` → Static (lint) and `Journey` → lint | 4 `react-hooks/error-boundaries` errors: `app/store/[slug]` built JSX inside a `try` | fetch inside `try`, render after it; behaviour unchanged |
+| `pos-erp-verify` static → unit suite | the suite asserts the runtime and a Node 20 runner is below it | the workflow now runs Node **22.22.3**, like main's own workflows |
+
+### 9.5 Verification on the merged tree (`595320e`)
+
+```bash
+npm run lint          # → 0 errors, 42 warnings (all pre-existing, none introduced here)
+npx tsc --noEmit      # → exit 0
+npx vitest run        # → Test Files 260 passed | 16 skipped (276)
+                      #   Tests      3399 passed | 137 skipped (3536), exit 0
+npx tsx scripts/erp/check-models.ts
+                      # → 124 schema models = 124 client models, 38 ERP/messaging, 90 referenced, PASSED
+npm run build         # → "[build] Build completed successfully" (Next 16.4.2), 17 ERP routes in the manifest
+bash scripts/erp/migration-verify.sh all
+                      # → 24 PASS / 0 FAIL (21 migrations, 38 ERP tables, 87 pre-existing, 125 total)
+PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npx vitest run tests/integration/erp-pro-postgres.test.ts
+                      # → 16 passed (16), WASM query engine + @prisma/adapter-pg
+```
+
+Local sandbox notes, unchanged in substance: the native Prisma engine still cannot be downloaded
+here (so the database suite runs on the WASM engine, and the unit suite needs the `--no-engine`
+client — a client generated against the missing native engine throws 42 unhandled
+`PrismaClientInitializationError`s that are a sandbox artefact, not test failures). CI runs the
+native path: `Migrations and PostgreSQL suite` executed `prisma migrate deploy` and the 16-test suite
+with **no skips**.
+
+### 9.6 CI on the merge head
+
+| Check (workflow) | Result on `595320e` |
+| --- | --- |
+| Schema, types, unit suite, build (`pos-erp-verify`) | **PASS** |
+| Migrations and PostgreSQL suite (`pos-erp-verify`) | **PASS** (native engine, 16 tests, no skips) |
+| Static (install, generate, lint, typecheck, audit) | **PASS** |
+| Migrations + schema on PostgreSQL 18 | **PASS** |
+| Production build path on PostgreSQL 18 | **PASS** |
+| Failure paths actually fail | **PASS** |
+| Schema reconciliation proposal closes the drift | **PASS** |
+| Exact candidate applies on disposable PostgreSQL 18 | **PASS** |
+| D2 — build, audit and controls on the candidate tree | **PASS** |
+| Migration target guard | **PASS** |
+| Real-Chrome six-viewport capture on a disposable database | **PASS** — CI-captured browser evidence for the responsive layout |
+| Release gate (aggregate) | **PASS** |
+| **Journey against a real database** | **FAIL** — step "Actual storefront Motion and immersive browser regressions", exit 1 |
+| Vercel / Vercel Preview Comments | PASS |
+
+**The one red check is unresolved, and it is honest to say so.** The GitHub log and artifact
+endpoints are not reachable from this sandbox (`results-receiver.actions.githubusercontent.com`
+returns EOF, `gh run rerun` is refused), so the failing assertion inside that step could not be
+read. The same six commands the step runs were executed here against a real Chromium 153
+(`@sparticuz/chromium`, `LD_LIBRARY_PATH` from its `al2023` libs) and a `next dev --webpack` server,
+**twice**: once with no database and once with a live migrated PostgreSQL. Both runs passed every
+assertion:
+
+| Script | Result |
+| --- | --- |
+| `test:browser:motion` | 124 passed, 0 failed |
+| `test:browser:immersive` | 22 passed, 0 failed |
+| `test:browser:layout` | 7 passed, 0 failed |
+| `test:browser:actionbar` | 37 passed, 0 failed |
+| `test:browser:families` | 167 passed, 0 failed |
+| `test:browser:media-local` | 29 passed, 0 failed |
+
+That is 386 assertions, 0 failures, on the same head. It makes an ERP-caused regression unlikely but
+it does **not** prove the CI step can pass; the check stays red until a run shows it green, so the
+merge gate below is BLOCKED rather than PASS.
