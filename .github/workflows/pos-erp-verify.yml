@@ -12,6 +12,9 @@ name: POS / ERP - PRO verify
 #                release with existing POS rows present, and rolls back/re-applies safely
 #                (scripts/erp/migration-verify.sh).
 #   3. database — the ERP PostgreSQL suite runs the real code paths against a migrated database.
+#
+# Node 22: the repository's unit suite asserts the runtime it runs on (main pins ^20.19 || >=22.12
+# and its own workflows use 22), so a Node 20 runner fails that guard before any test runs.
 
 on:
   pull_request:
@@ -37,7 +40,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.22.3"
           cache: npm
 
       - name: Install dependencies
@@ -101,7 +104,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.22.3"
           cache: npm
 
       - name: Prepare the evidence log directory

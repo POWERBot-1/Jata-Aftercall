@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS "ErpConfiguration" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpConfiguration_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpConfiguration_id_key" ON "ErpConfiguration"("id");
 CREATE INDEX IF NOT EXISTS "ErpConfiguration_businessId_idx" ON "ErpConfiguration"("businessId");
 
 DO $$ BEGIN
@@ -54,7 +53,6 @@ CREATE TABLE IF NOT EXISTS "ErpSubscription" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpSubscription_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpSubscription_id_key" ON "ErpSubscription"("id");
 CREATE INDEX IF NOT EXISTS "ErpSubscription_businessId_status_idx" ON "ErpSubscription"("businessId", "status");
 
 DO $$ BEGIN
@@ -74,7 +72,6 @@ CREATE TABLE IF NOT EXISTS "ErpEntitlement" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpEntitlement_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpEntitlement_id_key" ON "ErpEntitlement"("id");
 CREATE INDEX IF NOT EXISTS "ErpEntitlement_businessId_status_idx" ON "ErpEntitlement"("businessId", "status");
 
 DO $$ BEGIN
@@ -92,7 +89,6 @@ CREATE TABLE IF NOT EXISTS "ErpSequence" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpSequence_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpSequence_id_key" ON "ErpSequence"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpSequence_businessId_key_key" ON "ErpSequence"("businessId", "key");
 CREATE INDEX IF NOT EXISTS "ErpSequence_businessId_idx" ON "ErpSequence"("businessId");
 
@@ -118,7 +114,6 @@ CREATE TABLE IF NOT EXISTS "ErpAuditEvent" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpAuditEvent_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpAuditEvent_id_key" ON "ErpAuditEvent"("id");
 CREATE INDEX IF NOT EXISTS "ErpAuditEvent_businessId_createdAt_idx" ON "ErpAuditEvent"("businessId", "createdAt");
 CREATE INDEX IF NOT EXISTS "ErpAuditEvent_businessId_action_idx" ON "ErpAuditEvent"("businessId", "action");
 
@@ -138,7 +133,6 @@ CREATE TABLE IF NOT EXISTS "ErpIdempotencyRecord" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpIdempotencyRecord_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpIdempotencyRecord_id_key" ON "ErpIdempotencyRecord"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpIdempotencyRecord_businessId_scope_key_key" ON "ErpIdempotencyRecord"("businessId", "scope", "key");
 CREATE INDEX IF NOT EXISTS "ErpIdempotencyRecord_businessId_scope_idx" ON "ErpIdempotencyRecord"("businessId", "scope");
 
@@ -161,7 +155,6 @@ CREATE TABLE IF NOT EXISTS "ErpAccount" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpAccount_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpAccount_id_key" ON "ErpAccount"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpAccount_businessId_code_key" ON "ErpAccount"("businessId", "code");
 CREATE INDEX IF NOT EXISTS "ErpAccount_businessId_type_idx" ON "ErpAccount"("businessId", "type");
 
@@ -183,7 +176,6 @@ CREATE TABLE IF NOT EXISTS "ErpPeriod" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpPeriod_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpPeriod_id_key" ON "ErpPeriod"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpPeriod_businessId_fiscalYear_month_key" ON "ErpPeriod"("businessId", "fiscalYear", "month");
 CREATE INDEX IF NOT EXISTS "ErpPeriod_businessId_status_idx" ON "ErpPeriod"("businessId", "status");
 
@@ -215,7 +207,6 @@ CREATE TABLE IF NOT EXISTS "ErpJournal" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpJournal_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpJournal_id_key" ON "ErpJournal"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpJournal_businessId_journalNumber_key" ON "ErpJournal"("businessId", "journalNumber");
 CREATE INDEX IF NOT EXISTS "ErpJournal_businessId_entryDate_idx" ON "ErpJournal"("businessId", "entryDate");
 CREATE INDEX IF NOT EXISTS "ErpJournal_businessId_status_idx" ON "ErpJournal"("businessId", "status");
@@ -240,7 +231,6 @@ CREATE TABLE IF NOT EXISTS "ErpJournalLine" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpJournalLine_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpJournalLine_id_key" ON "ErpJournalLine"("id");
 CREATE INDEX IF NOT EXISTS "ErpJournalLine_journalId_idx" ON "ErpJournalLine"("journalId");
 CREATE INDEX IF NOT EXISTS "ErpJournalLine_businessId_accountCode_idx" ON "ErpJournalLine"("businessId", "accountCode");
 CREATE INDEX IF NOT EXISTS "ErpJournalLine_businessId_branchId_idx" ON "ErpJournalLine"("businessId", "branchId");
@@ -284,7 +274,6 @@ CREATE TABLE IF NOT EXISTS "ErpInvoice" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpInvoice_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpInvoice_id_key" ON "ErpInvoice"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpInvoice_businessId_invoiceNumber_key" ON "ErpInvoice"("businessId", "invoiceNumber");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpInvoice_businessId_idempotencyKey_key" ON "ErpInvoice"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpInvoice_businessId_status_idx" ON "ErpInvoice"("businessId", "status");
@@ -314,7 +303,6 @@ CREATE TABLE IF NOT EXISTS "ErpInvoiceLine" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpInvoiceLine_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpInvoiceLine_id_key" ON "ErpInvoiceLine"("id");
 CREATE INDEX IF NOT EXISTS "ErpInvoiceLine_invoiceId_idx" ON "ErpInvoiceLine"("invoiceId");
 CREATE INDEX IF NOT EXISTS "ErpInvoiceLine_businessId_idx" ON "ErpInvoiceLine"("businessId");
 
@@ -343,7 +331,6 @@ CREATE TABLE IF NOT EXISTS "ErpPayment" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpPayment_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpPayment_id_key" ON "ErpPayment"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpPayment_businessId_receiptNumber_key" ON "ErpPayment"("businessId", "receiptNumber");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpPayment_businessId_idempotencyKey_key" ON "ErpPayment"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpPayment_businessId_receivedAt_idx" ON "ErpPayment"("businessId", "receivedAt");
@@ -364,7 +351,6 @@ CREATE TABLE IF NOT EXISTS "ErpPaymentAllocation" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpPaymentAllocation_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpPaymentAllocation_id_key" ON "ErpPaymentAllocation"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpPaymentAllocation_paymentId_invoiceId_key" ON "ErpPaymentAllocation"("paymentId", "invoiceId");
 CREATE INDEX IF NOT EXISTS "ErpPaymentAllocation_businessId_invoiceId_idx" ON "ErpPaymentAllocation"("businessId", "invoiceId");
 
@@ -395,7 +381,6 @@ CREATE TABLE IF NOT EXISTS "ErpExpense" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpExpense_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpExpense_id_key" ON "ErpExpense"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpExpense_businessId_idempotencyKey_key" ON "ErpExpense"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpExpense_businessId_occurredAt_idx" ON "ErpExpense"("businessId", "occurredAt");
 CREATE INDEX IF NOT EXISTS "ErpExpense_businessId_status_idx" ON "ErpExpense"("businessId", "status");
@@ -423,7 +408,6 @@ CREATE TABLE IF NOT EXISTS "ErpSupplierBill" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpSupplierBill_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpSupplierBill_id_key" ON "ErpSupplierBill"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpSupplierBill_businessId_supplierId_billNumber_key" ON "ErpSupplierBill"("businessId", "supplierId", "billNumber");
 CREATE INDEX IF NOT EXISTS "ErpSupplierBill_businessId_status_idx" ON "ErpSupplierBill"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "ErpSupplierBill_businessId_dueAt_idx" ON "ErpSupplierBill"("businessId", "dueAt");
@@ -451,7 +435,6 @@ CREATE TABLE IF NOT EXISTS "ErpTaxRule" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpTaxRule_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpTaxRule_id_key" ON "ErpTaxRule"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpTaxRule_businessId_key_effectiveFrom_key" ON "ErpTaxRule"("businessId", "key", "effectiveFrom");
 CREATE INDEX IF NOT EXISTS "ErpTaxRule_businessId_key_idx" ON "ErpTaxRule"("businessId", "key");
 
@@ -480,7 +463,6 @@ CREATE TABLE IF NOT EXISTS "ErpComplianceProfile" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpComplianceProfile_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpComplianceProfile_id_key" ON "ErpComplianceProfile"("id");
 
 DO $$ BEGIN
     ALTER TABLE "ErpComplianceProfile" ADD CONSTRAINT "ErpComplianceProfile_businessId_fkey"
@@ -509,7 +491,6 @@ CREATE TABLE IF NOT EXISTS "ErpStoreOrder" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpStoreOrder_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrder_id_key" ON "ErpStoreOrder"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrder_businessId_orderNumber_key" ON "ErpStoreOrder"("businessId", "orderNumber");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrder_businessId_idempotencyKey_key" ON "ErpStoreOrder"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpStoreOrder_businessId_status_idx" ON "ErpStoreOrder"("businessId", "status");
@@ -534,7 +515,6 @@ CREATE TABLE IF NOT EXISTS "ErpStoreOrderItem" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpStoreOrderItem_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrderItem_id_key" ON "ErpStoreOrderItem"("id");
 CREATE INDEX IF NOT EXISTS "ErpStoreOrderItem_orderId_idx" ON "ErpStoreOrderItem"("orderId");
 CREATE INDEX IF NOT EXISTS "ErpStoreOrderItem_businessId_idx" ON "ErpStoreOrderItem"("businessId");
 
@@ -556,7 +536,6 @@ CREATE TABLE IF NOT EXISTS "ErpNotification" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpNotification_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpNotification_id_key" ON "ErpNotification"("id");
 CREATE INDEX IF NOT EXISTS "ErpNotification_businessId_createdAt_idx" ON "ErpNotification"("businessId", "createdAt");
 CREATE INDEX IF NOT EXISTS "ErpNotification_businessId_readAt_idx" ON "ErpNotification"("businessId", "readAt");
 
@@ -584,7 +563,6 @@ CREATE TABLE IF NOT EXISTS "ErpAutomationRule" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ErpAutomationRule_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpAutomationRule_id_key" ON "ErpAutomationRule"("id");
 CREATE INDEX IF NOT EXISTS "ErpAutomationRule_businessId_status_idx" ON "ErpAutomationRule"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "ErpAutomationRule_businessId_trigger_idx" ON "ErpAutomationRule"("businessId", "trigger");
 
@@ -609,7 +587,6 @@ CREATE TABLE IF NOT EXISTS "ErpAutomationRun" (
     "finishedAt" TIMESTAMP(3),
     CONSTRAINT "ErpAutomationRun_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpAutomationRun_id_key" ON "ErpAutomationRun"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpAutomationRun_businessId_ruleId_idempotencyKey_key" ON "ErpAutomationRun"("businessId", "ruleId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpAutomationRun_businessId_startedAt_idx" ON "ErpAutomationRun"("businessId", "startedAt");
 CREATE INDEX IF NOT EXISTS "ErpAutomationRun_businessId_status_idx" ON "ErpAutomationRun"("businessId", "status");
@@ -636,7 +613,6 @@ CREATE TABLE IF NOT EXISTS "ErpKycDocument" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpKycDocument_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpKycDocument_id_key" ON "ErpKycDocument"("id");
 CREATE INDEX IF NOT EXISTS "ErpKycDocument_businessId_status_idx" ON "ErpKycDocument"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "ErpKycDocument_senderIdId_idx" ON "ErpKycDocument"("senderIdId");
 
@@ -659,7 +635,6 @@ CREATE TABLE IF NOT EXISTS "MsgChannelConnection" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgChannelConnection_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgChannelConnection_id_key" ON "MsgChannelConnection"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgChannelConnection_businessId_channel_key" ON "MsgChannelConnection"("businessId", "channel");
 CREATE INDEX IF NOT EXISTS "MsgChannelConnection_businessId_status_idx" ON "MsgChannelConnection"("businessId", "status");
 
@@ -695,7 +670,6 @@ CREATE TABLE IF NOT EXISTS "MsgSenderId" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgSenderId_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgSenderId_id_key" ON "MsgSenderId"("id");
 CREATE INDEX IF NOT EXISTS "MsgSenderId_businessId_status_idx" ON "MsgSenderId"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "MsgSenderId_businessId_requestedId_idx" ON "MsgSenderId"("businessId", "requestedId");
 
@@ -718,7 +692,6 @@ CREATE TABLE IF NOT EXISTS "MsgSenderIdEvent" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MsgSenderIdEvent_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgSenderIdEvent_id_key" ON "MsgSenderIdEvent"("id");
 CREATE INDEX IF NOT EXISTS "MsgSenderIdEvent_senderIdId_createdAt_idx" ON "MsgSenderIdEvent"("senderIdId", "createdAt");
 CREATE INDEX IF NOT EXISTS "MsgSenderIdEvent_businessId_createdAt_idx" ON "MsgSenderIdEvent"("businessId", "createdAt");
 
@@ -742,7 +715,6 @@ CREATE TABLE IF NOT EXISTS "MsgContact" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgContact_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgContact_id_key" ON "MsgContact"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgContact_businessId_phoneNormalized_key" ON "MsgContact"("businessId", "phoneNormalized");
 CREATE INDEX IF NOT EXISTS "MsgContact_businessId_status_idx" ON "MsgContact"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "MsgContact_businessId_customerId_idx" ON "MsgContact"("businessId", "customerId");
@@ -767,7 +739,6 @@ CREATE TABLE IF NOT EXISTS "MsgConsentRecord" (
     "capturedById" TEXT,
     CONSTRAINT "MsgConsentRecord_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgConsentRecord_id_key" ON "MsgConsentRecord"("id");
 CREATE INDEX IF NOT EXISTS "MsgConsentRecord_businessId_contactId_channel_purpose_idx" ON "MsgConsentRecord"("businessId", "contactId", "channel", "purpose");
 CREATE INDEX IF NOT EXISTS "MsgConsentRecord_businessId_capturedAt_idx" ON "MsgConsentRecord"("businessId", "capturedAt");
 
@@ -788,7 +759,6 @@ CREATE TABLE IF NOT EXISTS "MsgSuppression" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MsgSuppression_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgSuppression_id_key" ON "MsgSuppression"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgSuppression_businessId_phoneNormalized_channel_key" ON "MsgSuppression"("businessId", "phoneNormalized", "channel");
 CREATE INDEX IF NOT EXISTS "MsgSuppression_businessId_phoneNormalized_idx" ON "MsgSuppression"("businessId", "phoneNormalized");
 
@@ -809,7 +779,6 @@ CREATE TABLE IF NOT EXISTS "MsgAudience" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgAudience_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgAudience_id_key" ON "MsgAudience"("id");
 CREATE INDEX IF NOT EXISTS "MsgAudience_businessId_createdAt_idx" ON "MsgAudience"("businessId", "createdAt");
 
 DO $$ BEGIN
@@ -836,7 +805,6 @@ CREATE TABLE IF NOT EXISTS "MsgTemplate" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgTemplate_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgTemplate_id_key" ON "MsgTemplate"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgTemplate_businessId_key_version_key" ON "MsgTemplate"("businessId", "key", "version");
 CREATE INDEX IF NOT EXISTS "MsgTemplate_businessId_status_idx" ON "MsgTemplate"("businessId", "status");
 
@@ -884,7 +852,6 @@ CREATE TABLE IF NOT EXISTS "MsgCampaign" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgCampaign_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgCampaign_id_key" ON "MsgCampaign"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgCampaign_businessId_dedupeKey_key" ON "MsgCampaign"("businessId", "dedupeKey");
 CREATE INDEX IF NOT EXISTS "MsgCampaign_businessId_status_idx" ON "MsgCampaign"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "MsgCampaign_businessId_scheduledAt_idx" ON "MsgCampaign"("businessId", "scheduledAt");
@@ -917,7 +884,6 @@ CREATE TABLE IF NOT EXISTS "MsgCampaignRecipient" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MsgCampaignRecipient_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgCampaignRecipient_id_key" ON "MsgCampaignRecipient"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgCampaignRecipient_campaignId_phoneNormalized_key" ON "MsgCampaignRecipient"("campaignId", "phoneNormalized");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgCampaignRecipient_businessId_idempotencyKey_key" ON "MsgCampaignRecipient"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "MsgCampaignRecipient_campaignId_status_idx" ON "MsgCampaignRecipient"("campaignId", "status");
@@ -944,7 +910,6 @@ CREATE TABLE IF NOT EXISTS "MsgMessageEvent" (
     "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MsgMessageEvent_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgMessageEvent_id_key" ON "MsgMessageEvent"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgMessageEvent_dedupeKey_key" ON "MsgMessageEvent"("dedupeKey");
 CREATE INDEX IF NOT EXISTS "MsgMessageEvent_businessId_receivedAt_idx" ON "MsgMessageEvent"("businessId", "receivedAt");
 CREATE INDEX IF NOT EXISTS "MsgMessageEvent_campaignId_eventType_idx" ON "MsgMessageEvent"("campaignId", "eventType");
@@ -965,7 +930,6 @@ CREATE TABLE IF NOT EXISTS "MsgWallet" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "MsgWallet_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgWallet_id_key" ON "MsgWallet"("id");
 CREATE INDEX IF NOT EXISTS "MsgWallet_businessId_idx" ON "MsgWallet"("businessId");
 
 DO $$ BEGIN
@@ -987,7 +951,6 @@ CREATE TABLE IF NOT EXISTS "MsgLedgerEntry" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MsgLedgerEntry_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "MsgLedgerEntry_id_key" ON "MsgLedgerEntry"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "MsgLedgerEntry_businessId_idempotencyKey_key" ON "MsgLedgerEntry"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "MsgLedgerEntry_businessId_createdAt_idx" ON "MsgLedgerEntry"("businessId", "createdAt");
 CREATE INDEX IF NOT EXISTS "MsgLedgerEntry_businessId_campaignId_idx" ON "MsgLedgerEntry"("businessId", "campaignId");
@@ -1015,7 +978,6 @@ CREATE TABLE IF NOT EXISTS "ErpCreditNote" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ErpCreditNote_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "ErpCreditNote_id_key" ON "ErpCreditNote"("id");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpCreditNote_businessId_creditNoteNumber_key" ON "ErpCreditNote"("businessId", "creditNoteNumber");
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpCreditNote_businessId_idempotencyKey_key" ON "ErpCreditNote"("businessId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "ErpCreditNote_businessId_invoiceId_idx" ON "ErpCreditNote"("businessId", "invoiceId");

@@ -15,10 +15,10 @@ One additive migration: `prisma/migrations/20261027000000_pos_erp_pro/migration.
 | New tables | 38 | `scripts/erp/migration-verify.sh clean` → 38 |
 | New indexes | 136 (72 unique, 64 plain) | 174 `pg_indexes` rows on the ERP tables, incl. primary keys |
 | New foreign keys | 38, every one `REFERENCES "Business"("id") ON DELETE CASCADE` | 38 in `information_schema` |
-| Tables altered | **0** | 74 pre-existing tables still present, no `ALTER TABLE` in the file |
+| Tables altered | **0** | 87 pre-existing tables still present, no `ALTER TABLE` in the file |
 | Columns dropped or retyped | **0** | `grep -c 'ALTER COLUMN'` = 0 |
 | Rows updated or deleted | **0** | upgrade-path row counts unchanged |
-| Historical migrations edited | **0** | 15 earlier migrations applied unchanged before it |
+| Historical migrations edited | **0** | 20 earlier migrations applied unchanged before it (21 in the chain) |
 
 The existing Business POS tables (`Pos*`), the commerce tables, the payment wallet and the Website
 Studio tables are untouched. The ERP reads `PosProduct` and `PosInventoryItem` through the existing
@@ -98,14 +98,17 @@ DATABASE_URL=postgresql://jata@127.0.0.1:5433/jata_test?schema=public \
 
 The script runs three scenarios and prints one `PASS`/`FAIL` line per check:
 
-1. **clean install** — empty `public` schema → 16 migrations → 38 ERP tables, 74 pre-existing
+1. **clean install** — empty `public` schema → 21 migrations → 38 ERP tables, 87 pre-existing
    tables, 38 ERP foreign keys, every table named in the migration present, migration re-runnable.
-2. **upgrade path** — 15 migrations up to `20261010000200_checkout_idempotency`, one user, one
+   The pre-existing count is *measured* from the migrations that precede the ERP one, not pinned:
+   every upstream release adds tables (74 at the 2026-10-27 review, 87 after the 2026-10-28 merge
+   with `main`), and a pinned number would report a healthy migration as broken.
+2. **upgrade path** — 20 migrations up to `20261010000200_checkout_idempotency`, one user, one
    business and one POS product inserted, then the ERP migration: 38 tables added, existing rows
    untouched, no rows created or duplicated.
 3. **rollback and recovery** — ERP data exported with `pg_dump` (38 tables), restored into a scratch
    database and row counts compared, all 38 ERP tables dropped one at a time in the documented
-   reverse-dependency order with `RESTRICT` (so a wrong order fails loudly), the 74 pre-existing
+   reverse-dependency order with `RESTRICT` (so a wrong order fails loudly), the 87 pre-existing
    tables and their rows still present, then the ERP migration re-applied and 38 tables back.
 
 `prisma migrate deploy` was also run against a freshly created database by the CI workflow
