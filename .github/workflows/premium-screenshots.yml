@@ -75,7 +75,7 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: bash scripts/lib/prisma-generate.sh
 
       - name: Apply migrations to the disposable database
         run: npx prisma migrate deploy
@@ -223,6 +223,12 @@ jobs:
           mkdir -p verification/evidence
           rm -rf "verification/evidence/run-${GITHUB_RUN_ID}"
           cp -r premium-shots "verification/evidence/run-${GITHUB_RUN_ID}"
+          # The ERP captures live in their own directory. They are copied under the same transient
+          # channel because the artifact blob host is blocked in some review environments, and a
+          # reviewer who cannot open the images cannot review them.
+          if [ -d erp-visual-shots ]; then
+            cp -r erp-visual-shots "verification/evidence/run-${GITHUB_RUN_ID}/erp-visual"
+          fi
           cat > verification/evidence/README.md <<'MD'
           # Transient visual evidence (not product code)
 

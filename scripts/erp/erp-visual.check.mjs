@@ -69,11 +69,14 @@ const VIEWPORTS = [
   { label: "390x844", width: 390, height: 844, mobile: true },
   { label: "430x932", width: 430, height: 932, mobile: true },
   { label: "768x1024", width: 768, height: 1024, mobile: false },
+  // Added for the owner's Q2 decision, which names 1024 explicitly: the width between the tablet
+  // layout (sidebar returns at >700px) and the desktop row.
+  { label: "1024x768", width: 1024, height: 768, mobile: false },
   { label: "1366x768", width: 1366, height: 768, mobile: false },
 ];
 
 const ROUTES = [
-  { slug: "workspace", path: "", marker: "POS / ERP - PRO" },
+  { slug: "workspace", path: "", marker: "Good " },
   { slug: "tasks", path: "/tasks", marker: "Tasks and work" },
   { slug: "requisitions", path: "/requisitions", marker: "Requisitions" },
   { slug: "procurement", path: "/procurement", marker: "Procurement" },
@@ -275,6 +278,12 @@ try {
           mainWidth: Math.round(main.getBoundingClientRect().width),
           navVisible: Boolean(nav && nav.getBoundingClientRect().width > 0),
           offenders: overflowing,
+          // Q1 and Q3 are layout decisions, so they are measured rather than eyeballed: exactly one
+          // navigation mode must be live at any width, and exactly one module label must be visible.
+          sidebarVisible: Boolean((() => { const el = document.querySelector(".erp-sidebar"); return el && el.getBoundingClientRect().width > 0; })()),
+          mobileBarVisible: Boolean((() => { const el = document.querySelector(".erp-mobile-bar"); return el && el.getBoundingClientRect().width > 0; })()),
+          labelFullVisible: Boolean((() => { const el = document.querySelector(".erp-label-full"); return el && el.getBoundingClientRect().width > 0; })()),
+          labelShortVisible: Boolean((() => { const el = document.querySelector(".erp-label-short"); return el && el.getBoundingClientRect().width > 0; })()),
         };
       });
       const file = join(SHOT_DIR, `${viewport.label}__${route.slug}.jpg`);
@@ -283,10 +292,21 @@ try {
       const okHeading = facts.headingVisible && (facts.heading ?? "").length > 2;
       const okOverflow = facts.overflow <= 0;
       const okMarker = await page.evaluate((marker) => document.body.innerText.includes(marker), route.marker);
+      // Q1: the sidebar replaces the bottom bar above 700px, and the bottom bar replaces the sidebar
+      // at 700px and below. Exactly one of them, never both and never neither.
+      const expectSidebar = viewport.width > 700;
+      const okNavMode = expectSidebar
+        ? facts.sidebarVisible && !facts.mobileBarVisible
+        : facts.mobileBarVisible && !facts.sidebarVisible;
+      // Q3: below 430px the module label is "ERP"; at 430px and above it is the full name.
+      const expectShort = viewport.width <= 430;
+      const okLabel = expectShort
+        ? facts.labelShortVisible && !facts.labelFullVisible
+        : facts.labelFullVisible && !facts.labelShortVisible;
       record(
-        okStatus && okHeading && okOverflow && okMarker,
+        okStatus && okHeading && okOverflow && okMarker && okNavMode && okLabel,
         `${viewport.label} ${route.slug} renders without overflow`,
-        `HTTP ${status}, overflow=${facts.overflow}px, main=${facts.mainWidth}px, nav=${facts.navVisible}, heading=${JSON.stringify(facts.heading)}${facts.offenders.length ? `, offenders=${facts.offenders.join(",")}` : ""}`,
+        `HTTP ${status}, overflow=${facts.overflow}px, main=${facts.mainWidth}px, nav=${facts.navVisible}, heading=${JSON.stringify(facts.heading)}, sidebar=${facts.sidebarVisible}, mobileBar=${facts.mobileBarVisible}, label=${facts.labelFullVisible ? "full" : facts.labelShortVisible ? "short" : "none"}${facts.offenders.length ? `, offenders=${facts.offenders.join(",")}` : ""}`,
       );
     }
     await page.close();

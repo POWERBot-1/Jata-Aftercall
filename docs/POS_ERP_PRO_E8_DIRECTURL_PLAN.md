@@ -235,3 +235,92 @@ advisory-lock behaviour, Neon's extension set, SSL, branch/restore, cold start �
 * No migration was executed against any provider database.
 * `prisma/schema.prisma`, `scripts/migrate.sh` and `DEPLOYMENT.md` are **unchanged** by this pass.
 * E8 stays **OPEN** until §6 has run and its outputs are recorded.
+
+---
+
+## 10. Execution record, 2026-10-28 (owner authorized a free-tier rehearsal)
+
+### 10.1 The authorization
+
+The owner explicitly authorized provisioning a **Neon Free-tier, non-production** project for this
+rehearsal, conditional on the actual cost being KES 0 / USD $0 with no paid plan, add-on or billing
+commitment, and on stopping and reporting if that could not be guaranteed.
+
+### 10.2 What was done: the code half (§2 of this document)
+
+| Change | File | Verified how |
+| --- | --- | --- |
+| `directUrl = env("DIRECT_URL")` added beside the existing pooled `url` | `prisma/schema.prisma` | `tests/unit/direct-url-guard.test.ts` asserts both lines exist |
+| Preflight that refuses a pooled migration target | `scripts/lib/direct-url-guard.mjs` (new) | 15 unit tests; four CLI runs (below) |
+| `DIRECT_URL` defaults to `DATABASE_URL` so no environment needs a second variable to build | `scripts/lib/prisma-env.sh` (new), sourced by `build.sh` and `migrate.sh` | build gate run, below |
+| One wrapper for every client generation, so P1012 cannot occur | `scripts/lib/prisma-generate.sh` (new) | 9 raw `npx prisma generate` call sites routed through it; `grep` shows zero bypasses |
+| Guard runs **before** Prisma in the migration gate | `scripts/migrate.sh` | build gate output below |
+| Deployment instructions | `DEPLOYMENT.md` §1/§2, `.env.example` | manual review |
+
+**Failure-path validation (rehearsal step 6), run locally with synthetic URLs — no network, no secrets:**
+
+| Input | Result | Exit |
+| --- | --- | --- |
+| pooled `DATABASE_URL`, `DIRECT_URL` unset (defaults to the pooled URL) | `REFUSED_POOLED_WITHOUT_DIRECT_URL` + the remedy | 1 |
+| pooled `DATABASE_URL`, `DIRECT_URL` also pooled (explicitly) | `REFUSED_DIRECT_URL_IS_POOLED` | 1 |
+| pooled `DATABASE_URL`, genuinely direct `DIRECT_URL` | `OK_DIRECT_URL_READY` — runtime pooled, migrations direct | 0 |
+| single local URL (CI/local shape) | `OK_DIRECT_URL_READY` | 0 |
+| unparseable URL, or URL with no database name | `REFUSED_UNPARSEABLE_URL` / `REFUSED_MISSING_DATABASE_NAME` | 1 |
+
+**End-to-end in the real build gate** (`npm run build` with a local `DATABASE_URL`):
+
+```
+[migrate] checking the migration connection (pooled vs direct)...
+[direct-url] OK (OK_DIRECT_URL_READY) — single non-pooled URL, migrations use it directly
+[migrate] checking migration target...
+[migration-guard] OK_LOCAL env=local mode=enforce target=e76708…
+```
+
+The existing migration-target guard still runs after it, in the same order as before, so this change
+added a control and removed none.
+
+### 10.3 What could NOT be done, and the exact blocker
+
+**Neon provisioning and the six-step rehearsal are BLOCKED. No project was created and nothing was
+spent.** The blocker is network reachability, not cost:
+
+```
+$ curl -sS --max-time 15 https://api.neon.tech/
+curl: (6) Could not resolve host: api.neon.tech
+$ getent hosts api.neon.tech
+DNS: no resolution
+```
+
+This sandbox permits outbound traffic only to `github.com`, `codeload.github.com`, `api.github.com`,
+`registry.npmjs.org`, `pypi.org` and `files.pythonhosted.org`. A control request to `api.github.com`
+returns 200 in the same shell, so the failure is the egress allowlist, not a broken network. There is
+also no Neon API key, no `neonctl`, and no Neon console access — none of which can be obtained from inside
+the sandbox, and none of which were requested in chat.
+
+**The cost question the authorization asked about could therefore not be answered from here at all.**
+Neon's free tier is documented as $0 with no card required, but this pass did not verify that against the
+provider, and an unverified claim is not evidence. It is recorded as unverified rather than asserted.
+
+### 10.4 Required environment and the precise manual action
+
+To complete the rehearsal, someone with Neon console access (the owner) must either run §6 of this
+document, or provide a disposable Neon project and a machine with egress to `api.neon.tech`. The exact
+manual action:
+
+1. Create a Neon **Free** plan project (do not upgrade, do not add a payment method).
+2. Create a throwaway branch named `rehearsal`; use only that branch.
+3. From **Connection string**, copy both values; put them in the shell as `DATABASE_URL` (pooled) and
+   `DIRECT_URL` (direct), never in a file that is committed.
+4. Run §6 steps 1–6 of this document and paste the output.
+
+### 10.5 What this does and does not change about the release
+
+* The **defect is fixed in the code** and guarded, tested and fail-closed: with `directUrl` in place, a
+  manual `prisma migrate deploy` uses the direct connection even when `DIRECT_URL` is unset-but-defaulted
+  to a non-pooled URL, and the guard refuses the pooled case before Prisma runs.
+* **No Neon-specific evidence exists.** PgBouncer's advisory-lock behaviour, Neon's extension set,
+  `sslmode=require`, branch/restore and cold start after auto-suspend remain **NOT TESTED**.
+* Therefore **E8 stays OPEN**, and the production deploy gate that depends on it stays closed.
+* Two owner actions are required before a production deploy could even be attempted: `DIRECT_URL` must
+  exist in Vercel Production and Preview (a production configuration change this pass is not authorized
+  to make), and the rehearsal above must run.

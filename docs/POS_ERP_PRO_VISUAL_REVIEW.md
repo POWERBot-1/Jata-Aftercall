@@ -27,9 +27,9 @@ is stated plainly: this closes the "has anybody actually looked at these screens
 | V2 | **No horizontal overflow anywhere.** 0px at 320, 360, 390, 430, 768 and 1366 on all four screens, including the long requisition line list, the three-line purchase order and the twelve step setup checklist. | all | — | Pass, measured |
 | V3 | **Requisitions is reachable and active.** The sidebar shows it under "Run the business" with the active state highlighted, next to Procurement. Before this pass it had no navigation entry at all — a product defect found by the page check, not by eye (see E14 / the navigation test). | 1366, 768 | Was High (unreachable) | **Fixed** in `lib/erp/navigation.ts` + `lib/erp/industryPacks.ts` |
 | V4 | **Mobile bottom bar overlays the final content in a capture.** In a *full-page* screenshot the fixed bar is painted at its viewport position, which reads as "a nav strip in the middle of the page". It is a capture artifact of `position: fixed`, not a layout bug: in viewport screenshots the bar sits correctly at the bottom, and `padding-bottom: 92–96px` on `.erp-content` keeps the last card clear of it. | 320–768 | None | Explained, no change |
-| V5 | **The ≤900px layout is the phone layout, including 768px tablets.** At 768×1024 the sidebar is replaced by the bottom bar. This is the stylesheet's deliberate breakpoint (`.erp-layout { grid-template-columns: 1fr }` under `max-width: 900px`), and it is coherent, but it means a 768px tablet gets a hamburger-and-bottom-bar experience rather than a two-column one. | 768 | Design call, not a defect | **Recorded for the owner** — see the open question below |
-| V6 | **Each KPI is a full-width card on phones.** `.erp-grid-3` collapses to one column under 900px, so Drafts / Waiting decision / Approved stack as three tall cards. Legible and tappable, but it pushes real content well below the fold on a 320px screen. | 320, 360, 390, 430 | Design call | **Recorded for the owner** — see below |
-| V7 | **The identity block is crowded on phones.** On a 320px screen the "POS / ERP - PRO / plan / inbox / New campaign / Business POS" cluster wraps into several rows above the page title, and the business name wraps to one word per line ("VISUAL / CHECK / 01DE…"). Nothing overlaps or clips, and the page title stays first in the reading order after it, but it is the weakest area visually. | 320, 360, 390 | Medium (visual hierarchy) | **Recorded** — not changed in this pass, because it is a design decision the owner has already corrected once (espresso/cream/amber). Changing it unilaterally would repeat that mistake. |
+| V5 | ~~**The ≤900px layout is the phone layout, including 768px tablets.**~~ **FIXED — owner chose option (b) on 2026-10-28.** The breakpoint moved to 700px, so 768px tablets keep the sidebar. At 768×1024 the sidebar is replaced by the bottom bar. This is the stylesheet's deliberate breakpoint (`.erp-layout { grid-template-columns: 1fr }` under `max-width: 900px`), and it is coherent, but it means a 768px tablet gets a hamburger-and-bottom-bar experience rather than a two-column one. | 768 | Design call, not a defect | **Recorded for the owner** — see the open question below |
+| V6 | ~~**Each KPI is a full-width card on phones.**~~ **FIXED — owner chose option (b).** KPI rows are two-up from 360px and one column only below that. `.erp-grid-3` collapses to one column under 900px, so Drafts / Waiting decision / Approved stack as three tall cards. Legible and tappable, but it pushes real content well below the fold on a 320px screen. | 320, 360, 390, 430 | Design call | **Recorded for the owner** — see below |
+| V7 | ~~**The identity block is crowded on phones.**~~ **PARTLY ADDRESSED — owner chose option (c).** Below 430px the module label is `ERP`, which removes one line of wrapping. The wider identity-block redesign (option b) was deliberately not done. On a 320px screen the "POS / ERP - PRO / plan / inbox / New campaign / Business POS" cluster wraps into several rows above the page title, and the business name wraps to one word per line ("VISUAL / CHECK / 01DE…"). Nothing overlaps or clips, and the page title stays first in the reading order after it, but it is the weakest area visually. | 320, 360, 390 | Medium (visual hierarchy) | **Recorded** — not changed in this pass, because it is a design decision the owner has already corrected once (espresso/cream/amber). Changing it unilaterally would repeat that mistake. |
 | V8 | **Money and status are unambiguous.** Every amount carries its currency, statuses are words ("Waiting for a decision", "In progress", "Ordered") not colours alone, and the requisitions footer states who may approve and that a requester cannot approve their own request. | all | — | Pass |
 
 ## What this does and does not close
@@ -39,7 +39,17 @@ is stated plainly: this closes the "has anybody actually looked at these screens
 * **Does not close:** aesthetic sign-off, brand approval, or the two design questions below. Those
   need the owner, not another automated pass.
 
-## Open questions for the owner (no defaults invented)
+## Decisions taken (2026-10-28)
+
+The owner answered all three questions: **Q1 (b)** breakpoint 700px, **Q2 (b)** KPI two-up from 360px,
+**Q3 (c)** short `ERP` label below 430px. All three are implemented, measured at eight viewports and
+recorded in `docs/POS_ERP_PRO_E4_OWNER_REVIEW.md` §2. The 768×1024 capture of the real shell also exposed
+a header-wrapping regression created by Q1 itself, fixed in the same pass (glyph rail at 701–859px,
+narrow labelled rail at 860–1024px).
+
+**E4 remains OPEN** for one reason only: the owner has not yet looked at the resulting screens.
+
+## The original questions, for the record
 
 1. **Tablet layout at 768–900px.** Options: (a) keep the current phone layout for the whole range;
    (b) move the single-column breakpoint to 700px so 768px tablets keep the sidebar; (c) keep the

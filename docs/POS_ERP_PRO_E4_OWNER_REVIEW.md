@@ -5,7 +5,11 @@ decide them for you. The measurements are automated and reproducible; the three 
 yours, and each one is currently left at "as built" rather than at a default I invented.
 
 **Head reviewed:** `a018bbe0ac57f4525aefbcff0e7ba9fd8bbd779a` (PR #71, base `main`).
-**Status of E4:** **OPEN, waiting on you.** Not on a defect — the defects found are fixed.
+**Status of E4:** **DECISIONS IMPLEMENTED — awaiting owner eyes on the result.**
+
+On 2026-10-28 the owner answered all three questions (`Q1 b`, `Q2 b`, `Q3 c`). They are implemented and
+measured below. The only thing still open is whether the owner is satisfied with how they look, which no
+amount of measuring can supply.
 
 ---
 
@@ -40,60 +44,51 @@ covered by the page checks (HTTP and authorisation) but were not part of this im
 
 ---
 
-## 2. The three design questions
+## 2. The three decisions, as implemented
 
-Each one is a recorded observation, not a bug: nothing clips, overlaps or overflows, and the automated
-results are identical under every option. My recommendation is stated so you can accept or reject it
-rather than start from a blank page — but the decision is yours and the code currently stays at
-"as built" until you answer.
+| # | Decision | Approved | Implemented in | Measured evidence |
+| --- | --- | --- | --- | --- |
+| **Q1** | Tablet breakpoint moves from 900px to 700px, so 768px tablets keep the sidebar | option (b) | `app/erp.css` — the `@media (max-width: 900px)` block became `@media (max-width: 700px)` | sidebar live at 701px and above, bottom bar at 700px and below, at every captured width |
+| **Q2** | KPI cards two-up from 360px | option (b) | `app/erp.css` — `.erp-grid-3` is `repeat(2, minmax(0,1fr))`; one column only below 360px | 2 columns at 360/390/430/700/768/1024/1366; 1 column at 320 |
+| **Q3** | Below 430px the module label is `ERP` | option (c) | `app/dashboard/erp/[businessId]/layout.tsx` (two server-rendered spans) + `app/erp.css` (`.erp-label-short`) | short label visible at 320/360/390/430, full label at 700/768/1024/1366 |
 
-### Q1 — Tablet layout at 768–900px (finding V5)
+### What the first capture caught (and was fixed)
 
-At 768×1024 the sidebar is replaced by the bottom bar, because the sheet switches to the single-column
-layout under `max-width: 900px`. A 10-inch tablet therefore gets the phone experience.
+The decisions were not the end of the work. The first 768×1024 capture of the **real shell** showed a
+regression the decision itself created: with a 264px sidebar back at 768px, the topbar had too little
+room, so "POS / ERP - PRO" broke over two lines and the action buttons wrapped onto a second row.
 
-| Option | What it looks like | Cost to build | Risk |
-| --- | --- | --- | --- |
-| **(a) Keep as built** — phone layout for the whole ≤900px range | Bottom bar at 768px too | zero | none |
-| **(b) Move the breakpoint to 700px** | 768px tablets keep the sidebar, two columns | ~1 line + re-capture 24 images | low: the 768 captures would change, so the evidence has to be regenerated and re-reviewed |
-| **(c) Phone layout + sidebar drawer at tablet widths** | Bottom bar stays, a drawer adds the full nav | a drawer component + focus handling + tests | medium: new interaction to make accessible and to test |
+Two changes followed, both measured:
 
-**My recommendation: (b).** It is the smallest change that gives a tablet a tablet layout, and the
-768×1024 viewport you mandated is otherwise a phone screenshot with extra space.
+1. `.erp-topbar-title { white-space: nowrap }` — the label never breaks mid-word.
+2. At **701–859px** the 264px rail becomes a **72px glyph strip** (brand mark + icon-only links, text
+   hidden by CSS while the link's accessible name is unchanged); at **860–1024px** the rail narrows to
+   212px with labels. At ≥1025px the full 264px rail is untouched.
 
-### Q2 — KPI cards below 900px (finding V6)
+The 768×1024 image now shows a single-row header, a glyph rail and two KPI columns.
 
-Drafts / Waiting decision / Approved stack as three full-width cards on phones. Legible and tappable,
-but on a 320px screen they push the requisition list below the fold.
+### Viewport coverage
 
-| Option | What it looks like | Cost to build | Risk |
-| --- | --- | --- | --- |
-| **(a) Keep as built** — one tall card each | three rows | zero | none |
-| **(b) Two columns from 360px** | 2 + 1, so two rows | one media query + re-capture | low |
-| **(c) One compact row of three numbers, no card chrome** | a single strip | new component + tests | medium: changes the visual language for KPIs everywhere, not just here |
+| Viewport | Nav mode | KPI columns | Module label | Overflow |
+| --- | --- | --- | --- | --- |
+| 320×568 | bottom bar | **1** (below the 360px rule) | `ERP` | 0px |
+| 360×800 | bottom bar | 2 | `ERP` | 0px |
+| 390×844 | bottom bar | 2 | `ERP` | 0px |
+| 430×932 | bottom bar | 2 | `ERP` | 0px |
+| 700×900 | bottom bar (the boundary) | 2 | `POS / ERP - PRO` | 0px |
+| 768×1024 | **sidebar** (glyph rail) | 2 | `POS / ERP - PRO` | 0px |
+| 1024×768 | **sidebar** (212px labelled) | 2 | `POS / ERP - PRO` | 0px |
+| 1366×768 | **sidebar** (264px) | 2 | `POS / ERP - PRO` | 0px |
 
-**My recommendation: (b).** It keeps the card language, removes one screenful of scrolling, and leaves
-320px alone (where two columns would be too tight).
+Two independent artifacts measure this, and they are not interchangeable:
 
-### Q3 — The phone identity block (finding V7)
+| Artifact | What it proves | Where |
+| --- | --- | --- |
+| `npm run test:erp:visual` — real Next.js build, real database, real session | the **product**: every ERP screen at every width | CI step + artifact `erp-visual-71`; images also in the label-gated `verification/evidence` channel |
+| `npm run test:erp:layout-fixture` — the two real stylesheets + the shell markup | the **stylesheet decisions** Q1/Q2/Q3 as a fast local loop, no database | `.cache/verification/erp-layout-fixture/` (8 viewports, viewport + full-page shots) |
 
-On a 320px screen the `POS / ERP - PRO · plan · inbox · New campaign · Business POS` cluster wraps into
-several rows above the page title, and the business name wraps to one word per line
-("VISUAL / CHECK / 01DE…"). Nothing overlaps or clips, and the page title still comes first in reading
-order after it — but it is the weakest area visually, at the three smallest widths.
-
-| Option | What it looks like | Cost to build | Risk |
-| --- | --- | --- | --- |
-| **(a) Keep as built** | crowded but functional | zero | none |
-| **(b) Move module label + plan badge into the page body at ≤430px** | header keeps business name + inbox only | markup + a media query + re-capture 12 images | low–medium: header markup is shared by every ERP page, so it needs a capture pass on all four screens |
-| **(c) Shorten the module label to "ERP" below 430px** | one line less wrapping | one string + a media query | low |
-
-**My recommendation: (c) first, and (b) only if the 320px screenshot still reads badly after it.** (c)
-is a one-line change with no new structure; (b) touches every ERP page and deserves its own pass.
-I have deliberately not applied either, because you have already corrected this product's visual
-identity once and I am not going to guess a second time.
-
----
+The fixture is labelled a fixture everywhere. It can prove the CSS; only the real-app capture can prove
+the product, so **CI's capture is the evidence of record for E4**.
 
 ## 3. What I am not asking you
 
@@ -115,8 +110,13 @@ npm run test:erp:visual:gallery
 
 Exit codes: `0` PASS, `1` FAIL, `2` BLOCKED (nothing captured — never counted as a pass).
 
-## 5. If you sign off
+## 5. What is still open
 
-Reply with one of: `Q1 b, Q2 b, Q3 c` — or "keep all as built". Then E4 closes and the follow-up
-change is a small, separately reviewed pass with its own re-capture. Until then E4 stays **OPEN** and
-this product is not claimed as visually approved by you.
+The three decisions are implemented and measured. What has **not** happened is the owner looking at the
+resulting screens. Until that happens E4 stays **OPEN**, and nothing in this repository claims the
+product is visually approved by you.
+
+If the 320px phone header still reads badly with the short `ERP` label, the recorded next step is
+option **(b)** from the original Q3 table — move the module label and plan badge into the page body below
+430px. That is a larger change (it touches every ERP page's header markup) and it is **not** implemented;
+it needs your decision, and this document is where it would be recorded.

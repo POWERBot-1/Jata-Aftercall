@@ -3,7 +3,8 @@
    Espresso, cream and amber (the original brand identity). Token-driven: every colour is a
    --jata-* alias, so the block follows the active product theme instead of pinning a palette.
    Everything is scoped under .erp so the existing JATA AFTERCALL and Business POS styles are
-   untouched. Mobile-first: the bottom bar appears below 900px, the sidebar above it.
+   untouched. Mobile-first: the bottom bar appears at 700px and below, the sidebar above it
+   (owner decision Q1, 2026-10-28: 768px tablets keep the sidebar instead of the phone layout).
    ═══════════════════════════════════════════════════════════════════════════════════════════ */
 .erp {
   /* Brand restoration 2026-10-27: the rejected graphite/electric-lime identity is withdrawn.
@@ -69,7 +70,10 @@
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--erp-line);
   padding: 12px 22px; display: flex; align-items: center; gap: 14px; justify-content: space-between;
 }
-.erp-topbar-title { font-weight: 850; letter-spacing: -0.02em; font-size: 1rem; }
+.erp-topbar-title { font-weight: 850; letter-spacing: -0.02em; font-size: 1rem; white-space: nowrap; }
+/* Both labels are in the markup and CSS chooses one, so the header never depends on JavaScript or
+   on a hydration pass to settle. Owner decision Q3: below 430px the module label is just "ERP". */
+.erp-label-short { display: none; }
 .erp-crumbs { font-size: 0.72rem; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.1em; }
 .erp-topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .erp-content { padding: 22px; max-width: 1240px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
@@ -86,7 +90,7 @@
 .erp-card-sub { color: var(--erp-muted); font-size: 0.82rem; margin: 0 0 14px; }
 .erp-grid { display: grid; gap: 14px; }
 .erp-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.erp-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.erp-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } /* owner decision Q2: KPI rows are two-up from 360px */
 .erp-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 .erp-hero {
@@ -206,12 +210,33 @@
 .erp-cost { font-size: 1.35rem; font-weight: 850; letter-spacing: -0.02em; }
 .erp-inline-code { font-family: ui-monospace, monospace; font-size: 0.76rem; background: var(--erp-surface-2); border: 1px solid var(--erp-line); padding: 2px 6px; border-radius: 6px; }
 
+/* Q1 consequence, found in the 768x1024 capture: once the sidebar returns at >700px, a 264px rail
+   leaves the topbar so narrow that the product name broke across two lines and the actions wrapped.
+   Below 860px the rail narrows to a glyph strip and the topbar keeps both labels whole on one row.
+   The strip is 80px because .erp-brand's mark is 34px and the nav labels need room to wrap inside
+   it; the accessible names are unchanged, so a screen reader still gets the full module name. */
+@media (min-width: 701px) and (max-width: 859px) {
+  .erp-layout { grid-template-columns: 72px 1fr; }
+  .erp-sidebar { padding: 16px 8px 24px; }
+  .erp-brand { justify-content: center; padding: 2px 0 8px; }
+  .erp-brand-name, .erp-brand-sub { display: none; }
+  /* A glyph strip: the link keeps its box and its accessible name, the text label is hidden. The
+     markup renders the label inside the link, so hiding the text (not shrinking it) is what stops
+     the words clipping at the rail edge. */
+  .erp-nav-link { justify-content: center; padding: 9px 6px; }
+  .erp-nav-link > span:not(.erp-nav-glyph) { display: none; }
+  .erp-nav-link .erp-nav-glyph { font-size: 1.05rem; }
+}
+@media (min-width: 860px) and (max-width: 1024px) {
+  .erp-layout { grid-template-columns: 212px 1fr; }
+}
+
 @media (max-width: 1100px) {
   .erp-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .erp-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .erp-split { grid-template-columns: 1fr; }
 }
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .erp-layout { grid-template-columns: 1fr; }
   .erp-sidebar { display: none; }
   .erp-content { padding: 16px 14px 96px; }
@@ -229,9 +254,15 @@
   .erp-page-head h1 { font-size: 1.3rem; }
   .erp-hero { padding: 20px; border-radius: 18px; }
   .erp-hero h1 { font-size: 1.35rem; }
-  .erp-grid-2, .erp-grid-3, .erp-grid-4 { grid-template-columns: 1fr; }
+  .erp-grid-2, .erp-grid-4 { grid-template-columns: 1fr; }
   .erp-card-grid { grid-template-columns: 1fr; }
   .erp-table { min-width: 480px; }
+}
+/* Q2, the narrow end: below 360px two KPI cards no longer fit without squeezing the figures,
+   so they take the full width. 320px is the smallest supported phone. */
+@media (max-width: 359px) {
+  .erp-grid-3 { grid-template-columns: 1fr; }
+  .erp-kpi { padding: 12px 13px; }
 }
 @media (max-width: 430px) {
   .erp-content { padding: 12px 11px 92px; }
@@ -239,6 +270,8 @@
   .erp-btn { min-height: 46px; }
   .erp-page-head h1 { font-size: 1.18rem; }
   .erp-kpi dd { font-size: 1.2rem; }
+  .erp-label-full { display: none; }
+  .erp-label-short { display: inline; }
 }
 
 /* ── Guided setup ────────────────────────────────────────────────────────────────────────── */

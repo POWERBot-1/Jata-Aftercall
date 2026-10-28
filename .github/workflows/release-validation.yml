@@ -92,7 +92,7 @@ jobs:
           # to RESOLVE; nothing connects. If a future step in this job opens a
           # connection, it must set its own real URL — do not reuse this one.
           npx prisma validate 2>&1 | tee /tmp/step-validate.log
-          npx prisma generate 2>&1 | tee /tmp/step-generate.log
+          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
           # An engine download that silently fails leaves a client-less tree and
           # a typecheck full of spurious errors. Make that an explicit blocker.
           if [ ! -f node_modules/.prisma/client/index.js ]; then
@@ -237,7 +237,7 @@ jobs:
       - name: Generate Prisma Client
         run: |
           npx prisma validate
-          npx prisma generate
+          bash scripts/lib/prisma-generate.sh
           if [ ! -f node_modules/.prisma/client/index.js ]; then
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1
@@ -509,7 +509,7 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client
-        run: npx prisma generate
+        run: bash scripts/lib/prisma-generate.sh
 
       - name: "Control 1 — a broken migration must fail the gate"
         run: |
@@ -722,7 +722,7 @@ jobs:
         run: |
           set -o pipefail
           npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
-          npx prisma generate 2>&1 | tail -n 15
+          bash scripts/lib/prisma-generate.sh 2>&1 | tail -n 15
           test -f node_modules/.prisma/client/index.js || {
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1

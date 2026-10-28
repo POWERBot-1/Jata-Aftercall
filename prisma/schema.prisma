@@ -4,7 +4,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Runtime keeps using the pooled connection (serverless-friendly, and what Vercel should point at).
   url      = env("DATABASE_URL")
+  // Migrate needs a connection that is NOT behind PgBouncer: it takes a session-level advisory lock,
+  // which transaction pooling does not reliably hold (P1002 / P3009). See scripts/lib/direct-url-guard.mjs.
+  directUrl = env("DIRECT_URL")
 }
 
 // ── Core ──

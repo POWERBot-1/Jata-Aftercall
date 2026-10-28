@@ -57,7 +57,7 @@ jobs:
       - name: Generate the Prisma client
         env:
           DATABASE_URL: postgresql://user:password@127.0.0.1:5432/validate_only?schema=public
-        run: npx prisma generate
+        run: bash scripts/lib/prisma-generate.sh
 
       - name: Check code references against the generated client
         run: npx tsx scripts/erp/check-models.ts
@@ -123,7 +123,7 @@ jobs:
         run: npm ci
 
       - name: Generate the Prisma client
-        run: npx prisma generate
+        run: bash scripts/lib/prisma-generate.sh
 
       - name: Apply the committed migrations with Prisma
         run: |

@@ -95,7 +95,13 @@ export default async function ErpLayout({ children, params }: Props) {
           <header className="erp-topbar">
             <div>
               <div className="erp-crumbs">{workspace.business.name}</div>
-              <div className="erp-topbar-title">POS / ERP - PRO</div>
+              <div className="erp-topbar-title">
+                {/* Owner decision Q3: the long label wraps the header onto several rows on a
+                    320–430px screen, so below 430px it shortens to "ERP". Both spans are server
+                    rendered; the stylesheet picks one, so nothing depends on hydration. */}
+                <span className="erp-label-full">POS / ERP - PRO</span>
+                <span className="erp-label-short">ERP</span>
+              </div>
             </div>
             <div className="erp-topbar-actions">
               <Badge tone={entitled ? "good" : "warn"}>{entitled ? "Plan active" : workspace.entitlement.status.toLowerCase().replace(/_/g, " ")}</Badge>

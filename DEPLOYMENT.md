@@ -66,8 +66,13 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
 - Seed remains manual/trusted: `npm run seed` creates plans, themes, demo businesses + `admin@jata.link`. No `/api/seed`, `/api/migrate`, `/api/init` endpoint. Build/migrate gate never invokes seed.
 - `package.json` build is now `bash scripts/build.sh` (via `npm run build`).
 
-1. https://neon.tech → Create project `jata-aftercall` → copy **Connection string (pooled)**.
-2. Paste as `DATABASE_URL` in hosting env + locally in `.env.local`.
+1. https://neon.tech → Create project `jata-aftercall` → copy **both** connection strings:
+   - **Pooled** (the host contains `-pooler`) → `DATABASE_URL`. The app's runtime uses this; it is what
+     makes a serverless deployment survive many short-lived connections.
+   - **Direct** (the same host **without** `-pooler`) → `DIRECT_URL`. Prisma Migrate uses only this.
+2. Paste both into the hosting environment and `DATABASE_URL` locally in `.env.local`. `DIRECT_URL` may
+   be omitted locally and in CI — `scripts/lib/prisma-env.sh` defaults it to `DATABASE_URL`, and
+   `scripts/migrate.sh` refuses to run if that default would send migrations through a pooler.
 3. Run migrations (local dev):
    ```bash
    npm ci
@@ -75,6 +80,20 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
    npm run seed                # creates plans, themes, 4 demo businesses + admin@jata.link
    ```
    Production (Vercel): `DATABASE_URL` present → `npm run build` automatically runs `scripts/migrate.sh` → `migrate deploy` → `next build`. If migration fails, build fails fast (gate). No manual `migrate deploy` needed in prod, but remains idempotent if run manually.
+
+   **Why `DIRECT_URL` exists (do not skip it on Neon).** Neon's pooled endpoint is PgBouncer in
+   transaction mode. Prisma Migrate takes a *session-level* advisory lock before applying migrations, and
+   transaction pooling does not reliably preserve it, so `migrate deploy` through the pooler fails with
+   **P1002** (timeout acquiring pg_advisory_lock) — or leaves the migration recorded as failed and every
+   later deploy fails with **P3009** until somebody runs `prisma migrate resolve`. The schema therefore
+   declares `directUrl = env("DIRECT_URL")`, and `scripts/migrate.sh` refuses, before Prisma is invoked,
+   either of these:
+   - a pooled `DATABASE_URL` with no `DIRECT_URL` (the preflight exits 1 with the remedy), or
+   - a `DIRECT_URL` that still points at a pooled host.
+
+   CI cannot catch this class of bug: every job points at a plain PostgreSQL service container with no
+   pooler in front of it. That is why the guard is a separate, unit-tested preflight
+   (`scripts/lib/direct-url-guard.mjs`, `tests/unit/direct-url-guard.test.ts`).
 
 **Behavior matrix:**
 
