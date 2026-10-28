@@ -1,0 +1,471 @@
+PASS demo sign-in through the public login form reaches /dashboard
+PASS mobile dashboard nav (390px) reaches every workspace section
+PASS contact editor rejects an invalid number with the KE rule inline — Enter a valid Kenyan mobile number for the nominated contact (e.g. 0724 317 010).
+PASS valid save reaches PATCH /api/business and returns 200 — status=200 error=- inline=- typed=0724317010
+PASS contact editor announces the successful save —  | Profile saved. |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+PASS saved nominated number survives reload (real PATCH persistence) — value=0724317010
+PASS experience draft exists for the gallery (created 201, or already present 428) — status=201 code=-
+PASS gallery renders category fallback imagery without an uploaded asset — [{"src":"/landing/nyumbani-kitchen-720.webp","naturalWidth":390,"complete":true},{"src":"/landing/nyumbani-kitchen-720.webp","naturalWidth":195,"complete":true},{"src":"/landing/marys-beauty-studio-720.webp","naturalWidth":195,"complete":true},{"src":"/category/salon-720.webp","naturalWidth":195,"complete":true}]
+PASS byte upload fails closed (503 inline_media_persistence_disabled) with no durable provider — status=503 code=inline_media_persistence_disabled
+PASS gallery upload shows the honest durable-storage message in the real UI — Inline image data cannot be saved until an approved durable media provider is configured. Existing images remain readable. Remove this inline image or replace it with an approved image URL before saving or publishing.
+PASS metadata reference asset is created (replace path available) — status=201
+PASS metadata asset is removed through the gallery Delete control — clicked=true
+PASS interaction capture raised no page errors
+PASS 320x568 home serves successfully (200/304) — status=200
+PASS 320x568 home did not bounce to sign-in — /
+PASS 320x568 home has no horizontal overflow
+PASS 320x568 home has no uncaught page errors
+PASS 320x568 home has no Next.js error overlay
+PASS 320x568 home has no blank/broken rendered images
+PASS 320x568 home keeps every image inside its boundary
+PASS 320x568 login serves successfully (200/304) — status=200
+PASS 320x568 login did not bounce to sign-in — /login
+PASS 320x568 login has no horizontal overflow
+PASS 320x568 login has no uncaught page errors
+PASS 320x568 login has no Next.js error overlay
+PASS 320x568 login has no blank/broken rendered images
+PASS 320x568 login keeps every image inside its boundary
+PASS 320x568 register serves successfully (200/304) — status=200
+PASS 320x568 register did not bounce to sign-in — /register
+PASS 320x568 register has no horizontal overflow
+PASS 320x568 register has no uncaught page errors
+PASS 320x568 register has no Next.js error overlay
+PASS 320x568 register has no blank/broken rendered images
+PASS 320x568 register keeps every image inside its boundary
+PASS 320x568 forgot-password serves successfully (200/304) — status=200
+PASS 320x568 forgot-password did not bounce to sign-in — /forgot-password
+PASS 320x568 forgot-password has no horizontal overflow
+PASS 320x568 forgot-password has no uncaught page errors
+PASS 320x568 forgot-password has no Next.js error overlay
+PASS 320x568 forgot-password has no blank/broken rendered images
+PASS 320x568 forgot-password keeps every image inside its boundary
+PASS 320x568 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 320x568 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 320x568 demo-nyumbani-kitchen has no horizontal overflow
+PASS 320x568 demo-nyumbani-kitchen has no uncaught page errors
+PASS 320x568 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 320x568 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 320x568 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 360x800 home serves successfully (200/304) — status=200
+PASS 360x800 home did not bounce to sign-in — /
+PASS 360x800 home has no horizontal overflow
+PASS 360x800 home has no uncaught page errors
+PASS 360x800 home has no Next.js error overlay
+PASS 360x800 home has no blank/broken rendered images
+PASS 360x800 home keeps every image inside its boundary
+PASS 360x800 login serves successfully (200/304) — status=200
+PASS 360x800 login did not bounce to sign-in — /login
+PASS 360x800 login has no horizontal overflow
+PASS 360x800 login has no uncaught page errors
+PASS 360x800 login has no Next.js error overlay
+PASS 360x800 login has no blank/broken rendered images
+PASS 360x800 login keeps every image inside its boundary
+PASS 360x800 register serves successfully (200/304) — status=200
+PASS 360x800 register did not bounce to sign-in — /register
+PASS 360x800 register has no horizontal overflow
+PASS 360x800 register has no uncaught page errors
+PASS 360x800 register has no Next.js error overlay
+PASS 360x800 register has no blank/broken rendered images
+PASS 360x800 register keeps every image inside its boundary
+PASS 360x800 forgot-password serves successfully (200/304) — status=200
+PASS 360x800 forgot-password did not bounce to sign-in — /forgot-password
+PASS 360x800 forgot-password has no horizontal overflow
+PASS 360x800 forgot-password has no uncaught page errors
+PASS 360x800 forgot-password has no Next.js error overlay
+PASS 360x800 forgot-password has no blank/broken rendered images
+PASS 360x800 forgot-password keeps every image inside its boundary
+PASS 360x800 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 360x800 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 360x800 demo-nyumbani-kitchen has no horizontal overflow
+PASS 360x800 demo-nyumbani-kitchen has no uncaught page errors
+PASS 360x800 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 360x800 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 360x800 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 390x844 home serves successfully (200/304) — status=200
+PASS 390x844 home did not bounce to sign-in — /
+PASS 390x844 home has no horizontal overflow
+PASS 390x844 home has no uncaught page errors
+PASS 390x844 home has no Next.js error overlay
+PASS 390x844 home has no blank/broken rendered images
+PASS 390x844 home keeps every image inside its boundary
+PASS 390x844 login serves successfully (200/304) — status=200
+PASS 390x844 login did not bounce to sign-in — /login
+PASS 390x844 login has no horizontal overflow
+PASS 390x844 login has no uncaught page errors
+PASS 390x844 login has no Next.js error overlay
+PASS 390x844 login has no blank/broken rendered images
+PASS 390x844 login keeps every image inside its boundary
+PASS 390x844 register serves successfully (200/304) — status=200
+PASS 390x844 register did not bounce to sign-in — /register
+PASS 390x844 register has no horizontal overflow
+PASS 390x844 register has no uncaught page errors
+PASS 390x844 register has no Next.js error overlay
+PASS 390x844 register has no blank/broken rendered images
+PASS 390x844 register keeps every image inside its boundary
+PASS 390x844 forgot-password serves successfully (200/304) — status=200
+PASS 390x844 forgot-password did not bounce to sign-in — /forgot-password
+PASS 390x844 forgot-password has no horizontal overflow
+PASS 390x844 forgot-password has no uncaught page errors
+PASS 390x844 forgot-password has no Next.js error overlay
+PASS 390x844 forgot-password has no blank/broken rendered images
+PASS 390x844 forgot-password keeps every image inside its boundary
+PASS 390x844 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 390x844 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 390x844 demo-nyumbani-kitchen has no horizontal overflow
+PASS 390x844 demo-nyumbani-kitchen has no uncaught page errors
+PASS 390x844 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 390x844 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 390x844 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 430x932 home serves successfully (200/304) — status=200
+PASS 430x932 home did not bounce to sign-in — /
+PASS 430x932 home has no horizontal overflow
+PASS 430x932 home has no uncaught page errors
+PASS 430x932 home has no Next.js error overlay
+PASS 430x932 home has no blank/broken rendered images
+PASS 430x932 home keeps every image inside its boundary
+PASS 430x932 login serves successfully (200/304) — status=200
+PASS 430x932 login did not bounce to sign-in — /login
+PASS 430x932 login has no horizontal overflow
+PASS 430x932 login has no uncaught page errors
+PASS 430x932 login has no Next.js error overlay
+PASS 430x932 login has no blank/broken rendered images
+PASS 430x932 login keeps every image inside its boundary
+PASS 430x932 register serves successfully (200/304) — status=200
+PASS 430x932 register did not bounce to sign-in — /register
+PASS 430x932 register has no horizontal overflow
+PASS 430x932 register has no uncaught page errors
+PASS 430x932 register has no Next.js error overlay
+PASS 430x932 register has no blank/broken rendered images
+PASS 430x932 register keeps every image inside its boundary
+PASS 430x932 forgot-password serves successfully (200/304) — status=200
+PASS 430x932 forgot-password did not bounce to sign-in — /forgot-password
+PASS 430x932 forgot-password has no horizontal overflow
+PASS 430x932 forgot-password has no uncaught page errors
+PASS 430x932 forgot-password has no Next.js error overlay
+PASS 430x932 forgot-password has no blank/broken rendered images
+PASS 430x932 forgot-password keeps every image inside its boundary
+PASS 430x932 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 430x932 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 430x932 demo-nyumbani-kitchen has no horizontal overflow
+PASS 430x932 demo-nyumbani-kitchen has no uncaught page errors
+PASS 430x932 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 430x932 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 430x932 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 768x1024 home serves successfully (200/304) — status=200
+PASS 768x1024 home did not bounce to sign-in — /
+PASS 768x1024 home has no horizontal overflow
+PASS 768x1024 home has no uncaught page errors
+PASS 768x1024 home has no Next.js error overlay
+PASS 768x1024 home has no blank/broken rendered images
+PASS 768x1024 home keeps every image inside its boundary
+PASS 768x1024 login serves successfully (200/304) — status=200
+PASS 768x1024 login did not bounce to sign-in — /login
+PASS 768x1024 login has no horizontal overflow
+PASS 768x1024 login has no uncaught page errors
+PASS 768x1024 login has no Next.js error overlay
+PASS 768x1024 login has no blank/broken rendered images
+PASS 768x1024 login keeps every image inside its boundary
+PASS 768x1024 register serves successfully (200/304) — status=200
+PASS 768x1024 register did not bounce to sign-in — /register
+PASS 768x1024 register has no horizontal overflow
+PASS 768x1024 register has no uncaught page errors
+PASS 768x1024 register has no Next.js error overlay
+PASS 768x1024 register has no blank/broken rendered images
+PASS 768x1024 register keeps every image inside its boundary
+PASS 768x1024 forgot-password serves successfully (200/304) — status=200
+PASS 768x1024 forgot-password did not bounce to sign-in — /forgot-password
+PASS 768x1024 forgot-password has no horizontal overflow
+PASS 768x1024 forgot-password has no uncaught page errors
+PASS 768x1024 forgot-password has no Next.js error overlay
+PASS 768x1024 forgot-password has no blank/broken rendered images
+PASS 768x1024 forgot-password keeps every image inside its boundary
+PASS 768x1024 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 768x1024 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 768x1024 demo-nyumbani-kitchen has no horizontal overflow
+PASS 768x1024 demo-nyumbani-kitchen has no uncaught page errors
+PASS 768x1024 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 768x1024 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 768x1024 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 1366x768 home serves successfully (200/304) — status=200
+PASS 1366x768 home did not bounce to sign-in — /
+PASS 1366x768 home has no horizontal overflow
+PASS 1366x768 home has no uncaught page errors
+PASS 1366x768 home has no Next.js error overlay
+PASS 1366x768 home has no blank/broken rendered images
+PASS 1366x768 home keeps every image inside its boundary
+PASS 1366x768 login serves successfully (200/304) — status=200
+PASS 1366x768 login did not bounce to sign-in — /login
+PASS 1366x768 login has no horizontal overflow
+PASS 1366x768 login has no uncaught page errors
+PASS 1366x768 login has no Next.js error overlay
+PASS 1366x768 login has no blank/broken rendered images
+PASS 1366x768 login keeps every image inside its boundary
+PASS 1366x768 register serves successfully (200/304) — status=200
+PASS 1366x768 register did not bounce to sign-in — /register
+PASS 1366x768 register has no horizontal overflow
+PASS 1366x768 register has no uncaught page errors
+PASS 1366x768 register has no Next.js error overlay
+PASS 1366x768 register has no blank/broken rendered images
+PASS 1366x768 register keeps every image inside its boundary
+PASS 1366x768 forgot-password serves successfully (200/304) — status=200
+PASS 1366x768 forgot-password did not bounce to sign-in — /forgot-password
+PASS 1366x768 forgot-password has no horizontal overflow
+PASS 1366x768 forgot-password has no uncaught page errors
+PASS 1366x768 forgot-password has no Next.js error overlay
+PASS 1366x768 forgot-password has no blank/broken rendered images
+PASS 1366x768 forgot-password keeps every image inside its boundary
+PASS 1366x768 demo-nyumbani-kitchen serves successfully (200/304) — status=200
+PASS 1366x768 demo-nyumbani-kitchen did not bounce to sign-in — /b/nyumbani-kitchen
+PASS 1366x768 demo-nyumbani-kitchen has no horizontal overflow
+PASS 1366x768 demo-nyumbani-kitchen has no uncaught page errors
+PASS 1366x768 demo-nyumbani-kitchen has no Next.js error overlay
+PASS 1366x768 demo-nyumbani-kitchen has no blank/broken rendered images
+PASS 1366x768 demo-nyumbani-kitchen keeps every image inside its boundary
+PASS 320x568 overview serves successfully (200/304) — status=200
+PASS 320x568 overview did not bounce to sign-in — /dashboard
+PASS 320x568 overview has no horizontal overflow
+PASS 320x568 overview has no uncaught page errors
+PASS 320x568 overview has no Next.js error overlay
+PASS 320x568 overview has no blank/broken rendered images
+PASS 320x568 overview keeps every image inside its boundary
+PASS 320x568 ai-front-desk serves successfully (200/304) — status=200
+PASS 320x568 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 320x568 ai-front-desk has no horizontal overflow
+PASS 320x568 ai-front-desk has no uncaught page errors
+PASS 320x568 ai-front-desk has no Next.js error overlay
+PASS 320x568 ai-front-desk has no blank/broken rendered images
+PASS 320x568 ai-front-desk keeps every image inside its boundary
+PASS 320x568 autopilot serves successfully (200/304) — status=200
+PASS 320x568 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 320x568 autopilot has no horizontal overflow
+PASS 320x568 autopilot has no uncaught page errors
+PASS 320x568 autopilot has no Next.js error overlay
+PASS 320x568 autopilot has no blank/broken rendered images
+PASS 320x568 autopilot keeps every image inside its boundary
+PASS 320x568 website-studio serves successfully (200/304) — status=200
+PASS 320x568 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 320x568 website-studio has no horizontal overflow
+PASS 320x568 website-studio has no uncaught page errors
+PASS 320x568 website-studio has no Next.js error overlay
+PASS 320x568 website-studio has no blank/broken rendered images
+PASS 320x568 website-studio keeps every image inside its boundary
+PASS 320x568 business-pos serves successfully (200/304) — status=200
+PASS 320x568 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 320x568 business-pos has no horizontal overflow
+PASS 320x568 business-pos has no uncaught page errors
+PASS 320x568 business-pos has no Next.js error overlay
+PASS 320x568 business-pos has no blank/broken rendered images
+PASS 320x568 business-pos keeps every image inside its boundary
+PASS 360x800 overview serves successfully (200/304) — status=200
+PASS 360x800 overview did not bounce to sign-in — /dashboard
+PASS 360x800 overview has no horizontal overflow
+PASS 360x800 overview has no uncaught page errors
+PASS 360x800 overview has no Next.js error overlay
+PASS 360x800 overview has no blank/broken rendered images
+PASS 360x800 overview keeps every image inside its boundary
+PASS 360x800 ai-front-desk serves successfully (200/304) — status=200
+PASS 360x800 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 360x800 ai-front-desk has no horizontal overflow
+PASS 360x800 ai-front-desk has no uncaught page errors
+PASS 360x800 ai-front-desk has no Next.js error overlay
+PASS 360x800 ai-front-desk has no blank/broken rendered images
+PASS 360x800 ai-front-desk keeps every image inside its boundary
+PASS 360x800 autopilot serves successfully (200/304) — status=200
+PASS 360x800 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 360x800 autopilot has no horizontal overflow
+PASS 360x800 autopilot has no uncaught page errors
+PASS 360x800 autopilot has no Next.js error overlay
+PASS 360x800 autopilot has no blank/broken rendered images
+PASS 360x800 autopilot keeps every image inside its boundary
+PASS 360x800 website-studio serves successfully (200/304) — status=200
+PASS 360x800 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 360x800 website-studio has no horizontal overflow
+PASS 360x800 website-studio has no uncaught page errors
+PASS 360x800 website-studio has no Next.js error overlay
+PASS 360x800 website-studio has no blank/broken rendered images
+PASS 360x800 website-studio keeps every image inside its boundary
+PASS 360x800 business-pos serves successfully (200/304) — status=200
+PASS 360x800 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 360x800 business-pos has no horizontal overflow
+PASS 360x800 business-pos has no uncaught page errors
+PASS 360x800 business-pos has no Next.js error overlay
+PASS 360x800 business-pos has no blank/broken rendered images
+PASS 360x800 business-pos keeps every image inside its boundary
+PASS 390x844 overview serves successfully (200/304) — status=200
+PASS 390x844 overview did not bounce to sign-in — /dashboard
+PASS 390x844 overview has no horizontal overflow
+PASS 390x844 overview has no uncaught page errors
+PASS 390x844 overview has no Next.js error overlay
+PASS 390x844 overview has no blank/broken rendered images
+PASS 390x844 overview keeps every image inside its boundary
+PASS 390x844 ai-front-desk serves successfully (200/304) — status=200
+PASS 390x844 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 390x844 ai-front-desk has no horizontal overflow
+PASS 390x844 ai-front-desk has no uncaught page errors
+PASS 390x844 ai-front-desk has no Next.js error overlay
+PASS 390x844 ai-front-desk has no blank/broken rendered images
+PASS 390x844 ai-front-desk keeps every image inside its boundary
+PASS 390x844 autopilot serves successfully (200/304) — status=200
+PASS 390x844 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 390x844 autopilot has no horizontal overflow
+PASS 390x844 autopilot has no uncaught page errors
+PASS 390x844 autopilot has no Next.js error overlay
+PASS 390x844 autopilot has no blank/broken rendered images
+PASS 390x844 autopilot keeps every image inside its boundary
+PASS 390x844 website-studio serves successfully (200/304) — status=200
+PASS 390x844 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 390x844 website-studio has no horizontal overflow
+PASS 390x844 website-studio has no uncaught page errors
+PASS 390x844 website-studio has no Next.js error overlay
+PASS 390x844 website-studio has no blank/broken rendered images
+PASS 390x844 website-studio keeps every image inside its boundary
+PASS 390x844 business-pos serves successfully (200/304) — status=200
+PASS 390x844 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 390x844 business-pos has no horizontal overflow
+PASS 390x844 business-pos has no uncaught page errors
+PASS 390x844 business-pos has no Next.js error overlay
+PASS 390x844 business-pos has no blank/broken rendered images
+PASS 390x844 business-pos keeps every image inside its boundary
+PASS 430x932 overview serves successfully (200/304) — status=200
+PASS 430x932 overview did not bounce to sign-in — /dashboard
+PASS 430x932 overview has no horizontal overflow
+PASS 430x932 overview has no uncaught page errors
+PASS 430x932 overview has no Next.js error overlay
+PASS 430x932 overview has no blank/broken rendered images
+PASS 430x932 overview keeps every image inside its boundary
+PASS 430x932 ai-front-desk serves successfully (200/304) — status=200
+PASS 430x932 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 430x932 ai-front-desk has no horizontal overflow
+PASS 430x932 ai-front-desk has no uncaught page errors
+PASS 430x932 ai-front-desk has no Next.js error overlay
+PASS 430x932 ai-front-desk has no blank/broken rendered images
+PASS 430x932 ai-front-desk keeps every image inside its boundary
+PASS 430x932 autopilot serves successfully (200/304) — status=200
+PASS 430x932 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 430x932 autopilot has no horizontal overflow
+PASS 430x932 autopilot has no uncaught page errors
+PASS 430x932 autopilot has no Next.js error overlay
+PASS 430x932 autopilot has no blank/broken rendered images
+PASS 430x932 autopilot keeps every image inside its boundary
+PASS 430x932 website-studio serves successfully (200/304) — status=200
+PASS 430x932 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 430x932 website-studio has no horizontal overflow
+PASS 430x932 website-studio has no uncaught page errors
+PASS 430x932 website-studio has no Next.js error overlay
+PASS 430x932 website-studio has no blank/broken rendered images
+PASS 430x932 website-studio keeps every image inside its boundary
+PASS 430x932 business-pos serves successfully (200/304) — status=200
+PASS 430x932 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 430x932 business-pos has no horizontal overflow
+PASS 430x932 business-pos has no uncaught page errors
+PASS 430x932 business-pos has no Next.js error overlay
+PASS 430x932 business-pos has no blank/broken rendered images
+PASS 430x932 business-pos keeps every image inside its boundary
+PASS 768x1024 overview serves successfully (200/304) — status=200
+PASS 768x1024 overview did not bounce to sign-in — /dashboard
+PASS 768x1024 overview has no horizontal overflow
+PASS 768x1024 overview has no uncaught page errors
+PASS 768x1024 overview has no Next.js error overlay
+PASS 768x1024 overview has no blank/broken rendered images
+PASS 768x1024 overview keeps every image inside its boundary
+PASS 768x1024 ai-front-desk serves successfully (200/304) — status=200
+PASS 768x1024 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 768x1024 ai-front-desk has no horizontal overflow
+PASS 768x1024 ai-front-desk has no uncaught page errors
+PASS 768x1024 ai-front-desk has no Next.js error overlay
+PASS 768x1024 ai-front-desk has no blank/broken rendered images
+PASS 768x1024 ai-front-desk keeps every image inside its boundary
+PASS 768x1024 autopilot serves successfully (200/304) — status=200
+PASS 768x1024 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 768x1024 autopilot has no horizontal overflow
+PASS 768x1024 autopilot has no uncaught page errors
+PASS 768x1024 autopilot has no Next.js error overlay
+PASS 768x1024 autopilot has no blank/broken rendered images
+PASS 768x1024 autopilot keeps every image inside its boundary
+PASS 768x1024 website-studio serves successfully (200/304) — status=200
+PASS 768x1024 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 768x1024 website-studio has no horizontal overflow
+PASS 768x1024 website-studio has no uncaught page errors
+PASS 768x1024 website-studio has no Next.js error overlay
+PASS 768x1024 website-studio has no blank/broken rendered images
+PASS 768x1024 website-studio keeps every image inside its boundary
+PASS 768x1024 business-pos serves successfully (200/304) — status=200
+PASS 768x1024 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 768x1024 business-pos has no horizontal overflow
+PASS 768x1024 business-pos has no uncaught page errors
+PASS 768x1024 business-pos has no Next.js error overlay
+PASS 768x1024 business-pos has no blank/broken rendered images
+PASS 768x1024 business-pos keeps every image inside its boundary
+PASS 1366x768 overview serves successfully (200/304) — status=200
+PASS 1366x768 overview did not bounce to sign-in — /dashboard
+PASS 1366x768 overview has no horizontal overflow
+PASS 1366x768 overview has no uncaught page errors
+PASS 1366x768 overview has no Next.js error overlay
+PASS 1366x768 overview has no blank/broken rendered images
+PASS 1366x768 overview keeps every image inside its boundary
+PASS 1366x768 ai-front-desk serves successfully (200/304) — status=200
+PASS 1366x768 ai-front-desk did not bounce to sign-in — /dashboard/ai
+PASS 1366x768 ai-front-desk has no horizontal overflow
+PASS 1366x768 ai-front-desk has no uncaught page errors
+PASS 1366x768 ai-front-desk has no Next.js error overlay
+PASS 1366x768 ai-front-desk has no blank/broken rendered images
+PASS 1366x768 ai-front-desk keeps every image inside its boundary
+PASS 1366x768 autopilot serves successfully (200/304) — status=200
+PASS 1366x768 autopilot did not bounce to sign-in — /dashboard/autopilot
+PASS 1366x768 autopilot has no horizontal overflow
+PASS 1366x768 autopilot has no uncaught page errors
+PASS 1366x768 autopilot has no Next.js error overlay
+PASS 1366x768 autopilot has no blank/broken rendered images
+PASS 1366x768 autopilot keeps every image inside its boundary
+PASS 1366x768 website-studio serves successfully (200/304) — status=200
+PASS 1366x768 website-studio did not bounce to sign-in — /dashboard/studio
+PASS 1366x768 website-studio has no horizontal overflow
+PASS 1366x768 website-studio has no uncaught page errors
+PASS 1366x768 website-studio has no Next.js error overlay
+PASS 1366x768 website-studio has no blank/broken rendered images
+PASS 1366x768 website-studio keeps every image inside its boundary
+PASS 1366x768 business-pos serves successfully (200/304) — status=200
+PASS 1366x768 business-pos did not bounce to sign-in — /dashboard/pos
+PASS 1366x768 business-pos has no horizontal overflow
+PASS 1366x768 business-pos has no uncaught page errors
+PASS 1366x768 business-pos has no Next.js error overlay
+PASS 1366x768 business-pos has no blank/broken rendered images
+PASS 1366x768 business-pos keeps every image inside its boundary
+PASS 320x568 homepage showcase renders a demo photograph — nyumbani-kitchen-720.webp=320px
+PASS 320x568 homepage showcase photo is decoded and inside its clipping boundary — nyumbani-kitchen-720.webp w=288 right=304 clip=figure.lp-demo__media
+PASS 320x568 demo page showcase band photograph decodes — nyumbani-kitchen-720.webp=320px
+PASS 320x568 demo page images respect the 320px boundary
+PASS 390x844 homepage showcase renders a demo photograph — nyumbani-kitchen-720.webp=390px
+PASS 390x844 homepage showcase photo is decoded and inside its clipping boundary — nyumbani-kitchen-720.webp w=357 right=373 clip=figure.lp-demo__media
+PASS 390x844 demo page showcase band photograph decodes — nyumbani-kitchen-720.webp=390px
+PASS 390x844 demo page images respect the 320px boundary
+PASS homepage plan order at 390x844: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS — MONTHLY > ANNUAL > AI_BUSINESS_FRONT_DESK > JATA_AUTOPILOT > INTERACTIVE_BUSINESS > BUSINESS_POS
+PASS root accent is the original amber at 390x844 — #d97706
+PASS landing espresso ink token applies at 390x844 — #14110f
+PASS landing cream token applies at 390x844 — #f7f2e8
+PASS landing amber token (scoped to .lp-page) applies at 390x844 — #f0a03c
+PASS landing deep-amber token applies at 390x844 — #b45309
+PASS editorial serif display face is in use at 390x844 — ui-serif,"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif
+PASS primary CTA renders original amber at 390x844 — rgb(240, 160, 60)
+PASS primary CTA label is the original dark espresso on amber at 390x844 — rgb(26, 20, 13)
+PASS hero band renders original espresso at 390x844 — rgb(20, 17, 15)
+PASS homepage plan order at 1366x768: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS — MONTHLY > ANNUAL > AI_BUSINESS_FRONT_DESK > JATA_AUTOPILOT > INTERACTIVE_BUSINESS > BUSINESS_POS
+PASS root accent is the original amber at 1366x768 — #d97706
+PASS landing espresso ink token applies at 1366x768 — #14110f
+PASS landing cream token applies at 1366x768 — #f7f2e8
+PASS landing amber token (scoped to .lp-page) applies at 1366x768 — #f0a03c
+PASS landing deep-amber token applies at 1366x768 — #b45309
+PASS editorial serif display face is in use at 1366x768 — ui-serif,"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif
+PASS primary CTA renders original amber at 1366x768 — rgb(240, 160, 60)
+PASS primary CTA label is the original dark espresso on amber at 1366x768 — rgb(26, 20, 13)
+PASS hero band renders original espresso at 1366x768 — rgb(20, 17, 15)
+PASS demo page WhatsApp action opens wa.me/254724317010 at 390x844 — https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20would%20like%20a%20quote. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20would%20like%20a%20quote. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20page%20and%20would%20like%20to%20know%20more. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.
+PASS demo page Call action dials the normalised demo number at 390x844 — tel:+254724317010 | tel:+254724317010 | tel:+254724317010
+PASS demo page renders only valid Google Maps Directions links at 390x844 — 3 link(s): https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi | https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi | https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi
+PASS demo page shows Share and no "coming soon" placeholder at 390x844 — share=true comingSoon=false
+PASS demo page WhatsApp action opens wa.me/254724317010 at 1366x768 — https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20would%20like%20a%20quote. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20would%20like%20a%20quote. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20page%20and%20would%20like%20to%20know%20more. | https://wa.me/254724317010?text=Hi%20Nyumbani%20Kitchen%2C%20I%20found%20your%20JATA%20AFTERCALL%20page%20and%20would%20like%20to%20know%20more.
+PASS demo page Call action dials the normalised demo number at 1366x768 — tel:+254724317010 | tel:+254724317010 | tel:+254724317010
+PASS demo page renders only valid Google Maps Directions links at 1366x768 — 3 link(s): https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi | https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi | https://www.google.com/maps/dir/?api=1&destination=Kilimani%2C%20Nairobi
+PASS demo page shows Share and no "coming soon" placeholder at 1366x768 — share=true comingSoon=false
+
+ALL OBJECTIVE GATES PASSED
