@@ -509,9 +509,13 @@ threshold are byte-identical to before.
 dev server: immersive 22, layout 7, actionbar 37, families 167, media-local 29 — **386 checks, 0
 failed**.
 
-**Status:** `PASS` for the root cause and the harness fix, with the caveat that these runs are a local
-Chromium unpacked from the pinned `@sparticuz/chromium@131` build against a local dev server, **not**
-the CI runner. E13 stays **open** until two consecutive CI heads that contain this change are green.
+**Status:** **Closed.** The 5 local runs above were the local proof; the CI confirmation is two
+consecutive green heads that contain the change — `4e98874` and `f7c4970`, **14/14 `success`** each,
+with the storefront Motion/immersive browser step passing on both. The local runs used a Chromium
+unpacked from the pinned `@sparticuz/chromium@131` build against a local dev server, not the CI
+runner, so the CI heads are the authoritative evidence. The residual risk is the runner image, not
+the product: a recurrence should be re-opened with its run id, never silenced by editing the
+assertion.
 
 ### 2.12 Requisitions: the request to buy, as a first-class object (2026-10-28)
 
