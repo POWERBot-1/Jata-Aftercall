@@ -564,6 +564,25 @@ matching work.
   requisition may be cloned, and who besides the requester may amend. These are presented as options
   in the gap document rather than chosen silently.
 
+### 2.13 CI on `4e98874`: fourteen of fourteen, and the first head carrying the E13 fix
+
+`4e98874` (requisitions + the storefront-check fix from `db2ad23`) returned **14/14 `success`**:
+`Schema, types, unit suite, build`, `Migrations and PostgreSQL suite`, `Migrations + schema on
+PostgreSQL 18`, `Exact candidate applies on disposable PostgreSQL 18`, `Production build path on
+PostgreSQL 18`, `Schema reconciliation proposal closes the drift`, `Real-Chrome six-viewport capture
+on a disposable database`, `Failure paths actually fail`, `D2 — build, audit and controls on the
+candidate tree`, `Journey against a real database`, `Migration target guard`, `Static (install,
+generate, lint, typecheck, audit)`, `Release gate (aggregate)`, and the Vercel status.
+PR #71 is `MERGEABLE` / `CLEAN` on that head, with **no approving review**.
+
+This is the **first** green head that contains the E13 harness change, so E13 is at "confirmation 1
+of 2" rather than closed. It also means the new migration ran twice on real PostgreSQL in CI — once
+through `prisma migrate deploy` against `postgres:16`, and once through the PG18 candidate path —
+after the same 27-migration / 48-table rehearsal passed locally.
+
+`Journey against a real database` covers the browser journeys; it is **not** a live render of
+`/requisitions`, which stays unverified over HTTP (E14).
+
 ---
 
 ## 3. Item-by-item status
