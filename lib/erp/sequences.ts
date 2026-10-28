@@ -8,7 +8,7 @@
 
 import prisma from "../db";
 
-export type SequenceKey = "journal" | "invoice" | "receipt" | "credit_note" | "order" | "supplier_bill" | "purchase_order";
+export type SequenceKey = "journal" | "invoice" | "receipt" | "credit_note" | "order" | "supplier_bill" | "purchase_order" | "requisition";
 
 export const SEQUENCE_PREFIXES: Record<SequenceKey, string> = {
   journal: "JV",
@@ -18,6 +18,7 @@ export const SEQUENCE_PREFIXES: Record<SequenceKey, string> = {
   order: "ORD",
   supplier_bill: "BILL",
   purchase_order: "PO",
+  requisition: "REQ",
 };
 
 export function formatDocumentNumber(prefix: string, value: number, pad = 6): string {

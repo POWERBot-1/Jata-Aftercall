@@ -143,8 +143,8 @@ createdb erp_pro_verify && pg_restore --dbname=erp_pro_verify erp_pro_export_*.d
 #    appendix below; it is exercised by scripts/erp/migration-verify.sh rollback.
 ```
 
-Copy-paste of a 40-table `DROP` block is deliberately **not** in this document as a single blob.
-Dropping 40 tables is a destructive, irreversible act that the owner of the database must review
+Copy-paste of a 48-table `DROP` block is deliberately **not** in this document as a single blob.
+Dropping 48 tables is a destructive, irreversible act that the owner of the database must review
 line by line, so the appendix lists the tables in dependency order and the `DROP` statement is
 written per table at the point of use. Today none of the ERP tables reference each other, so the
 order is not strictly required by PostgreSQL; it is kept because a future migration may add such a
@@ -155,21 +155,21 @@ foreign key, and the rehearsal should fail then rather than the real rollback.
 Leaf tables first (they reference the headers):
 
 ```
-ErpGoodsReceiptLine, ErpGoodsReceipt, ErpPurchaseOrderLine, ErpPurchaseOrder,
-ErpApprovalEvent, ErpApprovalRequest,
-ErpNotificationRead,
-ErpTask, ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
+ErpRequisitionLine, ErpRequisition, ErpGoodsReceiptLine, ErpGoodsReceipt, ErpPurchaseOrderLine,
+ErpPurchaseOrder, ErpApprovalEvent, ErpApprovalRequest, ErpNotificationRead, ErpTask,
+ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
 MsgCampaignRecipient, MsgMessageEvent, MsgSenderIdEvent, MsgConsentRecord, MsgLedgerEntry,
 MsgSuppression, MsgAudience, ErpAutomationRun, ErpKycDocument, ErpNotification,
-ErpPayment, ErpInvoice, ErpExpense, ErpSupplierBill, ErpStoreOrder, MsgCampaign,
-MsgTemplate, MsgSenderId, MsgChannelConnection, MsgContact, MsgWallet,
-ErpJournal, ErpPeriod, ErpAccount, ErpTaxRule, ErpComplianceProfile, ErpAutomationRule,
-ErpSequence, ErpIdempotencyRecord, ErpAuditEvent, ErpEntitlement, ErpSubscription,
-ErpConfiguration
+ErpPayment, ErpInvoice, ErpExpense, ErpSupplierBill, ErpStoreOrder,
+MsgCampaign, MsgTemplate, MsgSenderId, MsgChannelConnection, MsgContact,
+MsgWallet, ErpJournal, ErpPeriod, ErpAccount, ErpTaxRule,
+ErpComplianceProfile, ErpAutomationRule, ErpSequence, ErpIdempotencyRecord, ErpAuditEvent,
+ErpEntitlement, ErpSubscription, ErpConfiguration
 ```
 
-`ErpApprovalEvent` references `ErpApprovalRequest`, and `ErpNotificationRead` references
-`ErpNotification`, so each child goes before its parent.
+`ErpApprovalEvent` references `ErpApprovalRequest`, `ErpNotificationRead` references
+`ErpNotification`, and `ErpRequisitionLine` references `ErpRequisition`, so each child goes before its
+parent. The order above is the one `scripts/erp/migration-verify.sh rollback` actually executes.
 `ErpConfiguration` goes last: several tables read its feature flags and `teamRolesJson`.
 
 ### Rollback of `20261032000000_erp_procurement` on its own
@@ -187,6 +187,18 @@ Children before parents. Removing these tables loses the record of what was orde
 does **not** touch POS stock, the journals a supplier bill posted (they stay, as posted records must),
 or the suppliers themselves.
 
+### Rollback of `20261033000000_erp_requisitions` on its own
+
+```sql
+DROP TABLE IF EXISTS "ErpRequisitionLine";
+DROP TABLE IF EXISTS "ErpRequisition";
+```
+
+Both tables cascade from `Business`, and `ErpRequisition.purchaseOrderId` is a plain column rather
+than a foreign key, so dropping the requisition tables cannot break a purchase order and cannot
+depend on whether an order still exists. Nothing else references them; the `REQ-` rows in
+`ErpSequence` and the matching `REQUISITION_*` audit rows stay behind, which is intentional — the
+audit trail of a decision outlives the object it describes.
 ### Rollback of `20261031000000_erp_approval_consumption` on its own
 
 ```sql

@@ -17,6 +17,7 @@ import { listNotifications, notificationVisibleTo, unreadNotificationCount } fro
 import { taskSummary } from "./tasks";
 import { approvalSummary, listApprovalRequests } from "./approvals";
 import { listPurchaseOrders, purchaseOrderSummary } from "./procurement";
+import { listRequisitions, requisitionSummary } from "./requisitions";
 import { hasErpPermission } from "./access";
 
 async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
@@ -309,6 +310,28 @@ export async function loadProcurementCentre(businessId: string) {
     products: (products as any[]) ?? [],
     orders: (orders as any[]).map((order) => ({ ...order, bills: billsByOrder.get(String(order.id)) ?? [] })),
     summary,
+  };
+}
+
+/**
+ * The requisition desk: what people have asked to buy, what is waiting for a decision, and the
+ * suppliers a request can name.
+ *
+ * Only this tenant's rows are read; the supplier list is the business's own POS supplier list, so a
+ * request can never point at somebody else's supplier.
+ */
+export async function loadRequisitionCentre(businessId: string) {
+  const [requests, summary, suppliers, products] = await Promise.all([
+    safe(listRequisitions(prisma, { businessId, limit: 100 }), []),
+    safe(requisitionSummary(prisma, businessId), { draft: 0, submitted: 0, approved: 0, converted: 0, rejected: 0 }),
+    safe(prisma.posSupplier.findMany({ where: { businessId, isActive: true }, orderBy: { name: "asc" }, take: 200, select: { id: true, name: true } }), []),
+    safe(prisma.posProduct.findMany({ where: { businessId, isActive: true }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, sku: true, costKES: true } }), []),
+  ]);
+  return {
+    requests: (requests as any[]) ?? [],
+    summary,
+    suppliers: (suppliers as any[]) ?? [],
+    products: (products as any[]) ?? [],
   };
 }
 

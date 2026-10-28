@@ -164,6 +164,8 @@ model Business {
   erpPurchaseOrderLines   ErpPurchaseOrderLine[]
   erpGoodsReceipts        ErpGoodsReceipt[]
   erpGoodsReceiptLines    ErpGoodsReceiptLine[]
+  erpRequisitions         ErpRequisition[]
+  erpRequisitionLines     ErpRequisitionLine[]
   erpAutomationRules      ErpAutomationRule[]
   erpAutomationRuns       ErpAutomationRun[]
   erpKycDocuments         ErpKycDocument[]
@@ -3091,6 +3093,76 @@ model ErpGoodsReceiptLine {
 
   @@index([businessId, receiptId])
   @@index([businessId, lineId])
+}
+
+/// A request to buy something, before anybody has promised money to a supplier.
+///
+/// First-class rather than a draft purchase order because the two answer different questions: a
+/// requisition records *who asked, why, and who allowed it*, and it survives after conversion — a
+/// rejected request is a decision worth keeping, and a purchase order nobody can trace back to a
+/// requester is exactly the gap an audit looks for. Tenant-scoped at every query, numbered from
+/// ErpSequence, and idempotent per tenant so a double-submitted form cannot raise two requests.
+model ErpRequisition {
+  id                 String    @id @default(cuid())
+  businessId         String
+  business           Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tenant-scoped number from ErpSequence (REQ-000001), never a row count.
+  requisitionNumber  String
+  status             String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED | CONVERTED | CANCELLED
+  title              String
+  justification      String?   @db.Text
+  department         String?
+  priority           String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  neededBy           DateTime?
+  supplierId         String?
+  supplierName       String?
+  currencyCode       String    @default("KES")
+  estimatedSubtotalCents Int   @default(0)
+  estimatedTaxCents      Int   @default(0)
+  estimatedTotalCents    Int   @default(0)
+  requestedBy        String
+  requestedName      String?
+  submittedAt        DateTime?
+  decidedBy          String?
+  decidedName        String?
+  decidedAt          DateTime?
+  decisionNote       String?   @db.Text
+  /// The purchase order this request became, when it was approved and converted.
+  purchaseOrderId    String?
+  cancelledBy        String?
+  cancelledAt        DateTime?
+  cancelReason       String?   @db.Text
+  /// Unique per tenant so a retried submit cannot create a second request.
+  idempotencyKey     String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lines              ErpRequisitionLine[]
+
+  @@unique([businessId, requisitionNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, requestedBy, createdAt])
+}
+
+model ErpRequisitionLine {
+  id                     String          @id @default(cuid())
+  businessId             String
+  business               Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requisitionId          String
+  requisition            ErpRequisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  /// The POS product this line is for, when it is a stocked product rather than a free-text item.
+  productId              String?
+  description            String
+  quantity               Float
+  estimatedUnitCostCents Int             @default(0)
+  /// VAT as basis points (1600 = 16%); the tax is computed from it, never typed in twice.
+  taxRateBps             Int             @default(0)
+  lineSubtotalCents      Int             @default(0)
+  lineTaxCents           Int             @default(0)
+  sortOrder              Int             @default(0)
+  createdAt              DateTime        @default(now())
+
+  @@index([businessId, requisitionId])
 }
 
 /// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance

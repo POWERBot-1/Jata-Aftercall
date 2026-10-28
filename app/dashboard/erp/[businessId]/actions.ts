@@ -37,6 +37,13 @@ import {
   recordPurchaseBill,
 } from "@/lib/erp/procurement";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
+import {
+  createRequisition,
+  submitRequisition,
+  decideRequisition,
+  convertRequisition,
+  cancelRequisition,
+} from "@/lib/erp/requisitions";
 import { createApprovalRequest, decideApprovalRequest, withdrawApprovalRequest, requireApprovalFor } from "@/lib/erp/approvals";
 import { formatDate, formatNumber } from "@/lib/format";
 
@@ -1493,4 +1500,160 @@ export async function recordPurchaseBillAction(form: FormData) {
   }
   if (error) back(base, "/procurement", { error });
   back(base, "/procurement", { ok: ok ?? "Bill posted." });
+}
+
+// ── Requisitions ───────────────────────────────────────────────────────────────────────────
+function requisitionLinesFrom(form: FormData) {
+  const products = form.getAll("lineProduct").map(String);
+  const descriptions = form.getAll("lineDescription").map(String);
+  const quantities = form.getAll("lineQuantity").map(String);
+  const costs = form.getAll("lineUnitCost").map(String);
+  const rates = form.getAll("lineTaxRate").map(String);
+  const lines = descriptions.map((description, index) => ({
+    productId: products[index] || null,
+    description,
+    quantity: Number(quantities[index] ?? 0),
+    estimatedUnitCostCents: parseKesToCents(costs[index] ?? ""),
+    taxRateBps: Number(rates[index] ?? 0) || 0,
+  }));
+  return lines.filter((line) => line.description.trim() || line.productId);
+}
+
+export async function createRequisitionAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const result = await createRequisition(prisma, {
+      businessId,
+      title: text(form, "title"),
+      justification: text(form, "justification") || null,
+      department: text(form, "department") || null,
+      priority: text(form, "priority") || "NORMAL",
+      neededBy: text(form, "neededBy") || null,
+      supplierId: text(form, "supplierId") || null,
+      supplierName: text(form, "supplierName") || null,
+      lines: requisitionLinesFrom(form),
+      requestedBy: context.session.userId,
+      requestedName: context.session.name ?? context.session.email,
+      idempotencyKey: text(form, "requestKey") || randomUUID(),
+    });
+    ok = `${result.request.requisitionNumber} saved. Submit it when it is ready to be decided.`;
+    revalidatePath(`${base}/requisitions`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/requisitions", { error });
+  back(base, "/requisitions", { ok: ok ?? "Request saved." });
+}
+
+export async function submitRequisitionAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const requisitionId = text(form, "requisitionId");
+    if (!requisitionId) throw new ActionError("Choose a request.");
+    const request = await submitRequisition(prisma, {
+      businessId,
+      requisitionId,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+    });
+    ok = `${request.requisitionNumber} is waiting for a decision. Nothing has been ordered.`;
+    revalidatePath(`${base}/requisitions`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/requisitions", { error });
+  back(base, "/requisitions", { ok: ok ?? "Submitted." });
+}
+
+export async function decideRequisitionAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    // The permission is checked here as well as in the domain module: a hidden button is not a
+    // control, and an action invoked directly must still be refused.
+    const context = await access(businessId, "APPROVE_SPEND", { entitled: true });
+    const requisitionId = text(form, "requisitionId");
+    if (!requisitionId) throw new ActionError("Choose a request.");
+    const decision = text(form, "decision") === "REJECT" ? "REJECT" : "APPROVE";
+    const request = await decideRequisition(prisma, {
+      businessId,
+      requisitionId,
+      decision,
+      approverRole: context.role,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+      note: text(form, "note") || null,
+    });
+    ok = decision === "APPROVE"
+      ? `${request.requisitionNumber} approved. Turn it into a purchase order when you are ready.`
+      : `${request.requisitionNumber} rejected. The requester has been told.`;
+    revalidatePath(`${base}/requisitions`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/requisitions", { error });
+  back(base, "/requisitions", { ok: ok ?? "Decision recorded." });
+}
+
+export async function convertRequisitionAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const requisitionId = text(form, "requisitionId");
+    if (!requisitionId) throw new ActionError("Choose a request.");
+    const result = await convertRequisition(prisma, {
+      businessId,
+      requisitionId,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+    });
+    if (!result.order) throw new ActionError("That request was already converted but its order could not be read.");
+    ok = result.alreadyConverted
+      ? `Already converted to ${result.order.orderNumber}.`
+      : `${result.order.orderNumber} raised from the request. Submit the order to buy.`;
+    revalidatePath(`${base}/requisitions`);
+    revalidatePath(`${base}/procurement`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/requisitions", { error });
+  back(base, "/requisitions", { ok: ok ?? "Converted." });
+}
+
+export async function cancelRequisitionAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const requisitionId = text(form, "requisitionId");
+    if (!requisitionId) throw new ActionError("Choose a request.");
+    const request = await cancelRequisition(prisma, {
+      businessId,
+      requisitionId,
+      reason: text(form, "reason"),
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+    });
+    ok = `${request.requisitionNumber} cancelled.`;
+    revalidatePath(`${base}/requisitions`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/requisitions", { error });
+  back(base, "/requisitions", { ok: ok ?? "Cancelled." });
 }

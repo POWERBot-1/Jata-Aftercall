@@ -29,9 +29,9 @@ MIGRATIONS_DIR="$ROOT/prisma/migrations"
 ERP_MIGRATION="20261027000000_pos_erp_pro"
 # Every migration this product owns, in order. The upgrade path stops before the first one and
 # applies the rest; the rollback scenario drops what all of them create.
-ERP_MIGRATIONS=("20261027000000_pos_erp_pro" "20261028000000_erp_tasks" "20261029000000_erp_notifications" "20261030000000_erp_approvals" "20261031000000_erp_approval_consumption" "20261032000000_erp_procurement")
+ERP_MIGRATIONS=("20261027000000_pos_erp_pro" "20261028000000_erp_tasks" "20261029000000_erp_notifications" "20261030000000_erp_approvals" "20261031000000_erp_approval_consumption" "20261032000000_erp_procurement" "20261033000000_erp_requisitions")
 # Tables the ERP migrations create (Erp* / Msg*). Update when an additive migration adds one.
-ERP_TABLE_TOTAL=46
+ERP_TABLE_TOTAL=48
 LAST_RELEASE_MIGRATION="20261010000200_checkout_idempotency"
 PSQL="${PSQL:-psql}"
 PG_DUMP="${PG_DUMP:-pg_dump}"
@@ -255,7 +255,7 @@ rollback_and_recovery() {
   [ "$live" = "1" ] && [ "$live" = "$restored" ] && pass "restored ERP row counts match the live database" || fail "restored counts differ (live=$live restored=$restored)"
 
   # Drop in the documented order: children before parents, RESTRICT so a wrong order fails loudly.
-  local tables=( ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
+  local tables=( ErpRequisitionLine ErpRequisition ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
   local dropped=0 t
   for t in "${tables[@]}"; do
     if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -c "DROP TABLE \"$t\";" >/dev/null 2>&1; then

@@ -118,6 +118,11 @@ describe("runtime and schema guards", () => {
       "20261030000000_erp_approvals",
       "20261031000000_erp_approval_consumption",
       "20261032000000_erp_procurement",
+      // Requisitions: the request to buy, before the order. Two additive tenant-scoped tables
+      // (ErpRequisition, ErpRequisitionLine) with their indexes and guarded foreign keys; the
+      // optional purchaseOrderId is a plain column on purpose, so a request keeps its own audit
+      // story even if a draft order is deleted. No existing table or row is touched.
+      "20261033000000_erp_requisitions",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

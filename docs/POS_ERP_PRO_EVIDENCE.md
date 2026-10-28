@@ -513,6 +513,57 @@ failed**.
 Chromium unpacked from the pinned `@sparticuz/chromium@131` build against a local dev server, **not**
 the CI runner. E13 stays **open** until two consecutive CI heads that contain this change are green.
 
+### 2.12 Requisitions: the request to buy, as a first-class object (2026-10-28)
+
+Directive item 1 asks for requisitions as a tenant-scoped object before the enforcement work on
+three-way matching. This slice ships the object and the controls around it; it does **not** claim the
+matching work.
+
+**What exists now**
+
+| Piece | Detail |
+| --- | --- |
+| Tables | `ErpRequisition` (20 columns) and `ErpRequisitionLine`, both cascading from `Business`; unique `(businessId, requisitionNumber)` and `(businessId, idempotencyKey)`; indexes on `(businessId, status, createdAt)` and `(businessId, requestedBy, createdAt)` |
+| Numbering | `REQ-000001` from `ErpSequence` (new `requisition` key, prefix `REQ`), never a row count |
+| States | `DRAFT → SUBMITTED → APPROVED | REJECTED → CONVERTED`, plus `CANCELLED`; an amendment returns `SUBMITTED` to `DRAFT`; `REJECTED`/`CONVERTED`/`CANCELLED` are terminal |
+| Separation of duties | the requester can never decide their own request, including an owner; the attempt is refused with a plain-language message, not a hidden button |
+| Authority | raising needs `MANAGE_INVENTORY`, deciding needs `APPROVE_SPEND`; both are re-checked in the domain module and again in the server action |
+| Amendment | allowed only while draft or submitted, only by the requester, and it audits `beforeJson`/`afterJson` so an approver sees what actually changed |
+| Conversion | only from `APPROVED`, only with a supplier, through `createPurchaseOrder` (same stock/tax/approval rules as the procurement screen), exactly once — a second call returns the order that already exists |
+| Audit | `REQUISITION_CREATED`, `_SUBMITTED`, `_AMENDED`, `_APPROVED`, `_REJECTED`, `_CANCELLED`, `_CONVERTED`, each with actor, tenant, target and reason where one applies |
+| Notifications | the requester is told the decision (dedupe key `requisition-decision:<id>:<status>`) |
+| Screen | `/dashboard/erp/[businessId]/requisitions`, in the workspace navigation under `operate`, with the decision controls only on requests the signed-in role may actually decide |
+
+**Evidence (all run locally on this head)**
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Domain rules | `npx vitest run tests/unit/erp-requisitions.test.ts` | **PASS** — 23 tests |
+| Real PostgreSQL | `PRISMA_TEST_DATABASE_URL=… npm run test:db:erp` | **PASS** — 67 tests across 6 files, including 7 new requisition tests (tenant isolation, cross-tenant refusal, supplier-of-another-tenant refused, one-row-under-concurrency, amendment audit, single conversion, per-tenant summary) |
+| Migration forward | `bash scripts/erp/migration-verify.sh all` (via `PSQL`/`PG_DUMP`/`PG_RESTORE` pointing at the disposable cluster) | **PASS** — 27 migrations, **48 ERP tables**, 87 pre-existing tables, 55 ERP foreign keys, idempotent re-run |
+| Migration rollback | same script, rollback scenario | **PASS** — all 48 ERP tables exported and restored into a scratch database, dropped in the documented order, POS rows intact, re-applied for recovery |
+| Types | `npx tsc --noEmit` | **PASS** — exit 0 |
+| Unit suite | `npx vitest run` | **PASS** — 291 files, 3748 tests (3560 passed, 188 skipped, 0 failed) |
+| Lint | `npm run lint` | **PASS** — 0 errors, 44 warnings (pre-existing) |
+| Model check | `npx tsx scripts/erp/check-models.ts` | **PASS** — 134 schema models = 134 client models, 48 ERP/messaging, 94 referenced |
+| Build | `npm run build` | **PASS** — `/dashboard/erp/[businessId]/requisitions` compiled |
+
+**NOT TESTED / limitations**
+
+* **No live HTTP render of `/requisitions` in this sandbox.** The repository's Prisma client is
+  generated with `--no-engine` because `binaries.prisma.sh` is unreachable, so a running Next server
+  cannot query PostgreSQL here; the page compiles and the loaders are exercised only through the
+  domain tests. A cookie-authenticated page check of the kind `scripts/erp/tasks-page.check.mjs`
+  performs is therefore **NOT RUN** locally and remains to be added for requisitions.
+* **Three-way matching is still only recorded, not enforced.** `recordPurchaseBill` computes and
+  audits the variance against the order; it does not yet compare against the goods receipt, apply
+  configurable price/quantity tolerances, or route exceptions through approval. That is the next
+  slice of directive item 1 and is listed as open in the gap matrix.
+* **No price or lead-time history, reorder proposals, or supplier scorecards** yet.
+* Business-policy choices not made here: what the default tolerances should be, whether a rejected
+  requisition may be cloned, and who besides the requester may amend. These are presented as options
+  in the gap document rather than chosen silently.
+
 ---
 
 ## 3. Item-by-item status
