@@ -27,6 +27,7 @@ import { consentDecision } from "@/lib/messaging/consent";
 import { industryPack } from "@/lib/erp/industryPacks";
 import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
+import { createTask, updateTask } from "@/lib/erp/tasks";
 import { formatDate, formatNumber } from "@/lib/format";
 
 class ActionError extends Error {}
@@ -1049,4 +1050,70 @@ export async function updateTeamRoleAction(form: FormData) {
   }
   if (error) back(base, "/settings", { error, tab: "team" });
   back(base, "/settings", { ok: ok ?? "Role updated.", tab: "team" });
+}
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────────────────────────
+// The task board is the one place "somebody owns this by a date" is recorded. Creation and status
+// changes go through lib/erp/tasks, which validates, enforces the state machine and audits — the
+// form is only a convenience.
+
+export async function createTaskAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_TASKS", { entitled: true });
+    const dueRaw = text(form, "dueAt");
+    const result = await createTask(prisma, {
+      businessId,
+      title: text(form, "title"),
+      detail: text(form, "detail") || null,
+      priority: text(form, "priority", "NORMAL"),
+      assignedTo: text(form, "assignedTo") || null,
+      dueAt: dueRaw ? new Date(`${dueRaw}T12:00:00Z`) : null,
+      sourceType: "MANUAL",
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+    });
+    ok = result.created ? "Task added to the board." : "That task already existed.";
+    revalidatePath(`${base}/tasks`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/tasks", { error });
+  back(base, "/tasks", { ok: ok ?? "Task added." });
+}
+
+export async function updateTaskAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_TASKS", { entitled: true });
+    const taskId = text(form, "taskId");
+    if (!taskId) throw new ActionError("Choose a task.");
+    const status = text(form, "status");
+    const priority = text(form, "priority");
+    const dueRaw = text(form, "dueAt");
+    const assignee = form.get("assignedTo");
+    const result = await updateTask(prisma, {
+      businessId,
+      taskId,
+      status: status ? status : undefined,
+      priority: priority ? priority : undefined,
+      dueAt: dueRaw === "" ? null : dueRaw ? new Date(dueRaw) : undefined,
+      assignedTo: assignee === null ? undefined : String(assignee),
+      reason: text(form, "reason") || null,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
+    });
+    ok = result.changed ? "Task updated." : "Nothing changed.";
+    revalidatePath(`${base}/tasks`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/tasks", { error });
+  back(base, "/tasks", { ok: ok ?? "Task updated." });
 }

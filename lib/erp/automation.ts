@@ -8,6 +8,7 @@
  */
 
 import { logErpAudit } from "./audit";
+import { createTask } from "./tasks";
 
 export type AutomationTrigger =
   | "LOW_STOCK"
@@ -259,13 +260,40 @@ export async function runAutomation(client: any, input: RunAutomationInput) {
       results.push({ action: action.type, ok: false, detail: "Not available in this release." });
       continue;
     }
-    if (action.type === "NOTIFY" || action.type === "CREATE_TASK" || action.type === "SUGGEST_PURCHASE") {
+    if (action.type === "CREATE_TASK") {
+      // A task is work with an owner and a due date, so it goes on the board — not into the
+      // notification feed where nobody owns it. The idempotency key is the run key, so a replayed
+      // event returns the first task instead of raising a second one.
+      const title = String(action.params?.title ?? rule.name);
+      const dueDays = Number(action.params?.dueInDays ?? 0);
+      const dueAt = Number.isFinite(dueDays) && dueDays > 0 ? new Date(now.getTime() + dueDays * 86_400_000) : null;
+      const outcome: { task: any; error?: any } = await createTask(client, {
+        businessId: input.businessId,
+        title,
+        detail: String(action.params?.message ?? `Triggered by ${rule.name}.`),
+        priority: String(action.params?.priority ?? "NORMAL"),
+        assignedRole: action.params?.role ? String(action.params.role) : "OWNER",
+        dueAt,
+        sourceType: "AUTOMATION",
+        sourceId: rule.id,
+        href: action.params?.href ? String(action.params.href) : null,
+        idempotencyKey: `automation-task:${idempotencyKey}`,
+        actorId: input.approverId ?? input.actorId ?? null,
+        actorName: input.actorName ?? null,
+      }).catch((error: any) => ({ task: null, error })) as { task: any; error?: any };
+      if (!outcome.task) {
+        results.push({ action: action.type, ok: false, detail: outcome.error?.message ?? "The task could not be created." });
+        continue;
+      }
+      executed.push(action.type);
+      results.push({ action: action.type, ok: true, detail: `${title} (task ${outcome.task.id})` });
+      continue;
+    }
+    if (action.type === "NOTIFY" || action.type === "SUGGEST_PURCHASE") {
       const title =
         action.type === "SUGGEST_PURCHASE"
           ? `Purchase suggestion: ${String(input.event.productName ?? "stock item")}`
-          : action.type === "CREATE_TASK"
-            ? `Task: ${String(action.params?.title ?? rule.name)}`
-            : String(action.params?.title ?? rule.name);
+          : String(action.params?.title ?? rule.name);
       await client.erpNotification.create({
         data: {
           businessId: input.businessId,

@@ -51,6 +51,7 @@ export const ERP_PERMISSIONS = [
   { key: "MANAGE_STORE", label: "Manage the online store", risk: "medium" },
   { key: "VIEW_BILLING", label: "See plan, usage and billing", risk: "medium" },
   { key: "MANAGE_BILLING", label: "Change plan and payment settings", risk: "high" },
+  { key: "MANAGE_TASKS", label: "Create and assign work", risk: "medium" },
   { key: "VIEW_AUDIT", label: "Read the audit trail", risk: "high" },
   { key: "EXPORT_DATA", label: "Export business data", risk: "high" },
   { key: "MANAGE_USERS", label: "Manage users and roles", risk: "high" },
@@ -86,6 +87,7 @@ const ROLE_MATRIX: Record<ErpRole, ErpPermission[] | "all"> = {
     "MANAGE_SENDER_ID",
     "VIEW_KYC",
     "MANAGE_AUTOMATION",
+    "MANAGE_TASKS",
     "MANAGE_COMPLIANCE",
     "MANAGE_STORE",
     "VIEW_AUDIT",
@@ -98,10 +100,11 @@ const ROLE_MATRIX: Record<ErpRole, ErpPermission[] | "all"> = {
     "MANAGE_INVOICES",
     "MANAGE_CUSTOMERS",
     "MANAGE_COMPLIANCE",
+    "MANAGE_TASKS",
     "EXPORT_DATA",
     "VIEW_AUDIT",
   ],
-  STAFF: [...READ_ONLY, "MANAGE_INVOICES", "MANAGE_CUSTOMERS", "MANAGE_INVENTORY", "MANAGE_MESSAGING", "MANAGE_STORE"],
+  STAFF: [...READ_ONLY, "MANAGE_INVOICES", "MANAGE_CUSTOMERS", "MANAGE_INVENTORY", "MANAGE_MESSAGING", "MANAGE_STORE", "MANAGE_TASKS"],
   VIEWER: READ_ONLY,
 };
 

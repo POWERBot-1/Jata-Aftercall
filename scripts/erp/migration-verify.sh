@@ -27,6 +27,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MIGRATIONS_DIR="$ROOT/prisma/migrations"
 ERP_MIGRATION="20261027000000_pos_erp_pro"
+# Every migration this product owns, in order. The upgrade path stops before the first one and
+# applies the rest; the rollback scenario drops what all of them create.
+ERP_MIGRATIONS=("20261027000000_pos_erp_pro" "20261028000000_erp_tasks")
+# Tables the ERP migrations create (Erp* / Msg*). Update when an additive migration adds one.
+ERP_TABLE_TOTAL=39
 LAST_RELEASE_MIGRATION="20261010000200_checkout_idempotency"
 PSQL="${PSQL:-psql}"
 PG_DUMP="${PG_DUMP:-pg_dump}"
@@ -158,21 +163,28 @@ clean_install() {
   if apply_until; then pass "all migrations applied on an empty database"; else fail "migration chain failed on an empty database"; return; fi
   local erp base
   erp=$(erp_table_count); base=$(base_table_count)
-  [ "$erp" = "38" ] && pass "38 ERP tables created" || fail "expected 38 ERP tables, found $erp"
+  [ "$erp" = "$ERP_TABLE_TOTAL" ] && pass "$erp ERP tables created" || fail "expected $ERP_TABLE_TOTAL ERP tables, found $erp"
   local want_base
   want_base=$(baseline_base_tables)
   [ "$base" = "$want_base" ] && pass "$base pre-existing tables created" || fail "expected $want_base pre-existing tables, found $base"
   local fks missing
   fks=$(scalar "select count(*) from information_schema.table_constraints tc join information_schema.tables t on t.table_name=tc.table_name and t.table_schema=tc.table_schema where tc.constraint_type='FOREIGN KEY' and t.table_schema='public' and (t.table_name like 'Erp%' or t.table_name like 'Msg%');")
-  [ "$fks" -ge 38 ] && pass "$fks foreign keys on ERP tables" || fail "expected at least 38 ERP foreign keys, found $fks"
-  missing=$(psql_run -tAc "select count(*) from (select v as t from (values $(grep -o 'CREATE TABLE IF NOT EXISTS "[A-Za-z]*"' "$MIGRATIONS_DIR/$ERP_MIGRATION/migration.sql" | sed 's/.*"\([A-Za-z]*\)"/('\''\1'\'')/' | paste -sd,) ) x(v) where v not in (select table_name from information_schema.tables where table_schema='public'));")
+  [ "$fks" -ge "$ERP_TABLE_TOTAL" ] && pass "$fks foreign keys on ERP tables" || fail "expected at least $ERP_TABLE_TOTAL ERP foreign keys, found $fks"
+  local named="" migration name
+  for migration in "${ERP_MIGRATIONS[@]}"; do
+    for name in $(grep -o 'CREATE TABLE IF NOT EXISTS "[A-Za-z]*"' "$MIGRATIONS_DIR/$migration/migration.sql" | sed 's/.*"\([A-Za-z]*\)"/\1/'); do
+      named="$named,('$name')"
+    done
+  done
+  named=${named#,}
+  missing=$(psql_run -tAc "select count(*) from (select v as t from (values $named) x(v) where v not in (select table_name from information_schema.tables where table_schema='public'));")
   [ "$missing" = "0" ] && pass "every table named in the ERP migration exists" || fail "$missing table(s) named in the ERP migration are missing"
   # The migration must be re-runnable: a partial failure in a hosted runner must not block a retry.
-  if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$ERP_MIGRATION/migration.sql" >/dev/null 2>&1; then
-    pass "ERP migration is idempotent (re-ran over itself without error)"
-  else
-    fail "ERP migration is not re-runnable"
-  fi
+  local idempotent=1
+  for migration in "${ERP_MIGRATIONS[@]}"; do
+    "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$migration/migration.sql" >/dev/null 2>&1 || idempotent=0
+  done
+  [ "$idempotent" = "1" ] && pass "ERP migrations are idempotent (re-ran over themselves without error)" || fail "an ERP migration is not re-runnable"
 }
 
 # ── Scenario 2: supported upgrade path ───────────────────────────────────────────────────────────
@@ -184,12 +196,16 @@ upgrade_path() {
   local users businesses products
   users=$(scalar 'select count(*) from "User"'); businesses=$(scalar 'select count(*) from "Business"'); products=$(scalar 'select count(*) from "PosProduct"')
   [ "$users$businesses$products" = "111" ] && pass "pre-upgrade POS rows seeded (1 user, 1 business, 1 product)" || fail "seed counts wrong: $users/$businesses/$products"
-  if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$ERP_MIGRATION/migration.sql" >/dev/null; then
-    pass "ERP migration applied over a populated previous release"
+  local migration apply_failed=0
+  for migration in "${ERP_MIGRATIONS[@]}"; do
+    "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$migration/migration.sql" >/dev/null || apply_failed=1
+  done
+  if [ "$apply_failed" = "0" ]; then
+    pass "ERP migrations applied over a populated previous release"
   else
-    fail "ERP migration failed over a populated previous release"; return
+    fail "an ERP migration failed over a populated previous release"; return
   fi
-  [ "$(erp_table_count)" = "38" ] && pass "38 ERP tables added by the upgrade" || fail "ERP table count after upgrade is $(erp_table_count)"
+  [ "$(erp_table_count)" = "$ERP_TABLE_TOTAL" ] && pass "$ERP_TABLE_TOTAL ERP tables added by the upgrade" || fail "ERP table count after upgrade is $(erp_table_count)"
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business survived the upgrade" || fail "existing business was lost"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "existing POS product survived the upgrade" || fail "existing POS product was lost"
   [ "$(scalar 'select count(*) from "User"')" = "1" ] && pass "no rows were created or duplicated by the migration" || fail "row counts changed during the migration"
@@ -212,7 +228,7 @@ rollback_and_recovery() {
   while IFS= read -r t; do
     [ -n "$t" ] && dump_args+=(-t "\"$t\"")
   done < <("$PSQL" "$DB_URL" -tAc "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and (table_name like 'Erp%' or table_name like 'Msg%') order by table_name;")
-  if [ "${#dump_args[@]}" -lt 76 ]; then # 38 tables * 2 arguments each
+  if [ "${#dump_args[@]}" -lt $((ERP_TABLE_TOTAL * 2)) ]; then # 2 arguments per table (-t and name)
     fail "could not enumerate the ERP tables for export (${#dump_args[@]} arguments)"; return
   fi
   if "$PG_DUMP" "$DB_URL" --format=custom --data-only "${dump_args[@]}" --file="$dump" >/dev/null 2>&1; then
@@ -239,7 +255,7 @@ rollback_and_recovery() {
   [ "$live" = "1" ] && [ "$live" = "$restored" ] && pass "restored ERP row counts match the live database" || fail "restored counts differ (live=$live restored=$restored)"
 
   # Drop in the documented order: children before parents, RESTRICT so a wrong order fails loudly.
-  local tables=( ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
+  local tables=( ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
   local dropped=0 t
   for t in "${tables[@]}"; do
     if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -c "DROP TABLE \"$t\";" >/dev/null 2>&1; then
@@ -248,7 +264,7 @@ rollback_and_recovery() {
       fail "could not drop $t in the documented order"
     fi
   done
-  [ "$dropped" = "38" ] && pass "all 38 ERP tables dropped in documented reverse-dependency order" || fail "dropped $dropped of 38 ERP tables"
+  [ "$dropped" = "$ERP_TABLE_TOTAL" ] && pass "all $ERP_TABLE_TOTAL ERP tables dropped in documented reverse-dependency order" || fail "dropped $dropped of $ERP_TABLE_TOTAL ERP tables"
   [ "$(erp_table_count)" = "0" ] && pass "no ERP tables remain after rollback" || fail "ERP tables remain after rollback"
   local want_base
   want_base=$(baseline_base_tables)
@@ -256,12 +272,16 @@ rollback_and_recovery() {
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "POS rows survived the rollback" || fail "POS rows were lost during rollback"
 
   # Recovery: re-apply the ERP migration on the rolled-back database.
-  if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$ERP_MIGRATION/migration.sql" >/dev/null 2>&1; then
-    pass "ERP migration re-applied after rollback (recovery path)"
+  local recovered=1
+  for migration in "${ERP_MIGRATIONS[@]}"; do
+    "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$migration/migration.sql" >/dev/null 2>&1 || recovered=0
+  done
+  if [ "$recovered" = "1" ]; then
+    pass "ERP migrations re-applied after rollback (recovery path)"
   else
     fail "ERP migration could not be re-applied after rollback"
   fi
-  [ "$(erp_table_count)" = "38" ] && pass "38 ERP tables present after recovery" || fail "ERP table count after recovery is $(erp_table_count)"
+  [ "$(erp_table_count)" = "$ERP_TABLE_TOTAL" ] && pass "$ERP_TABLE_TOTAL ERP tables present after recovery" || fail "ERP table count after recovery is $(erp_table_count)"
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business intact after recovery" || fail "existing business lost after recovery"
 
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true

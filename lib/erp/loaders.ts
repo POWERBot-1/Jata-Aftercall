@@ -276,3 +276,40 @@ export async function loadErpBusinesses(userId: string, isAdmin: boolean) {
     subscription: subscriptions.find((subscription: any) => subscription.businessId === business.id) ?? null,
   }));
 }
+
+/**
+ * The task board. Reads only this tenant's tasks and resolves assignee names from the business's
+ * own owner and members — never from a global user list, which would leak other tenants' people.
+ */
+export async function loadTaskBoard(businessId: string) {
+  const [owner, members, configuration, tasks] = await Promise.all([
+    safe(prisma.business.findUnique({ where: { id: businessId }, select: { ownerId: true, owner: { select: { id: true, name: true, email: true } } } }), null),
+    safe(prisma.businessMember.findMany({ where: { businessId }, select: { userId: true, role: true, user: { select: { id: true, name: true, email: true } } } }), []),
+    safe(prisma.erpConfiguration.findUnique({ where: { businessId }, select: { teamRolesJson: true } }), null),
+    safe(prisma.erpTask.findMany({ where: { businessId }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }], take: 200 }), []),
+  ]);
+
+  const roles: Record<string, string> = (() => {
+    try {
+      const parsed = JSON.parse(String(configuration?.teamRolesJson ?? "{}"));
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const assignees: Array<{ id: string; name: string; role: string }> = [];
+  const seen = new Set<string>();
+  const push = (id: string | null | undefined, name: string | null | undefined, email: string | null | undefined, role: string) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    assignees.push({ id, name: String(name || email || "Team member"), role });
+  };
+  push(owner?.owner?.id ?? owner?.ownerId, owner?.owner?.name, owner?.owner?.email, "OWNER");
+  for (const member of members as any[]) {
+    push(member.userId ?? member.user?.id, member.user?.name, member.user?.email, String(roles[member.userId] ?? member.role ?? "STAFF").toUpperCase());
+  }
+
+  // Permission is decided by the caller from the workspace role; the loader never asserts it.
+  return { tasks: tasks as any[], assignees };
+}

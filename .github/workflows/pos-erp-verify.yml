@@ -142,10 +142,10 @@ jobs:
           fi
           printf '%s' "$plain" | grep -q 'RESULT: PASS'
 
-      - name: ERP PostgreSQL suite
+      - name: ERP PostgreSQL suites (POS/ERP core + tasks)
         run: |
           set -o pipefail
-          npx vitest run tests/integration/erp-pro-postgres.test.ts 2>&1 | tee ci-logs/erp-postgres.log
+          npm run test:db:erp 2>&1 | tee ci-logs/erp-postgres.log
           plain=$(sed -e 's/\x1b\[[0-9;]*m//g' ci-logs/erp-postgres.log)
           # A skipped database suite is not a passing one.
           if printf '%s' "$plain" | grep -qE '[1-9][0-9]* skipped'; then

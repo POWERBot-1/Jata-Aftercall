@@ -571,7 +571,8 @@ function createFallbackPrisma(): any {
     // Password-reset tokens (main's `lib/password-reset.ts`). Reads answer empty and writes throw,
     // so an offline build cannot report a reset link that was never stored.
     passwordResetToken: emptyModel(),
-    // POS / ERP - PRO and messaging models (38). Same contract as the rest of the stub.
+    // POS / ERP - PRO and messaging models. Same contract as the rest of the stub.
+    erpTask: emptyModel(),
     erpConfiguration: emptyModel(),
     erpSubscription: emptyModel(),
     erpEntitlement: emptyModel(),

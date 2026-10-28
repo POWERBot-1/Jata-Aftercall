@@ -156,6 +156,7 @@ model Business {
   erpStoreOrders          ErpStoreOrder[]
   erpStoreOrderItems      ErpStoreOrderItem[]
   erpNotifications        ErpNotification[]
+  erpTasks                ErpTask[]
   erpAutomationRules      ErpAutomationRule[]
   erpAutomationRuns       ErpAutomationRun[]
   erpKycDocuments         ErpKycDocument[]
@@ -2871,6 +2872,39 @@ model ErpNotification {
 
   @@index([businessId, createdAt])
   @@index([businessId, readAt])
+}
+
+/// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance
+/// renewals, automation, approvals follow-up, the dashboard inbox), so it is one tenant-scoped table
+/// with an owner, a due date and an audited state transition — not a per-feature to-do list.
+model ErpTask {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title          String
+  detail         String?   @db.Text
+  status         String    @default("OPEN") // OPEN | IN_PROGRESS | DONE | CANCELLED
+  priority       String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  assignedTo     String?
+  assignedRole   String?
+  createdBy      String?
+  completedBy    String?
+  dueAt          DateTime?
+  completedAt    DateTime?
+  /// Where the task came from: MANUAL | AUTOMATION | ORDER | INVOICE | COMPLIANCE.
+  sourceType     String?
+  sourceId       String?
+  /// Relative link that opens the record the task is about.
+  href           String?
+  /// Set when an automation action raised the task, so a replayed event cannot duplicate it.
+  idempotencyKey String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, dueAt])
+  @@index([businessId, assignedTo, status])
+  @@index([businessId, createdAt])
 }
 
 // ── Automation ──────────────────────────────────────────────────────────────────────────────
