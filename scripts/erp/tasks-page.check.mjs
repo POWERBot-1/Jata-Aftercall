@@ -96,6 +96,13 @@ function looksLikeBoard(html) {
   return html.includes("Tasks and work");
 }
 
+/** The ERP layout renders this card for a workspace the session may not open. */
+function refusalShown(html) {
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  // React escapes the apostrophe, so match the stable part of the sentence.
+  return text.includes("open this workspace") || text.includes("don&#x27;t have access") || text.includes("don't have access");
+}
+
 async function main() {
   const owner = await prisma.user.create({
     data: { email: `taskcheck-owner-${runId}@example.test`, name: `Owner ${runId}`, passwordHash: "x" },
@@ -196,7 +203,7 @@ async function main() {
   check("upcoming work is shown", ownerPage.body.includes(mine.open.title));
   check("recently finished work is shown", ownerPage.body.includes(mine.done.title));
   check("owner sees the add-task form", ownerPage.body.includes("Add a task") && ownerPage.body.includes("Add task"));
-  check("owner sees the completion control", ownerPage.body.includes(">Done<"));
+  check("owner sees the completion control", ownerPage.body.includes(">Done</button>"));
   check("overdue bucket is labelled", ownerPage.body.includes("Overdue"));
 
   // 2. Another tenant's task must not appear anywhere in this tenant's HTML.
@@ -208,13 +215,29 @@ async function main() {
   check("viewer receives the board", viewerPage.status === 200 && looksLikeBoard(viewerPage.body), `HTTP ${viewerPage.status}`);
   check("viewer still sees the work", viewerPage.body.includes(mine.open.title));
   check("viewer sees no add-task form", !viewerPage.body.includes("Add a task"));
-  check("viewer sees no completion control", !viewerPage.body.includes(">Done<"));
+  // The word "Done" also appears as the status badge of a finished task, so this asserts on the
+  // button element itself, not on a bare word that a read-only viewer legitimately sees.
+  check("viewer sees no completion control", !viewerPage.body.includes(">Done</button>"));
   check("viewer is told why", viewerPage.body.includes("only a manager, finance lead or staff member"));
 
-  // 4. Cross-tenant navigation is refused before any row is read.
+  // 4. Cross-tenant navigation must disclose nothing.
+  //
+  // The security contract is "no foreign record reaches this response, and the response is an
+  // explicit refusal" — not an arbitrary status code. The ERP layout deliberately renders a refusal
+  // panel for a workspace the session may not open, and a page that throws is handled by Next's
+  // error boundary, so requiring `status >= 400` would encode one implementation detail and would
+  // also pass if the app returned a 500 that happened to include foreign data. (E14)
   const crossTenant = await getHtml(`/dashboard/erp/${otherBusiness.id}/tasks`, ownerCookie);
-  check("owner is refused another tenant's board", crossTenant.status >= 400, `HTTP ${crossTenant.status}`);
+  const refusal = refusalShown(crossTenant.body);
+  const clientError = crossTenant.status >= 400 && crossTenant.status < 500;
+  check(
+    "owner is refused another tenant's board",
+    (clientError || refusal) && !looksLikeBoard(crossTenant.body),
+    `HTTP ${crossTenant.status}, refusal=${refusal}, boardRendered=${looksLikeBoard(crossTenant.body)}`,
+  );
   check("the refused page shows no foreign work", !crossTenant.body.includes(mine.theirs.title));
+  const crossTenantBody = crossTenant.body.replaceAll(encodeURIComponent(otherBusiness.id), " ").replaceAll(otherBusiness.id, " ");
+  check("the refused page leaks no foreign business id", !crossTenantBody.includes(otherBusiness.id));
 
   // 5. Signed out means no board at all.
   const anonymous = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });

@@ -168,6 +168,54 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee /tmp/step-build.log
 
+      # E14: the ERP pages over real HTTP. The unit suites prove the domain rules and the PostgreSQL
+      # suites prove the SQL, but neither proves that a signed-in person receives a working page, that
+      # a read-only role is refused the write controls, or that another tenant's rows never reach this
+      # tenant's HTML. This starts the production build above against the same disposable database.
+      # ERP_PRO_ENABLED is the product's own switch; without it every ERP route answers the 503
+      # "not switched on" refusal and the check would be testing that refusal instead of the pages.
+      - name: ERP pages over real HTTP (authorisation, tenant isolation, refusal contract)
+        run: |
+          set -o pipefail
+          ERP_PRO_ENABLED=true AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" \
+            npm run test:erp:pages 2>&1 | tee /tmp/step-erp-pages.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-erp-pages.log)
+          # BLOCKED means the environment could not run the check. That is not a pass.
+          if printf '%s' "$plain" | grep -q '^RESULT: BLOCKED'; then
+            echo "The ERP page check could not run in this environment." >&2
+            exit 1
+          fi
+          printf '%s' "$plain" | grep -q '^RESULT: PASS' || { echo "The ERP page check failed." >&2; exit 1; }
+
+      # The older, narrower task-board check keeps its extra assertions (work buckets, finished
+      # pagination). It expects a server, so this step starts the production build on a spare port and
+      # stops it afterwards; the ERP page check above starts its own server on a free port.
+      - name: ERP task board over real HTTP (role and refusal contract)
+        run: |
+          set -o pipefail
+          ERP_PRO_ENABLED=true AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" \
+            NEXT_TELEMETRY_DISABLED=1 npx next start -H 127.0.0.1 -p 3100 > /tmp/step-erp-tasks-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl -sf -o /dev/null "http://127.0.0.1:3100/login"; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "The ERP task board server did not become ready. Check NOT RUN, not passed." >&2
+            tail -20 /tmp/step-erp-tasks-server.log >&2 || true
+            exit 1
+          fi
+          BASE_URL=http://127.0.0.1:3100 AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" \
+            npm run test:erp:tasks-page 2>&1 | tee /tmp/step-erp-tasks-page.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-erp-tasks-page.log)
+          if printf '%s' "$plain" | grep -qE 'SKIP|BLOCKED'; then
+            echo "The ERP task board check did not run." >&2
+            exit 1
+          fi
+          printf '%s' "$plain" | grep -q '^RESULT: PASS' || { echo "The ERP task board check failed." >&2; exit 1; }
+
       - name: Production harness isolation and bundle evidence
         run: |
           set -o pipefail

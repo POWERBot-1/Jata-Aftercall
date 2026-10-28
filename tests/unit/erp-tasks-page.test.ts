@@ -165,6 +165,10 @@ describe("tasks board", () => {
     expect(html).toContain("No open work");
     expect(html).toContain("Nothing has been completed yet");
     expect(html).not.toContain("<ul class=\"erp-list\">");
+    // Found in the 768px visual capture (E4): the sub-heading and the empty-state paragraph both
+    // printed "Finished work stays here as evidence of who did what and when", so the sentence
+    // appeared twice in a row. One place only.
+    expect(html.split("Finished work stays here as evidence").length - 1).toBe(1);
   });
 
   it("surfaces the outcome of a server action as a notice", async () => {

@@ -113,8 +113,11 @@ export function navigationFor(input: {
     .map((module) => ({ ...module, href: moduleHref(module, input.businessId), active: module.key === input.activeKey }));
 
   const groupOrder: Array<{ key: string; label: string; modules: string[] }> = [
-    { key: "operate", label: "Run the business", modules: ["setup", "sell", "orders", "products", "inventory", "suppliers", "branches", "staff"] },
-    { key: "money", label: "Money", modules: ["invoices", "payments", "debt", "accounting", "expenses", "reports"] },
+    // Every READY module with a page must appear in exactly one group, or it is reachable only by
+    // typing its URL. tasks/notifications/requisitions/procurement were missing here and in
+    // CORE_MODULES, which hid them from the sidebar entirely (E14).
+    { key: "operate", label: "Run the business", modules: ["setup", "tasks", "sell", "orders", "products", "inventory", "suppliers", "requisitions", "procurement", "branches", "staff", "notifications"] },
+    { key: "money", label: "Money", modules: ["invoices", "payments", "debt", "accounting", "expenses", "approvals", "reports"] },
     { key: "reach", label: "Reach customers", modules: ["messaging", "sender", "customers", "store", "automation"] },
     { key: "compliance", label: "Compliance", modules: ["compliance", "audit"] },
   ];

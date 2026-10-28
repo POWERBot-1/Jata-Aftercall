@@ -26,7 +26,13 @@ export type IndustryPack = {
   unsupported: string[];
 };
 
-const CORE_MODULES = ["home", "sell", "products", "inventory", "customers", "invoices", "payments", "expenses", "accounting", "messaging", "sender", "automation", "reports", "store", "compliance", "settings"];
+// Modules every industry pack carries. Tasks, notifications, approvals, requisitions, procurement,
+// setup and orders are listed because they are universal workflow, not pack-specific capability: a
+// shop, a workshop and a clinic all own work, approve spending, buy stock and take store orders, and
+// all of them go through onboarding. Omission from this list removes a module from `allowed` in
+// navigationFor(), which is how five READY modules ended up unreachable from the sidebar in every
+// pack (found by scripts/erp/erp-pages.check.mjs; E14). Add new core modules here.
+const CORE_MODULES = ["home", "sell", "products", "inventory", "customers", "invoices", "payments", "expenses", "accounting", "messaging", "sender", "automation", "reports", "store", "compliance", "settings", "tasks", "notifications", "approvals", "requisitions", "procurement", "setup", "orders"];
 
 export const INDUSTRY_PACKS: IndustryPack[] = [
   {

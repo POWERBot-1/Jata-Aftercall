@@ -191,7 +191,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           ) : null}
         </div>
         {board.finished.length === 0 ? (
-          <p className="erp-muted erp-small">Nothing has been completed yet. Finished work stays here as evidence of who did what and when.</p>
+          <p className="erp-muted erp-small">Nothing has been completed yet.</p>
         ) : (
           <ul className="erp-list">{board.finished.map(renderTask)}</ul>
         )}

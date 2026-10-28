@@ -18,6 +18,8 @@ import { approvalDecision, ERP_APPROVAL_LIMITS_CENTS, ERP_PERMISSIONS, erpPermis
 import { assertAuthoritativeAcceptance, complianceCentreSummary, etimsReadiness, TAX_RULE_REGISTRY_VERSION } from "@/lib/erp/compliance";
 import { INDUSTRY_PACKS, industryPack } from "@/lib/erp/industryPacks";
 import { ERP_MODULES, listImplementedModules, navigationFor } from "@/lib/erp/navigation";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 describe("plan", () => {
   it("is priced at KES 3,000 for 30 days with a 3-day grace window", () => {
@@ -212,6 +214,32 @@ describe("industry packs and navigation", () => {
     const messaging = nav.primary.find((item) => item.key === "messaging");
     expect(messaging?.active).toBe(true);
     expect(messaging?.href).toBe("/dashboard/erp/bizA/messaging");
+  });
+
+  // E14: a READY module whose page exists but which no navigation group lists is reachable only by
+  // typing its URL. tasks, notifications, approvals, requisitions and procurement were in exactly
+  // that state — absent from CORE_MODULES and from every group — so the sidebar never linked them,
+  // and the two page checks above are the evidence that the pages themselves worked. This asserts
+  // the general property (page on disk ⇒ linked in navigation) for every industry pack, so a future
+  // module inherits it instead of repeating the mistake.
+  it("links every READY module that actually has a page, for every pack", () => {
+    const erpRoot = path.join(process.cwd(), "app/dashboard/erp/[businessId]");
+    const pageModules = ERP_MODULES.filter((module) => {
+      const segment = module.path.replace(/^\//, "");
+      if (!segment) return false; // `home` is the workspace root, reached from `primary`
+      return existsSync(path.join(erpRoot, segment, "page.tsx"));
+    });
+    expect(pageModules.length).toBeGreaterThan(10);
+    // Derived from the real pack list: hard-coding keys here once silently tested the retail fallback
+    // twenty times because unknown keys resolve to it.
+    const packKeys = INDUSTRY_PACKS.map((pack) => pack.key);
+    expect(packKeys.length).toBeGreaterThan(10);
+    for (const packKey of packKeys) {
+      const nav = navigationFor({ businessId: "bizA", role: "OWNER", packKey });
+      const linked = new Set([...nav.primary, ...nav.groups.flatMap((group) => group.items), ...nav.bottom].map((item) => item.key));
+      const unlinked = pageModules.map((module) => module.key).filter((key) => !linked.has(key));
+      expect(unlinked, `pack ${packKey} has pages nobody can reach`).toEqual([]);
+    }
   });
 
   it("hides modules the deployment switched off", () => {

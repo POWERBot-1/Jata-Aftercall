@@ -131,6 +131,37 @@ jobs:
           fi
           exit "$capture_exit"
 
+      # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
+      # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN
+      # production server on a free port and seeds and removes its own rows, so it does not touch the
+      # server above. A BLOCKED result (no Chrome, no database) fails the job — an environment that
+      # cannot take the images is not the same as images that passed.
+      - name: ERP screens at six viewports, real Chrome (overflow, headings, HTTP 200)
+        run: |
+          set -o pipefail
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing - ERP visual capture NOT RUN, not passed." >&2
+            exit 2
+          fi
+          ERP_PRO_ENABLED=true AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" \
+            SHOT_DIR=./erp-visual-shots npm run test:erp:visual 2>&1 | tee /tmp/erp-visual.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/erp-visual.log)
+          if printf '%s' "$plain" | grep -q 'BLOCKED'; then
+            echo "The ERP visual check could not run in this environment." >&2
+            exit 1
+          fi
+          printf '%s' "$plain" | grep -q 'RESULT: PASS' || { echo "The ERP visual check failed." >&2; exit 1; }
+
+      - name: Upload ERP screenshot evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-visual-${{ github.event.pull_request.number || github.run_id }}
+          path: erp-visual-shots/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Show evidence summary in the Actions log
         if: always()
         run: |
