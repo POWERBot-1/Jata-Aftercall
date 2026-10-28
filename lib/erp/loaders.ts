@@ -15,6 +15,8 @@ import { parseStorefrontSettings } from "./storefront";
 import { walletSummary } from "../messaging/billing";
 import { listNotifications, notificationVisibleTo, unreadNotificationCount } from "./notifications";
 import { taskSummary } from "./tasks";
+import { approvalSummary, listApprovalRequests } from "./approvals";
+import { hasErpPermission } from "./access";
 
 async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
@@ -380,7 +382,7 @@ export async function loadNotificationBadge(businessId: string, viewer: { userId
  * unread notices and the newest few notices. Every figure is a count of stored rows for this tenant.
  */
 export async function loadWorkDashboard(businessId: string, viewer: { userId: string; role: string }) {
-  const [mine, summary, unread, latest] = await Promise.all([
+  const [mine, summary, unread, latest, approvals] = await Promise.all([
     safe(
       prisma.erpTask.findMany({
         where: { businessId, assignedTo: viewer.userId, status: { in: ["OPEN", "IN_PROGRESS"] } },
@@ -400,6 +402,10 @@ export async function loadWorkDashboard(businessId: string, viewer: { userId: st
       }),
       [],
     ),
+    approvalSummary(prisma, businessId, {
+      viewer,
+      scope: hasErpPermission(viewer.role as any, "VIEW_FINANCE") ? "all" : "mine",
+    }).catch(() => ({ pending: 0, approved: 0, rejected: 0 })),
   ]);
 
   const visible = (latest as any[]).filter((row) => notificationVisibleTo(row, viewer)).slice(0, 5);
@@ -411,10 +417,34 @@ export async function loadWorkDashboard(businessId: string, viewer: { userId: st
       overdue: Boolean(task.dueAt && new Date(task.dueAt).getTime() < nowMs),
     })),
     summary,
+    approvals,
     unread,
     latest: visible.map((row) => ({
       ...row,
       read: (Array.isArray(row.reads) && row.reads.length > 0) || (!row.recipientId && Boolean(row.readAt)),
     })),
+  };
+}
+
+/**
+ * The approval queue.
+ *
+ * Who sees what is decided here, on the server: a finance-capable role sees every request in the
+ * tenant, everybody else sees only what they asked for or what was addressed to them by name. The
+ * amount is part of the row, so this scoping is a data-protection control, not a display preference.
+ */
+export async function loadApprovalCentre(businessId: string, viewer: { userId: string; role: string }) {
+  const scope: "all" | "mine" = hasErpPermission(viewer.role as any, "VIEW_FINANCE") ? "all" : "mine";
+  const [requests, summary] = await Promise.all([
+    listApprovalRequests(prisma, { businessId, decider: viewer, limit: 100, scope }).catch(() => []),
+    approvalSummary(prisma, businessId, { viewer, scope }).catch(() => ({ pending: 0, approved: 0, rejected: 0 })),
+  ]);
+  return {
+    requests: requests as any[],
+    pending: (requests as any[]).filter((row) => row.status === "PENDING"),
+    decided: (requests as any[]).filter((row) => row.status !== "PENDING"),
+    summary,
+    scope,
+    canApprove: hasErpPermission(viewer.role as any, "APPROVE_SPEND"),
   };
 }

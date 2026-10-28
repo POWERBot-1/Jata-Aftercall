@@ -596,6 +596,8 @@ function createFallbackPrisma(): any {
     erpStoreOrderItem: emptyModel(),
     erpNotification: emptyModel(),
     erpNotificationRead: emptyModel(),
+    erpApprovalRequest: emptyModel(),
+    erpApprovalEvent: emptyModel(),
     erpAutomationRule: emptyModel(),
     erpAutomationRun: emptyModel(),
     erpKycDocument: emptyModel(),

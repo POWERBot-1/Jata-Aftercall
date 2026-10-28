@@ -149,10 +149,10 @@ export default async function ErpHomePage({ params }: { params: Promise<{ busine
               <Kpi label="Open tasks" value={String(work.summary.open)} hint={`${work.summary.unassigned} unassigned`} />
               <Kpi label="Overdue" value={String(work.summary.overdue)} hint={work.summary.overdue ? "Needs attention today" : "Nothing overdue"} />
               <Kpi label="Unread notices" value={String(work.unread)} hint="For you" />
-              <Kpi label="Waiting approval" value="—" hint="Approvals are not built yet" />
+              <Kpi label="Waiting approval" value={String(work.approvals?.pending ?? 0)} hint={work.approvals?.pending ? "Decisions needed" : "Nothing waiting"} />
             </dl>
             <p className="erp-small erp-muted" style={{ marginBottom: 0 }}>
-              <Link className="erp-strong" href={`${base}/tasks?assignee=me`}>My work</Link> · <Link className="erp-strong" href={`${base}/tasks`}>All open work</Link>
+              <Link className="erp-strong" href={`${base}/tasks?assignee=me`}>My work</Link> · <Link className="erp-strong" href={`${base}/approvals`}>Approvals</Link>
             </p>
           </div>
 

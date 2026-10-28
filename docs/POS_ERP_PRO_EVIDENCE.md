@@ -46,14 +46,14 @@ control is only reasoned about, it is `NOT TESTED`.
 
 | Area | Files |
 | --- | --- |
-| Domain libraries | `lib/erp/*.ts` (24 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
+| Domain libraries | `lib/erp/*.ts` (25 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
 | Messaging engine | `lib/messaging/*.ts` (10 modules) — segments, consent, templates, senderId, providers, billing, campaigns, pipeline, testSend, import |
-| Schema | 40 new models in `prisma/schema.prisma`; three additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`, `20261029000000_erp_notifications`) |
-| Screens | `app/dashboard/erp/**` (18 pages, including `/tasks` and `/notifications`), `app/store/**` (2 public pages) |
+| Schema | 42 new models in `prisma/schema.prisma`; four additive migrations (`…_pos_erp_pro`, `…_erp_tasks`, `…_erp_notifications`, `…_erp_approvals`) |
+| Screens | `app/dashboard/erp/**` (19 pages, including `/tasks`, `/notifications` and `/approvals`), `app/store/**` (2 public pages) |
 | API | 7 route handlers (status, messaging preview, campaign dispatch, accounting, export, public order, provider webhook) |
 | Components | `components/erp/*` (4) |
-| Unit tests | 21 suites for this product, **354 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page) |
-| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (10) — **39 tests** against real PostgreSQL |
+| Unit tests | 23 suites for this product, **383 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page + 23 approvals-domain + 6 approvals-page) |
+| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (10), `erp-approvals-postgres` (10) — **49 tests** against real PostgreSQL |
 | Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh`, `scripts/erp/tasks-page.check.mjs` |
 | CI | `.github/workflows/pos-erp-verify.yml` (static / migrations / PostgreSQL gates) |
 | Docs | this report, `POS_ERP_PRO_MIGRATION_PLAN.md`, `POS_ERP_PRO_PROVIDER_COSTS.md`, `POS_ERP_PRO_SECURITY_REVIEW.md` |
@@ -285,6 +285,60 @@ npm run build                        # → [build] Build completed successfully
 | Deduplication, safe retries, auditable delivery failures | **PASS** | Unique key + race test; `NOTIFICATION_DELIVERY_FAILED` audit row asserted |
 | Dashboard widgets on persisted data with server-side permission enforcement | **PASS** | `/dashboard/erp/[businessId]` "What needs you today"; every figure is a stored-row count |
 | Responsive verification at 320×568 … 1366×768 | **NOT TESTED** | No browser ran in this sandbox (E4). The page uses the existing responsive primitives (`erp-grid-3`, `erp-row`, `erp-mobile-bar`) |
+
+---
+
+### 2.7 Approvals (2026-10-30, `e282a48`)
+
+Approval *limits* already existed (`ERP_APPROVAL_LIMITS_CENTS`), applied inline wherever money moves.
+That is a check, not a workflow: nobody could be asked, and "who approved this" could only be inferred
+from an audit row. This slice adds the request object the BOS directive asked for in module 7.
+
+```bash
+npx prisma generate --no-engine      # → 128 models (42 ERP/messaging)
+npx tsx scripts/erp/check-models.ts  # → 128 generated / 42 ERP / 94 referenced by app code — PASSED
+npx tsc --noEmit                     # → exit 0
+npm run lint                         # → 0 errors, 42 warnings (pre-existing files)
+
+npx vitest run tests/unit/erp-approvals.test.ts tests/unit/erp-approvals-page.test.ts
+# → 2 files, 29 tests passed
+#   23 domain: validation (short title, fractional cents, links that leave the workspace, a request
+#   addressed to a viewer), authority (role + amount + per-tenant threshold + addressed-person +
+#   terminal state + self-approval), idempotent raise, approve/reject with a required reason,
+#   withdraw by the requester only, cross-tenant refusal, queue scoping, summary counts, and the two
+#   notifications each transition raises.
+#    6 page: Approve/Reject on a decidable request, Withdraw on your own, nothing on a decided one,
+#   a role that may ask but not decide, the limit line, and action notices.
+
+PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npm run test:db:erp
+# → 4 files, 49 tests passed (16 ERP core + 13 tasks + 10 notifications + 10 approvals)
+#   The approval tests prove on real PostgreSQL: the request and its REQUESTED event are written
+#   together, a cross-tenant decision is refused and leaves the request pending, self-approval is
+#   refused, the manager limit and a per-tenant threshold both bite, two concurrent submissions with
+#   one key leave exactly one row, the event history is append-only (REQUESTED → REJECTED with the
+#   reason and the actor), withdrawal is restricted to the requester and to pending requests, and each
+#   transition raises one deduplicated notification.
+
+bash scripts/erp/migration-verify.sh all
+# → 24 checks PASS · 24 migrations · 42 ERP tables · 87 pre-existing tables
+
+npx vitest run                       # → 267 files passed | 19 skipped · 3493 passed | 170 skipped
+npm run build                        # → [build] Build completed successfully
+```
+
+| Requirement (directive module 7) | Status | Evidence |
+| --- | --- | --- |
+| Submit a request | **PASS** | `createApprovalRequest`; `/approvals` form; idempotency key |
+| Approve / reject with a reason | **PASS** | `decideApprovalRequest`; a rejection requires a note; audited |
+| Comment / record the decision note | **PASS** | `decisionNote` + `ErpApprovalEvent` (REQUESTED → APPROVED/REJECTED/WITHDRAWN) |
+| Withdraw | **PASS** | `withdrawApprovalRequest`, requester only, pending only |
+| Separation of duties | **PASS** | self-approval refused in the domain, asserted in unit and PostgreSQL suites |
+| Role limits and per-tenant thresholds | **PASS (limits) / PARTIAL (config)** | the limit is enforced; `thresholdCents` is honoured by the domain but there is no settings field to store a tenant-wide threshold yet |
+| Delegate | **MISSING** | not built |
+| Escalate | **MISSING** | not built: an unanswered request does not yet escalate to a higher role |
+| Notifications on request and decision | **PASS** | `APPROVAL_REQUESTED` / `APPROVAL_DECIDED`, deduplicated |
+| Server-side authorisation on every path | **PASS** | actions call `requireErpAccess` with `APPROVE_SPEND`; the domain re-derives authority per request |
+| Responsive verification | **NOT TESTED** | no browser in this sandbox (E4) |
 
 ---
 

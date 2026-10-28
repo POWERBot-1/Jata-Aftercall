@@ -1,8 +1,8 @@
 # POS / ERP - PRO — Business Operating System gap matrix
 
 **Directive:** "Unified Business Operating System" (owner, 2026-10-28) — ~20 integrated modules.
-**Head reviewed:** `e500664` for the original matrix; rows 9, 10 and the notification/dashboard rows
-were re-checked on `c57a3a3` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
+**Head reviewed:** `e500664` for the original matrix; rows 7, 9, 10 and the notification/dashboard rows
+were re-checked on `e282a48` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
 **Report date:** 2026-10-28.
 
 This document exists because the directive's scope is much wider than the software, and the gap
@@ -10,9 +10,9 @@ must be stated in the same units the directive uses. Each row was checked agains
 not against the roadmap. Labels: **PASS** (works and is proven), **PARTIAL** (a real subset works),
 **FAIL** (present but broken), **NOT TESTED** (code exists, no proof), **MISSING** (not built).
 
-The ERP Pro product is **additive** beside the existing Business POS: 40 new models
-(`Erp*` / `Msg*`), three additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
-`20261029000000_erp_notifications`),
+The ERP Pro product is **additive** beside the existing Business POS: 42 new models
+(`Erp*` / `Msg*`), four additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
+`20261029000000_erp_notifications`, `20261030000000_erp_approvals`),
 its own plan (`ERP_PRO`, KES 3,000/30 days). No existing POS model, order transition, payment path or
 migration was modified.
 
@@ -26,7 +26,7 @@ migration was modified.
 | 4 | Orders and fulfilment | **PARTIAL** | `ErpStoreOrder` + items, a validated state machine (`orderTransitions`, 16 PG tests), public tracking page with a token, `PosOrderEvent` audit. | Picking/packing/dispatch, proof of delivery, partial fulfilment, delivery assignment/fleet, profitability reporting. |
 | 5 | Procurement and suppliers | **MISSING** | `PosSupplier` exists (name, terms, credit, balance) and `PosPurchase`/`PosPurchaseItem`. | Requisitions, purchase orders with approval thresholds, goods-received notes, three-way matching, lead-time and price history, reorder proposals. |
 | 6 | Accounting and finance | **PASS (core)** | Real double-entry: `ErpAccount`, `ErpPeriod`, `ErpJournal`, `ErpJournalLine`, immutable posted journals, controlled reversals, period close/reopen, trial balance, invoices + payments + allocations, credit notes, expenses, supplier bills, Kenya tax rules. Proven by the PG suite. | Bank feed import and reconciliation matching; P&L/cash-flow *reports* beyond trial balance (data is there, report surface is thin); no statutory filing. |
-| 7 | Approvals and finance operations | **PARTIAL** | Role limits (`ERP_APPROVAL_LIMITS_CENTS`), approval-required paths on high-impact actions, immutable `ErpAuditEvent`, RBAC resolved server-side. | A general approval-request object with submit/approve/reject/comment/delegate/escalate, and per-tenant configurable thresholds. |
+| 7 | Approvals and finance operations | **PARTIAL** | `ErpApprovalRequest` + append-only `ErpApprovalEvent`: submit, approve, reject (with a required reason), withdraw by the requester, comment in the decision note. Authority is re-derived on the server from the role, the amount and a per-tenant threshold, so a crafted POST is refused where a legitimate click is accepted; self-approval is refused in the domain; `APPROVE_SPEND` gates the action and the queue is scoped per viewer (finance roles see everything, everybody else sees what they raised or what names them). Requests raise deduplicated `APPROVAL_REQUESTED` / `APPROVAL_DECIDED` notifications and audit rows. Proven by 23 domain + 6 render + 10 real-PostgreSQL tests. Role limits (`ERP_APPROVAL_LIMITS_CENTS`) and immutable `ErpAuditEvent` were already in place. | Delegate and escalate (an unanswered request does not yet rise to a higher role); a settings field to store a tenant-wide threshold (the domain honours one, nothing stores it); wiring into expenses/journals so those actions *must* raise a request rather than only being able to. |
 | 8 | Documents and records | **MISSING** | `ErpKycDocument` only (compliance evidence placeholder). The repo has a separate durable media stack for the POS/website. | Document register, versions, categories, expiry reminders, retention, access-controlled download, tenant-scoped storage paths for ERP records. |
 | 9 | Tasks, projects, workflow | **PARTIAL** | `ErpTask`: title, detail, `OPEN → IN_PROGRESS → DONE|CANCELLED` (terminal states enforced), priority, named assignee restricted to members of the tenant, role-based assignment, due date, source (`MANUAL`/`AUTOMATION`), idempotency key unique per tenant. `/tasks` board: overdue → open → recently finished, KPIs, create form, start/done/cancel controls gated by `MANAGE_TASKS`, cancel requires a reason. Server-side enforcement in the server actions; audit rows `TASK_CREATED` and `TASK_STATUS_CHANGED`. The automation engine's `CREATE_TASK` action now persists a real task instead of only previewing one. Proven by 22 domain tests, 9 render tests and 13 real-PostgreSQL tests. | Projects, checklist items, dependencies, recurrence, escalation/reminders, calendar view, per-project reporting, task inbox aggregation across modules. |
 | 10 | Messaging and communication | **PASS (engine), MISSING (inbox)** | SMS/WhatsApp campaign engine with consent, suppression, audiences, templates, sender-ID registry + events, wallet with reservations, idempotent dispatch, dry-run preview, per-recipient ledger. | Shared inbox / conversation threading, assignment, SLA escalation, email channel, internal announcements. |
@@ -54,7 +54,7 @@ in the UI as a working feature when the row above says otherwise.
 | Server-enforced permissions | Yes — `requireErpAccess` / `resolveErpRole` resolve the role from the database on every action; navigation hides links but is never the enforcement point. |
 | Role-aware UI | Yes (`lib/erp/navigation.ts`, per-page role gates). |
 | Unified global search / command launcher | **Missing.** Each module has its own filters. |
-| Notification centre / task inbox | **Partial** — the notification centre is live (`/notifications`, per-person read state, unread bell in the shell, dashboard widgets for own work, overdue counts and unread notices). What is missing: a single combined inbox that interleaves tasks and notices in one list, and notice types for approvals (the approvals object does not exist yet). |
+| Notification centre / task inbox | **Partial** — the notification centre is live (`/notifications`, per-person read state, unread bell in the shell, dashboard widgets for own work, overdue counts, unread notices and pending approvals), and approvals now raise `APPROVAL_REQUESTED` / `APPROVAL_DECIDED` notices. What is missing: one combined inbox that interleaves tasks and notices, and escalation notices for requests nobody answers. |
 | Location/branch scoping in ERP | **Partial** — POS has `PosBranch`; the ERP itself is business-wide, not branch-scoped. |
 | Brand identity | Original espresso / cream / amber, via `--jata-*` tokens only (`app/erp.css`). The withdrawn graphite/lime look is gone. |
 | Runtime | Next.js 16.4.2, React 18.3.1, Prisma 5.22.0, Neon PostgreSQL, Vercel — unchanged. |
@@ -80,11 +80,12 @@ The dependency order that actually works here, given what is built:
 1. **Task/notification spine** — *done in part (2026-10-28)*: `ErpTask` + assignment + due dates are
    wired to the automation engine and the sidebar, with tests. Remaining: escalation, reminders, and
    the notification surface that the dashboard inbox needs.
-2. **Approval request object** — submit/approve/reject/delegate with immutable history, replacing
-   the role-limit shortcut in module 7. Unblocks procurement (5) and high-impact automation.
+2. **Approval request object** — *done in part (2026-10-30)*: submit/approve/reject/withdraw with an
+   append-only history and server-side authority. Remaining: delegate and escalate. Unblocks
+   procurement (5) and high-impact automation.
 3. **Procurement slice** — requisition → PO → goods received → supplier bill, reusing
-   `PosSupplier`, `PosInventoryMovement` and the approval object. This is the MGAS bulk-order
-   scenario's missing half.
+   `PosSupplier`, `PosInventoryMovement` and the approval object (now built). This is the MGAS
+   bulk-order scenario's missing half.
 4. **Document register** — reuse the existing media stack; adds expiry reminders on top of (1).
 5. **Dashboard widgets + global search** — only after (1)–(4) give them real data.
 6. **ERP AI assistant** — last, because it must read from a schema whose semantics are settled.
@@ -105,6 +106,9 @@ automation `CREATE_TASK` action rewritten to persist (22 domain + 9 render + 13 
 `ErpNotification`, `lib/erp/notifications.ts`, the `/notifications` centre, the shell unread bell, the
 dashboard "What needs you today" widgets, task-assignment and daily-overdue notices, and paginated
 finished work on the board (23 domain + 8 render + 10 PostgreSQL tests).
+`e282a48` added approvals: `ErpApprovalRequest` + `ErpApprovalEvent`, the `APPROVE_SPEND`
+permission, `lib/erp/approvals.ts`, the `/approvals` screen, request/decision notifications and the
+dashboard's pending-approval figure (23 domain + 6 render + 10 PostgreSQL tests).
 
 **Nothing else in section 1 moved.** Modules 5, 8, 11, 12, 13 and 17 are still MISSING; no
 placeholder screen was created for any of them, and no capability above is claimed as working

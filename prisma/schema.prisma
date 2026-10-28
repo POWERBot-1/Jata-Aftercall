@@ -157,6 +157,8 @@ model Business {
   erpStoreOrderItems      ErpStoreOrderItem[]
   erpNotifications        ErpNotification[]
   erpNotificationReads    ErpNotificationRead[]
+  erpApprovalRequests     ErpApprovalRequest[]
+  erpApprovalEvents       ErpApprovalEvent[]
   erpTasks                ErpTask[]
   erpAutomationRules      ErpAutomationRule[]
   erpAutomationRuns       ErpAutomationRun[]
@@ -2911,6 +2913,66 @@ model ErpNotificationRead {
 
   @@unique([notificationId, userId])
   @@index([businessId, userId, readAt])
+}
+
+/// A request for permission to do something consequential: commit spend, raise a purchase order, post
+/// a journal, give a discount. One row per request, with an append-only event list, so "who asked, who
+/// decided, when, and why" is a fact rather than an inference from a status column.
+///
+/// The authority to decide is never stored as a boolean. It is derived at decision time from the
+/// decider's role, the amount, the per-tenant threshold and separation of duties (see `lib/erp/access.ts`).
+model ErpApprovalRequest {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind          String   // SPEND | PURCHASE | JOURNAL | DISCOUNT | CAMPAIGN | OTHER
+  title         String
+  detail        String?  @db.Text
+  /// Integer cents, like every other money column. Zero for requests that have no amount.
+  amountCents   Int      @default(0)
+  currencyCode  String   @default("KES")
+  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED | WITHDRAWN
+  requestedBy   String
+  requestedName String?
+  requestedRole String?
+  /// Defaults to the person who asked: nobody may approve their own request.
+  approverRole  String   @default("OWNER")
+  /// Set when the request is addressed to one named decider instead of a role.
+  approverId    String?
+  decidedBy     String?
+  decidedName   String?
+  decidedRole   String?
+  decidedAt     DateTime?
+  decisionNote  String?  @db.Text
+  sourceType    String?
+  sourceId      String?
+  href          String?
+  /// Unique per tenant so a retried automation or form cannot raise the same request twice.
+  idempotencyKey String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  events        ErpApprovalEvent[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, approverId, status])
+  @@index([businessId, requestedBy, status])
+}
+
+/// Append-only. Nothing updates or deletes an event; a correction is a new event.
+model ErpApprovalEvent {
+  id        String             @id @default(cuid())
+  businessId String
+  business  Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestId String
+  request   ErpApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  action    String             // REQUESTED | APPROVED | REJECTED | WITHDRAWN
+  actorId   String?
+  actorName String?
+  note      String?            @db.Text
+  createdAt DateTime           @default(now())
+
+  @@index([businessId, requestId, createdAt])
 }
 
 /// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance

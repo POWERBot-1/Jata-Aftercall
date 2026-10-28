@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   work: {
     myTasks: [] as any[],
     summary: { open: 0, overdue: 0, unassigned: 0 },
+    approvals: { pending: 0, approved: 0, rejected: 0 },
     unread: 0,
     latest: [] as any[],
   },
@@ -107,7 +108,7 @@ beforeEach(() => {
   state.unread = 0;
   state.stored = 0;
   state.notifications = [];
-  state.work = { myTasks: [], summary: { open: 0, overdue: 0, unassigned: 0 }, unread: 0, latest: [] };
+  state.work = { myTasks: [], summary: { open: 0, overdue: 0, unassigned: 0 }, approvals: { pending: 0, approved: 0, rejected: 0 }, unread: 0, latest: [] };
 });
 
 describe("notification centre", () => {
@@ -157,6 +158,7 @@ describe("dashboard work widgets", () => {
     state.work = {
       myTasks: [{ id: "t1", title: "Count the shelves", status: "OPEN", dueAt: new Date("2026-10-20T09:00:00.000Z"), overdue: true }],
       summary: { open: 4, overdue: 2, unassigned: 1 },
+      approvals: { pending: 0, approved: 0, rejected: 0 },
       unread: 3,
       latest: [notice()],
     };
@@ -170,15 +172,19 @@ describe("dashboard work widgets", () => {
   });
 
   it("links every widget to a screen that exists", async () => {
-    state.work = { myTasks: [], summary: { open: 0, overdue: 0, unassigned: 0 }, unread: 0, latest: [] };
+    state.work = { myTasks: [], summary: { open: 0, overdue: 0, unassigned: 0 }, approvals: { pending: 0, approved: 0, rejected: 0 }, unread: 0, latest: [] };
     const html = await renderHome();
     expect(html).toContain("/dashboard/erp/biz-1/tasks");
     expect(html).toContain("/dashboard/erp/biz-1/notifications");
+    expect(html).toContain("/dashboard/erp/biz-1/approvals");
     expect(html).toContain("My work");
   });
 
-  it("does not invent an approval count that has no data behind it", async () => {
+  it("shows the approval count the loader read, not a placeholder", async () => {
+    state.work = { myTasks: [], summary: { open: 0, overdue: 0, unassigned: 0 }, approvals: { pending: 3, approved: 1, rejected: 0 }, unread: 0, latest: [] };
     const html = await renderHome();
-    expect(html).toContain("Approvals are not built yet");
+    expect(html).toContain("Waiting approval");
+    expect(html).toContain(">3<");
+    expect(html).toContain("Decisions needed");
   });
 });

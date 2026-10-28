@@ -155,6 +155,7 @@ foreign key, and the rehearsal should fail then rather than the real rollback.
 Leaf tables first (they reference the headers):
 
 ```
+ErpApprovalEvent, ErpApprovalRequest,
 ErpNotificationRead,
 ErpTask, ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
 MsgCampaignRecipient, MsgMessageEvent, MsgSenderIdEvent, MsgConsentRecord, MsgLedgerEntry,
@@ -166,8 +167,20 @@ ErpSequence, ErpIdempotencyRecord, ErpAuditEvent, ErpEntitlement, ErpSubscriptio
 ErpConfiguration
 ```
 
-`ErpNotificationRead` is first because it references `ErpNotification`, so it must go before it.
+`ErpApprovalEvent` references `ErpApprovalRequest`, and `ErpNotificationRead` references
+`ErpNotification`, so each child goes before its parent.
 `ErpConfiguration` goes last: several tables read its feature flags and `teamRolesJson`.
+
+### Rollback of `20261030000000_erp_approvals` on its own
+
+```sql
+DROP TABLE IF EXISTS "ErpApprovalEvent";
+DROP TABLE IF EXISTS "ErpApprovalRequest";
+```
+
+Both tables hold approval request and decision history only. Removing them cannot lose POS, invoice,
+journal, task, notification or messaging data — but it does lose the record of who approved what, so
+export them first (`pg_dump -t '"ErpApproval*"' --format=custom`).
 
 ### Rollback of `20261029000000_erp_notifications` on its own
 

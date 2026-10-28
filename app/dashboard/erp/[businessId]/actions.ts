@@ -29,6 +29,7 @@ import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
 import { createTask, updateTask } from "@/lib/erp/tasks";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
+import { createApprovalRequest, decideApprovalRequest, withdrawApprovalRequest } from "@/lib/erp/approvals";
 import { formatDate, formatNumber } from "@/lib/format";
 
 class ActionError extends Error {}
@@ -1173,4 +1174,88 @@ export async function markAllNotificationsReadAction(form: FormData) {
   }
   if (error) back(base, "/notifications", { error, ...(filter === "unread" ? { filter } : {}) });
   back(base, "/notifications", { ok: ok ?? "All caught up.", ...(filter === "unread" ? { filter } : {}) });
+}
+
+/**
+ * Raise an approval request. Any member of the workspace may ask — that is the point of the object —
+ * and the amount is parsed from KES into integer cents before it reaches the domain.
+ */
+export async function requestApprovalAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "WORKSPACE_READ", { entitled: true });
+    const result = await createApprovalRequest(prisma, {
+      businessId,
+      kind: text(form, "kind", "SPEND"),
+      title: text(form, "title"),
+      detail: text(form, "detail") || null,
+      amountCents: text(form, "amount") ? cents(form, "amount") : 0,
+      approverRole: text(form, "approverRole", "OWNER"),
+      requestedBy: context.session.userId,
+      requestedName: context.session.name ?? context.session.email,
+      requestedRole: context.role,
+    });
+    ok = result.created ? "Sent for approval." : "That request already existed.";
+    revalidatePath(`${base}/approvals`);
+    revalidatePath(base);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/approvals", { error });
+  back(base, "/approvals", { ok: ok ?? "Sent for approval." });
+}
+
+/** Decide a request. Authority is re-derived on the server from the role, the amount and the limits. */
+export async function decideApprovalAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "APPROVE_SPEND", { entitled: true });
+    const requestId = text(form, "requestId");
+    if (!requestId) throw new ActionError("Choose a request.");
+    const decision = text(form, "decision").toUpperCase() === "REJECT" ? "REJECT" : "APPROVE";
+    const result = await decideApprovalRequest(prisma, {
+      businessId,
+      requestId,
+      decision,
+      note: text(form, "note") || null,
+      decider: { userId: context.session.userId, role: context.role, name: context.session.name ?? context.session.email },
+    });
+    ok = result.status === "APPROVED" ? "Approved and recorded." : "Rejected and recorded.";
+    revalidatePath(`${base}/approvals`);
+    revalidatePath(base);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/approvals", { error });
+  back(base, "/approvals", { ok: ok ?? "Recorded." });
+}
+
+/** Take back a request that has not been decided. Only the person who asked may do this. */
+export async function withdrawApprovalAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "WORKSPACE_READ", { entitled: true });
+    const requestId = text(form, "requestId");
+    if (!requestId) throw new ActionError("Choose a request.");
+    await withdrawApprovalRequest(prisma, {
+      businessId,
+      requestId,
+      requester: { userId: context.session.userId, name: context.session.name ?? context.session.email },
+    });
+    ok = "Request withdrawn.";
+    revalidatePath(`${base}/approvals`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/approvals", { error });
+  back(base, "/approvals", { ok: ok ?? "Request withdrawn." });
 }
