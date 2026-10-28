@@ -156,6 +156,7 @@ model Business {
   erpStoreOrders          ErpStoreOrder[]
   erpStoreOrderItems      ErpStoreOrderItem[]
   erpNotifications        ErpNotification[]
+  erpNotificationReads    ErpNotificationRead[]
   erpTasks                ErpTask[]
   erpAutomationRules      ErpAutomationRule[]
   erpAutomationRuns       ErpAutomationRun[]
@@ -2858,6 +2859,9 @@ model ErpStoreOrderItem {
   @@index([businessId])
 }
 
+/// An in-app notification. Broadcast rows name an audience role; a row with `recipientId` is for one
+/// person. Read state is per person in `ErpNotificationRead`, so one teammate opening a shared notice
+/// does not make it disappear for everybody else.
 model ErpNotification {
   id         String    @id @default(cuid())
   businessId String
@@ -2866,12 +2870,45 @@ model ErpNotification {
   title      String
   body       String    @db.Text
   href       String?
-  audienceRole String  @default("OWNER")
+  priority   String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  audienceRole String  @default("OWNER") // OWNER | ADMIN | MANAGER | FINANCE | STAFF | VIEWER | ALL
+  /// Set when the notice is for one person. Null means "everyone in audienceRole".
+  recipientId String?
+  /// What raised it: TASK | STORE_ORDER | CAMPAIGN | AUTOMATION | APPROVAL | SYSTEM.
+  sourceType String?
+  sourceId   String?
+  /// Unique per tenant so a retried job cannot notify the same person twice about the same thing.
+  dedupeKey  String?
+  /// In-app only unless a provider connection exists and a send was actually recorded.
+  deliveryStatus  String  @default("IN_APP") // IN_APP | SKIPPED | QUEUED | SENT | FAILED
+  deliveryChannel String?
+  deliveryError   String? @db.Text
+  deliveredAt     DateTime?
+  /// Legacy broadcast read flag, kept for rows written before per-person read state existed.
   readAt     DateTime?
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  reads      ErpNotificationRead[]
 
+  @@unique([businessId, dedupeKey])
   @@index([businessId, createdAt])
   @@index([businessId, readAt])
+  @@index([businessId, recipientId, readAt])
+}
+
+/// Per-person read state. Tenant-scoped, and unique per (notification, user) so marking read twice is
+/// idempotent.
+model ErpNotificationRead {
+  id             String          @id @default(cuid())
+  businessId     String
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  notificationId String
+  notification   ErpNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime        @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([businessId, userId, readAt])
 }
 
 /// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance

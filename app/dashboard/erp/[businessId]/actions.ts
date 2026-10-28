@@ -28,6 +28,7 @@ import { industryPack } from "@/lib/erp/industryPacks";
 import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
 import { createTask, updateTask } from "@/lib/erp/tasks";
+import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
 import { formatDate, formatNumber } from "@/lib/format";
 
 class ActionError extends Error {}
@@ -1116,4 +1117,60 @@ export async function updateTaskAction(form: FormData) {
   }
   if (error) back(base, "/tasks", { error });
   back(base, "/tasks", { ok: ok ?? "Task updated." });
+}
+
+/**
+ * Mark one notification read for the signed-in person.
+ *
+ * Reading is per person, so this writes a `ErpNotificationRead` row rather than flipping a flag on the
+ * notice. The domain function refuses a row from another tenant and a row this person cannot see;
+ * this action only decides that the caller may open the workspace at all.
+ */
+export async function markNotificationReadAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  const filter = text(form, "filter") === "unread" ? "unread" : "all";
+  const path = `/notifications${filter === "unread" ? "?filter=unread" : ""}`;
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "WORKSPACE_READ", { entitled: true });
+    const notificationId = text(form, "notificationId");
+    if (!notificationId) throw new ActionError("Choose a notification.");
+    const result = await markNotificationRead(prisma, {
+      businessId,
+      notificationId,
+      viewer: { userId: context.session.userId, role: context.role },
+    });
+    ok = result.marked ? "Marked as read." : "That was already read.";
+    revalidatePath(`${base}/notifications`);
+    revalidatePath(base);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, path.includes("?") ? path.split("?")[0] : path, { error, ...(filter === "unread" ? { filter } : {}) });
+  back(base, "/notifications", { ok: ok ?? "Marked as read.", ...(filter === "unread" ? { filter } : {}) });
+}
+
+/** Mark everything this person can see as read. */
+export async function markAllNotificationsReadAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  const filter = text(form, "filter") === "unread" ? "unread" : "all";
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "WORKSPACE_READ", { entitled: true });
+    const result = await markAllNotificationsRead(prisma, {
+      businessId,
+      viewer: { userId: context.session.userId, role: context.role },
+    });
+    ok = result.marked === 0 ? "Everything was already read." : `${result.marked} notification${result.marked === 1 ? "" : "s"} marked as read.`;
+    revalidatePath(`${base}/notifications`);
+    revalidatePath(base);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/notifications", { error, ...(filter === "unread" ? { filter } : {}) });
+  back(base, "/notifications", { ok: ok ?? "All caught up.", ...(filter === "unread" ? { filter } : {}) });
 }

@@ -19,13 +19,20 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const { businessId } = await params;
   const query = await searchParams;
   const workspace = await loadErpWorkspace(businessId);
-  const board = await loadTaskBoard(businessId);
+  const onlyMine = query.assignee === "me";
+  const finishedPage = Number(typeof query.page === "string" ? query.page : "1") || 1;
+  const board = await loadTaskBoard(businessId, {
+    viewerId: workspace.session.userId,
+    assignee: onlyMine ? "me" : "all",
+    finishedPage,
+  });
   const error = typeof query.error === "string" ? query.error : null;
   const ok = typeof query.ok === "string" ? query.ok : null;
 
   const now = new Date();
-  const buckets = bucketTasks(board.tasks, now);
+  const buckets = bucketTasks(board.open, now);
   const canManage = hasErpPermission(workspace.role, "MANAGE_TASKS");
+  const filterHref = (assignee: "me" | "all") => `${workspace.basePath}/tasks?${new URLSearchParams({ ...(assignee === "me" ? { assignee: "me" } : {}) }).toString()}`;
 
   const renderTask = (task: any) => {
     const status = normalizeTaskStatus(task.status);
@@ -41,6 +48,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           {task.sourceType && task.sourceType !== "MANUAL" ? <span className="erp-small erp-muted">· {humanise(task.sourceType)}</span> : null}
         </div>
         {task.detail ? <p className="erp-small erp-muted" style={{ margin: 0 }}>{task.detail}</p> : null}
+        {task.href ? <p className="erp-small" style={{ margin: 0 }}><a className="erp-strong" href={String(task.href)}>Open the record this is about →</a></p> : null}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className="erp-small erp-muted">{board.assignees.find((person: any) => person.id === task.assignedTo)?.name ?? (task.assignedRole ? `Any ${humanise(task.assignedRole)}` : "Unassigned")}</span>
           {canManage && !isTerminalTaskStatus(status) ? (
@@ -85,6 +93,11 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {ok ? <Notice tone="success">{ok}</Notice> : null}
+
+      <div className="erp-actions" style={{ marginBottom: 10 }} aria-label="Filter the board">
+        <a className="erp-btn erp-btn-sm" data-active={!onlyMine} href={filterHref("all")} aria-current={!onlyMine ? "true" : undefined}>Everyone</a>
+        <a className="erp-btn erp-btn-sm" data-active={onlyMine} href={filterHref("me")} aria-current={onlyMine ? "true" : undefined}>Only mine</a>
+      </div>
 
       <dl className="erp-grid erp-grid-3">
         <Kpi label="Open work" value={String(buckets.overdue.length + buckets.dueToday.length + buckets.upcoming.length + buckets.undated.length)} hint="Not finished and not cancelled" />
@@ -153,11 +166,34 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
       </section>
 
       <section className="erp-card">
-        <h2>Recently finished</h2>
-        {buckets.done.length + buckets.cancelled.length === 0 ? (
+        <div className="erp-page-head">
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Recently finished</h2>
+            <p className="erp-card-sub" style={{ marginBottom: 0 }}>
+              {board.finishedTotal === 0
+                ? "Finished work stays here as evidence of who did what and when."
+                : `${board.finishedTotal} finished or cancelled. Page ${board.finishedPage} of ${board.finishedPages}.`}
+            </p>
+          </div>
+          {board.finishedTotal > 0 ? (
+            <div className="erp-actions" style={{ flexWrap: "nowrap" }}>
+              {board.finishedPage > 1 ? (
+                <a className="erp-btn erp-btn-sm erp-btn-secondary" href={`${workspace.basePath}/tasks?${new URLSearchParams({ ...(onlyMine ? { assignee: "me" } : {}), page: String(board.finishedPage - 1) }).toString()}`}>
+                  Newer
+                </a>
+              ) : null}
+              {board.finishedPage < board.finishedPages ? (
+                <a className="erp-btn erp-btn-sm erp-btn-secondary" href={`${workspace.basePath}/tasks?${new URLSearchParams({ ...(onlyMine ? { assignee: "me" } : {}), page: String(board.finishedPage + 1) }).toString()}`}>
+                  Older
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {board.finished.length === 0 ? (
           <p className="erp-muted erp-small">Nothing has been completed yet. Finished work stays here as evidence of who did what and when.</p>
         ) : (
-          <ul className="erp-list">{[...buckets.done, ...buckets.cancelled].slice(0, 20).map(renderTask)}</ul>
+          <ul className="erp-list">{board.finished.map(renderTask)}</ul>
         )}
       </section>
 

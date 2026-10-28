@@ -13,6 +13,8 @@ import { receivablesAgeing } from "./invoicing";
 import { loadTaxRules } from "./invoicing";
 import { parseStorefrontSettings } from "./storefront";
 import { walletSummary } from "../messaging/billing";
+import { listNotifications, notificationVisibleTo, unreadNotificationCount } from "./notifications";
+import { taskSummary } from "./tasks";
 
 async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
@@ -278,15 +280,45 @@ export async function loadErpBusinesses(userId: string, isAdmin: boolean) {
 }
 
 /**
- * The task board. Reads only this tenant's tasks and resolves assignee names from the business's
- * own owner and members — never from a global user list, which would leak other tenants' people.
+ * The task board.
+ *
+ * Reads only this tenant's tasks and resolves assignee names from the business's own owner and
+ * members — never from a global user list, which would leak other tenants' people.
+ *
+ * Open work and finished work are read separately: open work is the board (bounded, all of it),
+ * finished work is history and is paginated, because a business that has existed for a year has
+ * thousands of finished tasks and nobody scrolls to the end of that.
  */
-export async function loadTaskBoard(businessId: string) {
-  const [owner, members, configuration, tasks] = await Promise.all([
+export async function loadTaskBoard(
+  businessId: string,
+  options: { viewerId?: string | null; assignee?: "me" | "all"; finishedPage?: number } = {},
+) {
+  const pageSize = 25;
+  const finishedPage = Math.max(1, Number(options.finishedPage ?? 1) || 1);
+  const assignedFilter = options.assignee === "me" && options.viewerId ? { assignedTo: options.viewerId } : {};
+
+  const [owner, members, configuration, open, finished, finishedTotal] = await Promise.all([
     safe(prisma.business.findUnique({ where: { id: businessId }, select: { ownerId: true, owner: { select: { id: true, name: true, email: true } } } }), null),
     safe(prisma.businessMember.findMany({ where: { businessId }, select: { userId: true, role: true, user: { select: { id: true, name: true, email: true } } } }), []),
     safe(prisma.erpConfiguration.findUnique({ where: { businessId }, select: { teamRolesJson: true } }), null),
-    safe(prisma.erpTask.findMany({ where: { businessId }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }], take: 200 }), []),
+    safe(
+      prisma.erpTask.findMany({
+        where: { businessId, status: { in: ["OPEN", "IN_PROGRESS"] }, ...assignedFilter },
+        orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+        take: 200,
+      }),
+      [],
+    ),
+    safe(
+      prisma.erpTask.findMany({
+        where: { businessId, status: { in: ["DONE", "CANCELLED"] }, ...assignedFilter },
+        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+        skip: (finishedPage - 1) * pageSize,
+        take: pageSize,
+      }),
+      [],
+    ),
+    safe(prisma.erpTask.count({ where: { businessId, status: { in: ["DONE", "CANCELLED"] }, ...assignedFilter } }), 0),
   ]);
 
   const roles: Record<string, string> = (() => {
@@ -311,5 +343,78 @@ export async function loadTaskBoard(businessId: string) {
   }
 
   // Permission is decided by the caller from the workspace role; the loader never asserts it.
-  return { tasks: tasks as any[], assignees };
+  return {
+    open: open as any[],
+    finished: finished as any[],
+    finishedTotal,
+    finishedPage,
+    finishedPages: Math.max(1, Math.ceil(finishedTotal / pageSize)),
+    assignees,
+    filter: options.assignee === "me" ? "me" : "all",
+  };
+}
+
+/**
+ * The notification centre. Read state is per person, so two people opening the same shared notice do
+ * not consume each other's unread badge.
+ */
+export async function loadNotificationCentre(
+  businessId: string,
+  viewer: { userId: string; role: string },
+  options: { unreadOnly?: boolean } = {},
+) {
+  const [list, total] = await Promise.all([
+    listNotifications(prisma, { businessId, viewer, unreadOnly: options.unreadOnly, limit: 100 }).catch(() => ({ notifications: [], unread: 0, scanned: 0 })),
+    safe(prisma.erpNotification.count({ where: { businessId } }), 0),
+  ]);
+  return { ...list, stored: total, unreadOnly: Boolean(options.unreadOnly) };
+}
+
+/** The bell count for the shell. Cheap enough for every page load, and it matches the screen. */
+export async function loadNotificationBadge(businessId: string, viewer: { userId: string; role: string }) {
+  return unreadNotificationCount(prisma, { businessId, viewer }).catch(() => 0);
+}
+
+/**
+ * "What needs you today" for the home screen: the person's own open work, the tenant's overdue count,
+ * unread notices and the newest few notices. Every figure is a count of stored rows for this tenant.
+ */
+export async function loadWorkDashboard(businessId: string, viewer: { userId: string; role: string }) {
+  const [mine, summary, unread, latest] = await Promise.all([
+    safe(
+      prisma.erpTask.findMany({
+        where: { businessId, assignedTo: viewer.userId, status: { in: ["OPEN", "IN_PROGRESS"] } },
+        orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+        take: 5,
+      }),
+      [],
+    ),
+    safe(taskSummary(prisma, businessId), { open: 0, overdue: 0, unassigned: 0 }),
+    safe(unreadNotificationCount(prisma, { businessId, viewer }), 0),
+    safe(
+      prisma.erpNotification.findMany({
+        where: { businessId, OR: [{ recipientId: viewer.userId }, { recipientId: null }] },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        include: { reads: { where: { userId: viewer.userId }, select: { userId: true } } },
+      }),
+      [],
+    ),
+  ]);
+
+  const visible = (latest as any[]).filter((row) => notificationVisibleTo(row, viewer)).slice(0, 5);
+  const nowMs = Date.now();
+  return {
+    // Overdue is decided here, from stored dates, so the page never computes time during render.
+    myTasks: (mine as any[]).map((task) => ({
+      ...task,
+      overdue: Boolean(task.dueAt && new Date(task.dueAt).getTime() < nowMs),
+    })),
+    summary,
+    unread,
+    latest: visible.map((row) => ({
+      ...row,
+      read: (Array.isArray(row.reads) && row.reads.length > 0) || (!row.recipientId && Boolean(row.readAt)),
+    })),
+  };
 }

@@ -12,16 +12,31 @@ import { renderToStaticMarkup } from "react-dom/server";
 const state = vi.hoisted(() => ({
   role: "OWNER" as string,
   tasks: [] as any[],
+  finished: [] as any[],
+  finishedTotal: 0,
   assignees: [] as Array<{ id: string; name: string; role: string }>,
-  error: null as string | null,
+  filter: "all" as "all" | "me",
+  finishedPage: 1,
 }));
 
 vi.mock("@/lib/erp/workspace", () => ({
-  loadErpWorkspace: vi.fn(async () => ({ role: state.role, basePath: "/dashboard/erp/biz-1" })),
+  loadErpWorkspace: vi.fn(async () => ({
+    role: state.role,
+    basePath: "/dashboard/erp/biz-1",
+    session: { userId: "u-viewer", email: "person@example.test", role: "OWNER" },
+  })),
 }));
 
 vi.mock("@/lib/erp/loaders", () => ({
-  loadTaskBoard: vi.fn(async () => ({ tasks: state.tasks, assignees: state.assignees })),
+  loadTaskBoard: vi.fn(async () => ({
+    open: state.tasks,
+    finished: state.finished,
+    finishedTotal: state.finishedTotal,
+    finishedPage: state.finishedPage,
+    finishedPages: Math.max(1, Math.ceil(state.finishedTotal / 25)),
+    assignees: state.assignees,
+    filter: state.filter,
+  })),
 }));
 
 // Next passes server actions as `action={fn}`; react-dom/server 18 does not model that, so the test
@@ -66,8 +81,11 @@ async function render(query: Record<string, string> = {}) {
 beforeEach(() => {
   state.role = "OWNER";
   state.tasks = [];
+  state.finished = [];
+  state.finishedTotal = 0;
+  state.filter = "all";
+  state.finishedPage = 1;
   state.assignees = [];
-  state.error = null;
 });
 
 describe("tasks board", () => {
@@ -75,8 +93,9 @@ describe("tasks board", () => {
     state.tasks = [
       task({ id: "late", title: "Renew the fire certificate", dueAt: new Date(NOW - 3 * day) }),
       task({ id: "soon", title: "Call the supplier", dueAt: new Date(NOW + 2 * day) }),
-      task({ id: "done", title: "File the VAT return", status: "DONE", completedAt: new Date(NOW - day) }),
     ];
+    state.finished = [task({ id: "done", title: "File the VAT return", status: "DONE", completedAt: new Date(NOW - day) })];
+    state.finishedTotal = 1;
     const html = await render();
     expect(html.indexOf("Renew the fire certificate")).toBeLessThan(html.indexOf("Call the supplier"));
     expect(html).toContain("Overdue");
@@ -110,13 +129,14 @@ describe("tasks board", () => {
   });
 
   it("offers no controls on finished work, whatever the role", async () => {
-    state.tasks = [task({ status: "DONE", completedAt: new Date(NOW) }), task({ id: "c", title: "Cancelled thing", status: "CANCELLED" })];
+    state.finished = [task({ status: "DONE", completedAt: new Date(NOW) }), task({ id: "c", title: "Cancelled thing", status: "CANCELLED" })];
+    state.finishedTotal = 2;
     const html = await render();
     expect(html).toContain("Recently finished");
     expect(html).not.toContain(">Done</button>");
     expect(html).not.toContain(">Start</button>");
-    // Cancelled work is counted, not silently dropped.
-    expect(html).toContain("1 cancelled");
+    // Finished work is paginated and counted, not silently dropped.
+    expect(html).toContain("2 finished or cancelled. Page 1 of 1.");
   });
 
   it("renders only what the loader returned for this tenant", async () => {

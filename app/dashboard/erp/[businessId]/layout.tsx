@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { loadErpPage } from "@/lib/erp/workspace";
+import { loadNotificationBadge } from "@/lib/erp/loaders";
 import { ErpSidebarGroup, ErpMobileBar } from "@/components/erp/ErpNavLink";
 import { Badge } from "@/components/erp/ErpBits";
 import { formatNumber } from "@/lib/format";
@@ -42,6 +43,9 @@ export default async function ErpLayout({ children, params }: Props) {
 
   const workspace = gate.workspace;
   const entitled = workspace.entitlement.entitled;
+  // One count, same visibility rule as the notification screen. It is a read of stored rows; it never
+  // marks anything read.
+  const unread = await loadNotificationBadge(businessId, { userId: workspace.session.userId, role: workspace.role });
   const planLabel = entitled ? "PRO active" : workspace.entitlement.lifecycle === "AWAITING_PAYMENT" ? "Payment due" : "Setup";
 
   return (
@@ -95,6 +99,14 @@ export default async function ErpLayout({ children, params }: Props) {
             </div>
             <div className="erp-topbar-actions">
               <Badge tone={entitled ? "good" : "warn"}>{entitled ? "Plan active" : workspace.entitlement.status.toLowerCase().replace(/_/g, " ")}</Badge>
+              <Link
+                href={`${workspace.basePath}/notifications`}
+                className="erp-btn erp-btn-secondary erp-btn-sm"
+                aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications, nothing unread"}
+              >
+                <span aria-hidden="true">✉</span>
+                <span>{unread > 0 ? `${unread} new` : "Inbox"}</span>
+              </Link>
               <Link href={`${workspace.basePath}/messaging/new`} className="erp-btn erp-btn-primary erp-btn-sm">New campaign</Link>
               <Link href={`/dashboard/pos/${workspace.business.id}`} className="erp-btn erp-btn-secondary erp-btn-sm">Business POS</Link>
             </div>

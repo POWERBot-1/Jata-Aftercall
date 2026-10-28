@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { loadErpWorkspace } from "@/lib/erp/workspace";
-import { loadAccounting, loadInvoices, loadMessagingOverview } from "@/lib/erp/loaders";
+import { loadAccounting, loadInvoices, loadMessagingOverview, loadWorkDashboard } from "@/lib/erp/loaders";
 import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { formatDate, formatNumber, nairobiHour } from "@/lib/format";
+import prisma from "@/lib/db";
+import { sweepOverdueTasks } from "@/lib/erp/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +19,17 @@ export const dynamic = "force-dynamic";
 export default async function ErpHomePage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = await params;
   const workspace = await loadErpWorkspace(businessId);
-  const [accounting, invoices, messaging] = await Promise.all([
+
+  // Overdue work raises one notice per task per day. The sweep is bounded, tenant-scoped and
+  // idempotent (unique dedupe key), so a reload costs nothing and a retry cannot double-notify. It is
+  // best-effort: failing to notify must never fail the dashboard.
+  await sweepOverdueTasks(prisma, { businessId }).catch(() => null);
+
+  const [accounting, invoices, messaging, work] = await Promise.all([
     loadAccounting(businessId),
     loadInvoices(businessId),
     loadMessagingOverview(businessId),
+    loadWorkDashboard(businessId, { userId: workspace.session.userId, role: workspace.role }),
   ]);
 
   const base = workspace.basePath;
@@ -93,6 +102,79 @@ export default async function ErpHomePage({ params }: { params: Promise<{ busine
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="work-heading">
+        <div className="erp-page-head">
+          <div>
+            <h2 id="work-heading" style={{ fontSize: "1rem", margin: "0 0 2px" }}>What needs you today</h2>
+            <p className="erp-card-sub" style={{ marginBottom: 0 }}>
+              Counted from stored rows for this business. Nothing here is an estimate.
+            </p>
+          </div>
+          <div className="erp-actions" style={{ flexWrap: "nowrap" }}>
+            <Link href={`${base}/tasks`} className="erp-btn erp-btn-sm erp-btn-secondary">Open the board</Link>
+            <Link href={`${base}/notifications`} className="erp-btn erp-btn-sm erp-btn-secondary">Notifications</Link>
+          </div>
+        </div>
+
+        <div className="erp-grid erp-grid-3" style={{ marginTop: 12 }}>
+          <div className="erp-card">
+            <h3 style={{ marginTop: 0, fontSize: "0.95rem" }}>My open work</h3>
+            {work.myTasks.length === 0 ? (
+              <p className="erp-small erp-muted" style={{ margin: 0 }}>
+                Nothing is assigned to you. <Link className="erp-strong" href={`${base}/tasks`}>Look at the whole board</Link>.
+              </p>
+            ) : (
+              <ul className="erp-list">
+                {work.myTasks.map((task: any) => (
+                  <li key={task.id}>
+                    <div>
+                      <strong className="erp-small">{task.title}</strong>
+                      <div className="erp-small erp-muted">
+                        {task.dueAt ? `Due ${formatDate(task.dueAt)}` : "No due date"}
+                        {task.overdue ? " · overdue" : ""}
+                      </div>
+                    </div>
+                    <Badge tone={task.status === "IN_PROGRESS" ? "warn" : "neutral"}>{humanise(task.status)}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="erp-card">
+            <h3 style={{ marginTop: 0, fontSize: "0.95rem" }}>The business</h3>
+            <dl className="erp-grid erp-grid-2" style={{ gap: 10 }}>
+              <Kpi label="Open tasks" value={String(work.summary.open)} hint={`${work.summary.unassigned} unassigned`} />
+              <Kpi label="Overdue" value={String(work.summary.overdue)} hint={work.summary.overdue ? "Needs attention today" : "Nothing overdue"} />
+              <Kpi label="Unread notices" value={String(work.unread)} hint="For you" />
+              <Kpi label="Waiting approval" value="—" hint="Approvals are not built yet" />
+            </dl>
+            <p className="erp-small erp-muted" style={{ marginBottom: 0 }}>
+              <Link className="erp-strong" href={`${base}/tasks?assignee=me`}>My work</Link> · <Link className="erp-strong" href={`${base}/tasks`}>All open work</Link>
+            </p>
+          </div>
+
+          <div className="erp-card">
+            <h3 style={{ marginTop: 0, fontSize: "0.95rem" }}>Latest notifications</h3>
+            {work.latest.length === 0 ? (
+              <p className="erp-small erp-muted" style={{ margin: 0 }}>No notices yet.</p>
+            ) : (
+              <ul className="erp-list">
+                {work.latest.map((notification: any) => (
+                  <li key={notification.id}>
+                    <div>
+                      <strong className="erp-small">{notification.title}</strong>
+                      <div className="erp-small erp-muted">{formatDate(notification.createdAt)}</div>
+                    </div>
+                    {notification.read ? <span className="erp-small erp-muted">Read</span> : <Badge tone="lime">New</Badge>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="actions-heading">

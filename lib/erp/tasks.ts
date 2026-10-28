@@ -14,6 +14,7 @@
  */
 
 import { logErpAudit } from "./audit";
+import { notifyTaskAssigned } from "./notifications";
 
 export const TASK_STATUSES = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -217,6 +218,10 @@ export async function createTask(client: any, input: CreateTaskInput) {
     client,
   });
 
+  // The person who was given the work is told about it. Best-effort: a notification must never
+  // fail the task write, and the dedupe key stops a retry from notifying twice.
+  await notifyTaskAssigned(client, { businessId: input.businessId, task, actorId: input.actorId ?? null, actorName: input.actorName ?? null });
+
   return { task, created: true, deduplicated: false };
 }
 
@@ -290,6 +295,17 @@ export async function updateTask(client: any, input: UpdateTaskInput) {
   if (Object.keys(data).length === 0) return { task, changed: false };
 
   const updated = await client.erpTask.update({ where: { id: task.id }, data });
+
+  if (data.assignedTo !== undefined && data.assignedTo && data.assignedTo !== task.assignedTo) {
+    // A reassignment is a new owner, so the same notice a new task raises applies. The dedupe key
+    // carries the new owner, so moving work back and forth notifies each person once.
+    await notifyTaskAssigned(client, {
+      businessId: input.businessId,
+      task: updated as any,
+      actorId: input.actorId ?? null,
+      actorName: input.actorName ?? null,
+    }).catch(() => null);
+  }
 
   await logErpAudit({
     businessId: input.businessId,
