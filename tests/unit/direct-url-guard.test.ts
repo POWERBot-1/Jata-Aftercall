@@ -116,6 +116,26 @@ describe("the wiring this depends on", () => {
     expect(guardAt).toBeLessThan(prismaAt);
   });
 
+  it("derives DIRECT_URL from DATABASE_URL inside the migration rehearsal", () => {
+    // The rehearsal spawns the Prisma CLI for several different databases in turn. An inherited
+    // DIRECT_URL could name a different database than the one under test, so it must be derived
+    // per invocation; otherwise `migrate deploy` could act on the wrong target.
+    const rehearsal = readFileSync(path.join(root, "scripts/ci/rehearse-candidate-migrations.mjs"), "utf8");
+    expect(rehearsal).toContain("mergedEnv.DIRECT_URL = mergedEnv.DATABASE_URL");
+    expect(rehearsal).toContain("if (mergedEnv.DATABASE_URL && !mergedEnv.DIRECT_URL)");
+  });
+
+  it("routes every CI invocation of the Prisma CLI through the wrapper", () => {
+    // The first attempt at this change covered `generate` only, and CI failed on `prisma validate`
+    // with exactly the P1012 this is supposed to prevent. Pin the whole surface, not one verb.
+    const workflows = ["pos-erp-verify", "interactive-business-e2e", "release-validation", "premium-screenshots", "candidate-rehearsal"];
+    for (const name of workflows) {
+      const source = readFileSync(path.join(root, `.github/workflows/${name}.yml`), "utf8");
+      const raw = source.match(/npx prisma /g) ?? [];
+      expect(raw.length, `${name}.yml still calls npx prisma directly`).toBe(0);
+    }
+  });
+
   it("keeps the existing migration-target guard, so this change did not replace a control", () => {
     const migrate = readFileSync(path.join(root, "scripts/migrate.sh"), "utf8");
     expect(migrate).toContain("migration-target-guard.mjs");

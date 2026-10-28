@@ -92,7 +92,7 @@ jobs:
       - name: Generate Prisma client
         run: |
           set -o pipefail
-          npx prisma validate 2>&1 | tee /tmp/step-schema-validate.log
+          bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-schema-validate.log
           bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
 
       - name: Lint and TypeScript
@@ -103,7 +103,7 @@ jobs:
       - name: Apply migrations
         run: |
           set -o pipefail
-          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate.log
+          bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate.log
 
       - name: Seed plans
         run: |

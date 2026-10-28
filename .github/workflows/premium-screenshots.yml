@@ -78,7 +78,7 @@ jobs:
         run: bash scripts/lib/prisma-generate.sh
 
       - name: Apply migrations to the disposable database
-        run: npx prisma migrate deploy
+        run: bash scripts/lib/prisma-cli.sh migrate deploy
 
       - name: Seed fictional plans and demo dataset
         run: npm run seed
