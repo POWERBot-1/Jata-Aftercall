@@ -1,8 +1,8 @@
 # POS / ERP - PRO — Business Operating System gap matrix
 
 **Directive:** "Unified Business Operating System" (owner, 2026-10-28) — ~20 integrated modules.
-**Head reviewed:** `e500664` for the original matrix; the task-spine row (9) was re-checked on
-`00cdd71` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
+**Head reviewed:** `e500664` for the original matrix; rows 9, 10 and the notification/dashboard rows
+were re-checked on `c57a3a3` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
 **Report date:** 2026-10-28.
 
 This document exists because the directive's scope is much wider than the software, and the gap
@@ -10,8 +10,9 @@ must be stated in the same units the directive uses. Each row was checked agains
 not against the roadmap. Labels: **PASS** (works and is proven), **PARTIAL** (a real subset works),
 **FAIL** (present but broken), **NOT TESTED** (code exists, no proof), **MISSING** (not built).
 
-The ERP Pro product is **additive** beside the existing Business POS: 39 new models
-(`Erp*` / `Msg*`), two additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`),
+The ERP Pro product is **additive** beside the existing Business POS: 40 new models
+(`Erp*` / `Msg*`), three additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
+`20261029000000_erp_notifications`),
 its own plan (`ERP_PRO`, KES 3,000/30 days). No existing POS model, order transition, payment path or
 migration was modified.
 
@@ -53,7 +54,7 @@ in the UI as a working feature when the row above says otherwise.
 | Server-enforced permissions | Yes — `requireErpAccess` / `resolveErpRole` resolve the role from the database on every action; navigation hides links but is never the enforcement point. |
 | Role-aware UI | Yes (`lib/erp/navigation.ts`, per-page role gates). |
 | Unified global search / command launcher | **Missing.** Each module has its own filters. |
-| Notification centre / task inbox | **Partial** — `ErpTask` and the `/tasks` board exist and are reachable from the sidebar; `ErpNotification` exists per record. There is no unified inbox aggregating notifications and tasks across modules. |
+| Notification centre / task inbox | **Partial** — the notification centre is live (`/notifications`, per-person read state, unread bell in the shell, dashboard widgets for own work, overdue counts and unread notices). What is missing: a single combined inbox that interleaves tasks and notices in one list, and notice types for approvals (the approvals object does not exist yet). |
 | Location/branch scoping in ERP | **Partial** — POS has `PosBranch`; the ERP itself is business-wide, not branch-scoped. |
 | Brand identity | Original espresso / cream / amber, via `--jata-*` tokens only (`app/erp.css`). The withdrawn graphite/lime look is gone. |
 | Runtime | Next.js 16.4.2, React 18.3.1, Prisma 5.22.0, Neon PostgreSQL, Vercel — unchanged. |
@@ -61,8 +62,9 @@ in the UI as a working feature when the row above says otherwise.
 ## 3. What "one dashboard" would require that does not exist yet
 
 1. A **shell** (`app/dashboard/erp/[businessId]/layout.tsx` exists) with company switcher, global
-   search over permitted records, notification centre, task inbox and quick-create — today the
-   layout offers navigation and plan status only.
+   search over permitted records, notification centre, task inbox and quick-create — the notification
+   bell and unread count are now in the shell, and the board and inbox exist. Still missing: global
+   search, quick-create, and a workspace (company) switcher inside the sidebar.
 2. **Widgets bound to persisted queries.** Building them against invented numbers is the one thing
    the directive forbids, so each widget must land with the query and the test that proves it reads
    real rows.
@@ -96,11 +98,13 @@ The earlier remediation pass (head `e500664`) was scoped to retargeting PR #71 t
 the merge with `main`, restoring the brand identity and re-running every gate. That pass added no
 module.
 
-**This pass (`00cdd71`) implements section 4 step 1, partially: the task spine.** One new model
-(`ErpTask`), one additive migration, one domain module (`lib/erp/tasks.ts`), one screen (`/tasks`),
-two server actions, one navigation entry, and the automation `CREATE_TASK` action rewritten to
-persist instead of preview. It ships with 22 domain tests, 9 render tests and 13 tests that run
-against a real PostgreSQL database.
+**Two passes implement section 4 step 1.** `00cdd71` added the task spine: `ErpTask`, one additive
+migration, `lib/erp/tasks.ts`, the `/tasks` board, two server actions, a navigation entry and the
+automation `CREATE_TASK` action rewritten to persist (22 domain + 9 render + 13 PostgreSQL tests).
+`c57a3a3` added the notification foundation: `ErpNotificationRead` and ten defaulted columns on
+`ErpNotification`, `lib/erp/notifications.ts`, the `/notifications` centre, the shell unread bell, the
+dashboard "What needs you today" widgets, task-assignment and daily-overdue notices, and paginated
+finished work on the board (23 domain + 8 render + 10 PostgreSQL tests).
 
 **Nothing else in section 1 moved.** Modules 5, 8, 11, 12, 13 and 17 are still MISSING; no
 placeholder screen was created for any of them, and no capability above is claimed as working

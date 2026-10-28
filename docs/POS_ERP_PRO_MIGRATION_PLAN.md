@@ -143,8 +143,8 @@ createdb erp_pro_verify && pg_restore --dbname=erp_pro_verify erp_pro_export_*.d
 #    appendix below; it is exercised by scripts/erp/migration-verify.sh rollback.
 ```
 
-Copy-paste of a 38-table `DROP` block is deliberately **not** in this document as a single blob.
-Dropping 38 tables is a destructive, irreversible act that the owner of the database must review
+Copy-paste of a 40-table `DROP` block is deliberately **not** in this document as a single blob.
+Dropping 40 tables is a destructive, irreversible act that the owner of the database must review
 line by line, so the appendix lists the tables in dependency order and the `DROP` statement is
 written per table at the point of use. Today none of the ERP tables reference each other, so the
 order is not strictly required by PostgreSQL; it is kept because a future migration may add such a
@@ -155,7 +155,8 @@ foreign key, and the rehearsal should fail then rather than the real rollback.
 Leaf tables first (they reference the headers):
 
 ```
-ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
+ErpNotificationRead,
+ErpTask, ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
 MsgCampaignRecipient, MsgMessageEvent, MsgSenderIdEvent, MsgConsentRecord, MsgLedgerEntry,
 MsgSuppression, MsgAudience, ErpAutomationRun, ErpKycDocument, ErpNotification,
 ErpPayment, ErpInvoice, ErpExpense, ErpSupplierBill, ErpStoreOrder, MsgCampaign,
@@ -165,7 +166,34 @@ ErpSequence, ErpIdempotencyRecord, ErpAuditEvent, ErpEntitlement, ErpSubscriptio
 ErpConfiguration
 ```
 
+`ErpNotificationRead` is first because it references `ErpNotification`, so it must go before it.
 `ErpConfiguration` goes last: several tables read its feature flags and `teamRolesJson`.
+
+### Rollback of `20261029000000_erp_notifications` on its own
+
+This migration does not only create a table; it also adds ten defaulted columns to the existing
+`ErpNotification`. If only the notification centre has to go, the reverse statements are:
+
+```sql
+DROP TABLE IF EXISTS "ErpNotificationRead";
+DROP INDEX IF EXISTS "ErpNotification_businessId_recipientId_readAt_idx";
+DROP INDEX IF EXISTS "ErpNotification_businessId_dedupeKey_key";
+ALTER TABLE "ErpNotification"
+  DROP COLUMN IF EXISTS "updatedAt",
+  DROP COLUMN IF EXISTS "deliveredAt",
+  DROP COLUMN IF EXISTS "deliveryError",
+  DROP COLUMN IF EXISTS "deliveryChannel",
+  DROP COLUMN IF EXISTS "deliveryStatus",
+  DROP COLUMN IF EXISTS "dedupeKey",
+  DROP COLUMN IF EXISTS "sourceId",
+  DROP COLUMN IF EXISTS "sourceType",
+  DROP COLUMN IF EXISTS "recipientId",
+  DROP COLUMN IF EXISTS "priority";
+```
+
+They are written here, not in the migration, so the migration itself stays additive and passes the
+repository's "no destructive SQL in a migration" guard. Losing these columns loses the notification
+centre and nothing else: no POS row, invoice, journal or message references them.
 
 ## Ordering hazard worth knowing before you apply
 

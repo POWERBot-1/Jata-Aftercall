@@ -46,14 +46,14 @@ control is only reasoned about, it is `NOT TESTED`.
 
 | Area | Files |
 | --- | --- |
-| Domain libraries | `lib/erp/*.ts` (23 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
+| Domain libraries | `lib/erp/*.ts` (24 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
 | Messaging engine | `lib/messaging/*.ts` (10 modules) — segments, consent, templates, senderId, providers, billing, campaigns, pipeline, testSend, import |
-| Schema | 39 new models in `prisma/schema.prisma`; two additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`) |
-| Screens | `app/dashboard/erp/**` (17 pages, including `/tasks`), `app/store/**` (2 public pages) |
+| Schema | 40 new models in `prisma/schema.prisma`; three additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`, `20261029000000_erp_notifications`) |
+| Screens | `app/dashboard/erp/**` (18 pages, including `/tasks` and `/notifications`), `app/store/**` (2 public pages) |
 | API | 7 route handlers (status, messaging preview, campaign dispatch, accounting, export, public order, provider webhook) |
 | Components | `components/erp/*` (4) |
-| Unit tests | 19 suites for this product, **323 tests** (292 from the core revision + 22 task-domain + 9 task-page) |
-| Database tests | `tests/integration/erp-pro-postgres.test.ts` (16) and `tests/integration/erp-tasks-postgres.test.ts` (13) — **29 tests** against real PostgreSQL |
+| Unit tests | 21 suites for this product, **354 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page) |
+| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (10) — **39 tests** against real PostgreSQL |
 | Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh`, `scripts/erp/tasks-page.check.mjs` |
 | CI | `.github/workflows/pos-erp-verify.yml` (static / migrations / PostgreSQL gates) |
 | Docs | this report, `POS_ERP_PRO_MIGRATION_PLAN.md`, `POS_ERP_PRO_PROVIDER_COSTS.md`, `POS_ERP_PRO_SECURITY_REVIEW.md` |
@@ -221,6 +221,70 @@ ran above — they are reported as skipped, never as passing.
 | Automation integration | **PASS** | `CREATE_TASK` persists with `automation-task:<idempotencyKey>`; replay raises no second task |
 | Responsive layout | **NOT TESTED** | The board reuses the existing `erp-grid-3` / `erp-row` responsive primitives, but no visual review or viewport check ran in this environment (E4) |
 | Full end-to-end browser run of `/tasks` | **BLOCKED** | `scripts/erp/tasks-page.check.mjs` seeds a tenant and asserts on real HTML, but the sandbox client is generated with `--no-engine` and the native query-engine binary cannot be downloaded here, so every authenticated request bounces to `/login`. The script detects this and reports BLOCKED rather than a false PASS. Run it where a native engine exists. |
+
+---
+
+### 2.6 The notification centre and the working dashboard (2026-10-29, `c57a3a3`)
+
+Phase A of the BOS directive asked for two things: a task spine (delivered in §2.5) and a notification
+foundation wired into the dashboard. `ErpNotification` existed but could only broadcast to a role and
+carried one `readAt` — so one person opening a notice cleared it for the whole team, and there was
+nowhere to record what raised it. This pass fixes that and adds the screen, the bell and the
+dashboard widgets.
+
+```bash
+npx prisma generate --no-engine      # → 126 models (40 ERP/messaging, 1 new: ErpNotificationRead)
+npx tsx scripts/erp/check-models.ts  # → 126 generated / 40 ERP / 92 referenced by app code — PASSED
+npx tsc --noEmit                     # → exit 0
+npm run lint                         # → 0 errors, 43 warnings (pre-existing files)
+
+npx vitest run tests/unit/erp-notifications.test.ts tests/unit/erp-notifications-page.test.ts
+# → 2 files, 31 tests passed
+#   23 domain: validation (short title, empty body, links that leave the workspace, unknown kind),
+#   visibility (personal / role broadcast / ALL / owners), per-person read state, legacy broadcast
+#   flag, idempotent mark-read, cross-tenant and not-yours refusals, mark-all, unread filter,
+#   delivery decisions (in-app, skipped, failed + audited), dedupe by key and by unique-index race,
+#   per-tenant key scoping, assignment and overdue notices from the task module.
+#    8 page: unread notice with destination and controls, no mark-read on a read notice, honest empty
+#   inbox, separate empty-unread state, action notices, dashboard widgets (own work, counts, latest
+#   notices), widget links, and no invented approval figure.
+
+PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npm run test:db:erp
+# → 3 files, 39 tests passed (16 ERP core + 13 tasks + 10 notifications)
+#   The notification tests prove on real PostgreSQL: the unique (businessId, dedupeKey) index stops a
+#   second write, two concurrent writers leave exactly one row, read state is per person, a
+#   cross-tenant mark-read is refused and writes no row, the list never contains another tenant's
+#   row, mark-all is a no-op the second time, the overdue sweep raises one notice per task per day,
+#   assignment notifies once and reassignment notifies the new owner, and a failed delivery is
+#   recorded as FAILED with an audit row.
+
+bash scripts/erp/migration-verify.sh all
+# → 24 checks PASS · 23 migrations · 40 ERP tables · 87 pre-existing tables
+#   clean install, upgrade over a populated previous release, export/restore/row-count match,
+#   reverse-drop of all 40 tables, re-apply, business intact.
+
+npx vitest run                       # → 265 files passed | 18 skipped · 3464 passed | 160 skipped
+npm run build                        # → [build] Build completed successfully
+```
+
+| Phase A requirement | Status | Evidence |
+| --- | --- | --- |
+| Persistent tenant-scoped task model | **PASS** | §2.5; `ErpTask` |
+| Assignment, creator, status, priority, due date, description, related record, completion metadata, timestamps | **PASS** | `ErpTask` columns; the board renders `href` as "Open the record this is about" |
+| Server-side CRUD, validation, authorisation | **PASS** | `lib/erp/tasks.ts` + `MANAGE_TASKS` actions; deletion is expressed as a cancelled task with a reason, never a hard delete, so history survives |
+| Pagination | **PASS** | Finished work is paginated (25 per page, Newer/Older links, total shown); open work is bounded at 200 and the board says so |
+| Overdue / assigned / approval tasks, dashboard links | **PASS (overdue, assigned, links) / BLOCKED (approval tasks)** | Assignee filter and overdue sweep are live; approval tasks need the approvals object, which does not exist yet |
+| `CREATE_TASK` connected to the real service | **PASS** | §2.5 + assignment notifications asserted against PostgreSQL |
+| Transactional where necessary, idempotent on retry | **PASS** | Unique `(businessId, idempotencyKey)`, concurrent double-submit test |
+| Cross-tenant access and unauthorised assignment/completion prevented | **PASS** | 13 task + 10 notification PostgreSQL tests |
+| Persistent tenant-scoped notifications | **PASS** | `ErpNotification` + `ErpNotificationRead`, new migration |
+| Recipients, type, priority, read/unread, linked record, created time, delivery status | **PASS** | Columns + domain module; delivery is recorded, not assumed |
+| Task assignment, overdue work, approval events connected | **PASS (tasks, overdue) / BLOCKED (approvals)** | Approvals do not exist yet, so no approval notice can be raised; the kind is defined and unused |
+| In-app notification centre with unread counts, destinations, mark-as-read, empty/error states | **PASS** | `/notifications` + shell bell; 8 render tests |
+| Real delivery providers only when available; nothing faked | **PASS (honesty) / BLOCKED (sending)** | `deliveryDecision` refuses to claim a send; out-of-product delivery is not implemented and the UI says so |
+| Deduplication, safe retries, auditable delivery failures | **PASS** | Unique key + race test; `NOTIFICATION_DELIVERY_FAILED` audit row asserted |
+| Dashboard widgets on persisted data with server-side permission enforcement | **PASS** | `/dashboard/erp/[businessId]` "What needs you today"; every figure is a stored-row count |
+| Responsive verification at 320×568 … 1366×768 | **NOT TESTED** | No browser ran in this sandbox (E4). The page uses the existing responsive primitives (`erp-grid-3`, `erp-row`, `erp-mobile-bar`) |
 
 ---
 
