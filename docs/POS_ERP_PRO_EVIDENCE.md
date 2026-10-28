@@ -382,7 +382,7 @@ npm run build                        # → [build] Build completed successfully
 
 ---
 
-### 2.9 Procurement (2026-10-31, `PROCUREMENT_SHA`)
+### 2.9 Procurement (2026-10-31, `5069990`)
 
 The MGAS bulk-order half of the reference workflow: something is needed, somebody with authority agrees
 to buy it, it arrives, and the supplier's invoice is posted against it. Before this slice the ERP could

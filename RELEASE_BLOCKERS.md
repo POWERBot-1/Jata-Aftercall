@@ -320,7 +320,7 @@ other check-runs; `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
 refused. No merge and no deployment was attempted. Merge remains an owner decision, and E4 (human
 visual review), E5, E6, E8 and E12 below stay open regardless of the green checks.
 
-**Procurement (head `PROCUREMENT_SHA`), slice-specific gaps:** three-way matching is *recorded* (the
+**Procurement (head `5069990`), slice-specific gaps:** three-way matching is *recorded* (the
 bill is linked to its order and the variance is audited, never hidden) but not *enforced*; a
 requisition is a draft order; there is no lead-time or price history and no reorder proposal. No
 responsive verification (E4).
