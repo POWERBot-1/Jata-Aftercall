@@ -310,9 +310,11 @@ rules as above:
 Full status table: `docs/POS_ERP_PRO_EVIDENCE.md`. Nothing here is a claim that the product is
 production-ready.
 
-**Merge gate (2026-10-28, head `cca017d` — code `00cdd71` + docs):** PR #71 targets `main`; every required check is green
-(`Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, plus the 11
-other check-runs and the Vercel status); `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
+**Merge gate (2026-10-28):** PR #71 targets `main`. Every required check is green on
+`cca017d` — code commit `00cdd71` plus docs — where all 14 check-runs returned `success`
+(runs 40698196584 / 40698196626 / 40698196704 / 40698196567 and the Vercel status):
+`Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, plus the 11
+other check-runs; `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
 **no approving review**, and the repository ruleset carries
 `require_extra_approval_for_unattributed_changes`, so a merge by this automation is expected to be
 refused. No merge and no deployment was attempted. Merge remains an owner decision, and E4 (human
