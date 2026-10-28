@@ -342,7 +342,7 @@ npm run build                        # → [build] Build completed successfully
 
 ---
 
-### 2.8 Spending a grant (2026-10-31, `CONSUMPTION_SHA`)
+### 2.8 Spending a grant (2026-10-31, `b89fc59`)
 
 Section 2.7 shipped approvals that could be *asked for* but nothing tied a grant to the action it
 authorised, so "approved" was an opinion rather than a permission slip. This slice makes an approval
