@@ -48,12 +48,12 @@ control is only reasoned about, it is `NOT TESTED`.
 | --- | --- |
 | Domain libraries | `lib/erp/*.ts` (25 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
 | Messaging engine | `lib/messaging/*.ts` (10 modules) — segments, consent, templates, senderId, providers, billing, campaigns, pipeline, testSend, import |
-| Schema | 42 new models in `prisma/schema.prisma`; five additive migrations (`…_pos_erp_pro`, `…_erp_tasks`, `…_erp_notifications`, `…_erp_approvals`, `…_erp_approval_consumption`) |
-| Screens | `app/dashboard/erp/**` (19 pages, including `/tasks`, `/notifications` and `/approvals`), `app/store/**` (2 public pages) |
+| Schema | 46 new models in `prisma/schema.prisma`; six additive migrations (`…_pos_erp_pro`, `…_erp_tasks`, `…_erp_notifications`, `…_erp_approvals`, `…_erp_approval_consumption`, `…_erp_procurement`) |
+| Screens | `app/dashboard/erp/**` (20 pages, including `/tasks`, `/notifications`, `/approvals` and `/procurement`), `app/store/**` (2 public pages) |
 | API | 7 route handlers (status, messaging preview, campaign dispatch, accounting, export, public order, provider webhook) |
 | Components | `components/erp/*` (4) |
 | Unit tests | 23 suites for this product, **412 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page + 23 approvals-domain + 6 approvals-page) |
-| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (11), `erp-approvals-postgres` (13) — **53 tests** against real PostgreSQL |
+| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (11), `erp-approvals-postgres` (13), `erp-procurement-postgres` (7) — **60 tests** against real PostgreSQL |
 | Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh`, `scripts/erp/tasks-page.check.mjs` |
 | CI | `.github/workflows/pos-erp-verify.yml` (static / migrations / PostgreSQL gates) |
 | Docs | this report, `POS_ERP_PRO_MIGRATION_PLAN.md`, `POS_ERP_PRO_PROVIDER_COSTS.md`, `POS_ERP_PRO_SECURITY_REVIEW.md` |
@@ -378,6 +378,59 @@ npm run build                        # → [build] Build completed successfully
 | Retried submit raises one request | **PASS** | idempotency key `gate:<ref>` |
 | The trail runs both ways | **PASS** | `APPROVAL_CONSUMED` audit + `CONSUMED` event + `consumedRef`; the screen shows "Used on …" / "not used yet" |
 | Applies to campaigns | **PARTIAL** | campaigns already require `APPROVE_CAMPAIGNS` with cost confirmation and separation of duties; they do not yet spend an approval grant |
+| Responsive verification | **NOT TESTED** | no browser in this sandbox (E4) |
+
+---
+
+### 2.9 Procurement (2026-10-31, `PROCUREMENT_SHA`)
+
+The MGAS bulk-order half of the reference workflow: something is needed, somebody with authority agrees
+to buy it, it arrives, and the supplier's invoice is posted against it. Before this slice the ERP could
+invoice out and record expenses, but had no object for what it had decided to buy.
+
+```bash
+npx prisma generate                 # → 132 models (46 ERP/messaging)
+npx tsx scripts/erp/check-models.ts # → 132 generated / 46 ERP / 94 referenced by app code — PASSED
+npx tsc --noEmit                    # → exit 0
+npx vitest run tests/unit/erp-procurement.test.ts tests/unit/erp-procurement-page.test.ts
+# → 30 tests passed (22 domain, 8 screen)
+#   Domain: line arithmetic and VAT rounding, validation (no supplier, no lines, zero quantity,
+#   fractional cents, bad date), the state machine (no reopening a received or cancelled order), the
+#   tenant sequence, an idempotent retry, a supplier from another tenant, submission inside/above the
+#   limit, the second submit spending the owner's grant, refusal to receive an unapproved order, an
+#   over-receipt refused per line, partial and complete deliveries, the retried delivery, cancellation
+#   requiring a reason, and the request procurement raises appearing in the approvals queue.
+#   Screen: empty state, draft/approved/ordered/received/cancelled controls, the outstanding quantity
+#   per line, the bill form, and a viewer who sees the order but no controls.
+
+PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npm run test:db:erp -- tests/integration/erp-procurement-postgres.test.ts
+# → 7 tests passed on real PostgreSQL: numbering comes from the tenant sequence (PO-000001, PO-000002)
+#   and not from a row count; another tenant's supplier is refused; an over-limit order stays
+#   AWAITING_APPROVAL until the owner decides, then approves and spends the grant; a delivery writes a
+#   PURCHASE movement against the PO and moves PosInventoryItem by exactly the quantity received;
+#   two racing submits with one key leave one receipt; another tenant cannot receive; the summary
+#   counts only this tenant's orders.
+
+bash scripts/erp/migration-verify.sh all
+# → PASS · 26 migrations · 46 ERP tables · 87 pre-existing tables
+
+npx vitest run                 # → 269 files passed | 20 skipped · 3537 passed | 181 skipped
+npm run lint                   # → 0 errors, 43 warnings
+npm run build                  # → [build] Build completed successfully
+```
+
+| Requirement (directive module 5) | Status | Evidence |
+| --- | --- | --- |
+| Purchase order with lines, supplier, expected date | **PASS** | `ErpPurchaseOrder`/`ErpPurchaseOrderLine`, `/procurement` |
+| Approval thresholds | **PASS** | `requireApprovalFor` (module 7's single-use grant); over-limit orders wait |
+| Document numbers that never repeat | **PASS** | `ErpSequence` (`PO-000001`), proven under concurrent inserts by the existing accounting suite |
+| Goods received notes | **PASS** | `ErpGoodsReceipt`/line; over-receipt refused per line |
+| Stock actually moves, once | **PASS** | POS `PosInventoryMovement` via `recordMovement`, asserted on real PostgreSQL |
+| Supplier bill posted | **PASS** | `ErpSupplierBill` + `buildSupplierBillJournal` (inventory/COGS, VAT input, AP) |
+| Variance against the order | **PASS (recorded)** | returned to the screen, audited, shown in the confirmation sentence |
+| Three-way *matching* enforced | **MISSING** | the three documents exist and are linked; a bill is not blocked when it disagrees with the receipt |
+| Requisition as a separate object | **MISSING** | a draft order is the requisition |
+| Lead-time/price history, reorder proposals | **MISSING** | not built |
 | Responsive verification | **NOT TESTED** | no browser in this sandbox (E4) |
 
 ---

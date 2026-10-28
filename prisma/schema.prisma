@@ -160,6 +160,10 @@ model Business {
   erpApprovalRequests     ErpApprovalRequest[]
   erpApprovalEvents       ErpApprovalEvent[]
   erpTasks                ErpTask[]
+  erpPurchaseOrders       ErpPurchaseOrder[]
+  erpPurchaseOrderLines   ErpPurchaseOrderLine[]
+  erpGoodsReceipts        ErpGoodsReceipt[]
+  erpGoodsReceiptLines    ErpGoodsReceiptLine[]
   erpAutomationRules      ErpAutomationRule[]
   erpAutomationRuns       ErpAutomationRun[]
   erpKycDocuments         ErpKycDocument[]
@@ -2756,6 +2760,8 @@ model ErpSupplierBill {
   businessId   String
   business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   supplierId   String?
+  /// The purchase order this bill settles, when there is one. Null for a bill entered by hand.
+  purchaseOrderId String?
   supplierName String
   billNumber   String
   issuedAt     DateTime @default(now())
@@ -2771,6 +2777,7 @@ model ErpSupplierBill {
   @@unique([businessId, supplierId, billNumber])
   @@index([businessId, status])
   @@index([businessId, dueAt])
+  @@index([businessId, purchaseOrderId])
 }
 
 model ErpTaxRule {
@@ -2981,6 +2988,109 @@ model ErpApprovalEvent {
   createdAt DateTime           @default(now())
 
   @@index([businessId, requestId, createdAt])
+}
+
+/// Procurement: what a business decided to buy, from whom, whether it was approved, what actually
+/// arrived and which supplier invoice settles it.
+///
+/// Suppliers are the POS catalogue's `PosSupplier` rows, referenced by id and copied by name: a
+/// purchase order must still read correctly after a supplier is deactivated, and this product never
+/// edits POS tables it does not own.
+model ErpPurchaseOrder {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tenant-scoped document number from ErpSequence (PO-000001), never a row count.
+  orderNumber    String
+  supplierId     String
+  /// Snapshot of the supplier's name at the time of ordering.
+  supplierName   String
+  status         String   @default("DRAFT") // DRAFT | AWAITING_APPROVAL | APPROVED | ORDERED | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+  currencyCode   String   @default("KES")
+  subtotalCents  Int      @default(0)
+  taxCents       Int      @default(0)
+  totalCents     Int      @default(0)
+  expectedAt     DateTime?
+  notes          String?  @db.Text
+  requestedBy    String
+  requestedName  String?
+  /// Set when the order exceeded the requester's limit and had to be approved first.
+  approvalRequestId String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  cancelledBy    String?
+  cancelledAt    DateTime?
+  cancelReason   String?  @db.Text
+  /// Unique per tenant so a retried submit cannot create a second order.
+  idempotencyKey String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lines          ErpPurchaseOrderLine[]
+  receipts       ErpGoodsReceipt[]
+
+  @@unique([businessId, orderNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, supplierId, status])
+}
+
+model ErpPurchaseOrderLine {
+  id               String          @id @default(cuid())
+  businessId       String
+  business         Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrderId  String
+  purchaseOrder    ErpPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  /// The POS product this line buys, when it is a stocked product rather than a free-text item.
+  productId        String?
+  description      String
+  quantity         Float
+  unitCostCents    Int             @default(0)
+  /// VAT as basis points (1600 = 16%); the tax is computed from it, never typed in twice.
+  taxRateBps       Int             @default(0)
+  lineSubtotalCents Int            @default(0)
+  lineTaxCents     Int             @default(0)
+  receivedQuantity Float           @default(0)
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+  receiptLines     ErpGoodsReceiptLine[]
+
+  @@index([businessId, purchaseOrderId])
+}
+
+model ErpGoodsReceipt {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrderId String
+  purchaseOrder   ErpPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receivedAt      DateTime @default(now())
+  receivedBy      String?
+  receivedName    String?
+  note            String?  @db.Text
+  /// Unique per tenant so a double-submitted form cannot receive the same delivery twice.
+  idempotencyKey  String?
+  createdAt       DateTime @default(now())
+  lines           ErpGoodsReceiptLine[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, purchaseOrderId, receivedAt])
+}
+
+model ErpGoodsReceiptLine {
+  id          String          @id @default(cuid())
+  businessId  String
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  receiptId   String
+  receipt     ErpGoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  lineId      String
+  line        ErpPurchaseOrderLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  quantity    Float
+  createdAt   DateTime        @default(now())
+
+  @@index([businessId, receiptId])
+  @@index([businessId, lineId])
 }
 
 /// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance

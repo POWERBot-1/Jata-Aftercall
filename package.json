@@ -21,7 +21,7 @@
     "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs",
     "check:models": "tsx scripts/erp/check-models.ts",
     "migrate:verify": "bash scripts/erp/migration-verify.sh all",
-    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts",
+    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts tests/integration/erp-procurement-postgres.test.ts",
     "test:browser:motion": "node scripts/browser/storefront-motion.check.mjs",
     "test:browser:layout": "node scripts/browser/fixture-layout.check.mjs",
     "test:browser:families": "node scripts/browser/storefront-families.check.mjs",

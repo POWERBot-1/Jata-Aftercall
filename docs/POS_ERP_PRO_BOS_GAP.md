@@ -10,10 +10,10 @@ must be stated in the same units the directive uses. Each row was checked agains
 not against the roadmap. Labels: **PASS** (works and is proven), **PARTIAL** (a real subset works),
 **FAIL** (present but broken), **NOT TESTED** (code exists, no proof), **MISSING** (not built).
 
-The ERP Pro product is **additive** beside the existing Business POS: 42 new models
-(`Erp*` / `Msg*`), five additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
+The ERP Pro product is **additive** beside the existing Business POS: 46 new models
+(`Erp*` / `Msg*`), six additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
 `20261029000000_erp_notifications`, `20261030000000_erp_approvals`,
-`20261031000000_erp_approval_consumption`),
+`20261031000000_erp_approval_consumption`, `20261032000000_erp_procurement`),
 its own plan (`ERP_PRO`, KES 3,000/30 days). No existing POS model, order transition, payment path or
 migration was modified.
 
@@ -25,7 +25,7 @@ migration was modified.
 | 2 | CRM and customer lifecycle | **PARTIAL** | `PosCustomer`, `MsgContact`, consent + suppression + audience models, segmentation (`lib/messaging/segments.ts`), import with de-duplication (`lib/messaging/import.ts`), ERP `/customers` page. | Leads/pipeline/stages, quotes, opportunities, support cases, merge workflow, retention automation. |
 | 3 | Products and inventory | **PARTIAL** | `PosProduct`, `PosInventoryItem`, `PosInventoryMovement` (signed delta + reason + unit, multi-branch), stock reads inside ERP, low-stock surfacing. | Warehouses as entities, batches/lots/expiry/serials, transfers UI, stocktake reconciliation, explicit costing method, valuation reports. |
 | 4 | Orders and fulfilment | **PARTIAL** | `ErpStoreOrder` + items, a validated state machine (`orderTransitions`, 16 PG tests), public tracking page with a token, `PosOrderEvent` audit. | Picking/packing/dispatch, proof of delivery, partial fulfilment, delivery assignment/fleet, profitability reporting. |
-| 5 | Procurement and suppliers | **MISSING** | `PosSupplier` exists (name, terms, credit, balance) and `PosPurchase`/`PosPurchaseItem`. | Requisitions, purchase orders with approval thresholds, goods-received notes, three-way matching, lead-time and price history, reorder proposals. |
+| 5 | Procurement and suppliers | **PARTIAL** | `ErpPurchaseOrder` + lines, `ErpGoodsReceipt` + lines, tenant-scoped `PO-000001` numbering from `ErpSequence`, and a `/procurement` screen. An order above the requester's approval limit waits for a decision and spends the grant exactly as expenses do; receiving writes **POS** `PosInventoryMovement` rows so the till and the ERP share one stock ledger, and over-receipt is refused per line. The supplier invoice posts a balanced journal (inventory or cost of sales, VAT input, accounts payable) into `ErpSupplierBill`, and the variance against the order is audited. `PosSupplier` remains the supplier record. Proven by 22 domain + 8 render + 7 real-PostgreSQL tests. | Requisitions as a separate object, three-way *matching* (bill vs receipt vs order is recorded, not enforced), lead-time and price history, reorder proposals, supplier scorecards. |
 | 6 | Accounting and finance | **PASS (core)** | Real double-entry: `ErpAccount`, `ErpPeriod`, `ErpJournal`, `ErpJournalLine`, immutable posted journals, controlled reversals, period close/reopen, trial balance, invoices + payments + allocations, credit notes, expenses, supplier bills, Kenya tax rules. Proven by the PG suite. | Bank feed import and reconciliation matching; P&L/cash-flow *reports* beyond trial balance (data is there, report surface is thin); no statutory filing. |
 | 7 | Approvals and finance operations | **PARTIAL** | `ErpApprovalRequest` + append-only `ErpApprovalEvent`: submit, approve, reject (with a required reason), withdraw by the requester, comment in the decision note. Authority is re-derived on the server from the role, the amount and a per-tenant threshold, so a crafted POST is refused where a legitimate click is accepted; self-approval is refused in the domain; `APPROVE_SPEND` gates the action and the queue is scoped per viewer (finance roles see everything, everybody else sees what they raised or what names them). Requests raise deduplicated `APPROVAL_REQUESTED` / `APPROVAL_DECIDED` notifications and audit rows. Proven by 23 domain + 6 render + 10 real-PostgreSQL tests. Role limits (`ERP_APPROVAL_LIMITS_CENTS`) and immutable `ErpAuditEvent` were already in place. | Delegate and escalate (an unanswered request does not yet rise to a higher role); a settings field to store a tenant-wide threshold (the domain honours one, nothing stores it). Expenses and manual journals now **must** raise a request above the actor's limit and spend a granted one once — campaigns still do not spend a grant. |
 | 8 | Documents and records | **MISSING** | `ErpKycDocument` only (compliance evidence placeholder). The repo has a separate durable media stack for the POS/website. | Document register, versions, categories, expiry reminders, retention, access-controlled download, tenant-scoped storage paths for ERP records. |
@@ -84,9 +84,10 @@ The dependency order that actually works here, given what is built:
 2. **Approval request object** — *done in part (2026-10-30)*: submit/approve/reject/withdraw with an
    append-only history and server-side authority. Remaining: delegate and escalate, and spending a grant from
    campaigns. Expenses and journals are gated and single-use as of 2026-10-31.
-3. **Procurement slice** — requisition → PO → goods received → supplier bill, reusing
-   `PosSupplier`, `PosInventoryMovement` and the approval object (now built). This is the MGAS
-   bulk-order scenario's missing half.
+3. **Procurement slice** — *done in part (2026-10-31)*: purchase order → approval → goods received
+   (real POS stock movements) → supplier bill with a balanced journal and an audited variance. The
+   MGAS bulk-order scenario now runs end to end. Remaining: requisitions as their own object,
+   three-way matching, lead-time and price history, reorder proposals.
 4. **Document register** — reuse the existing media stack; adds expiry reminders on top of (1).
 5. **Dashboard widgets + global search** — only after (1)–(4) give them real data.
 6. **ERP AI assistant** — last, because it must read from a schema whose semantics are settled.

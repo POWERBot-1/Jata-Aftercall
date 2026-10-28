@@ -573,6 +573,10 @@ function createFallbackPrisma(): any {
     passwordResetToken: emptyModel(),
     // POS / ERP - PRO and messaging models. Same contract as the rest of the stub.
     erpTask: emptyModel(),
+    erpPurchaseOrder: emptyModel(),
+    erpPurchaseOrderLine: emptyModel(),
+    erpGoodsReceipt: emptyModel(),
+    erpGoodsReceiptLine: emptyModel(),
     erpConfiguration: emptyModel(),
     erpSubscription: emptyModel(),
     erpEntitlement: emptyModel(),

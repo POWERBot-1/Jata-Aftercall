@@ -28,6 +28,14 @@ import { industryPack } from "@/lib/erp/industryPacks";
 import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
 import { createTask, updateTask } from "@/lib/erp/tasks";
+import {
+  createPurchaseOrder,
+  submitPurchaseOrder,
+  markPurchaseOrderOrdered,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
+  recordPurchaseBill,
+} from "@/lib/erp/procurement";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
 import { createApprovalRequest, decideApprovalRequest, withdrawApprovalRequest, requireApprovalFor } from "@/lib/erp/approvals";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -1297,4 +1305,192 @@ export async function withdrawApprovalAction(form: FormData) {
   }
   if (error) back(base, "/approvals", { error });
   back(base, "/approvals", { ok: ok ?? "Request withdrawn." });
+}
+
+/* ── Procurement ────────────────────────────────────────────────────────────────────────────────
+ * Requisition → order → goods received → supplier bill. The heavy lifting (authority, single-use
+ * approvals, stock movements, the balanced bill journal) lives in lib/erp/procurement.ts; these
+ * actions only parse the form, check the permission and report back in a sentence.
+ */
+
+function purchaseOrderLinesFrom(form: FormData) {
+  const products = form.getAll("lineProduct").map(String);
+  const descriptions = form.getAll("lineDescription").map(String);
+  const quantities = form.getAll("lineQuantity").map(String);
+  const costs = form.getAll("lineUnitCost").map(String);
+  const rates = form.getAll("lineTaxRate").map(String);
+  const lines = descriptions.map((description, index) => ({
+    productId: products[index] || null,
+    description,
+    quantity: Number(quantities[index] ?? 0),
+    unitCostCents: parseKesToCents(costs[index] ?? ""),
+    taxRateBps: Number(rates[index] ?? 0) || 0,
+  }));
+  // Blank template rows are normal in a form; they are not an error.
+  return lines.filter((line) => line.description.trim() || line.productId);
+}
+
+export async function createPurchaseOrderAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const supplierId = text(form, "supplierId");
+    if (!supplierId) throw new ActionError("Choose the supplier you are buying from.");
+    const expectedRaw = text(form, "expectedAt");
+    const result = await createPurchaseOrder(prisma, {
+      businessId,
+      supplierId,
+      expectedAt: expectedRaw || null,
+      notes: text(form, "notes") || null,
+      lines: purchaseOrderLinesFrom(form),
+      requestedBy: context.session.userId,
+      requestedName: context.session.name ?? context.session.email,
+      idempotencyKey: text(form, "requestKey") || randomUUID(),
+    });
+    ok = `${result.order.orderNumber} saved as a draft. Submit it when you are ready to buy.`;
+    revalidatePath(`${base}/procurement`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Purchase order saved." });
+}
+
+export async function submitPurchaseOrderAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const orderId = text(form, "orderId");
+    if (!orderId) throw new ActionError("Choose a purchase order.");
+    const result = await submitPurchaseOrder(prisma, {
+      businessId,
+      orderId,
+      requester: { userId: context.session.userId, name: context.session.name ?? null, role: context.role },
+    });
+    ok = result.approved
+      ? "Approved. Mark it ordered once you have actually sent it to the supplier."
+      : `${result.reason} It is waiting for a decision — nothing has been bought yet.`;
+    revalidatePath(`${base}/procurement`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Submitted." });
+}
+
+export async function orderPurchaseOrderAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    await markPurchaseOrderOrdered(prisma, {
+      businessId,
+      orderId: text(form, "orderId"),
+      actorId: context.session.userId,
+      actorName: context.session.name ?? context.session.email,
+    });
+    ok = "Marked as ordered. Record what arrives so stock stays true.";
+    revalidatePath(`${base}/procurement`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Marked as ordered." });
+}
+
+export async function receivePurchaseOrderAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    const orderId = text(form, "orderId");
+    if (!orderId) throw new ActionError("Choose a purchase order.");
+    const lines: Array<{ lineId: string; quantity: number }> = [];
+    for (const [key, value] of form.entries()) {
+      if (!key.startsWith("qty:") || typeof value !== "string") continue;
+      const quantity = Number(value);
+      if (!Number.isFinite(quantity) || quantity <= 0) continue;
+      lines.push({ lineId: key.slice(4), quantity: Math.round(quantity * 1000) / 1000 });
+    }
+    if (lines.length === 0) throw new ActionError("Enter how much arrived on at least one line.");
+    const result = await receivePurchaseOrder(prisma, {
+      businessId,
+      orderId,
+      lines,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? context.session.email,
+      note: text(form, "note") || null,
+      idempotencyKey: text(form, "requestKey") || randomUUID(),
+    });
+    ok = result.order.status === "RECEIVED"
+      ? "Whole order received. Stock has been updated."
+      : "Part of the order received. Stock has been updated; the rest is still outstanding.";
+    revalidatePath(`${base}/procurement`);
+    revalidatePath(`${base}/dashboard/pos/${businessId}/inventory`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Goods received." });
+}
+
+export async function cancelPurchaseOrderAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "MANAGE_INVENTORY", { entitled: true });
+    await cancelPurchaseOrder(prisma, {
+      businessId,
+      orderId: text(form, "orderId"),
+      reason: text(form, "reason"),
+      actorId: context.session.userId,
+      actorName: context.session.name ?? context.session.email,
+    });
+    ok = "Purchase order cancelled. Nothing was bought.";
+    revalidatePath(`${base}/procurement`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Purchase order cancelled." });
+}
+
+export async function recordPurchaseBillAction(form: FormData) {
+  const businessId = businessIdFrom(form);
+  const base = erpBasePath(businessId);
+  let error: string | null = null;
+  let ok: string | null = null;
+  try {
+    const context = await access(businessId, "POST_JOURNAL", { entitled: true });
+    const result = await recordPurchaseBill(prisma, {
+      businessId,
+      orderId: text(form, "orderId"),
+      billNumber: text(form, "billNumber"),
+      netCents: parseKesToCents(text(form, "net")),
+      taxCents: parseKesToCents(text(form, "tax")),
+      dueAt: text(form, "dueAt") || null,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? context.session.email,
+    });
+    const variance = result.varianceCents;
+    ok = `Bill posted as ${result.journal.journalNumber}.${variance === 0 ? " It matches the order exactly." : ` It is ${formatCentsShort(Math.abs(variance))} ${variance > 0 ? "more" : "less"} than the order — that difference is recorded.`}`;
+    revalidatePath(`${base}/procurement`);
+    revalidatePath(`${base}/accounting`);
+  } catch (err) {
+    error = actionErrorMessage(err);
+  }
+  if (error) back(base, "/procurement", { error });
+  back(base, "/procurement", { ok: ok ?? "Bill posted." });
 }

@@ -155,6 +155,7 @@ foreign key, and the rehearsal should fail then rather than the real rollback.
 Leaf tables first (they reference the headers):
 
 ```
+ErpGoodsReceiptLine, ErpGoodsReceipt, ErpPurchaseOrderLine, ErpPurchaseOrder,
 ErpApprovalEvent, ErpApprovalRequest,
 ErpNotificationRead,
 ErpTask, ErpJournalLine, ErpPaymentAllocation, ErpInvoiceLine, ErpCreditNote, ErpStoreOrderItem,
@@ -170,6 +171,21 @@ ErpConfiguration
 `ErpApprovalEvent` references `ErpApprovalRequest`, and `ErpNotificationRead` references
 `ErpNotification`, so each child goes before its parent.
 `ErpConfiguration` goes last: several tables read its feature flags and `teamRolesJson`.
+
+### Rollback of `20261032000000_erp_procurement` on its own
+
+```sql
+DROP TABLE IF EXISTS "ErpGoodsReceiptLine";
+DROP TABLE IF EXISTS "ErpGoodsReceipt";
+DROP TABLE IF EXISTS "ErpPurchaseOrderLine";
+DROP TABLE IF EXISTS "ErpPurchaseOrder";
+DROP INDEX IF EXISTS "ErpSupplierBill_businessId_purchaseOrderId_idx";
+ALTER TABLE "ErpSupplierBill" DROP COLUMN IF EXISTS "purchaseOrderId";
+```
+
+Children before parents. Removing these tables loses the record of what was ordered and received; it
+does **not** touch POS stock, the journals a supplier bill posted (they stay, as posted records must),
+or the suppliers themselves.
 
 ### Rollback of `20261031000000_erp_approval_consumption` on its own
 

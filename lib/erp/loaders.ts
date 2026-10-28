@@ -16,6 +16,7 @@ import { walletSummary } from "../messaging/billing";
 import { listNotifications, notificationVisibleTo, unreadNotificationCount } from "./notifications";
 import { taskSummary } from "./tasks";
 import { approvalSummary, listApprovalRequests } from "./approvals";
+import { listPurchaseOrders, purchaseOrderSummary } from "./procurement";
 import { hasErpPermission } from "./access";
 
 async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
@@ -279,6 +280,36 @@ export async function loadErpBusinesses(userId: string, isAdmin: boolean) {
     configured: configurations.some((configuration: any) => configuration.businessId === business.id),
     subscription: subscriptions.find((subscription: any) => subscription.businessId === business.id) ?? null,
   }));
+}
+
+/**
+ * The procurement centre.
+ *
+ * Three reads that the screen needs together: who we can buy from, what we can buy (the POS
+ * catalogue, shared rather than copied), and the orders themselves with their lines and receipts.
+ * Every query is tenant-scoped; a supplier or product from another business is never returned.
+ */
+export async function loadProcurementCentre(businessId: string) {
+  const [suppliers, products, orders, summary, bills] = await Promise.all([
+    safe(prisma.posSupplier.findMany({ where: { businessId, isActive: true }, orderBy: { name: "asc" }, take: 200, select: { id: true, name: true, termsDays: true, creditEnabled: true } }), []),
+    safe(prisma.posProduct.findMany({ where: { businessId, isActive: true }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, sku: true, unitKey: true, costKES: true, trackInventory: true } }), []),
+    safe(listPurchaseOrders(prisma, { businessId, limit: 50 }), []),
+    safe(purchaseOrderSummary(prisma, businessId), { draft: 0, awaiting: 0, open: 0, received: 0 }),
+    safe(prisma.erpSupplierBill.findMany({ where: { businessId, purchaseOrderId: { not: null } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, purchaseOrderId: true, billNumber: true, totalCents: true, status: true, dueAt: true } }), []),
+  ]);
+
+  const billsByOrder = new Map<string, any[]>();
+  for (const bill of bills as any[]) {
+    const key = String(bill.purchaseOrderId);
+    billsByOrder.set(key, [...(billsByOrder.get(key) ?? []), bill]);
+  }
+
+  return {
+    suppliers: (suppliers as any[]) ?? [],
+    products: (products as any[]) ?? [],
+    orders: (orders as any[]).map((order) => ({ ...order, bills: billsByOrder.get(String(order.id)) ?? [] })),
+    summary,
+  };
 }
 
 /**
