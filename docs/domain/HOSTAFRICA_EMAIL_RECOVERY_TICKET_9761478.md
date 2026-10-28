@@ -21,6 +21,25 @@ no Vercel env/code/deployment change was made in this task.**
 | Recovery executed | **BLOCKED** — requires HOSTAFRICA action on ticket #9761478 |
 | New project / deploy created | **No — none** |
 
+### 0.1 Support-request status — **ALREADY SENT; do not resend** (verified 2026-10-29)
+
+| Question | Answer | Evidence |
+| --- | --- | --- |
+| Has the recovery request been sent? | **YES — sent 29 Oct 2026, 02:39 EAT** | Gmail `SENT`, message `1a184e24a073511a`, threading on ticket **#9761478** |
+| To whom | `support@hostafrica.com` (reply on the existing ticket thread) | same |
+| Was a duplicate created? | **NO** — I sent nothing; no new message or draft was created in this task | Gmail draft/sent state unchanged |
+| Has HOSTAFRICA replied since? | **No.** Latest inbound on the thread is their 27 Oct 23:10 EAT reply (Micheal N.) | `from:hostafrica.com newer_than:2d` → newest is a 28 Oct marketing email |
+| Current ticket state | **Awaiting HOSTAFRICA** (ticket was "Answered" on 27 Oct; now awaiting their response to our 29 Oct recovery request) | thread order |
+| FTP instruction honoured | **PASS** — the sent message explicitly asks them to confirm FTP usage **before** changing that record and says not to remove or restore it unconfirmed | §8.1 |
+
+**No duplicate ticket or duplicate request was created.** The owner (or an earlier authorised turn)
+already sent the request, and its content already matches this task's required asks almost exactly
+(§8.1). The only two gaps are the explicit DKIM/DMARC question and a request for a full authoritative
+zone dump — addressed by a prepared **optional addendum** in §8.2 that has **not** been sent and
+needs owner approval (or can simply be folded into the next reply once HOSTAFRICA responds).
+
+---
+
 **Do not consider this recovered.** Recovery is complete only when §6 verification passes against
 authoritative DNS *and* mail flow has been independently tested.
 
@@ -205,7 +224,68 @@ real mail-flow test pass.**
 
 ---
 
-## 8. PASTE-READY SUPPORT REQUEST
+## 8. SUPPORT REQUEST — **ALREADY SENT, DO NOT RESEND**
+
+### 8.1 What was actually sent (verbatim substance), 29 Oct 2026 02:39 EAT
+
+Sent by the owner's mailbox to `support@hostafrica.com`, as a reply on ticket **#9761478**
+(subject: *Re: [Ticket ID: 9761478] Urgent DNS assistance required - jataaftercall.co.ke*).
+It already asks for everything this task required:
+
+| Required ask (this task) | Covered in the sent message? |
+| --- | --- |
+| Restore MX, SPF, `mail`, `smtp`, `pop` to documented previous values | **Yes** — all five listed with exact values |
+| Preserve the Vercel apex A records and `www` CNAME | **Yes** — quoted explicitly before the restore list |
+| Confirm the nameserver change and the correct current zone | **Yes** — asks why NS changed `dan1–dan4` → `ns1–ns4`, and to verify the current authoritative zone can hold the Vercel **and** email records together |
+| Verify whether FTP is in use **before** changing its record | **Yes** — "please confirm whether FTP is included in my hosting service and whether it is currently in use… please do not remove or restore that record without confirming" |
+| Check mail queues, delivery failures, bounces | **Yes** — "check for mail delivery failures, queued messages or bounces since the DNS change" |
+| Do not revert nameservers blindly | **Yes** — stated explicitly, with the reason (would disconnect the working website) |
+| Report final authoritative values | **Yes** — "provide the final authoritative DNS record values" |
+| Explicit DKIM / DMARC / `_domainkey` question | **Partial** — asks only "confirm whether any additional email records are required" |
+| Full authoritative zone dump | **No** |
+
+**Conclusion: a further message is not needed now.** Sending an immediate second email would duplicate
+an open, unanswered request and dilute the thread.
+
+### 8.2 OPTIONAL addendum — prepared, **NOT SENT**, needs owner approval
+
+Use this only if (a) the owner wants the two gaps closed now, or (b) HOSTAFRICA replies without
+answering the DKIM/DMARC and zone-dump points.
+
+> **Subject: Re: [Ticket ID: 9761478] — two clarifications on jataaftercall.co.ke**
+>
+> Good day Micheal,
+>
+> Thank you — following on from my previous message, two short clarifications so we can close this
+> out in one pass:
+>
+> **1. DKIM / DMARC / additional records.** My checks show **no** `_dmarc` TXT and **no** DKIM record
+> at any of these selectors: `default`, `mail`, `dkim`, `k1`, `k2`, `hostingermail-a`,
+> `hostingermail-b`, `hostingermail-c`, `selector1`, `selector2`, `google`, `s1`, `s2`. Please confirm
+> from your own zone data whether any DKIM key or DMARC record existed for this domain **before** the
+> change. If one did, please restore it. If a DKIM key was never issued, please say so explicitly so we
+> can record it — and confirm whether outbound mail from my mailboxes is DKIM-signed by a relay domain
+> (the SPF references `include:spf.antispamcloud.com`).
+>
+> **2. Authoritative zone dump.** Once the records are restored, please send me the **full
+> authoritative record list** for `jataaftercall.co.ke` from the zone that is currently live — every
+> A, CNAME, MX, TXT and NS record — so I can verify the website and email records coexist in one zone.
+>
+> Two things I would still like confirmed in writing:
+>
+> - **FTP:** whether FTP is part of my hosting service and whether that record should point at
+>   `102.218.215.41`. I have deliberately left it untouched.
+> - **Mail continuity:** whether any messages to `@jataaftercall.co.ke` were rejected, deferred or
+>   bounced since the DNS change, and whether mailbox contents are intact.
+>
+> Thank you,
+> JATA AFTERCALL
+
+### 8.3 Reference copy of the original draft (superseded)
+
+The message below was prepared in the previous turn and was **superseded** by the message actually
+sent (§8.1). It is retained only as wording for a future escalation. **Do not send it as-is** — it
+would duplicate the open request.
 
 > **Subject: URGENT — Email records missing after DNS change on jataaftercall.co.ke (ticket #9761478)**
 >
@@ -279,16 +359,53 @@ real mail-flow test pass.**
 
 ---
 
-## 9. What we do next
+## 9. Re-verification on 2026-10-29 and what happens next
 
-1. **You:** confirm the `ftp` decision (§3) and send the ticket text in §8.
-2. **HOSTAFRICA:** restores records in the current zone and answers questions 3–6.
-3. **Me, on their confirmation:** run V1–V11 (§6) against authoritative DNS, re-check Vercel
-   validation and website/HTTPS, and report each record as PASS/FAIL.
-4. **Then, separately:** authorized mail-flow test (send + receive) to clear the **NOT TESTED**
-   status on email. Only after that may email be described as working.
-5. **Separately, on approval:** explicit apex→`www` 308; Phase D env origins; optional DMARC/SPF
-   hardening.
+### 9.1 State check this turn — unchanged, still broken
 
-**Recovery is not claimed. Current DNS is objectively wrong for inbound mail, and nothing has been
-repaired yet.**
+| Check | Result | Observed |
+| --- | --- | --- |
+| SOA serial | **FAIL (no repair)** | still `2026102714` — zone untouched since 27 Oct |
+| Apex MX (authoritative, `ns1` 169.239.180.4) | **FAIL** | `0 jataaftercall.co.ke.` |
+| Apex TXT (authoritative) | **FAIL** | NODATA — no TXT records |
+| `mail` A | **FAIL** | resolves to `216.198.79.1`, `64.29.17.1` (via CNAME to apex) |
+| `smtp`, `pop` | **FAIL** | NXDOMAIN both |
+| `ftp` | **FAIL / untouched** | still CNAME → apex; deliberately not altered |
+| Apex A (website — preserve) | **PASS** | `216.198.79.1`, `64.29.17.1` |
+| `www` CNAME (website — preserve) | **PASS** | `2da49677b2414cfd.vercel-dns-017.com.` |
+| NS | **CONFIRMED** | `ns1–ns4.host-ww.net` |
+| HOSTAFRICA reply to our request | **BLOCKED** | none yet |
+
+### 9.2 Mail-flow testing — **BLOCKED for this environment**
+
+The only mailbox available to this workflow is **`gitanyakariuki@gmail.com`** — a Gmail account, **not**
+a `@jataaftercall.co.ke` mailbox. There is no HOSTAFRICA webmail/IMAP access here. Therefore:
+
+| Test | Status | Why |
+| --- | --- | --- |
+| **Inbound** to `@jataaftercall.co.ke` | **NOT TESTED / BLOCKED** | No domain mailbox reachable from here; no HOSTAFRICA webmail access. Cannot be tested until records are restored **and** the owner provides an authorised mailbox access route. |
+| **Outbound** from `@jataaftercall.co.ke` | **NOT TESTED / BLOCKED** | Same — no domain mailbox to send from. |
+
+Even after the apex MX is restored, a genuine mail-flow test needs either the owner sending from/to a
+real domain mailbox, or authorised webmail/IMAP access. **I will not declare email recovery from DNS
+records alone.**
+
+### 9.3 Next actions
+
+| # | Action | Owner |
+| --- | --- | --- |
+| 1 | **Wait for HOSTAFRICA's reply** to the request sent 29 Oct 02:39 EAT. Do not send a duplicate. | Owner / waiting |
+| 2 | If they reply without answering DKIM/DMARC or a zone dump, send the §8.2 addendum (needs approval). | Owner |
+| 3 | Confirm the **FTP** position in writing before any FTP record change. | HOSTAFRICA |
+| 4 | On their "restored" confirmation, I re-verify authoritative MX/TXT/`mail`/`smtp`/`pop`, SOA serial advance, Vercel validation, HTTPS and website behaviour (§6 V1–V10). | Me |
+| 5 | Commission an **authorised inbound + outbound mail-flow test** (§9.2) before declaring email recovered. | Owner + me |
+| 6 | Separately, on approval: explicit apex→`www` **308**; Phase D env origins (`PUBLIC_BASE_URL`, `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`) and Paystack callback URLs. | Owner approval |
+
+### 9.4 Security hygiene
+
+The HOSTAFRICA emails in this thread contain a **per-ticket access token in the ticket URL** and
+several **two-factor verification codes**. None of these have been copied into this document, any
+commit, or any chat message, and they must not be. Only the numeric ticket ID **#9761478** is
+recorded, which is not a credential.
+
+---
