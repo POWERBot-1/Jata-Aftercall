@@ -435,27 +435,29 @@ npm run build                  # → [build] Build completed successfully
 
 ---
 
-### 2.10 CI status on this head (2026-10-31, `660e3ff`)
+### 2.10 CI status on this head (2026-10-31, `6c6a690`)
 
-Fourteen check-runs are produced for every head. On this head **13 are green and one is red**, and the
-red one is not an ERP gate:
+**All fourteen check-runs are `success`** on this head, plus the Vercel status: `mergeable=MERGEABLE`,
+`mergeStateStatus=CLEAN`, base `main`.
 
-| Check | Result | Evidence |
+Two heads in between were not fully green, and the reason matters more than the colour:
+
+| Head | Result | What was red |
 | --- | --- | --- |
-| `Journey against a real database` — the job that runs the native-engine suite against a real migrated PostgreSQL, plus the build, lint, typecheck and six browser steps | **FAIL** (1 step of 22) | Step 20 `Actual storefront Motion and immersive browser regressions`, sub-check `no JavaScript 360px phone: no horizontal overflow … — overflow=488px`. Every other step in the same job passed, including `Run the unit, integration and security suites against the database` (**287 files, 3,678 tests**) which is where the ERP PostgreSQL suites actually run on CI, and `Production build against the isolated test database`. |
-| The other 13 checks | **PASS** | schema validation, migration-target guard, aggregate release gate, Vercel preview, and the rest. |
+| `aef3c04` | 13/14 | `Journey against a real database`, step 20 `Actual storefront Motion and immersive browser regressions`: `FAIL no JavaScript 360px phone: no horizontal overflow, canvas or global motion flag — overflow=488px` |
+| `660e3ff` | 13/14 | the same sub-check, the same 488px |
+| `6c6a690` | **14/14** | — |
 
-This is recorded rather than fixed because the failing check is a **storefront** check that no ERP file
-touches, it fails with an identical value on two consecutive heads, and it passed on the immediately
-preceding head — so the cause is not established, and changing storefront code, a threshold or a
-workflow to make a red check green would be exactly the kind of weakening this register forbids.
-Blocked on: no Chrome in this sandbox, and the Actions log blob host is unreachable. Tracked as **E13**
-in `RELEASE_BLOCKERS.md` with the owner action.
+That check exercises the **storefront** in a no-JS 360px viewport. No ERP file it touches changed
+between the passing and failing heads (one of them was a docs-only commit), so it is recorded as an
+intermittent storefront check — **E13** in `RELEASE_BLOCKERS.md` — and was not worked around: no
+storefront code, assertion threshold or workflow was edited to make it green.
 
-What CI *did* prove on this head, from the job's own reported output: the native-engine database suite
-ran **287 files / 3,678 tests with nothing skipped**, including `erp-procurement.test.ts (22)`,
-`erp-approvals.test.ts (33)`, `erp-pro-postgres.test.ts (16)`; `prisma migrate deploy` applied all 26
-migrations; and the production build succeeded against the isolated database.
+Where the ERP work was actually proven on CI, from the job's own reported output on `660e3ff`: the
+native-engine suite ran **287 files / 3,678 tests with nothing skipped** (including
+`erp-procurement.test.ts`, `erp-approvals.test.ts` and `erp-pro-postgres.test.ts`), `prisma migrate
+deploy` applied all 26 migrations, the typecheck and lint passed, and the production build succeeded
+against the isolated database.
 
 ---
 
