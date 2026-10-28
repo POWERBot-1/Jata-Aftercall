@@ -17,6 +17,31 @@ const EVIDENCE = process.env.EVIDENCE_DIR || join(process.cwd(), ".cache", "veri
 if (!CHROME_PATH) { console.error("CHROME_PATH required. Browser checks NOT RUN."); process.exit(2); }
 mkdirSync(EVIDENCE, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Geometry may only be measured once the application stylesheet has actually been applied. The
+// server sends the hero SVG before `/layout.css`, so an image-only readiness gate can be satisfied
+// while `link.sheet` is still null; measuring then reads the unstyled document (24px default h1,
+// 800px intrinsic illustration in a 360px viewport = 488px overflow). That race produced the
+// intermittent storefront 360px failure. This is a measurement precondition, not a relaxation:
+// `overflow <= 0` and every other threshold are unchanged.
+// Polling is driven from Node (`page.evaluate`) rather than `page.waitForFunction`, because the
+// latter schedules its poller inside the page, where background-tab timer throttling can stall it
+// for a minute or more even after the stylesheet has applied.
+async function waitForStylesheets(page, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const applied = await page.evaluate(() => {
+      const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
+      return links.length > 0 && links.every((link) => {
+        if (!link.sheet) return false;
+        try { return link.sheet.cssRules.length > 0; } catch { return true; }
+      });
+    }).catch(() => false);
+    if (applied) return true;
+    if (Date.now() > deadline) return false;
+    await sleep(100);
+  }
+}
 const results = [];
 const runs = [];
 const miniUrl = (url) => /(?:motion.*mini|mini.*motion)/i.test(new URL(url).pathname) && url.includes("/_next/static/chunks/");
@@ -27,6 +52,10 @@ function check(name, ok, details = "") {
 
 async function newPage(browser, options = {}) {
   const page = await browser.newPage();
+  // Background pages get timer/rendering throttled in headless Chrome, which stalls in-page
+  // polling and IntersectionObserver delivery. Every scenario owns its page, so foregrounding
+  // it cannot disturb another scenario.
+  await page.bringToFront();
   const mobile = options.mobile ?? true;
   await page.setViewport({ width: mobile ? 360 : 1280, height: mobile ? 740 : 800, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1 });
   await page.setCacheEnabled(false);
@@ -156,6 +185,15 @@ async function scenario(name, options, test, query = "") {
     // page the rAF scheduler is unreliable in headless Chrome, which made the first cold scenario
     // time out even though the SVG had already been served. The assertion and 15s budget are
     // unchanged; only the polling mechanism is made deterministic.
+    // Geometry must only be measured once the stylesheet has actually been applied. The server
+    // sends the hero SVG before `/layout.css` arrives, so the image readiness gate below can be
+    // satisfied while `link.sheet` is still null; measuring then reads the unstyled document
+    // (24px default h1, 800px intrinsic illustration inside a 360px viewport = 488px overflow).
+    // That race produced the intermittent storefront 360px failure. This is a measurement
+    // precondition, not a relaxation: `overflow <= 0` and every other threshold are unchanged.
+    // `readyState === "complete"` is NOT usable here — the dev document keeps a request open, so
+    // the load event can stall indefinitely (observed: 30s timeout with no CSS dependency).
+    if (!(await waitForStylesheets(page))) throw new Error("application stylesheet never applied");
     await page.waitForFunction(() => document.querySelector(".eb-hero__media img")?.naturalWidth > 0, { timeout: 15000, polling: 100 });
     check(`${name}: actual local synthetic illustration loaded`, true);
     await test(page, trace);

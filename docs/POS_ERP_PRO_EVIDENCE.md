@@ -459,6 +459,60 @@ native-engine suite ran **287 files / 3,678 tests with nothing skipped** (includ
 deploy` applied all 26 migrations, the typecheck and lint passed, and the production build succeeded
 against the isolated database.
 
+### 2.11 Storefront 360px overflow: E13 root-caused (2026-10-28, harness fix on top of `6dbfd7a`)
+
+E13 was carried as an "intermittent storefront check". It is now **root-caused, and the defect was in
+the measurement, not in the storefront layout**. No storefront style, assertion, threshold or workflow
+was changed.
+
+**Reproduction.** Run locally against `next dev` (the same command CI uses for this step) with a
+Chromium build whose libraries were unpacked from the bundled `al2023.tar.br`. Twelve unmodified runs
+of the harness produced one failure; instrumenting it showed the measured document at that instant had
+`document.styleSheets.length === 1` with the single `link[rel="stylesheet"]`
+(`/_next/static/css/app/layout.css`) still `sheet === null`, `getComputedStyle(h1).fontSize === "24px"`
+(browser default), and the hero illustration at its intrinsic `800px` width. `800 + 48` of container
+padding `- 360` viewport `= 488px` — **exactly the CI value**.
+
+**Deterministic proof.** Holding the stylesheet response back 3s at the network layer reproduces the
+CI failure every time, and the same page one moment later is clean:
+
+| Measurement point | overflow | stylesheets applied | hero width | h1 size |
+| --- | --- | --- | --- | --- |
+| image-decoded gate, stylesheet delayed 3s (old harness gate) | **488px** | 1 (`layout.css` pending) | 800px | 24px |
+| same page once `layout.css` has applied | **0px** | 2 (incl. `layout.css`) | 360px | 38.4px |
+
+**Why the harness could get there.** `page.goto` used `domcontentloaded`, and the only readiness gate
+was `hero image naturalWidth > 0`. The server streams the SVG before the CSS chunk is fetched, so the
+image gate could be satisfied while the layout stylesheet was still pending — and `contentChecks()`
+then measured unstyled geometry. On a dev server whose CSS compile is cold, that window is wide enough
+to lose the race occasionally, which is why the same assertion passed on most heads.
+
+`readyState === "complete"` is **not** a usable gate here: the dev document keeps a request open, and
+in testing the `load` event stalled past 30s (with no CSS dependency at all), so a `load`-based wait
+would convert a rare wrong measurement into a rare hard timeout.
+
+**Fix (measurement precondition only).**
+
+1. `waitForStylesheets(page)` — no geometry is read until every `link[rel="stylesheet"]` has a loaded
+   sheet with readable rules (30s budget; failure is an explicit scenario failure, never a pass).
+2. The poller runs from Node via `page.evaluate`, not `page.waitForFunction`: in-page pollers are
+   subject to background-tab timer throttling. Observed: the stylesheet finished at 112ms while the
+   in-page poller had still not fired after 40s, which produced two false timeouts before the change.
+3. `page.bringToFront()` on every scenario page so timers, rendering and IntersectionObserver
+   delivery are not throttled. Each scenario owns its page, so this cannot disturb another one.
+
+The `overflow <= 0` assertion, the exact-price check, the canvas/global-flag checks and every other
+threshold are byte-identical to before.
+
+**Evidence after the fix.** 5 consecutive full runs of `storefront-motion.check.mjs`: **124 passed,
+0 failed** each. The complete browser suite CI runs in that job also passes locally against the same
+dev server: immersive 22, layout 7, actionbar 37, families 167, media-local 29 — **386 checks, 0
+failed**.
+
+**Status:** `PASS` for the root cause and the harness fix, with the caveat that these runs are a local
+Chromium unpacked from the pinned `@sparticuz/chromium@131` build against a local dev server, **not**
+the CI runner. E13 stays **open** until two consecutive CI heads that contain this change are green.
+
 ---
 
 ## 3. Item-by-item status
