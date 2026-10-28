@@ -1270,3 +1270,70 @@ sandbox, so the images themselves were reviewed from the local capture run of th
 
 **What this table does not say:** it says the checks passed. It does not say the product is finished,
 that E4/E5/E6/E8 are closed, or that a human approved the design.
+
+## 13. Final candidate `f9141a7`: E4 decisions, E8 directUrl, and the release gates (2026-10-28)
+
+### 13.1 Local results at this head
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run tests/unit` | **2,449 pass / 1 fail**, and the failure is environmental: `Prisma.dmmf` is undefined because this sandbox cannot run `prisma generate` (binaries.prisma.sh is unreachable). The same failure reproduces on the base commit `3d730ec` with my changes stashed, so it is not caused by this pass. CI, which can generate, runs the same suite green. |
+| `node --test scripts/__tests__/*.test.mjs` | **298 pass / 0 fail**, including the two new contracts that a pooled migration URL never reaches `npx` |
+| `tests/unit/direct-url-guard.test.ts` | **17/17** |
+| `npm run test:erp:layout-fixture` | **40/40** across 8 viewports (320/360/390/430/700/768/1024/1366) |
+| `npx tsc --noEmit` | the 4 errors that the base commit also has, all caused by the missing generated client (`Prisma.dmmf`, `BusinessUncheckedCreateInput`); no new error |
+| `npm run lint` | **0 errors** (44 pre-existing warnings) |
+
+### 13.2 CI at this head — 15/15 pass
+
+| Check | Result | Run / job |
+| --- | --- | --- |
+| Schema, types, unit suite, build | pass (3m01s) | run `40779051193` / job `123135769262` |
+| Static (install, generate, lint, typecheck, audit) | pass (1m23s) | run `40779050982` / job `123135770116` |
+| Migrations + schema on PostgreSQL 18 | pass (1m59s) | run `40779050982` / job `123135769816` |
+| Production build path on PostgreSQL 18 | pass (2m29s) | run `40779050982` / job `123135770301` |
+| Exact candidate applies on disposable PostgreSQL 18 | pass (2m04s) | run `40779051125` / job `123135769266` |
+| D2 — build, audit and controls | pass (2m28s) | run `40779051125` / job `123135768759` |
+| Failure paths actually fail | pass (1m10s) | run `40779050982` / job `123135770130` |
+| Journey against a real database | pass (9m54s) | run `40779051127` / job `123135769095` |
+| ↳ ERP pages over real HTTP | pass | same run |
+| ↳ ERP task board over real HTTP | pass | same run |
+| Real-Chrome six-viewport capture | pass (5m05s) | run `40779051069` / job `123135768801` |
+| ↳ ERP screens at six viewports | pass | same run; artifact `erp-visual-71` 3.91 MB |
+| Migrations and PostgreSQL suite | pass (1m21s) | run `40779051193` / job `123137112730` |
+| Migration target guard | pass (9s) | run `40779051127` / job `123135768740` |
+| Release gate (aggregate) | pass (2s) | run `40779050982` / job `123136883233` |
+| Vercel / Vercel Preview Comments | pass | preview only |
+
+**No approving review exists on the PR.** Branch protection could not be read from here
+(`gh api .../branches/main/protection` → 403 "Resource not accessible by integration"), so whether a
+review is *required* is unverifiable from this sandbox — and a review cannot be manufactured anyway.
+
+### 13.3 Why this candidate was not merged or deployed
+
+Both are blocked by the authorization's own terms, not by a weak check.
+
+**Merge would run production migrations.** `main` is the production branch; a merge triggers the Vercel
+production build; `scripts/build.sh` runs `prisma migrate deploy` whenever `DATABASE_URL` is set, which
+it is in Production. Merging would therefore apply **the seven new ERP migrations to the production
+database**. The authorization excludes production database migrations and production schema changes,
+so this needs separate authorization — and it is the exact operation E8 exists to de-risk, with E8's
+Neon rehearsal still blocked.
+
+**A deploy would fail closed until `DIRECT_URL` exists in Vercel.** The schema now references
+`DIRECT_URL`. `scripts/lib/prisma-env.sh` defaults it to `DATABASE_URL`, and on a Neon pooled URL the
+guard then **refuses** rather than migrating through PgBouncer. That is the correct behaviour, but it
+means production cannot migrate until `DIRECT_URL` is configured. Setting it is a production
+configuration change this pass is not authorized to make.
+
+**Production smoke tests were therefore not run**, because nothing was deployed. Reporting them as
+anything but NOT TESTED would be a fabrication.
+
+### 13.4 What the owner needs to do, in order
+
+1. Decide on the E4 screens (see `docs/POS_ERP_PRO_E4_OWNER_REVIEW.md` §5).
+2. Run the Neon rehearsal from `docs/POS_ERP_PRO_E8_DIRECTURL_PLAN.md` §6 on a disposable free-tier
+   project — this sandbox cannot reach `api.neon.tech`.
+3. Add `DIRECT_URL` to Vercel **Preview** first, confirm a preview deploy migrates correctly, then add
+   it to **Production**.
+4. Only then authorize the merge, knowing it will migrate production.
