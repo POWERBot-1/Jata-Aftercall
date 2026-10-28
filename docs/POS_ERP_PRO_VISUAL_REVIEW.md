@@ -47,6 +47,11 @@ is stated plainly: this closes the "has anybody actually looked at these screens
 2. **KPI cards below 900px.** Options: (a) current stacked full-width cards; (b) two columns at
    360px and wider, so three figures take two rows instead of three cards; (c) a single compact row
    of three numbers with no card chrome. Current behaviour is (a).
+3. **The phone identity block (V7).** Options: (a) leave it as it is; (b) move the module label and
+   plan badge out of the header into the page body at ≤430px, leaving only the business name and the
+   inbox action; (c) shorten the module label to "ERP" below 430px and let the business name take the
+   width. Current behaviour is (a) — unchanged deliberately.
 
-Neither question changes any measured result above, and neither blocks the release assessment —
-they are visual decisions, recorded as such.
+None of the three changes any measured result above, and none blocks the release assessment — they
+are visual decisions, recorded as such. An owner-facing summary with screenshots and a recommended
+option for each is in `docs/POS_ERP_PRO_E4_OWNER_REVIEW.md`.

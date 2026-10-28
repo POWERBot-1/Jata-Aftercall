@@ -1138,3 +1138,103 @@ PRISMA_TEST_DATABASE_URL="postgresql://...?pgbouncer=true&connection_limit=1" np
 
 Both page checks and the visual check exit `2`/report `BLOCKED` when the environment cannot support them,
 and the CI steps treat that as a failure.
+
+## 11. Review pass on `a018bbe`: PR audit, E4 package, E5/E6/E13-residual, E8 design (2026-10-28)
+
+This pass added no product behaviour. It audited the PR, built the owner-review package for E4,
+investigated E5, E6 and the E13 residual, and wrote the E8 deployment design. One test file was added
+(the live-messaging fail-closed gate), two dead documentation citations were fixed, and one stale
+"not built" claim in the blocker register was corrected.
+
+### 11.1 The PR audit (144 files, +34,278 / −3)
+
+| Check | Result |
+| --- | --- |
+| Head / base | `a018bbe0ac57f4525aefbcff0e7ba9fd8bbd779a` → `main` (`a04124de`), merge-base `a04124d`, `MERGEABLE` / `CLEAN`, **no approving review**, not a draft |
+| Changed files | **144**: 130 added, 14 modified, **0 removed** |
+| Total deletions | **3 lines** (`lib/format.ts` 1 — a replaced import; `tests/unit/repair-guards.test.ts` 1; `prisma/schema.prisma` 1 — the datasource line) |
+| Files outside the ERP scope | none. The only non-`erp` paths are the shop-facing order routes (`app/api/store/[slug]/orders`, `app/store/...`), `lib/messaging/*`, `app/erp.css` and `.github/workflows/pos-erp-verify.yml` — all part of the delivered product |
+| Binaries / large files / lockfile churn | none; the largest added file is 1,659 lines of TypeScript |
+| Secrets in the added lines | none: no `sk_live`/`sk_test`/`pk_live`, no AWS/GitHub token shapes, no private keys, no JWT literals, no hard-coded passwords |
+| `.env` values committed | `.env.example` only, and every new value is empty (`""`) |
+| Destructive SQL in the 7 new migrations | none — no `DROP TABLE`, `DROP COLUMN`, `TRUNCATE` or `DELETE` |
+| Effect on existing POS screens | `app/layout.tsx` gains one import of `app/erp.css`; **every selector in that sheet is scoped under `.erp`** (checked by parsing all selector groups, keyframes excepted: 0 unscoped selectors) |
+| `lib/db.ts` change | additive only (0 deletions): fallback-stub model entries so the offline build renders rather than throwing |
+| Existing assertions weakened | none found. The only harness change (`storefront-motion.check.mjs`) adds a measurement precondition; its `overflow <= 0` assertion is byte-identical to the base commit |
+
+**Artifact availability (checked on `a018bbe`):** `erp-visual-71` (3.29 MB, 24 JPEGs) — **present, not
+expired**, expires 2026-11-11; `premium-screenshots-71` (13.2 MB) — present. The artifact blob host is
+unreachable from this sandbox, so the images were read from the local run instead of the download.
+
+### 11.2 E4: the owner-review package
+
+`docs/POS_ERP_PRO_E4_OWNER_REVIEW.md` — the artifact links, what the automated pass guarantees, the three
+recorded design questions with options and a recommendation for each, what is **not** being asked, and a
+one-line sign-off format. A browsable gallery was added so the images can be reviewed without unzipping
+an artifact: `scripts/erp/erp-visual-gallery.mjs` (`npm run test:erp:visual:gallery`) reads the capture's
+own `evidence.json` and writes `gallery.html` with every capture, its measured overflow, its heading and
+its PASS/FAIL state. It exits 1 rather than rendering an empty page when the evidence is missing.
+Verified locally: **24 images, 24 PASS badges, 6 viewports, 4 screens**.
+
+**E4 remains OPEN** and is now explicitly waiting on the owner, not on engineering.
+
+### 11.3 E5: what was missing and what was added
+
+The live paths fail closed in three places (messaging 409 + `PROVIDER_NOT_CONFIGURED`; eTIMS requires the
+flag *and* a certified adapter key with `canSubmit` hard-false; the shop takes no payment). Two of the
+three were tested. The messaging half was **not**: `UnconfiguredLiveProvider` and `liveProviderReady`
+were exported and used by the dispatch route with no test anywhere in the suite.
+
+`tests/unit/messaging-live-gate.test.ts` (7 tests, all passing) now proves: an unknown provider key
+resolves to a live adapter that reports `configured: false`; every send is refused with
+`PROVIDER_NOT_CONFIGURED`, `retryable: false`, no provider message id, and the words "nothing was sent";
+callbacks are refused and produce no parsed events; health is `NOT_CONFIGURED`; `liveProviderReady` is
+false for every unregistered key and true only for a registered, configured adapter; the sandbox adapter
+is not live; and an unset webhook secret rejects a callback.
+
+**E5 stays OPEN** — no provider, credential or certification exists, so delivery and settlement remain
+unverified. It does not block the merge.
+
+### 11.4 E6: the review's citations were audited
+
+Ten test paths are cited in `docs/POS_ERP_PRO_SECURITY_REVIEW.md`. **Two do not exist**
+(`tests/unit/erp-access.test.ts`, `tests/unit/erp-wallet.test.ts`), so two control claims could not be
+checked by following their citation. Both rows now point at the files that actually assert those
+controls, and the audit is recorded in the document. The controls themselves were already covered —
+this was a documentation defect, and it is exactly the failure mode the blocker was opened for.
+
+**E6 stays OPEN** pending an independent human review; the nine accepted risks a reviewer must consider
+are unchanged and named.
+
+### 11.5 E13 residual
+
+The storefront fix corrected one script. Eleven other browser scripts read geometry with no stylesheet
+precondition, and **four of them gate CI on `overflow <= 0`**: `actionbar-layout` (6 reads),
+`fixture-layout` (1), `storefront-families` (1), `studio-authenticated` (4). They carry the same latent
+flake and have not failed in the runs inspected. Recorded as a latent risk, deliberately not refactored
+in this pass (four CI-gating harnesses immediately before a merge review), with the remediation and the
+commands to re-run each one written into the register. No assertion was changed.
+
+### 11.6 E8: design only
+
+`docs/POS_ERP_PRO_E8_DIRECTURL_PLAN.md` — the three-part minimal change (`directUrl` in the datasource;
+a preflight guard in `scripts/migrate.sh` that refuses a pooled host without a direct URL, and refuses a
+"direct" URL that is the pooled host; the `.env.example`/`DEPLOYMENT.md` updates), the exact environment
+matrix (Vercel Production/Preview/Development, five workflows and eight job-level `DATABASE_URL` blocks,
+local `.env.local`), the before/after behaviour table, the rollback plan including P3009 recovery, the
+non-production rehearsal procedure, and the risk register. **Nothing in it was executed**: no project
+was provisioned, no secret was read or written, no production configuration changed, no provider
+migration was run. E8 stays **OPEN**.
+
+### 11.7 Verification of this pass
+
+Run on the final candidate head (see §12 for the CI result of that head):
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| `npm run lint` | 0 errors |
+| `npm run build` | completed |
+| `npx vitest run tests/unit` | **2,433 tests pass** (2,426 before + 7 new live-gate tests) |
+| `npm run test:erp:visual:gallery` | PASS — 24/24 captures, 6 viewports, 4 screens |
+| PR checks in CI | see §12 |
