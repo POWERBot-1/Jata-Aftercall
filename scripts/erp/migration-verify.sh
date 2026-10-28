@@ -90,6 +90,38 @@ base_table_count() {
 }
 scalar() { "$PSQL" "$DB_URL" -tAc "$1"; }
 
+# How many non-ERP tables the *upstream* migration chain creates is not a constant: main adds
+# migrations between reviews (74 when this script was written, 87 after the 2026-10-28 merge).
+# Hard-coding it turns an upstream release into a false failure here, so the baseline is measured
+# once per run on a throwaway database built from every migration that precedes the ERP one.
+BASELINE_BASE_TABLES=""
+measure_base_tables() {
+  local stamp_db="erp_pro_baseline_scratch" url dir count
+  url="${DB_URL%/*}/$stamp_db"
+  "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null || return 1
+  "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE \"$stamp_db\";" >/dev/null || return 1
+  for dir in $(ls -1 "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_' | sort); do
+    [ "$dir" = "$ERP_MIGRATION" ] && break
+    if ! "$PSQL" "$url" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$dir/migration.sql" >/dev/null 2>&1; then
+      echo "      baseline measurement failed at $dir" >&2
+      "$PSQL" "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null 2>&1
+      return 1
+    fi
+  done
+  count=$("$PSQL" "$url" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'Erp%' and table_name not like 'Msg%';")
+  "$PSQL" "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null 2>&1
+  echo "$count"
+}
+baseline_base_tables() {
+  if [ -z "$BASELINE_BASE_TABLES" ]; then
+    BASELINE_BASE_TABLES="$(measure_base_tables)" || BASELINE_BASE_TABLES=""
+    case "$BASELINE_BASE_TABLES" in
+      ''|*[!0-9]*) fail "could not measure the pre-existing table baseline"; BASELINE_BASE_TABLES="?" ;;
+    esac
+  fi
+  echo "$BASELINE_BASE_TABLES"
+}
+
 # Every ERP row references a Business, so the parent rows have to exist in the target database
 # before a data-only restore can succeed.
 seed_baseline_rows() {
@@ -127,7 +159,9 @@ clean_install() {
   local erp base
   erp=$(erp_table_count); base=$(base_table_count)
   [ "$erp" = "38" ] && pass "38 ERP tables created" || fail "expected 38 ERP tables, found $erp"
-  [ "$base" = "74" ] && pass "74 pre-existing tables created" || fail "expected 74 pre-existing tables, found $base"
+  local want_base
+  want_base=$(baseline_base_tables)
+  [ "$base" = "$want_base" ] && pass "$base pre-existing tables created" || fail "expected $want_base pre-existing tables, found $base"
   local fks missing
   fks=$(scalar "select count(*) from information_schema.table_constraints tc join information_schema.tables t on t.table_name=tc.table_name and t.table_schema=tc.table_schema where tc.constraint_type='FOREIGN KEY' and t.table_schema='public' and (t.table_name like 'Erp%' or t.table_name like 'Msg%');")
   [ "$fks" -ge 38 ] && pass "$fks foreign keys on ERP tables" || fail "expected at least 38 ERP foreign keys, found $fks"
@@ -216,7 +250,9 @@ rollback_and_recovery() {
   done
   [ "$dropped" = "38" ] && pass "all 38 ERP tables dropped in documented reverse-dependency order" || fail "dropped $dropped of 38 ERP tables"
   [ "$(erp_table_count)" = "0" ] && pass "no ERP tables remain after rollback" || fail "ERP tables remain after rollback"
-  [ "$(base_table_count)" = "74" ] && pass "all 74 pre-existing tables survived the rollback" || fail "pre-existing tables were lost during rollback"
+  local want_base
+  want_base=$(baseline_base_tables)
+  [ "$(base_table_count)" = "$want_base" ] && pass "all $want_base pre-existing tables survived the rollback" || fail "pre-existing tables were lost during rollback"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "POS rows survived the rollback" || fail "POS rows were lost during rollback"
 
   # Recovery: re-apply the ERP migration on the rolled-back database.
