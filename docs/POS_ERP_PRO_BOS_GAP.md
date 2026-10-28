@@ -116,3 +116,27 @@ dashboard's pending-approval figure (23 domain + 6 render + 10 PostgreSQL tests)
 **Nothing else in section 1 moved.** Modules 5, 8, 11, 12, 13 and 17 are still MISSING; no
 placeholder screen was created for any of them, and no capability above is claimed as working
 beyond what its row states.
+
+## 6. Verification status for directive item 6 (2026-10-28)
+
+Item 6 of the directive asks for specific verification, not a general statement that testing happened.
+This table records each requested type, its exact status, and the artifact that supports it. **Modules are
+not moved by this table** — it says what was verified, not what was built.
+
+| Requested verification | Status | Artifact / what actually ran |
+| --- | --- | --- |
+| Unit and integration tests | **PASS** | Vitest suites per slice; the ERP domain, render and PostgreSQL files run in CI on every head. |
+| Real-PostgreSQL tests | **PASS** | 6 files / **67 tests** against disposable PostgreSQL 16.2, in pooler mode (`?pgbouncer=true`), with `connection_limit=1`, and with `connection_limit=2` on a cluster capped at `max_connections=8` — all 67 pass in each mode. |
+| Migration forward + rollback | **PASS** | `scripts/erp/migration-verify.sh all`: 24 PASS — 48 ERP tables created, 87 pre-existing created, 55 foreign keys, upgrade path, `pg_dump` export, documented reverse-dependency drop, no ERP tables left after rollback, all 87 pre-existing survive, then re-applied for recovery. |
+| Tenant isolation and authorisation | **PASS (local) / pending CI** | `npm run test:erp:pages` — **24/24**: signed-out redirect, owner sees real rows, staff cannot approve what they raised, manager sees the decision, viewer is refused the write controls with a stated reason, and cross-tenant requests disclose no foreign title, page or record **and** answer with an explicit refusal. Plus `npm run test:erp:tasks-page` **19/19**. |
+| Concurrency, idempotency, failure paths | **PASS** | PostgreSQL suites: grant consumption is a single conditional UPDATE (verified under real concurrency), requisition conversion goes through `createPurchaseOrder` exactly once, duplicate posting refused, over-receipt refused per line, terminal task states enforced, automation idempotency keys unique per tenant. Failure paths assert refusal, not silent success. |
+| End-to-end across connected workflows | **PARTIAL** | Proven across requisition → approval → purchase order → goods receipt → POS stock movement → supplier bill → balanced journal → audit. **Not** an end-to-end browser journey: the ERP browser checks drive the real pages but each screen is asserted separately, not as one person's session across the chain. |
+| Responsive browser at the six viewports | **PASS** | `npm run test:erp:visual` — **24/24** captures on HeadlessChrome 131 at 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768; HTTP 200, expected heading, `scrollWidth − clientWidth = 0` everywhere. |
+| Lint / typecheck / build / model check / full CI | **PASS (local) / CI pending** | `npx tsc --noEmit` clean, `npm run build` completed successfully, model/schema check via the migration guard. The CI run for this commit is the outstanding item — no green CI is claimed for it here. |
+| Human visual review with screenshots and recorded findings | **BLOCKED** | The review exists (`docs/POS_ERP_PRO_VISUAL_REVIEW.md`, findings V1–V8, two defects fixed) but the reviewer was the **agent**, not the owner or a designer. Owner/designer sign-off has not happened. **BLOCKED pending owner review**, not PASS. |
+| Storefront 360px failures investigated via recorded run IDs | **PASS** | Root cause: the harness measured before the stylesheet applied (unstyled 800px hero + 48px padding inside 360px = exactly the reported 488px). Fixed in the measurement precondition only; no assertion or threshold changed; closure recorded on two green CI heads. |
+
+**Deliberately not claimed:** three-way matching, tolerances, exception queues, price/lead-time history,
+reorder proposals and scorecards remain **NOT IMPLEMENTED**; modules 2–5 of the directive remain **NOT
+STARTED**; the provider-database rehearsal (E8) remains **BLOCKED** on a real Neon project; and no
+out-of-product notification delivery is claimed anywhere.

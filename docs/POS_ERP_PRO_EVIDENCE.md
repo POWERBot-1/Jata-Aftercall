@@ -1012,3 +1012,116 @@ were run against a real Chromium 153 and a `next dev --webpack` server, twice (w
 live database): motion 124, immersive 22, layout 7, actionbar 37, families 167, media-local 29 —
 **386 assertions, 0 failures**. That run is what produced the dev-mode `next-env.d.ts` rewrite, and
 the reason the guard now exists.
+
+## 10. ERP pages, ERP screenshots and the provider-database rehearsal (2026-10-28)
+
+Three gaps were closed far enough to change what can honestly be claimed, and one deployment defect
+was found that is **not** fixed. Every number below was produced by the script named beside it; where a
+number is missing, the reason is stated instead.
+
+### 10.1 The ERP pages checked over real HTTP (blocker E14) — **PASS 24/24 and 19/19, local**
+
+`scripts/erp/erp-pages.check.mjs` (new, `npm run test:erp:pages`) and `scripts/erp/tasks-page.check.mjs`
+(19 checks, `npm run test:erp:tasks-page`) drive the **production build** over real HTTP with real signed
+session cookies against a disposable PostgreSQL 16.2 database. Both were wired into
+`interactive-business-e2e.yml`, immediately after the build step, and a `BLOCKED` result fails the job —
+an environment that cannot run a check is never reported as a pass.
+
+| What is proven | How |
+| --- | --- |
+| A signed-out visitor is redirected to `/login` (307), not shown ERP data | request without a cookie |
+| The owner receives real rows on the workspace, tasks, requisitions and procurement pages | seeded rows + `h1` + marker text |
+| Staff can raise a requisition but cannot approve their own request | server-side permission, not UI hiding |
+| A manager who did not raise it sees Approve/Reject | approver ≠ requester |
+| A viewer reads the page but is refused the write controls, and is told why | form absence + refusal copy |
+| **Cross-tenant access discloses nothing, in both directions** | foreign title, foreign page marker and foreign record text must all be absent, *and* the response must be an explicit refusal (4xx, or the application's own refusal panel) |
+| The workspace navigation links requisitions, procurement and the rest | link presence |
+
+**The assertion was fixed, not weakened.** The old cross-tenant test demanded `status >= 400`. The ERP
+layout deliberately renders a 200 refusal panel for a workspace the session may not open, so the test
+contradicted the product — and it would also have accepted a 500 that leaked data, i.e. it could pass on
+the worst outcome. It now asserts the security contract itself. A second flaw was found while fixing it:
+`leakedId` was computed **after** the foreign id had been stripped from the body, so it could never fire.
+That assertion was deleted rather than kept as evidence that cannot fail.
+
+**Environment honesty:** the repo client is generated with `--no-engine` (binaries.prisma.sh is
+unreachable here), so the local runs used a **temporary, never-committed** branch in `lib/db.ts` that
+instantiates a locally generated **WASM query-engine client with `@prisma/adapter-pg`**. It is Prisma's
+own query engine, not a mock, but it is *not* the pinned native-engine path. `lib/db.ts` is reverted to
+HEAD afterwards (`git diff lib/db.ts` = 0 lines). CI supplies the native engine, so CI proves the
+shipping configuration; the local numbers prove the page behaviour.
+
+### 10.2 The ERP screens at six viewports (blocker E4) — **PASS 24/24, agent-reviewed, owner sign-off OPEN**
+
+`scripts/erp/erp-visual.check.mjs` (`npm run test:erp:visual`) spawns `next start` on a free port with
+`ERP_PRO_ENABLED=true`, seeds an owner, an ERP_PRO subscription, a supplier, a product, two tasks (one
+overdue) and a submitted requisition plus an ordered purchase order, mints a `jata_session` cookie, and
+captures four screens — workspace, tasks, requisitions, procurement — at **320×568, 360×800, 390×844,
+430×932, 768×1024, 1366×768** with **HeadlessChrome/131.0.6778.0**.
+
+| Measurement | Result |
+| --- | --- |
+| Captures | **24/24** `ok: true` in `evidence.json` |
+| HTTP status | 200 on every capture |
+| Expected heading present | yes on every capture |
+| Horizontal overflow (`scrollWidth − clientWidth`) | **0px on every capture**, at every viewport |
+| Main column width | exactly the viewport width at 320/360/390/430/768; 1312px at 1366 (sidebar visible) |
+| Fixed-bottom mobile bar | `position:fixed; bottom:0` at ≤900px — present in the viewport, absent above 900px |
+
+The 24 JPEGs are in `.cache/verification/erp-visual/` (git-ignored; regenerate with the command above).
+Findings and the review record are in **`docs/POS_ERP_PRO_VISUAL_REVIEW.md`**. Two defects were found and
+fixed: the duplicated sentence on the task-board empty state (V1) and five modules that were ready but
+unreachable from every industry pack's navigation (V3). Three are **open questions for the owner**, recorded
+with the options and no invented default: the ≤900px breakpoint also applying to 768px tablets (V5), KPI
+cards stacking full-width below 900px (V6), and the crowded identity block at 320px (V7).
+
+**What this does not prove:** it is not a human or designer sign-off. The reviewer was the agent. No image,
+finding or layout decision here is presented as an owner approval, and **E4 stays open** on that basis.
+
+### 10.3 The provider database (blocker E8) — **OPEN, with a real deployment defect found**
+
+**Defect (not fixed — it is a coordinated deployment change):** `prisma/schema.prisma` declares only
+`url = env("DATABASE_URL")` and has **no `directUrl`**, while `DEPLOYMENT.md` §1 tells the operator to paste
+Neon's **pooled** connection string into `DATABASE_URL`, and `scripts/build.sh` runs `prisma migrate deploy`
+against that same URL during `npm run build`. Neon's pooled endpoint is PgBouncer in transaction mode, which
+does not reliably hold the **session-level advisory lock** Prisma Migrate takes. The documented deployment
+path therefore fails at build time with **P1002 (timeout acquiring pg_advisory_lock)** or leaves a migration
+stuck and blocking later deploys (**P3009**). Fixing it needs `directUrl = env("DIRECT_URL")` **and**
+`DIRECT_URL` present in every environment that runs `generate`/`migrate`, because Prisma hard-fails schema
+validation (**P1012**) on a referenced-but-unset variable — so it is recorded for the owner, not applied here.
+
+**What was actually rehearsed, on disposable PostgreSQL 16.2:**
+
+| Check | Result |
+| --- | --- |
+| Full migration chain, forward + upgrade + rollback + recovery (`scripts/erp/migration-verify.sh all`) | **PASS** — 48 ERP tables after recovery, 87 pre-existing intact, POS rows survived the rollback |
+| ERP database suite, **pooler mode** (`?pgbouncer=true`) | **67/67 pass**, 6 files |
+| ERP database suite, `connection_limit=1` | **67/67 pass** |
+| ERP database suite, `connection_limit=2` on a cluster capped at `max_connections=8` | **67/67 pass** |
+| Migration chain re-applied under that same connection cap | **PASS** (all scenarios) |
+
+`?pgbouncer=true` disables prepared statements, which is the runtime half of the PgBouncer problem; the
+advisory-lock half only appears with a real pooler in front of the database.
+
+**NOT TESTED, and why:** an actual Neon project (so: a real PgBouncer hop, Neon's extension set,
+`sslmode=require`, branch/restore-from-snapshot, cold start after auto-suspend, and Neon's PostgreSQL
+version). None of it exists in this environment, and provisioning a Neon project needs the owner's
+authorization and would incur cost, which was neither given nor requested. **E8 therefore stays OPEN.** No
+part of this section should be read as a Neon rehearsal.
+
+### 10.4 Verification commands used for this section
+
+```bash
+# ERP pages over real HTTP (needs a production build + disposable DB)
+ERP_PRO_ENABLED=true DATABASE_URL=... AUTH_SECRET=... npm run test:erp:pages      # RESULT: PASS (24/24)
+BASE_URL=http://127.0.0.1:3100 npm run test:erp:tasks-page                        # RESULT: PASS (19/19)
+
+# ERP screens at six viewports (needs Chromium; SHOT_DIR keeps images out of git)
+CHROME_PATH=... SHOT_DIR=.cache/verification/erp-visual npm run test:erp:visual   # RESULT: PASS (24/24)
+
+# provider-database rehearsal, pooler mode
+PRISMA_TEST_DATABASE_URL="postgresql://...?pgbouncer=true&connection_limit=1" npm run test:db:erp
+```
+
+Both page checks and the visual check exit `2`/report `BLOCKED` when the environment cannot support them,
+and the CI steps treat that as a failure.
