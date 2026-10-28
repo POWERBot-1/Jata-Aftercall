@@ -296,7 +296,7 @@ from an audit row. This slice adds the request object the BOS directive asked fo
 
 ```bash
 npx prisma generate --no-engine      # → 128 models (42 ERP/messaging)
-npx tsx scripts/erp/check-models.ts  # → 128 generated / 42 ERP / 94 referenced by app code — PASSED
+npx tsx scripts/erp/check-models.ts  # → 128 generated / 42 ERP / 92 referenced by app code — PASSED
 npx tsc --noEmit                     # → exit 0
 npm run lint                         # → 0 errors, 42 warnings (pre-existing files)
 
