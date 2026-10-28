@@ -2887,7 +2887,9 @@ model ErpNotification {
   /// Legacy broadcast read flag, kept for rows written before per-person read state existed.
   readAt     DateTime?
   createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  /// `@default(now())` as well as `@updatedAt`: the database needs a value for existing rows when
+  /// this column is added to a live table, and the client still refreshes it on every write.
+  updatedAt  DateTime  @default(now()) @updatedAt
   reads      ErpNotificationRead[]
 
   @@unique([businessId, dedupeKey])
