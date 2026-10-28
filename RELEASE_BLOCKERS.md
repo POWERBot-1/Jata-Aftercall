@@ -304,16 +304,24 @@ rules as above:
 | E9 | `Journey against a real database` (main's required check) | **Closed (green run)** | Was red on `0c93d45`; green on `595320e` and green again on the reviewed head `e500664`. The one red job in between (`f4121cc`, D2) is recorded as E11. |
 | E10 | Design restoration after main's owner correction | **Closed** | The rejected graphite/electric-lime identity is gone: the ERP sheet moved to `app/erp.css`, every ERP colour is a `--jata-*` alias (light and dark follow the theme), and both of main's design guards pass. ERP Pro ships in the original espresso / cream / amber identity. |
 | E11 | D2 candidate rehearsal — clean-tree assertion | **Closed (green run, root cause fixed)** | Red on `f4121cc`: `FAIL: tracked files were modified by the run`. Reproduced from a clean checkout — the committed `next-env.d.ts` held `next dev`'s `.next/dev/types/…` paths, so a `next build` rewrote a tracked file. The assertion was correct and was not weakened. Fixed in `e500664` by committing the build-mode content that `origin/main` carries; a clean-checkout build now leaves the tree clean. Guard added: `tests/unit/next-env-build-mode.test.ts`. Note the job logs themselves are unreachable from the build sandbox (Azure Blob egress), so the failure text came from the check-run annotations. |
-| E12 | Unified Business Operating System scope (owner directive 2026-10-28) | **Open — not implemented** | The directive asks for ~20 integrated modules (procurement, documents, tasks/projects, HR, assets/fleet, support, marketing, compliance, BI, AI assistant, automation engine, integrations, DR). What exists is the ERP Pro core: POS sales, chart of accounts and double-entry journals, invoices/payments, storefront ordering, messaging, approvals/RBAC/audit, tax/eTIMS readiness. The remaining modules are **not built**; no part of this repository should be read as delivering them. See `docs/POS_ERP_PRO_BOS_GAP.md` for the capability matrix. |
+| E12 | Unified Business Operating System scope (owner directive 2026-10-28) | **Open — partially implemented** | The directive asks for ~20 integrated modules. Built so far: the ERP Pro core (POS sales, chart of accounts and double-entry journals, invoices/payments, storefront ordering, messaging, approvals/RBAC/audit, tax/eTIMS readiness) and, from 2026-10-28, the **task spine** — `ErpTask`, the `/tasks` board, server-side `MANAGE_TASKS` enforcement and the automation `CREATE_TASK` action persisting real tasks. Still **not built**: procurement, documents, projects/checklists, HR, assets/fleet, customer-service cases, the ERP AI assistant, the aggregated notification inbox. No part of this repository should be read as delivering those. Capability matrix: `docs/POS_ERP_PRO_BOS_GAP.md`; slice evidence: `docs/POS_ERP_PRO_EVIDENCE.md` §2.5. |
 | E8 | Migration rehearsal on the provider's PostgreSQL | **Open** | The rehearsal used a local PostgreSQL 16.2 cluster without Neon's pooler, extensions, backup schedule or restore-from-snapshot. |
 
 Full status table: `docs/POS_ERP_PRO_EVIDENCE.md`. Nothing here is a claim that the product is
 production-ready.
 
-**Merge gate (2026-10-28, head `e500664`):** PR #71 targets `main`; every required check is green
+**Merge gate (2026-10-28, head `00cdd71`):** PR #71 targets `main`; every required check is green
 (`Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, plus the 11
 other check-runs and the Vercel status); `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
 **no approving review**, and the repository ruleset carries
 `require_extra_approval_for_unattributed_changes`, so a merge by this automation is expected to be
 refused. No merge and no deployment was attempted. Merge remains an owner decision, and E4 (human
 visual review), E5, E6, E8 and E12 below stay open regardless of the green checks.
+
+**Task spine (head `00cdd71`), slice-specific gaps:** the `/tasks` board has no human visual review
+and no viewport/responsive check (E4), and its end-to-end HTTP check
+(`scripts/erp/tasks-page.check.mjs`) is **BLOCKED** in the build sandbox because the Prisma native
+query engine cannot be downloaded there — the script reports BLOCKED, not PASS. Everything else on
+the slice (model, migration, tenant/role enforcement, validation, audit, automation integration,
+unit/render/PostgreSQL suites, migration rehearsal) is PASS with commands in
+`docs/POS_ERP_PRO_EVIDENCE.md` §2.5.

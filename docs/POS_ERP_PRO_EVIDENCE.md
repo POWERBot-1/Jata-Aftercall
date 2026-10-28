@@ -46,15 +46,15 @@ control is only reasoned about, it is `NOT TESTED`.
 
 | Area | Files |
 | --- | --- |
-| Domain libraries | `lib/erp/*.ts` (22 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
+| Domain libraries | `lib/erp/*.ts` (23 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
 | Messaging engine | `lib/messaging/*.ts` (10 modules) — segments, consent, templates, senderId, providers, billing, campaigns, pipeline, testSend, import |
-| Schema | 38 new models in `prisma/schema.prisma`; one additive migration (1,038 lines) |
-| Screens | `app/dashboard/erp/**` (16 pages), `app/store/**` (2 public pages) |
+| Schema | 39 new models in `prisma/schema.prisma`; two additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`) |
+| Screens | `app/dashboard/erp/**` (17 pages, including `/tasks`), `app/store/**` (2 public pages) |
 | API | 7 route handlers (status, messaging preview, campaign dispatch, accounting, export, public order, provider webhook) |
 | Components | `components/erp/*` (4) |
-| Unit tests | 17 suites, **292 tests** |
-| Database tests | `tests/integration/erp-pro-postgres.test.ts`, **16 tests** against real PostgreSQL |
-| Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh` |
+| Unit tests | 19 suites for this product, **323 tests** (292 from the core revision + 22 task-domain + 9 task-page) |
+| Database tests | `tests/integration/erp-pro-postgres.test.ts` (16) and `tests/integration/erp-tasks-postgres.test.ts` (13) — **29 tests** against real PostgreSQL |
+| Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh`, `scripts/erp/tasks-page.check.mjs` |
 | CI | `.github/workflows/pos-erp-verify.yml` (static / migrations / PostgreSQL gates) |
 | Docs | this report, `POS_ERP_PRO_MIGRATION_PLAN.md`, `POS_ERP_PRO_PROVIDER_COSTS.md`, `POS_ERP_PRO_SECURITY_REVIEW.md` |
 
@@ -149,6 +149,78 @@ The same suite also ran in CI with the **native** engine against a `postgres:16`
 after `prisma migrate deploy`, and passed (run 40585281750), so both engine paths are covered.
 What is still **not** proven: row-lock concurrency (no two-connection race test yet) and the
 production connection pooler (Neon's pgbouncer, `sslmode`).
+
+---
+
+### 2.5 The task spine slice (2026-10-28, `00cdd71`)
+
+The first BOS module after the ERP Pro core: work that somebody owns. New model `ErpTask`, new
+migration `20261028000000_erp_tasks`, new domain module `lib/erp/tasks.ts`, new screen `/tasks`,
+two server actions, one sidebar entry, and `CREATE_TASK` automation rewritten to persist.
+
+```bash
+# schema/client
+npx prisma generate --no-engine
+# → "Generated Prisma Client (v5.22.0, engine=none)"; the schema is the input, so it parsed cleanly.
+#   `prisma validate` itself is BLOCKED in this sandbox: it tries to fetch the schema engine from
+#   binaries.prisma.sh, which is not on the allowed network. The migration run below is the stronger
+#   check anyway — the generated SQL was applied by PostgreSQL.
+
+# types and lint
+npx tsc --noEmit                    # → exit 0
+npm run lint                        # → 0 errors, 42 warnings (all pre-existing files)
+
+# the slice's own suites
+npx vitest run tests/unit/erp-tasks.test.ts tests/unit/erp-tasks-page.test.ts
+# → Test Files 2 passed (2) / Tests 31 passed (31)
+#   22 domain tests: input validation, the OPEN→IN_PROGRESS→DONE|CANCELLED machine and its terminal
+#   states, bucketing, tenant scoping on every read/write, assignee must be a member, cancel reason,
+#   idempotent replay, audit rows, automation preview vs execute, 200-row cap.
+#    9 page tests: overdue-first ordering, KPI counts, owner form/controls, viewer gets no control
+#   it cannot use, finished work has no controls, assignee/role/unassigned labels, empty board,
+#   action notices, overdue date label.
+
+# real PostgreSQL (22 migrations applied to a disposable database, DB `jata_erp`)
+PRISMA_TEST_DATABASE_URL=postgresql://jata@127.0.0.1:5433/jata_erp?schema=public \
+PRISMA_WASM_HARNESS_DIR=$PWD/node_modules/.erp-wasm-harness npm run test:db:erp
+# → Test Files 2 passed (2) / Tests 29 passed (29)
+#   16 pre-existing ERP Pro tests + 13 task tests (cross-tenant reads and writes refused, non-member
+#   assignee refused, terminal state refuses further transitions, cancel needs a reason, concurrent
+#   double submit, per-event idempotency, the same key in two tenants, audit rows with no leakage,
+#   automation raises exactly one task and skips the replay, list cap).
+
+# migrations, rollback and recovery (disposable database, 22 migrations, 39 ERP tables)
+bash scripts/erp/migration-verify.sh all
+# → 24 checks PASS, RESULT: PASS (all migration scenarios)
+#   clean install 39 ERP tables + 87 pre-existing; upgrade over a populated previous release with
+#   rows untouched; export → restore → row-count match → documented reverse drop → re-apply.
+
+# schema/client agreement
+npx tsx scripts/erp/check-models.ts
+# → 125 generated models, 39 ERP/messaging models, 91 referenced by app code, consistency PASSED
+
+# whole repository
+npx vitest run
+# → Test Files 263 passed | 17 skipped (280)
+# → Tests      3433 passed | 150 skipped (3583)
+
+npm run build                       # → [build] Build completed successfully
+```
+
+The 150 skips are the database-backed suites when no test URL is configured, including the 29 that
+ran above — they are reported as skipped, never as passing.
+
+| Acceptance item | Status | Evidence |
+| --- | --- | --- |
+| Data model + additive, reversible migration | **PASS** | `ErpTask` in `prisma/schema.prisma`; `20261028000000_erp_tasks/migration.sql` is `CREATE TABLE IF NOT EXISTS` + indexes + FK; `migration-verify.sh all` 24/24 |
+| Persistence (create, transition, list) | **PASS** | `lib/erp/tasks.ts`; 13 PostgreSQL tests on a real database |
+| Server-side tenant and role enforcement | **PASS** | `requireErpAccess` + `hasErpPermission(..., "MANAGE_TASKS")` in both actions; cross-tenant read *and* write refused in the PG suite; non-member assignee refused |
+| Validation and error handling | **PASS** | `validateTaskInput` (title 3–140, detail ≤ 4000, priority enum, due date parse); errors surface as a notice, never a stack trace |
+| UI | **PASS** | `/tasks` board; 9 render tests |
+| Auditability | **PASS** | `TASK_CREATED`, `TASK_STATUS_CHANGED` rows asserted in both suites, tenant-scoped |
+| Automation integration | **PASS** | `CREATE_TASK` persists with `automation-task:<idempotencyKey>`; replay raises no second task |
+| Responsive layout | **NOT TESTED** | The board reuses the existing `erp-grid-3` / `erp-row` responsive primitives, but no visual review or viewport check ran in this environment (E4) |
+| Full end-to-end browser run of `/tasks` | **BLOCKED** | `scripts/erp/tasks-page.check.mjs` seeds a tenant and asserts on real HTML, but the sandbox client is generated with `--no-engine` and the native query-engine binary cannot be downloaded here, so every authenticated request bounces to `/login`. The script detects this and reports BLOCKED rather than a false PASS. Run it where a native engine exists. |
 
 ---
 

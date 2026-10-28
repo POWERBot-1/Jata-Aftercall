@@ -1,7 +1,8 @@
 # POS / ERP - PRO — Business Operating System gap matrix
 
 **Directive:** "Unified Business Operating System" (owner, 2026-10-28) — ~20 integrated modules.
-**Head reviewed:** `e500664` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
+**Head reviewed:** `e500664` for the original matrix; the task-spine row (9) was re-checked on
+`00cdd71` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
 **Report date:** 2026-10-28.
 
 This document exists because the directive's scope is much wider than the software, and the gap
@@ -9,9 +10,10 @@ must be stated in the same units the directive uses. Each row was checked agains
 not against the roadmap. Labels: **PASS** (works and is proven), **PARTIAL** (a real subset works),
 **FAIL** (present but broken), **NOT TESTED** (code exists, no proof), **MISSING** (not built).
 
-The ERP Pro product is **additive** beside the existing Business POS: 38 new models
-(`Erp*` / `Msg*`), one additive migration, its own plan (`ERP_PRO`, KES 3,000/30 days). No existing
-POS model, order transition, payment path or migration was modified.
+The ERP Pro product is **additive** beside the existing Business POS: 39 new models
+(`Erp*` / `Msg*`), two additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`),
+its own plan (`ERP_PRO`, KES 3,000/30 days). No existing POS model, order transition, payment path or
+migration was modified.
 
 ## 1. What the directive asks for, versus what exists
 
@@ -25,7 +27,7 @@ POS model, order transition, payment path or migration was modified.
 | 6 | Accounting and finance | **PASS (core)** | Real double-entry: `ErpAccount`, `ErpPeriod`, `ErpJournal`, `ErpJournalLine`, immutable posted journals, controlled reversals, period close/reopen, trial balance, invoices + payments + allocations, credit notes, expenses, supplier bills, Kenya tax rules. Proven by the PG suite. | Bank feed import and reconciliation matching; P&L/cash-flow *reports* beyond trial balance (data is there, report surface is thin); no statutory filing. |
 | 7 | Approvals and finance operations | **PARTIAL** | Role limits (`ERP_APPROVAL_LIMITS_CENTS`), approval-required paths on high-impact actions, immutable `ErpAuditEvent`, RBAC resolved server-side. | A general approval-request object with submit/approve/reject/comment/delegate/escalate, and per-tenant configurable thresholds. |
 | 8 | Documents and records | **MISSING** | `ErpKycDocument` only (compliance evidence placeholder). The repo has a separate durable media stack for the POS/website. | Document register, versions, categories, expiry reminders, retention, access-controlled download, tenant-scoped storage paths for ERP records. |
-| 9 | Tasks, projects, workflow | **MISSING** | The automation engine can *create a task* action, but there is no task entity, board or calendar. | Task/project model, assignment, dependencies, checklists, escalation, activity history. |
+| 9 | Tasks, projects, workflow | **PARTIAL** | `ErpTask`: title, detail, `OPEN → IN_PROGRESS → DONE|CANCELLED` (terminal states enforced), priority, named assignee restricted to members of the tenant, role-based assignment, due date, source (`MANUAL`/`AUTOMATION`), idempotency key unique per tenant. `/tasks` board: overdue → open → recently finished, KPIs, create form, start/done/cancel controls gated by `MANAGE_TASKS`, cancel requires a reason. Server-side enforcement in the server actions; audit rows `TASK_CREATED` and `TASK_STATUS_CHANGED`. The automation engine's `CREATE_TASK` action now persists a real task instead of only previewing one. Proven by 22 domain tests, 9 render tests and 13 real-PostgreSQL tests. | Projects, checklist items, dependencies, recurrence, escalation/reminders, calendar view, per-project reporting, task inbox aggregation across modules. |
 | 10 | Messaging and communication | **PASS (engine), MISSING (inbox)** | SMS/WhatsApp campaign engine with consent, suppression, audiences, templates, sender-ID registry + events, wallet with reservations, idempotent dispatch, dry-run preview, per-recipient ledger. | Shared inbox / conversation threading, assignment, SLA escalation, email channel, internal announcements. |
 | 11 | HR, workforce, payroll | **MISSING** | `PosStaff` (POS operators). | Employee records, shifts, attendance, leave, payroll inputs/exports, offboarding. |
 | 12 | Assets, maintenance, fleet | **MISSING** | `PosCustomerAsset` (customer-owned item history). | Internal asset register, preventive maintenance, work orders, downtime, fleet/fuel/driver records. |
@@ -38,7 +40,8 @@ POS model, order transition, payment path or migration was modified.
 | 19 | Integrations and API platform | **PARTIAL** | `MsgChannelConnection` (provider credentials per tenant), provider adapters behind flags, webhook routes, idempotent event processing, sender-ID and delivery-event ingestion. eTIMS is readiness-only. | OAuth-style connection lifecycle, secret rotation, versioned public API, integration health dashboard, accounting/logistics/email connectors. |
 | 20 | Continuity and disaster recovery | **PARTIAL** | Migration rollback rehearsed with `pg_dump`/`pg_restore` into a scratch database and row-count comparison (`scripts/erp/migration-verify.sh`, 24 PASS); documented reverse-dependency drop order; idempotent re-apply. | Application-level backup/restore rehearsal on real data volumes, RPO/RTO numbers, job-failure monitoring, incident runbook, tested restore-from-snapshot on the provider. |
 
-**Count:** 1 PASS-core (accounting), 2 PASS-engine (messaging fire-path), 9 PARTIAL, 8 MISSING.
+**Count (re-counted against the table, not carried over):** 1 PASS-core (accounting), 1 PASS-engine
+with a missing inbox (messaging), **12 PARTIAL**, **6 MISSING**.
 No module in the directive is falsely marked complete, and no module in this table is represented
 in the UI as a working feature when the row above says otherwise.
 
@@ -50,7 +53,7 @@ in the UI as a working feature when the row above says otherwise.
 | Server-enforced permissions | Yes — `requireErpAccess` / `resolveErpRole` resolve the role from the database on every action; navigation hides links but is never the enforcement point. |
 | Role-aware UI | Yes (`lib/erp/navigation.ts`, per-page role gates). |
 | Unified global search / command launcher | **Missing.** Each module has its own filters. |
-| Notification centre / task inbox | **Missing** as a cross-module surface (`ErpNotification` exists per record). |
+| Notification centre / task inbox | **Partial** — `ErpTask` and the `/tasks` board exist and are reachable from the sidebar; `ErpNotification` exists per record. There is no unified inbox aggregating notifications and tasks across modules. |
 | Location/branch scoping in ERP | **Partial** — POS has `PosBranch`; the ERP itself is business-wide, not branch-scoped. |
 | Brand identity | Original espresso / cream / amber, via `--jata-*` tokens only (`app/erp.css`). The withdrawn graphite/lime look is gone. |
 | Runtime | Next.js 16.4.2, React 18.3.1, Prisma 5.22.0, Neon PostgreSQL, Vercel — unchanged. |
@@ -63,16 +66,18 @@ in the UI as a working feature when the row above says otherwise.
 2. **Widgets bound to persisted queries.** Building them against invented numbers is the one thing
    the directive forbids, so each widget must land with the query and the test that proves it reads
    real rows.
-3. **A task entity** — four separate directive modules (9, 15, 18, and the notification centre)
-   all converge on "create a task", and `CREATE_TASK` is already an automation action with no
-   table behind it. This is the single highest-leverage missing piece.
+3. **A task entity** — four separate directive modules (9, 15, 18, and the notification centre) all
+   converge on "create a task". The entity now exists (`ErpTask`), the automation action writes real
+   rows, and the board is live. Still missing for the dashboard: an aggregated inbox widget, overdue
+   *notifications* (the engine can raise a task, not yet a notification), and escalation.
 
 ## 4. Honest sequencing
 
 The dependency order that actually works here, given what is built:
 
-1. **Task/notification spine** — one `ErpTask` + assignment + due dates + escalation, wired to the
-   existing automation engine and the sidebar. Unblocks modules 9, 15, 18 and the dashboard inbox.
+1. **Task/notification spine** — *done in part (2026-10-28)*: `ErpTask` + assignment + due dates are
+   wired to the automation engine and the sidebar, with tests. Remaining: escalation, reminders, and
+   the notification surface that the dashboard inbox needs.
 2. **Approval request object** — submit/approve/reject/delegate with immutable history, replacing
    the role-limit shortcut in module 7. Unblocks procurement (5) and high-impact automation.
 3. **Procurement slice** — requisition → PO → goods received → supplier bill, reusing
@@ -87,11 +92,16 @@ reverse dependency order, and separable into its own reviewable PR.
 
 ## 5. What was *not* done in this pass
 
-This pass was scoped to the PR #71 remediation the owner asked for: retarget to `main`, resolve the
-merge with `main`, restore the brand identity, and clear every release gate with evidence. That is
-done and green on `e500664`.
+The earlier remediation pass (head `e500664`) was scoped to retargeting PR #71 to `main`, clearing
+the merge with `main`, restoring the brand identity and re-running every gate. That pass added no
+module.
 
-**Nothing in section 1 beyond ERP Pro's existing core was implemented in this pass.** No module was
-added, no placeholder screen was created, and no capability above is claimed as working. Building
-the BOS modules is a multi-phase program on the sequence in section 4, and each phase needs its own
-review and its own evidence.
+**This pass (`00cdd71`) implements section 4 step 1, partially: the task spine.** One new model
+(`ErpTask`), one additive migration, one domain module (`lib/erp/tasks.ts`), one screen (`/tasks`),
+two server actions, one navigation entry, and the automation `CREATE_TASK` action rewritten to
+persist instead of preview. It ships with 22 domain tests, 9 render tests and 13 tests that run
+against a real PostgreSQL database.
+
+**Nothing else in section 1 moved.** Modules 5, 8, 11, 12, 13 and 17 are still MISSING; no
+placeholder screen was created for any of them, and no capability above is claimed as working
+beyond what its row states.
