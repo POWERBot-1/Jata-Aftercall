@@ -1238,3 +1238,35 @@ Run on the final candidate head (see §12 for the CI result of that head):
 | `npx vitest run tests/unit` | **2,433 tests pass** (2,426 before + 7 new live-gate tests) |
 | `npm run test:erp:visual:gallery` | PASS — 24/24 captures, 6 viewports, 4 screens |
 | PR checks in CI | see §12 |
+
+### 12. CI result for the review pass, and where each artefact lives
+
+`c67d0a7` — **15/15 checks pass** on PR #71 (base `main`). Nothing was merged or deployed.
+
+| Check | Result | Run / job |
+| --- | --- | --- |
+| Schema, types, unit suite, build | **pass** (3m05s) | run `40763833381` / job `123082559673` |
+| Static (install, generate, lint, typecheck, audit) | **pass** (1m39s) | run `40763833530` / job `123082560182` |
+| Migrations + schema on PostgreSQL 18 | **pass** (1m46s) | run `40763833530` / job `123082560210` |
+| Production build path on PostgreSQL 18 | **pass** (2m29s) | run `40763833530` / job `123082560421` |
+| Exact candidate applies on disposable PostgreSQL 18 | **pass** (2m13s) | run `40763833225` / job `123082561201` |
+| D2 — build, audit and controls on the candidate tree | **pass** (2m37s) | run `40763833225` / job `123082560509` |
+| Failure paths actually fail | **pass** (1m07s) | run `40763833530` / job `123082560310` |
+| Journey against a real database | **pass** (12m33s) | run `40763833595` / job `123082561769` |
+| ↳ ERP pages over real HTTP (authorisation, tenant isolation, refusal contract) | **pass** | same run |
+| ↳ ERP task board over real HTTP (role and refusal contract) | **pass** | same run |
+| Real-Chrome six-viewport capture on a disposable database | **pass** (6m03s) | run `40763833449` / job `123082559970` |
+| ↳ ERP screens at six viewports, real Chrome | **pass** | same run |
+| Migrations and PostgreSQL suite | **pass** (1m20s) | run `40763833381` / job `123084208745` |
+| Migration target guard | **pass** (10s) | run `40763833595` / job `123082561500` |
+| Release gate (aggregate) | **pass** (4s) | run `40763833530` / job `123083903974` |
+| Vercel / Vercel Preview Comments | **pass** | preview build only; nothing deployed to production |
+
+**Artefacts produced by this head:** `erp-visual-71` — 3,286,854 bytes, expires 2026-11-11; and
+`premium-screenshots-71` — 13,169,546 bytes, same expiry. Both were confirmed **present and not
+expired** through the API. The blob host that serves artifact downloads is unreachable from this
+sandbox, so the images themselves were reviewed from the local capture run of the same script
+(`.cache/verification/erp-visual/`, 24 JPEGs, 24/24 PASS) rather than from the downloaded archive.
+
+**What this table does not say:** it says the checks passed. It does not say the product is finished,
+that E4/E5/E6/E8 are closed, or that a human approved the design.
