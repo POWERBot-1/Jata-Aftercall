@@ -2,7 +2,7 @@
   "name": "jata-aftercall",
   "version": "1.0.0",
   "private": true,
-  "description": "JATA AFTERCALL — lightweight after-interaction business conversion pages for Kenyan SMEs",
+  "description": "JATA AFTERCALL \u2014 lightweight after-interaction business conversion pages for Kenyan SMEs",
   "scripts": {
     "dev": "next dev --webpack -H 0.0.0.0",
     "build": "bash scripts/build.sh",
@@ -50,7 +50,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
-    "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@tanstack/react-table": "^9.3.1",
     "bcryptjs": "^2.4.3",
@@ -74,7 +73,7 @@
     "@types/three": "^0.186.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
-    "pg": "^8.23.1",
+    "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
     "prisma": "^5.22.0",
