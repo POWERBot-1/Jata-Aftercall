@@ -1044,6 +1044,13 @@ the worst outcome. It now asserts the security contract itself. A second flaw wa
 `leakedId` was computed **after** the foreign id had been stripped from the body, so it could never fire.
 That assertion was deleted rather than kept as evidence that cannot fail.
 
+**CI confirmation (head `15020e3`):** run `40755507945`, job `123053226681` — `ERP pages over real HTTP
+(authorisation, tenant isolation, refusal contract)` **success** and `ERP task board over real HTTP (role and
+refusal contract)` **success**, both after `Production build against the isolated test database`, on a GitHub
+runner where `prisma generate` produced the **native** engine. Neither step can pass while reporting
+`BLOCKED`; the task-board step also fails on `SKIP`. So the numbers above are reproduced in the shipping
+configuration, not only in this sandbox.
+
 **Environment honesty:** the repo client is generated with `--no-engine` (binaries.prisma.sh is
 unreachable here), so the local runs used a **temporary, never-committed** branch in `lib/db.ts` that
 instantiates a locally generated **WASM query-engine client with `@prisma/adapter-pg`**. It is Prisma's
@@ -1074,6 +1081,12 @@ fixed: the duplicated sentence on the task-board empty state (V1) and five modul
 unreachable from every industry pack's navigation (V3). Three are **open questions for the owner**, recorded
 with the options and no invented default: the ≤900px breakpoint also applying to 768px tablets (V5), KPI
 cards stacking full-width below 900px (V6), and the crowded identity block at 320px (V7).
+
+**CI confirmation (head `15020e3`):** run `40755507973`, job `123053227834` — the step
+`ERP screens at six viewports, real Chrome (overflow, headings, HTTP 200)` **success**, and artifact
+`erp-visual-71` (3.29 MB) was uploaded. The step exits non-zero if the check reports `BLOCKED` or fails to
+print `RESULT: PASS`, so its success is the CI-side capture result. The images themselves live in the
+artifact; the blob host is unreachable from this sandbox, so they were read locally instead.
 
 **What this does not prove:** it is not a human or designer sign-off. The reviewer was the agent. No image,
 finding or layout decision here is presented as an owner approval, and **E4 stays open** on that basis.
