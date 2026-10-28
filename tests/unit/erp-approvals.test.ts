@@ -11,7 +11,11 @@ import {
   approvalAuthority,
   approvalLimitFor,
   approvalSummary,
+  consumeApproval,
   createApprovalRequest,
+  escalationRoleFor,
+  requireApprovalFor,
+  spendGate,
   decideApprovalRequest,
   isTerminalApprovalStatus,
   listApprovalRequests,
@@ -41,7 +45,7 @@ function fakeClient() {
       findFirst: async ({ where }: any) => requests.find((row) => row.id === where.id && row.businessId === where.businessId) ?? null,
       create: async ({ data }: any) => {
         if (data.idempotencyKey && requests.some((row) => row.businessId === data.businessId && row.idempotencyKey === data.idempotencyKey)) throw duplicate();
-        const row = { id: `req-${++sequence}`, decidedBy: null, decidedAt: null, decisionNote: null, ...data };
+        const row = { id: `req-${++sequence}`, decidedBy: null, decidedAt: null, decisionNote: null, consumedAt: null, consumedBy: null, consumedRef: null, ...data };
         requests.push(row);
         return row;
       },
@@ -53,6 +57,10 @@ function fakeClient() {
       findMany: async ({ where }: any) => {
         let rows = requests.filter((row) => row.businessId === where.businessId);
         if (where.status) rows = rows.filter((row) => row.status === where.status);
+        if (where.kind) rows = rows.filter((row) => row.kind === where.kind);
+        if (where.requestedBy) rows = rows.filter((row) => row.requestedBy === where.requestedBy);
+        if (where.consumedAt === null) rows = rows.filter((row) => row.consumedAt == null);
+        if (where.amountCents?.gte !== undefined) rows = rows.filter((row) => row.amountCents >= where.amountCents.gte);
         if (where.OR) {
           rows = rows.filter((row) => where.OR.some((clause: any) =>
             (clause.requestedBy && row.requestedBy === clause.requestedBy) || (clause.approverId && row.approverId === clause.approverId)));
@@ -60,6 +68,16 @@ function fakeClient() {
         return rows.map((row) => ({ ...row, events: events.filter((event) => event.requestId === row.id) }));
       },
       count: async ({ where }: any) => requests.filter((row) => row.businessId === where.businessId && (!where.status || row.status === where.status)).length,
+      /** Models the guarded write: `consumedAt: null` only matches a row nobody has spent yet. */
+      updateMany: async ({ where, data }: any) => {
+        const row = requests.find((entry) => entry.id === where.id
+          && entry.businessId === where.businessId
+          && (!where.status || entry.status === where.status)
+          && (where.consumedAt === null ? entry.consumedAt == null : true));
+        if (!row) return { count: 0 };
+        Object.assign(row, data);
+        return { count: 1 };
+      },
     },
     erpApprovalEvent: {
       create: async ({ data }: any) => {
@@ -286,5 +304,146 @@ describe("the queue", () => {
     await decideApprovalRequest(client, { businessId: "biz-a", requestId: one.request.id, decision: "APPROVE", decider: manager });
     await decideApprovalRequest(client, { businessId: "biz-a", requestId: two.request.id, decision: "REJECT", note: "No budget", decider: manager });
     expect(await approvalSummary(client, "biz-a")).toEqual({ pending: 0, approved: 1, rejected: 1 });
+  });
+});
+
+describe("the spend gate", () => {
+  it("lets an owner and an admin sign for anything, and a manager up to their limit", () => {
+    expect(spendGate("OWNER", 900_000_000).restricted).toBe(false);
+    expect(spendGate("ADMIN", 900_000_000).restricted).toBe(false);
+    expect(spendGate("MANAGER", 1_000_000).restricted).toBe(false);
+    expect(spendGate("MANAGER", 1_000_001).restricted).toBe(true);
+    expect(spendGate("MANAGER", 1_000_001).reason).toMatch(/above the KES 10,000/);
+  });
+
+  it("treats a role with a zero limit as always needing approval, not as refused", () => {
+    const gate = spendGate("STAFF", 1);
+    expect(gate.restricted).toBe(true);
+    expect(gate.limitCents).toBe(0);
+    expect(gate.reason).toMatch(/cannot record spending on its own/i);
+  });
+
+  it("applies a per-tenant threshold below the role limit", () => {
+    expect(spendGate("ADMIN", 6_000_000, 5_000_000).restricted).toBe(true);
+    expect(spendGate("ADMIN", 5_000_000, 5_000_000).restricted).toBe(false);
+    // With no tenant threshold the admin limit is the only ceiling.
+    expect(spendGate("ADMIN", 6_000_000).restricted).toBe(false);
+  });
+
+  it("escalates to a role that actually outranks the requester", () => {
+    expect(escalationRoleFor("MANAGER")).toBe("ADMIN");
+    expect(escalationRoleFor("FINANCE")).toBe("ADMIN");
+    expect(escalationRoleFor("STAFF")).toBe("OWNER");
+  });
+});
+
+describe("spending a grant", () => {
+  it("spends an approval once and refuses the replay", async () => {
+    const client = fakeClient();
+    const raised = await raise(client, { amountCents: 900_000 });
+    await decideApprovalRequest(client, { businessId: "biz-a", requestId: raised.request.id, decision: "APPROVE", decider: manager });
+
+    const first = await consumeApproval(client, { businessId: "biz-a", requesterId: staff.userId, kind: "SPEND", amountCents: 900_000, ref: "expense:abc", actorId: staff.userId });
+    const second = await consumeApproval(client, { businessId: "biz-a", requesterId: staff.userId, kind: "SPEND", amountCents: 900_000, ref: "expense:def", actorId: staff.userId });
+
+    expect(first?.id).toBe(raised.request.id);
+    expect(first?.consumedRef).toBe("expense:abc");
+    expect(second).toBeNull();
+    expect(client.events.filter((event: any) => event.action === "CONSUMED")).toHaveLength(1);
+    expect(client.audits.filter((row: any) => row.action === "APPROVAL_CONSUMED")).toHaveLength(1);
+  });
+
+  it("will not spend a grant on a different kind, a bigger amount, or somebody else's request", async () => {
+    const client = fakeClient();
+    const raised = await raise(client, { amountCents: 400_000 });
+    await decideApprovalRequest(client, { businessId: "biz-a", requestId: raised.request.id, decision: "APPROVE", decider: manager });
+
+    expect(await consumeApproval(client, { businessId: "biz-a", requesterId: staff.userId, kind: "JOURNAL", amountCents: 400_000, ref: "journal:1" })).toBeNull();
+    expect(await consumeApproval(client, { businessId: "biz-a", requesterId: staff.userId, kind: "SPEND", amountCents: 400_001, ref: "expense:1" })).toBeNull();
+    expect(await consumeApproval(client, { businessId: "biz-a", requesterId: manager.userId, kind: "SPEND", amountCents: 100, ref: "expense:2" })).toBeNull();
+    expect(await consumeApproval(client, { businessId: "biz-b", requesterId: staff.userId, kind: "SPEND", amountCents: 100, ref: "expense:3" })).toBeNull();
+  });
+
+  it("leaves a rejected or still-pending request unspendable", async () => {
+    const client = fakeClient();
+    const pending = await raise(client, { amountCents: 900_000 });
+    const rejected = await raise(client, { amountCents: 900_000, title: "Second ask" });
+    await decideApprovalRequest(client, { businessId: "biz-a", requestId: rejected.request.id, decision: "REJECT", note: "No budget", decider: manager });
+    expect(await consumeApproval(client, { businessId: "biz-a", requesterId: staff.userId, kind: "SPEND", amountCents: 100, ref: "a" })).toBeNull();
+    expect(client.requests.find((row: any) => row.id === pending.request.id)?.consumedAt).toBeNull();
+  });
+
+  it("inside the limit, no request is raised and nothing is spent", async () => {
+    const client = fakeClient();
+    const outcome = await requireApprovalFor({
+      client,
+      businessId: "biz-a",
+      requester: manager,
+      kind: "SPEND",
+      amountCents: 500_000,
+      title: "Fuel",
+      ref: "expense:ok",
+    });
+    expect(outcome.blocked).toBe(false);
+    expect(client.requests).toHaveLength(0);
+    expect(client.notifications).toHaveLength(0);
+  });
+
+  it("above the limit, it raises one request to a higher role and writes nothing else", async () => {
+    const client = fakeClient();
+    const outcome = await requireApprovalFor({
+      client,
+      businessId: "biz-a",
+      requester: manager,
+      kind: "SPEND",
+      amountCents: 2_500_000,
+      title: "Expense: Bulk cement",
+      ref: "expense:big",
+    });
+    expect(outcome.blocked).toBe(true);
+    if (!outcome.blocked) throw new Error("unreachable");
+    expect(outcome.request.status).toBe("PENDING");
+    expect(outcome.request.approverRole).toBe("ADMIN");
+    expect(outcome.request.requestedBy).toBe(manager.userId);
+    expect(outcome.gate.reason).toMatch(/above the KES 10,000/);
+    // One notice to the decider, and a retried submit reuses the same request instead of a second one.
+    const replay = await requireApprovalFor({
+      client,
+      businessId: "biz-a",
+      requester: manager,
+      kind: "SPEND",
+      amountCents: 2_500_000,
+      title: "Expense: Bulk cement",
+      ref: "expense:big",
+    });
+    expect(client.requests).toHaveLength(1);
+    expect(replay.blocked).toBe(true);
+    expect(client.notifications).toHaveLength(1);
+  });
+
+  it("unblocks the moment a grant exists, and spends it", async () => {
+    const client = fakeClient();
+    const raised = await requireApprovalFor({
+      client,
+      businessId: "biz-a",
+      requester: manager,
+      kind: "SPEND",
+      amountCents: 2_500_000,
+      title: "Expense: Bulk cement",
+      ref: "expense:big",
+    });
+    if (!raised.blocked) throw new Error("expected a request");
+    await decideApprovalRequest(client, { businessId: "biz-a", requestId: raised.request.id, decision: "APPROVE", decider: owner });
+    const outcome = await requireApprovalFor({
+      client,
+      businessId: "biz-a",
+      requester: manager,
+      kind: "SPEND",
+      amountCents: 2_500_000,
+      title: "Expense: Bulk cement",
+      ref: "expense:big",
+    });
+    expect(outcome.blocked).toBe(false);
+    expect(client.requests[0].consumedRef).toBe("expense:big");
   });
 });

@@ -203,6 +203,25 @@ describe.skipIf(!enabled)("notifications against real PostgreSQL", () => {
     expect(afterMove.map((row: any) => row.recipientId).sort()).toEqual([ids.staffA, ids.staffA2].sort());
   });
 
+  it("tells the creator when somebody else finishes their work, and says nothing when they finish it themselves", async () => {
+    const { task } = await createTask(client, {
+      businessId: ids.businessA,
+      title: "Chase the missing delivery note",
+      assignedTo: ids.staffA,
+      actorId: ids.ownerA,
+    });
+    await updateTask(client, { businessId: ids.businessA, taskId: task.id, status: "DONE", actorId: ids.staffA, actorName: "Staff A" });
+    const notices = await client.erpNotification.findMany({ where: { businessId: ids.businessA, kind: "TASK_COMPLETED", sourceId: task.id } });
+    expect(notices).toHaveLength(1);
+    expect(notices[0].recipientId).toBe(ids.ownerA);
+    expect(notices[0].deliveredAt).toBeNull();
+
+    const own = await createTask(client, { businessId: ids.businessA, title: "File the deprecation notice", assignedTo: ids.ownerA, actorId: ids.ownerA });
+    await updateTask(client, { businessId: ids.businessA, taskId: own.task.id, status: "DONE", actorId: ids.ownerA, actorName: "Owner A" });
+    const selfNotices = await client.erpNotification.findMany({ where: { businessId: ids.businessA, kind: "TASK_COMPLETED", sourceId: own.task.id } });
+    expect(selfNotices).toHaveLength(0);
+  });
+
   it("records an audited failure rather than claiming a send", async () => {
     const created = await createNotification(client, {
       businessId: ids.businessA,

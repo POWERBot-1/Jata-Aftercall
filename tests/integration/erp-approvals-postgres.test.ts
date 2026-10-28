@@ -11,9 +11,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   approvalSummary,
+  consumeApproval,
   createApprovalRequest,
   decideApprovalRequest,
   listApprovalRequests,
+  requireApprovalFor,
   withdrawApprovalRequest,
 } from "@/lib/erp/approvals";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
@@ -212,6 +214,87 @@ describe.skipIf(!enabled)("approvals against real PostgreSQL", () => {
 
     const ownScope = await listApprovalRequests(client, { businessId: ids.businessA, decider: { userId: ids.staffA, role: "STAFF" }, scope: "mine", limit: 200 });
     expect(ownScope.every((row: any) => row.requestedBy === ids.staffA || row.approverId === ids.staffA)).toBe(true);
+  });
+
+  it("spends a grant exactly once, even when two submits race", async () => {
+    const raised = await createApprovalRequest(client, {
+      businessId: ids.businessA,
+      kind: "SPEND",
+      title: "Bulk order deposit",
+      amountCents: 900_000,
+      approverRole: "MANAGER",
+      requestedBy: ids.staffA,
+      requestedName: "Staff A",
+      requestedRole: "STAFF",
+      idempotencyKey: `consume-${stamp}`,
+    });
+    await decideApprovalRequest(client, { businessId: ids.businessA, requestId: raised.request.id, decision: "APPROVE", decider: { userId: ids.managerA, role: "MANAGER", name: "Manager A" } });
+
+    const [first, second] = await Promise.all([
+      consumeApproval(client, { businessId: ids.businessA, requesterId: ids.staffA, kind: "SPEND", amountCents: 900_000, ref: `expense:${stamp}:a` }),
+      consumeApproval(client, { businessId: ids.businessA, requesterId: ids.staffA, kind: "SPEND", amountCents: 900_000, ref: `expense:${stamp}:b` }),
+    ]);
+    expect([first, second].filter(Boolean)).toHaveLength(1);
+
+    const stored = await client.erpApprovalRequest.findUnique({ where: { id: raised.request.id } });
+    expect(stored.consumedAt).not.toBeNull();
+    expect(stored.consumedRef).toMatch(new RegExp(`^expense:${stamp}:[ab]$`));
+    const consumedEvents = await client.erpApprovalEvent.findMany({ where: { requestId: raised.request.id, action: "CONSUMED" } });
+    expect(consumedEvents).toHaveLength(1);
+
+    const replay = await consumeApproval(client, { businessId: ids.businessA, requesterId: ids.staffA, kind: "SPEND", amountCents: 900_000, ref: `expense:${stamp}:c` });
+    expect(replay).toBeNull();
+  });
+
+  it("refuses a grant from another tenant and a grant that is too small", async () => {
+    const small = await createApprovalRequest(client, {
+      businessId: ids.businessA,
+      kind: "SPEND",
+      title: "Small purchase",
+      amountCents: 50_000,
+      approverRole: "MANAGER",
+      requestedBy: ids.staffA,
+      requestedRole: "STAFF",
+      idempotencyKey: `small-${stamp}`,
+    });
+    await decideApprovalRequest(client, { businessId: ids.businessA, requestId: small.request.id, decision: "APPROVE", decider: { userId: ids.managerA, role: "MANAGER" } });
+
+    expect(await consumeApproval(client, { businessId: ids.businessA, requesterId: ids.staffA, kind: "SPEND", amountCents: 50_001, ref: `x:${stamp}` })).toBeNull();
+    expect(await consumeApproval(client, { businessId: ids.businessB, requesterId: ids.staffA, kind: "SPEND", amountCents: 100, ref: `y:${stamp}` })).toBeNull();
+    const stored = await client.erpApprovalRequest.findUnique({ where: { id: small.request.id } });
+    expect(stored.consumedAt).toBeNull();
+  });
+
+  it("raises a request instead of posting when a manager exceeds the limit, then lets the owner unblock it", async () => {
+    const ref = `journal:${stamp}:gate`;
+    const blocked = await requireApprovalFor({
+      client,
+      businessId: ids.businessA,
+      requester: { userId: ids.managerA, role: "MANAGER", name: "Manager A" },
+      kind: "JOURNAL",
+      amountCents: 3_000_000,
+      title: "Journal: Reclassify stock",
+      ref,
+    });
+    expect(blocked.blocked).toBe(true);
+    if (!blocked.blocked) throw new Error("unreachable");
+    expect(blocked.request.approverRole).toBe("ADMIN");
+
+    await decideApprovalRequest(client, { businessId: ids.businessA, requestId: blocked.request.id, decision: "APPROVE", decider: { userId: ids.ownerA, role: "OWNER", name: "Owner A" } });
+    const unblocked = await requireApprovalFor({
+      client,
+      businessId: ids.businessA,
+      requester: { userId: ids.managerA, role: "MANAGER", name: "Manager A" },
+      kind: "JOURNAL",
+      amountCents: 3_000_000,
+      title: "Journal: Reclassify stock",
+      ref,
+    });
+    expect(unblocked.blocked).toBe(false);
+    if (unblocked.blocked) throw new Error("unreachable");
+    expect(unblocked.consumed?.consumedRef).toBe(ref);
+    const audits = await client.erpAuditEvent.findMany({ where: { businessId: ids.businessA, action: "APPROVAL_CONSUMED", targetId: blocked.request.id } });
+    expect(audits).toHaveLength(1);
   });
 
   it("counts the queue for the dashboard", async () => {

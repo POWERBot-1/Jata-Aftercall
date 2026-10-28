@@ -171,6 +171,18 @@ ErpConfiguration
 `ErpNotification`, so each child goes before its parent.
 `ErpConfiguration` goes last: several tables read its feature flags and `teamRolesJson`.
 
+### Rollback of `20261031000000_erp_approval_consumption` on its own
+
+```sql
+DROP INDEX IF EXISTS "ErpApprovalRequest_businessId_kind_status_consumedAt_idx";
+ALTER TABLE "ErpApprovalRequest" DROP COLUMN IF EXISTS "consumedRef";
+ALTER TABLE "ErpApprovalRequest" DROP COLUMN IF EXISTS "consumedBy";
+ALTER TABLE "ErpApprovalRequest" DROP COLUMN IF EXISTS "consumedAt";
+```
+
+Losing these three columns loses only which grant paid for which action; the approvals themselves and
+their event history are untouched.
+
 ### Rollback of `20261030000000_erp_approvals` on its own
 
 ```sql

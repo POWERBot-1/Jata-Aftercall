@@ -14,7 +14,7 @@
  */
 
 import { logErpAudit } from "./audit";
-import { notifyTaskAssigned } from "./notifications";
+import { notifyTaskAssigned, notifyTaskCompleted } from "./notifications";
 
 export const TASK_STATUSES = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -305,6 +305,17 @@ export async function updateTask(client: any, input: UpdateTaskInput) {
       actorId: input.actorId ?? null,
       actorName: input.actorName ?? null,
     }).catch(() => null);
+  }
+
+  if (data.status === "DONE") {
+    // The person who asked for the work is told it is finished; completing your own task says
+    // nothing. Best-effort, like every notification: the state change must not depend on it.
+    await notifyTaskCompleted(client, {
+      businessId: input.businessId,
+      task: updated as any,
+      actorId: input.actorId ?? null,
+      actorName: input.actorName ?? null,
+    });
   }
 
   await logErpAudit({

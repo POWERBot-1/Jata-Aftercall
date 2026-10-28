@@ -2947,6 +2947,13 @@ model ErpApprovalRequest {
   sourceType    String?
   sourceId      String?
   href          String?
+  /// Set when the grant is spent on the action it authorised. An approval is a single-use
+  /// permission slip: consuming it is what turns "you may spend up to X" into one recorded spend.
+  consumedAt    DateTime?
+  consumedBy    String?
+  /// What the grant was spent on, e.g. expense:<idempotency key>, so the trail is followed in both
+  /// directions.
+  consumedRef   String?
   /// Unique per tenant so a retried automation or form cannot raise the same request twice.
   idempotencyKey String?
   createdAt     DateTime @default(now())
@@ -2957,6 +2964,7 @@ model ErpApprovalRequest {
   @@index([businessId, status, createdAt])
   @@index([businessId, approverId, status])
   @@index([businessId, requestedBy, status])
+  @@index([businessId, kind, status, consumedAt])
 }
 
 /// Append-only. Nothing updates or deletes an event; a correction is a new event.

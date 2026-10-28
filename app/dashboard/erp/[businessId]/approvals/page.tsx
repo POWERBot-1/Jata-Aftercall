@@ -53,6 +53,13 @@ export default async function ApprovalsPage({ params, searchParams }: { params: 
             {request.decisionNote ? ` — “${request.decisionNote}”` : ""}
           </p>
         ) : null}
+        {request.status === "APPROVED" ? (
+          <p className="erp-small" style={{ margin: 0 }}>
+            {request.consumedAt
+              ? <span className="erp-muted">Used on {String(request.consumedRef ?? "an action")} · {formatDate(request.consumedAt)}</span>
+              : <span className="erp-muted">Granted and not used yet — it covers one action up to this amount.</span>}
+          </p>
+        ) : null}
         {waiting && mineToDecide ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <form action={decideApprovalAction} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -104,6 +111,7 @@ export default async function ApprovalsPage({ params, searchParams }: { params: 
       <section className="erp-card">
         <h2>Ask for approval</h2>
         <p className="erp-card-sub">
+          An approval covers one action. Once it is used, the next one needs a new decision.{" "}
           {centre.canApprove
             ? unlimited
               ? "Your role can decide any amount. You still cannot approve your own request."

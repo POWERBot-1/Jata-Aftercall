@@ -314,6 +314,40 @@ export async function notifyTaskAssigned(
 }
 
 /**
+ * Tell the person who asked for the work that it is finished.
+ *
+ * The creator hears about it — not the person who completed it (they already know), and not the
+ * whole team. The dedupe key carries the completion timestamp, so a retried completion is free
+ * while a task that is reopened and finished again does produce one new notice.
+ */
+export async function notifyTaskCompleted(
+  client: any,
+  input: { businessId: string; task: any; actorId?: string | null; actorName?: string | null },
+) {
+  const creator = input.task?.createdBy ? String(input.task.createdBy) : null;
+  const actor = input.actorId ?? null;
+  if (!creator || creator === actor) return null;
+  const finishedAt = input.task?.completedAt ? new Date(input.task.completedAt).toISOString() : "now";
+  return createNotification(client, {
+    businessId: input.businessId,
+    kind: "TASK_COMPLETED",
+    title: `Finished: ${input.task.title}`.slice(0, 160),
+    body: input.actorName
+      ? `${input.actorName} marked this done. Nothing else is needed unless you disagree.`
+      : "Somebody in the business marked this done. Nothing else is needed unless you disagree.",
+    href: input.task.href ?? `/dashboard/erp/${encodeURIComponent(input.businessId)}/tasks`,
+    priority: "NORMAL",
+    recipientId: creator,
+    audienceRole: "ALL",
+    sourceType: "TASK",
+    sourceId: input.task.id,
+    dedupeKey: `task-completed:${input.task.id}:${finishedAt}`,
+    actorId: actor,
+    actorName: input.actorName ?? null,
+  }).catch(() => null); // a notification must never break the task write
+}
+
+/**
  * Raise one overdue notice per task per day, for the person who owns it (or the owner role when the
  * task has no named assignee). Called from the dashboard sweep; dedupe keys make repeated page loads
  * free.

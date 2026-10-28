@@ -398,6 +398,159 @@ async function recordEvent(client: any, input: { businessId: string; requestId: 
     .catch(() => null); // history must not block the decision, and the audit row covers the decision
 }
 
+/**
+ * Does recording this amount need somebody to sign for it first?
+ *
+ * Pure and derived from the same limits the decision path uses, so the button a person sees and the
+ * check the server runs cannot disagree. `restricted` means "raise a request"; it never means
+ * "refused" — the person is still allowed to ask.
+ */
+export function spendGate(role: string, amountCents: number, thresholdCents?: number): { restricted: boolean; limitCents: number; reason: string | null } {
+  const normalized = normalizeErpRole(role);
+  const roleLimit = approvalLimitFor(normalized);
+  const limitCents = Math.min(thresholdCents ?? Number.MAX_SAFE_INTEGER, roleLimit);
+  const amount = Math.max(0, Math.round(Number(amountCents) || 0));
+  if (amount <= limitCents) return { restricted: false, limitCents, reason: null };
+  const limit = (limitCents / 100).toLocaleString("en-KE");
+  return {
+    restricted: true,
+    limitCents,
+    reason: roleLimit === 0
+      ? "Your role cannot record spending on its own. It has to be approved first."
+      : `This is above the KES ${limit} your role may sign for. It has to be approved first.`,
+  };
+}
+
+/** Which role a request from this person should go to. Never the requester's own role. */
+export function escalationRoleFor(role: string): string {
+  const normalized = normalizeErpRole(role);
+  if (normalized === "MANAGER" || normalized === "FINANCE") return "ADMIN";
+  return "OWNER";
+}
+
+export type ConsumeApprovalInput = {
+  businessId: string;
+  /** Only the person who asked may spend their own grant. */
+  requesterId: string;
+  kind: string;
+  amountCents: number;
+  actorId?: string | null;
+  actorName?: string | null;
+  /** What the grant is being spent on, stored on the row so the trail can be followed both ways. */
+  ref: string;
+  thresholdCents?: number;
+};
+
+/**
+ * Spend a grant on the action it authorised.
+ *
+ * Two rules make this safe under a double submit: the candidate must still be unconsumed when it is
+ * picked, and the write is conditional on `consumedAt IS NULL` (updateMany, so a lost race writes
+ * nothing instead of overwriting). Returns the request when the grant was taken, or null when there
+ * is nothing to spend — the caller then raises a new request rather than posting.
+ */
+export async function consumeApproval(client: any, input: ConsumeApprovalInput) {
+  const amount = Math.max(0, Math.round(Number(input.amountCents) || 0));
+  const candidates = await client.erpApprovalRequest
+    .findMany({
+      where: {
+        businessId: input.businessId,
+        requestedBy: input.requesterId,
+        kind: normalizeApprovalKind(input.kind),
+        status: "APPROVED",
+        consumedAt: null,
+        amountCents: { gte: amount },
+      },
+      orderBy: [{ decidedAt: "asc" }, { createdAt: "asc" }],
+      take: 5,
+    })
+    .catch(() => []);
+
+  for (const candidate of candidates as any[]) {
+    // The decider's own limit was checked when they approved; a tenant threshold still applies to the
+    // amount actually being spent.
+    if (input.thresholdCents !== undefined && amount > input.thresholdCents) continue;
+    const taken = await client.erpApprovalRequest
+      .updateMany({
+        where: { id: candidate.id, businessId: input.businessId, status: "APPROVED", consumedAt: null },
+        data: { consumedAt: new Date(), consumedBy: input.actorId ?? input.requesterId, consumedRef: String(input.ref).slice(0, 200) },
+      })
+      .catch(() => ({ count: 0 }));
+    if (Number(taken?.count ?? 0) !== 1) continue;
+
+    await recordEvent(client, {
+      businessId: input.businessId,
+      requestId: candidate.id,
+      action: "CONSUMED",
+      actorId: input.actorId ?? input.requesterId,
+      actorName: input.actorName ?? null,
+      note: String(input.ref).slice(0, 200),
+    });
+    await logErpAudit({
+      businessId: input.businessId,
+      actorId: input.actorId ?? input.requesterId,
+      actorName: input.actorName ?? null,
+      action: "APPROVAL_CONSUMED",
+      targetType: "APPROVAL",
+      targetId: candidate.id,
+      after: { amountCents: amount, ref: String(input.ref).slice(0, 200) },
+      client,
+    });
+    const fresh = await client.erpApprovalRequest.findFirst({ where: { id: candidate.id, businessId: input.businessId } }).catch(() => null);
+    return fresh ?? { ...candidate, consumedRef: String(input.ref).slice(0, 200) };
+  }
+  return null;
+}
+
+/**
+ * The barrier a consequential action calls before it writes money.
+ *
+ * Either an existing grant covers the amount (and is spent by the caller) or a request is raised and
+ * nothing is written. Returns the shape a server action can redirect on, with the reason a person
+ * can read.
+ */
+export async function requireApprovalFor(input: {
+  client: any;
+  businessId: string;
+  requester: { userId: string; name?: string | null; role: string };
+  kind: string;
+  amountCents: number;
+  title: string;
+  detail?: string | null;
+  href?: string | null;
+  ref: string;
+  thresholdCents?: number;
+  actorName?: string | null;
+}) {
+  const gate = spendGate(input.requester.role, input.amountCents, input.thresholdCents);
+  if (!gate.restricted) return { blocked: false as const, gate };
+  const consumed = await consumeApproval(input.client, {
+    businessId: input.businessId,
+    requesterId: input.requester.userId,
+    kind: input.kind,
+    amountCents: input.amountCents,
+    actorId: input.requester.userId,
+    actorName: input.actorName ?? input.requester.name ?? null,
+    ref: input.ref,
+    thresholdCents: input.thresholdCents,
+  });
+  if (consumed) return { blocked: false as const, gate, consumed };
+  const raised = await createApprovalRequest(input.client, {
+    businessId: input.businessId,
+    kind: input.kind,
+    title: input.title,
+    detail: input.detail ?? null,
+    amountCents: input.amountCents,
+    requestedBy: input.requester.userId,
+    requestedName: input.requester.name ?? input.actorName ?? null,
+    requestedRole: input.requester.role,
+    approverRole: escalationRoleFor(input.requester.role),
+    href: input.href ?? null,
+    idempotencyKey: `gate:${input.ref}`,
+  });
+  return { blocked: true as const, gate, request: raised.request, deduplicated: raised.deduplicated };
+}
+
 /** The queue: what is waiting, newest first, plus what this person may decide. Tenant-scoped. */
 export async function listApprovalRequests(
   client: any,

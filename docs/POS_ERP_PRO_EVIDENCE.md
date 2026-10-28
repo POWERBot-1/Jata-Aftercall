@@ -48,12 +48,12 @@ control is only reasoned about, it is `NOT TESTED`.
 | --- | --- |
 | Domain libraries | `lib/erp/*.ts` (25 modules) — money, tax, accounting, invoicing, storefront, compliance, industry packs, entitlement, access, audit, sequences, automation, onboarding, bootstrap, workspace, loaders, team, etims, http, navigation |
 | Messaging engine | `lib/messaging/*.ts` (10 modules) — segments, consent, templates, senderId, providers, billing, campaigns, pipeline, testSend, import |
-| Schema | 42 new models in `prisma/schema.prisma`; four additive migrations (`…_pos_erp_pro`, `…_erp_tasks`, `…_erp_notifications`, `…_erp_approvals`) |
+| Schema | 42 new models in `prisma/schema.prisma`; five additive migrations (`…_pos_erp_pro`, `…_erp_tasks`, `…_erp_notifications`, `…_erp_approvals`, `…_erp_approval_consumption`) |
 | Screens | `app/dashboard/erp/**` (19 pages, including `/tasks`, `/notifications` and `/approvals`), `app/store/**` (2 public pages) |
 | API | 7 route handlers (status, messaging preview, campaign dispatch, accounting, export, public order, provider webhook) |
 | Components | `components/erp/*` (4) |
-| Unit tests | 23 suites for this product, **383 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page + 23 approvals-domain + 6 approvals-page) |
-| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (10), `erp-approvals-postgres` (10) — **49 tests** against real PostgreSQL |
+| Unit tests | 23 suites for this product, **412 tests** (292 core + 22 task-domain + 9 task-page + 23 notifications-domain + 8 notification-page + 23 approvals-domain + 6 approvals-page) |
+| Database tests | `erp-pro-postgres` (16), `erp-tasks-postgres` (13), `erp-notifications-postgres` (11), `erp-approvals-postgres` (13) — **53 tests** against real PostgreSQL |
 | Verification tooling | `scripts/erp/migrate-test-db.sh`, `scripts/erp/migration-verify.sh`, `scripts/erp/check-models.ts`, `scripts/erp/build-wasm-harness.sh`, `scripts/erp/tasks-page.check.mjs` |
 | CI | `.github/workflows/pos-erp-verify.yml` (static / migrations / PostgreSQL gates) |
 | Docs | this report, `POS_ERP_PRO_MIGRATION_PLAN.md`, `POS_ERP_PRO_PROVIDER_COSTS.md`, `POS_ERP_PRO_SECURITY_REVIEW.md` |
@@ -320,7 +320,7 @@ PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npm run test:db:erp
 #   transition raises one deduplicated notification.
 
 bash scripts/erp/migration-verify.sh all
-# → 24 checks PASS · 24 migrations · 42 ERP tables · 87 pre-existing tables
+# → 24 checks PASS · 25 migrations · 42 ERP tables · 87 pre-existing tables
 
 npx vitest run                       # → 267 files passed | 19 skipped · 3493 passed | 170 skipped
 npm run build                        # → [build] Build completed successfully
@@ -338,6 +338,46 @@ npm run build                        # → [build] Build completed successfully
 | Escalate | **MISSING** | not built: an unanswered request does not yet escalate to a higher role |
 | Notifications on request and decision | **PASS** | `APPROVAL_REQUESTED` / `APPROVAL_DECIDED`, deduplicated |
 | Server-side authorisation on every path | **PASS** | actions call `requireErpAccess` with `APPROVE_SPEND`; the domain re-derives authority per request |
+| Responsive verification | **NOT TESTED** | no browser in this sandbox (E4) |
+
+---
+
+### 2.8 Spending a grant (2026-10-31, `CONSUMPTION_SHA`)
+
+Section 2.7 shipped approvals that could be *asked for* but nothing tied a grant to the action it
+authorised, so "approved" was an opinion rather than a permission slip. This slice makes an approval
+single-use and puts it in front of the money.
+
+```bash
+npx tsc --noEmit                     # → exit 0
+npx vitest run tests/unit/erp-approvals.test.ts
+# → 33 tests passed (10 new: the gate at every role and threshold, and eight ways to spend a grant,
+#   including the replay, the wrong kind, the wrong amount, another tenant, a rejected request and a
+#   retried submit that must not raise a second request)
+
+PRISMA_TEST_DATABASE_URL=… PRISMA_WASM_HARNESS_DIR=… npm run test:db:erp
+# → 4 files, 53 tests passed (16 ERP core + 13 tasks + 11 notifications + 13 approvals)
+#   New on real PostgreSQL: two concurrent consumes of one grant leave exactly one CONSUMED event and
+#   one audit row; a smaller grant cannot pay a larger bill; another tenant cannot spend it; and a
+#   manager's over-limit journal is refused until the owner approves, then spends the grant.
+
+bash scripts/erp/migration-verify.sh all
+# → PASS · 25 migrations · 42 ERP tables (three nullable columns and one index, no new table)
+
+npx vitest run                       # → 267 files passed | 19 skipped · 3507 passed | 174 skipped
+npm run lint                         # → 0 errors, 42 warnings
+npm run build                        # → [build] Build completed successfully
+```
+
+| Requirement (directive module 7) | Status | Evidence |
+| --- | --- | --- |
+| A granted approval authorises one action, not a policy | **PASS** | `consumedAt`/`consumedBy`/`consumedRef`; `consumeApproval` |
+| Two submits cannot spend the same grant twice | **PASS** | guarded `updateMany` (`consumedAt IS NULL`); proven with two racing calls on real PostgreSQL |
+| Above the limit, the action does not run | **PASS** | `requireApprovalFor` in `recordExpenseAction` and `postJournalAction`; nothing is posted, a request is raised, the reason is shown |
+| Above the limit, the request goes to somebody who can decide it | **PASS** | `escalationRoleFor` (manager/finance → admin, everything else → owner) |
+| Retried submit raises one request | **PASS** | idempotency key `gate:<ref>` |
+| The trail runs both ways | **PASS** | `APPROVAL_CONSUMED` audit + `CONSUMED` event + `consumedRef`; the screen shows "Used on …" / "not used yet" |
+| Applies to campaigns | **PARTIAL** | campaigns already require `APPROVE_CAMPAIGNS` with cost confirmation and separation of duties; they do not yet spend an approval grant |
 | Responsive verification | **NOT TESTED** | no browser in this sandbox (E4) |
 
 ---

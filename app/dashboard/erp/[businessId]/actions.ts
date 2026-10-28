@@ -15,7 +15,7 @@ import { getSession } from "@/lib/auth";
 import { erpBasePath, requireErpAccess, ErpAccessError, hasErpPermission } from "@/lib/erp/access";
 import { logErpAudit } from "@/lib/erp/audit";
 import { bootstrapErpWorkspace } from "@/lib/erp/bootstrap";
-import { parseKesToCents } from "@/lib/erp/money";
+import { parseKesToCents, formatCentsShort } from "@/lib/erp/money";
 import { postJournal, closePeriod, buildExpenseJournal, reopenPeriod } from "@/lib/erp/accounting";
 import { createInvoice, issueInvoice, recordPayment, issueCreditNote } from "@/lib/erp/invoicing";
 import { createAutomationRule, pauseAutomation, activateAutomation, runAutomation } from "@/lib/erp/automationActions";
@@ -29,7 +29,7 @@ import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
 import { createTask, updateTask } from "@/lib/erp/tasks";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
-import { createApprovalRequest, decideApprovalRequest, withdrawApprovalRequest } from "@/lib/erp/approvals";
+import { createApprovalRequest, decideApprovalRequest, withdrawApprovalRequest, requireApprovalFor } from "@/lib/erp/approvals";
 import { formatDate, formatNumber } from "@/lib/format";
 
 class ActionError extends Error {}
@@ -549,6 +549,26 @@ export async function recordExpenseAction(form: FormData) {
     const requestKey = text(form, "requestKey") || randomUUID();
     const netCents = amountCents - taxCents;
 
+    // Above this role's limit the expense is not posted: it becomes a request. An approval granted
+    // earlier is spent here, once, inside the same write.
+    const gate = await requireApprovalFor({
+      client: prisma,
+      businessId,
+      requester: { userId: context.session.userId, name: context.session.name ?? null, role: context.role },
+      kind: "SPEND",
+      amountCents,
+      title: `Expense: ${description}`,
+      detail: `${formatCentsShort(amountCents)}${taxCents ? ` including ${formatCentsShort(taxCents)} VAT` : ""} · ${category}`,
+      href: `${base}/expenses`,
+      ref: `expense:${requestKey}`,
+      actorName: context.session.name ?? null,
+    });
+    if (gate.blocked) {
+      back(base, "/expenses", {
+        ok: `${gate.gate.reason} Request sent for approval — nothing has been posted or paid yet.`,
+      });
+    }
+
     const result = await prisma.$transaction(async (tx: any) => {
       const journal = await postJournal(tx, {
         businessId,
@@ -598,6 +618,25 @@ export async function postJournalAction(form: FormData) {
       }))
       .filter((line) => line.accountCode && (line.debitCents > 0 || line.creditCents > 0));
     if (lines.length < 2) throw new ActionError("Add at least two lines — a debit and a credit.");
+    const totalCents = lines.reduce((sum, line) => sum + line.debitCents, 0);
+    // A manual journal is a consequential write. Above the role limit it waits for a decision.
+    const gate = await requireApprovalFor({
+      client: prisma,
+      businessId,
+      requester: { userId: context.session.userId, name: context.session.name ?? null, role: context.role },
+      kind: "JOURNAL",
+      amountCents: totalCents,
+      title: `Journal: ${text(form, "description").slice(0, 120) || "Manual journal"}`,
+      detail: `${lines.length} lines · ${formatCentsShort(totalCents)}`,
+      href: `${base}/accounting`,
+      ref: `journal:${text(form, "requestKey") || randomUUID()}`,
+      actorName: context.session.name ?? null,
+    });
+    if (gate.blocked) {
+      back(base, "/accounting", {
+        ok: `${gate.gate.reason} Request sent for approval — nothing has been posted.`,
+      });
+    }
     const entryDate = text(form, "entryDate") ? new Date(text(form, "entryDate")) : new Date();
     if (Number.isNaN(entryDate.getTime())) throw new ActionError("That date is not valid.");
     const journal = await postJournal(prisma, {

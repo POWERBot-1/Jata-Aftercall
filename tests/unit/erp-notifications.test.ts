@@ -18,12 +18,13 @@ import {
   notificationIsRead,
   notificationKind,
   notificationVisibleTo,
+  notifyTaskCompleted,
   notifyTaskOverdue,
   sweepOverdueTasks,
   unreadNotificationCount,
   validateNotificationInput,
 } from "@/lib/erp/notifications";
-import { createTask } from "@/lib/erp/tasks";
+import { createTask, updateTask } from "@/lib/erp/tasks";
 
 const NOW = new Date("2026-10-29T09:00:00.000Z");
 
@@ -353,5 +354,68 @@ describe("task integration", () => {
     seedTask(client, { id: "t2", assignedTo: null, assignedRole: "FINANCE" });
     await notifyTaskOverdue(client, { businessId: "biz-a", task: client.tasks[0], now: NOW });
     expect(client.notifications[0]).toMatchObject({ recipientId: null, audienceRole: "FINANCE" });
+  });
+});
+
+describe("completion notices", () => {
+  const completedTask = (over: Record<string, unknown> = {}) => ({
+    id: "t-done",
+    businessId: "biz-a",
+    title: "Restock the shop floor",
+    status: "DONE",
+    priority: "HIGH",
+    createdBy: "owner-1",
+    completedBy: "staff-1",
+    completedAt: new Date("2026-10-29T08:00:00.000Z"),
+    href: null,
+    ...over,
+  });
+
+  it("tells the creator, once, when somebody else finishes the work", async () => {
+    const client = fakeClient();
+    const first = await notifyTaskCompleted(client, { businessId: "biz-a", task: completedTask(), actorId: "staff-1", actorName: "Amina" });
+    const replay = await notifyTaskCompleted(client, { businessId: "biz-a", task: completedTask(), actorId: "staff-1", actorName: "Amina" });
+    expect(first?.created).toBe(true);
+    expect(replay?.created).toBe(false);
+    expect(client.notifications).toHaveLength(1);
+    expect(client.notifications[0]).toMatchObject({
+      kind: "TASK_COMPLETED",
+      recipientId: "owner-1",
+      priority: "NORMAL",
+      sourceType: "TASK",
+      sourceId: "t-done",
+      deliveredAt: null,
+    });
+    expect(client.notifications[0].body).toContain("Amina");
+  });
+
+  it("says nothing when the creator completes their own task", async () => {
+    const client = fakeClient();
+    const result = await notifyTaskCompleted(client, { businessId: "biz-a", task: completedTask({ completedBy: "owner-1" }), actorId: "owner-1" });
+    expect(result).toBeNull();
+    expect(client.notifications).toHaveLength(0);
+  });
+
+  it("says nothing when nobody recorded who asked for the work", async () => {
+    const client = fakeClient();
+    const result = await notifyTaskCompleted(client, { businessId: "biz-a", task: completedTask({ createdBy: null }), actorId: "staff-1" });
+    expect(result).toBeNull();
+    expect(client.notifications).toHaveLength(0);
+  });
+
+  it("is raised by the real update path, not only when called directly", async () => {
+    const client = fakeClient();
+    seedTask(client, { id: "t-live", createdBy: "owner-1", assignedTo: "staff-1", status: "IN_PROGRESS", dueAt: null });
+    client.erpTask.findFirst = async ({ where }: any) =>
+      client.tasks.find((task: any) => task.id === where.id && task.businessId === where.businessId) ?? null;
+    client.erpTask.update = async ({ where, data }: any) => {
+      const row = client.tasks.find((task: any) => task.id === where.id);
+      Object.assign(row, data);
+      return row;
+    };
+    await updateTask(client, { businessId: "biz-a", taskId: "t-live", status: "DONE", actorId: "staff-1", actorName: "Amina" });
+    const notices = client.notifications.filter((row) => row.kind === "TASK_COMPLETED");
+    expect(notices).toHaveLength(1);
+    expect(notices[0].recipientId).toBe("owner-1");
   });
 });
