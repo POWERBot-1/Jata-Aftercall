@@ -1,6 +1,106 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+/*
+ * Tailwind CSS v4 (upgrade from v3.4.19 — owner-approved staged remediation, release report §J.2).
+ *
+ * `source(none)` disables v4's automatic content detection so the class scan stays exactly what
+ * `tailwind.config.ts` declared before this migration: app/, components/ and lib/ only. The three
+ * @source lines below are that same content configuration, expressed CSS-first.
+ */
+@source "../app/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../components/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../lib/**/*.{js,ts,jsx,tsx,mdx}";
+
+/*
+ * Design tokens. The project's only theme customisation was `fontFamily.sans` in
+ * tailwind.config.ts, so this is the whole token migration — every other token (colours, spacing,
+ * radii, shadows, breakpoints) is v4's own scale, which the tests and the built CSS are checked
+ * against. The brand variables themselves (`--jata-*`, `--eb-*`) live below and are untouched.
+ */
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * v3 → v4 compatibility layer.
+ *
+ * v4's preflight deliberately changes four defaults that the previous version set. Each rule below
+ * restores the v3 value exactly, so the migration does not silently restyle the product; the
+ * evidence for each is a diff of the two preflight files (v3.4.19 vs v4.3.3) and is recorded in
+ * the release report. Nothing here overrides a utility: this is the `base` layer, so any
+ * `border-*`, `ring-*`, `placeholder-*` or `cursor-*` class still wins over it.
+ */
+@layer base {
+  /*
+   * v3: `*, ::before, ::after { border-color: theme(borderColor.DEFAULT) }` = gray-200.
+   * v4: the universal reset is `border: 0 solid`, i.e. currentColor. Without this, every bare
+   * `border` / `divide-y` in the app would take the text colour instead of the subtle v3 hairline.
+   */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb; /* v3 gray-200, verbatim — v4's palette is OKLCH, so the literal is used */
+  }
+
+  /*
+   * v3: the default `--tw-ring-color` was blue-500 at 50% opacity. v4 defaults it to currentColor.
+   * Only bare `ring-1`/`ring-2` are affected; `ring-<colour>` utilities still override this.
+   */
+  * {
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+  }
+
+  /*
+   * v3 preflight: `button, [role="button"] { cursor: pointer }` and `:disabled { cursor: default }`.
+   * v4 removed both, so buttons would fall back to the browser's default cursor — a UX change, not
+   * a styling detail, and the reason this rule exists.
+   */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :disabled {
+    cursor: default;
+  }
+
+  /*
+   * v3 preflight: `input::placeholder, textarea::placeholder { color: gray-400; opacity: 1 }`.
+   * v4 uses a half-transparent currentColor, which reads differently on coloured surfaces.
+   * Explicit `placeholder-<colour>` classes still override this.
+   */
+  ::placeholder {
+    color: #9ca3af; /* v3 gray-400, verbatim */
+    opacity: 1;
+  }
+
+  /*
+   * v3 preflight: `button, select { text-transform: none }`. v4 dropped it, so a control inside an
+   * uppercased container would inherit the transform instead of rendering its own label. No current
+   * markup nests a control under `uppercase`/`capitalize`, so this is defensive fidelity rather than
+   * a fix — but it keeps the reset v3 had, and an explicit `uppercase` class on the control itself
+   * still wins (utilities layer).
+   */
+  button,
+  select {
+    text-transform: none;
+  }
+
+  /*
+   * v3 preflight: `[type='search'] { -webkit-appearance: textfield; outline-offset: -2px }`, also
+   * dropped by v4. Three real search inputs depend on it — the POS record board and till
+   * (components/pos/RecordBoard.tsx, components/pos/TillClient.tsx) and the storefront catalogue
+   * (components/storefront/CatalogueClient.tsx) — because without it Safari draws its native rounded
+   * search field and the focus ring shifts outwards.
+   */
+  [type="search"] {
+    -webkit-appearance: textfield;
+    outline-offset: -2px;
+  }
+}
+
 
 :root {
   --jata-ink: #18181b;
@@ -8,6 +108,15 @@
   --jata-card: #ffffff;
   --jata-line: #e4e4e7;
   --jata-muted: #52525b;
+  /* Filled-action, hover and inset-chip surfaces. They exist as tokens because the shared
+     primitives (.jata-btn, .jc-*, .pos-*) used to hard-code #18181b/#fff/#f4f4f5 — a light-theme
+     assumption that painted white-on-white controls as soon as the product ran under the
+     graphite theme. Re-pointed per product theme below. */
+  --jata-action: #18181b;
+  --jata-on-action: #ffffff;
+  --jata-action-hover: #000000;
+  --jata-sunken: #f4f4f5;
+  --jata-soft: #fafafa;
   --jata-accent: #d97706;
   --jata-live: #047857;
   --jata-danger: #b91c1c;
@@ -82,8 +191,8 @@ h1, h2, h3 {
 
 .jata-brand-mark {
   border-radius: 0.55rem;
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   padding: 0.2rem 0.55rem;
   font-size: 0.8rem;
   font-weight: 700;
@@ -95,16 +204,13 @@ h1, h2, h3 {
   font-weight: 700;
 }
 
+/* The tagline is a marketing line, not part of the wordmark: it is off by default and the surfaces
+   that want it turn it on (`.lp-nav` below), so a shared header never carries copy it does not own. */
 .jata-brand-tag {
   display: none;
   color: var(--jata-muted);
   font-size: 0.75rem;
-}
-
-@media (min-width: 640px) {
-  .jata-brand-tag {
-    display: inline;
-  }
+  min-width: 0;
 }
 
 .jata-nav {
@@ -207,17 +313,17 @@ button:focus-visible {
 }
 
 .jata-btn-primary {
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
 }
 
 .jata-btn-primary:hover:not(:disabled) {
-  background: black;
+  background: var(--jata-action-hover);
 }
 
 .jata-btn-secondary {
   border: 1px solid var(--jata-line);
-  background: white;
+  background: var(--jata-card);
   color: var(--jata-ink);
 }
 
@@ -300,6 +406,11 @@ button:focus-visible {
   --jata-live: var(--color-success);
   --jata-danger: var(--color-error);
   --jata-focus: var(--color-focus);
+  --jata-action: var(--color-primary);
+  --jata-on-action: var(--color-primary-contrast);
+  --jata-action-hover: var(--color-primary-hover);
+  --jata-sunken: var(--color-surface-muted);
+  --jata-soft: color-mix(in srgb, var(--color-surface-muted) 55%, var(--color-surface));
 }
 .product-theme-root .jata-page { background: var(--color-background); }
 .product-theme-root .jata-landing { background: var(--color-background); color: var(--color-text); }
@@ -439,6 +550,14 @@ button:focus-visible {
   min-height: 3.25rem;
   padding: 0.45rem 1rem;
 }
+/* While the Appearance picker is OPEN it must paint above the sticky workspace chrome
+   (z-index 60) and the landing nav (z-index 50). At the closed z-index of 40 the options
+   panel rendered underneath the header: the first theme option was covered and taps on it
+   landed on the navigation rail instead. The toolbar only rises while open, so when the
+   picker is closed modal sheets (z-index 60/61) still cover it as before. */
+.product-theme-toolbar:has(> .product-theme-picker[open]) {
+  z-index: 65;
+}
 .product-theme-picker { position: relative; color: var(--color-text); font-size: 0.8rem; }
 .product-theme-picker summary {
   display: inline-flex;
@@ -568,8 +687,8 @@ button:focus-visible {
   top: -4rem;
   z-index: 60;
   border-radius: 0.75rem;
-  background: var(--jata-ink);
-  color: var(--jata-card);
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   padding: 0.6rem 1rem;
   font-weight: 700;
 }
@@ -595,6 +714,52 @@ button:focus-visible {
   transition: width 0.2s ease;
 }
 .product-theme-root .jata-stepper-bar > span { background: var(--color-primary); }
+
+/* Onboarding step illustration + guidance. The scene is drawn with `currentColor` and the action
+   token, so it inherits whichever appearance the workspace is in instead of being a fixed bitmap. */
+.ob-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 1rem;
+  background: var(--jata-soft);
+}
+.ob-step__scene { flex: 0 0 auto; width: 3.4rem; height: 3.4rem; }
+.ob-step__body { min-width: 0; }
+.ob-step__title {
+  margin: 0;
+  font-family: var(--jata-display, inherit);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--jata-ink);
+}
+.ob-step__hints {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--jata-muted);
+}
+.ob-step__hints li { display: flex; gap: 0.4rem; }
+.ob-step__hints li::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.32rem;
+  height: 0.32rem;
+  margin-top: 0.42rem;
+  border-radius: 999px;
+  background: var(--jata-action);
+}
+@media (max-width: 480px) {
+  .ob-step__scene { width: 2.8rem; height: 2.8rem; }
+}
 .product-theme-root .bg-red-50 { background-color: var(--color-error-surface); }
 .product-theme-root .text-red-700 { color: var(--color-error); }
 
@@ -711,7 +876,8 @@ button:focus-visible {
   color: var(--eb-header-text);
 }
 
-.eb-nav--sticky { position: sticky; top: 0; backdrop-filter: blur(10px); }
+/* Treatment classes live on the scope. Never filter/stick the entire page: fixed cart dialogs must use the viewport. */
+.eb-scope.eb-nav--sticky > .eb-nav { position: sticky; top: 0; backdrop-filter: blur(10px); }
 
 .eb-nav__inner {
   display: flex;
@@ -748,6 +914,10 @@ button:focus-visible {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* The brand is the only part of the header allowed to give way. Without `min-width: 0` the
+     flex child keeps its intrinsic width, so a long business name plus a two-word CTA used to
+     push the primary button past the right edge on a 390 px screen. */
+  min-width: 0;
 }
 .eb-nav__links {
   display: none;
@@ -764,6 +934,14 @@ button:focus-visible {
 }
 .eb-nav--pill .eb-nav__link:hover { background: var(--eb-surface-muted); }
 .eb-nav__cta { flex-shrink: 0; }
+@media (max-width: 640px) {
+  /* On a phone the header CTA is redundant and dangerous: the fixed action bar below the fold
+     already carries the same primary action in full, thumb-reachable wording, while a two-word
+     label like "Book a consultation" cannot fit beside the brand and used to be clipped by the
+     edge of the screen. The brand keeps the row to itself. */
+  .eb-nav__inner { gap: 0.75rem; min-height: 3.5rem; }
+  .eb-nav__cta { display: none; }
+}
 
 /* ── Buttons ── */
 .eb-btn {
@@ -786,12 +964,13 @@ button:focus-visible {
 .eb-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .eb-btn:active:not(:disabled) { transform: translateY(1px); }
 .eb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.eb-btn--upper { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
+.eb-scope.eb-btn--upper .eb-btn { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
 .eb-btn--soft { background: var(--eb-surface-muted); color: var(--eb-text); }
 .eb-btn--outline { background: transparent; border-color: var(--eb-border); color: var(--eb-text); }
 .eb-btn--pill { border-radius: 999px; }
 .eb-btn--block { width: 100%; }
 .eb-btn--sm { min-height: 2.35rem; padding: 0.45rem 0.95rem; font-size: 0.85rem; }
+@media (pointer: coarse) { .eb-scope .eb-btn { min-width: 44px; min-height: 44px; } }
 .eb-btn--ghost { background: transparent; color: var(--eb-text); }
 
 /* ── Hero ── */
@@ -1020,15 +1199,27 @@ button:focus-visible {
   z-index: 40;
   display: flex;
   gap: 0.6rem;
+  /* DEF-1 (§M.4): a second row is allowed, because four actions cannot share one 320–430 px row at a
+     readable size — measured, their labels need ~420 px inside a 401 px content box even at 430 px. */
+  row-gap: 0.5rem;
+  flex-wrap: wrap;
   padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--eb-surface) 92%, transparent);
   border-top: 1px solid var(--eb-border);
   backdrop-filter: blur(12px);
 }
-/* Let each quick action share the width and wrap its label, so four actions never push past a 390px phone. */
-.eb-actionbar .eb-btn { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; white-space: normal; text-align: center; line-height: 1.2; }
+/* Two actions per row, evenly grown, so every label keeps its own pill (§M.4, DEF-1).
+ *
+ * The previous rule (`flex: 1 1 0`) shared the row four ways and relied on wrapping, but a
+ * single-word label cannot wrap on whitespace: "WhatsApp" painted 17 px and "Directions" 22 px
+ * outside its button at 360 px, across the neighbouring control (`overflow: visible`). A label
+ * that still cannot fit — a longer locale, for instance — now breaks inside its own pill
+ * (`overflow-wrap: anywhere`) instead of bleeding. Typography, colours, padding and the 44 px
+ * touch target are unchanged. */
+.eb-actionbar .eb-btn { flex: 1 1 45%; min-width: 0; padding-inline: 0.5rem; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
-.eb-actionbar-spacer { height: 5rem; }
+/* Reserve the full two-row height below 900px so the fixed bar never covers page content. */
+.eb-actionbar-spacer { height: 9.5rem; }
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
 
 /* ── Cart drawer ── */
@@ -1170,7 +1361,12 @@ button:focus-visible {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  /* A toolbar is a row of controls, not a page: it must never make the page scroll sideways.
+     Groups inside it wrap, and `.jata-btn` inside it may not be squeezed below its label. */
+  min-width: 0;
 }
+.jata-toolbar > * { min-width: 0; }
+.jata-toolbar .jata-btn { white-space: nowrap; }
 
 .jata-sheet-scrim {
   position: fixed;
@@ -1249,6 +1445,25 @@ button:focus-visible {
 .pos-subtitle { font-size: 0.8rem; color: var(--jata-muted); margin: 0.15rem 0 0; }
 .pos-header-side { display: flex; align-items: center; gap: 0.5rem; }
 
+/* Category header image: a short, collapsible banner. Fixed heights keep the layout
+   still while it loads; on small phones it stays compact so selling keeps the space. */
+.pos-header-image {
+  position: relative; overflow: hidden; border-radius: 1rem;
+  border: 1px solid var(--jata-line); background: var(--jata-card);
+}
+.pos-header-image img { display: block; width: 100%; height: 7rem; object-fit: cover; }
+@media (min-width: 640px) { .pos-header-image img { height: 9rem; } }
+.pos-header-image[data-collapsed="true"] { height: 2rem; }
+.pos-header-image-toggle {
+  position: absolute; right: 0.45rem; bottom: 0.45rem; display: inline-flex; align-items: center; gap: 0.3rem;
+  min-height: 1.55rem; padding: 0.18rem 0.55rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.62); color: #fff; font-size: 0.68rem; font-weight: 700;
+}
+.pos-header-image[data-collapsed="true"] .pos-header-image-toggle {
+  position: absolute; right: 0.35rem; bottom: 0.28rem; background: var(--jata-card); color: var(--jata-muted);
+  border-color: var(--jata-line);
+}
+
 .pos-nav {
   display: flex; gap: 0.35rem; overflow-x: auto; padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--jata-line); scrollbar-width: thin;
@@ -1267,9 +1482,12 @@ button:focus-visible {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem;
   border-radius: 1rem; border: 1px solid var(--jata-line); padding: 0.75rem 0.9rem; background: var(--jata-card);
 }
-.pos-banner[data-tone="warn"] { border-color: #f0c36d; background: #fffaf0; }
-.pos-banner[data-tone="danger"] { border-color: #e6a3a3; background: #fff6f6; }
-.pos-banner[data-tone="success"] { border-color: #9fd3b0; background: #f4fbf6; }
+.pos-banner[data-tone="warn"] { border-color: color-mix(in srgb, var(--jata-warning) 45%, var(--jata-line)); background: var(--jata-warning-surface); color: var(--jata-warning); }
+.pos-banner[data-tone="danger"] { border-color: color-mix(in srgb, var(--jata-danger) 45%, var(--jata-line)); background: var(--jata-danger-surface); color: var(--jata-danger); }
+.pos-banner[data-tone="success"] { border-color: color-mix(in srgb, var(--jata-live) 45%, var(--jata-line)); background: var(--jata-success-surface); color: var(--jata-live); }
+/* A status banner says what happened; its label and sentence inherit the status ink. */
+.pos-banner[data-tone] .pos-banner-label,
+.pos-banner[data-tone] .pos-banner-text { color: inherit; }
 .pos-banner-label {
   font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--jata-muted); margin: 0;
@@ -1367,8 +1585,8 @@ button:focus-visible {
   font-size: 0.72rem; font-weight: 700; border: 1px solid var(--jata-line); background: rgba(0, 0, 0, 0.03);
 }
 .pos-pill[data-tone="success"] { background: #f0faf3; border-color: #9fd3b0; color: #166534; }
-.pos-pill[data-tone="warn"] { background: #fffaf0; border-color: #f0c36d; color: #8a5b00; }
-.pos-pill[data-tone="danger"] { background: #fff6f6; border-color: #e6a3a3; color: #991b1b; }
+.pos-pill[data-tone="warn"] { background: var(--jata-warning-surface); border-color: color-mix(in srgb, var(--jata-warning) 40%, var(--jata-line)); color: var(--jata-warning); }
+.pos-pill[data-tone="danger"] { background: var(--jata-danger-surface); border-color: color-mix(in srgb, var(--jata-danger) 40%, var(--jata-line)); color: var(--jata-danger); }
 .pos-pill[data-tone="info"] { background: #f4f8ff; border-color: #a9c4ef; color: #1e3a8a; }
 
 /* ── The till (§62 dead-simple first sale) ───────────────────────────────── */
@@ -1393,7 +1611,7 @@ button:focus-visible {
 .pos-line-main strong { display: block; font-size: 0.9rem; }
 .pos-line-main small { display: block; font-size: 0.75rem; color: var(--jata-muted); }
 .pos-qty { display: flex; align-items: center; gap: 0.25rem; }
-.pos-qty button { min-width: 2rem; min-height: 2rem; border-radius: 0.6rem; border: 1px solid var(--jata-line); background: #fff; font-weight: 800; }
+.pos-qty button { min-width: 2rem; min-height: 2rem; border-radius: 0.6rem; border: 1px solid var(--jata-line); background: var(--jata-card); color: var(--jata-ink); font-weight: 800; }
 .pos-qty input { width: 3.4rem; text-align: center; }
 .pos-totals { display: grid; gap: 0.25rem; font-size: 0.9rem; }
 .pos-totals div { display: flex; justify-content: space-between; gap: 0.5rem; }
@@ -1401,7 +1619,7 @@ button:focus-visible {
 .pos-pay { display: grid; gap: 0.5rem; }
 .pos-methods { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .pos-method {
-  border: 1px solid var(--jata-line); border-radius: 0.8rem; padding: 0.55rem 0.8rem; background: #fff;
+  border: 1px solid var(--jata-line); border-radius: 0.8rem; padding: 0.55rem 0.8rem; background: var(--jata-card); color: var(--jata-ink);
   font-weight: 700; font-size: 0.88rem; min-height: 2.8rem; cursor: pointer;
 }
 .pos-method[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
@@ -1410,7 +1628,8 @@ button:focus-visible {
 
 .pos-receipt {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45;
-  background: #fff; border: 1px dashed var(--jata-line); border-radius: 0.6rem; padding: 0.9rem; white-space: pre-wrap;
+  /* A receipt is a printable artefact: paper-white ink on white in every theme. */
+  background: #ffffff; color: #18181b; border: 1px dashed var(--jata-line); border-radius: 0.6rem; padding: 0.9rem; white-space: pre-wrap;
 }
 
 /* ── Boards (§29) ────────────────────────────────────────────────────────── */
@@ -1433,7 +1652,7 @@ button:focus-visible {
 .pos-preview-body { padding: 0.9rem; display: grid; gap: 0.8rem; }
 .pos-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .pos-tab {
-  border: 1px solid var(--jata-line); border-radius: 999px; padding: 0.35rem 0.75rem; background: #fff;
+  border: 1px solid var(--jata-line); border-radius: 999px; padding: 0.35rem 0.75rem; background: var(--jata-card); color: var(--jata-ink);
   font-size: 0.82rem; font-weight: 700; cursor: pointer;
 }
 .pos-tab[data-selected="true"] { border-color: var(--jata-ink); box-shadow: inset 0 0 0 1px var(--jata-ink); }
@@ -1458,7 +1677,7 @@ button:focus-visible {
 .pos-empty p { margin: 0.3rem 0 0.8rem; font-size: 0.86rem; color: var(--jata-muted); }
 
 @media print {
-  .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions { display: none !important; }
+  .pos-nav, .pos-banner, .pos-quick, .pos-header-side, .pos-form-actions, .pos-header-image { display: none !important; }
   .pos-receipt { border: none; }
 }
 
@@ -1474,8 +1693,8 @@ button:focus-visible {
   min-height: 2.9rem;
   border-radius: 999px;
   padding: 0.6rem 1.1rem;
-  background: var(--jata-ink);
-  color: white;
+  background: var(--jata-action);
+  color: var(--jata-on-action);
   font-size: 0.88rem;
   font-weight: 700;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
@@ -1533,9 +1752,20 @@ button:focus-visible {
   z-index: 40;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
   max-width: calc(100vw - 8.5rem);
+  /* A floating toolbar, not three buttons dropped on the page. It sits in its own opaque dock so
+     whatever scrolls underneath never shows through a label, and it reads as one control group. */
+  padding: 0.35rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--jata-card) 94%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
 }
+.jata-history-bar .jata-btn { border-radius: 999px; }
 
 .jata-history-bar .jata-btn {
   min-height: 2.75rem;
@@ -1596,296 +1826,3592 @@ button:focus-visible {
   }
 }
 
-/* ── Immersive Website Engine: Motion mode (Phase 2) ───────────────────────────────────────
-   Only applies after the visitor's browser has chosen Motion (html[data-motion-ready]).
-   Lite pages carry no hidden state, so content is always visible without JavaScript.
-   Reduced-motion visitors never get the attribute, and the media query below is a second guard. */
-html[data-motion-ready] .eb-reveal {
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-  will-change: opacity, transform;
-}
-html[data-motion-ready] .eb-reveal--expressive {
-  transform: translateY(32px) scale(0.985);
-  transition-duration: 0.9s;
-}
-html[data-motion-ready] .eb-reveal.is-visible {
-  opacity: 1;
-  transform: none;
-  will-change: auto;
+/* Website Studio Motion: readable SSR baseline and scoped, finite CSS fallback.
+   No global html flag, zero-opacity state, permanent will-change or scroll-jacking. */
+.eb-scope .eb-reveal { opacity: 1; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="slide"] { animation: eb-motion-slide 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="scale"] { animation: eb-motion-scale 0.42s ease-out; }
+.eb-scope[data-render-mode="motion"] [data-motion-css="reveal"] { animation: eb-motion-reveal 0.56s ease-out; }
+@keyframes eb-motion-fade { from { opacity: 0.94; } to { opacity: 1; } }
+@keyframes eb-motion-slide { from { opacity: 0.94; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-scale { from { opacity: 0.94; transform: scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes eb-motion-reveal { from { opacity: 0.92; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+/* Immediate guard even before preference/network event handlers run or a native cancel fails. */
+.eb-scope [data-motion-static="true"] {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-motion-ready] .eb-reveal,
-  html[data-motion-ready] .eb-reveal--expressive {
-    opacity: 1;
-    transform: none;
-    transition: none;
-    will-change: auto;
+  .eb-scope [data-motion-recipe] {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════════════════
-   POS / ERP - PRO
-   Graphite and electric-lime. Neutral surfaces, high-contrast text, generous spacing.
-   Everything is scoped under .erp so the existing JATA AFTERCALL and Business POS styles are
-   untouched. Mobile-first: the bottom bar appears below 900px, the sidebar above it.
-   ═══════════════════════════════════════════════════════════════════════════════════════════ */
-.erp {
-  --erp-graphite: #16181d;
-  --erp-graphite-soft: #23262e;
-  --erp-lime: #b6ff2e;
-  --erp-lime-dim: #9bdb1f;
-  --erp-ink: #16181d;
-  --erp-muted: #5b6170;
-  --erp-line: #e3e5e9;
-  --erp-surface: #ffffff;
-  --erp-surface-2: #f6f7f4;
-  --erp-page: #fbfbf9;
-  --erp-danger: #b42318;
-  --erp-warn: #8a5b00;
-  --erp-good: #166534;
-  --erp-info: #1d4ed8;
-  --erp-radius: 16px;
-  --erp-shadow: 0 1px 2px rgba(22, 24, 29, 0.04), 0 10px 30px rgba(22, 24, 29, 0.05);
+/* Website Studio v2: registered compositional geometry, not generated CSS or palette shuffles.
+   One-column readable/touch baseline; desktop enhances hierarchy without changing DOM order. */
+.eb-family-body { min-width: 0; }
+.eb-composition-grid { min-width: 0; }
+.eb-composition-block { min-width: 0; }
+.eb-chapters { padding: 1.25rem; border-bottom: 1px solid var(--eb-border); }
+.eb-chapters ol { list-style: none; display: flex; gap: 1rem; overflow-x: auto; padding: 0; margin: 0; }
+.eb-chapters a { display: flex; align-items: center; gap: 0.65rem; min-height: 44px; white-space: nowrap; }
+.eb-chapters a span { color: var(--eb-muted); font-variant-numeric: tabular-nums; }
+.eb-place-context { padding: 2rem 1.25rem; background: var(--eb-surface-muted); }
+.eb-product-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; padding-block: 2rem; }
+.eb-catalog--carousel { grid-auto-flow: column; grid-auto-columns: minmax(230px, 85%); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 1rem; }
+.eb-catalog--carousel > * { scroll-snap-align: start; }
+.eb-catalog--editorial { grid-template-columns: minmax(0, 1fr); }
+.eb-catalog--spotlight { grid-template-columns: minmax(0, 1fr); }
+.eb-comparison { max-width: 100%; overflow-x: auto; }
+.eb-comparison table { border-collapse: collapse; min-width: 100%; }
+.eb-comparison caption { text-align: left; padding-bottom: 0.75rem; color: var(--eb-muted); }
+.eb-comparison th, .eb-comparison td { text-align: left; padding: 0.85rem; border-bottom: 1px solid var(--eb-border); vertical-align: top; }
+.eb-comparison th { min-width: 8rem; }
+.eb-gallery--paired { grid-template-columns: minmax(0, 1fr); }
+.eb-gallery--masonry { display: block; columns: 1; column-gap: 1.25rem; }
+.eb-gallery--masonry figure { break-inside: avoid; margin-bottom: 1.25rem; }
+.eb-gallery--masonry img { aspect-ratio: auto; min-height: 160px; }
+.eb-gallery--strip, .eb-gallery--panorama { grid-auto-flow: column; grid-auto-columns: minmax(230px, 85%); grid-template-columns: none; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 1rem; }
+.eb-gallery--strip figure, .eb-gallery--panorama figure { scroll-snap-align: start; }
+.eb-gallery--panorama img { aspect-ratio: 16 / 9; }
+.eb-gallery--mosaic { grid-template-columns: minmax(0, 1fr); }
+.eb-hero-treatment--poster { min-height: 88svh; }
+.eb-hero--text .eb-hero__content, .eb-hero--text .eb-h1, .eb-hero--text .eb-lede, .eb-hero--text .eb-eyebrow { color: var(--eb-text); }
+.eb-hero--has-media:not(.eb-hero--split) .eb-hero__content, .eb-hero--has-media:not(.eb-hero--split) .eb-h1, .eb-hero--has-media:not(.eb-hero--split) .eb-lede { color: #fff; }
+@media (min-width: 760px) {
+  .eb-product-stage { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-family-body--paired .eb-composition-grid, .eb-family-body--magazine .eb-composition-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eb-family-body--paired .eb-composition-block[data-wide="true"], .eb-family-body--magazine .eb-composition-block[data-wide="true"] { grid-column: 1 / -1; }
+  .eb-family-body--magazine .eb-composition-block:nth-child(3n):not([data-wide]) { grid-column: 1 / -1; }
+  .eb-family-body--chapters { display: grid; grid-template-columns: minmax(160px, 18%) minmax(0, 1fr); }
+  .eb-chapters { align-self: start; position: sticky; top: 5rem; border-bottom: 0; border-right: 1px solid var(--eb-border); }
+  .eb-chapters ol { display: flex; flex-direction: column; overflow: visible; }
+  .eb-chapters a { white-space: normal; }
+  .eb-family-body--location-led { display: grid; grid-template-columns: minmax(200px, 30%) minmax(0, 1fr); }
+  .eb-place-context { align-self: start; position: sticky; top: 5rem; }
+  .eb-family-body--stage .eb-section-head { max-width: 48rem; margin-inline: auto; text-align: center; }
+  .eb-catalog--editorial { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-catalog--editorial > :first-child { grid-column: span 2; }
+  .eb-catalog--spotlight { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .eb-catalog--spotlight > :first-child { grid-row: span 2; }
+  .eb-catalog--carousel { grid-auto-columns: minmax(260px, 32%); }
+  .eb-gallery--masonry { columns: 3; }
+  .eb-gallery--paired { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eb-gallery--strip { grid-auto-columns: minmax(260px, 35%); }
+  .eb-gallery--panorama { grid-auto-columns: minmax(450px, 85%); }
+  .eb-gallery--mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-gallery--mosaic > :first-child { grid-column: span 2; grid-row: span 2; }
+  .eb-gallery--mosaic > :first-child img { height: 100%; }
+}
+
+/* Versioned business recipes: structural/semantic layouts, not palette aliases. Static/no-JS first. */
+.eb-business-recipe { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.1rem; }
+.eb-business-recipe--product-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.eb-business-recipe .eb-recipe-item { min-width: 0; overflow: hidden; }
+.eb-recipe-item__media { display: block; aspect-ratio: 4/3; overflow: hidden; background: var(--eb-surface-muted); }
+.eb-recipe-item__media img { width: 100%; height: 100%; object-fit: cover; }
+.eb-business-recipe--product-grid .eb-recipe-item__media img { object-fit: contain; }
+.eb-recipe-item__placeholder { display: grid; place-items: center; color: var(--eb-muted); font-size: .85rem; }
+.eb-recipe-item__body { padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.eb-recipe-facts { margin: .8rem 0; display: grid; gap: .35rem; font-size: .9rem; }
+.eb-recipe-facts > div { display: flex; flex-wrap: wrap; gap: .25rem .5rem; }
+.eb-recipe-facts dt { color: var(--eb-muted); }
+.eb-recipe-facts dd { margin: 0; }
+.eb-recipe-item__action { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; justify-content: space-between; }
+.eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); }
+.eb-business-recipe--menu-list .eb-recipe-item__media, .eb-business-recipe--service-list .eb-recipe-item__media { aspect-ratio: auto; height: 100%; min-height: 8rem; }
+.eb-business-recipe--service-list .eb-recipe-item__action { border-top: 1px solid var(--eb-border); padding-top: .65rem; }
+@media (max-width: 440px) {
+  .eb-business-recipe--menu-list .eb-recipe-item, .eb-business-recipe--service-list .eb-recipe-item { grid-template-columns: minmax(0, 5rem) minmax(0, 1fr); }
+  .eb-recipe-item__body { padding: .8rem; }
+  .eb-business-recipe .eb-btn { min-height: 44px; white-space: normal; text-align: center; }
+}
+.eb-business-recipe--product-list .eb-recipe-item { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+.eb-business-recipe--product-list .eb-recipe-item__media { height: 100%; min-height: 7rem; aspect-ratio: auto; }
+.eb-business-recipe--product-list .eb-recipe-item__media img { object-fit: contain; }
+.eb-business-recipe--service-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.eb-business-recipe--service-grid .eb-recipe-item__action { border-top: 1px solid var(--eb-border); padding-top: .65rem; }
+.eb-business-recipe--menu-board { gap: 0; }
+.eb-business-recipe--menu-board .eb-recipe-item { border-bottom: 1px dotted var(--eb-border); }
+.eb-business-recipe--menu-board .eb-recipe-item__body { padding: .75rem 0; }
+.eb-recipe-item__line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem .75rem; }
+.eb-recipe-item__line .eb-card__title { margin: 0; }
+.eb-recipe-item__price { margin: 0; font-weight: 600; white-space: nowrap; }
+.eb-business-recipe--menu-board .eb-recipe-facts { margin: .45rem 0; }
+.eb-business-recipe--menu-board .eb-recipe-item__action { margin-top: .55rem; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   JATA AFTERCALL — Global design system layer (2026-10-13)
+
+   One enforced design language for every customer-facing surface: the owner
+   dashboard, the AI Business Front Desk, Website Studio, Business POS,
+   subscriptions, analytics, authentication and every generated customer
+   product. Everything here is ADDITIVE: the pre-existing .jata-*, .eb-* and
+   .pos-* rules above are unchanged and stay authoritative for their screens.
+
+   Rules:
+     • Every colour, radius, shadow, duration and focus ring comes from a token.
+       No component may hard-code a hex value in this layer.
+     • Every interactive control keeps a visible :focus-visible ring and a
+       minimum 2.75rem (44px) touch target.
+     • Every state a customer can reach has a defined style: hover, focus,
+       pressed, disabled, loading, empty, error, success, offline.
+     • Motion is opt-in, short and never required to complete a transaction.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Spacing scale (4px base, kept in rem so it scales with user font size). */
+  --jata-space-1: 0.25rem;
+  --jata-space-2: 0.5rem;
+  --jata-space-3: 0.75rem;
+  --jata-space-4: 1rem;
+  --jata-space-5: 1.5rem;
+  --jata-space-6: 2rem;
+  --jata-space-7: 3rem;
+
+  /* Typography scale. */
+  --jata-text-meta: 0.72rem;
+  --jata-text-sm: 0.8125rem;
+  --jata-text-body: 0.9375rem;
+  --jata-text-lg: 1.125rem;
+  --jata-text-title: 1.5rem;
+  --jata-display: 1.75rem;
+  --jata-leading-tight: 1.2;
+  --jata-leading-body: 1.6;
+  --jata-measure: 68ch;
+
+  /* Shape and elevation. */
+  --jata-radius-sm: 0.5rem;
+  --jata-radius-md: 0.75rem;
+  --jata-radius-lg: 1rem;
+  --jata-radius-xl: 1.25rem;
+  --jata-radius-pill: 999px;
+  --jata-elevation-1: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --jata-elevation-2: 0 6px 18px rgba(24, 24, 27, 0.07);
+  --jata-elevation-3: 0 18px 40px rgba(24, 24, 27, 0.12);
+
+  /* Semantic status colours (readable on --jata-card). */
+  --jata-success: #047857;
+  --jata-success-surface: #ecfdf5;
+  --jata-warning: #92400e;
+  --jata-warning-surface: #fffbeb;
+  --jata-info: #1d4ed8;
+  --jata-info-surface: #eff6ff;
+  --jata-danger-surface: #fef2f2;
+
+  /* Interaction. */
+  --jata-focus-width: 2px;
+  --jata-focus-offset: 2px;
+  --jata-touch-target: 2.75rem;
+  --jata-dur-fast: 120ms;
+  --jata-dur-base: 180ms;
+  --jata-dur-slow: 260ms;
+  --jata-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Containers. */
+  --jata-container-md: 42rem;
+  --jata-container-lg: 64rem;
+}
+
+/* ── Page structure ─────────────────────────────────────────────────────── */
+
+.jata-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--jata-space-4);
+  margin-bottom: var(--jata-space-5);
+}
+
+.jata-page-head__copy { min-width: 0; }
+
+.jata-page-head__title {
+  margin: 0;
+  font-size: var(--jata-text-title);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: var(--jata-leading-tight);
+}
+
+.jata-page-head__sub {
+  margin: var(--jata-space-1) 0 0;
+  max-width: var(--jata-measure);
+  color: var(--jata-muted);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+
+.jata-page-head__actions { display: flex; flex-wrap: wrap; gap: var(--jata-space-2); }
+.jata-page-head__actions > * { min-height: var(--jata-touch-target); }
+
+.jata-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--jata-space-1);
+  margin: 0 0 var(--jata-space-2);
+  padding: 0;
+  list-style: none;
+  color: var(--jata-muted);
+  font-size: var(--jata-text-meta);
+  font-weight: 600;
+}
+.jata-breadcrumb a { color: var(--jata-muted); text-decoration: none; }
+.jata-breadcrumb a:hover { color: var(--jata-ink); text-decoration: underline; text-underline-offset: 4px; }
+.jata-breadcrumb__sep { opacity: 0.55; }
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+.jata-surface {
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  box-shadow: var(--jata-elevation-1);
+}
+
+.jata-surface--raised { box-shadow: var(--jata-elevation-2); }
+.jata-surface--muted { background: color-mix(in srgb, var(--jata-line) 22%, var(--jata-card)); }
+.jata-surface--interactive { transition: box-shadow var(--jata-dur-base) var(--jata-ease-out), transform var(--jata-dur-base) var(--jata-ease-out); }
+@media (hover: hover) {
+  .jata-surface--interactive:hover { box-shadow: var(--jata-elevation-2); transform: translateY(-1px); }
+}
+
+.jata-surface__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  padding: var(--jata-space-4) var(--jata-space-4) 0;
+}
+
+.jata-surface__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-surface__body { padding: var(--jata-space-4); }
+.jata-surface__foot {
+  border-top: 1px solid var(--jata-line);
+  padding: var(--jata-space-3) var(--jata-space-4);
+  font-size: var(--jata-text-sm);
+  color: var(--jata-muted);
+}
+
+/* ── Section headings ───────────────────────────────────────────────────── */
+
+.jata-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--jata-space-2);
+  margin-bottom: var(--jata-space-3);
+}
+.jata-section-head__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; letter-spacing: -0.01em; }
+.jata-section-head__meta { margin: 0; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Status pills ───────────────────────────────────────────────────────── */
+
+.jata-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--jata-radius-pill);
+  padding: 0.15rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.jata-pill[data-tone="neutral"] { background: color-mix(in srgb, var(--jata-line) 40%, var(--jata-card)); color: var(--jata-muted); border-color: var(--jata-line); }
+.jata-pill[data-tone="info"] { background: var(--jata-info-surface); color: var(--jata-info); border-color: color-mix(in srgb, var(--jata-info) 24%, transparent); }
+.jata-pill[data-tone="success"] { background: var(--jata-success-surface); color: var(--jata-success); border-color: color-mix(in srgb, var(--jata-success) 24%, transparent); }
+.jata-pill[data-tone="warning"] { background: var(--jata-warning-surface); color: var(--jata-warning); border-color: color-mix(in srgb, var(--jata-warning) 24%, transparent); }
+.jata-pill[data-tone="danger"] { background: var(--jata-danger-surface); color: var(--jata-danger); border-color: color-mix(in srgb, var(--jata-danger) 24%, transparent); }
+
+/* ── Metric tiles ───────────────────────────────────────────────────────── */
+
+.jata-metric-grid { display: grid; gap: var(--jata-space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 720px) { .jata-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.jata-metric {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.15rem;
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius-lg);
+  background: var(--jata-card);
+  padding: var(--jata-space-3) var(--jata-space-4);
+}
+.jata-metric__label { color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.jata-metric__value { font-size: var(--jata-display); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: var(--jata-leading-tight); }
+.jata-metric__hint { color: var(--jata-muted); font-size: var(--jata-text-meta); }
+
+/* ── Buttons (extends .jata-btn) ────────────────────────────────────────── */
+
+.jata-btn { transition: background-color var(--jata-dur-fast) var(--jata-ease-out), box-shadow var(--jata-dur-fast) var(--jata-ease-out), transform var(--jata-dur-fast) var(--jata-ease-out); }
+.jata-btn:active:not(:disabled) { transform: translateY(1px); }
+.jata-btn-sm { min-height: 2.25rem; padding: 0.3rem 0.7rem; font-size: var(--jata-text-sm); }
+.jata-btn-block { width: 100%; justify-content: center; }
+.jata-btn[aria-busy="true"] { cursor: progress; opacity: 0.85; }
+.jata-btn .jata-spinner { animation: jata-spin 900ms linear infinite; }
+@keyframes jata-spin { to { transform: rotate(360deg); } }
+
+/* ── Alerts / inline states ─────────────────────────────────────────────── */
+
+.jata-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--jata-space-2);
+  border: 1px solid var(--jata-line);
+  border-left-width: 3px;
+  border-radius: var(--jata-radius-md);
+  padding: var(--jata-space-3);
+  font-size: var(--jata-text-sm);
+  line-height: var(--jata-leading-body);
+}
+.jata-alert[data-tone="neutral"] { background: var(--jata-card); }
+.jata-alert[data-tone="info"] { background: var(--jata-info-surface); border-color: color-mix(in srgb, var(--jata-info) 30%, transparent); }
+.jata-alert[data-tone="success"] { background: var(--jata-success-surface); border-color: color-mix(in srgb, var(--jata-success) 30%, transparent); }
+.jata-alert[data-tone="warning"] { background: var(--jata-warning-surface); border-color: color-mix(in srgb, var(--jata-warning) 30%, transparent); }
+.jata-alert[data-tone="danger"] { background: var(--jata-danger-surface); border-color: color-mix(in srgb, var(--jata-danger) 30%, transparent); color: var(--jata-danger); }
+
+/* ── Loading, empty and offline states ──────────────────────────────────── */
+
+.jata-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--jata-radius-md);
+  background: color-mix(in srgb, var(--jata-line) 45%, var(--jata-card));
+}
+.jata-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.jata-skeleton--text { height: 0.85rem; }
+.jata-skeleton--title { height: 1.4rem; width: 40%; }
+.jata-skeleton--tile { height: 5rem; }
+@keyframes jata-shimmer { to { transform: translateX(100%); } }
+
+.jata-empty__title { margin: 0; font-size: var(--jata-text-lg); font-weight: 750; }
+.jata-empty__text { margin: var(--jata-space-1) auto 0; max-width: var(--jata-measure); color: var(--jata-muted); font-size: var(--jata-text-sm); line-height: var(--jata-leading-body); }
+.jata-empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--jata-space-2); margin-top: var(--jata-space-4); }
+
+.jata-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--jata-radius-pill);
+  background: var(--jata-warning-surface);
+  color: var(--jata-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--jata-text-meta);
+  font-weight: 700;
+}
+
+/* ── Tables (TanStack Table renders into these) ─────────────────────────── */
+
+.jata-table-wrap { overflow-x: auto; border: 1px solid var(--jata-line); border-radius: var(--jata-radius-lg); background: var(--jata-card); }
+.jata-table { width: 100%; border-collapse: collapse; font-size: var(--jata-text-sm); }
+.jata-table caption { padding: var(--jata-space-3) var(--jata-space-4); text-align: left; color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-table th, .jata-table td { padding: 0.6rem var(--jata-space-4); text-align: left; border-bottom: 1px solid var(--jata-line); vertical-align: middle; }
+.jata-table th { background: color-mix(in srgb, var(--jata-line) 18%, var(--jata-card)); font-size: var(--jata-text-meta); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jata-muted); white-space: nowrap; }
+.jata-table tbody tr:last-child td { border-bottom: 0; }
+.jata-table tbody tr:hover { background: color-mix(in srgb, var(--jata-line) 14%, var(--jata-card)); }
+.jata-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.jata-table__sort[aria-sort="ascending"], .jata-table__sort[aria-sort="descending"] { color: var(--jata-ink); }
+
+/* ── Charts ─────────────────────────────────────────────────────────────── */
+
+.jata-chart-shell { width: 100%; min-height: 12rem; }
+.jata-chart-legend { display: flex; flex-wrap: wrap; gap: var(--jata-space-3); margin-top: var(--jata-space-2); color: var(--jata-muted); font-size: var(--jata-text-meta); font-weight: 600; }
+.jata-chart-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.jata-chart-legend i { width: 0.65rem; height: 0.65rem; border-radius: var(--jata-radius-sm); display: inline-block; }
+
+/* ── Toasts (sonner) ────────────────────────────────────────────────────── */
+
+.jata-toaster [data-sonner-toast] {
+  border-radius: var(--jata-radius-md);
+  border-color: var(--jata-line);
+  box-shadow: var(--jata-elevation-3);
+  font-family: var(--font-sans);
+}
+.jata-toaster [data-sonner-toast][data-type="success"] { border-left: 3px solid var(--jata-success); }
+.jata-toaster [data-sonner-toast][data-type="error"] { border-left: 3px solid var(--jata-danger); }
+
+/* ── Focus ring for every interactive element in this layer ─────────────── */
+
+.jata-surface a:focus-visible,
+.jata-pill a:focus-visible,
+.jata-btn:focus-visible,
+.jata-table__sort:focus-visible,
+.jata-breadcrumb a:focus-visible {
+  outline: var(--jata-focus-width) solid var(--jata-focus);
+  outline-offset: var(--jata-focus-offset);
+  border-radius: var(--jata-radius-sm);
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .jata-skeleton::after { animation: none; }
+  .jata-btn .jata-spinner { animation: none; }
+  .jata-surface--interactive { transition: none; }
+}
+
+/* ── Dashboard section navigation (extends .jata-nav) ───────────────────── */
+
+.jata-nav__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: var(--jata-container-lg);
+  margin: 0 auto;
+  padding: 0.35rem 1rem 0.5rem;
+}
+@media (min-width: 768px) {
+  .jata-nav__sections { flex-direction: row-reverse; align-items: center; justify-content: space-between; }
+}
+.jata-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  background: color-mix(in srgb, var(--jata-line) 30%, transparent);
+  border-radius: var(--jata-radius-pill);
+}
+
+/* ── Generated customer products: shared foundation ──────────────────────
+   The Theme Engine (lib/experience/themes.ts#themeCss) injects `--eb-*` foundation tokens on
+   the root of every published product, for every category and theme. These rules consume them,
+   so a single shared change reaches every business website, catalogue, storefront, restaurant
+   page, booking flow, service page and course page without touching a template.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.eb-scope :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--eb-focus-width, 2px) solid var(--eb-ring);
+  outline-offset: var(--eb-focus-offset, 2px);
+  border-radius: var(--eb-radius);
+}
+
+/* Touch targets: the primary controls of a generated product stay pressable on a phone. */
+.eb-scope .eb-btn,
+.eb-scope .eb-action,
+.eb-scope .eb-nav__links a,
+.eb-scope .eb-actionbar a,
+.eb-scope .eb-actionbar button {
+  min-height: var(--eb-touch-target, 2.75rem);
+}
+
+/* Status surfaces shared by every product type (order states, stock, booking, payment). */
+.eb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.eb-status[data-tone="success"] { color: var(--eb-status-success); background: var(--eb-status-success-surface); }
+.eb-status[data-tone="warning"] { color: var(--eb-status-warning); background: var(--eb-status-warning-surface); }
+.eb-status[data-tone="danger"] { color: var(--eb-status-error); background: var(--eb-status-error-surface); }
+.eb-status[data-tone="neutral"] { color: var(--eb-muted); background: var(--eb-surface-muted); }
+
+/* Loading and offline states, so a slow connection never looks like a broken page. */
+.eb-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--eb-radius);
+  background: var(--eb-surface-muted);
+  min-height: 1rem;
+}
+.eb-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: jata-shimmer 1.4s ease-in-out infinite;
+}
+.eb-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--eb-radius-pill, 999px);
+  background: var(--eb-status-warning-surface);
+  color: var(--eb-status-warning);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--eb-text-meta, 0.72rem);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eb-skeleton::after { animation: none; }
+}
+
+/* ── POS navigation icons (extends .pos-nav) ────────────────────────────── */
+
+.pos-nav-link svg { flex: 0 0 auto; }
+.pos-nav-link[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, transparent);
+}
+
+/* ── Studio section tabs (extends .jata-*) ──────────────────────────────── */
+
+.jata-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--jata-radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--jata-text-sm);
+  font-weight: 650;
+  color: var(--jata-muted);
+}
+.jata-tab[aria-current="page"], .jata-tab[data-active="true"] {
+  color: var(--jata-ink);
+  border-color: var(--jata-line);
+  background: color-mix(in srgb, var(--jata-line) 26%, var(--jata-card));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * JATA AFTERCALL — 2026 landing page and demo showcase
+ *
+ * Scope: `.lp-*` (public landing page) and `.jata-showcase*` (the band on the four demo
+ * business pages). Nothing here changes a product, dashboard, POS or storefront selector.
+ *
+ * The landing carries its own brand palette instead of the product-theme tokens: it is a
+ * marketing surface whose photography, contrast and motion are fixed, so a saved product theme
+ * (Lime Spark / Emerald Ink) cannot make the page unreadable or move it away from the artwork.
+ * The theme toolbar itself still renders above it and still works.
+ *
+ * Motion rules for this block:
+ *   • Every animation is CSS, so the page keeps working with JavaScript disabled or failed.
+ *   • Content is visible in its final state first; animation only adds the entrance.
+ *   • Everything is switched off under `prefers-reduced-motion: reduce` at the end of the block.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.lp-page {
+  --lp-ink: #14110f;
+  --lp-ink-soft: #1d1815;
+  --lp-cream: #f7f2e8;
+  --lp-cream-2: #efe7d7;
+  --lp-paper: #fffdf8;
+  --lp-text: #171310;
+  --lp-text-muted: #5a5148;
+  --lp-line: rgba(23, 19, 16, 0.12);
+  --lp-line-light: rgba(247, 242, 232, 0.16);
+  --lp-amber: #f0a03c;
+  --lp-amber-deep: #b45309;
+  --lp-ember: #c2410c;
+  --lp-jade: #0f766e;
+  --lp-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  overflow-x: clip;
+  background: var(--lp-cream);
+  color: var(--lp-text);
+}
+
+/*
+ * The product theme sets `color` on `.jata-landing` at (0,2,0). The landing's own palette has to
+ * beat that, or every element without an explicit colour inherits the theme's near-white text and
+ * disappears on the cream sections.
+ */
+.lp-page,
+.product-theme-root .jata-landing.lp-page {
+  background: var(--lp-cream);
+  color: var(--lp-text);
+}
+
+.lp-page :is(h1, h2, h3, p, ul, ol, figure) { margin: 0; }
+.lp-page h1, .lp-page h2, .lp-page h3, .lp-page h4 { color: inherit; }
+/* The appearance picker sits directly above the page on every route; align it with this page's
+   palette so there is no dead strip of theme background above the navigation. Scoped with :has()
+   so no other route's toolbar changes colour. */
+.product-theme-root:has(> .lp-page) { background: #14110f; }
+.product-theme-root:has(> .lp-page) > .product-theme-toolbar { background: #14110f; color: #f7f2e8; }
+.lp-page ul, .lp-page ol { padding: 0; list-style: none; }
+.lp-page :focus-visible { outline: 3px solid var(--lp-amber); outline-offset: 3px; border-radius: 4px; }
+.lp-page [id] { scroll-margin-top: 84px; }
+
+.lp-wrap { width: 100%; max-width: 76rem; margin: 0 auto; padding: 0 1.25rem; }
+.lp-wrap--narrow { max-width: 52rem; }
+@media (min-width: 900px) { .lp-wrap { padding: 0 2.5rem; } }
+
+/* ── Navigation ─────────────────────────────────────────────────────────── */
+
+.jata-nav.lp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid var(--lp-line-light);
+  background: rgba(20, 17, 15, 0.86);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  color: var(--lp-cream);
+}
+.lp-nav__inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* A long label or a scaled-up root font must wrap onto a second row rather than push the wordmark
+     into the controls sitting next to it. */
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+}
+.lp-nav .jata-brand { min-width: 0; flex: 0 1 auto; }
+.lp-nav .jata-brand-name { white-space: nowrap; }
+/* Phone widths: the menu control loses its word first. */
+@media (max-width: 419px) { .lp-nav__compact-label { display: none; } }
+@media (max-width: 419px) {
+  .lp-nav__inner { padding: 0.5rem 0.85rem; }
+  .lp-nav .jata-btn { padding-inline: 0.85rem; font-size: 0.84rem; }
+  /* The account links live in the menu panel at these widths, so the bar stays one row and the
+     wordmark keeps its full text instead of being squeezed underneath the controls. */
+  .lp-nav .lp-nav__actions { display: none; }
+}
+/* The tagline drops to its own line under the wordmark below the tablet breakpoint: the wordmark and
+   the account controls then never share a row, so a narrow phone cannot push them into each other,
+   and the tagline wraps naturally instead of being clipped. The wordmark grows to the space the menu
+   control leaves, so the tagline line is as wide as the bar allows. Above it the tagline stays
+   inline, as it has since the redesign. */
+@media (max-width: 639px) {
+  .lp-nav .jata-brand {
+    flex: 1 1 auto;
+    margin-right: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+  .lp-nav .jata-brand-tag {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+}
+@media (min-width: 640px) {
+  .lp-nav .jata-brand-tag { display: inline; }
+}
+.lp-nav__panel-cta { background: rgba(240, 160, 60, 0.16); color: #f7b45c; }
+.lp-nav .jata-btn { flex: 0 0 auto; }
+@media (min-width: 900px) { .lp-nav__inner { padding: 0.55rem 2.5rem; } }
+.lp-nav .jata-brand { margin-right: auto; }
+.lp-nav .jata-brand-mark { background: var(--lp-amber); color: #1a140d; }
+.lp-nav .jata-brand-name { color: var(--lp-cream); letter-spacing: 0.16em; }
+.lp-nav .jata-brand-tag { color: rgba(247, 242, 232, 0.6); }
+.lp-nav__links { display: none; }
+.lp-nav__link { color: rgba(247, 242, 232, 0.74); }
+.lp-nav__link:hover { color: var(--lp-cream); }
+.lp-nav__actions { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.lp-nav__login { display: none; color: rgba(247, 242, 232, 0.78); }
+.lp-nav .jata-btn-primary { border-color: var(--lp-amber); background: var(--lp-amber); color: #1a140d; }
+.lp-nav .jata-btn-primary:hover:not(:disabled) { border-color: #f7b45c; background: #f7b45c; }
+.lp-nav .jata-btn-secondary { border-color: rgba(247, 242, 232, 0.28); background: transparent; color: var(--lp-cream); }
+.lp-nav .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
+.lp-nav__logout { display: inline-flex; }
+.lp-nav__compact { position: relative; display: block; }
+.lp-nav__compact > summary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(247, 242, 232, 0.28);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  color: var(--lp-cream);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.lp-nav__compact > summary::-webkit-details-marker { display: none; }
+.lp-nav__burger,
+.lp-nav__burger::before,
+.lp-nav__burger::after {
+  display: block;
+  width: 1rem;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  content: "";
+}
+.lp-nav__burger { position: relative; }
+.lp-nav__burger::before { position: absolute; top: -5px; }
+.lp-nav__burger::after { position: absolute; top: 5px; }
+.lp-nav__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  display: grid;
+  width: min(17rem, calc(100vw - 2rem));
+  gap: 0.15rem;
+  border: 1px solid var(--lp-line-light);
+  border-radius: 1rem;
+  background: #1d1815;
+  padding: 0.6rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.lp-nav__panel-link {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: 0.6rem;
+  padding: 0 0.7rem;
+  color: var(--lp-cream);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.lp-nav__panel-link:hover { background: rgba(247, 242, 232, 0.08); }
+.lp-nav__panel-button { width: 100%; background: none; border: 0; text-align: left; }
+@media (min-width: 980px) {
+  .lp-nav__links { display: flex; align-items: center; gap: 0.15rem; flex-wrap: wrap; row-gap: 0.35rem; min-width: 0; }
+  .lp-nav__link { font-size: 0.88rem; padding: 0 0.6rem; }
+  .lp-nav__compact { display: none; }
+  .lp-nav__login { display: inline-flex; }
+}
+
+/* ── Type + shared blocks ───────────────────────────────────────────────── */
+
+.lp-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(247, 242, 232, 0.22);
+  border-radius: 999px;
+  background: rgba(247, 242, 232, 0.06);
+  padding: 0.35rem 0.85rem;
+  color: rgba(247, 242, 232, 0.86);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.lp-eyebrow__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--lp-amber);
+  box-shadow: 0 0 0 4px rgba(240, 160, 60, 0.18);
+}
+.lp-kicker {
+  color: var(--lp-ember);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.lp-kicker--light { color: var(--lp-amber); }
+.lp-h2 {
+  max-width: 44rem;
+  margin-top: 0.6rem !important;
+  font-family: var(--lp-display);
+  font-size: clamp(1.75rem, 3.6vw, 2.7rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  color: var(--lp-text);
+  text-wrap: balance;
+}
+.lp-h2--light { color: var(--lp-cream); }
+.lp-lede {
+  max-width: 40rem;
+  margin-top: 0.9rem !important;
+  color: var(--lp-text-muted);
+  font-size: clamp(0.98rem, 1.35vw, 1.1rem);
+  line-height: 1.65;
+}
+.lp-lede--light { color: rgba(247, 242, 232, 0.78); }
+.lp-lede--tight { margin-top: 1.25rem !important; }
+.lp-section { position: relative; padding: clamp(3rem, 7vw, 5.5rem) 0; }
+.lp-section--cream { background: var(--lp-cream); }
+.lp-section--paper { background: var(--lp-paper); }
+.lp-section--ink { background: var(--lp-ink); color: var(--lp-cream); }
+.lp-section--ink .lp-lede { color: rgba(247, 242, 232, 0.76); }
+.lp-section__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1.25rem; }
+
+.lp-code {
+  border-radius: 0.4rem;
+  background: rgba(23, 19, 16, 0.07);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.9em;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.lp-btn {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.75rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.lp-btn:hover { transform: translateY(-1px); }
+.lp-btn--primary { background: var(--lp-amber); color: #1a140d; box-shadow: 0 12px 30px rgba(240, 160, 60, 0.26); }
+.lp-btn--primary:hover { background: #f7b45c; }
+.lp-btn--ghost { border-color: rgba(247, 242, 232, 0.32); background: rgba(247, 242, 232, 0.05); color: var(--lp-cream); }
+.lp-btn--ghost:hover { background: rgba(247, 242, 232, 0.12); }
+.lp-btn--amber { background: var(--lp-amber); color: #1a140d; box-shadow: 0 14px 34px rgba(240, 160, 60, 0.32); }
+.lp-btn--outline { border-color: rgba(247, 242, 232, 0.4); color: var(--lp-cream); }
+.lp-btn--outline:hover { background: rgba(247, 242, 232, 0.1); }
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+
+.lp-hero {
+  position: relative;
+  overflow: clip;
+  background: var(--lp-ink);
+  color: var(--lp-cream);
+  isolation: isolate;
+}
+.lp-hero__media { position: relative; height: clamp(11rem, 46vw, 17rem); }
+.lp-hero__media picture, .lp-hero__media img { display: block; width: 100%; height: 100%; }
+.lp-hero__media img { object-fit: cover; object-position: 66% 52%; }
+.lp-hero__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(20, 17, 15, 0.15) 0%, rgba(20, 17, 15, 0.55) 55%, #14110f 100%),
+    radial-gradient(90% 70% at 84% 18%, rgba(194, 65, 12, 0.28), transparent 62%);
+}
+.lp-hero__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 3px 3px;
+  mix-blend-mode: overlay;
+}
+.lp-hero__inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2.25rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 2.75rem;
+}
+.lp-hero__copy { min-width: 0; }
+.lp-hero__title {
+  margin-top: 1.1rem !important;
+  font-family: var(--lp-display);
+  font-size: clamp(2.1rem, 5.4vw, 4rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.lp-hero__accent {
+  background: linear-gradient(transparent 64%, rgba(240, 160, 60, 0.35) 64%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: var(--lp-cream);
+}
+.lp-hero__lede {
+  max-width: 34rem;
+  margin-top: 1.15rem !important;
+  color: rgba(247, 242, 232, 0.78);
+  font-size: clamp(1rem, 1.4vw, 1.12rem);
+  line-height: 1.62;
+}
+.lp-hero__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.6rem; }
+.lp-hero__micro {
+  margin-top: 1rem !important;
+  color: rgba(247, 242, 232, 0.55);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+@media (min-width: 900px) {
+  .lp-hero__media { position: absolute; inset: 0; height: auto; }
+  .lp-hero__scrim {
+    background:
+      linear-gradient(90deg, #14110f 0%, rgba(20, 17, 15, 0.94) 34%, rgba(20, 17, 15, 0.55) 58%, rgba(20, 17, 15, 0.12) 100%),
+      radial-gradient(70% 90% at 96% 4%, rgba(194, 65, 12, 0.22), transparent 60%);
+  }
+  .lp-hero__inner {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: center;
+    gap: 3.5rem;
+    padding: 4.5rem 2.5rem 5rem;
+  }
+  .lp-hero__copy { position: relative; z-index: 1; }
+}
+
+/*
+ * Phone mock (pure markup — no screenshot, so it stays sharp and costs nothing).
+ *
+ * The mock is laid out square to the page on purpose: a tilted frame (the old float rotated the
+ * whole figure by -1.2deg) pushed every row below the first sideways, so the badge, contact row,
+ * action buttons, offer card, service rows, Directions/Share chips and the caption all sat on
+ * slightly different left edges, and the caption and its link were tilted too. The float now moves
+ * the mock up and down only, and every row inside the screen is a full-width block on the same
+ * 1rem gutter, so the stack is aligned at every width and cannot spill past the page gutter.
+ */
+.lp-phone {
+  min-width: 0;
+  justify-self: center;
+  width: min(21rem, 100%);
+}
+.lp-phone__frame {
+  border-radius: 2rem;
+  border: 1px solid rgba(247, 242, 232, 0.16);
+  background: linear-gradient(160deg, #2a2320, #171310);
+  padding: 0.6rem;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+}
+.lp-phone__screen {
+  border-radius: 1.5rem;
+  background: #fffdf8;
+  padding: 1rem;
+  color: var(--lp-text);
+}
+/* One column, one gutter, no child wider than the screen. */
+.lp-phone__screen > * { min-width: 0; }
+.lp-phone__thanks {
+  color: var(--lp-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+/* Avatar and business details share one baseline; the details take the remaining width. */
+.lp-phone__biz { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
+.lp-phone__biz > div { min-width: 0; }
+.lp-phone__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #fde8cf;
+  color: #8a4a10;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.lp-phone__name { font-size: 0.85rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.lp-phone__meta { color: var(--lp-text-muted); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; }
+.lp-phone__ctas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem; margin-top: 0.8rem; }
+.lp-phone__cta {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  background: #171310;
+  padding: 0.5rem;
+  color: #fffdf8;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.lp-phone__cta--wa { background: #0b6b4f; }
+.lp-phone__offer {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.7rem;
+  border: 1px solid #f3d3a8;
+  border-radius: 0.7rem;
+  background: #fdf2e2;
+  padding: 0.6rem 0.7rem;
+}
+.lp-phone__offer-label { color: #8a4a10; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.lp-phone__offer-title { font-size: 0.82rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.lp-phone__offer-sub { color: var(--lp-text-muted); font-size: 0.68rem; line-height: 1.4; }
+.lp-phone__rows { display: grid; gap: 0.32rem; margin-top: 0.65rem; }
+.lp-phone__rows > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-radius: 0.55rem;
+  background: #f4efe6;
+  padding: 0.42rem 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+.lp-phone__rows > span > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.lp-phone__rows > span > span:last-child { flex: 0 0 auto; color: var(--lp-text-muted); text-align: right; white-space: nowrap; }
+.lp-phone__chips { display: flex; gap: 0.4rem; margin-top: 0.65rem; }
+.lp-phone__chips > span {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid rgba(23, 19, 16, 0.18);
+  border-radius: 999px;
+  padding: 0.4rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.lp-phone__caption {
+  width: 100%;
+  margin-top: 0.8rem;
+  color: rgba(247, 242, 232, 0.62);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+/* The link is its own centred target under the disclaimer, not a full-width block. */
+.lp-phone__caption-link {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.15rem;
+  padding: 0 0.35rem;
+  color: var(--lp-amber);
+  font-weight: 700;
+  text-decoration: none;
+}
+.lp-phone__caption-link:hover { text-decoration: underline; }
+
+/* ── Story ──────────────────────────────────────────────────────────────── */
+
+.lp-story {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 2rem !important;
+}
+.lp-story__item {
+  position: relative;
+  border: 1px solid var(--lp-line);
+  border-radius: 1.1rem;
+  background: var(--lp-paper);
+  padding: 1.25rem;
+}
+.lp-story__step {
+  display: inline-block;
+  font-family: var(--lp-display);
+  color: var(--lp-ember);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.lp-story__title { margin-top: 0.35rem !important; color: var(--lp-text); font-size: 1.02rem; font-weight: 750; }
+.lp-story__body { margin-top: 0.4rem !important; color: var(--lp-text-muted); font-size: 0.92rem; line-height: 1.6; }
+@media (min-width: 760px) { .lp-story { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; } }
+
+.lp-marquee {
+  margin-top: 2.25rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.lp-marquee__track { display: flex; width: max-content; animation: lp-slide 40s linear infinite; }
+.lp-marquee__row {
+  display: flex;
+  gap: 1.1rem;
+  padding-right: 1.1rem;
+  color: rgba(23, 19, 16, 0.42);
+  font-family: var(--lp-display);
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+  white-space: nowrap;
+}
+@keyframes lp-slide { to { transform: translate3d(-50%, 0, 0); } }
+
+/* ── Benefits ───────────────────────────────────────────────────────────── */
+
+.lp-benefits {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+  margin-top: 2rem;
+}
+.lp-benefit {
+  border: 1px solid var(--lp-line-light);
+  border-radius: 1.1rem;
+  background: linear-gradient(180deg, rgba(247, 242, 232, 0.06), rgba(247, 242, 232, 0.02));
+  padding: 1.2rem;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.lp-benefit:hover { transform: translateY(-3px); border-color: rgba(240, 160, 60, 0.5); }
+/*
+ * Every benefit icon is the same box: 2.6rem square with 0.55rem of padding, one radius, and the
+ * glyph centred on both axes. It is a flex container rather than an inline-grid so it cannot be
+ * squeezed by a long title or pick up a text baseline below itself, and `flex: 0 0 auto` keeps the
+ * square intact and the icon on its own line when the card wraps.
+ */
+.lp-benefit__icon {
+  display: flex;
+  flex: 0 0 auto;
+  width: 2.6rem;
+  height: 2.6rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.8rem;
+  background: rgba(240, 160, 60, 0.14);
+  padding: 0.55rem;
+  color: var(--lp-amber);
+  line-height: 0;
+}
+.lp-benefit__icon svg { display: block; width: 100%; height: 100%; }
+.lp-benefit__title { margin-top: 0.8rem !important; color: var(--lp-cream); font-size: 0.98rem; font-weight: 750; }
+.lp-benefit__body { margin-top: 0.35rem !important; color: rgba(247, 242, 232, 0.68); font-size: 0.88rem; line-height: 1.6; }
+@media (min-width: 640px) { .lp-benefits { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .lp-benefits { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ── Demo showcase ──────────────────────────────────────────────────────── */
+
+.lp-demo__hint { color: var(--lp-text-muted); font-size: 0.85rem; }
+.lp-demo {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+  padding-bottom: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.lp-demo__tab {
+  flex: 0 0 auto;
+  min-height: 3rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 0.9rem;
+  background: #fff;
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  scroll-snap-align: start;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+.lp-demo__tab:hover { border-color: rgba(194, 65, 12, 0.4); }
+.lp-demo__tab[data-active="true"] {
+  border-color: var(--lp-ember);
+  background: #fdf1e8;
+  box-shadow: inset 0 0 0 1px rgba(194, 65, 12, 0.25);
+}
+.lp-demo__tab-name { display: block; color: var(--lp-text); font-size: 0.86rem; font-weight: 750; white-space: nowrap; }
+.lp-demo__tab-meta { display: block; color: var(--lp-text-muted); font-size: 0.72rem; white-space: nowrap; }
+.lp-demo__tab[data-active="true"] .lp-demo__tab-name { color: var(--lp-ember); }
+@media (min-width: 900px) {
+  .lp-demo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; overflow: visible; }
+  .lp-demo__tab { width: 100%; }
+}
+.lp-demo__body { margin-top: 1.5rem; }
+.lp-demo__panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+}
+.lp-demo__panel[hidden] { display: none; }
+.lp-demo__media {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: var(--lp-cream-2);
+  aspect-ratio: 16 / 10;
+  min-width: 0;
+}
+.lp-demo__media picture, .lp-demo__media img { display: block; width: 100%; height: 100%; }
+.lp-demo__media img { object-fit: cover; transform-origin: center; }
+.lp-demo__credit {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.72);
+  padding: 0.25rem 0.6rem;
+  color: rgba(247, 242, 232, 0.9);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.lp-demo__inset {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: block;
+  overflow: hidden;
+  width: 38%;
+  border: 2px solid rgba(255, 253, 248, 0.9);
+  border-radius: 0.8rem;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  animation: lp-inset-in 0.6s ease both;
+}
+.lp-demo__inset img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.lp-demo__content { min-width: 0; }
+.lp-demo__kicker { color: var(--lp-ember); font-size: 0.7rem; font-weight: 750; letter-spacing: 0.14em; text-transform: uppercase; }
+.lp-demo__headline {
+  margin-top: 0.4rem !important;
+  color: var(--lp-text);
+  font-family: var(--lp-display);
+  font-size: clamp(1.45rem, 2.9vw, 2.15rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.lp-demo__story { margin-top: 0.7rem !important; color: var(--lp-text-muted); font-size: 0.95rem; line-height: 1.62; }
+.lp-demo__offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.9rem !important;
+  border: 1px solid #f0d3ab;
+  border-radius: 0.8rem;
+  background: #fdf4e6;
+  padding: 0.55rem 0.75rem;
+}
+.lp-demo__offer-label { color: #8a4a10; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.lp-demo__offer-title { color: var(--lp-text); font-size: 0.92rem; font-weight: 750; }
+.lp-demo__offer-sub { color: var(--lp-text-muted); font-size: 0.78rem; }
+.lp-demo__services { display: grid; gap: 0.4rem; margin-top: 0.9rem !important; }
+.lp-demo__service {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 0.5rem 0.8rem;
+  color: var(--lp-text);
+  text-decoration: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+.lp-demo__service:hover { border-color: rgba(194, 65, 12, 0.45); background: #fdf1e8; }
+.lp-demo__service-title { font-size: 0.88rem; font-weight: 650; }
+.lp-demo__service-price { flex: 0 0 auto; color: var(--lp-text-muted); font-size: 0.8rem; }
+.lp-demo__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.1rem; }
+.lp-demo__actions .lp-btn--ghost { border-color: rgba(23, 19, 16, 0.25); color: var(--lp-text); background: transparent; }
+.lp-demo__actions .lp-btn--ghost:hover { background: rgba(23, 19, 16, 0.05); }
+.lp-demo__note { margin-top: 0.8rem !important; color: var(--lp-text-muted); font-size: 0.74rem; line-height: 1.5; }
+.lp-demo__index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--lp-line);
+}
+.lp-demo__index-link { color: var(--lp-text-muted); font-size: 0.76rem; text-decoration: none; }
+.lp-demo__index-link:hover { color: var(--lp-ember); text-decoration: underline; }
+@media (min-width: 900px) {
+  .lp-demo__panel { grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr); gap: 2.25rem; }
+}
+
+/* Showcase motion: a still photograph with a slow camera move, not a video download. */
+.lp-demo__panel[data-motion="steam"] .lp-demo__media img { animation: lp-zoom 24s ease-in-out infinite alternate; }
+.lp-demo__panel[data-motion="salon"] .lp-demo__media img { animation: lp-pan 26s ease-in-out infinite alternate; }
+.lp-demo__panel[data-motion="drive"] .lp-demo__media img { animation: lp-drive 22s ease-in-out infinite alternate; }
+.lp-demo__panel[data-motion="tour"] .lp-demo__media img { animation: lp-zoom 28s ease-in-out infinite alternate; }
+@keyframes lp-zoom { from { transform: scale(1.01); } to { transform: scale(1.09); } }
+@keyframes lp-pan { from { transform: scale(1.06) translate3d(-1.4%, 0, 0); } to { transform: scale(1.06) translate3d(1.4%, 0, 0); } }
+@keyframes lp-drive { from { transform: scale(1.08) translate3d(1.8%, 0.6%, 0); } to { transform: scale(1.08) translate3d(-1.8%, -0.6%, 0); } }
+@keyframes lp-inset-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* ── Pricing ────────────────────────────────────────────────────────────── */
+
+/*
+ * Every plan card is the same shape, eight rows deep: name, badge (optional), price, billing
+ * period, description (optional), features, call to action, fine print.
+ *
+ * Where subgrid is supported the cards in a row share those rows, so plan names, prices, periods,
+ * feature lists and calls to action sit on the same line across the row — even when an operator's
+ * stored plan name wraps to two lines or a card carries no badge. Without subgrid the flex column
+ * below is the fallback: the same markup, equal-height cards, call to action pinned to the bottom.
+ * No row is reserved twice, and nothing is positioned with fixed pixel heights, so the layout keeps
+ * working for plan names of any length.
+ */
+.lp-pricing .lp-plans {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-top: 2rem;
+  padding-top: 0.25rem;
+}
+.lp-plan {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border: 1px solid var(--lp-line-light);
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, rgba(247, 242, 232, 0.06), rgba(247, 242, 232, 0.015));
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+.lp-plan[data-featured="true"] {
+  border-color: rgba(240, 160, 60, 0.6);
+  background: linear-gradient(180deg, rgba(240, 160, 60, 0.16), rgba(240, 160, 60, 0.03));
+  box-shadow: 0 24px 60px rgba(240, 160, 60, 0.12);
+}
+/* Product mark, in the same amber chip as the benefit icons. Rendered on every card, so it is a
+   shared row like the name and price; decorative (`aria-hidden`) next to the plan name. */
+.lp-plan__icon {
+  display: flex;
+  width: 2.6rem;
+  height: 2.6rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  border-radius: 0.8rem;
+  background: rgba(240, 160, 60, 0.14);
+  padding: 0.55rem;
+  color: var(--lp-amber);
+  line-height: 0;
+}
+.lp-plan__icon svg { display: block; width: 100%; height: 100%; }
+.lp-plan__name {
+  margin-top: 0.7rem !important;
+  color: var(--lp-cream);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.lp-plan__badge {
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: 0.4rem !important;
+  border-radius: 999px;
+  background: rgba(240, 160, 60, 0.18);
+  padding: 0.2rem 0.55rem;
+  color: var(--lp-amber);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lp-plan__price {
+  margin-top: 0.5rem !important;
+  color: var(--lp-cream);
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.lp-plan__period { margin-top: 0.15rem !important; color: rgba(247, 242, 232, 0.6); font-size: 0.76rem; }
+.lp-plan__blurb { margin-top: 0.55rem !important; color: rgba(247, 242, 232, 0.74); font-size: 0.84rem; line-height: 1.5; }
+/* Shared rows stretch the list box; the extra height goes after the last item, not between items. */
+.lp-plan__includes { display: grid; gap: 0.4rem; align-content: start; margin-top: 0.9rem !important; }
+.lp-plan__includes li { display: flex; gap: 0.45rem; color: rgba(247, 242, 232, 0.82); font-size: 0.82rem; line-height: 1.5; }
+.lp-plan__tick { flex: 0 0 auto; color: var(--lp-amber); font-weight: 800; }
+.lp-plan__cta {
+  display: flex;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  margin-bottom: 0.5rem;
+  border-radius: 999px;
+  background: rgba(247, 242, 232, 0.92);
+  padding: 0.6rem 1rem;
+  color: #1a140d;
+  font-size: 0.88rem;
+  font-weight: 750;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+.lp-plan__cta:hover { background: #fff; transform: translateY(-1px); }
+.lp-plan[data-featured="true"] .lp-plan__cta { background: var(--lp-amber); }
+.lp-plan[data-featured="true"] .lp-plan__cta:hover { background: #f7b45c; }
+.lp-plan__fine { margin-top: 0.6rem !important; color: rgba(247, 242, 232, 0.55); font-size: 0.68rem; line-height: 1.5; text-align: center; }
+
+.lp-pricing__note {
+  max-width: 48rem;
+  margin: 1.5rem auto 0 !important;
+  color: rgba(247, 242, 232, 0.6);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  text-align: center;
+}
+@media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/*
+ * Six plans, one grid: three across on a desktop in two even rows (3 + 3) instead of stretched
+ * into six narrow columns. Six equal tracks let every card span two, so all six cards stay
+ * exactly one third of the row wide — the same card width in both rows. The count-5 centring
+ * below is kept for the degraded case where a stored plan row is missing and only five cards
+ * render: the fourth and fifth then centre under the first row instead of leaving a hole.
+ */
+@media (min-width: 1080px) {
+  .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .lp-pricing .lp-plans .lp-plan { grid-column: span 2; }
+  .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(4) { grid-column: 2 / span 2; }
+  .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(5) { grid-column: 4 / span 2; }
+}
+
+/*
+ * Side-by-side cards share their rows. Only from 620px up: stacked cards are read one at a time
+ * and need no shared rows, so the phone layout keeps its natural card heights.
+ */
+@media (min-width: 620px) {
+  @supports (grid-template-rows: subgrid) {
+    /* Row gap becomes the cards' own margin-bottom, so the shared card rows are spaced by margins
+       rather than by the gutter the grid needs between rows of cards. */
+    .lp-pricing .lp-plans { gap: 0 0.9rem; }
+    .lp-plan {
+      display: grid;
+      grid-row: span 9;
+      grid-template-rows: subgrid;
+      margin-bottom: 0.9rem;
+    }
+    .lp-plan__icon { grid-row: 1; }
+    .lp-plan__name { grid-row: 2; }
+    .lp-plan__badge { grid-row: 3; }
+    .lp-plan__price { grid-row: 4; }
+    .lp-plan__period { grid-row: 5; }
+    .lp-plan__blurb { grid-row: 6; }
+    .lp-plan__includes { grid-row: 7; }
+    .lp-plan__cta { grid-row: 8; margin-top: 1.1rem; margin-bottom: 0; }
+    .lp-plan__fine { grid-row: 9; }
+    /* The cards' own bottom margin replaces the grid gutter the note used to clear. */
+    .lp-pricing__note { margin-top: 0.6rem !important; }
+  }
+}
+
+/* ── Steps ──────────────────────────────────────────────────────────────── */
+
+.lp-steps { display: grid; gap: 0.6rem; margin-top: 1.75rem !important; }
+.lp-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 0.85rem;
+  background: var(--lp-paper);
+  padding: 0.8rem 1rem;
+}
+.lp-step__num {
+  display: grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--lp-ink);
+  color: var(--lp-amber);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.lp-step__label { color: var(--lp-text); font-size: 0.9rem; font-weight: 650; }
+@media (min-width: 760px) { .lp-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); } .lp-step { flex-direction: column; align-items: flex-start; gap: 0.55rem; } }
+
+/* ── FAQ ────────────────────────────────────────────────────────────────── */
+
+.lp-faq { display: grid; gap: 0.55rem; margin-top: 1.75rem; }
+.lp-faq__item {
+  border: 1px solid var(--lp-line);
+  border-radius: 0.9rem;
+  background: var(--lp-paper);
+  padding: 0 1rem;
+}
+.lp-faq__q {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--lp-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.lp-faq__q::-webkit-details-marker { display: none; }
+.lp-faq__mark {
+  position: relative;
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+}
+.lp-faq__mark::before,
+.lp-faq__mark::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--lp-ember);
+  content: "";
+}
+.lp-faq__mark::after { transform: rotate(90deg); transition: transform 0.2s ease; }
+.lp-faq__item[open] .lp-faq__mark::after { transform: rotate(0deg); }
+.lp-faq__a { padding: 0 0 1rem; color: var(--lp-text-muted); font-size: 0.9rem; line-height: 1.65; }
+.lp-faq__item[open] .lp-faq__q { color: var(--lp-ember); }
+
+/* ── Final call to action ───────────────────────────────────────────────── */
+
+.lp-final {
+  position: relative;
+  overflow: clip;
+  background:
+    radial-gradient(70% 120% at 88% 0%, rgba(194, 65, 12, 0.32), transparent 62%),
+    linear-gradient(180deg, #1b1510, #14110f);
+  padding: clamp(2.5rem, 6vw, 4rem) 0;
+  color: var(--lp-cream);
+}
+.lp-final__inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.lp-final__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.lp-footer { background: #100d0b; color: rgba(247, 242, 232, 0.72); padding: clamp(2.5rem, 6vw, 4rem) 0 2rem; }
+.lp-footer__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
+.lp-footer__brand { color: var(--lp-cream); font-size: 1rem; font-weight: 800; letter-spacing: 0.06em; }
+.lp-footer__mark { color: var(--lp-amber); }
+.lp-footer__line { max-width: 24rem; margin-top: 0.5rem !important; font-size: 0.85rem; line-height: 1.6; }
+.lp-footer__line--muted { color: rgba(247, 242, 232, 0.5); }
+.lp-footer__heading { color: var(--lp-cream); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.lp-footer__col { display: grid; align-content: start; gap: 0.5rem; margin-top: 0.9rem; }
+.lp-footer__col a { color: rgba(247, 242, 232, 0.72); font-size: 0.86rem; text-decoration: none; }
+.lp-footer__col a:hover { color: var(--lp-amber); text-decoration: underline; }
+.lp-footer__base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 1.5rem;
+  margin-top: 2.25rem;
+  border-top: 1px solid rgba(247, 242, 232, 0.12);
+  padding-top: 1rem;
+  color: rgba(247, 242, 232, 0.45);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+@media (min-width: 760px) { .lp-footer__grid { grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); gap: 2rem; } }
+
+/* ── Demo-page showcase band (/b/<demo-slug>) ───────────────────────────── */
+
+.jata-showcase {
+  position: relative;
+  overflow: clip;
+  isolation: isolate;
+  background: #12100e;
+  color: #f7f2e8;
+}
+.jata-showcase__media { position: absolute; inset: 0; }
+.jata-showcase__media picture,
+.jata-showcase__media img { display: block; width: 100%; height: 100%; }
+.jata-showcase__img { object-fit: cover; object-position: center 42%; }
+.jata-showcase__frame2 { position: absolute; inset: 0; opacity: 0; animation: jata-cross 18s ease-in-out infinite; }
+.jata-showcase__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(18, 16, 14, 0.35) 0%, rgba(18, 16, 14, 0.72) 46%, #12100e 100%);
+}
+.jata-showcase__inner {
+  position: relative;
+  display: flex;
+  min-height: clamp(28rem, 96vw, 38rem);
+  max-width: 40rem;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: clamp(2rem, 8vw, 4rem) 1.25rem clamp(1.6rem, 5vw, 2.5rem);
+}
+/* A soft plate behind the copy keeps the small service rows readable on the brightest part of
+   any photograph, without hiding the photograph itself. */
+.jata-showcase__panel {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 78%;
+  background: linear-gradient(180deg, transparent 0%, rgba(18, 16, 14, 0.55) 42%, rgba(18, 16, 14, 0.86) 100%);
+}
+@media (min-width: 900px) {
+  .jata-showcase__panel {
+    inset: 0 auto 0 0;
+    width: 58%;
+    height: auto;
+    background: linear-gradient(90deg, rgba(18, 16, 14, 0.88) 0%, rgba(18, 16, 14, 0.62) 58%, transparent 100%);
+  }
+}
+.jata-showcase__flag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.45rem;
+  border: 1px solid rgba(247, 242, 232, 0.26);
+  border-radius: 999px;
+  background: rgba(18, 16, 14, 0.6);
+  padding: 0.3rem 0.7rem;
+  color: rgba(247, 242, 232, 0.9);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.jata-showcase__pulse {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #f0a03c;
+  box-shadow: 0 0 0 3px rgba(240, 160, 60, 0.22);
+  animation: jata-pulse 3.2s ease-in-out infinite;
+}
+.jata-showcase__kicker {
+  margin-top: 0.9rem !important;
+  color: #f0a03c;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.jata-showcase__headline {
+  margin-top: 0.4rem !important;
+  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  font-size: clamp(1.6rem, 6.4vw, 2.4rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.jata-showcase__lede {
+  margin-top: 0.7rem !important;
+  color: rgba(247, 242, 232, 0.8);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.jata-showcase__offer {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  align-self: flex-start;
+  margin-top: 0.9rem !important;
+  border: 1px solid rgba(240, 160, 60, 0.42);
+  border-radius: 0.8rem;
+  background: rgba(240, 160, 60, 0.14);
+  padding: 0.45rem 0.75rem;
+}
+.jata-showcase__offer-label { color: #f0a03c; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.jata-showcase__offer-title { font-size: 0.9rem; font-weight: 750; }
+.jata-showcase__services {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem !important;
+  padding: 0 !important;
+  list-style: none;
+}
+.jata-showcase__service {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(247, 242, 232, 0.24);
+  border-radius: 0.7rem;
+  background: rgba(18, 16, 14, 0.62);
+  padding: 0.45rem 0.75rem;
+  color: #f7f2e8;
+  text-decoration: none;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+.jata-showcase__service:hover { border-color: rgba(240, 160, 60, 0.7); background: rgba(240, 160, 60, 0.12); }
+.jata-showcase__service-title { font-size: 0.88rem; font-weight: 650; }
+.jata-showcase__service-price { flex: 0 0 auto; color: rgba(247, 242, 232, 0.72); font-size: 0.8rem; }
+.jata-showcase__actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1.1rem; }
+.jata-showcase__cta {
+  display: inline-flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f0a03c;
+  padding: 0.6rem 1.15rem;
+  color: #1a140d;
+  font-size: 0.88rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+.jata-showcase__cta:hover { background: #f7b45c; transform: translateY(-1px); }
+.jata-showcase__cta--ghost { border: 1px solid rgba(247, 242, 232, 0.34); background: transparent; color: #f7f2e8; }
+.jata-showcase__cta--ghost:hover { background: rgba(247, 242, 232, 0.1); }
+.jata-showcase__detail {
+  margin-top: 0.9rem;
+  border-top: 1px solid rgba(247, 242, 232, 0.16);
+  padding-top: 0.7rem;
+}
+.jata-showcase__summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgba(247, 242, 232, 0.86);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+.jata-showcase__summary::-webkit-details-marker { display: none; }
+.jata-showcase__chevron {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform 0.2s ease;
+}
+.jata-showcase__detail[open] .jata-showcase__chevron { transform: rotate(-135deg) translateY(-1px); }
+.jata-showcase__detail-body { margin-top: 0.35rem !important; color: rgba(247, 242, 232, 0.72); font-size: 0.85rem; line-height: 1.62; }
+.jata-showcase__meta { margin-top: 0.8rem !important; color: rgba(247, 242, 232, 0.68); font-size: 0.7rem; line-height: 1.5; }
+
+/* Band motion — a slow camera move on a real photograph, plus light, never a video payload. */
+.jata-showcase[data-motion="steam"] .jata-showcase__img { animation: jata-zoom 26s ease-in-out infinite alternate; }
+.jata-showcase[data-motion="salon"] .jata-showcase__img { animation: jata-pan 28s ease-in-out infinite alternate; }
+.jata-showcase[data-motion="drive"] .jata-showcase__img { animation: jata-drive 20s ease-in-out infinite alternate; }
+.jata-showcase[data-motion="tour"] .jata-showcase__img { animation: jata-zoom 30s ease-in-out infinite alternate; }
+.jata-showcase__steam,
+.jata-showcase__glow,
+.jata-showcase__streaks { position: absolute; inset: 0; pointer-events: none; }
+.jata-showcase__steam {
+  background: radial-gradient(38% 42% at 42% 46%, rgba(255, 246, 226, 0.22), transparent 70%);
+  animation: jata-steam 9s ease-in-out infinite alternate;
+}
+.jata-showcase__glow {
+  background: radial-gradient(48% 52% at 68% 26%, rgba(255, 226, 186, 0.22), transparent 70%);
+  animation: jata-glow 11s ease-in-out infinite alternate;
+}
+.jata-showcase__streaks {
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 186, 110, 0.16) 32%, transparent 60%),
+    linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.12) 55%, transparent 80%);
+  animation: jata-streaks 6s linear infinite;
+  mix-blend-mode: screen;
+}
+@keyframes jata-zoom { from { transform: scale(1.02); } to { transform: scale(1.1); } }
+@keyframes jata-pan { from { transform: scale(1.08) translate3d(-1.6%, 0, 0); } to { transform: scale(1.08) translate3d(1.6%, 0, 0); } }
+@keyframes jata-drive { from { transform: scale(1.1) translate3d(2%, 1%, 0); } to { transform: scale(1.1) translate3d(-2%, -1%, 0); } }
+@keyframes jata-cross { 0%, 42% { opacity: 0; } 52%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes jata-steam { from { opacity: 0.35; transform: translate3d(0, 6%, 0) scale(1); } to { opacity: 0.7; transform: translate3d(2%, -6%, 0) scale(1.08); } }
+@keyframes jata-glow { from { opacity: 0.35; } to { opacity: 0.8; } }
+@keyframes jata-streaks { from { transform: translate3d(-22%, 0, 0); } to { transform: translate3d(22%, 0, 0); } }
+@keyframes jata-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+@media (min-width: 900px) {
+  .jata-showcase__inner {
+    min-height: clamp(30rem, 52vw, 40rem);
+    max-width: 76rem;
+    padding: clamp(3rem, 6vw, 4.5rem) 2.5rem clamp(2rem, 4vw, 3rem);
+  }
+  .jata-showcase__headline { font-size: clamp(2rem, 3.6vw, 3rem); }
+  .jata-showcase__lede { max-width: 36rem; font-size: 1.02rem; }
+  .jata-showcase__scrim {
+    background:
+      linear-gradient(90deg, #12100e 0%, rgba(18, 16, 14, 0.9) 40%, rgba(18, 16, 14, 0.35) 72%, rgba(18, 16, 14, 0.2) 100%),
+      linear-gradient(180deg, rgba(18, 16, 14, 0.2) 0%, transparent 30%, rgba(18, 16, 14, 0.55) 100%);
+  }
+  .jata-showcase__img { object-position: center; }
+}
+
+/* ── Entrance motion for the landing hero ───────────────────────────────── */
+
+.lp-hero__copy > * { animation: lp-rise 0.72s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.lp-hero__copy > *:nth-child(2) { animation-delay: 0.08s; }
+.lp-hero__copy > *:nth-child(3) { animation-delay: 0.16s; }
+.lp-hero__copy > *:nth-child(4) { animation-delay: 0.24s; }
+.lp-hero__copy > *:nth-child(5) { animation-delay: 0.32s; }
+.lp-hero__media img { animation: lp-hero-drift 28s ease-in-out infinite alternate; }
+/* Vertical drift only: a tilted mock cannot keep its rows on one left edge. */
+.lp-phone { animation: lp-float 10s ease-in-out infinite alternate; }
+@keyframes lp-rise { from { opacity: 0; transform: translate3d(0, 14px, 0); } to { opacity: 1; transform: none; } }
+@keyframes lp-hero-drift { from { transform: scale(1.02) translate3d(0, 0, 0); } to { transform: scale(1.1) translate3d(-1.5%, -1%, 0); } }
+@keyframes lp-float { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -8px, 0); } }
+
+/* ── Reduced motion: content first, motion optional ─────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-page *,
+  .lp-page *::before,
+  .lp-page *::after,
+  .jata-showcase,
+  .jata-showcase *,
+  .jata-showcase *::before,
+  .jata-showcase *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .lp-hero__copy > * { opacity: 1; transform: none; }
+  .jata-showcase__frame2 { opacity: 0; }
+  .lp-btn:hover,
+  .lp-benefit:hover,
+  .lp-plan__cta:hover,
+  .jata-showcase__cta:hover { transform: none; }
+}
+
+/* Anchors that are off-screen must never create a horizontal scrollbar. */
+.lp-page :target { scroll-margin-top: 84px; }
+
+/* ============================================================================
+ * Studio Canvas — the Website Studio editing surface (§4, §63)
+ *
+ * A self-contained block so the editor cannot be broken by, or break, the storefront
+ * (`--eb-*`) or dashboard (`--jata-*`) token sets. Three panes on a desktop, three switchable
+ * panes on a phone; every interactive target is at least 44px tall on touch, and motion is
+ * opt-in through the user's own preference.
+ * ========================================================================== */
+
+.jc-page {
+  min-height: 100dvh;
+  background: var(--jata-paper);
+  color: var(--jata-ink);
+  padding: 1rem;
+  /* The studio docks Undo/Redo/History bottom-left and the JATA assistant bottom-right. Those
+     bars are fixed, so the editor reserves their height instead of letting them cover the
+     section list's last control or a preview's footer. */
+  padding-bottom: 6rem;
+}
+
+.jc-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 100rem;
+  margin: 0 auto;
+}
+
+.jc-demo-notice {
+  border: 1px solid color-mix(in srgb, var(--jata-warning) 45%, var(--jata-line));
+  background: var(--jata-warning-surface);
+  color: var(--jata-warning);
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------ topbar */
+
+.jc-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius);
+  background: var(--jata-card);
+  box-shadow: var(--jata-shadow);
+}
+
+.jc-eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jata-muted);
+}
+
+.jc-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.jc-topbar__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.jc-topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.jc-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.jc-pill--neutral { background: var(--jata-sunken); color: var(--jata-muted); border-color: #e4e4e7; }
+.jc-pill--warn { background: var(--jata-warning-surface); color: var(--jata-warning); border-color: #fdba74; }
+.jc-pill--ok { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+.jc-pill--busy { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.jc-pill--error { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+.jc-pill:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------ layout */
+
+.jc-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr) minmax(16rem, 20rem);
+  align-items: start;
+}
+
+.jc-outline,
+.jc-stage,
+.jc-inspector {
+  border: 1px solid var(--jata-line);
+  border-radius: var(--jata-radius);
+  background: var(--jata-card);
+  padding: 0.85rem;
+  min-width: 0;
+}
+
+.jc-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: linear-gradient(180deg, var(--jata-card) 0%, var(--jata-sunken) 100%);
+}
+
+.jc-outline { position: sticky; top: 0.75rem; }
+.jc-inspector { position: sticky; top: 0.75rem; }
+
+.jc-h2 { margin: 0; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--jata-muted); }
+.jc-mt { margin-top: 1rem; }
+.jc-muted { margin: 0; font-size: 0.8rem; color: var(--jata-muted); line-height: 1.45; }
+.jc-help { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--jata-muted); line-height: 1.4; }
+.jc-link { color: #1d4ed8; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ------------------------------------------------------------------ outline */
+
+.jc-outline__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+.jc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+
+.jc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 0.7rem;
+  background: var(--jata-card);
+  padding: 0.2rem 0.25rem 0.2rem 0.1rem;
+}
+
+.jc-row[data-active="true"] { border-color: var(--jata-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--jata-ink) 22%, transparent); }
+.jc-row[data-hidden="true"] { background: repeating-linear-gradient(135deg, var(--jata-card), var(--jata-card) 6px, var(--jata-soft) 6px, var(--jata-soft) 12px); }
+.jc-row[data-hidden="true"] .jc-row__label { color: var(--jata-muted); }
+
+.jc-row__select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.jc-row__select:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
+.jc-row__index { font-size: 0.7rem; font-weight: 700; color: #a1a1aa; font-variant-numeric: tabular-nums; }
+.jc-row__text { display: flex; flex-direction: column; min-width: 0; }
+.jc-row__label { font-size: 0.82rem; font-weight: 700; color: var(--jata-ink); }
+.jc-row__title { font-size: 0.72rem; color: var(--jata-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.jc-row__actions { display: flex; gap: 0.1rem; }
+.jc-icon {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--jata-muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.jc-icon:hover:not(:disabled) { background: var(--jata-sunken); border-color: var(--jata-line); }
+.jc-icon:disabled { opacity: 0.3; cursor: default; }
+.jc-icon:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; }
+.jc-icon--danger:hover { background: #fef2f2; color: #b91c1c; }
+
+.jc-add { margin-top: 0.85rem; border-top: 1px solid var(--jata-line); padding-top: 0.7rem; }
+.jc-add__row { display: flex; gap: 0.35rem; margin-top: 0.3rem; }
+
+/* ------------------------------------------------------------------ buttons */
+
+.jc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--jata-line);
+  background: var(--jata-card);
+  color: var(--jata-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.jc-btn:disabled { opacity: 0.45; cursor: default; }
+.jc-btn--primary { background: var(--jata-action); border-color: var(--jata-ink); color: var(--jata-on-action); }
+.jc-btn--primary:hover:not(:disabled) { background: var(--jata-action-hover); }
+.jc-btn--quiet:hover:not(:disabled) { background: var(--jata-soft); }
+.jc-btn:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
+
+.jc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.2rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--jata-line);
+  background: var(--jata-card);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--jata-muted);
+  cursor: pointer;
+}
+.jc-chip[aria-pressed="true"] { background: var(--jata-action); border-color: var(--jata-ink); color: var(--jata-on-action); }
+.jc-chip:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
+
+/* --------------------------------------------------------------- preview */
+
+.jc-stage__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; justify-content: space-between; }
+.jc-devices { display: inline-flex; gap: 0.25rem; }
+
+.jc-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.jc-frame__chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--jata-line);
+  border-bottom: 0;
+  border-radius: 1.1rem 1.1rem 0 0;
+  background: var(--jata-line);
+  font-size: 0.68rem;
+  color: var(--jata-muted);
+}
+.jc-frame__notch { width: 2.5rem; height: 0.3rem; border-radius: 999px; background: #a1a1aa; }
+.jc-frame__url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.jc-frame__iframe {
+  display: block;
+  border: 1px solid var(--jata-line);
+  border-radius: 0 0 1.1rem 1.1rem;
+  background: var(--jata-card);
+  max-width: 100%;
+}
+
+.jc-frame[data-device="desktop"] .jc-frame__iframe { border-radius: 0.4rem; }
+.jc-stage__note { text-align: center; }
+
+/* -------------------------------------------------------------- inspector */
+
+.jc-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--jata-line); margin-bottom: 0.6rem; }
+.jc-tab {
+  min-height: 2.4rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--jata-muted);
+  cursor: pointer;
+}
+.jc-tab[aria-pressed="true"] { color: var(--jata-ink); border-bottom-color: var(--jata-ink); }
+.jc-tab:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: -2px; }
+
+.jc-panel { display: flex; flex-direction: column; gap: 0.6rem; }
+.jc-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.jc-panel__actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; border-top: 1px solid var(--jata-line); padding-top: 0.7rem; }
+
+.jc-tag { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--jata-muted); background: var(--jata-sunken); border-radius: 999px; padding: 0.1rem 0.5rem; }
+
+.jc-field { display: flex; flex-direction: column; }
+.jc-label { font-size: 0.78rem; font-weight: 700; color: var(--jata-muted); margin-bottom: 0.2rem; }
+.jc-input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 0.6rem;
+  background: var(--jata-card);
+  font-size: 0.88rem;
+  color: var(--jata-ink);
+}
+.jc-input--area { min-height: 5.5rem; resize: vertical; }
+.jc-input:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; border-color: var(--jata-ink); }
+.jc-checkbox { width: 1.35rem; height: 1.35rem; }
+
+.jc-alert {
+  margin: 0 0 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #065f46;
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+}
+.jc-alert--error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+
+/* ------------------------------------------------------------- directions */
+
+.jc-directions { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.jc-direction {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.5rem;
+  border: 1px solid var(--jata-line);
+  border-radius: 0.7rem;
+  background: var(--jata-card);
+  text-align: left;
+  cursor: pointer;
+}
+.jc-direction[aria-pressed="true"] { border-color: var(--jata-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--jata-ink) 22%, transparent); }
+.jc-direction:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
+.jc-direction__text { display: flex; flex-direction: column; min-width: 0; }
+.jc-direction__name { font-size: 0.82rem; font-weight: 700; }
+.jc-direction__desc { font-size: 0.72rem; color: var(--jata-muted); line-height: 1.35; }
+
+.jc-swatches { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.jc-swatch { width: 1.1rem; height: 1.6rem; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.08); }
+.jc-swatch--sm { width: 0.6rem; height: 0.9rem; }
+
+.jc-themes { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.jc-chip--theme { padding-left: 0.45rem; }
+
+/* ---------------------------------------------------------------- footer */
+
+.jc-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0.15rem 1rem; }
+
+/* --------------------------------------------------------------- mobile */
+
+.jc-mobile-panes { display: none; }
+
+@media (max-width: 1180px) {
+  .jc-grid { grid-template-columns: minmax(0, 1fr); }
+  .jc-outline,
+  .jc-inspector { position: static; }
+
+  .jc-mobile-panes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--jata-line);
+    border-radius: 0.8rem;
+    background: var(--jata-sunken);
+  }
+
+  .jc-segment {
+    min-height: 2.6rem;
+    border: 0;
+    border-radius: 0.6rem;
+    background: transparent;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--jata-muted);
+    cursor: pointer;
+  }
+  .jc-segment[aria-pressed="true"] { background: var(--jata-card); color: var(--jata-ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .jc-segment:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 1px; }
+
+  .jc-grid > section { display: none; }
+  .jc-grid[data-pane="outline"] > .jc-outline { display: block; }
+  .jc-grid[data-pane="preview"] > .jc-stage { display: flex; }
+  .jc-grid[data-pane="edit"] > .jc-inspector { display: block; }
+
+  .jc-icon { min-width: 2.5rem; min-height: 2.5rem; font-size: 0.95rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jc-root *,
+  .jc-root *::before,
+  .jc-root *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Dark product themes: the Canvas follows the same ink/paper inversion as the dashboard. */
+[data-theme="graphite"] .jc-outline,
+[data-theme="graphite"] .jc-stage,
+[data-theme="graphite"] .jc-inspector,
+[data-theme="graphite"] .jc-topbar { background: var(--jata-card); }
+
+/* ============================================================================
+   WORKSPACE DESIGN SYSTEM  (`ws-*`)
+   ----------------------------------------------------------------------------
+   The authenticated half of JATA AFTERCALL. The public landing page established
+   the brand's editorial identity — graphite ink, warm cream paper, amber accent
+   and a serif display face. This layer carries that same identity through every
+   owner screen: the workspace chrome, dashboard hero, business cards, plan
+   comparison, studio/POS/AI doors, account forms and empty states.
+
+   Everything is scoped to `.ws-shell` so a generated customer website (which has
+   its own theme engine and `.eb-*` foundation) never inherits workspace styling.
+
+   Tokens are declared on the shell, not `:root`, so the storefront, checkout and
+   public business pages keep their own independent palettes and themes.
+   ========================================================================= */
+
+.ws-shell {
+  /* Brand palette — identical values to the landing page, restated here so the
+     workspace never depends on landing-only classes. */
+  --ws-ink: #14110f;
+  --ws-ink-soft: #1d1815;
+  --ws-ink-line: rgba(247, 242, 232, 0.14);
+  --ws-cream: #f7f2e8;
+  --ws-cream-2: #efe7d7;
+  /* Light text sitting on an *ink* surface. Its own token, because `--ws-cream` is the page
+     background and the graphite variant repoints it to a dark colour: using the background token
+     as a foreground is what once painted the hero headline dark-on-dark. Never redefined. */
+  --ws-on-ink: #f7f2e8;
+  --ws-paper: #fffdf8;
+  --ws-text: #171310;
+  --ws-muted: #5a5148;
+  --ws-faint: #8a7f73;
+  --ws-line: #e3d8c8;
+  --ws-line-soft: rgba(23, 19, 16, 0.08);
+  --ws-amber: #f0a03c;
+  --ws-amber-deep: #b45309;
+  --ws-amber-soft: #fdf1e0;
+  --ws-jade: #0f766e;
+  --ws-jade-soft: #e8f5f1;
+  /* Surfaces that were literal white/light in the first pass, lifted into tokens so the
+     graphite variant below can re-point them without duplicating a single rule. */
+  --ws-solid: #ffffff;
+  --ws-wash: rgba(23, 19, 16, 0.03);
+  --ws-skel-shine: rgba(255, 253, 248, 0.7);
+  --ws-plan-tint: #fff8ec;
+  --ws-ember: #c2410c;
+  /* Semantic status tokens. Success reuses the jade pair; danger gets its own pair so an error
+     notice or destructive control is themed (and re-pointed for graphite) instead of carrying a
+     hard-coded light-red palette that breaks on a dark surface. */
+  --ws-on-amber: #1a140d;
+  --ws-jade-line: rgba(15, 118, 110, 0.35);
+  --ws-danger: #991b1b;
+  --ws-danger-soft: #fef2f2;
+  --ws-danger-line: rgba(185, 28, 28, 0.35);
+  --ws-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+
+  --ws-radius-sm: 0.6rem;
+  --ws-radius-md: 0.85rem;
+  --ws-radius-lg: 1.15rem;
+  --ws-radius-xl: 1.6rem;
+  --ws-elev-1: 0 1px 2px rgba(23, 19, 16, 0.05);
+  --ws-elev-2: 0 18px 44px -30px rgba(23, 19, 16, 0.45);
+  --ws-elev-3: 0 34px 70px -40px rgba(23, 19, 16, 0.55);
+  --ws-dur: 220ms;
+  --ws-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Bridge the shared `jata-*` primitives onto the workspace palette, so every
+     Card, Metric, StatusPill, Alert and table already used across the product
+     inherits this look without a parallel component set. */
+  --jata-paper: var(--ws-cream);
+  --jata-card: var(--ws-paper);
+  --jata-card-strong: #ffffff;
+  --jata-line: var(--ws-line);
+  --jata-ink: var(--ws-text);
+  --jata-muted: var(--ws-muted);
+  --jata-accent: var(--ws-amber-deep);
+  --jata-live: var(--ws-jade);
+  --jata-focus: var(--ws-amber-deep);
+  --jata-radius-lg: 0.9rem;
+  --jata-elevation-1: var(--ws-elev-1);
+  --jata-elevation-2: var(--ws-elev-2);
+
   min-height: 100vh;
-  background: var(--erp-page);
-  color: var(--erp-ink);
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(240, 160, 60, 0.08), transparent 55rem),
+    var(--ws-cream);
+  color: var(--ws-text);
 }
 
-@media (prefers-color-scheme: dark) {
-  .erp {
-    --erp-ink: #f4f6f2;
-    --erp-muted: #a3a9b6;
-    --erp-line: #30343d;
-    --erp-surface: #1b1e24;
-    --erp-surface-2: #22262e;
-    --erp-page: #121419;
-    --erp-good: #7ee2a8;
-    --erp-danger: #ff9b8e;
-    --erp-warn: #ffd27a;
-    --erp-info: #9db8ff;
-    --erp-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.25);
-  }
+/* The theme toolbar sits above the workspace chrome. Paint the strip in the
+   workspace ink so there is never a seam of an unrelated theme colour. */
+.product-theme-root:has(> .ws-shell) { background: var(--ws-ink, #14110f); }
+.product-theme-root:has(> .ws-shell) > .product-theme-toolbar { background: #14110f; color: #f7f2e8; }
+
+.ws-shell :where(h1, h2, h3, h4) { letter-spacing: -0.015em; }
+/* Zero specificity: Tailwind margin/padding/list utilities used by the POS and the AI cockpit
+   keep winning over these resets. */
+.ws-shell :where(p, ul, ol, dl, figure) { margin: 0; }
+.ws-shell :where(ul, ol) { padding: 0; list-style: none; }
+.ws-shell a { -webkit-tap-highlight-color: transparent; }
+.ws-shell :focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ws-amber) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.erp * { box-sizing: border-box; }
-.erp a { color: inherit; }
-.erp-layout { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
-.erp-sidebar {
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
-  background: var(--erp-graphite); color: #f4f6f2; padding: 20px 14px 28px;
-  display: flex; flex-direction: column; gap: 18px;
-}
-.erp-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 8px; }
-.erp-brand-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--erp-lime); color: var(--erp-graphite); display: grid; place-items: center; font-weight: 900; }
-.erp-brand-name { font-weight: 800; letter-spacing: -0.02em; font-size: 1rem; line-height: 1.1; }
-.erp-brand-sub { font-size: 0.7rem; color: #aab1bd; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.12em; }
-.erp-side-business { padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
-.erp-side-business strong { display: block; font-size: 0.9rem; }
-.erp-side-business span { font-size: 0.72rem; color: #aab1bd; }
-.erp-nav-group { display: flex; flex-direction: column; gap: 3px; }
-.erp-nav-heading { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.14em; color: #8e96a3; padding: 4px 10px; }
-.erp-nav-link {
-  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px;
-  color: #d9dee6; text-decoration: none; font-size: 0.875rem; font-weight: 550; line-height: 1.2;
-}
-.erp-nav-link:hover { background: rgba(255,255,255,0.07); color: #fff; }
-.erp-nav-link[data-active="true"] { background: var(--erp-lime); color: var(--erp-graphite); font-weight: 800; }
-.erp-nav-glyph { width: 20px; text-align: center; font-size: 0.95rem; }
-.erp-side-foot { margin-top: auto; font-size: 0.7rem; color: #8e96a3; padding: 8px; }
+/* ── Workspace chrome ───────────────────────────────────────────────────── */
 
-.erp-main { min-width: 0; display: flex; flex-direction: column; }
-.erp-topbar {
-  position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--erp-page) 88%, transparent);
-  backdrop-filter: blur(10px); border-bottom: 1px solid var(--erp-line);
-  padding: 12px 22px; display: flex; align-items: center; gap: 14px; justify-content: space-between;
-}
-.erp-topbar-title { font-weight: 850; letter-spacing: -0.02em; font-size: 1rem; }
-.erp-crumbs { font-size: 0.72rem; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.1em; }
-.erp-topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.erp-content { padding: 22px; max-width: 1240px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-.erp-footer { padding: 18px 22px 28px; color: var(--erp-muted); font-size: 0.74rem; text-align: center; }
-
-.erp-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.erp-page-head h1 { font-size: 1.55rem; font-weight: 850; letter-spacing: -0.03em; margin: 0 0 4px; }
-.erp-page-head p { margin: 0; color: var(--erp-muted); font-size: 0.88rem; max-width: 62ch; }
-.erp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-
-.erp-card { background: var(--erp-surface); border: 1px solid var(--erp-line); border-radius: var(--erp-radius); box-shadow: var(--erp-shadow); padding: 18px; }
-.erp-card h2 { font-size: 1rem; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
-.erp-card h3 { font-size: 0.9rem; font-weight: 800; margin: 0 0 6px; }
-.erp-card-sub { color: var(--erp-muted); font-size: 0.82rem; margin: 0 0 14px; }
-.erp-grid { display: grid; gap: 14px; }
-.erp-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.erp-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.erp-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-.erp-hero {
-  background: linear-gradient(135deg, var(--erp-graphite) 0%, #22262f 62%, #2d3320 100%);
-  color: #f5f7f2; border-radius: 22px; padding: 26px; position: relative; overflow: hidden;
-  border: 1px solid rgba(182, 255, 46, 0.18);
-}
-.erp-hero::after { content: ""; position: absolute; inset: auto -60px -120px auto; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(182,255,46,0.28), transparent 65%); pointer-events: none; }
-.erp-hero h1 { margin: 0 0 6px; font-size: 1.7rem; letter-spacing: -0.035em; }
-.erp-hero p { margin: 0; color: #c8cfbc; max-width: 64ch; font-size: 0.92rem; }
-.erp-hero .erp-actions { margin-top: 16px; }
-.erp-hero-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(182,255,46,0.14); color: var(--erp-lime); border: 1px solid rgba(182,255,46,0.35); padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
-
-.erp-kpi { background: var(--erp-surface); border: 1px solid var(--erp-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
-.erp-kpi dt { font-size: 0.72rem; color: var(--erp-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
-.erp-kpi dd { margin: 0; font-size: 1.4rem; font-weight: 850; letter-spacing: -0.03em; }
-.erp-kpi small { color: var(--erp-muted); font-size: 0.75rem; }
-
-.erp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 10px 16px; border-radius: 12px; border: 1px solid transparent; font-weight: 750; font-size: 0.86rem; text-decoration: none; cursor: pointer; transition: transform 0.04s ease, background 0.15s ease; }
-.erp-btn:active { transform: translateY(1px); }
-.erp-btn-primary { background: var(--erp-lime); color: var(--erp-graphite); border-color: var(--erp-lime); }
-.erp-btn-primary:hover { background: var(--erp-lime-dim); }
-.erp-btn-dark { background: var(--erp-graphite); color: #fff; }
-.erp-btn-dark:hover { background: var(--erp-graphite-soft); }
-.erp-btn-secondary { background: var(--erp-surface); color: var(--erp-ink); border-color: var(--erp-line); }
-.erp-btn-secondary:hover { border-color: var(--erp-muted); }
-.erp-btn-ghost { background: transparent; color: var(--erp-ink); border-color: transparent; padding-inline: 10px; }
-.erp-btn-danger { background: transparent; color: var(--erp-danger); border-color: color-mix(in srgb, var(--erp-danger) 35%, transparent); }
-.erp-btn[disabled], .erp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.erp-btn-sm { min-height: 34px; padding: 6px 11px; font-size: 0.78rem; border-radius: 9px; }
-.erp-btn-wide { width: 100%; }
-
-.erp-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; font-size: 0.7rem; font-weight: 750; border: 1px solid var(--erp-line); background: var(--erp-surface-2); color: var(--erp-muted); white-space: nowrap; }
-.erp-badge[data-tone="good"] { color: var(--erp-good); border-color: color-mix(in srgb, var(--erp-good) 30%, transparent); background: color-mix(in srgb, var(--erp-good) 9%, transparent); }
-.erp-badge[data-tone="warn"] { color: var(--erp-warn); border-color: color-mix(in srgb, var(--erp-warn) 35%, transparent); background: color-mix(in srgb, var(--erp-warn) 10%, transparent); }
-.erp-badge[data-tone="bad"] { color: var(--erp-danger); border-color: color-mix(in srgb, var(--erp-danger) 30%, transparent); background: color-mix(in srgb, var(--erp-danger) 8%, transparent); }
-.erp-badge[data-tone="lime"] { background: var(--erp-lime); color: var(--erp-graphite); border-color: var(--erp-lime); }
-
-.erp-notice { border-radius: 12px; padding: 12px 14px; font-size: 0.84rem; border: 1px solid var(--erp-line); background: var(--erp-surface); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
-.erp-notice[data-tone="warn"] { border-color: color-mix(in srgb, var(--erp-warn) 35%, transparent); background: color-mix(in srgb, var(--erp-warn) 8%, transparent); }
-.erp-notice[data-tone="danger"] { border-color: color-mix(in srgb, var(--erp-danger) 35%, transparent); background: color-mix(in srgb, var(--erp-danger) 7%, transparent); }
-.erp-notice[data-tone="success"] { border-color: color-mix(in srgb, var(--erp-good) 30%, transparent); background: color-mix(in srgb, var(--erp-good) 7%, transparent); }
-.erp-notice a { font-weight: 750; text-decoration: underline; text-underline-offset: 2px; }
-
-.erp-label { display: block; font-size: 0.76rem; font-weight: 750; color: var(--erp-ink); margin-bottom: 5px; }
-.erp-hint { font-size: 0.74rem; color: var(--erp-muted); margin-top: 4px; line-height: 1.45; }
-.erp-field { margin-bottom: 12px; }
-.erp-input, .erp-select, .erp-textarea {
-  width: 100%; min-height: 42px; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--erp-line);
-  background: var(--erp-surface); color: var(--erp-ink); font: inherit; font-size: 0.88rem;
-}
-.erp-textarea { min-height: 110px; resize: vertical; }
-.erp-input:focus-visible, .erp-select:focus-visible, .erp-textarea:focus-visible, .erp-btn:focus-visible, .erp-nav-link:focus-visible, .erp-tab:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--erp-lime) 65%, transparent); outline-offset: 2px;
-}
-.erp-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-.erp-row > * { flex: 1 1 160px; }
-.erp-check { display: flex; gap: 9px; align-items: flex-start; font-size: 0.84rem; padding: 8px 0; }
-.erp-check input { margin-top: 2px; width: 18px; height: 18px; accent-color: #6a9c00; }
-
-.erp-table-wrap { overflow-x: auto; border: 1px solid var(--erp-line); border-radius: 12px; background: var(--erp-surface); }
-.erp-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 560px; }
-.erp-table th { text-align: left; font-size: 0.69rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--erp-muted); padding: 10px 12px; border-bottom: 1px solid var(--erp-line); background: var(--erp-surface-2); position: sticky; top: 0; }
-.erp-table td { padding: 10px 12px; border-bottom: 1px solid var(--erp-line); vertical-align: top; }
-.erp-table tr:last-child td { border-bottom: 0; }
-.erp-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.erp-table tfoot td { font-weight: 800; background: var(--erp-surface-2); }
-
-.erp-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; border-bottom: 1px solid var(--erp-line); }
-.erp-tab { padding: 9px 12px; border-radius: 9px 9px 0 0; font-size: 0.82rem; font-weight: 700; color: var(--erp-muted); text-decoration: none; white-space: nowrap; }
-.erp-tab[data-active="true"] { color: var(--erp-ink); background: var(--erp-surface); border: 1px solid var(--erp-line); border-bottom-color: var(--erp-surface); margin-bottom: -1px; }
-
-.erp-empty { text-align: center; padding: 34px 18px; border: 1px dashed var(--erp-line); border-radius: 14px; background: var(--erp-surface-2); }
-.erp-empty .glyph { font-size: 1.6rem; display: block; margin-bottom: 8px; }
-.erp-empty h3 { margin: 0 0 4px; font-size: 0.95rem; }
-.erp-empty p { margin: 0 auto 14px; color: var(--erp-muted); font-size: 0.84rem; max-width: 44ch; }
-
-.erp-checklist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.erp-checklist li { display: flex; gap: 12px; padding: 10px 12px; border: 1px solid var(--erp-line); border-radius: 12px; background: var(--erp-surface); align-items: flex-start; }
-.erp-checklist li[data-status="DONE"] { background: color-mix(in srgb, var(--erp-good) 6%, var(--erp-surface)); }
-.erp-checklist li[data-status="NEXT"] { border-color: color-mix(in srgb, var(--erp-lime) 70%, var(--erp-line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--erp-lime) 18%, transparent); }
-.erp-check-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 26px; font-size: 0.72rem; font-weight: 850; border: 1px solid var(--erp-line); background: var(--erp-surface-2); }
-.erp-checklist li[data-status="DONE"] .erp-check-dot { background: var(--erp-good); color: #fff; border-color: var(--erp-good); }
-.erp-checklist li[data-status="NEXT"] .erp-check-dot { background: var(--erp-lime); color: var(--erp-graphite); border-color: var(--erp-lime); }
-.erp-check-body { flex: 1; min-width: 0; }
-.erp-check-body strong { display: block; font-size: 0.86rem; }
-.erp-check-body span { font-size: 0.78rem; color: var(--erp-muted); display: block; margin-top: 2px; }
-
-.erp-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.erp-action-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--erp-line); border-radius: 14px; background: var(--erp-surface); text-decoration: none; transition: border-color 0.15s ease, transform 0.08s ease; }
-.erp-action-card:hover { border-color: var(--erp-graphite); transform: translateY(-1px); }
-.erp-action-card strong { font-size: 0.9rem; letter-spacing: -0.01em; }
-.erp-action-card span { font-size: 0.79rem; color: var(--erp-muted); }
-.erp-action-card .erp-card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; }
-
-.erp-progress { height: 8px; background: var(--erp-surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--erp-line); }
-.erp-progress > span { display: block; height: 100%; background: var(--erp-lime); }
-
-.erp-mobile-bar { display: none; }
-.erp-mobile-menu { display: none; }
-.erp-scroll-x { overflow-x: auto; }
-.erp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
-.erp-muted { color: var(--erp-muted); }
-.erp-small { font-size: 0.78rem; }
-.erp-strong { font-weight: 800; }
-.erp-pass { color: var(--erp-good); font-weight: 800; }
-.erp-fail { color: var(--erp-danger); font-weight: 800; }
-.erp-blocked { color: var(--erp-warn); font-weight: 800; }
-.erp-split { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
-.erp-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
-.erp-list li { padding: 10px 0; border-bottom: 1px solid var(--erp-line); display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; }
-.erp-list li:last-child { border-bottom: 0; }
-.erp-steps { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
-.erp-step { flex: 1 1 120px; border: 1px solid var(--erp-line); border-radius: 10px; padding: 8px 10px; font-size: 0.74rem; color: var(--erp-muted); background: var(--erp-surface); }
-.erp-step[data-active="true"] { border-color: var(--erp-lime); color: var(--erp-ink); background: color-mix(in srgb, var(--erp-lime) 12%, var(--erp-surface)); font-weight: 750; }
-.erp-step[data-done="true"] { color: var(--erp-good); }
-.erp-cost { font-size: 1.35rem; font-weight: 850; letter-spacing: -0.02em; }
-.erp-inline-code { font-family: ui-monospace, monospace; font-size: 0.76rem; background: var(--erp-surface-2); border: 1px solid var(--erp-line); padding: 2px 6px; border-radius: 6px; }
-
-@media (max-width: 1100px) {
-  .erp-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .erp-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .erp-split { grid-template-columns: 1fr; }
-}
-@media (max-width: 900px) {
-  .erp-layout { grid-template-columns: 1fr; }
-  .erp-sidebar { display: none; }
-  .erp-content { padding: 16px 14px 96px; }
-  .erp-topbar { padding: 10px 14px; }
-  .erp-mobile-bar {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-    background: var(--erp-graphite); border-top: 1px solid rgba(255,255,255,0.08);
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
-  }
-  .erp-mobile-bar a { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #aab1bd; text-decoration: none; font-size: 0.64rem; padding: 6px 2px; border-radius: 9px; }
-  .erp-mobile-bar a[data-active="true"] { color: var(--erp-graphite); background: var(--erp-lime); font-weight: 800; }
-  .erp-mobile-bar .glyph { font-size: 1rem; }
-  .erp-mobile-menu { display: block; }
-  .erp-page-head h1 { font-size: 1.3rem; }
-  .erp-hero { padding: 20px; border-radius: 18px; }
-  .erp-hero h1 { font-size: 1.35rem; }
-  .erp-grid-2, .erp-grid-3, .erp-grid-4 { grid-template-columns: 1fr; }
-  .erp-card-grid { grid-template-columns: 1fr; }
-  .erp-table { min-width: 480px; }
-}
-@media (max-width: 430px) {
-  .erp-content { padding: 12px 11px 92px; }
-  .erp-card { padding: 14px; border-radius: 14px; }
-  .erp-btn { min-height: 46px; }
-  .erp-page-head h1 { font-size: 1.18rem; }
-  .erp-kpi dd { font-size: 1.2rem; }
+.ws-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  border-bottom: 1px solid rgba(240, 160, 60, 0.24);
+  background:
+    radial-gradient(90% 220% at 92% -60%, rgba(240, 160, 60, 0.22), transparent 60%),
+    linear-gradient(180deg, #1b1512 0%, #14110f 100%);
+  color: var(--ws-on-ink);
+  box-shadow: 0 14px 34px -26px rgba(0, 0, 0, 0.9);
 }
 
-/* ── Guided setup ────────────────────────────────────────────────────────────────────────── */
-/* Ordered list rendered as vertical cards on a phone, two columns from tablet up. Each card is the
-   whole tap target; the badge says whether a step is done, next, to-do, or with a provider. */
-.erp-steps { counter-reset: erp-step; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin: 16px 0; padding: 0; list-style: none; }
-.erp-steps > li { margin: 0; }
-.erp-steps .erp-card[data-active="true"] { border-color: var(--erp-lime); box-shadow: 0 0 0 2px color-mix(in srgb, var(--erp-lime) 45%, transparent); }
-.erp-steps .erp-card[data-done="true"] { opacity: 0.72; }
-.erp-step-number { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 0.74rem; font-weight: 850; background: var(--erp-surface-2); border: 1px solid var(--erp-line); color: var(--erp-muted); }
-.erp-steps .erp-card[data-active="true"] .erp-step-number { background: var(--erp-lime); border-color: var(--erp-lime); color: var(--erp-graphite); }
-.erp-steps .erp-card[data-done="true"] .erp-step-number { background: color-mix(in srgb, var(--erp-good) 16%, var(--erp-surface)); border-color: color-mix(in srgb, var(--erp-good) 40%, var(--erp-line)); color: var(--erp-good); }
-.erp-steps h3 { font-size: 0.95rem; letter-spacing: -0.01em; }
-
-@media (max-width: 640px) {
-  .erp-steps { grid-template-columns: 1fr; }
-  .erp-steps .erp-card { padding: 12px; }
+.ws-chrome__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  width: 100%;
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 0.55rem 1rem;
 }
+@media (min-width: 900px) { .ws-chrome__row { padding: 0.6rem 2.5rem; } }
+
+.ws-chrome .jata-brand { margin-right: auto; min-width: 0; }
+.ws-chrome .jata-brand-mark { background: var(--ws-amber); color: #1a140d; border-radius: 0.55rem; }
+.ws-chrome .jata-brand-name { color: var(--ws-on-ink); letter-spacing: 0.16em; }
+.ws-chrome .jata-brand-tag { display: none; }
+
+.ws-chrome__tag {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--ws-ink-line);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  color: rgba(247, 242, 232, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+@media (min-width: 900px) { .ws-chrome__tag { display: inline-flex; } }
+
+.ws-chrome__actions { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+
+/* Pushes the right-hand controls to the edge of a chrome row once the left-hand cluster has
+   taken the space it needs; on a narrow phone the row wraps instead of overflowing. */
+.ws-chrome__spacer { flex: 1 1 auto; min-width: 0; }
+
+/* The admin console is the same product, so it uses the same chrome and tokens. This pill is the
+   only thing that marks it as a platform surface rather than an owner's workspace. */
+.ws-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--ws-ink-line);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-pill--admin { border-color: rgba(240, 160, 60, 0.5); color: var(--ws-amber); }
+
+.ws-chrome__account {
+  display: none;
+  max-width: 15rem;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  border: 1px solid var(--ws-ink-line);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  color: rgba(247, 242, 232, 0.78);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 720px) { .ws-chrome__account { display: inline-flex; } }
+
+.ws-chrome .jata-btn {
+  min-height: 2.5rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+}
+.ws-chrome .jata-btn-secondary { border-color: var(--ws-ink-line); background: transparent; color: var(--ws-on-ink); }
+.ws-chrome .jata-btn-secondary:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); }
+.ws-chrome .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
+.ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
+
+/* Section rail — the one navigation row on every owner screen. */
+.ws-rail-wrap {
+  border-top: 1px solid rgba(247, 242, 232, 0.09);
+  background: rgba(255, 253, 248, 0.02);
+  /* The rail inside owns the horizontal scroll (overflow-x: auto); this wrapper guarantees its
+     scrollable overflow never propagates to the document on phone widths (real-Chrome evidence,
+     PR #69 six-viewport capture). min-width:0 lets the block shrink below the rail's min-content
+     width instead of expanding the chrome; clip creates no scroll container and does not trap
+     focus or affect the sticky header. */
+  min-width: 0;
+  overflow-x: clip;
+}
+.ws-rail {
+  display: flex;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 0.3rem 1rem 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.ws-rail::-webkit-scrollbar { display: none; }
+@media (min-width: 900px) { .ws-rail { padding: 0.35rem 2.5rem 0.5rem; } }
+
+.ws-rail a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.42rem;
+  min-height: 2.75rem; /* 44px touch target, as DashboardNav documents */
+  padding: 0 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: rgba(247, 242, 232, 0.74);
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: background-color var(--ws-dur) var(--ws-ease), color var(--ws-dur) var(--ws-ease);
+}
+.ws-rail a:hover { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
+.ws-rail a[aria-current="page"] {
+  background: var(--ws-amber);
+  border-color: var(--ws-amber);
+  color: #1a140d;
+  box-shadow: 0 8px 20px -12px rgba(240, 160, 60, 0.9);
+}
+.ws-rail a[aria-current="page"] svg { color: #1a140d; }
+
+.ws-main {
+  width: 100%;
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 1.1rem 1rem 3.5rem;
+}
+@media (min-width: 900px) { .ws-main { padding: 1.75rem 2.5rem 5rem; } }
+
+/* Explicit minmax(0, 1fr) track: the implicit `auto` track honours grid items' min-content, so
+   wide children (the AI Front Desk snap stepper, hero surfaces, metric grids) expanded the track
+   past phone viewports and pushed documentElement.scrollWidth past 100% — real-Chrome evidence
+   (PR #69 six-viewport capture, 320–430px). A zero-minimum track keeps the single-column stack
+   at container width; the children's own overflow:auto/hidden then scroll or clip inside it. */
+.ws-stack { display: grid; gap: 1.1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .ws-stack { gap: 1.5rem; } }
+
+/* ── Editorial headings ─────────────────────────────────────────────────── */
+
+.ws-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ws-amber-deep);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.ws-kicker--light { color: var(--ws-amber); }
+
+.ws-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.7rem;
+}
+.ws-section-head__title {
+  margin: 0;
+  font-family: var(--ws-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ws-section-head__meta { color: var(--ws-muted); font-size: 0.74rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ── Hero band ──────────────────────────────────────────────────────────── */
+
+.ws-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(247, 242, 232, 0.1);
+  border-radius: var(--ws-radius-xl);
+  background: var(--ws-ink);
+  color: var(--ws-on-ink);
+  padding: clamp(1.15rem, 3.6vw, 2.5rem);
+  box-shadow: var(--ws-elev-3);
+}
+.ws-hero__media { position: absolute; inset: 0; z-index: -2; background: var(--ws-ink); }
+.ws-hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 42%;
+  opacity: 0.62;
+  transform: scale(1.02);
+  animation: ws-hero-drift 26s var(--ws-ease) infinite alternate;
+}
+@keyframes ws-hero-drift {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.08) translate3d(0, -1.2%, 0); }
+}
+.ws-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Coverage is deliberately heavier than "a photo with a gradient": the subtitle and the meta
+     line run to the middle of the card, over the brightest part of the city lights, so the scrim
+     has to still be near-opaque there for the body copy to clear AA contrast. */
+  background:
+    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.9) 42%, rgba(20, 17, 15, 0.74) 68%, rgba(20, 17, 15, 0.42) 100%),
+    linear-gradient(0deg, rgba(20, 17, 15, 0.7), transparent 62%);
+}
+.ws-hero__inner { position: relative; display: grid; gap: 1rem; max-width: 46rem; }
+.ws-hero__title {
+  font-family: var(--ws-display);
+  font-size: clamp(1.65rem, 4.6vw, 2.65rem);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--ws-on-ink);
+  text-wrap: balance;
+}
+.ws-hero__title em { font-style: italic; color: var(--ws-amber); }
+.ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.88); font-size: 0.92rem; line-height: 1.6; }
+.ws-hero__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
+.ws-hero__meta { color: rgba(247, 242, 232, 0.78); font-size: 0.75rem; }
+.ws-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+@media (min-width: 640px) { .ws-hero__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 36rem; } }
+.ws-hero__stat {
+  border: 1px solid rgba(247, 242, 232, 0.16);
+  border-radius: var(--ws-radius-md);
+  background: rgba(247, 242, 232, 0.07);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 0.65rem;
+}
+.ws-hero__stat dt { color: rgba(247, 242, 232, 0.66); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.ws-hero__stat dd { margin: 0.1rem 0 0; font-family: var(--ws-display); font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.05; }
+
+/* Compact page hero for secondary workspace screens. */
+.ws-hero--compact { padding: clamp(1rem, 2.6vw, 1.7rem); }
+.ws-hero--compact .ws-hero__title { font-size: clamp(1.45rem, 3.2vw, 2.05rem); }
+
+.ws-btn-amber,
+.ws-btn-outline,
+.ws-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.87rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform var(--ws-dur) var(--ws-ease), background-color var(--ws-dur) var(--ws-ease), box-shadow var(--ws-dur) var(--ws-ease);
+}
+.ws-btn-amber {
+  background: var(--ws-amber);
+  color: #1a140d;
+  box-shadow: 0 16px 32px -18px rgba(240, 160, 60, 0.95);
+}
+.ws-btn-amber:hover { background: #f7b45c; transform: translateY(-1px); }
+.ws-btn-outline {
+  border-color: rgba(247, 242, 232, 0.28);
+  background: rgba(247, 242, 232, 0.04);
+  color: var(--ws-on-ink);
+}
+.ws-btn-outline:hover { background: rgba(247, 242, 232, 0.12); }
+.ws-btn-quiet { color: rgba(247, 242, 232, 0.78); }
+.ws-btn-quiet:hover { color: var(--ws-on-ink); background: rgba(247, 242, 232, 0.08); }
+.ws-btn-amber:active, .ws-btn-outline:active, .ws-btn-quiet:active { transform: translateY(1px); }
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+
+.ws-panel {
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-panel--flush { overflow: hidden; }
+.ws-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  padding: 0.9rem 1rem 0.3rem;
+}
+.ws-panel__title { margin: 0; font-family: var(--ws-display); font-size: 1.12rem; font-weight: 600; }
+.ws-panel__body { padding: 0.6rem 1rem 1rem; }
+.ws-panel__body--tight { padding: 0.5rem 1rem 0.8rem; }
+.ws-panel--graphite { border-color: rgba(247, 242, 232, 0.12); background: var(--ws-ink); color: var(--ws-on-ink); }
+.ws-panel--graphite .ws-panel__title { color: var(--ws-on-ink); }
+.ws-panel--graphite .ws-section-head__meta, .ws-panel--graphite .ws-muted { color: rgba(247, 242, 232, 0.64); }
+
+.ws-muted { color: var(--ws-muted); }
+.ws-small { font-size: 0.8rem; line-height: 1.55; }
+.ws-tiny { font-size: 0.74rem; line-height: 1.5; }
+
+.ws-grid-2 { display: grid; gap: 1rem; }
+@media (min-width: 1000px) { .ws-grid-2 { grid-template-columns: minmax(0, 1.65fr) minmax(17rem, 1fr); align-items: start; } }
+.ws-col { display: grid; gap: 0.9rem; min-width: 0; }
+
+/* ── Business card ──────────────────────────────────────────────────────── */
+
+.ws-biz {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-xl);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-2);
+}
+.ws-biz__cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 10.5rem;
+  aspect-ratio: 16 / 9;
+  padding: 0.75rem;
+  background: var(--ws-ink);
+  isolation: isolate;
+}
+@media (min-width: 700px) { .ws-biz__cover { aspect-ratio: 21 / 8; min-height: 11.5rem; padding: 0.9rem 1rem; } }
+.ws-biz__cover img {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms var(--ws-ease);
+}
+@media (hover: hover) { .ws-biz:hover .ws-biz__cover img { transform: scale(1.03); } }
+.ws-biz__cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(20, 17, 15, 0.55) 0%, rgba(20, 17, 15, 0.08) 38%, rgba(20, 17, 15, 0.88) 100%);
+}
+.ws-biz__cover-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.ws-biz__cover-id { display: flex; align-items: flex-end; gap: 0.7rem; min-width: 0; }
+.ws-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.9rem;
+  height: 2.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0.85rem;
+  background: var(--ws-amber);
+  color: #1a140d;
+  font-family: var(--ws-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.8);
+}
+.ws-biz__name {
+  margin: 0;
+  color: var(--ws-on-ink);
+  font-family: var(--ws-display);
+  font-size: clamp(1.25rem, 3vw, 1.6rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.ws-biz__meta { margin-top: 0.15rem; color: rgba(247, 242, 232, 0.76); font-size: 0.78rem; overflow-wrap: anywhere; }
+.ws-biz__body { display: grid; gap: 1rem; padding: 1rem; }
+@media (min-width: 900px) { .ws-biz__body { padding: 1.15rem 1.35rem 1.35rem; gap: 1.15rem; } }
+
+/* Cover pills: semantic tone preserved, glass treatment for the photograph. */
+.ws-cover-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ws-cover-pills .jata-pill {
+  border-color: rgba(247, 242, 232, 0.24);
+  background: rgba(20, 17, 15, 0.55);
+  color: rgba(247, 242, 232, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 0.68rem;
+}
+.ws-cover-pills .jata-pill[data-tone="success"] { background: rgba(4, 120, 87, 0.82); border-color: rgba(16, 185, 129, 0.4); color: #ecfdf5; }
+.ws-cover-pills .jata-pill[data-tone="warning"] { background: rgba(180, 83, 9, 0.85); border-color: rgba(245, 158, 11, 0.45); color: #fffbeb; }
+.ws-cover-pills .jata-pill[data-tone="danger"] { background: rgba(153, 27, 27, 0.85); border-color: rgba(248, 113, 113, 0.4); color: #fef2f2; }
+
+/* ── Next step ──────────────────────────────────────────────────────────── */
+
+.ws-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: var(--ws-radius-md);
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(240, 160, 60, 0.2), transparent 60%),
+    linear-gradient(120deg, rgba(240, 160, 60, 0.15), rgba(240, 160, 60, 0.03));
+  padding: 0.85rem 1rem;
+}
+.ws-next__copy { min-width: 0; flex: 1 1 15rem; }
+.ws-next__label { display: flex; align-items: center; gap: 0.35rem; color: var(--ws-amber-deep); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.ws-next__title { margin-top: 0.15rem; font-weight: 750; font-size: 0.95rem; }
+.ws-next__detail { color: var(--ws-muted); font-size: 0.82rem; line-height: 1.5; }
+.ws-next__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* ── Stat tiles ─────────────────────────────────────────────────────────── */
+
+.ws-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+@media (min-width: 640px) { .ws-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .ws-stats--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.ws-stat {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  border: 1px solid var(--ws-line-soft);
+  border-radius: var(--ws-radius-md);
+  background: var(--ws-solid);
+  padding: 0.6rem 0.7rem;
+  overflow: hidden;
+}
+.ws-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--ws-stat-accent, var(--ws-amber));
+  opacity: 0.85;
+}
+.ws-stat__top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.ws-stat__icon { display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 0.5rem; background: var(--ws-stat-soft, var(--ws-amber-soft)); color: var(--ws-stat-accent, var(--ws-amber-deep)); }
+.ws-stat__label { color: var(--ws-muted); font-size: 0.65rem; font-weight: 750; letter-spacing: 0.09em; text-transform: uppercase; }
+.ws-stat__value { font-family: var(--ws-display); font-size: clamp(1.35rem, 4.6vw, 1.7rem); font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.ws-stat__hint { color: var(--ws-faint); font-size: 0.68rem; }
+.ws-stat[data-metric="whatsapp"] { --ws-stat-accent: #0f766e; --ws-stat-soft: #e6f4f1; }
+.ws-stat[data-metric="calls"] { --ws-stat-accent: #1d4ed8; --ws-stat-soft: #eaefff; }
+.ws-stat[data-metric="directions"] { --ws-stat-accent: #c2410c; --ws-stat-soft: #fdeee6; }
+.ws-stat[data-metric="shares"] { --ws-stat-accent: #7c3aed; --ws-stat-soft: #f1ebfe; }
+.ws-stat[data-metric="views"] { --ws-stat-accent: #b45309; --ws-stat-soft: #fdf1e0; }
+
+/* ── Quick actions ──────────────────────────────────────────────────────── */
+
+.ws-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+@media (min-width: 620px) and (max-width: 999px) { .ws-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ws-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-paper);
+  color: var(--ws-text);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+  transition: border-color var(--ws-dur) var(--ws-ease), background-color var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
+}
+.ws-action:hover { border-color: rgba(180, 83, 9, 0.4); background: var(--ws-amber-soft); transform: translateY(-1px); }
+.ws-action svg { flex: 0 0 auto; color: var(--ws-amber-deep); }
+.ws-action[data-primary="true"] { border-color: var(--ws-ink); background: var(--ws-ink); color: var(--ws-on-ink); }
+.ws-action[data-primary="true"]:hover { border-color: #241d18; background: #241d18; color: #fff; }
+.ws-action[data-primary="true"] svg { color: var(--ws-amber); }
+
+/* ── Fact list (page/subscription facts) ────────────────────────────────── */
+
+.ws-facts { display: grid; gap: 0.1rem; }
+.ws-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--ws-line-soft);
+  padding: 0.5rem 0;
+  font-size: 0.8rem;
+}
+.ws-fact:last-child { border-bottom: 0; }
+.ws-fact dt { color: var(--ws-muted); display: inline-flex; align-items: center; gap: 0.35rem; }
+.ws-fact dd { margin: 0; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
+
+/* ── Editors (progressive disclosure) ──────────────────────────────────── */
+
+.ws-editor {
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-md);
+  background: var(--ws-paper);
+}
+.ws-editor + .ws-editor { margin-top: 0.45rem; }
+.ws-editor > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3rem;
+  padding: 0 0.85rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+.ws-editor > summary::-webkit-details-marker { display: none; }
+.ws-editor > summary:hover { background: var(--ws-wash); }
+.ws-editor > summary::after {
+  content: "+";
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--ws-cream-2);
+  color: var(--ws-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.ws-editor[open] > summary::after { content: "−"; background: var(--ws-amber-soft); color: var(--ws-amber-deep); }
+.ws-editor__body { border-top: 1px solid var(--ws-line-soft); padding: 0.75rem 0.85rem 1rem; }
+.ws-editor svg { color: var(--ws-amber-deep); }
+
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+
+/* Form controls are styled only inside workspace-owned form containers (`.ws-form`,
+   `.ws-editor`, `.ws-auth__card`), never across the whole shell: the POS and the dark AI
+   cockpit have their own, deliberately different, control styling. */
+.ws-shell .ws-form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.ws-shell .ws-form select,
+.ws-shell .ws-form textarea,
+.ws-editor input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.ws-editor select,
+.ws-editor textarea,
+.ws-auth__card input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.ws-auth__card select,
+.ws-auth__card textarea,
+.ws-panel--form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.ws-panel--form select,
+.ws-panel--form textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-solid);
+  padding: 0.5rem 0.7rem;
+  color: var(--ws-text);
+  font-size: 0.9rem;
+}
+.ws-shell .ws-form textarea,
+.ws-editor textarea,
+.ws-auth__card textarea,
+.ws-panel--form textarea { min-height: 5rem; resize: vertical; }
+.ws-shell .ws-form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
+.ws-shell .ws-form select:focus-visible,
+.ws-shell .ws-form textarea:focus-visible,
+.ws-editor input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
+.ws-editor select:focus-visible,
+.ws-editor textarea:focus-visible,
+.ws-auth__card input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
+.ws-auth__card select:focus-visible,
+.ws-auth__card textarea:focus-visible,
+.ws-panel--form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
+.ws-panel--form select:focus-visible,
+.ws-panel--form textarea:focus-visible {
+  border-color: var(--ws-amber-deep);
+  outline: 3px solid color-mix(in srgb, var(--ws-amber) 55%, transparent);
+  outline-offset: 1px;
+}
+.ws-shell label { color: var(--ws-text); }
+.ws-shell .jata-label { font-size: 0.78rem; font-weight: 700; color: var(--ws-muted); }
+.ws-shell .jata-hint { color: var(--ws-faint); }
+.ws-shell .jata-field { margin-bottom: 0.6rem; }
+
+/* ── Workspace buttons (inherits .jata-btn) ─────────────────────────────── */
+
+.ws-shell .jata-btn {
+  min-height: 2.75rem;
+  border-radius: 999px;
+  padding: 0.45rem 1.05rem;
+  font-weight: 700;
+}
+/* 44px floor on small workspace controls (WCAG 2.5.5 / Android thumb targets). The visual size is
+   kept compact through padding and type, not through a tap target too small to hit on a phone. */
+.ws-shell .jata-btn.jata-btn-sm { min-height: 2.75rem; padding: 0.35rem 0.85rem; font-size: 0.78rem; }
+.ws-shell .jata-btn-primary {
+  border-color: var(--ws-ink);
+  background: var(--ws-ink);
+  color: var(--ws-on-ink);
+  box-shadow: 0 14px 28px -20px rgba(20, 17, 15, 0.9);
+}
+.ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #241d18; background: #241d18; color: #fff; }
+.ws-shell .jata-btn-secondary { border-color: var(--ws-line); background: var(--ws-paper); color: var(--ws-text); }
+.ws-shell .jata-btn-secondary:hover:not(:disabled) { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
+.ws-shell .jata-btn-ghost { color: var(--ws-amber-deep); }
+.ws-shell .jata-btn-ghost:hover:not(:disabled) { background: rgba(180, 83, 9, 0.08); }
+.ws-shell .jata-btn-danger { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
+
+/* ── Charts & tables ────────────────────────────────────────────────────── */
+
+.ws-shell .jata-chart-legend { color: var(--ws-muted); }
+.ws-shell .recharts-text { font-family: var(--font-sans); }
+.ws-shell .jata-table { background: var(--ws-paper); }
+.ws-shell .jata-table th { background: var(--ws-cream-2); color: var(--ws-muted); }
+.ws-shell .jata-table tbody tr:hover { background: rgba(240, 160, 60, 0.07); }
+.ws-shell .jata-table-wrap { border-color: var(--ws-line); background: var(--ws-paper); }
+
+/* ── Empty states with artwork ──────────────────────────────────────────── */
+
+.ws-empty {
+  display: grid;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-xl);
+  background: var(--ws-paper);
+  padding: 1rem;
+  box-shadow: var(--ws-elev-2);
+}
+@media (min-width: 820px) { .ws-empty { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); padding: 1.25rem; gap: 1.75rem; } }
+.ws-empty__media { position: relative; overflow: hidden; border-radius: var(--ws-radius-lg); aspect-ratio: 16 / 10; background: var(--ws-cream-2); }
+.ws-empty__media img { width: 100%; height: 100%; object-fit: cover; }
+.ws-empty__title { font-family: var(--ws-display); font-size: clamp(1.4rem, 3.4vw, 1.9rem); font-weight: 600; line-height: 1.15; }
+.ws-empty__text { margin-top: 0.4rem; color: var(--ws-muted); font-size: 0.9rem; line-height: 1.6; max-width: 42ch; }
+.ws-empty__actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.9rem; }
+
+/* ── Plan cards ─────────────────────────────────────────────────────────── */
+
+.ws-plans { display: grid; gap: 0.7rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 680px) { .ws-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1180px) { .ws-plans { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ws-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  padding: 0.95rem;
+  box-shadow: var(--ws-elev-1);
+  transition: border-color var(--ws-dur) var(--ws-ease), box-shadow var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
+}
+.ws-plan:hover { border-color: rgba(180, 83, 9, 0.4); box-shadow: var(--ws-elev-2); transform: translateY(-2px); }
+.ws-plan[data-featured="true"] {
+  border-color: rgba(180, 83, 9, 0.45);
+  background: linear-gradient(170deg, var(--ws-plan-tint) 0%, var(--ws-paper) 58%);
+}
+.ws-plan[data-featured="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  border-radius: var(--ws-radius-lg) var(--ws-radius-lg) 0 0;
+  background: linear-gradient(90deg, var(--ws-amber), var(--ws-ember));
+}
+.ws-plan__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.ws-plan__icon { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 0.7rem; background: var(--ws-cream-2); color: var(--ws-amber-deep); }
+.ws-plan__badge { border: 1px solid rgba(180, 83, 9, 0.3); border-radius: 999px; background: var(--ws-amber-soft); color: var(--ws-amber-deep); padding: 0.12rem 0.5rem; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.ws-plan__name { margin-top: 0.15rem; font-family: var(--ws-display); font-size: 1.14rem; font-weight: 600; line-height: 1.15; }
+.ws-plan__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem; }
+.ws-plan__amount { font-family: var(--ws-display); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; }
+.ws-plan__period { color: var(--ws-muted); font-size: 0.76rem; }
+.ws-plan__includes { display: grid; gap: 0.28rem; margin: 0.15rem 0 0.35rem; }
+.ws-plan__includes li { display: flex; gap: 0.4rem; align-items: flex-start; color: var(--ws-muted); font-size: 0.79rem; line-height: 1.45; }
+.ws-plan__includes svg { flex: 0 0 auto; margin-top: 0.15rem; color: var(--ws-jade); }
+.ws-plan__cta { margin-top: auto; }
+
+/* ── Activity timeline ──────────────────────────────────────────────────── */
+
+.ws-timeline { display: grid; gap: 0; }
+.ws-timeline li { position: relative; display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); gap: 0.5rem; padding: 0 0 0.85rem; font-size: 0.82rem; }
+.ws-timeline li:last-child { padding-bottom: 0; }
+.ws-timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0.32rem;
+  top: 0.9rem;
+  bottom: 0;
+  width: 1px;
+  background: var(--ws-line);
+}
+.ws-timeline li:last-child::before { display: none; }
+.ws-timeline__dot { width: 0.7rem; height: 0.7rem; margin-top: 0.28rem; border: 2px solid var(--ws-amber); border-radius: 999px; background: var(--ws-paper); }
+.ws-timeline__title { font-weight: 650; }
+.ws-timeline__meta { color: var(--ws-muted); font-size: 0.74rem; }
+
+/* ── Referral / share card (shared component, workspace skin) ──────────── */
+
+.ws-shell .jata-surface { border-color: var(--ws-line); background: var(--ws-paper); }
+
+/* ── Auth / onboarding split layout ────────────────────────────────────── */
+
+.ws-auth {
+  display: grid;
+  min-height: 100vh;
+  background: var(--ws-cream);
+}
+@media (min-width: 960px) { .ws-auth { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); } }
+.ws-auth__aside {
+  position: relative;
+  isolation: isolate;
+  display: none;
+  overflow: hidden;
+  background: var(--ws-ink);
+  color: var(--ws-on-ink);
+  padding: 2.5rem;
+}
+@media (min-width: 960px) { .ws-auth__aside { display: flex; flex-direction: column; justify-content: space-between; gap: 2rem; } }
+.ws-auth__aside img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; opacity: 0.5; }
+.ws-auth__aside::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(20, 17, 15, 0.55), rgba(20, 17, 15, 0.92));
+}
+.ws-auth__aside-title { font-family: var(--ws-display); font-size: clamp(1.9rem, 2.6vw, 2.6rem); font-weight: 600; line-height: 1.08; letter-spacing: -0.02em; }
+.ws-auth__aside-title em { color: var(--ws-amber); font-style: italic; }
+.ws-auth__aside-copy { max-width: 34ch; color: rgba(247, 242, 232, 0.78); font-size: 0.92rem; line-height: 1.6; }
+.ws-auth__aside-list { display: grid; gap: 0.55rem; margin-top: 1.2rem; }
+.ws-auth__aside-list li { display: flex; gap: 0.5rem; align-items: flex-start; color: rgba(247, 242, 232, 0.86); font-size: 0.85rem; }
+.ws-auth__aside-list svg { flex: 0 0 auto; color: var(--ws-amber); margin-top: 0.1rem; }
+.ws-auth__main { display: flex; flex-direction: column; padding: 1.25rem 1rem 2.5rem; }
+@media (min-width: 640px) { .ws-auth__main { padding: 2rem 1.5rem 3rem; } }
+.ws-auth__card {
+  width: 100%;
+  max-width: 30rem;
+  margin: auto;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-xl);
+  background: var(--ws-paper);
+  padding: clamp(1.1rem, 3vw, 1.75rem);
+  box-shadow: var(--ws-elev-3);
+}
+.ws-auth__title { font-family: var(--ws-display); font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 600; line-height: 1.12; }
+.ws-auth__sub { margin-top: 0.35rem; color: var(--ws-muted); font-size: 0.88rem; line-height: 1.55; }
+
+/* ── Subscription / studio / POS door cards ────────────────────────────── */
+
+.ws-door {
+  display: grid;
+  gap: 0.85rem;
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+  transition: border-color var(--ws-dur) var(--ws-ease), box-shadow var(--ws-dur) var(--ws-ease), transform var(--ws-dur) var(--ws-ease);
+}
+@media (min-width: 720px) { .ws-door { grid-template-columns: 12rem minmax(0, 1fr); align-items: stretch; } }
+.ws-door:hover { border-color: rgba(180, 83, 9, 0.35); box-shadow: var(--ws-elev-2); transform: translateY(-1px); }
+.ws-door__media { position: relative; min-height: 7.5rem; background: var(--ws-cream-2); }
+.ws-door__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ws-door__body { display: grid; align-content: start; gap: 0.5rem; padding: 0.9rem 1rem; }
+.ws-door__title { font-family: var(--ws-display); font-size: 1.22rem; font-weight: 600; overflow-wrap: anywhere; }
+.ws-door__meta { color: var(--ws-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.ws-door__pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ws-door__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.15rem; }
+
+/* ── Loading skeletons ─────────────────────────────────────────────────── */
+
+.ws-skel { position: relative; overflow: hidden; border-radius: var(--ws-radius-md); background: var(--ws-cream-2); }
+.ws-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--ws-skel-shine), transparent);
+  animation: ws-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes ws-shimmer { to { transform: translateX(100%); } }
+
+/* ── Graphite workspace (the "Lime Spark / Graphite" product theme) ───────
+   The workspace has one art direction, but it must not ignore the appearance the owner
+   already chose. Under the graphite product theme the same tokens are re-pointed at deep
+   charcoal surfaces with the same warm amber accent, so the dashboard, studio, POS doors and
+   account screens follow the theme instead of contradicting it. Only token values change —
+   every rule above is reused, which is why the two variants cannot drift apart.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell,
+html[data-jata-theme="lime-spark"] .ws-shell {
+  --ws-ink: #14110f;
+  --ws-ink-soft: #1d1815;
+  --ws-cream: #171412;
+  --ws-cream-2: #241f1c;
+  --ws-paper: #201c19;
+  --ws-solid: #272220;
+  --ws-text: #f4efe7;
+  --ws-muted: #bcb1a5;
+  --ws-faint: #9a9086;
+  --ws-line: #3b342e;
+  --ws-line-soft: rgba(247, 242, 232, 0.09);
+  --ws-wash: rgba(247, 242, 232, 0.06);
+  --ws-skel-shine: rgba(247, 242, 232, 0.08);
+  --ws-plan-tint: #2b2521;
+  --ws-amber-deep: #f5b566;
+  --ws-amber-soft: rgba(240, 160, 60, 0.14);
+  --ws-jade: #4adebc;
+  --ws-jade-soft: rgba(15, 118, 110, 0.26);
+  /* Graphite counterparts of the semantic status tokens. Text lightens and the fills turn
+     translucent so a notice keeps AA contrast on a dark surface instead of painting a light box. */
+  --ws-on-amber: #1a140d;
+  --ws-jade-line: rgba(74, 222, 188, 0.35);
+  --ws-danger: #fca5a5;
+  --ws-danger-soft: rgba(220, 38, 38, 0.18);
+  --ws-danger-line: rgba(248, 113, 113, 0.4);
+  --ws-elev-1: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --ws-elev-2: 0 18px 44px -30px rgba(0, 0, 0, 0.95);
+  --ws-elev-3: 0 34px 70px -40px rgba(0, 0, 0, 0.95);
+  --jata-card-strong: #272220;
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(240, 160, 60, 0.1), transparent 55rem),
+    var(--ws-cream);
+  color: var(--ws-text);
+}
+
+/* Semantic fills that were tuned for a light card need a darker counterpart. */
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="whatsapp"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="whatsapp"] { --ws-stat-soft: rgba(74, 222, 188, 0.16); --ws-stat-accent: #4adebc; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="calls"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="calls"] { --ws-stat-soft: rgba(147, 173, 255, 0.16); --ws-stat-accent: #93adff; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="directions"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="directions"] { --ws-stat-soft: rgba(249, 168, 122, 0.16); --ws-stat-accent: #f9a87a; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="shares"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="shares"] { --ws-stat-soft: rgba(196, 168, 255, 0.16); --ws-stat-accent: #c4a8ff; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-stat[data-metric="views"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-stat[data-metric="views"] { --ws-stat-soft: rgba(240, 160, 60, 0.16); --ws-stat-accent: #f0a03c; }
+
+/* Primary actions become amber on graphite: a charcoal button on a charcoal page has no
+   separation, and amber-on-ink is the brand's highest-contrast pairing. */
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-primary,
+html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-primary {
+  border-color: var(--ws-amber);
+  background: var(--ws-amber);
+  color: #1a140d;
+}
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-primary:hover:not(:disabled),
+html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-primary:hover:not(:disabled) { border-color: #f7b45c; background: #f7b45c; color: #1a140d; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"],
+html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] {
+  border-color: var(--ws-amber);
+  background: var(--ws-amber);
+  color: #1a140d;
+}
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] svg,
+html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"] svg { color: #1a140d; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"]:hover,
+html[data-jata-theme="lime-spark"] .ws-shell .ws-action[data-primary="true"]:hover { border-color: #f7b45c; background: #f7b45c; color: #1a140d; }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .jata-btn-secondary:hover:not(:disabled),
+html[data-jata-theme="lime-spark"] .ws-shell .jata-btn-secondary:hover:not(:disabled) { background: var(--ws-amber-soft); border-color: var(--ws-amber); }
+.product-theme-root[data-product-theme="lime-spark"] .ws-hero,
+html[data-jata-theme="lime-spark"] .ws-hero { border-color: rgba(247, 242, 232, 0.16); }
+.product-theme-root[data-product-theme="lime-spark"] .ws-shell .ws-plan__includes svg,
+html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var(--ws-jade); }
+
+/* ── Admin console ────────────────────────────────────────────────────────
+   The console is the same product, so it borrows the workspace tokens rather than inventing a
+   second palette. These are the four surfaces its pages need: an editorial page head, a search
+   row, one record card and the scrollable table skin. */
+
+.ws-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+.ws-page-title {
+  margin: 0.15rem 0 0;
+  font-family: var(--ws-display);
+  font-size: clamp(1.45rem, 3.4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  color: var(--ws-text);
+  text-wrap: balance;
+}
+.ws-page-sub { margin: 0.3rem 0 0; max-width: 58ch; color: var(--ws-muted); font-size: 0.86rem; line-height: 1.55; }
+.ws-page-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.ws-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-search input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  background: var(--ws-solid);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.ws-search input::placeholder { color: var(--ws-faint); }
+.ws-search input:focus-visible { outline: 2px solid var(--ws-amber-deep); outline-offset: 2px; }
+
+.ws-record {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.ws-record__title {
+  margin: 0;
+  font-family: var(--ws-display);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ws-text);
+  overflow-wrap: anywhere;
+}
+.ws-record__sub { margin: 0.2rem 0 0; color: var(--ws-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.ws-record__facts {
+  display: grid;
+  gap: 0.4rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ws-line-soft);
+}
+.ws-record__facts dt { color: var(--ws-faint); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.ws-record__facts dd { margin: 0.1rem 0 0; color: var(--ws-text); font-size: 0.82rem; overflow-wrap: anywhere; }
+.ws-record__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--ws-line);
+  padding: 0.1rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-status[data-tone="success"] { border-color: color-mix(in srgb, var(--ws-jade) 45%, var(--ws-line)); background: color-mix(in srgb, var(--ws-jade) 14%, transparent); color: var(--ws-jade); }
+.ws-status[data-tone="warning"] { border-color: color-mix(in srgb, var(--ws-amber) 55%, var(--ws-line)); background: color-mix(in srgb, var(--ws-amber) 16%, transparent); color: var(--ws-amber-deep); }
+.ws-status[data-tone="danger"] { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
+.ws-status[data-tone="neutral"] { background: var(--ws-wash); color: var(--ws-muted); }
+
+/* Inline form/notice message used across the guided workspace flows. Themed through the ws
+   semantic status tokens so a success/error line re-points for graphite instead of carrying a
+   hard-coded light palette that becomes unreadable on a dark surface. */
+.ws-notice {
+  margin: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.ws-notice--success { border-color: var(--ws-jade-line); background: var(--ws-jade-soft); color: var(--ws-jade); }
+.ws-notice--error { border-color: var(--ws-danger-line); background: var(--ws-danger-soft); color: var(--ws-danger); }
+
+.ws-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-lg);
+  background: var(--ws-paper);
+  box-shadow: var(--ws-elev-1);
+}
+.ws-table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: 0.84rem; }
+.ws-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--ws-line);
+  background: var(--ws-cream-2);
+  color: var(--ws-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ws-table tbody td { padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--ws-line-soft); color: var(--ws-text); vertical-align: top; }
+.ws-table tbody tr:last-child td { border-bottom: 0; }
+.ws-table tbody tr:hover td { background: var(--ws-wash); }
+.ws-table .ws-table__num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ws-table .ws-table__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; overflow-wrap: anywhere; }
+
+/* The outline button is drawn for an ink surface; inside the console it sits on paper. */
+.ws-btn-outline--ink {
+  min-height: 2.4rem;
+  border-color: var(--ws-line);
+  background: var(--ws-solid);
+  color: var(--ws-text);
+  font-size: 0.8rem;
+}
+.ws-btn-outline--ink:hover { border-color: var(--ws-amber-deep); background: var(--ws-amber-soft); }
+
+
+/* ── Motion & accessibility ────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-hero__media img { animation: none; transform: none; }
+  .ws-skel::after { animation: none; }
+  .ws-action, .ws-plan, .ws-door, .ws-btn-amber, .ws-btn-outline, .ws-biz__cover img { transition: none; }
+  .ws-action:hover, .ws-plan:hover, .ws-door:hover, .ws-btn-amber:hover { transform: none; }
+}
+
+/* Small phones: keep the chrome one row and the hero readable. */
+@media (max-width: 419px) {
+  .ws-chrome__row { padding-inline: 0.75rem; }
+  .ws-chrome .jata-brand-name { font-size: 0.72rem; }
+  .ws-chrome .jata-brand-mark { font-size: 0.72rem; padding-inline: 0.35rem; }
+  .ws-main { padding-inline: 0.75rem; }
+  .ws-hero { border-radius: 1.15rem; }
+  .ws-biz { border-radius: 1.15rem; }
+}
+
+/* ── Four visible customer contact actions (Phase 3, 2026-10-27) ───────────────
+ * Shared by the classic AFTERCALL business page and the experience storefront bar.
+ * Neutral controls inherit the owning surface's text colour; only the two primary
+ * actions use brand colours. Nothing here relies on hover alone or on an invisible
+ * click target: every control has an icon, a text label and a >=44 px target.
+ */
+.jata-contact-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+@media (min-width: 640px) {
+  .jata-contact-actions--primary,
+  .jata-contact-actions--bar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.jata-contact-actions--sticky { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.3rem; }
+.jata-contact-action {
+  display: inline-flex;
+  min-height: 2.75rem;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 1rem;
+  padding: 0.65rem 0.5rem;
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+.jata-contact-action:hover:not([data-contact-state="unavailable"]) { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,0,0,0.10); }
+.jata-contact-action:focus-visible { outline: 3px solid var(--jata-accent, rgb(217 119 6)); outline-offset: 2px; }
+.jata-contact-action__icon { width: 20px; height: 20px; flex: none; }
+.jata-contact-action__label { display: block; }
+.jata-contact-action--neutral {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+.jata-contact-action--whatsapp { background: rgb(4 120 87); color: rgb(255 255 255); }
+.jata-contact-action--call { background: var(--jata-accent, rgb(217 119 6)); color: rgb(255 255 255); }
+.jata-contact-action[data-contact-state="unavailable"] {
+  border-style: dashed;
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.jata-contact-actions--sticky .jata-contact-action {
+  flex-direction: column;
+  gap: 0.15rem;
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.15rem;
+  font-size: 0.68rem;
+}
+.jata-contact-actions--sticky .jata-contact-action__icon { width: 18px; height: 18px; }
+.jata-contact-actions__status {
+  grid-column: 1 / -1;
+  margin: 0;
+  min-height: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.jata-contact-actions__status--active { margin-top: 0.2rem; }
+@media (prefers-reduced-motion: reduce) {
+  .jata-contact-action { transition: none; }
+  .jata-contact-action:hover { transform: none; }
+}
+/* Action bar share feedback and the extra row the four contact controls can occupy. */
+.eb-actionbar__status { flex: 1 1 100%; margin: 0; text-align: center; font-size: 0.72rem; line-height: 1.35; }
+.eb-actionbar-spacer--contacts { height: 11.5rem; }
+@media (min-width: 900px) { .eb-actionbar-spacer--contacts { height: 0; } }
+/* Desktop storefront footer keeps all four actions visible when the mobile bar is hidden. */
+.eb-footer__contact-actions { margin-top: 1rem; max-width: 34rem; }
+/* Verified JATA Team Free Access badge — status only, never an authorisation input. */
+.ws-pill--team { border-color: rgb(15 118 110); color: rgb(15 118 110); background: rgb(236 253 245); font-weight: 700; white-space: nowrap; }
+
+/* ── PWA lifecycle UI (Phase 8) ──────────────────────────────────────────────
+ * Small, dismissible, bottom-left toasts. They never cover a payment or checkout
+ * control and each button is >=44 px. Colours are rgb() so the token-only status
+ * surface tests stay valid.
+ */
+.jata-pwa { position: fixed; left: 0.75rem; bottom: calc(0.75rem + env(safe-area-inset-bottom)); z-index: 70; display: grid; gap: 0.5rem; max-width: min(26rem, calc(100vw - 1.5rem)); pointer-events: none; }
+.jata-pwa__toast { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid rgb(23 19 16 / 0.16); border-radius: 0.9rem; background: rgb(255 253 248); color: rgb(23 19 16); box-shadow: 0 12px 30px rgb(20 17 15 / 0.14); font-size: 0.8rem; line-height: 1.35; pointer-events: auto; }
+.jata-pwa__toast--offline { border-color: rgb(180 83 9 / 0.5); background: rgb(255 247 237); }
+.jata-pwa__toast--offline span { color: rgb(180 83 9); font-weight: 800; }
+.jata-pwa__button { min-height: 2.75rem; border: 0; border-radius: 0.65rem; padding: 0.45rem 0.8rem; background: rgb(20 17 15); color: rgb(247 242 232); font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+.jata-pwa__button--quiet { background: transparent; color: rgb(23 19 16); border: 1px solid rgb(23 19 16 / 0.2); }
+.jata-pwa__button:focus-visible, .jata-pwa__link:focus-visible { outline: 3px solid rgb(180 83 9); outline-offset: 2px; }
+.jata-pwa__link { min-height: 2.75rem; display: inline-flex; align-items: center; font-size: 0.78rem; font-weight: 700; color: rgb(180 83 9); text-underline-offset: 3px; }
+
+/* ── Public marketing pages (Phase 6) — same landing tokens, no rebrand ────── */
+.mk-page { min-height: 100vh; }
+.mk-header { position: sticky; top: 0; z-index: 30; background: rgb(20 17 15); color: rgb(247 242 232); border-bottom: 1px solid rgb(247 242 232 / 0.12); }
+.mk-header__inner { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; min-height: 3.75rem; padding-block: 0.5rem; }
+.mk-brand { display: inline-flex; align-items: center; gap: 0.45rem; color: inherit; text-decoration: none; }
+.mk-brand__mark { background: rgb(240 160 60); color: rgb(26 20 13); border-radius: 0.35rem; padding: 0.2rem 0.4rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }
+.mk-brand__name { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; }
+.mk-nav { display: flex; flex: 1 1 auto; gap: 0.2rem 0.85rem; flex-wrap: wrap; min-width: 0; }
+.mk-nav a { min-height: 2.75rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.78); font-size: 0.82rem; font-weight: 600; text-decoration: none; }
+.mk-nav a:hover, .mk-link:hover { color: rgb(240 160 60); text-decoration: underline; }
+.mk-header__actions { display: flex; align-items: center; gap: 0.6rem; margin-left: auto; }
+.mk-link { min-height: 2.75rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.82); font-size: 0.82rem; font-weight: 700; text-decoration: none; }
+.mk-cta { min-height: 2.75rem; display: inline-flex; align-items: center; border-radius: 0.7rem; background: rgb(240 160 60); color: rgb(26 20 13); padding: 0.45rem 0.8rem; font-size: 0.82rem; font-weight: 800; text-decoration: none; }
+.mk-hero { padding-top: clamp(2rem, 5vw, 3.5rem); }
+.mk-h1 { font-family: var(--lp-display, ui-serif, Georgia, serif); font-size: clamp(2rem, 6vw, 3.6rem); line-height: 1.06; letter-spacing: -0.02em; margin: 0.6rem 0 0; }
+.mk-lede { max-width: 46rem; font-size: clamp(1rem, 2vw, 1.15rem); }
+.mk-prose { font-size: 0.98rem; line-height: 1.75; color: rgb(23 19 16); }
+.mk-prose h3 { font-size: 1.1rem; margin: 1.5rem 0 0.4rem; }
+.mk-prose p, .mk-prose ul, .mk-prose ol { margin: 0 0 0.9rem; }
+.mk-prose ul, .mk-prose ol { padding-left: 1.25rem; list-style: revert; }
+.mk-prose a, .mk-prose .mk-inline-link { color: rgb(180 83 9); font-weight: 700; text-underline-offset: 3px; }
+.mk-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); margin-top: 1.5rem; }
+.mk-card { background: rgb(255 253 248); border: 1px solid rgb(23 19 16 / 0.12); border-radius: 1.1rem; padding: 1.25rem; }
+.mk-card h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.mk-card p { margin: 0 0 0.6rem; font-size: 0.9rem; line-height: 1.65; color: rgb(90 81 72); }
+.mk-card__price { font-weight: 800; color: rgb(20 17 15); }
+.mk-card a { display: inline-flex; min-height: 2.75rem; align-items: center; font-weight: 800; font-size: 0.85rem; color: rgb(180 83 9); text-underline-offset: 3px; }
+.mk-table-wrap { overflow-x: auto; margin-top: 1.25rem; border: 1px solid rgb(23 19 16 / 0.12); border-radius: 1rem; background: rgb(255 253 248); }
+.mk-table { width: 100%; border-collapse: collapse; min-width: 34rem; font-size: 0.88rem; }
+.mk-table th, .mk-table td { padding: 0.8rem 0.9rem; text-align: left; border-bottom: 1px solid rgb(23 19 16 / 0.1); vertical-align: top; }
+.mk-table th { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(90 81 72); }
+.mk-table tr:last-child td { border-bottom: 0; }
+.mk-btn-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+.mk-btn { min-height: 2.9rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 0.8rem; padding: 0.65rem 1.1rem; background: rgb(20 17 15); color: rgb(247 242 232); font-weight: 800; font-size: 0.88rem; text-decoration: none; }
+.mk-btn--ghost { background: transparent; color: rgb(20 17 15); border: 1px solid rgb(23 19 16 / 0.25); }
+.mk-footer { background: rgb(20 17 15); color: rgb(247 242 232); padding: 2.5rem 0 1.25rem; }
+.mk-footer__grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.mk-footer__brand { font-family: var(--lp-display, ui-serif, Georgia, serif); font-size: 1.15rem; font-weight: 700; }
+.mk-footer__line { margin-top: 0.6rem; font-size: 0.85rem; line-height: 1.6; color: rgb(247 242 232 / 0.7); }
+.mk-footer__heading { font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgb(240 160 60); margin-bottom: 0.5rem; }
+.mk-footer nav { display: grid; gap: 0.35rem; align-content: start; }
+.mk-footer nav a { min-height: 2.25rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.75); font-size: 0.85rem; text-decoration: none; text-transform: capitalize; }
+.mk-footer nav a:hover { color: rgb(240 160 60); text-decoration: underline; }
+.mk-footer__base { border-top: 1px solid rgb(247 242 232 / 0.14); margin-top: 2rem; padding-top: 1rem; font-size: 0.76rem; line-height: 1.6; color: rgb(247 242 232 / 0.6); }
+.mk-page :focus-visible { outline: 3px solid rgb(240 160 60); outline-offset: 3px; }
+@media (max-width: 700px) { .mk-nav { order: 3; flex-basis: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.2rem; } .mk-nav a { white-space: nowrap; } }
+/* Five footer columns (product, demos, account, support) wrap cleanly at tablet/desktop. */
+@media (min-width: 760px) { .lp-footer__grid { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); } }
+
+/* Local browser evidence fixtures: hide the product-theme picker (real /b/ pages never show it). */
+body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }

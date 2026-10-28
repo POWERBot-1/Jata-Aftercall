@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { MethodOption } from "@/lib/pos/money";
 import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 import type { ReceiptDocument } from "@/lib/pos/types";
+import { formatNumber } from "@/lib/dateFormat";
+import { submitSaleOfflineFirst } from "@/lib/pos/offline";
 
 /**
  * The till (§58, §59, §62).
@@ -54,6 +56,10 @@ type SaleResponse = {
   totals?: { subtotalKES: number; discountKES: number; taxKES: number; totalKES: number; paidKES: number; balanceKES: number; changeKES: number };
   changeKES?: number;
   creditKES?: number;
+  /** True when the sale was recorded on this device because the network was down (§6). */
+  offline?: boolean;
+  /** The device-side identifier of an offline sale; it becomes the server idempotency key on sync. */
+  offlineReference?: string;
 };
 
 export function TillClient({
@@ -207,18 +213,46 @@ export function TillClient({
     };
   }
 
+  /** A local receipt for an offline sale. Totals are the counter's own; the server re-derives them on sync. */
+  function offlineReceiptText(input: {
+    reference: string;
+    subtotal: number;
+    discount: number;
+    total: number;
+    paid: number;
+    change: number;
+    paymentKind: "cash" | "pending";
+  }): string {
+    const lines = [
+      "OFFLINE SALE — SAVED ON THIS DEVICE",
+      `Reference ${input.reference}`,
+      `Items subtotal   KES ${formatNumber(input.subtotal)}`,
+      `Discount         KES ${formatNumber(Math.max(0, input.discount))}`,
+      `Total            KES ${formatNumber(input.total)}`,
+    ];
+    if (input.paymentKind === "cash") {
+      lines.push(`Cash received    KES ${formatNumber(input.paid)}`);
+      lines.push(`Change due       KES ${formatNumber(input.change)}`);
+    } else {
+      lines.push("Payment UNCONFIRMED — will be verified when you reconnect.");
+    }
+    lines.push("This sale will be recorded and given a receipt number when the device syncs.");
+    return lines.join("\n");
+  }
+
   async function complete() {
     setBusy(true);
     setError(null);
     setWarnings([]);
+    const saleBody = {
+      ...payload(),
+      payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
+    };
     try {
       const response = await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...payload(),
-          payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
-        }),
+        body: JSON.stringify(saleBody),
       });
       const data: SaleResponse = await response.json();
       if (!response.ok || data.ok === false) {
@@ -237,7 +271,65 @@ export function TillClient({
       setBusy(false);
       searchRef.current?.focus();
     } catch {
-      setError("We couldn't reach JATA. Check your connection and try again.");
+      // Network unreachable (§6): the sale happened at the counter, so save it on this device and
+      // sync it when connectivity returns. Cash is received now; any other method is unconfirmed.
+      try {
+        const methods = (saleBody.payments ?? []).map((entry) => String(entry.method ?? "").toLowerCase());
+        const paymentKind = methods.some((entry) => entry && entry !== "cash" && entry !== "credit")
+          ? "pending"
+          : "cash";
+        const cash = saleBody.payments.find((entry) => String(entry.method).toLowerCase() === "cash");
+        const cashTendered = paymentKind === "cash" ? Number(cash?.amountKES ?? 0) : 0;
+        const change = paymentKind === "cash" ? Math.max(0, cashTendered - total) : 0;
+        const outcome = await submitSaleOfflineFirst(businessId, {
+          request: saleBody as any,
+          branchId: null,
+          paymentKind,
+          paymentReference: typeof cash?.reference === "string" && cash.reference ? cash.reference : null,
+        });
+        if (outcome.offline) {
+          const offlineId = outcome.offlineId ?? "offline-record";
+          setResult({
+            ok: true,
+            offline: true,
+            offlineReference: offlineId,
+            sale: { id: offlineId, receiptNumber: "OFFLINE", status: "OFFLINE" },
+            totals: {
+              subtotalKES: subtotal,
+              discountKES: Math.max(0, lineDiscounts + discountKES),
+              taxKES: 0,
+              totalKES: total,
+              paidKES: paymentKind === "cash" ? cashTendered : 0,
+              balanceKES: paymentKind === "cash" ? 0 : total,
+              changeKES: change,
+            },
+            receiptText: offlineReceiptText({
+              reference: offlineId,
+              subtotal,
+              discount: lineDiscounts + discountKES,
+              total,
+              paid: paymentKind === "cash" ? cashTendered : 0,
+              change,
+              paymentKind,
+            }),
+            changeKES: change,
+          });
+          setWarnings([
+            paymentKind === "cash"
+              ? "Saved on this device. It will be recorded and given a receipt number when you reconnect."
+              : "Saved on this device. This payment is unconfirmed and will be verified when you reconnect.",
+          ]);
+          setCart([]);
+          setPayments([]);
+          setDiscountKES(0);
+          setFeeKES(0);
+          setNotes("");
+        } else {
+          setError(outcome.error ?? "We couldn't record that sale.");
+        }
+      } catch {
+        setError("We couldn't reach JATA and couldn't save this sale. Check your connection and try again.");
+      }
       setBusy(false);
     }
   }
@@ -270,7 +362,7 @@ export function TillClient({
         <div className="jata-card p-5" data-pos-wallet="paid">
           <p className="jata-kicker">Paid</p>
           <h2 className="text-lg font-bold">
-            KES {walletPaid.amountKES.toLocaleString("en-KE")} received
+            KES {formatNumber(walletPaid.amountKES)} received
           </h2>
           <p className="pos-note">
             {walletPaid.receiptNumber ? `Receipt ${walletPaid.receiptNumber}. ` : ""}
@@ -289,6 +381,34 @@ export function TillClient({
     );
   }
 
+  if (result?.offline) {
+    return (
+      <div className="space-y-4">
+        <div className="jata-card p-5" data-pos-offline="saved">
+          <p className="jata-kicker">Offline sale saved</p>
+          <h2 className="text-lg font-bold">Reference {result.offlineReference}</h2>
+          <p className="pos-note">
+            {result.totals
+              ? `Total KES ${formatNumber(result.totals.totalKES)}` +
+                (result.changeKES ? ` · Change KES ${formatNumber(result.changeKES)}` : "") +
+                (result.totals.balanceKES ? ` · Still owed KES ${formatNumber(result.totals.balanceKES)}` : "")
+              : ""}
+          </p>
+          {warnings.length ? (
+            <ul className="mt-3 grid gap-1">
+              {warnings.map((warning) => <li key={warning} className="pos-note">• {warning}</li>)}
+            </ul>
+          ) : null}
+          <pre className="pos-receipt mt-4">{result.receiptText}</pre>
+          <div className="pos-form-actions mt-4">
+            <button type="button" className="jata-btn jata-btn-primary" onClick={reset}>New {words.sale.toLowerCase()}</button>
+            <button type="button" className="jata-btn jata-btn-secondary" onClick={() => window.print()}>Print</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (result?.receipt || result?.receiptText) {
     return (
       <div className="space-y-4">
@@ -296,10 +416,10 @@ export function TillClient({
           <p className="jata-kicker">Sale recorded</p>
           <h2 className="text-lg font-bold">{result.sale?.receiptNumber ?? nextReceiptNumber}</h2>
           <p className="pos-note">
-            {result.totals ? `Total KES ${result.totals.totalKES.toLocaleString("en-KE")}` : ""}
-            {result.changeKES ? ` · Change KES ${result.changeKES.toLocaleString("en-KE")}` : ""}
-            {result.creditKES ? ` · On credit KES ${result.creditKES.toLocaleString("en-KE")}` : ""}
-            {result.totals?.balanceKES ? ` · Still owed KES ${result.totals.balanceKES.toLocaleString("en-KE")}` : ""}
+            {result.totals ? `Total KES ${formatNumber(result.totals.totalKES)}` : ""}
+            {result.changeKES ? ` · Change KES ${formatNumber(result.changeKES)}` : ""}
+            {result.creditKES ? ` · On credit KES ${formatNumber(result.creditKES)}` : ""}
+            {result.totals?.balanceKES ? ` · Still owed KES ${formatNumber(result.totals.balanceKES)}` : ""}
           </p>
           {warnings.length ? (
             <ul className="mt-3 grid gap-1">
@@ -360,9 +480,13 @@ export function TillClient({
               return (
                 <button type="button" key={product.id} className="pos-item" data-out={out} onClick={() => add(product)}>
                   <strong>{product.name}</strong>
-                  <span>KES {product.priceKES.toLocaleString("en-KE")}</span>
+                  <span>KES {formatNumber(product.priceKES)}</span>
                   <small>
-                    {typeof product.stock === "number" ? `${product.stock} ${product.unitKey}` : product.unitKey}
+                    {typeof product.stock !== "number"
+                      ? product.unitKey
+                      : product.stock <= 0
+                        ? "Out of stock"
+                        : `${product.stock} ${product.unitKey}`}
                   </small>
                 </button>
               );
@@ -388,8 +512,8 @@ export function TillClient({
               <div className="pos-line-main">
                 <strong>{line.name}</strong>
                 <small>
-                  KES {line.unitPriceKES.toLocaleString("en-KE")} / {line.unitKey}
-                  {line.discountKES > 0 ? ` · less KES ${line.discountKES.toLocaleString("en-KE")}` : ""}
+                  KES {formatNumber(line.unitPriceKES)} / {line.unitKey}
+                  {line.discountKES > 0 ? ` · less KES ${formatNumber(line.discountKES)}` : ""}
                 </small>
               </div>
               <div className="pos-qty">
@@ -403,19 +527,19 @@ export function TillClient({
                   onChange={(event) => setQuantity(line.key, Math.max(0, Number(event.target.value)))}
                 />
                 <button type="button" aria-label={`One more ${line.name}`} onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
-                <strong className="ml-2">KES {(line.unitPriceKES * line.quantity - line.discountKES).toLocaleString("en-KE")}</strong>
+                <strong className="ml-2">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</strong>
               </div>
             </div>
           ))}
 
           <div className="pos-totals">
-            <div><span>Items</span><span>KES {subtotal.toLocaleString("en-KE")}</span></div>
+            <div><span>Items</span><span>KES {formatNumber(subtotal)}</span></div>
             {lineDiscounts + discountKES > 0 ? (
-              <div><span>Discount</span><span>− KES {(lineDiscounts + discountKES).toLocaleString("en-KE")}</span></div>
+              <div><span>Discount</span><span>− KES {formatNumber(lineDiscounts + discountKES)}</span></div>
             ) : null}
             {flags.taxEnabled ? <div><span>{flags.taxLabel || "Tax"}</span><span>Included by the server</span></div> : null}
-            {feeKES > 0 ? <div><span>Delivery</span><span>KES {feeKES.toLocaleString("en-KE")}</span></div> : null}
-            <div className="pos-total-line"><span>Total</span><span>KES {total.toLocaleString("en-KE")}</span></div>
+            {feeKES > 0 ? <div><span>Delivery</span><span>KES {formatNumber(feeKES)}</span></div> : null}
+            <div className="pos-total-line"><span>Total</span><span>KES {formatNumber(total)}</span></div>
           </div>
 
           {flags.discounts && flags.canDiscount && cart.length > 0 ? (
@@ -546,7 +670,7 @@ export function TillClient({
                     <option value="">Walk-in (no name)</option>
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
-                        {customer.name}{customer.balanceKES ? ` · owes KES ${Number(customer.balanceKES).toLocaleString("en-KE")}` : ""}
+                        {customer.name}{customer.balanceKES ? ` · owes KES ${formatNumber(customer.balanceKES)}` : ""}
                       </option>
                     ))}
                   </select>
@@ -571,10 +695,10 @@ export function TillClient({
           <div className="pos-totals">
             {tendered > 0 || onCredit > 0 ? (
               <>
-                <div><span>Taken</span><span>KES {tendered.toLocaleString("en-KE")}</span></div>
-                {onCredit > 0 ? <div><span>On credit</span><span>KES {onCredit.toLocaleString("en-KE")}</span></div> : null}
-                {change > 0 ? <div><span>Change due</span><span>KES {change.toLocaleString("en-KE")}</span></div> : null}
-                {balance > 0 ? <div><span>Still owed</span><span>KES {balance.toLocaleString("en-KE")}</span></div> : null}
+                <div><span>Taken</span><span>KES {formatNumber(tendered)}</span></div>
+                {onCredit > 0 ? <div><span>On credit</span><span>KES {formatNumber(onCredit)}</span></div> : null}
+                {change > 0 ? <div><span>Change due</span><span>KES {formatNumber(change)}</span></div> : null}
+                {balance > 0 ? <div><span>Still owed</span><span>KES {formatNumber(balance)}</span></div> : null}
               </>
             ) : null}
           </div>
@@ -585,7 +709,7 @@ export function TillClient({
             onClick={complete}
             disabled={busy || !cart.length || !entitled || (payments.length === 0 && !(flags.partialPayments || flags.credit))}
           >
-            {busy ? "Saving…" : `Complete ${words.sale.toLowerCase()} · KES ${total.toLocaleString("en-KE")}`}
+            {busy ? "Saving…" : `Complete ${words.sale.toLowerCase()} · KES ${formatNumber(total)}`}
           </button>
           <p className="pos-note">Stock, the receipt and the payment are saved together in one step.</p>
         </div>

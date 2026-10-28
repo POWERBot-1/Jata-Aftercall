@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { loadErpBusinesses } from "@/lib/erp/loaders";
 import { ERP_PLAN_COMMERCIALS, ERP_PLAN_EXCLUSIONS, ERP_PLAN_INCLUSIONS, ERP_PLAN_PRICE_KES } from "@/lib/erp/entitlement";
 import { ERP_MODULES } from "@/lib/erp/navigation";
+import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "POS / ERP - PRO" };
@@ -38,7 +39,7 @@ export default async function ErpIndexPage() {
     <div className="erp">
       <main className="erp-content">
         <section className="erp-hero">
-          <span className="erp-hero-chip">Premium product · KES {ERP_PLAN_PRICE_KES.toLocaleString("en-KE")}/month</span>
+          <span className="erp-hero-chip">Premium product · KES {formatNumber(ERP_PLAN_PRICE_KES)}/month</span>
           <h1>Run sales, books and customer contact in one workspace.</h1>
           <p>
             POS / ERP - PRO adds double-entry accounting, invoices, a Kenya tax engine, your public ordering page and

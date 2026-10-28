@@ -5,6 +5,7 @@ import { formatCentsShort } from "@/lib/erp/money";
 import { orderTransitions, ORDER_STATUS_LABELS } from "@/lib/erp/storefront";
 import { Badge, EmptyState, Kpi, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { storeOrderAction } from "../actions";
+import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function OrdersPage({ params, searchParams }: { params: Pro
           <strong className="erp-mono">{order.orderNumber}</strong>
           <div className="erp-small">{order.customerName} · •••{String(order.customerPhone ?? "").slice(-3)}</div>
           <div className="erp-hint">
-            {humanise(order.fulfilment)}{order.deliveryAddress ? ` · ${order.deliveryAddress}` : ""} · placed {new Date(order.createdAt).toLocaleString("en-KE")}
+            {humanise(order.fulfilment)}{order.deliveryAddress ? ` · ${order.deliveryAddress}` : ""} · placed {formatDateTime(order.createdAt)}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>

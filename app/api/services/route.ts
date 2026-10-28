@@ -7,6 +7,7 @@ import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
 import { getExperienceProfile } from "@/lib/experience/categories";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,16 @@ export async function POST(req: Request) {
 
     const title = sanitizeText(String(body?.title || ""), 80);
     if (!title || title.length < 2) return NextResponse.json({ error: "Service title required" }, { status: 400 });
+    if (containsInlineImageDataUrl(body.imageUrl)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
+    const data = serviceDataFrom(body);
+    if (containsInlineImageDataUrl({ title, data })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const service = await prisma.service.create({
-      data: { businessId, title, ...serviceDataFrom(body) } as never,
+      data: { businessId, title, ...data } as never,
     });
     await logAudit({ actorId: session.userId, action: "SERVICE_CREATED", targetType: "SERVICE", targetId: service.id, metadata: { businessId } });
     return NextResponse.json({ service }, { status: 201 });
@@ -86,16 +94,23 @@ export async function PATCH(req: Request) {
     const id = typeof body?.id === "string" ? body.id.trim() : "";
     if (!id) return NextResponse.json({ error: "Choose a service to update." }, { status: 400 });
 
-    const existing = await prisma.service.findUnique({ where: { id }, select: { id: true, businessId: true } });
+    const existing = await prisma.service.findUnique({ where: { id }, select: { id: true, businessId: true, imageUrl: true } });
     if (!existing) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const guard = await guardTenantMutation(session, existing.businessId);
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const data = serviceDataFrom(body);
+    if (body.imageUrl !== undefined && containsInlineImageDataUrl(body.imageUrl)) {
+      if (body.imageUrl === existing.imageUrl) delete data.imageUrl;
+      else return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     if (body?.title !== undefined) {
       const title = sanitizeText(String(body.title), 80);
       if (title.length < 2) return NextResponse.json({ error: "Service title is too short." }, { status: 400 });
       data.title = title;
+    }
+    if (containsInlineImageDataUrl(data)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
     const service = await prisma.service.update({ where: { id }, data: data as never });
     await logAudit({ actorId: session.userId, action: "SERVICE_UPDATED", targetType: "SERVICE", targetId: id });
@@ -126,13 +141,34 @@ export async function GET(req: Request) {
   const businessId = searchParams.get("businessId");
   if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
 
-  // Public reads are limited to services of a published business; the dashboard caller is
-  // additionally authenticated by the page that renders it (§37).
-  const services = await prisma.service.findMany({
-    where: { businessId },
-    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
-  });
-  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true, isPublished: true } });
-  const profile = getExperienceProfile(business?.category);
-  return NextResponse.json({ services, fields: profile.serviceFields, itemNoun: profile.itemNoun });
+  try {
+    // Check visibility BEFORE catalogue reads. A signed-in user from another tenant is
+    // still a public visitor here, never an owner merely because a session exists.
+    const business = await prisma.business.findUnique({
+      where: { id: businessId }, select: { category: true, isPublished: true, status: true },
+    });
+    if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+    const session = await getSession();
+    let owner = false;
+    if (session) {
+      try {
+        await assertBusinessOwnership(businessId, session);
+        owner = true;
+      } catch {
+        // Public access is checked separately; ownership failures do not grant draft access.
+      }
+    }
+    if (!owner && (!business.isPublished || business.status === "SUSPENDED")) {
+      return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+    }
+    const services = await prisma.service.findMany({
+      where: { businessId, ...(owner ? {} : { isActive: true }) },
+      orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }],
+      take: 200,
+    });
+    const profile = getExperienceProfile(business.category);
+    return NextResponse.json({ services, fields: profile.serviceFields, itemNoun: profile.itemNoun });
+  } catch {
+    return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+  }
 }

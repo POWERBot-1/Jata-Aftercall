@@ -44,7 +44,7 @@ import {
   lifecycleWithoutPayment,
 } from "@/lib/pos/entitlement";
 import { settlePosPayment, lapseExpiredPosSubscriptions } from "@/lib/pos/settlement";
-import { getBusinessPosPlan, PRIVATE_PLAN_KEYS, isPubliclyListedPlan, publiclyListedPlans } from "@/lib/pricing";
+import { getBusinessPosPlan, homepagePlanCards, PRIVATE_PLAN_KEYS, isPubliclyListedPlan, publiclyListedPlans } from "@/lib/pricing";
 import { POS_PLAN_KEY as ENGINE_PLAN_KEY } from "@/lib/pos/configuration";
 
 const root = path.resolve(__dirname, "../..");
@@ -97,11 +97,31 @@ describe("the POS plan is never advertised publicly (§67)", () => {
     expect(publiclyListedPlans(plans).map((plan) => plan.key)).toEqual(["MONTHLY"]);
   });
 
-  it("keeps the POS out of the landing page, onboarding and the AFTERCALL subscription screen", () => {
-    for (const file of ["app/page.tsx", "app/onboarding/page.tsx", "app/dashboard/subscription/page.tsx"]) {
+  it("keeps the POS out of every payable plan list", () => {
+    // Onboarding and the AFTERCALL subscription screen choose from publiclyListedPlans() only.
+    for (const file of ["app/onboarding/page.tsx", "app/dashboard/subscription/page.tsx"]) {
       const source = readFileSync(path.join(root, file), "utf8");
       expect(source, file).toContain("publiclyListedPlans");
     }
+    expect(readFileSync(path.join(root, "lib/pricing.ts"), "utf8")).toContain("publiclyListedPlans");
+  });
+
+  it("advertises the POS on the homepage as a card that only opens the authenticated flow", () => {
+    // 2026-10-27 owner order: one pricing grid, with the POS sixth (last). That is a presentation
+    // change only — the card links into /dashboard/pos, never to register or checkout.
+    const page = readFileSync(path.join(root, "app/page.tsx"), "utf8");
+    expect(page).toContain("homepagePlanCards");
+    expect(page).toContain('"/dashboard/pos"');
+    expect(page).not.toContain('"/checkout');
+    expect(page).not.toMatch(/href="\/register"[^>]*POS|POS[^>]*href="\/register"/);
+    const cards = homepagePlanCards([
+      { key: "MONTHLY", name: "Monthly", priceKES: 149, durationDays: 30 },
+      { key: POS_PLAN_KEY, name: POS_PLAN_NAME, priceKES: 499, durationDays: 30 },
+    ]);
+    // 2026-10-27 order: Autopilot sorts before the POS; the POS remains the last grid card.
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "JATA_AUTOPILOT", POS_PLAN_KEY]);
+    // The POS row is still not a member of the publicly listed set.
+    expect(publiclyListedPlans(cards).map((card) => card.key)).toEqual(["MONTHLY"]);
   });
 
   it("never mentions the POS price in customer-facing referral or business-page copy", () => {
@@ -192,6 +212,15 @@ describe("entitlement follows payment, not the browser (§45, §56)", () => {
     expect(pastDue.entitled).toBe(true);
     expect(pastDue.nextAction).toBe("renew");
 
+    const unpublishedPastDue = derivePosEntitlement({
+      subscription: { ...activeSubscription, status: "PAST_DUE", expiresAt: new Date("2026-09-30T09:00:00Z"), graceUntil: new Date("2026-10-03T09:00:00Z") },
+      configurationStatus: "PAYMENT_CONFIRMED",
+      publishedVersion: 0,
+      now,
+    });
+    expect(unpublishedPastDue).toMatchObject({ entitled: true, status: "PAST_DUE", lifecycle: "PAYMENT_CONFIRMED", nextAction: "renew" });
+    expect(unpublishedPastDue.reason).toMatch(/publication is still pending/i);
+
     const expired = derivePosEntitlement({
       subscription: { ...activeSubscription, expiresAt: new Date("2026-09-01T09:00:00Z"), graceUntil: new Date("2026-09-04T09:00:00Z") },
       configurationStatus: "PUBLISHED",
@@ -261,6 +290,12 @@ describe("settlement activates the POS inside the payment transaction (§31, §4
       },
       posConfigurationVersion: { create: vi.fn(async () => ({ id: "v1" })) },
       posAuditEvent: { create: vi.fn(async () => ({ id: "a1" })) },
+      posPublicationResolution: {
+        upsert: vi.fn(async ({ create }: any) => ({ id: "publication_case_1", ...create })),
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+      paymentNotification: { upsert: vi.fn(async ({ create }: any) => ({ id: "notification_1", ...create })) },
       payment: {
         updateMany: vi.fn(async () => ({ count: overrides.paymentUpdateCount ?? 1 })),
         findUnique: vi.fn(async () => overrides.latestPayment ?? null),
@@ -284,6 +319,24 @@ describe("settlement activates the POS inside the payment transaction (§31, §4
     await expect(
       settlePosPayment(tx as never, { payment: { ...payment, businessId: "" }, plan }),
     ).rejects.toThrow("PAYMENT_CONTEXT_INVALID");
+  });
+
+  it("refuses to activate a pending POS payment without provider evidence", async () => {
+    const tx = txWith();
+    await expect(settlePosPayment(tx as never, { payment, plan })).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    expect(tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(tx.posSubscription.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inline data URL masquerading as the POS transaction ID", async () => {
+    const tx = txWith();
+    await expect(settlePosPayment(tx as never, {
+      payment,
+      plan,
+      verification: { paystackId: "data:image/png;base64,iVBORw0KGgo=" },
+    })).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    expect(tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(tx.posSubscription.upsert).not.toHaveBeenCalled();
   });
 
   it("activates the subscription, the entitlement and the configuration together", async () => {
@@ -310,6 +363,27 @@ describe("settlement activates the POS inside the payment transaction (§31, §4
     expect(tx.processedWebhook.create).toHaveBeenCalledWith({ data: { id: "evt_1" } });
   });
 
+  it("settles on a valid provider ID while omitting unsafe optional raw evidence", async () => {
+    const tx = txWith();
+    const result = await settlePosPayment(tx as never, {
+      payment,
+      plan,
+      eventId: "evt_inline_raw",
+      verification: {
+        paystackId: "ps_56",
+        raw: { status: "success", providerNote: "data:image/png;base64,iVBORw0KGgo=" },
+      },
+    });
+
+    expect(result.alreadySettled).toBe(false);
+    const data = tx.payment.updateMany.mock.calls[0][0].data;
+    expect(data.status).toBe("PAID");
+    expect(data.paystackId).toBe("ps_56");
+    expect(data).not.toHaveProperty("raw");
+    expect(tx.posSubscription.upsert).toHaveBeenCalled();
+    expect(tx.posEntitlement.upsert).toHaveBeenCalled();
+  });
+
   it("is idempotent: a replayed event cannot activate twice (§75)", async () => {
     const tx = txWith({ currentSubscription: { id: "sub", businessId: "bizA", status: "ACTIVE" } });
     const result = await settlePosPayment(tx as never, { payment: { ...payment, status: "PAID" }, plan, eventId: "evt_dup" });
@@ -319,15 +393,44 @@ describe("settlement activates the POS inside the payment transaction (§31, §4
     expect(tx.processedWebhook.create).toHaveBeenCalledWith({ data: { id: "evt_dup" } });
   });
 
+  it("refuses legacy PAID repair without an authoritative provider confirmation instant", async () => {
+    const tx = txWith();
+    await expect(settlePosPayment(tx as never, {
+      payment: { ...payment, status: "PAID", updatedAt: "2026-10-23T00:00:00.000Z" } as any,
+      plan,
+      repairingLegacyPaidPayment: true,
+      verification: { paystackId: "ps_legacy" },
+    })).rejects.toThrow("LEGACY_PAYMENT_CONFIRMATION_TIME_REQUIRED");
+    expect(tx.posSubscription.upsert).not.toHaveBeenCalled();
+    expect(tx.posEntitlement.upsert).not.toHaveBeenCalled();
+    expect(tx.posPublicationResolution.upsert).not.toHaveBeenCalled();
+  });
+
+  it("anchors explicit legacy PAID repair to verified provider paid_at, not mutable ledger timestamps", async () => {
+    const tx = txWith();
+    const result = await settlePosPayment(tx as never, {
+      payment: { ...payment, status: "PAID", updatedAt: "2026-10-23T00:00:00.000Z" } as any,
+      plan,
+      eventId: "evt_legacy_repair",
+      repairingLegacyPaidPayment: true,
+      verification: { providerConfirmedAt: "2026-10-20T08:00:00.000+03:00" },
+    });
+    expect(result.alreadySettled).toBe(false);
+    expect(tx.payment.updateMany).not.toHaveBeenCalled();
+    const create = tx.posPublicationResolution.upsert.mock.calls[0][0].create;
+    expect(create.confirmedAt.toISOString()).toBe("2026-10-20T05:00:00.000Z");
+    expect(create.deadlineAt.toISOString()).toBe("2026-10-23T05:00:00.000Z");
+  });
+
   it("fails closed when the payment row was already changed by someone else", async () => {
     const tx = txWith({ paymentUpdateCount: 0, latestPayment: { id: "pay_1", status: "FAILED" } });
-    await expect(settlePosPayment(tx as never, { payment, plan })).rejects.toThrow("PAYMENT_STATE_CHANGED");
+    await expect(settlePosPayment(tx as never, { payment, plan, verification: { paystackId: "ps_1" } })).rejects.toThrow("PAYMENT_STATE_CHANGED");
     expect(tx.posSubscription.upsert).not.toHaveBeenCalled();
   });
 
   it("treats a second webhook for the same payment as already settled, not as an error", async () => {
     const tx = txWith({ paymentUpdateCount: 0, latestPayment: { id: "pay_1", status: "PAID" }, currentSubscription: { id: "sub", status: "ACTIVE" } });
-    const result = await settlePosPayment(tx as never, { payment, plan, eventId: "evt_late" });
+    const result = await settlePosPayment(tx as never, { payment, plan, eventId: "evt_late", verification: { paystackId: "ps_1" } });
     expect(result.alreadySettled).toBe(true);
     expect(tx.posSubscription.upsert).not.toHaveBeenCalled();
   });
@@ -368,7 +471,10 @@ describe("the POS subscription never disturbs the AFTERCALL plan (§80)", () => 
     expect(paystack.split("settlePosPayment(tx,").length - 1).toBe(1);
     // The POS branch returns before the generic subscription path, which is left untouched:
     // the same guards, the same window arithmetic, the same platform Subscription row (§80).
-    expect(paystack).toContain('if (payment.status !== "PENDING" && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_PENDING");');
+    // The settlement guards themselves: only settleable states, and every new settlement requires
+    // provider evidence from the caller's own verification, including PENDING (2026-10-18 hardening).
+    expect(paystack).toContain('if (!isSettleablePaymentStatus(payment.status) && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_SETTLEABLE");');
+    expect(paystack).toContain('if (!repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");');
     expect(paystack).toContain("subscriptionWindow(now, plan.durationDays, current)");
     expect(paystack).toContain("activateSubscriptionForPayment");
     const branchIndex = paystack.indexOf("if (plan.key === POS_PLAN_KEY) {");

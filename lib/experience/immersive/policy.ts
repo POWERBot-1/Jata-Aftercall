@@ -54,13 +54,18 @@ export function immersiveEligibility(input: {
   if (!signals.webgl) return { eligible: false, reason: "no-webgl" };
   if (signals.deviceMemoryGB === null) return { eligible: false, reason: "memory-unknown" };
   if (signals.deviceMemoryGB < IMMERSIVE_LIMITS.minMemoryGB) return { eligible: false, reason: "low-memory" };
-  if (signals.hardwareConcurrency !== null && signals.hardwareConcurrency < IMMERSIVE_LIMITS.minCores) {
+  if (signals.hardwareConcurrency === null) return { eligible: false, reason: "cores-unknown" };
+  if (signals.hardwareConcurrency < IMMERSIVE_LIMITS.minCores) {
     return { eligible: false, reason: "low-cores" };
   }
   if (!asset) return { eligible: false, reason: "no-model" };
-  if (!Number.isFinite(asset.bytes) || asset.bytes > IMMERSIVE_LIMITS.maxModelBytes) {
+  if (!Number.isSafeInteger(asset.bytes) || asset.bytes <= 0) return { eligible: false, reason: "model-size-invalid" };
+  if (asset.bytes > IMMERSIVE_LIMITS.maxModelBytes) {
     return { eligible: false, reason: "model-too-large" };
   }
-  if (!/^https:\/\/[^\s]+$/i.test(asset.url)) return { eligible: false, reason: "model-url-not-https" };
+  try {
+    const url = new URL(asset.url);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname || asset.url.includes("\\") || /\s/.test(asset.url)) return { eligible: false, reason: "model-url-not-https" };
+  } catch { return { eligible: false, reason: "model-url-not-https" }; }
   return { eligible: true, reason: "eligible" };
 }

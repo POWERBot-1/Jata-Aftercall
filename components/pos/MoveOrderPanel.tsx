@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDateTime } from "@/lib/dateFormat";
 
 /**
  * Moving one order on (§29).
@@ -94,7 +95,7 @@ export function MoveOrderPanel({
           <ol className="mt-2 grid gap-1 text-sm">
             {history.map((entry) => (
               <li key={entry.id} className="flex flex-wrap gap-x-2">
-                <span className="pos-note">{new Date(entry.createdAt).toLocaleString("en-KE")}</span>
+                <span className="pos-note">{formatDateTime(entry.createdAt)}</span>
                 <span>{entry.fromState ? `${entry.fromState} → ${entry.toState}` : `Started as ${entry.toState}`}</span>
                 {entry.note ? <span className="pos-note">· {entry.note}</span> : null}
               </li>

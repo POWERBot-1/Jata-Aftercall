@@ -20,14 +20,28 @@ export async function getActivePlans(): Promise<Plan[]> {
 }
 
 /**
- * Plans that may never be advertised on a public or customer-facing surface (POS spec §67).
+ * Plans that may never be selected, priced or sold from a public or customer-facing list
+ * (POS spec §67).
  *
  * The Business POS is the owner's operating system — PUBLIC means "customer interaction",
  * PRIVATE means "business operating system". A customer browsing a business page, a referral
  * redirect or a call instruction must never be shown an operating-system price list, so the
- * POS plan is sold only from inside the authenticated POS workspace.
+ * POS plan is never part of a payable plan list: onboarding, the AFTERCALL subscription screen
+ * and checkout all resolve their choices through `publiclyListedPlans()`.
+ *
+ * The one presentation exception is the homepage pricing grid, which shows the POS as the sixth
+ * (last), clearly-labelled owner-only card that links into the authenticated `/dashboard/pos`
+ * flow, and the standard JATA Autopilot package as the fourth card linking into
+ * `/dashboard/autopilot` (2026-10-27 owner order; see `homepagePlanCards`). Showing those cards
+ * grants nothing: each product still switches on only from PlanConfig and confirmed payment
+ * inside the workspace.
  */
-export const PRIVATE_PLAN_KEYS = ["BUSINESS_POS"];
+export const PRIVATE_PLAN_KEYS = [
+  "BUSINESS_POS",
+  "JATA_AUTOPILOT",
+  "JATA_AUTOPILOT_PRO",
+  "JATA_AUTOPILOT_ENTERPRISE",
+];
 
 export function isPubliclyListedPlan(key: string): boolean {
   return !PRIVATE_PLAN_KEYS.includes(key);
@@ -39,15 +53,88 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
 }
 
 /**
+ * Marketing order only; never changes stored IDs, prices, durations or checkout selection.
+ *
+ * Owner-mandated homepage sequence (2026-10-27): Monthly → Annual → AI Business Front Desk →
+ * JATA Autopilot → Website Studio (INTERACTIVE_BUSINESS) → Business POS. The three owner-only
+ * products keep their stored plan keys and their own CTAs; only the presentation rank moves.
+ */
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "JATA_AUTOPILOT", "INTERACTIVE_BUSINESS", "BUSINESS_POS"] as const;
+
+/**
+ * The owner-only POS plan the homepage advertises sixth (last card), without ever making it a
+ * payable choice. A literal rather than an import: `lib/pos/entitlement.ts` imports this module,
+ * so importing its `POS_PLAN_KEY` here would be a cycle. Both name the same stored key, and
+ * `assertBusinessPosPricing`/`assertPosPlanPricing` still guard the price itself.
+ */
+export const HOMEPAGE_POS_PLAN_KEY = "BUSINESS_POS";
+
+/**
+ * The standard JATA Autopilot package the homepage advertises fourth, without ever making it a
+ * payable choice. A literal rather than an import for the same cycle reason as the POS key above:
+ * it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
+ * `lib/autopilot/entitlement.ts`, and `assertAutopilotPlanPricing` still guards the price itself
+ * (KES 2,499 / 30 days) at checkout. Only the standard package is advertised here; the Pro and
+ * Enterprise tiers stay inside the authenticated Autopilot flow and are never homepage cards.
+ */
+export const HOMEPAGE_AUTOPILOT_PLAN_KEY = "JATA_AUTOPILOT";
+
+export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[]): T[] {
+  const rank = (key: string) => {
+    const index = (HOMEPAGE_PLAN_ORDER as readonly string[]).indexOf(key);
+    return index < 0 ? HOMEPAGE_PLAN_ORDER.length : index;
+  };
+  return [...plans].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
+/** Exactly the fields a homepage plan card renders. Nothing here is payable data. */
+export type HomepagePlanCard = { key: string; name: string; priceKES: number; durationDays: number };
+
+/**
+ * The six plans the homepage advertises, in marketing order.
+ *
+ * The four page plans come from `publiclyListedPlans()` as before; under the 2026-10-27 owner
+ * order the standard JATA Autopilot package is the fourth card and the owner-only Business POS
+ * the sixth (last), so an owner can see the whole product range in one grid instead of separate
+ * promotional blocks below it. This is presentation only:
+ *
+ *   • POS and Autopilot stay in `PRIVATE_PLAN_KEYS`, so they are still absent from onboarding,
+ *     the AFTERCALL subscription screen and every payable list — the cards link to
+ *     `/dashboard/pos` and `/dashboard/autopilot`, not to `/register` or checkout. The Autopilot
+ *     Pro/Enterprise tiers are never appended: only the standard package is advertised.
+ *   • Each owner-only card's price and duration are the stored `PlanConfig` row when it can be
+ *     read, and the canonical `FALLBACK_PLANS` row (POS KES 499 / 30 days; Autopilot standard
+ *     KES 2,499 / 30 days, guarded by `assertAutopilotPlanPricing`) when the database is
+ *     unavailable — never a number written into the page.
+ *   • If a plan row is missing entirely the canonical row still fills its slot, so the grid is
+ *     never left with a hole and never invents a different price.
+ */
+export function homepagePlanCards(plans: readonly HomepagePlanCard[]): HomepagePlanCard[] {
+  const listed = publiclyListedPlans([...plans]);
+  const storedPos = plans.find((plan) => plan.key === HOMEPAGE_POS_PLAN_KEY);
+  const pos = storedPos ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_POS_PLAN_KEY);
+  const storedAutopilot = plans.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
+  const autopilot = storedAutopilot ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
+  const cards: HomepagePlanCard[] = [...listed];
+  if (pos && !cards.some((card) => card.key === HOMEPAGE_POS_PLAN_KEY)) cards.push(pos);
+  if (autopilot && !cards.some((card) => card.key === HOMEPAGE_AUTOPILOT_PLAN_KEY)) cards.push(autopilot);
+  return orderHomepagePlans(cards);
+}
+
+/**
  * The name a customer-facing surface shows for a plan.
  *
  * The stored `PlanConfig.name` is operator-editable text. If it was ever written through a
  * client with the wrong encoding it holds U+FFFD ("�") — which is what the public
  * homepage was observed rendering for the AI Business Front Desk and Interactive Business cards.
  * A known plan then shows its canonical name instead of a corrupted or blank one; any other
- * stored name is shown exactly as the operator wrote it.
+ * stored name is shown exactly as the operator wrote it, except the Website Studio product
+ * whose stable INTERACTIVE_BUSINESS key always uses the requested customer-facing brand.
  */
 export function planDisplayName(plan: { key: string; name?: string | null }): string {
+  if (plan.key === "INTERACTIVE_BUSINESS") {
+    return FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)!.name;
+  }
   const stored = typeof plan.name === "string" ? plan.name.trim() : "";
   if (stored && !stored.includes("\uFFFD")) return stored;
   const canonical = FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)?.name;
@@ -132,11 +219,20 @@ export function assertBusinessPosPricing(plan: Plan | null): asserts plan is Pla
   }
 }
 
+export async function getJataAutopilotPlan(
+  key: "JATA_AUTOPILOT" | "JATA_AUTOPILOT_PRO" | "JATA_AUTOPILOT_ENTERPRISE" = "JATA_AUTOPILOT",
+): Promise<Plan | null> {
+  return getPlanByKey(key);
+}
+
 export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365, isActive: true },
   { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
   { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
-  { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
-  // Private plan: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
+  { key: "INTERACTIVE_BUSINESS", name: "Website Studio — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
+  // Private plans: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
   { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30, isActive: true },
+  { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30, isActive: true },
 ];

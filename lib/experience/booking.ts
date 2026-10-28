@@ -10,6 +10,25 @@
 
 import { getExperienceProfile } from "./categories";
 import type { CategoryKey } from "./types";
+import {
+  CONTRACT_BOOKING_TIME_ZONE,
+  addCalendarDays,
+  bookingRowTimeZone,
+  calendarDayInZone,
+  contractBookingMarker,
+  dayOfWeekForCalendarDay,
+  dayWindowInZone,
+  isCalendarDay,
+  wallClockToInstant,
+} from "./bookingTime";
+
+export {
+  CONTRACT_BOOKING_TIME_ZONE,
+  bookingRowTimeZone,
+  contractBookingMarker,
+  dayWindowInZone,
+  wallClockToInstant,
+} from "./bookingTime";
 
 export const BOOKING_STATUSES = ["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
@@ -83,13 +102,21 @@ export function parseAvailability(raw: string | null | undefined): Availability 
   }
 }
 
-/** Next `count` days the business is open, starting today. */
+/**
+ * Next `count` days the business is open, starting today — on the business clock.
+ *
+ * "Today" is the Nairobi calendar day (the same day the storefront calendar offers), and each
+ * following day is pure calendar arithmetic. The previous implementation built days from
+ * ambient-local midnights and serialized them with `toISOString()`, which in UTC+3 named the day
+ * *before* the one it displayed. Deterministic in every host zone.
+ */
 export function openDays(availability: Availability, count = 14, from: Date = new Date()): string[] {
   const days: string[] = [];
+  const startDay = calendarDayInZone(from, CONTRACT_BOOKING_TIME_ZONE);
   for (let offset = 0; offset < 60 && days.length < count; offset += 1) {
-    const date = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
-    if (availability.days.includes(date.getDay())) {
-      days.push(date.toISOString().slice(0, 10));
+    const day = addCalendarDays(startDay, offset);
+    if (availability.days.includes(dayOfWeekForCalendarDay(day))) {
+      days.push(day);
     }
   }
   return days;
@@ -104,10 +131,10 @@ export function freeSlotsFor(params: {
   now?: Date;
 }): string[] {
   const { availability } = params;
-  const day = new Date(`${params.date}T00:00:00`);
-  if (Number.isNaN(day.getTime())) return [];
-  // A closed day has no slots at all, whatever the customer's browser sends.
-  if (availability.days.length > 0 && !availability.days.includes(day.getDay())) return [];
+  if (!isCalendarDay(params.date)) return [];
+  // A closed day has no slots at all, whatever the customer's browser sends. The weekday comes
+  // from the business calendar day, never from parsing a zone-less string in the host's zone.
+  if (availability.days.length > 0 && !availability.days.includes(dayOfWeekForCalendarDay(params.date))) return [];
   const now = params.now ?? new Date();
   const duration = Math.max(15, Math.round(Number(params.durationMinutes || availability.slotMinutes || 30)));
   const taken = params.taken || [];
@@ -121,8 +148,11 @@ export function freeSlotsFor(params: {
     });
 
   return availability.slots.filter((slot) => {
-    const [hours, minutes] = slot.split(":").map(Number);
-    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hours, minutes).getTime();
+    // The slot is a Nairobi wall-clock time; compare it as an instant, so a host in any zone
+    // (or a browser preview) reaches the same answer as the server.
+    const startAt = wallClockToInstant(params.date, slot, CONTRACT_BOOKING_TIME_ZONE);
+    if (!startAt) return false;
+    const start = startAt.getTime();
     const end = start + duration * 60_000;
     if (start < now.getTime()) return false;
     const overlaps = takenRanges.some((range) => start < range.end && end > range.start);
@@ -162,10 +192,11 @@ export function validateBookingRequest(input: BookingRequest): BookingValidation
   if (phone.replace(/\D/g, "").length < 9) return { kind: "error", error: "Enter a valid phone number." };
   if (!input.date || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { kind: "error", error: "Choose a date for your booking." };
   if (!input.time || !TIME_PATTERN.test(input.time)) return { kind: "error", error: "Choose a time for your booking." };
-  const [year, month, day] = input.date.split("-").map(Number);
-  const [hours, minutes] = input.time.split(":").map(Number);
-  const startAt = new Date(year, month - 1, day, hours, minutes);
-  if (Number.isNaN(startAt.getTime())) return { kind: "error", error: "That date and time could not be read." };
+  // The one conversion the contract rests on: the customer's date + time are Nairobi wall-clock
+  // values, and what is stored is the unambiguous instant they denote. Never `new Date(...)`,
+  // which would anchor to whatever zone the host happens to run in.
+  const startAt = wallClockToInstant(input.date, input.time, CONTRACT_BOOKING_TIME_ZONE);
+  if (!startAt || Number.isNaN(startAt.getTime())) return { kind: "error", error: "That date and time could not be read." };
   if (startAt.getTime() < Date.now() - 60_000) return { kind: "error", error: "Choose a time in the future." };
   return { kind: "ok", startAt };
 }

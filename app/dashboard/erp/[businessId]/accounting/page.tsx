@@ -4,6 +4,7 @@ import { loadAccounting } from "@/lib/erp/loaders";
 import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { closePeriodAction, postJournalAction } from "../actions";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function AccountingPage({ params, searchParams }: { params:
       {ok ? <Notice tone="success">{ok}</Notice> : null}
 
       <dl className="erp-grid erp-grid-4">
-        <Kpi label="Assets" value={formatCentsShort(bs.totalAssetsCents)} hint={`as at ${new Date(bs.asOf ?? Date.now()).toLocaleDateString("en-KE")}`} />
+        <Kpi label="Assets" value={formatCentsShort(bs.totalAssetsCents)} hint={`as at ${formatDate(new Date(bs.asOf ?? Date.now()))}`} />
         <Kpi label="Liabilities" value={formatCentsShort(bs.totalLiabilitiesCents)} hint="Including VAT output and deposits" />
         <Kpi label="Net profit (YTD)" value={formatCentsShort(pnl.netProfitCents)} hint={`${formatCentsShort(pnl.totalIncomeCents)} income`} />
         <Kpi label="Journals posted" value={String(data.journals.length)} hint={`${tb.rows.length} accounts with movement`} />
@@ -168,7 +169,7 @@ export default async function AccountingPage({ params, searchParams }: { params:
                 <li key={journal.id}>
                   <div>
                     <div className="erp-strong">{journal.description}</div>
-                    <div className="erp-muted erp-small">{journal.journalNumber} · {new Date(journal.entryDate).toLocaleDateString("en-KE")} · {humanise(journal.sourceType ?? "manual")}</div>
+                    <div className="erp-muted erp-small">{journal.journalNumber} · {formatDate(journal.entryDate)} · {humanise(journal.sourceType ?? "manual")}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <Badge tone={StatusTone(journal.status)}>{humanise(journal.status)}</Badge>

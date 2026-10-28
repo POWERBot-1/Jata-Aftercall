@@ -100,6 +100,7 @@ async function goLive() {
       payment: { id: "pay_scope_1", reference: "jata-pos-scope-1", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49_900, currency: "KES", status: "PENDING" },
       plan: { id: "plan_pos", key: POS_PLAN_KEY, priceKES: 499, durationDays: 30 },
       eventId: "evt_scope_1",
+      verification: { paystackId: "ps_scope_seed" },
     }),
   );
   await prisma.posBranch.create({ data: { businessId: "bizA", name: "Kilimani Shop", isPrimary: false, isActive: true } });

@@ -14,10 +14,22 @@ vi.mock("@/lib/db", () => ({
     business: {
       findFirst: vi.fn(async ({ where }: any) => {
         const biz = authState.businesses.get(where.id);
-        if (biz && biz.userId === where.userId) return { id: biz.id };
+        if (!biz) return null;
+        // Owner probe from lib/tenant: { id, ownerId } (Prisma schema field). Also honour
+        // the fixture's legacy { userId } shape used by other call sites.
+        if (where.ownerId !== undefined && biz.userId === where.ownerId) return { id: biz.id };
+        if (where.userId !== undefined && biz.userId === where.userId) return { id: biz.id };
         return null;
       }),
+      findMany: vi.fn(async ({ where }: any) =>
+        where?.ownerId
+          ? [...authState.businesses.values()].filter((b) => b.userId === where.ownerId).map((b) => ({ id: b.id }))
+          : [],
+      ),
       findUnique: vi.fn(async ({ where }: any) => authState.businesses.get(where.id) || null),
+    },
+    businessMember: {
+      findMany: vi.fn(async () => []),
     },
     product: { findMany: vi.fn(async () => []) },
     productVariant: { findMany: vi.fn(async () => []) },

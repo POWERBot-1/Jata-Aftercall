@@ -1,10 +1,13 @@
 /** Server-only Paystack integration. Never return or log secret configuration. */
 import crypto from "crypto";
 import prisma from "./db";
-import { subscriptionWindow } from "./paymentVerification";
+import { isProviderTransactionId, isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
+import { isAutopilotPlanKey } from "./autopilot/entitlement";
+import { settleAutopilotPayment } from "./autopilot/settlement";
+import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -66,7 +69,7 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
   });
   const result = await response.json().catch(() => null);
   const data = result?.data;
-  const validId = typeof data?.id === "number" ? Number.isSafeInteger(data.id) : typeof data?.id === "string" && data.id.trim().length > 0;
+  const validId = typeof data?.id === "number" ? Number.isSafeInteger(data.id) : isProviderTransactionId(data?.id);
   if (!response.ok || !result?.status || !data || typeof data.status !== "string" ||
       typeof data.reference !== "string" || !Number.isSafeInteger(data.amount) ||
       typeof data.currency !== "string" || !/^[A-Z]{3}$/.test(data.currency) || !validId) {
@@ -96,7 +99,7 @@ export type SettlementResult = { subscription: unknown; alreadySettled: boolean 
 export async function activateSubscriptionForPayment(
   paymentId: string,
   eventId?: string,
-  verification?: { paystackId?: string; raw?: unknown },
+  verification?: { paystackId?: string; raw?: unknown; providerConfirmedAt?: string },
 ): Promise<SettlementResult> {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({ where: { id: paymentId } });
@@ -104,23 +107,58 @@ export async function activateSubscriptionForPayment(
     if (!payment.businessId || !payment.planId) throw new Error("PAYMENT_CONTEXT_INVALID");
     if (payment.currency !== PAYMENT_CURRENCY) throw new Error("PAYMENT_CURRENCY_MISMATCH");
 
+    const planHint = await tx.planConfig?.findUnique?.({ where: { id: payment.planId } });
+    const isAutopilotPlan = isAutopilotPlanKey(planHint?.key);
+
     if (eventId) {
       const alreadySeen = await tx.processedWebhook.findUnique({ where: { id: eventId } });
       if (alreadySeen) {
-        return { subscription: await tx.subscription.findUnique({ where: { businessId: payment.businessId } }), alreadySettled: true };
+        const existingSub = isAutopilotPlan
+          ? await tx.autopilotSubscription.findUnique({ where: { businessId: payment.businessId } })
+          : await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
+        return { subscription: existingSub, alreadySettled: true };
       }
     }
 
-    const current = await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
-    const repairingLegacyPaidPayment = payment.status === "PAID" && !current;
-    if (payment.status === "PAID" && current) {
+    const current = isAutopilotPlan
+      ? await tx.autopilotSubscription.findUnique({ where: { businessId: payment.businessId } })
+      : await tx.subscription.findUnique({ where: { businessId: payment.businessId } });
+    const alreadySettledThisPayment = isAutopilotPlan
+      ? Boolean(current && (current as { paymentId?: string | null }).paymentId === payment.id)
+      : Boolean(current);
+    const repairingLegacyPaidPayment = payment.status === "PAID" && !alreadySettledThisPayment;
+    if (payment.status === "PAID" && alreadySettledThisPayment) {
       if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
       return { subscription: current, alreadySettled: true };
     }
-    if (payment.status !== "PENDING" && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_PENDING");
+    /*
+     * What may settle, and on what evidence.
+     *
+     *   PENDING                     — only with provider transaction evidence from the caller.
+     *   FAILED/CANCELLED/EXPIRED    — the same evidence is required to correct a stale local state.
+     *   PAID (with a subscription)  — already handled above, idempotent.
+     *   PAID without a subscription — legacy repair of the already-paid row.
+     *   REFUNDED / anything else    — never: money already returned is not money received.
+     *
+     * The webhook and verify route both verify the transaction with Paystack and match its
+     * reference, amount, currency and successful status before calling this function. Requiring
+     * the transaction id here also makes a bare internal call fail closed for every new settlement.
+     */
+    // Every new settlement needs the transaction id from a provider verification the caller
+    // performed and matched against this payment. PENDING is not permission to skip verification.
+    // The explicit legacy repair path only repairs a payment already recorded as PAID.
+    const providerEvidence = isProviderTransactionId(verification?.paystackId);
+
+    if (!isSettleablePaymentStatus(payment.status) && !repairingLegacyPaidPayment) throw new Error("PAYMENT_NOT_SETTLEABLE");
+    if (!repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
 
     const plan = await tx.planConfig.findUnique({ where: { id: payment.planId } });
     if (!plan) throw new Error("PLAN_NOT_FOUND");
+
+    // Remembered before any write: the state this verified success settled from, reported in the
+    // audit trail so a revived payment can be reconciled later. (Read from the row rather than
+    // assumed, and captured before the compare-and-set for the same reason.)
+    const settledFrom = payment.status;
 
     // JATA AFTERCALL Business POS (spec §4, §43–§45): an additive product with its own
     // subscription row, settled from the same verified payment and the same idempotency
@@ -128,17 +166,32 @@ export async function activateSubscriptionForPayment(
     if (plan.key === POS_PLAN_KEY) {
       return settlePosPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
     }
+    if (isAutopilotPlanKey(plan.key)) {
+      return settleAutopilotPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
+    }
 
     const now = new Date();
     const { startAt, expiresAt } = subscriptionWindow(now, plan.durationDays, current);
 
     if (!repairingLegacyPaidPayment) {
+      const rawForStorage = verification?.raw === undefined
+        ? undefined
+        : serializeJsonWithoutInlineImageData(verification.raw);
+      // The verified transaction id is evidence for this call, but optional provider text must
+      // not make the money-state transaction fail a database write policy. Omit only the unsafe
+      // identifier; retain the provider-verified settlement and its existing CAS/entitlement path.
+      const paystackIdForStorage = verification?.paystackId &&
+        !containsInlineImageDataUrl(verification.paystackId)
+        ? verification.paystackId
+        : undefined;
       const changed = await tx.payment.updateMany({
-        where: { id: payment.id, status: "PENDING" },
+        // Compare-and-set on the state that was read: a concurrent settlement of any kind makes
+        // this write match nothing, and the branch below then resolves idempotently.
+        where: { id: payment.id, status: settledFrom },
         data: {
           status: "PAID",
-          ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),
-          ...(verification?.raw !== undefined ? { raw: JSON.stringify(verification.raw) } : {}),
+          ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+          ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
         },
       });
       if (changed.count !== 1) {
@@ -186,7 +239,13 @@ export async function activateSubscriptionForPayment(
       data: {
         actorId: payment.userId, action: "SUBSCRIPTION_ACTIVATED", targetType: "SUBSCRIPTION",
         targetId: subscription.id,
-        metadata: JSON.stringify({ paymentReference: payment.reference, planKey: plan.key, businessId: payment.businessId }),
+        metadata: JSON.stringify({
+          paymentReference: payment.reference,
+          planKey: plan.key,
+          businessId: payment.businessId,
+          // Observability for a revived payment: the stored state a verified success corrected.
+          ...(settledFrom === "PENDING" ? {} : { settledFrom }),
+        }),
       },
     });
     return { subscription, alreadySettled: false };

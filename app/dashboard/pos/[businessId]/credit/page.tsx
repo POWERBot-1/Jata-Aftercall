@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatKES } from "@/lib/format";
+import { formatDate, formatKES } from "@/lib/format";
 import { ageingBucket, creditExposure, daysOverdue, supplierSummary } from "@/lib/pos/credit";
 import { partiesWithBalances } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
@@ -108,7 +108,7 @@ export default async function PosCreditPage({ params }: Props) {
                         <strong>{party.name}</strong>
                         <small>
                           {party.phone ?? "No phone"}
-                          {party.oldestEntryAt ? ` · oldest ${new Date(party.oldestEntryAt).toLocaleDateString("en-KE")}` : ""}
+                          {party.oldestEntryAt ? ` · oldest ${formatDate(party.oldestEntryAt)}` : ""}
                           {party.creditLimitKES ? ` · limit ${formatKES(Number(party.creditLimitKES))}` : ""}
                         </small>
                       </div>

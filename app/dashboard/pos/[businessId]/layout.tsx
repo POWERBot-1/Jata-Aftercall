@@ -4,6 +4,8 @@ import { PosAccessError } from "@/lib/pos/guard";
 import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
 import { PosNav } from "@/components/pos/PosNav";
 import { PosBanner } from "@/components/pos/PosBanner";
+import { PosHeaderImage, type PosHeaderImageData } from "@/components/pos/PosHeaderImage";
+import { categoryImageForUrl, focalToObjectPosition, imageForPosType } from "@/lib/categoryImagery";
 
 /**
  * The POS shell (§23).
@@ -42,8 +44,32 @@ export default async function PosLayout({ children, params }: Props) {
     );
   }
 
+  const presentation = workspace.configuration.presentation ?? {};
+  const suggested = imageForPosType(workspace.configuration.business.typeKey);
+  const chosen = presentation.headerImageUrl ? categoryImageForUrl(presentation.headerImageUrl) : null;
+  const headerImage: PosHeaderImageData = presentation.headerImageUrl
+    ? {
+        src: presentation.headerImageUrl,
+        srcSet: chosen?.srcSet, webp: chosen?.webp, webpSrcSet: chosen?.webpSrcSet,
+        alt: presentation.headerImageAlt || chosen?.alt || workspace.business.name,
+        width: chosen?.width, height: chosen?.height,
+        focal: focalToObjectPosition({
+          x: presentation.headerFocalX ?? chosen?.focal.x ?? 50,
+          y: presentation.headerFocalY ?? chosen?.focal.y ?? 45,
+        }),
+      }
+    : {
+        src: suggested.src, srcSet: suggested.srcSet, webp: suggested.webp, webpSrcSet: suggested.webpSrcSet,
+        alt: suggested.alt, width: suggested.width, height: suggested.height,
+        focal: focalToObjectPosition({
+          x: presentation.headerFocalX ?? suggested.focal.x,
+          y: presentation.headerFocalY ?? suggested.focal.y,
+        }),
+      };
+
   return (
     <div className="pos-shell">
+      <PosHeaderImage image={headerImage} />
       <header className="pos-header">
         <div>
           <p className="jata-kicker">Business POS</p>

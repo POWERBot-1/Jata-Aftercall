@@ -27,6 +27,7 @@ import { consentDecision } from "@/lib/messaging/consent";
 import { industryPack } from "@/lib/erp/industryPacks";
 import { slugify } from "@/lib/slug";
 import { setTeamRole } from "@/lib/erp/team";
+import { formatDate, formatNumber } from "@/lib/format";
 
 class ActionError extends Error {}
 
@@ -491,7 +492,7 @@ export async function recordPaymentAction(form: FormData) {
       reference: text(form, "reference") || null,
       idempotencyKey: `payment:${text(form, "requestKey") || randomUUID()}`,
     });
-    ok = `Receipt ${result.payment.receiptNumber} recorded.${result.unallocatedCents ? ` KES ${(result.unallocatedCents / 100).toLocaleString("en-KE")} held as a customer deposit.` : ""}`;
+    ok = `Receipt ${result.payment.receiptNumber} recorded.${result.unallocatedCents ? ` KES ${formatNumber(result.unallocatedCents / 100)} held as a customer deposit.` : ""}`;
     revalidatePath(`${base}/invoices`);
   } catch (err) {
     error = actionErrorMessage(err);
@@ -832,7 +833,7 @@ export async function createCampaignAction(form: FormData) {
       businessId,
       actorId: context.session.userId,
       actorName: context.session.name ?? null,
-      name: text(form, "name") || `${channel === "WHATSAPP" ? "WhatsApp" : "SMS"} campaign ${new Date().toLocaleDateString("en-KE")}`,
+      name: text(form, "name") || `${channel === "WHATSAPP" ? "WhatsApp" : "SMS"} campaign ${formatDate(new Date())}`,
       channel,
       purpose,
       body,
@@ -862,7 +863,7 @@ export async function planCampaignAction(form: FormData) {
     const prisma = (await import("@/lib/db")).default;
     const { planCampaign } = await import("@/lib/messaging/campaigns");
     const result = await planCampaign(prisma, { businessId, campaignId });
-    ok = `${result.preview.eligibleCount} recipients ready · ${result.preview.excludedCount} excluded · estimated ${(Number(result.preview.estimatedCostCents) / 100).toLocaleString("en-KE")} KES.`;
+    ok = `${result.preview.eligibleCount} recipients ready · ${result.preview.excludedCount} excluded · estimated ${formatNumber(Number(result.preview.estimatedCostCents) / 100)} KES.`;
     revalidatePath(`${base}/messaging/${campaignId}`);
   } catch (err) {
     error = actionErrorMessage(err);
@@ -920,7 +921,7 @@ export async function approveCampaignAction(form: FormData) {
       costConfirmed: bool(form, "costConfirmed"),
       separationOfDuties: process.env.ERP_SEPARATION_OF_DUTIES !== "false",
     });
-    ok = `Approved. ${(result.reservedCents / 100).toLocaleString("en-KE")} KES reserved in your wallet. Nothing has been sent yet.`;
+    ok = `Approved. ${formatNumber(result.reservedCents / 100)} KES reserved in your wallet. Nothing has been sent yet.`;
     revalidatePath(`${base}/messaging/${campaignId}`);
   } catch (err) {
     error = actionErrorMessage(err);

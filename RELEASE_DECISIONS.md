@@ -1,239 +1,71 @@
 # Release decisions: media storage and sale-price policy
 
-Status: **proposals for owner approval. Nothing in this file is implemented.** No media has been moved or deleted, no
-provider has been added, no schema or dependency has changed, and no paid resource has been created.
+Status as of E-25: **owner approval remains pending.** This file distinguishes implemented source behavior from owner authorization. The current source has sale-window fields/migrations and a shared pricing helper; new inline media writes are blocked. No durable media provider/account was activated, no legacy data was inventoried or migrated, and no database migration was executed. No owner decision is inferred from code/migration comments or historical release wording.
 
-Scope of the code read: this branch at `685e6e7` (plus the pricing fix in the commit that adds this file).
+Scope: current worktree on `arena/401b4d54-jata-aftercall` at `2575cf461d33476a6bf8edb44fc56dc63498152a`; source-path review only. Exact requests are in `OWNER_APPROVAL_REQUEST.md`; the full cost/access and environment analysis is in `OWNER_DECISION_READINESS_PLAN.md`.
 
 ---
 
-## 1. Media storage: `MediaAsset.url` and inline image data
+## 1. Media storage and legacy image records
 
-### 1.1 Where image bytes live today
+### 1.1 Current source behavior (E-25)
 
-Image data URLs (`data:image/...;base64,...`) are stored as text in Neon in these places:
+- The no-binary-in-Neon rule remains. `/api/media` rejects new inline `data:image` bytes; a safe hosted/path URL is metadata-only, not a durable upload. The inline provider identifier remains for compatibility, but `put()` fails closed. `IMPLEMENTED_PROVIDERS` is empty and no durable object-read adapter is wired.
+- The Studio AI image/enhance routes do not inject an `ImageAssetStore`; they fail closed before quota/generation/provider work. Existing media URL reads remain for compatibility.
+- No database inventory ran. Legacy inline values, references and other binary representations remain unknown; do not claim the database is clean or zero. No provider/account/token, upload, backfill, migration, deletion or spend was authorized or performed.
 
-| Location | Writer | Notes |
+### 1.2 Options to compare before selection
+
+| Candidate | Current evidence and cost status | Access/privacy questions |
 |---|---|---|
-| `MediaAsset.url` (`TEXT`) | `POST /api/media` (`app/api/media/route.ts`); AI images via `storeGeneratedImage` (`lib/ai/imageLab.ts`) | The main store. Hash-deduplicated per business. |
-| `BusinessExperience.draftJson` and `publishedJson` | Any document save or publish, once a photo is picked (`MediaPicker` sets the document field to `asset.url`) | `safeUrl` (`lib/experience/document.ts`) accepts data-image URLs up to `MAX_STORED_CHARS` = 4,000,000 characters, so a full copy is written into each document. |
-| `ExperienceVersion.snapshotJson` | Each publish | One full document copy per published version. Not capped in code. |
-| `ExperienceDraftRevision.snapshotJson` | Each draft write | Full document copy. Capped at `DRAFT_HISTORY_LIMIT` = 30 per business. |
-| `Product.imageUrl` (and `Service.imageUrl`) | `POST/PATCH /api/products`, `/api/services` through `safeUrl` | Same 4,000,000-character cap. |
+| Vercel Blob | Candidate only; not installed or implemented. Current pricing/limits and expected operation/transfer costs need verification against current terms and measured traffic. | Public versus private draft access, URL exposure, project identity/secret mechanism, quotas, retention and deletion. |
+| S3-compatible (including AWS S3 or R2) | Candidate only; compatible implementation and current storage/request/egress/versioning costs are not established. | Least-privilege identity, tenant-scoped keys, public/private delivery, signed URLs/proxy, lifecycle and deletion. |
+| Cloudinary | Candidate only; compatible implementation, current plan/credit/transformation costs and workload fit are not established. | Upload/delivery scope, tenant authorization, public/private behavior, transformation data, retention and deletion. |
 
-Consequence: one photo of about 3 MB can be written into the asset row, the draft, the published copy, each publish
-snapshot, and up to 30 history rows. The text is then stored in Neon, which is the store that the release rule says
-must not hold binary media. Size of the existing data: **not measured.** Measuring it needs a read-only query, which
-needs owner approval (see 1.8).
+Older local cost examples are illustrative, conflict with one another and are not current quotes. Before choosing, compare current provider terms for storage, requests, egress/cache misses, transformations, backups/versioning and service limits; specify one-time and recurring spend caps. No provider is preferred or selected here.
 
-### 1.2 Readers
+### 1.3 Required owner choices and safe legacy plan
 
-- `GET /api/media` returns `url` to the Studio media library. `MediaPicker` renders each one with `<img src={url}>`.
-- `lib/studio/studioData.ts` loads `url` for the Studio.
-- `lib/ai/imageLab.ts` `loadAssets` returns `url` to the AI photo tools.
-- The storefront renders the document's image fields and `Product.imageUrl` in `<img>` tags. The published copy
-  (`publishedJson`) is what visitors get.
-- Structured data (`lib/experience/structuredData.ts`) and the checkout and booking routes read the published document.
+Authorize a non-binding comparison only, or defer and keep uploads disabled. Before any selection, decide provider, account/identity approach, public/private access, per-tenant and global count/byte limits, alerts, privacy, retention/legal deletion, orphan/reference behavior, rollback window, and a hard one-time/monthly budget. No provider activation, token/secret creation, dependency installation, upload, backfill, migration or spend is included.
 
-### 1.3 Deletion
+For legacy media, preserve existing reads and first inventory only an owner-approved isolated/sanitized snapshot with a read-only role. Then choose an owner-reviewed replacement/re-upload process or a dry-run, per-tenant staged backfill with mapping, verification and rollback; cleanup/deletion requires separate approval. State how drafts, published products, versions/history, orphans and deletion requests are handled. `LEGACY_MEDIA_INVENTORY_READONLY.sql` is count-only, has known detection limits, has not been PostgreSQL-validated and has not been run.
 
-`DELETE /api/media` removes the `MediaAsset` row only. It does **not** remove the copies in `draftJson`,
-`publishedJson`, version snapshots, history, or `Product.imageUrl`. A deleted asset can therefore still appear on the
-site. This is a defect today, separate from the storage question.
-
-### 1.4 Existing records and compatibility
-
-- Two kinds of URL are stored: `data:` URLs (the upload path) and `https://` URLs (the `url` field accepted by
-  `POST /api/media`, which is an external hotlink). External links are a separate risk: the business's images are
-  loaded from third-party hosts, which can track visitors and can disappear.
-- Any migration must keep reading both forms until the backfill is verified.
-
-### 1.5 Proposed provider: Vercel Blob
-
-Why this option: it is the same vendor as the hosting, it is CDN-backed, the SDK authenticates with OIDC on Vercel
-(so no long-lived token is needed on Vercel), and the repo's storage interface (`lib/storage/types.ts`, `lib/storage/index.ts`)
-already anticipates it. The other candidates in `STORAGE_DECISION.md` (S3-compatible, Cloudinary, Neon Object Storage) are
-not evaluated here. Pricing and limits below were re-read from the official Vercel documentation on this turn.
-
-| Item | Value (official docs) |
-|---|---|
-| Hobby included | 1 GB storage, 10,000 simple operations, 2,000 advanced operations, 10 GB data transfer per month |
-| Pro, on demand | $0.023 per GB-month storage; $0.40 per 1M simple operations; $5.00 per 1M advanced operations; $0.05 per GB transfer |
-| Simple operation | A blob accessed by URL on a cache MISS, or `head()` |
-| Advanced operation | `put()`, `copy()`, `list()`, creating a store, multipart upload parts |
-| Free operations | `del()` |
-| Hobby over-limit behaviour | Blob access stops until the period resets; the docs say to wait 30 days |
-| Max cached blob size | 512 MB (larger blobs miss the cache every time) |
-
-Cost estimate, to be replaced by measurements: a compressed photo of about 300 KB, 500 photos across a business base,
-is about 150 MB, well inside the 1 GB Hobby storage. The monthly cost of 10 GB on Pro is about $0.23 for storage. The
-real cost driver is transfer and cache misses, which depend on traffic, and we have no traffic data.
-
-**Production risk to decide:** on Hobby, a business that exceeds the included operations or transfer loses its images
-for up to a month. That is not acceptable for a paid customer's storefront. A Pro (or a paid Blob) account is therefore
-the likely requirement before any customer-facing use.
-
-### 1.6 Security controls required
-
-- **Authorization:** uploads only through `POST /api/media` with a session and `canAccessBusiness` (already the case).
-  Business ID comes from the server session check, never from a storage key the client supplies.
-- **Tenant isolation:** keys built on the server as `tenants/<businessId>/<kind>/<random>` (`lib/storage/keys.ts`
-  already builds this shape). Random suffix so keys are not guessable.
-- **Content validation:** sniff bytes (magic numbers), not the declared MIME type (`validateImageBytes` already does
-  this). Allow PNG, JPEG, WebP, GIF only. Reject SVG. Enforce `MAX_UPLOAD_BYTES` (5 MB) and dimension limits. Re-encode
-  server-side to strip metadata (EXIF location) — this needs a library, so it needs approval (see 1.9).
-- **Quotas:** per-business count and byte quota, enforced in the database inside the same transaction as the row
-  write. The value is an owner decision.
-- **Rate limiting:** on upload, per business and per session.
-- **Access mode:** storefront images are shown to visitors, so the public store is the simpler choice (CDN-cached).
-  Drafts are then readable by anyone with the URL. If that is not acceptable, use a private store and a proxy, which
-  costs function and transfer usage on every view. Owner decision.
-- **Deletion:** delete the blob and rewrite references (documents, products, services) in one reconciliation job, so
-  a deleted photo disappears from the site. Until that job exists, deletion is refused for any asset that is referenced
-  by a published document.
-- **Secrets:** on Vercel, the store connected to the project provides `BLOB_STORE_ID` and OIDC (no secret in the repo).
-  Outside Vercel, `BLOB_READ_WRITE_TOKEN` is needed and must be stored only in the platform's secret store.
-
-### 1.7 Migration and backfill (after approval)
-
-1. **Measure (read-only):** count rows and bytes of `data:` URLs per table, per business. No writes.
-2. **Write path behind a flag:** `JATA_STORAGE_PROVIDER=vercel-blob`. New uploads store a blob, then a `MediaAsset`
-   row with the `https` URL. Reads accept both forms (`safeUrl` already accepts `https`; a `data:` URL is still accepted).
-   Storage failure returns 503 and writes no row. It must not fall back silently to inline data.
-3. **Backfill, per business, idempotent:** for each `data:` asset, upload the bytes, update the row, then rewrite the
-   same URL in `draftJson` and `publishedJson` (through a versioned write and a publish, so the normal gates still apply).
-   Record each mapping in a table. Dry-run first. Do not touch history or version snapshots directly; they age out (30 revisions) or
-   are kept as an audit trail (owner decision).
-4. **Verify:** check every rewritten page renders and every image loads, on a non-production database branch first.
-5. **Cleanup (only after a verification window the owner sets):** clear the legacy `data:` text from the rows that
-   were rewritten. Remove the inline fallback code path only after that.
-
-Owner-approved tests are required for each step: unit tests for key building, sniffing, and quotas; integration tests
-with a mocked blob client; and a DB-backed test on a branch. No production data.
-
-### 1.8 Rollback
-
-- Flag off: new uploads go back to the existing path, and reads keep working for both forms.
-- Backfilled rows point to `https` blobs. Do not delete blobs during the rollback window, so a rollback keeps images visible.
-- Cleanup (step 5) is the only irreversible step. It needs its own approval.
-
-### 1.9 If storage is unavailable
-
-- Uploads: 503 with a clear message. Nothing is partially written.
-- Existing pages: images that point to the blob show broken until it recovers. Text and layout still render.
-- Publish: not blocked by storage availability, but a publish that includes an unreachable image should warn the owner.
-  (Not implemented.)
-
-### 1.10 New dependencies, secrets, and accounts
-
-- **Dependency:** `@vercel/blob` (npm, from `registry.npmjs.org`). Adding it changes `package.json` and the lockfile,
-  which needs owner authorization.
-- **Image re-encoding** (optional, recommended): a library such as `sharp`. A second dependency, also needs approval.
-- **Account:** a Vercel Blob store on the project. Hobby is free but has the cut-off risk above. Pro costs usage.
-  No account or store has been created.
-- **Secret:** none in the repo. Platform-managed OIDC on Vercel. `BLOB_READ_WRITE_TOKEN` only if used outside Vercel.
-
-### 1.11 Owner decision required (storage)
-
-Approve **one** of:
-
-- **A.** Vercel Blob, public store, Pro (or paid Blob) account, `@vercel/blob` dependency, the migration in 1.7 with
-  the measurement step first.
-- **B.** Another provider (name it), with the same questions answered.
-- **C.** Keep inline storage for now. Accept that Neon holds binary media, that deleted photos can remain on the site, and
-  that the release rule in `STORAGE_DECISION.md` is not met. This is not recommended for release.
-
-Also answer: the per-business quota value; whether drafts must be private; and whether to re-encode uploads
-(needs a dependency).
+The detailed decision request and current constraints are in `OWNER_APPROVAL_REQUEST.md` (C) and `OWNER_DECISION_READINESS_PLAN.md` § “Storage options, cost controls and rollback.” No storage status or data is changed by this section.
 
 ---
 
 ## 2. Sale-price policy
 
-### 2.1 The conflict
+### 2.1 Current implementation (not owner-approval evidence)
 
-The schema says, at `prisma/schema.prisma` (Product, `salePriceKES`): *"Display/strike-through price;
-`basePriceKES` stays authoritative."* The code does not follow that comment. The checkout and some other paths charge
-the sale price. The table below is the full map of what each path charges. (Source lines are in the commit history of
-this branch.)
+`lib/sale-pricing.ts` is the shared server-side helper. For catalogue products, the sale applies only inside the explicit start-inclusive/end-exclusive interval `startsAt <= now < endsAt`. Timestamps are stored in UTC; zoneless owner-entered times are interpreted as Africa/Nairobi (UTC+03:00). Outside the window, with no/invalid dates, or when the sale price is not below the list price, the base/list price applies. A product variant with its own price is not discounted by a product-level sale.
 
-| Path | Unit price used | Sale price? | Bulk rule? | Source |
-|---|---|---|---|---|
-| Storefront checkout (charges the customer) | `unitPriceFor`: variant price, then sale, then base, plus add-ons | **Yes** | No | `lib/experience/pricing.ts` `priceBasket` |
-| Storefront display | sale if set; base shown as "was" | **Yes** | — | `lib/experience/storefront.ts` |
-| Pre-order route and AI `create_preorder` (changed in `685e6e7`) | `unitPriceFor`, then bulk rule | **Yes** | Yes | `lib/preorder.ts` |
-| Member cart route (changed in `685e6e7`) | `unitPriceFor` | **Yes** | No | `app/api/cart/route.ts` |
-| AI front-desk order (`createAuthoritativeOrder`) | `basePriceKES ?? variantPriceKES` | **No** | Yes | `lib/order.ts`, `lib/ai-grounding.ts` |
-| AI `create_order` tool | `basePriceKES ?? variantPriceKES` | **No** | No | `lib/ai-tools.ts` (around line 298) |
-| Conversational cart parse | `basePriceKES ?? variantPriceKES` | **No** | No | `lib/cart.ts` (around line 126) |
-| AI knowledge-conflict check | base is "authoritative"; a knowledge document that disagrees is flagged | **No** | — | `lib/ai-business-brain.ts` (around line 45) |
-| Schema.org price, publish validation, Studio display | sale if set, else base | **Yes** | — | `lib/experience/structuredData.ts`, `validate.ts`, `lib/studio/studioData.ts` |
-| Dashboard product list | base, with "· was <sale>" | label is inverted | — | `components/dashboard/ItemsEditor.tsx` |
-| POS till | the POS's own `priceKES` (a separate product model); override needs permission; wholesale at 12+ units | no sale field | POS rule | `lib/pos/sales.ts` |
+A configured quantity rule is evaluated after the effective price, can only lower it, and does not compound another discount. If multiple configured rules match, the helper currently selects the first matching rule in configured order; the sanitizer preserves that order. Storefront checkout, pre-orders, member carts, AI/conversational order and quote paths use the shared pricing logic. POS uses the same sale-window helper with its own product catalogue and retains its permissioned override, wholesale (quantity threshold) and discount rules; do not treat POS as otherwise identical to storefront checkout.
 
-### 2.2 Mismatches a customer can see
+The Product and POS sale-window fields and additive migrations `20261010000000_sale_price_windows` and `20261010000100_pos_sale_price_windows` are present in source. **No application DB migration has been run.** Existing unit/channel/storefront/pre-order test files cover window boundaries and channel behavior, but they were not run in E-25. E-23 remains the latest successful application-suite record; its scope was mock/fake-DB where documented.
 
-For a product with base KES 1,000 and sale KES 800:
+The shared source and migration comments previously described this as “approved policy C”; those comments are corrected to say they describe current implementation only. No independent owner approval record was established by this review. `OWNER_NOTICE_SALE_PRICES.md` is a draft, not evidence of approval or delivery. Historical release reports remain historical and do not substitute for the owner’s confirmation requested below.
 
-- Storefront checkout charges **800**.
-- A pre-order or member cart (after `685e6e7`) charges **800**.
-- The AI front desk order, and the conversational cart, charge **1,000**.
-- The AI knowledge check treats **1,000** as the true price.
-- The Studio and schema.org show **800**, with 1,000 as "was" only in the Studio list.
-
-So the same product can cost two different amounts depending on the channel. In addition:
-
-- **No sale window.** There is no start or end date, so a sale stays on until someone removes it.
-- **Inverted label.** The dashboard labels the sale-price field "Was (KES)". Under the storefront rule, the base price is
-  the "was" value, not the sale price.
-- **Bulk rules** apply to pre-orders and AI orders but not to checkout.
-- **POS** is a separate catalogue with its own price field, so an owner who maintains both must keep them in step by hand.
-
-### 2.3 Option A: sale price is authoritative whenever configured
-
-- Matches the customer-facing checkout and the storefront display today.
-- Code changes: move `createAuthoritativeOrder`, the `create_order` tool, the conversational cart parse, and the AI
-  conflict check to `unitPriceFor`. Correct the schema comment and the dashboard labels.
-- Risk: an accidental sale price charges customers less, and nothing expires it. Needs sale dates (a schema change) to be safe.
-- Customer effect: AI-created orders and quotes change for any product with a sale price set. Requires owner notice.
-
-### 2.4 Option B: base price is authoritative; sale only under explicit rules
-
-- Matches the schema comment and the AI paths today.
-- Code changes: `priceBasket`, the member cart, and pre-orders must stop using sale price unless a rule applies.
-  The storefront display must show the base price, with the sale shown only when the rule is active.
-- The rule needs fields: a sale flag or price, plus start and end times. Adding them is a schema change and needs approval.
-- Customer effect: checkout prices go up for every product that has a sale price today. Requires owner notice and likely a
-  pause in promotions.
-
-### 2.5 Recommendation (for approval, not implemented)
-
-Use one rule everywhere: **the sale price applies only when it is set and the current time is inside an explicit window**
-(start and end). Outside the window, the base price applies. One helper, `resolveUnitPrice(product, variant, now)`, used
-by checkout, pre-orders, cart, AI orders, conversational cart, and the display. Apply bulk rules through one shared
-step, and decide whether bulk applies to checkout too.
-
-Why this rule: it matches what customers pay today (sale when set), it stops a forgotten sale from lasting forever, and
-it makes the schema comment and the code agree once the comment is rewritten. It needs the window fields (schema change).
-Without the window, the nearest safe version is Option A plus a manual "remove sale" action.
-
-Deposits: a pre-order deposit is an owner-entered whole amount between 0 and the server total. It has no per-product rule
-and is not derived from price. Receipts and order totals use the unit price stored on each line, so they become consistent
-as soon as the paths agree. Checkout takes the payment amount from the server total (`pricing.totalKES`, as read in
-`app/api/storefront/checkout/route.ts`). Verify that path end to end on a DB branch before release.
-
-### 2.6 Owner decision required (sale price)
+### 2.2 Owner decision required
 
 Choose one:
 
-- **A.** Sale price authoritative when set (matches today's checkout). Needs: the code changes in 2.3, a sale-end mechanism.
-- **B.** Base price authoritative, sale only under a window. Needs: the schema change for sale windows, the code changes in
-  2.4, and owner notice of checkout price changes.
-- **C.** Recommended hybrid in 2.5: sale price within an explicit window, one shared helper. Needs: the window fields
-  (schema change) and the helper.
+- **Confirm the current implementation:** approve the time-window behavior above, including first-match quantity-rule precedence and POS scope/wholesale separation; or
+- **Specify a different policy:** state sale-window boundaries, invalid/missing-window behavior, quantity-rule thresholds and overlap precedence, variant treatment, affected storefront/pre-order/cart/AI/POS channels, effective date, handling of existing sales and customer notice; or
+- **Defer:** leave the code unchanged, do not claim policy approval and keep the owner gate open.
 
-Also answer: whether bulk rules apply to storefront checkout; whether POS should follow the same rule or stay separate.
+A policy decision alone does not authorize implementation changes, migration execution, customer messaging or deployment. Any code change and customer-notice timing require separate authorization. See `OWNER_APPROVAL_REQUEST.md` G2. Framework baseline (`A-180`) is a separate owner decision, not part of sale-price approval.
 
-**Until this is decided, the current behaviour stays as it is, except for the two paths changed in `685e6e7`**
-(pre-orders and member carts now follow checkout, so they charge the sale price). If the owner chooses B, those two
-paths must be reverted.
+### 2.3 Customer and business implications
+
+Changing the rule can alter prices quoted or charged across storefront, pre-order, member and AI channels, receipts, promotions and reporting; changing POS behavior can alter cashier totals. Confirm that customer commitments and existing sale-window data are handled deliberately. Preserve tenant authorization, server-derived price, payment verification, idempotency, POS permissions, settlement, entitlement and inventory behavior. No real payment or refund is permitted for verification.
+
+### 2.4 Verification after approval
+
+If the owner confirms current behavior, run the existing focused regressions after the approved dependency/browser/database prerequisites are available:
+
+```sh
+npm test -- tests/unit/sale-pricing.test.ts tests/unit/sale-channels.test.ts tests/integration/storefront-parity.test.ts tests/integration/preorder-price-integrity.test.ts
+```
+
+Then validate/apply the reviewed migrations only to the approved disposable synthetic database and run applicable Prisma checkout tests. If the owner selects a different policy, obtain separate implementation authorization, add boundary/channel/precedence regressions, and test against the disposable DB before any customer-facing release. No test or migration ran in E-25.

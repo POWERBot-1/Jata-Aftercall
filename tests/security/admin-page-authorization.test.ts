@@ -42,6 +42,8 @@ const pages: Array<[string, () => Promise<{ default: (props: any) => Promise<unk
   // The JATA view of the payment wallet: cross-tenant by design, so it is admin-only for the same
   // reason as the rest of this list — and it must never read before it has authorized (§102).
   ["/admin/payments/wallet", () => import("@/app/admin/payments/wallet/page")],
+  // Phase 5 team entitlement console: reads its own audit history, so it needs the same guard.
+  ["/admin/team-access", () => import("@/app/admin/team-access/page")],
 ];
 
 describe("every admin page enforces ADMIN itself, before reading data", () => {

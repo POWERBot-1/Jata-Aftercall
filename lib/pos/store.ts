@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { negativeStockAllowed } from "./inventory";
 import type { InventoryMovementReason } from "./types";
 import type { PosConfiguration } from "./types";
+import { InlineMediaPersistenceError, containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
 
 /**
  * Tenant-scoped data access for the Business POS (spec §5, §53, §75).
@@ -256,18 +257,20 @@ function productData(input: ProductInput): Record<string, unknown> {
     taxable: input.taxable === true,
     durationMinutes: input.durationMinutes == null ? null : Math.max(0, asInt(input.durationMinutes)),
     variantOptions: clampText(input.variantOptions, 4000),
-    imageUrl: clampText(input.imageUrl, 2000),
+    ...(input.imageUrl !== undefined ? { imageUrl: clampText(input.imageUrl, 2000) } : {}),
     isActive: input.isActive !== false,
     sortOrder: asInt(input.sortOrder),
   };
 }
 
 export async function createProduct(businessId: string, input: ProductInput, client: PosClient = db()) {
+  if (containsInlineImageDataUrl(input)) throw new InlineMediaPersistenceError();
   return client.posProduct.create({ data: { businessId, ...productData(input) } });
 }
 
 /** Compound-key update: an id belonging to another business updates nothing. */
 export async function updateProduct(businessId: string, productId: string, input: ProductInput, client: PosClient = db()) {
+  if (containsInlineImageDataUrl(input)) throw new InlineMediaPersistenceError();
   return client.posProduct.updateMany({ where: { businessId, id: productId }, data: productData(input) });
 }
 
@@ -466,6 +469,7 @@ export async function addCustomerAsset(
   asset: { label: string; name: string; identifier?: string | null; detailsJson?: string | null },
   client: PosClient = db(),
 ) {
+  if (containsInlineImageDataUrl(asset)) throw new InlineMediaPersistenceError();
   const customer = await client.posCustomer.findFirst({ where: { businessId, id: customerId }, select: { id: true } });
   if (!customer) return null;
   return client.posCustomerAsset.create({

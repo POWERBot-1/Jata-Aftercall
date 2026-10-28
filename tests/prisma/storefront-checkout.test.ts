@@ -73,9 +73,10 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
     otherSlug = second.business.slug;
     other = await seedProduct(p, second.business.id, { name: "Other shop item", basePriceKES: 500 });
   });
-  afterAll(async () => { delete process.env.PAYSTACK_SECRET_KEY; if (p) await p.$disconnect(); });
+  afterAll(async () => { delete process.env.PAYSTACK_SECRET_KEY; if (p) await p.$disconnect(); vi.unstubAllEnvs(); });
 
   beforeEach(async () => {
+    vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
     vi.useRealTimers();
     // A fresh product per test keeps stock and sale windows independent.
     product = await seedProduct(p, biz.id, {

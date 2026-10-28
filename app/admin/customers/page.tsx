@@ -1,5 +1,8 @@
+import { formatDate, formatNumber } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
+import { AdminPage, AdminRecord, AdminSearch, AdminStatus } from "@/components/admin/AdminUI";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminCustomers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -10,34 +13,48 @@ export default async function AdminCustomers({ searchParams }: { searchParams: P
     ? { OR: [{ email: { contains: q, mode: "insensitive" as const } }, { name: { contains: q, mode: "insensitive" as const } }, { phone: { contains: q } }] }
     : {};
   const users = await prisma.user.findMany({ where, orderBy: { createdAt: "desc" }, take: 50, include: { businesses: false } as any });
-  // Fetch business counts per user
+  // Per-account detail is read one account at a time so a single slow relation cannot blank the list.
   const withCounts = await Promise.all(
     users.map(async (u) => {
       const bizCount = await prisma.business.count({ where: { ownerId: u.id } });
       const payments = await prisma.payment.findMany({ where: { userId: u.id }, orderBy: { createdAt: "desc" }, take: 1 });
       const sub = await prisma.subscription.findFirst({ where: { userId: u.id }, include: { plan: true } });
       return { ...u, bizCount, lastPayment: payments[0] || null, sub };
-    })
+    }),
   );
 
   return (
-    <div>
-      <h1 className="text-lg font-bold">Customers</h1>
-      <form className="mt-3 flex gap-2">
-        <input name="q" defaultValue={q} placeholder="Search email / name / phone" className="w-full rounded-xl border px-3 py-2 text-sm" />
-        <button className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">Search</button>
-      </form>
-
-      <div className="mt-4 space-y-3">
-        {withCounts.map((u) => (
-          <div key={u.id} className="rounded-2xl border bg-white p-4">
-            <p className="text-sm font-bold">{u.name || "—"} — {u.email}</p>
-            <p className="text-xs text-zinc-500">Phone: {u.phone || "—"} • Role: {u.role} • Businesses: {u.bizCount}</p>
-            <p className="text-xs">Subscription: {u.sub ? `${u.sub.status} • ${u.sub.plan.name} • exp ${u.sub.expiresAt ? new Date(u.sub.expiresAt).toLocaleDateString() : "—"}` : "None"}</p>
-            <p className="text-xs">Last payment: {u.lastPayment ? `${u.lastPayment.reference} • ${u.lastPayment.status} • KES ${u.lastPayment.amount / 100}` : "None"}</p>
-          </div>
-        ))}
+    <AdminPage
+      kicker="Platform admin"
+      title="Customers"
+      meta={`${withCounts.length} ${withCounts.length === 1 ? "account" : "accounts"}${q ? ` matching “${q}”` : ", newest first"}. Contact details are shown to admins only; nothing here is exported or shared.`}
+    >
+      <AdminSearch action="/admin/customers" defaultValue={q} placeholder="Search email, name or phone" label="Search accounts by email, name or phone" />
+      <div className="ws-stack">
+        {withCounts.length === 0 ? (
+          <p className="ws-muted">No account matches that search.</p>
+        ) : (
+          withCounts.map((u) => (
+            <AdminRecord
+              key={u.id}
+              title={u.name || u.email}
+              subtitle={u.name ? u.email : u.phone || "No phone on file"}
+              facts={[
+                { label: "Role", value: <AdminStatus value={u.role} /> },
+                { label: "Businesses", value: formatNumber(u.bizCount) },
+                { label: "Subscription", value: u.sub ? `${u.sub.status} · ${u.sub.plan.name}` : "None" },
+                { label: "Renews / expires", value: u.sub?.expiresAt ? formatDate(u.sub.expiresAt) : "—" },
+                {
+                  label: "Last payment",
+                  value: u.lastPayment
+                    ? `KES ${formatNumber(u.lastPayment.amount / 100)} · ${u.lastPayment.status}`
+                    : "None",
+                },
+              ]}
+            />
+          ))
+        )}
       </div>
-    </div>
+    </AdminPage>
   );
 }

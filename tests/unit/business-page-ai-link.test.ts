@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const state = vi.hoisted(() => ({ entitled: false, throwEntitlement: false }));
+const state = vi.hoisted(() => ({ live: false, draft: false, throwEntitlement: false }));
 
 const business = {
   id: "biz-1", slug: "acme", name: "Acme", category: "Shop", phone: "0722000000", whatsapp: "0722000000",
@@ -26,10 +26,20 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => null) }));
 vi.mock("@/lib/referral", () => ({ ensureReferralCode: vi.fn(async () => null), referralPath: vi.fn(() => "/r/x") }));
-vi.mock("@/lib/ai-entitlement", () => ({
-  getAIPackageStatus: vi.fn(async () => {
+// The link follows the derived lifecycle (lib/ai-publication.ts): a desk that is entitled but
+// still a draft is not live, and /b/<slug>/ai would 404 — so the button stays hidden.
+vi.mock("@/lib/ai-publication", () => ({
+  getAIFrontDeskPublication: vi.fn(async () => {
     if (state.throwEntitlement) throw new Error("db down");
-    return { entitled: state.entitled };
+    if (state.draft) {
+      return { state: "DRAFT", publiclyOperational: false, entitled: true, isPublished: true };
+    }
+    return {
+      state: state.live ? "LIVE" : "SUSPENDED",
+      publiclyOperational: state.live,
+      entitled: state.live,
+      isPublished: state.live,
+    };
   }),
 }));
 
@@ -39,7 +49,7 @@ const render = async () =>
   renderToStaticMarkup(await PublicBusinessPage({ params: Promise.resolve({ slug: "acme" }), searchParams: Promise.resolve({}) }));
 
 describe("public business page AI entry", () => {
-  beforeEach(() => { state.entitled = false; state.throwEntitlement = false; });
+  beforeEach(() => { state.live = false; state.draft = false; state.throwEntitlement = false; });
 
   it("is hidden for a business without a live AI Business Front Desk", async () => {
     const html = await render();
@@ -48,14 +58,20 @@ describe("public business page AI entry", () => {
     expect(html).not.toContain("/b/acme/ai");
   });
 
-  it("is shown for a business whose AI package is entitled", async () => {
-    state.entitled = true;
+  it("is shown for a business whose Front Desk is live and entitled", async () => {
+    state.live = true;
     const html = await render();
     expect(html).toContain("Ask AI Front Desk");
     expect(html).toContain('href="/b/acme/ai"');
   });
 
-  it("fails closed (hidden) if the entitlement check itself fails", async () => {
+  it("is hidden for an entitled business that never activated its Front Desk", async () => {
+    state.draft = true;
+    const html = await render();
+    expect(html).not.toContain("Ask AI Front Desk");
+  });
+
+  it("fails closed (hidden) if the lifecycle check itself fails", async () => {
     state.throwEntitlement = true;
     const html = await render();
     expect(html).not.toContain("Ask AI Front Desk");

@@ -1,0 +1,9 @@
+{
+  "acceptedOn": "2026-10-21",
+  "owner": "repository owner",
+  "scope": "Empty — all six pre-existing divergences discovered at 2575cf4 are reconciled in prisma/schema.prisma.",
+  "why": "check-schema-drift.mjs fails on any unrecorded drift finding and on any stale baseline entry. Emptying entries enforces strict zero schema drift between prisma/migrations and prisma/schema.prisma.",
+  "notA": "Zero drift waivers remain active.",
+  "remediation": "Reconciled in prisma/schema.prisma and tests/unit/pos-schema.test.ts via docs/schema-reconciliation/reconciliation.patch and docs/schema-reconciliation/reconciliation-tests.patch with 0 DDL statements.",
+  "entries": []
+}

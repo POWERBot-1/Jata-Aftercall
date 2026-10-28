@@ -35,7 +35,9 @@ describe("seeded structural variants", () => {
     expect(document.brand).toEqual(doc.brand);
     expect(document.settings).toEqual(doc.settings);
     expect(document.categoryKey).toBe(doc.categoryKey);
-    const byId = (sections: typeof doc.sections) => new Map(sections.map((section) => [section.id, JSON.stringify(section)]));
+    // Layout is deliberately a presentation change in format2; ALL factual/content fields remain exact.
+    const byId = (sections: typeof doc.sections) => new Map(sections.map(({ layout, ...content }) => [content.id, JSON.stringify(content)]));
+    expect(document.sections.filter((section) => ["featured", "menu", "services", "properties", "gallery"].includes(section.type)).every((section) => section.layout === "family")).toBe(true);
     expect(byId(document.sections)).toEqual(byId(doc.sections));
     expect(document.sections.map((s) => s.id).sort()).toEqual(doc.sections.map((s) => s.id).sort());
   });
@@ -50,7 +52,7 @@ describe("seeded structural variants", () => {
 
   it("records provenance in a generation field, and that field survives normalisation", () => {
     const { document } = buildVariant(base(), "biz-4:1", 2);
-    expect(document.generation).toEqual({ seed: "biz-4:1", version: 1, attempt: 2 });
+    expect(document.generation).toEqual({ seed: "biz-4:1", version: 2, attempt: 2 });
     const reloaded = normalizeExperienceDocument(JSON.parse(JSON.stringify(document)));
     expect(reloaded.generation).toEqual(document.generation);
   });

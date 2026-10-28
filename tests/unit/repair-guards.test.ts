@@ -62,7 +62,9 @@ describe("runtime and schema guards", () => {
     const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
     expect(schema).toContain("ownedBusinesses Business[]");
     expect(schema).toContain("subscriptions Subscription[]");
-    const migrations = readdirSync(path.join(root, "prisma/migrations")).filter((name) => name !== "migration_lock.toml");
+    const migrations = readdirSync(path.join(root, "prisma/migrations"))
+      .filter((name) => name !== "migration_lock.toml")
+      .sort();
     // The additional migrations are authorised, all purely additive: the Stage 2 referral
     // attribution schema, the commerce baseline the platform always needed, the Interactive
     // Business package schema, the Configurable Business POS schema, the Website Studio AI
@@ -74,9 +76,17 @@ describe("runtime and schema guards", () => {
     // promotion of the POS quantity columns, and the POS till-sale replay guard (one new
     // tenant-scoped table that stops a duplicate till submission becoming a second sale), and the
     // durable checkout idempotency table (replaces in-memory order idempotency maps, one additive table),
-    // and the sale-price window columns (approved pricing policy C: additive nullable columns and a CHECK that
+    // and the sale-price window columns (current implementation: additive nullable columns and a CHECK that
     // a window ends after it starts; existing sales with no dates stay inactive, no data is rewritten),
-    // and POS / ERP - PRO (38 new tenant-scoped ERP, accounting, messaging and storefront tables that
+    // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
+    // column that records which clock a booking was anchored to, so a legacy row keeps its stored
+    // instant and its meaning and no historical row is rewritten or backfilled), the media version
+    // counter (one defaulted integer for strict compare-and-swap), and password recovery (additive
+    // token table, per-account cooldown, and a defaulted session revocation counter), and the
+    // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only),
+    // and the additive JATA Autopilot foundation (tenant-scoped Autopilot* tables, indexes, and
+    // foreign keys only), and POS / ERP - PRO (38 new tenant-scoped ERP, accounting, messaging and
+    // storefront tables that
     // sit beside the existing POS without touching it; every statement is CREATE TABLE, CREATE INDEX
     // or a guarded foreign key on a table the same migration creates).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
@@ -97,6 +107,11 @@ describe("runtime and schema guards", () => {
       "20261010000000_sale_price_windows",
       "20261010000100_pos_sale_price_windows",
       "20261010000200_checkout_idempotency",
+      "20261014000000_booking_time_zone_marker",
+      "20261017000000_media_asset_version",
+      "20261018000000_password_reset_security",
+      "20261023000000_pos_publication_resolution",
+      "20261025000000_jata_autopilot_foundation",
       "20261027000000_pos_erp_pro",
     ]);
     for (const migration of migrations) {
@@ -134,6 +149,11 @@ describe("runtime and schema guards", () => {
       "20261005020000_pos_sale_refund_integrity",
       "20261005030000_pos_fractional_quantities",
       "20261005040000_pos_sale_idempotency",
+      "20261014000000_booking_time_zone_marker",
+      "20261017000000_media_asset_version",
+      "20261018000000_password_reset_security",
+      "20261023000000_pos_publication_resolution",
+      "20261025000000_jata_autopilot_foundation",
       "20261027000000_pos_erp_pro",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -178,6 +198,69 @@ describe("runtime and schema guards", () => {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8").toUpperCase();
       expect(sql).toContain("ADD COLUMN");
     }
+  });
+
+  it("keeps media metadata concurrency additive and defaulted", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model MediaAsset {");
+    const media = schema.slice(start, schema.indexOf("\n}", start));
+    expect(media).toContain("version    Int      @default(0)");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261017000000_media_asset_version/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps password recovery additive, hashed-token only, and session-revocable", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const userStart = schema.indexOf("model User {");
+    const user = schema.slice(userStart, schema.indexOf("\n}", userStart));
+    expect(user).toContain("sessionVersion Int          @default(0)");
+    expect(user).toContain("passwordResetRequestedAt DateTime?");
+    const tokenStart = schema.indexOf("model PasswordResetToken {");
+    const token = schema.slice(tokenStart, schema.indexOf("\n}", tokenStart));
+    expect(token).toContain("userId    String   @unique");
+    expect(token).toContain("tokenHash String   @unique");
+    expect(token).toContain("expiresAt DateTime");
+    expect(token).toContain("usedAt    DateTime?");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261018000000_password_reset_security/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('"sessionVersion" INTEGER NOT NULL DEFAULT 0');
+    expect(sql).toContain('"passwordResetRequestedAt" TIMESTAMP(3)');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "PasswordResetToken"');
+    expect(sql).toContain('FOREIGN KEY ("userId") REFERENCES "User"("id")');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps the paid-POS publication policy additive and payment-preserving", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model PosPublicationResolution {");
+    expect(start).toBeGreaterThan(-1);
+    const policy = schema.slice(start, schema.indexOf("\n}", start));
+    expect(policy).toMatch(/paymentId\s+String\s+@unique/);
+    expect(policy).toMatch(/confirmedAt\s+DateTime/);
+    expect(policy).toMatch(/deadlineAt\s+DateTime/);
+    expect(policy).toMatch(/remedyStatus\s+String\s+@default\("PENDING_PUBLICATION"\)/);
+    expect(policy).toContain('onDelete: Restrict');
+    expect(policy).toContain("@@index([status, deadlineAt])");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261023000000_pos_publication_resolution/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "PosPublicationResolution"');
+    expect(sql).toContain('"paymentId" TEXT NOT NULL');
+    expect(sql).toContain('"deadlineAt" TIMESTAMP(3) NOT NULL');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "PosPublicationResolution_paymentId_key"');
+    expect(sql).toContain('ON "PosPublicationResolution"("paymentId")');
+    expect(sql).toContain('ON DELETE RESTRICT ON UPDATE CASCADE');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE "|ALTER COLUMN/);
   });
 
   it("adds the Business POS as new tenant-scoped tables and touches no existing table", () => {
@@ -259,6 +342,38 @@ describe("runtime and schema guards", () => {
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "MsgWallet_businessId_key"');
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrder_publicToken_key"');
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpJournal_businessId_journalNumber_key"');
+  });
+
+  it("adds JATA Autopilot as new tenant-scoped tables and touches no existing table", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261025000000_jata_autopilot_foundation/migration.sql"),
+      "utf8",
+    );
+
+    const autopilotModels = [
+      "AutopilotSubscription",
+      "AutopilotEntitlement",
+      "AutopilotConfiguration",
+      "AutopilotUsageLedger",
+      "AutopilotCustomerProfile",
+      "AutopilotConsentRecord",
+      "AutopilotSession",
+      "AutopilotMessage",
+      "AutopilotIngestionRecord",
+      "AutopilotActionProposal",
+      "AutopilotAuditEvent",
+    ];
+    for (const model of autopilotModels) {
+      expect(schema).toContain(`model ${model} {`);
+      const start = schema.indexOf(`model ${model} {`);
+      const block = schema.slice(start, schema.indexOf("\n}", start));
+      expect(block).toContain("businessId");
+      expect(block).toContain("@@index([businessId");
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS "${model}"`);
+    }
+    expect(sql).not.toMatch(/ALTER TABLE "(?!Autopilot)/);
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE "|ALTER COLUMN/);
   });
 
   it("extends the schema additively for the Interactive Business package", () => {

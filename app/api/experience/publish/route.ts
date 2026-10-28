@@ -11,14 +11,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, assertBusinessRole } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
 import { getBusinessUrl } from "@/lib/url";
-import { normalizeExperienceDocument } from "@/lib/experience/document";
+import { validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
 import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 
 export const dynamic = "force-dynamic";
 
@@ -65,8 +67,12 @@ export async function POST(req: Request) {
   }
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
 
+  // Publishing AND unpublishing are privileged, publish-level actions (§5, §15): ownership
+  // alone is not enough — every member used to pass this gate, including VIEWER. The role is
+  // resolved fail-closed (unknown role, failed lookup, or cross-tenant → no role → 403), so
+  // neither direction mutates protected state without ADMIN/OWNER-level rights.
   try {
-    await assertBusinessOwnership(businessId, session);
+    await assertBusinessRole(businessId, session, "publish");
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -77,7 +83,9 @@ export async function POST(req: Request) {
     const { business, experience } = context;
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
 
-    // Unpublishing is always allowed — never lock an owner out of hiding their site.
+    // Unpublishing skips the payment/entitlement gates — never lock an owner out of hiding
+    // their site. The publish-level role check above still applies: hiding the site is a
+    // protected state change too, and only users with the publish role may perform it.
     if (action === "unpublish") {
       if (experience) {
         await prisma.businessExperience.update({
@@ -99,8 +107,21 @@ export async function POST(req: Request) {
     }
 
     const isAdmin = session.role === "ADMIN";
+    const teamFreeAccess = isAdmin ? false : await hasTeamFreeAccessForBusiness(businessId);
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(experience.draftJson), experience.categoryKey);
+    const schema = validateExperienceJson(experience.draftJson, experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        error: "Your website configuration needs attention before publishing.",
+        code: "experience_schema_invalid", requires: "SCHEMA", published: false, issues: schema.issues,
+      }, { status: 409 });
+    }
+    const document = schema.document;
+    // The live site remains untouched. Publishing a legacy inline image would duplicate its
+    // bytes into publishedJson and ExperienceVersion; require removal/replacement first.
+    if (containsInlineImageDataUrl(document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE, published: false }, { status: 503 });
+    }
 
     const validation = validateForPublication({
       document,
@@ -111,11 +132,16 @@ export async function POST(req: Request) {
       entitlement,
       paidPayment: context.paidPayment,
       subscription: context.subscription,
+      teamFreeAccess,
     });
 
     // Payment-before-publication is enforced with the existing gate (§3) — not a new one.
-    const verifiedPayment = hasVerifiedPublicationRight({ paidPayment: context.paidPayment, subscription: context.subscription });
-    if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+    const verifiedPayment = hasVerifiedPublicationRight(
+      { paidPayment: context.paidPayment, subscription: context.subscription },
+      new Date(),
+      { teamFreeAccess },
+    );
+    if (!canSetPublished(true, { isAdmin, verifiedPayment, teamFreeAccess })) {
       return NextResponse.json({
         error: SAFE_ERRORS.publishPaymentRequired,
         published: false,
@@ -231,8 +257,17 @@ export async function GET(req: Request) {
     const context: Loaded = await loadPublishContext(businessId);
     if (!context.business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     if (!context.experience) return NextResponse.json({ ready: false, checks: [] });
+    const teamFreeAccess = await hasTeamFreeAccessForBusiness(businessId);
     const entitlement = await getInteractiveEntitlement(businessId);
-    const document = normalizeExperienceDocument(JSON.parse(context.experience.draftJson), context.experience.categoryKey);
+    const schema = validateExperienceJson(context.experience.draftJson, context.experience.categoryKey);
+    if (!schema.ok) {
+      return NextResponse.json({
+        ready: false, failedCount: 1, entitlement, version: context.experience.draftVersion,
+        publishedVersion: context.experience.publishedVersion, code: "experience_schema_invalid", issues: schema.issues,
+        checks: [{ id: "schema", label: "Supported safe experience format", status: "fail", hint: schema.issues[0]?.message }],
+      });
+    }
+    const document = schema.document;
     const validation = validateForPublication({
       document,
       business: context.business,
@@ -242,6 +277,7 @@ export async function GET(req: Request) {
       entitlement,
       paidPayment: context.paidPayment,
       subscription: context.subscription,
+      teamFreeAccess,
     });
     return NextResponse.json({ ...validation, entitlement, version: context.experience.draftVersion, publishedVersion: context.experience.publishedVersion });
   } catch {

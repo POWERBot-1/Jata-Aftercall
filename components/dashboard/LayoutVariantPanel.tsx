@@ -8,8 +8,10 @@
  * draft are kept. Asking again only previews: the owner is never sent to a new draft automatically.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ExperienceDocument } from "@/lib/experience/types";
+import { getExperienceProfile } from "@/lib/experience/categories";
+import { TEMPLATE_FAMILIES, DESIGN_PERSONALITIES, DESIGN_AUDIENCES, DESIGN_DENSITIES, type DesignGoal, type ArtDirection, type TemplateFamilyKey } from "@/lib/experience/templateFamilies";
 import { themeOf } from "@/lib/experience/document";
 
 type Candidate = {
@@ -21,6 +23,7 @@ type Candidate = {
   comparedWith: number;
   baseDraftVersion: number;
   history: { publishedCompared: number; limitation: string | null };
+  direction?: { family: TemplateFamilyKey; semanticScore: number; reasons: Array<{ code: string; explanation: string }> };
 };
 
 export function LayoutVariantPanel({
@@ -35,6 +38,17 @@ export function LayoutVariantPanel({
   const [busy, setBusy] = useState<"" | "preview" | "apply">("");
   const [result, setResult] = useState<Candidate | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const caps = getExperienceProfile(current.categoryKey).capabilities;
+  const [goal, setGoal] = useState<DesignGoal>(current.artDirection?.goal || (caps.includes("commerce") ? "sell" : caps.includes("booking") ? "book" : "enquire"));
+  const [personality, setPersonality] = useState<ArtDirection["personality"]>(current.artDirection?.personality || "warm");
+  const [audience, setAudience] = useState<ArtDirection["audience"]>(current.artDirection?.audience || "local");
+  const [density, setDensity] = useState<ArtDirection["density"]>(current.artDirection?.density || "balanced");
+  const [family, setFamily] = useState<"" | TemplateFamilyKey>("");
+  useEffect(() => {
+    const capabilities = getExperienceProfile(current.categoryKey).capabilities;
+    setGoal(current.artDirection?.goal || (capabilities.includes("commerce") ? "sell" : capabilities.includes("booking") ? "book" : "enquire"));
+    setResult(null); setFamily("");
+  }, [businessId, current.categoryKey, current.artDirection?.goal]);
 
   async function preview(seed?: string) {
     setBusy("preview");
@@ -43,7 +57,7 @@ export function LayoutVariantPanel({
       const response = await fetch("/api/experience/variant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, ...(seed ? { seed } : {}) }),
+        body: JSON.stringify({ businessId, brief: { goal, personality, audience, density }, ...(family ? { family } : {}), ...(seed ? { seed } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -100,6 +114,16 @@ export function LayoutVariantPanel({
       <p className="jata-hint mt-1">
         JATA creates a different arrangement of your existing content. Your prices, products and contact details stay exactly as they are.
       </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">Customer objective<select className="jata-input mt-1" disabled={busy !== ""} value={goal} onChange={(event) => { setGoal(event.target.value as DesignGoal); setFamily(""); setResult(null); }}>
+          {(["sell", "book", "enquire", "browse"] as const).filter((value) => value !== "sell" || caps.includes("commerce")).filter((value) => value !== "book" || caps.includes("booking")).map((value) => <option key={value} value={value}>{value === "sell" ? "Discover and order" : value === "book" ? "Choose and book" : value === "enquire" ? "Understand and enquire" : "Browse catalogue"}</option>)}
+        </select></label>
+        <label className="text-sm">Brand personality<select className="jata-input mt-1" disabled={busy !== ""} value={personality} onChange={(event) => { setPersonality(event.target.value as ArtDirection["personality"]); setResult(null); }}>{DESIGN_PERSONALITIES.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label className="text-sm">Target audience<select className="jata-input mt-1" disabled={busy !== ""} value={audience} onChange={(event) => { setAudience(event.target.value as ArtDirection["audience"]); setResult(null); }}>{DESIGN_AUDIENCES.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label className="text-sm">Information density<select className="jata-input mt-1" disabled={busy !== ""} value={density} onChange={(event) => { setDensity(event.target.value as ArtDirection["density"]); setResult(null); }}>{DESIGN_DENSITIES.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label className="text-sm sm:col-span-2">Composition family<select className="jata-input mt-1" disabled={busy !== ""} value={family} onChange={(event) => { setFamily(event.target.value as "" | TemplateFamilyKey); setResult(null); }}><option value="">Content-led recommendation</option>{TEMPLATE_FAMILIES.filter((entry) => entry.goals.includes(goal)).map((entry) => <option key={entry.key} value={entry.key}>{entry.name}{entry.immersive !== "none" ? " — HTML fallback, scene not activated" : ""}</option>)}</select></label>
+      </div>
+      <p className="jata-hint mt-2">Deterministic content/intent reasoning, not a provider call or measured conversion/performance score. No new media generated or uploaded.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="jata-btn" disabled={busy !== ""} onClick={() => void preview()}>
           {busy === "preview" ? "Creating…" : "Preview a layout"}
@@ -128,6 +152,7 @@ export function LayoutVariantPanel({
       </div>
       {result ? (
         <div className="mt-3 text-sm text-zinc-700" aria-live="polite">
+          {result.direction ? <><p>Composition: <strong>{TEMPLATE_FAMILIES.find((entry) => entry.key === result.direction.family)?.name}</strong></p><ul className="mt-1 list-disc pl-5">{result.direction.reasons.slice(0, 5).map((reason) => <li key={reason.code}>{reason.explanation}</li>)}</ul></> : null}
           <p>
             Preview theme: <strong>{candidateTheme}</strong>
             {result.change.themeChanged ? "" : " (same theme)"}

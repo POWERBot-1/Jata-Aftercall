@@ -10,6 +10,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { calculateSegments, DEFAULT_SMS_TARIFFS } from "@/lib/messaging/segments";
+import { formatNumber } from "@/lib/format";
 
 type Option = { id: string; label: string; hint?: string };
 
@@ -226,7 +227,7 @@ export function CampaignComposer({ businessId, action, templates, senders, chann
             <dl className="erp-grid erp-grid-3">
               <div className="erp-kpi"><dt>Eligible</dt><dd>{preview.eligibleCount}</dd><small>of {preview.totalContacts} contacts</small></div>
               <div className="erp-kpi"><dt>Excluded</dt><dd>{preview.excludedCount}</dd><small>with a reason for each</small></div>
-              <div className="erp-kpi"><dt>Estimated cost</dt><dd>KES {(preview.estimatedCostCents / 100).toLocaleString("en-KE", { maximumFractionDigits: 2 })}</dd><small>{preview.segmentsPerMessage} part{preview.segmentsPerMessage === 1 ? "" : "s"} at KES {(preview.perSegmentCents / 100).toFixed(2)}</small></div>
+              <div className="erp-kpi"><dt>Estimated cost</dt><dd>KES {formatNumber(preview.estimatedCostCents / 100)}</dd><small>{preview.segmentsPerMessage} part{preview.segmentsPerMessage === 1 ? "" : "s"} at KES {(preview.perSegmentCents / 100).toFixed(2)}</small></div>
             </dl>
             <p className="erp-hint">{preview.costNote}</p>
             {preview.excluded.length > 0 ? (

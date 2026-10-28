@@ -1,7 +1,7 @@
 /**
  * Price presentation on AI-facing and customer-facing surfaces (customer AI page, AI brain API, AI dashboard API).
- * Base price, active sale and expired sale must each be shown correctly, and no sale window or raw sale
- * price may leave the server through these views.
+ * Base price, active sale and expired sale must each be shown correctly; raw sale-window fields and
+ * an inactive/raw sale price must not leave the server through these views.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

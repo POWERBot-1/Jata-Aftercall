@@ -10,8 +10,10 @@
  * conditional PENDING → PAID update and the processed-webhook key.
  */
 
-import { subscriptionWindow } from "../paymentVerification";
+import { isProviderTransactionId, subscriptionWindow } from "../paymentVerification";
+import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "../media/persistence-policy";
 import { provisionAfterPayment } from "./provisioning";
+import { recordPosPublicationResolution } from "./publication-policy";
 import { POS_PLAN_KEY } from "./entitlement";
 
 export type PosSettlementResult = {
@@ -33,7 +35,7 @@ export type PosSettlementParams = {
   };
   plan: { id: string; key: string; priceKES: number; durationDays: number };
   eventId?: string;
-  verification?: { paystackId?: string; raw?: unknown };
+  verification?: { paystackId?: string; raw?: unknown; providerConfirmedAt?: string };
   /** A PAID payment with no subscription row (legacy repair) skips the PENDING guard. */
   repairingLegacyPaidPayment?: boolean;
 };
@@ -54,13 +56,36 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
     return { subscription: current, alreadySettled: true, posSubscription: true };
   }
 
-  if (!params.repairingLegacyPaidPayment) {
+  const repairingLegacyPaidPayment = params.repairingLegacyPaidPayment === true && payment.status === "PAID" && !current;
+  if (params.repairingLegacyPaidPayment && !repairingLegacyPaidPayment) throw new Error("PAYMENT_STATE_CHANGED");
+  let legacyRepairConfirmedAt: Date | null = null;
+  if (repairingLegacyPaidPayment) {
+    // A mutable ledger updatedAt/createdAt is not proof of when money was confirmed. Only the
+    // verified provider's paid_at may anchor a legacy case; absent evidence fails closed.
+    const value = verification?.providerConfirmedAt;
+    const parsed = typeof value === "string" && value.length <= 64 ? new Date(value) : null;
+    if (!parsed || !Number.isFinite(parsed.getTime())) throw new Error("LEGACY_PAYMENT_CONFIRMATION_TIME_REQUIRED");
+    legacyRepairConfirmedAt = parsed;
+  }
+  const providerEvidence = isProviderTransactionId(verification?.paystackId);
+  if (!repairingLegacyPaidPayment && !providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
+
+  if (!repairingLegacyPaidPayment) {
+    const rawForStorage = verification?.raw === undefined
+      ? undefined
+      : serializeJsonWithoutInlineImageData(verification.raw);
+    // Provider evidence remains authoritative for this call, but an unsafe optional identifier
+    // must not block the confirmed payment/entitlement settlement transaction.
+    const paystackIdForStorage = verification?.paystackId &&
+      !containsInlineImageDataUrl(verification.paystackId)
+      ? verification.paystackId
+      : undefined;
     const changed = await tx.payment.updateMany({
-      where: { id: payment.id, status: "PENDING" },
+      where: { id: payment.id, status: payment.status },
       data: {
         status: "PAID",
-        ...(verification?.paystackId ? { paystackId: verification.paystackId } : {}),
-        ...(verification?.raw !== undefined ? { raw: JSON.stringify(verification.raw) } : {}),
+        ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+        ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
     });
     if (changed.count !== 1) {
@@ -112,9 +137,19 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
     create: { businessId: payment.businessId, packageKey: plan.key, status: "ACTIVE", activatedAt: now, expiresAt },
   });
 
-  // DRAFT/CONFIGURED → PROVISIONING → LIVE happens in the same transaction (§43, §44):
-  // a paid business is never left with an unpublished configuration.
-  await provisionAfterPayment(tx, { businessId: payment.businessId, actorId: payment.userId });
+  // Payment and publication are separate facts in the same transaction. The owner-selected
+  // policy allows paid, entitled, draft-backed POS sales while publication is blocked, but the
+  // lifecycle must not claim LIVE before a snapshot exists. A fresh case gets exactly 72 hours
+  // from this server confirmation; a legacy repair uses verified provider paid_at. Retries cannot
+  // move either deadline.
+  const outcome = await provisionAfterPayment(tx, { businessId: payment.businessId, actorId: payment.userId, now });
+  await recordPosPublicationResolution(tx, {
+    payment: { id: payment.id, reference: payment.reference, businessId: payment.businessId },
+    confirmedAt: legacyRepairConfirmedAt ?? now,
+    entitlementStatus: "ACTIVE",
+    outcome,
+    actorId: payment.userId,
+  });
 
   if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
 

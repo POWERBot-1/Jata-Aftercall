@@ -4,6 +4,7 @@ import { loadExpenses } from "@/lib/erp/loaders";
 import { formatCentsShort } from "@/lib/erp/money";
 import { EmptyState, Kpi, Notice, PageHead } from "@/components/erp/ErpBits";
 import { recordExpenseAction } from "../actions";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -119,5 +120,5 @@ export default async function ExpensesPage({ params, searchParams }: { params: P
 }
 
 function humanDate(value: string | Date): string {
-  return new Date(value).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  return formatDate(value);
 }

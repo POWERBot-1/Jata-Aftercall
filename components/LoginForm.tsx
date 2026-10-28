@@ -35,15 +35,18 @@ export default function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="jata-card mt-6 space-y-3 p-5">
+    <form onSubmit={submit} className="space-y-3">
       <Field id="login-email" label="Email" hint="The email you registered with." error={err || undefined}>
         <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" />
       </Field>
       <Field id="login-password" label="Password" hint="At least 8 characters.">
         <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required autoComplete="current-password" />
       </Field>
+      <p className="text-right text-sm">
+        <a href="/forgot-password" className="font-semibold underline">Forgot your password?</a>
+      </p>
       <FormError>{err}</FormError>
-      <Button type="submit" disabled={loading} className="w-full">
+      <Button type="submit" disabled={loading} className="w-full" block>
         {loading ? "Signing in…" : "Sign in"}
       </Button>
     </form>

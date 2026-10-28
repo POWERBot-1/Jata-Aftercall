@@ -112,9 +112,9 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
   if (loading && !report) {
     return (
       <section className="jata-card" aria-busy="true">
-        <div className="h-5 w-40 animate-pulse rounded bg-zinc-100" />
-        <div className="mt-3 h-2 w-full animate-pulse rounded bg-zinc-100" />
-        <div className="mt-3 h-24 w-full animate-pulse rounded bg-zinc-50" />
+        <div className="h-5 w-40 animate-pulse rounded-sm bg-zinc-100" />
+        <div className="mt-3 h-2 w-full animate-pulse rounded-sm bg-zinc-100" />
+        <div className="mt-3 h-24 w-full animate-pulse rounded-sm bg-zinc-50" />
       </section>
     );
   }
@@ -148,7 +148,7 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
       </div>
 
       {report.attention.length === 0 ? (
-        <p className="mt-3 text-sm text-emerald-700">Everything a customer needs is in place. Publish whenever you are ready.</p>
+        <p className="mt-3 text-sm text-[color:var(--ws-jade)]">Everything a customer needs is in place. Publish whenever you are ready.</p>
       ) : (
         <>
           <h3 className="mt-4 text-xs font-bold uppercase tracking-wide text-zinc-500">{showAll ? "Everything that needs attention" : "Worth fixing first"}</h3>
@@ -230,12 +230,21 @@ export function WebsiteHealth({ businessId, initialReport }: { businessId: strin
             ? payload.publishing.ready
               ? "Your website passes the publish checklist."
               : `Publishing still needs: ${payload.publishing.failedChecks.join(", ")}.`
-            : "Publishing unlocks with the Interactive Business plan — your work stays saved."}
+            : "Publishing unlocks with the Website Studio plan — your work stays saved."}
         </p>
       ) : null}
       {payload?.ai ? <p className="jata-hint">{payload.ai.note}</p> : null}
       {message ? (
-        <p className={`mt-2 text-sm ${message.tone === "error" ? "jata-error" : message.tone === "warn" ? "text-amber-800" : "text-emerald-700"}`} role="status">
+        <p
+          className={`mt-2 text-sm ${
+            message.tone === "error"
+              ? "jata-error"
+              : message.tone === "warn"
+                ? "text-[color:var(--ws-amber-deep)]"
+                : "text-[color:var(--ws-jade)]"
+          }`}
+          role="status"
+        >
           {message.text}
           {message.tone === "warn" ? ` You can add that in Theme & brand.` : ""}
         </p>

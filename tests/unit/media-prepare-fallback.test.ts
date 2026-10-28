@@ -1,16 +1,5 @@
-/**
- * prepareUpload in a non-browser runtime: there is no canvas or image decoder, so the optional
- * optimisation step always fails. That exercises the fallback path directly.
- *
- * Expected behaviour:
- *   - a complete JPEG / PNG / WebP / GIF is uploaded as the original (usable photo is not lost).
- *     Fixtures are synthetic headers, so "complete" versions get a real PNG end chunk and WebP length,
- *   - a truncated file with a valid signature is NOT uploaded (it would be a broken image),
- *   - HEIC keeps its specific conversion instruction,
- *   - text renamed to an image is rejected as not an image.
- *
- * Real-browser decode and WebP encoding are verified separately (see the release report).
- */
+/** Owner deferred durable originals. No decoder/canvas must yield a useful error, never an inline-original substitute.
+ * Header fixtures are synthetic, not proof of a real raster codec or provider operation. */
 import { describe, expect, it } from "vitest";
 import { prepareUpload } from "@/lib/media/browserImage";
 import { gifBytes, heicBytes, jpegBytes, pngBytes, textBytes, webpBytes } from "../helpers/imageFixtures";
@@ -39,38 +28,30 @@ function completeWebp(bytes: Uint8Array): Uint8Array {
   return out;
 }
 
-describe("prepareUpload falls back to the original when optimisation is unavailable", () => {
-  it("uploads a complete JPEG as the original", async () => {
+describe("prepareUpload does not substitute original bytes when optimisation is unavailable", () => {
+  it("does not inline a complete JPEG as the original", async () => {
     const bytes = jpegBytes({ width: 640, height: 480 });
     const result = await prepareUpload(fileOf(bytes, "photo.jpg", "image/jpeg"));
-    expect(result.status).toBe("ok");
-    if (result.status === "ok") {
-      expect(result.upload.mime).toBe("image/jpeg");
-      expect(result.upload.dataUrl.startsWith("data:image/jpeg;base64,")).toBe(true);
-      expect(result.upload.bytes).toBe(bytes.length);
-      expect(result.upload.notes.join(" ")).toMatch(/uploaded the original/);
-    }
+    expect(result.status).toBe("error");
+
   });
 
-  it("uploads a complete PNG as the original", async () => {
+  it("does not inline a complete PNG as the original", async () => {
     const result = await prepareUpload(fileOf(completePng(pngBytes({ width: 320, height: 200 })), "shot.png", "image/png"));
-    expect(result.status).toBe("ok");
-    if (result.status === "ok") expect(result.upload.mime).toBe("image/png");
+    expect(result.status).toBe("error");
+
   });
 
-  it("uploads a complete WebP as the original (Android camera output)", async () => {
+  it("does not inline a complete WebP as the original (Android camera output)", async () => {
     const bytes = completeWebp(webpBytes({ width: 2400, height: 1600 }));
     const result = await prepareUpload(fileOf(bytes, "scenery.webp", "image/webp"));
-    expect(result.status).toBe("ok");
-    if (result.status === "ok") {
-      expect(result.upload.mime).toBe("image/webp");
-      expect(result.upload.width).toBe(2400);
-    }
+    expect(result.status).toBe("error");
+
   });
 
-  it("uploads a complete GIF as the original", async () => {
+  it("does not inline a complete GIF as the original", async () => {
     const result = await prepareUpload(fileOf(gifBytes({ width: 40, height: 40 }), "loop.gif", "image/gif"));
-    expect(result.status).toBe("ok");
+    expect(result.status).toBe("error");
   });
 
   it("does not upload a truncated JPEG, even though its signature is valid", async () => {

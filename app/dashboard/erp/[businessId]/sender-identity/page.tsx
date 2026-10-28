@@ -3,6 +3,7 @@ import { loadSenderIdentity } from "@/lib/erp/loaders";
 import { Badge, EmptyState, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { SENDER_ID_FEES, kycRequirements, replyCapability, senderIdCanSend } from "@/lib/messaging/senderId";
 import { connectSandboxChannelAction, createSenderApplicationAction, recordManualSenderDecisionAction, submitSenderIdAction } from "../actions";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function SenderIdentityPage({ params, searchParams }: { par
             <div>
               <h2 style={{ marginBottom: 2 }}>{primary.requestedId}</h2>
               <p className="erp-card-sub" style={{ marginBottom: 0 }}>
-                {humanise(primary.network)} · {humanise(primary.purpose)} · {primary.channel === "WHATSAPP" ? "WhatsApp" : "SMS"} · applied {new Date(primary.createdAt).toLocaleDateString("en-KE")}
+                {humanise(primary.network)} · {humanise(primary.purpose)} · {primary.channel === "WHATSAPP" ? "WhatsApp" : "SMS"} · applied {formatDate(primary.createdAt)}
               </p>
             </div>
             <Badge tone={StatusTone(primary.status)}>{humanise(primary.status)}</Badge>
@@ -62,7 +63,7 @@ export default async function SenderIdentityPage({ params, searchParams }: { par
             <li><span className="erp-muted erp-small">Application reference</span><span className="erp-mono">{primary.applicationRef ?? "Not submitted"}</span></li>
             <li><span className="erp-muted erp-small">Can send today</span><span className="erp-small">{canSend.reason}</span></li>
             <li><span className="erp-muted erp-small">Replies</span><span className="erp-small" style={{ maxWidth: "52ch", textAlign: "right" }}>{reply?.note}</span></li>
-            <li><span className="erp-muted erp-small">Fees</span><span className="erp-small">{primary.feeAcknowledgedAt ? `Acknowledged ${new Date(primary.feeAcknowledgedAt).toLocaleDateString("en-KE")}` : "Not acknowledged"}</span></li>
+            <li><span className="erp-muted erp-small">Fees</span><span className="erp-small">{primary.feeAcknowledgedAt ? `Acknowledged ${formatDate(primary.feeAcknowledgedAt)}` : "Not acknowledged"}</span></li>
           </ul>
 
           {primary.missingItemsJson && primary.missingItemsJson !== "[]" ? (
@@ -175,7 +176,7 @@ export default async function SenderIdentityPage({ params, searchParams }: { par
                   <td className="erp-strong">{humanise(connection.channel)}</td>
                   <td>{connection.provider}</td>
                   <td><Badge tone={StatusTone(connection.status)}>{humanise(connection.status)}</Badge></td>
-                  <td className="erp-small erp-muted">{connection.lastCheckedAt ? new Date(connection.lastCheckedAt).toLocaleString("en-KE") : "Never"}</td>
+                  <td className="erp-small erp-muted">{connection.lastCheckedAt ? formatDateTime(connection.lastCheckedAt) : "Never"}</td>
                   <td className="num">
                     <form action={connectSandboxChannelAction}>
                       <input type="hidden" name="businessId" value={businessId} />
@@ -211,7 +212,7 @@ export default async function SenderIdentityPage({ params, searchParams }: { par
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <Badge tone={event.source === "PROVIDER" ? "good" : "neutral"}>{humanise(event.source)}</Badge>
-                    <div className="erp-muted erp-small">{new Date(event.createdAt).toLocaleString("en-KE")}</div>
+                    <div className="erp-muted erp-small">{formatDateTime(event.createdAt)}</div>
                   </div>
                 </li>
               ))}

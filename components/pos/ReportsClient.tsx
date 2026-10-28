@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatKES } from "@/lib/format";
+import { formatDate } from "@/lib/dateFormat";
 
 /**
  * Reports (§35, §71).
@@ -178,7 +179,7 @@ export function ReportsClient({
               <p className="jata-kicker">{report.label}</p>
               <h3 className="text-base font-semibold">{report.blurb}</h3>
               <p className="pos-note">
-                {new Date(report.range.from).toLocaleDateString("en-KE")} — {new Date(report.range.to).toLocaleDateString("en-KE")}
+                {formatDate(report.range.from)} — {formatDate(report.range.to)}
               </p>
             </div>
             <span className="pos-pill" data-tone={report.basis === "recorded" ? "success" : report.partial ? "warn" : "info"}>

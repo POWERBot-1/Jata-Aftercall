@@ -38,6 +38,8 @@ vi.mock("@/lib/tenant", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   default: {
+    product: { count: vi.fn(async () => 0) },
+    service: { count: vi.fn(async () => 0) },
     businessExperience: { findUnique: mocks.experienceFindUnique, update: mocks.experienceUpdate, create: vi.fn(), upsert: vi.fn() },
     experienceVersion: { findMany: mocks.versionFindMany },
   },

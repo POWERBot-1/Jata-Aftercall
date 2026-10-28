@@ -1,0 +1,8 @@
+# Smoke tests against the production build (npm start, port 3100) — 2026-10-25
+# Candidate: arena/44f2d980-jata-aftercall @ e636468482ba3a39647bb898fc73d0fea4309e88
+/health      -> 200
+/register    -> 200
+/login       -> 200
+/            -> 200
+anonymous /dashboard/pos -> 307 redirect to /login  (final=/login)
+anonymous /dashboard      -> login page (final=/login)

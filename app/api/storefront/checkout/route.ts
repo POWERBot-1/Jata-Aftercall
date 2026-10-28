@@ -29,6 +29,7 @@ import {
 } from "@/lib/experience/payments";
 import { recordEvent, hashSession } from "@/lib/analytics";
 import { formatKES } from "@/lib/format";
+import { containsInlineImageDataUrl, imageUrlForNewRecord, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import {
   commitOrderOnce,
   findIdempotencyRecord,
@@ -227,6 +228,9 @@ export async function POST(req: Request) {
     if (fulfilment === "DELIVERY" && !deliveryLocation) {
       return NextResponse.json({ error: "Add a delivery location so we know where to bring your order." }, { status: 400 });
     }
+    if (containsInlineImageDataUrl({ customer, deliveryLocation, deliveryInstructions, notes })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const requestHash = requestHashOf({
       scope: SCOPE,
@@ -318,6 +322,42 @@ export async function POST(req: Request) {
 
     const reference = orderReference();
     ctx.amountKES = pricing.totalKES;
+    const orderData = {
+      orderReference: reference,
+      businessId: business.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      customerEmail: customer.email || null,
+      status: "PENDING_PAYMENT",
+      paymentStatus: "UNPAID",
+      subtotalKES: pricing.subtotalKES,
+      deliveryFeeKES: pricing.deliveryFeeKES,
+      discountKES: pricing.discountKES,
+      totalKES: pricing.totalKES,
+      currency: PAYMENT_CURRENCY,
+      fulfilmentType: fulfilment,
+      deliveryLocation,
+      deliveryInstructions,
+      notes,
+      source: "STOREFRONT",
+      items: {
+        create: pricing.lineItems.map((line: PricedLine) => ({
+          productId: line.productId,
+          variantId: line.variantId || null,
+          name: line.name,
+          variantDesc: line.variantDesc || null,
+          quantity: line.quantity,
+          unitPriceKES: line.unitPriceKES,
+          addOns: line.addOns.length ? JSON.stringify(line.addOns) : null,
+          // Image presentation is optional on a transaction snapshot. Never duplicate a
+          // legacy inline catalogue image into a new order row.
+          imageUrl: imageUrlForNewRecord(line.imageUrl),
+        })),
+      },
+    };
+    if (containsInlineImageDataUrl(orderData)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     let committed;
     try {
@@ -331,37 +371,7 @@ export async function POST(req: Request) {
           .map((line: PricedLine) => ({ productId: line.productId, quantity: line.quantity, name: line.name })),
         create: async (tx: any) => {
           const order = await tx.order.create({
-            data: {
-              orderReference: reference,
-              businessId: business.id,
-              customerName: customer.name,
-              customerPhone: customer.phone,
-              customerEmail: customer.email || null,
-              status: "PENDING_PAYMENT",
-              paymentStatus: "UNPAID",
-              subtotalKES: pricing.subtotalKES,
-              deliveryFeeKES: pricing.deliveryFeeKES,
-              discountKES: pricing.discountKES,
-              totalKES: pricing.totalKES,
-              currency: PAYMENT_CURRENCY,
-              fulfilmentType: fulfilment,
-              deliveryLocation,
-              deliveryInstructions,
-              notes,
-              source: "STOREFRONT",
-              items: {
-                create: pricing.lineItems.map((line: PricedLine) => ({
-                  productId: line.productId,
-                  variantId: line.variantId || null,
-                  name: line.name,
-                  variantDesc: line.variantDesc || null,
-                  quantity: line.quantity,
-                  unitPriceKES: line.unitPriceKES,
-                  addOns: line.addOns.length ? JSON.stringify(line.addOns) : null,
-                  imageUrl: line.imageUrl || null,
-                })),
-              },
-            },
+            data: orderData,
             select: { id: true, orderReference: true, totalKES: true, status: true, paymentStatus: true },
           });
           const payment = await createOrderPaymentRecord(

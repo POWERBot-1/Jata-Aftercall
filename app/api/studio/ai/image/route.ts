@@ -19,6 +19,7 @@ import { guardTenantMutation } from "@/lib/tenant";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateStudioImages } from "@/lib/ai/imageLab";
+import { resolveImageAssetStore } from "@/lib/ai/assetStore";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,9 @@ export async function POST(req: Request) {
       referenceDataUrl: typeof body?.referenceDataUrl === "string" && body.referenceDataUrl.startsWith("data:image/") ? body.referenceDataUrl : null,
       count: Number(body?.count) || 2,
       refresh: body?.refresh === true,
-    });
+      // Durable storage is resolved per request: undefined (no approved provider) keeps the
+      // lab's honest fail-closed 503; a configured durable provider makes generation real.
+    }, { assetStore: resolveImageAssetStore() });
 
     if (outcome.status !== "ok") {
       return NextResponse.json({ error: outcome.error, code: outcome.code, retryable: outcome.retryable }, { status: outcome.httpStatus });

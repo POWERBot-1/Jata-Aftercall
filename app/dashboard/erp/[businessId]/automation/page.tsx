@@ -4,6 +4,7 @@ import { loadAutomation } from "@/lib/erp/loaders";
 import { AUTOMATION_ACTIONS, AUTOMATION_TRIGGERS, STARTER_RULES } from "@/lib/erp/automation";
 import { Badge, EmptyState, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { createAutomationRuleAction, runAutomationRuleAction, toggleAutomationRuleAction } from "../actions";
+import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -91,7 +92,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
                 <li key={run.id}>
                   <div>
                     <div className="erp-strong">{humanise(run.trigger)}</div>
-                    <div className="erp-muted erp-small">{new Date(run.startedAt ?? run.createdAt).toLocaleString("en-KE")}</div>
+                    <div className="erp-muted erp-small">{formatDateTime(run.startedAt ?? run.createdAt)}</div>
                   </div>
                   <Badge tone={StatusTone(run.status)}>{humanise(run.status)}</Badge>
                 </li>

@@ -5,6 +5,7 @@ import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { AGEING_BUCKETS } from "@/lib/erp/invoicing";
 import { createInvoiceAction, creditNoteAction, issueInvoiceAction, recordPaymentAction } from "../actions";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,7 @@ export default async function InvoicesPage({ params, searchParams }: { params: P
                     <td><Badge tone={StatusTone(invoice.status)}>{humanise(invoice.status)}</Badge></td>
                     <td className="num">{formatCentsShort(invoice.totalCents)}</td>
                     <td className="num">{formatCentsShort(invoice.balanceCents)}</td>
-                    <td className="erp-small">{invoice.dueAt ? new Date(invoice.dueAt).toLocaleDateString("en-KE") : "—"}</td>
+                    <td className="erp-small">{invoice.dueAt ? formatDate(invoice.dueAt) : "—"}</td>
                     <td>
                       <div className="erp-actions">
                         {invoice.status === "DRAFT" ? (
@@ -168,7 +169,7 @@ export default async function InvoicesPage({ params, searchParams }: { params: P
 
       <section className="erp-card" id="ageing">
         <h2>Receivables ageing</h2>
-        <p className="erp-card-sub">Buckets are computed from due dates as at {new Date(data.ageing.asOf).toLocaleDateString("en-KE")}.</p>
+        <p className="erp-card-sub">Buckets are computed from due dates as at {formatDate(data.ageing.asOf)}.</p>
         <div className="erp-grid erp-grid-4">
           {AGEING_BUCKETS.map((bucket) => (
             <Kpi key={bucket} label={ageingLabel(bucket)} value={formatCentsShort(data.ageing.totals[bucket])} />
@@ -185,7 +186,7 @@ export default async function InvoicesPage({ params, searchParams }: { params: P
                   <tr key={row.invoiceId}>
                     <td className="erp-mono">{row.invoiceNumber}</td>
                     <td>{row.customerName}</td>
-                    <td className="erp-small">{row.dueAt ? new Date(row.dueAt).toLocaleDateString("en-KE") : "—"}</td>
+                    <td className="erp-small">{row.dueAt ? formatDate(row.dueAt) : "—"}</td>
                     <td><Badge tone={row.bucket === "CURRENT" ? "good" : row.bucket === "OVER_90" ? "bad" : "warn"}>{ageingLabel(row.bucket)}</Badge></td>
                     <td className="num">{formatCentsShort(row.balanceCents)}</td>
                   </tr>

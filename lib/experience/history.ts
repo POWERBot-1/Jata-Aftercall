@@ -17,7 +17,8 @@
  */
 
 import type { ExperienceDocument } from "./types";
-import { normalizeExperienceDocument } from "./document";
+import { validateExperienceJson } from "./schema";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 /** How many revisions one business keeps. Older ones are pruned after every new revision. */
 export const DRAFT_HISTORY_LIMIT = 30;
@@ -147,6 +148,8 @@ export function describeDraftChange(op: string | null, detail?: { type?: string;
       return detail?.label ? `Removed the ${detail.label} section` : "Removed a section";
     case "move":
       return detail?.label ? `Moved the ${detail.label} section` : "Reordered sections";
+    case "reorder":
+      return detail?.label ? `Moved the ${detail.label} section to a new position` : "Reordered sections";
     case "duplicate":
       return detail?.label ? `Duplicated the ${detail.label} section` : "Duplicated a section";
     case "toggle":
@@ -242,7 +245,9 @@ export async function recordDraftRevision(
   },
 ): Promise<boolean> {
   const { businessId, draftVersion } = params;
-  if (!Number.isSafeInteger(draftVersion) || draftVersion < 1) return false;
+  // A revision is a new persistent copy. Keep legacy snapshots readable, but never create another
+  // history row containing image bytes while the approved durable provider is absent.
+  if (!Number.isSafeInteger(draftVersion) || draftVersion < 1 || containsInlineImageDataUrl(params.document)) return false;
   const discardAfter = Number.isSafeInteger(params.discardAfter) && params.discardAfter >= 0 ? params.discardAfter : 0;
   try {
     await db.experienceDraftRevision.deleteMany({
@@ -322,9 +327,14 @@ export async function moveDraftHistory(
 
   let document: ExperienceDocument;
   try {
-    document = normalizeExperienceDocument(JSON.parse(snapshot.snapshotJson), experience.categoryKey);
+    const schema = validateExperienceJson(snapshot.snapshotJson, experience.categoryKey, { migrateLegacyDefaults: true });
+    if (!schema.ok) return { status: "unavailable", reason: "That version can no longer be opened safely." };
+    document = schema.document;
   } catch {
     return { status: "unavailable", reason: "That version can no longer be opened." };
+  }
+  if (containsInlineImageDataUrl(document)) {
+    return { status: "unavailable", reason: INLINE_MEDIA_PERSISTENCE_MESSAGE };
   }
 
   // Compare-and-swap on the version this move was computed from: if another write landed after the read,

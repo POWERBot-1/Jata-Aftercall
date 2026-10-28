@@ -5,6 +5,7 @@ import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { storefrontUrl, orderTransitions, ORDER_STATUS_LABELS } from "@/lib/erp/storefront";
 import { saveStorefrontAction, storeOrderAction } from "../actions";
+import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +144,7 @@ export default async function StorePage({ params, searchParams }: { params: Prom
                     <td className="erp-small">{humanise(order.fulfilment)}</td>
                     <td><Badge tone={StatusTone(order.status)}>{ORDER_STATUS_LABELS[String(order.status)] ?? humanise(order.status)}</Badge></td>
                     <td className="num">{formatCentsShort(order.totalCents)}</td>
-                    <td className="erp-small">{new Date(order.createdAt).toLocaleString("en-KE")}</td>
+                    <td className="erp-small">{formatDateTime(order.createdAt)}</td>
                     <td>
                       <div className="erp-actions">
                         {order.status === "PENDING" ? (

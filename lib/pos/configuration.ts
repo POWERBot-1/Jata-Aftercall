@@ -21,7 +21,7 @@ import { getWorkflow, initialState, resolveStates, workflowsForBusinessType } fr
 import {
   POS_CONFIG_SCHEMA_VERSION,
   type CapabilityKey, type ChannelKey, type CreditFrequency, type DashboardCardKey,
-  type PosConfiguration, type PosModuleKey, type PosRoleConfig, type QuestionnaireAnswers,
+  type PosConfiguration, type PosModuleKey, type PosPresentationConfig, type PosRoleConfig, type QuestionnaireAnswers,
   type ReportKey, type TerminologyEntityKey, type UnitConversion,
 } from "./types";
 
@@ -106,6 +106,7 @@ export function baselineConfiguration(): PosConfiguration {
     reports: [],
     roles: [],
     industry: { key: "other", modules: [] },
+    presentation: {},
   };
   return finalize(config);
 }
@@ -640,8 +641,37 @@ export function normalizeConfiguration(raw: unknown): PosConfiguration {
       key: typeof input.industry?.key === "string" ? input.industry.key.slice(0, 40) : base.industry.key,
       modules: stringArray(input.industry?.modules).filter(isCapabilityKey),
     },
+    presentation: sanitizePosPresentation(input.presentation),
   };
   return finalize(merged);
+}
+
+/**
+ * Sanitize owner-chosen POS presentation. Only a site-relative path or an https URL may be
+ * stored — never inline image bytes, never an executable scheme, never a protocol-relative
+ * URL. Focal points are integer percents inside 5–95. Unknown keys are dropped.
+ */
+export function sanitizePosPresentation(input: unknown): PosPresentationConfig {
+  if (!isObject(input)) return {};
+  const clean: PosPresentationConfig = {};
+  const url = typeof input.headerImageUrl === "string" ? input.headerImageUrl.trim().slice(0, 2048) : "";
+  if (url && !url.includes("\\") && !/^data:/i.test(url)) {
+    if (url.startsWith("/") && !url.startsWith("//")) clean.headerImageUrl = url;
+    else if (/^https:\/\//i.test(url)) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname && !parsed.username && !parsed.password) clean.headerImageUrl = url;
+      } catch { /* not a usable URL — dropped */ }
+    }
+  }
+  if (typeof input.headerImageAlt === "string" && input.headerImageAlt.trim()) {
+    clean.headerImageAlt = input.headerImageAlt.trim().slice(0, 160);
+  }
+  for (const key of ["headerFocalX", "headerFocalY"] as const) {
+    const n = Number(input[key]);
+    if (Number.isFinite(n)) clean[key] = Math.max(5, Math.min(95, Math.round(n)));
+  }
+  return clean;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

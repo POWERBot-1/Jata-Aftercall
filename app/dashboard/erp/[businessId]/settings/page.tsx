@@ -7,6 +7,7 @@ import { INDUSTRY_PACKS } from "@/lib/erp/industryPacks";
 import { ERP_PLAN_COMMERCIALS } from "@/lib/erp/entitlement";
 import { bootstrapWorkspaceAction, saveBusinessProfileAction, startErpPlanAction, updateTeamRoleAction } from "../actions";
 import { ASSIGNABLE_ROLES, TEAM_ROLE_GUIDE, parseTeamRoles } from "@/lib/erp/team";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         {configuration ? (
           <ul className="erp-list" style={{ marginTop: 12 }}>
             <li><span className="erp-muted erp-small">Storefront slug</span><span className="erp-mono">{configuration.storefrontSlug ?? "Not set"}</span></li>
-            <li><span className="erp-muted erp-small">Created</span><span className="erp-small">{new Date(configuration.createdAt).toLocaleDateString("en-KE")}</span></li>
+            <li><span className="erp-muted erp-small">Created</span><span className="erp-small">{formatDate(configuration.createdAt)}</span></li>
             <li><span className="erp-muted erp-small">Messaging kill switch</span><span className="erp-small erp-strong">{killSwitch(configuration.featureFlagsJson)}</span></li>
           </ul>
         ) : null}
@@ -110,10 +111,10 @@ export default async function SettingsPage({ params, searchParams }: { params: P
 
       <section className="erp-card" id="plan">
         <h2>Plan and billing</h2>
-        <p className="erp-card-sub">POS / ERP - PRO is KES {workspace.plan.priceKES.toLocaleString("en-KE")} per month, billed per business.</p>
+        <p className="erp-card-sub">POS / ERP - PRO is KES {formatNumber(workspace.plan.priceKES)} per month, billed per business.</p>
         <dl className="erp-grid erp-grid-3">
           <div className="erp-kpi"><dt>Status</dt><dd>{humanise(workspace.entitlement.status)}</dd><small>{workspace.entitlement.reason}</small></div>
-          <div className="erp-kpi"><dt>Renews</dt><dd>{workspace.entitlement.expiresAt ? new Date(workspace.entitlement.expiresAt).toLocaleDateString("en-KE") : "—"}</dd><small>{workspace.entitlement.inGrace ? "Inside the approved grace window" : "Monthly term"}</small></div>
+          <div className="erp-kpi"><dt>Renews</dt><dd>{workspace.entitlement.expiresAt ? formatDate(workspace.entitlement.expiresAt) : "—"}</dd><small>{workspace.entitlement.inGrace ? "Inside the approved grace window" : "Monthly term"}</small></div>
           <div className="erp-kpi"><dt>Subscription</dt><dd>{data.subscription ? humanise(data.subscription.status) : "None"}</dd><small>{data.subscription?.paymentReference ?? "No payment reference"}</small></div>
         </dl>
 
@@ -237,7 +238,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
               <tbody>
                 {data.auditEvents.map((event: any) => (
                   <tr key={event.id}>
-                    <td className="erp-small">{new Date(event.createdAt).toLocaleString("en-KE")}</td>
+                    <td className="erp-small">{formatDateTime(event.createdAt)}</td>
                     <td className="erp-small erp-strong">{humanise(event.action)}</td>
                     <td className="erp-small">{humanise(event.targetType)}{event.targetId ? ` · ${String(event.targetId).slice(0, 10)}…` : ""}</td>
                     <td><Badge tone={StatusTone(event.outcome)}>{humanise(event.outcome)}</Badge></td>

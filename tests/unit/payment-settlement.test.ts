@@ -55,8 +55,33 @@ describe("atomic, idempotent payment settlement", () => {
     expect(state.businessUpdates).toBe(1);
   });
 
+  it("keeps a verified settlement when optional provider raw contains inline image data", async () => {
+    state.payment.status = "FAILED";
+    const result = await activateSubscriptionForPayment("pay-a", "event-inline-raw", {
+      paystackId: "56",
+      raw: { verified: true, reference: "jata-ref", providerNote: "data:image/png;base64,iVBORw0KGgo=" },
+    });
+
+    expect(result.alreadySettled).toBe(false);
+    expect(state.payment.status).toBe("PAID");
+    expect(state.payment.paystackId).toBe("56");
+    expect(state.payment).not.toHaveProperty("raw");
+    expect(state.subscription).toMatchObject({ status: "ACTIVE", businessId: "biz-a" });
+    expect(state.processed.has("event-inline-raw")).toBe(true);
+  });
+
+  it("rejects inline data URLs masquerading as provider transaction IDs", async () => {
+    await expect(activateSubscriptionForPayment("pay-a", "event-invalid-id", {
+      paystackId: "data:image/png;base64,iVBORw0KGgo=",
+    })).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+
+    expect(state.payment.status).toBe("PENDING");
+    expect(state.subscription).toBeNull();
+    expect(state.upsertCount).toBe(0);
+  });
+
   it("does not create or extend a second subscription on duplicate callback or webhook", async () => {
-    await activateSubscriptionForPayment("pay-a", "event-1");
+    await activateSubscriptionForPayment("pay-a", "event-1", { paystackId: "56", raw: { verified: true } });
     const afterFirst = state.subscription.expiresAt.getTime();
     expect((await activateSubscriptionForPayment("pay-a", "event-1")).alreadySettled).toBe(true);
     expect((await activateSubscriptionForPayment("pay-a")).alreadySettled).toBe(true);
@@ -81,9 +106,20 @@ describe("atomic, idempotent payment settlement", () => {
     expect(state.upsertCount).toBe(0);
   });
 
-  it("does not activate a failed/cancelled payment", async () => {
+  it("does not settle a pending payment on a bare call with no provider evidence", async () => {
+    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    expect(state.payment.status).toBe("PENDING");
+    expect(state.subscription).toBeNull();
+    expect(state.upsertCount).toBe(0);
+  });
+
+  it("does not activate a failed/cancelled payment on a bare call with no provider evidence", async () => {
     state.payment.status = "CANCELLED";
-    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_NOT_PENDING");
+    // A verified success may revive a CANCELLED payment, but only with the Paystack transaction id
+    // from the caller's own verification. Without it, nothing activates — the control is intact and
+    // the error now names the missing evidence instead of the old state-only guard.
+    await expect(activateSubscriptionForPayment("pay-a")).rejects.toThrow("PAYMENT_EVIDENCE_REQUIRED");
+    expect(state.payment.status).toBe("CANCELLED");
     expect(state.subscription).toBeNull();
     expect(state.upsertCount).toBe(0);
   });

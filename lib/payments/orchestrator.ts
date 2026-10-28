@@ -13,6 +13,12 @@
  */
 
 import prisma from "@/lib/db";
+import {
+  containsInlineImageDataUrl,
+  imageUrlForNewRecord,
+  INLINE_MEDIA_PERSISTENCE_CODE,
+  INLINE_MEDIA_PERSISTENCE_MESSAGE,
+} from "@/lib/media/persistence-policy";
 import { effectiveConfiguration, loadConfiguration } from "@/lib/pos/provisioning";
 import { baselineConfiguration } from "@/lib/pos/configuration";
 import { isPricedSale, priceSaleRequest, type PosActor, type SaleRequest } from "@/lib/pos/sales";
@@ -183,40 +189,45 @@ export async function createPaymentRequest(input: CreatePaymentRequestInput): Pr
   const jataId = jataPaymentId(saleContext ? (input.sale?.configurationVersion ?? 1) : requestKey, now);
   const providerReference = providerReferenceFor(jataId, destination.provider);
   const method = input.method || (destination.provider === "PAYSTACK" ? "card" : "mpesa");
+  const paymentContext = saleContext
+    ? {
+        version: 1,
+        requestKey,
+        pos: {
+          request: saleContext.request,
+          method,
+          actor: { ...input.actor },
+          business: input.sale?.business
+            ? { ...input.sale.business, logoUrl: imageUrlForNewRecord(input.sale.business.logoUrl) }
+            : { name: "", phone: null, whatsapp: null, location: null, logoUrl: null },
+          configurationVersion: saleContext.configurationVersion,
+          configurationFingerprint: saleContext.configurationFingerprint,
+          expectedTotalKES: amountKES,
+        },
+      }
+    : { version: 1, requestKey };
+  const paymentData = {
+    jataPaymentId: jataId,
+    businessId: input.businessId,
+    destinationId: destination.id,
+    provider: destination.provider,
+    status: "CREATED",
+    idempotencyKey,
+    method,
+    amountMinor,
+    currency,
+    customerName: input.customer?.name ? String(input.customer.name).slice(0, 120) : null,
+    customerPhoneMasked: maskPhone(input.customer?.phone),
+    posCustomerId: input.customer?.posCustomerId ? String(input.customer.posCustomerId).slice(0, 64) : null,
+    orderId: input.orderId ? String(input.orderId).slice(0, 64) : null,
+    paymentContext,
+  };
+  if (containsInlineImageDataUrl({ paymentData, customer: input.customer })) {
+    return failure(INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE);
+  }
 
   const created = await inTransaction(input.client, async (tx: PaymentClient) => {
-    const row = await tx.paymentTransaction.create({
-      data: {
-        jataPaymentId: jataId,
-        businessId: input.businessId,
-        destinationId: destination.id,
-        provider: destination.provider,
-        status: "CREATED",
-        idempotencyKey,
-        method,
-        amountMinor,
-        currency,
-        customerName: input.customer?.name ? String(input.customer.name).slice(0, 120) : null,
-        customerPhoneMasked: maskPhone(input.customer?.phone),
-        posCustomerId: input.customer?.posCustomerId ? String(input.customer.posCustomerId).slice(0, 64) : null,
-        orderId: input.orderId ? String(input.orderId).slice(0, 64) : null,
-        paymentContext: saleContext
-          ? {
-              version: 1,
-              requestKey,
-              pos: {
-                request: saleContext.request,
-                method,
-                actor: { ...input.actor },
-                business: input.sale?.business ?? { name: "", phone: null, whatsapp: null, location: null, logoUrl: null },
-                configurationVersion: saleContext.configurationVersion,
-                configurationFingerprint: saleContext.configurationFingerprint,
-                expectedTotalKES: amountKES,
-              },
-            }
-          : { version: 1, requestKey },
-      },
-    });
+    const row = await tx.paymentTransaction.create({ data: paymentData });
     await logPaymentAudit({
       businessId: input.businessId,
       transactionId: row.id,

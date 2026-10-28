@@ -3,16 +3,37 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { slugify, validateSlug } from "@/lib/slug";
 import { sanitizeText, validatePhone } from "@/lib/validation";
+import { isValidKePhone } from "@/lib/phone";
 import { guardTenantMutation } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { resolveTheme } from "@/lib/themes";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { canSetPublished, hasVerifiedPublicationRight, PUBLISH_REQUIRES_PAYMENT } from "@/lib/publication";
 import { parseCoordinates } from "@/lib/location";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
+}
+
+const CONTACT_NUMBER_ERROR = "Enter a valid Kenyan mobile number (e.g. 0724 317 010).";
+
+/**
+ * Owner-supplied contact numbers must produce working Kenyan tel/wa.me destinations. The generic
+ * length gate (validatePhone) is kept, and the same KE rule used when the public page builds
+ * contact links (isValidKePhone -> lib/phone) is enforced at write time. Empty input clears the
+ * field; any other invalid value is a hard 400. Stored values keep the owner's display format —
+ * normalisation to 254XXXXXXXXX stays at point of use, as it did before.
+ */
+function parseContactNumber(value: unknown): { value: string | null; error: string | null } {
+  if (value === null || value === undefined || value === "") return { value: null, error: null };
+  if (typeof value !== "string") return { value: null, error: CONTACT_NUMBER_ERROR };
+  const trimmed = value.trim();
+  if (!trimmed) return { value: null, error: null };
+  if (!validatePhone(trimmed) || !isValidKePhone(trimmed)) return { value: null, error: CONTACT_NUMBER_ERROR };
+  return { value: trimmed, error: null };
 }
 
 /**
@@ -52,10 +73,17 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
+    if (containsInlineImageDataUrl(body)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const nameRaw = sanitizeText(body.name || "", 80);
     const category = sanitizeText(body.category || "Other", 40);
-    const phone = (body.phone || "").trim();
-    const whatsapp = (body.whatsapp || body.phone || "").trim();
+    const parsedPhone = parseContactNumber(body.phone);
+    if (parsedPhone.error) return NextResponse.json({ error: parsedPhone.error }, { status: 400 });
+    const parsedWhatsapp = parseContactNumber(body.whatsapp);
+    if (parsedWhatsapp.error) return NextResponse.json({ error: parsedWhatsapp.error }, { status: 400 });
+    const phone = parsedPhone.value ?? "";
+    const whatsapp = parsedWhatsapp.value ?? "";
     if (body.location !== undefined && body.location !== null && typeof body.location !== "string") {
       return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });
     }
@@ -103,8 +131,6 @@ export async function POST(req: Request) {
 
     const resolvedTheme = resolveTheme(theme).key;
 
-    if (phone && !validatePhone(phone)) return NextResponse.json({ error: "Valid phone required" }, { status: 400 });
-
     let business;
     try {
       business = await prisma.business.create({
@@ -116,6 +142,7 @@ export async function POST(req: Request) {
         category: category || "Other",
         phone: phone || null,
         whatsapp: whatsapp || phone || null,
+        // Phone/whatsapp were validated above through parseContactNumber (KE gate + length gate).
         location: location || null,
         lat: coordinates.lat,
         lng: coordinates.lng,
@@ -161,8 +188,19 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid business details." }, { status: 400 });
     const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
+    // Flipping isPublished (either direction) is a publish-level action (§5, §15). Guarding
+    // with the default "read" action used to let any member — including a VIEWER, or one whose
+    // role lookup failed and resolved to no role — change the public visibility of the site.
+    // The role check runs before any write and fails closed on unknown/failed role lookups.
+    const guard = await guardTenantMutation(
+      session,
+      businessId,
+      body.isPublished !== undefined ? "publish" : "read",
+    );
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    if (containsInlineImageDataUrl(body)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) {
@@ -171,8 +209,16 @@ export async function PATCH(req: Request) {
       data.name = n;
     }
     if (body.category !== undefined) data.category = sanitizeText(body.category, 40);
-    if (body.phone !== undefined) data.phone = (body.phone || "").trim() || null;
-    if (body.whatsapp !== undefined) data.whatsapp = (body.whatsapp || "").trim() || null;
+    if (body.phone !== undefined) {
+      const parsed = parseContactNumber(body.phone);
+      if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      data.phone = parsed.value;
+    }
+    if (body.whatsapp !== undefined) {
+      const parsed = parseContactNumber(body.whatsapp);
+      if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      data.whatsapp = parsed.value;
+    }
     if (body.location !== undefined) {
       if (body.location !== null && typeof body.location !== "string") {
         return NextResponse.json({ error: "Location must be plain text." }, { status: 400 });
@@ -197,15 +243,18 @@ export async function PATCH(req: Request) {
         // Payment-before-publication is enforced here, server-side. The UI is not the boundary:
         // a direct API request while unpaid is rejected the same way.
         const isAdmin = session.role === "ADMIN";
+        // Verified team entitlement is resolved server-side from the business owner's audit
+        // chain. It satisfies the publication gate without creating a payment/subscription row.
+        const teamFreeAccess = isAdmin ? false : await hasTeamFreeAccessForBusiness(businessId);
         let verifiedPayment = false;
-        if (!isAdmin && PUBLISH_REQUIRES_PAYMENT) {
+        if (!isAdmin && !teamFreeAccess && PUBLISH_REQUIRES_PAYMENT) {
           const [paidPayment, subscription] = await Promise.all([
             prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } }),
             prisma.subscription.findUnique({ where: { businessId }, select: { status: true, expiresAt: true, graceUntil: true } }),
           ]);
           verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription });
         }
-        if (!canSetPublished(true, { isAdmin, verifiedPayment })) {
+        if (!canSetPublished(true, { isAdmin, verifiedPayment, teamFreeAccess })) {
           return NextResponse.json({ error: SAFE_ERRORS.publishPaymentRequired }, { status: 403 });
         }
         data.isPublished = true;

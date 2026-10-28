@@ -22,6 +22,7 @@ const POS_MIGRATIONS = [
   "20261005030000_pos_fractional_quantities",
   "20261005040000_pos_sale_idempotency",
   "20261010000100_pos_sale_price_windows",
+  "20261023000000_pos_publication_resolution",
 ];
 const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");
@@ -156,7 +157,13 @@ describe("the POS data model is tenant-scoped by construction (§5)", () => {
   it("keeps one per-business receipt sequence row so concurrent sales get unique numbers (§32)", () => {
     const sequence = posModels.find((model) => model.name === "PosReceiptSequence")!;
     expect(sequence, "PosReceiptSequence model").toBeTruthy();
-    expect(sequence.body).toMatch(/businessId\s+String\s+@unique/);
+    // The committed migration declares `CONSTRAINT "PosReceiptSequence_pkey"
+    // PRIMARY KEY ("businessId")`, so the column is the primary key — not a
+    // secondary unique index. `@id` implies uniqueness and adds NOT NULL, which
+    // is what the database actually enforces; asserting `@unique` here locked the
+    // datamodel to a weaker shape than the schema it is supposed to describe.
+    expect(sequence.body).toMatch(/businessId\s+String\s+@id\b/);
+    expect(sequence.body).not.toMatch(/businessId\s+String\s+@id\s+@unique/);
     expect(sequence.fields.get("nextValue")).toBe("Int");
   });
 

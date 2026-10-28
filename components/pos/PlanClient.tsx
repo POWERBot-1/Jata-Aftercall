@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDate, formatNumber } from "@/lib/dateFormat";
 
 /**
  * Choosing the plan (§4 step 6, §43, §45, §67).
@@ -57,7 +58,7 @@ export function PlanClient({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="jata-kicker">JATA AFTERCALL — Business POS</p>
-          <p className="text-2xl font-extrabold">KES {priceKES.toLocaleString("en-KE")}<span className="text-sm font-semibold text-zinc-500"> / month</span></p>
+          <p className="text-2xl font-extrabold">KES {formatNumber(priceKES)}<span className="text-sm font-semibold text-zinc-500"> / month</span></p>
           <p className="pos-note">Per business. Cancel any time — your records stay yours.</p>
         </div>
         <span className="jata-status">{lifecycleLabel}</span>
@@ -69,13 +70,13 @@ export function PlanClient({
         <div className="mt-4">
           <p className="text-sm font-semibold">Your POS is active.</p>
           <p className="pos-note">
-            {expiresAt ? `Renews by ${new Date(expiresAt).toLocaleDateString("en-KE")}.` : "Payment confirmed."}
+            {expiresAt ? `Renews by ${formatDate(expiresAt)}.` : "Payment confirmed."}
           </p>
         </div>
       ) : (
         <div className="pos-form-actions mt-4">
           <button type="button" className="jata-btn jata-btn-primary" onClick={choose} disabled={busy || !checkoutUrl}>
-            {busy ? "Opening payment…" : `Choose plan and pay KES ${priceKES.toLocaleString("en-KE")}`}
+            {busy ? "Opening payment…" : `Choose plan and pay KES ${formatNumber(priceKES)}`}
           </button>
           <span className="pos-note">Pay with M-Pesa or card through Paystack. Your POS switches on the moment the payment is confirmed.</span>
         </div>

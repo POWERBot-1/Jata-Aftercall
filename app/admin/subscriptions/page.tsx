@@ -1,30 +1,47 @@
+import { formatDate } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
+import { AdminPage, AdminStatus, AdminTable } from "@/components/admin/AdminUI";
+
 export const dynamic = "force-dynamic";
 
+/** Every AFTERCALL subscription, soonest expiry first, so renewals are worked from the top. */
 export default async function AdminSubscriptions() {
   await requireAdminPage();
   const subs = await prisma.subscription.findMany({ orderBy: { expiresAt: "asc" }, include: { business: true, plan: true, user: true } });
+  const expiring = subs.filter((s) => s.expiresAt && s.expiresAt.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14).length;
+
   return (
-    <div>
-      <h1 className="text-lg font-bold">Subscriptions</h1>
-      <div className="mt-4 overflow-x-auto rounded-2xl border bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-xs text-zinc-500"><tr><th className="px-3 py-2 text-left">Business</th><th className="px-3 py-2 text-left">Customer</th><th className="px-3 py-2">Plan</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Start</th><th className="px-3 py-2">Expiry</th></tr></thead>
-          <tbody>
-            {subs.map((s) => (
-              <tr key={s.id} className="border-t">
-                <td className="px-3 py-2">{s.business.name}</td>
-                <td className="px-3 py-2 text-xs">{s.user.email}</td>
-                <td className="px-3 py-2 text-center text-xs">{s.plan.name}</td>
-                <td className="px-3 py-2 text-center"><span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold">{s.status}</span></td>
-                <td className="px-3 py-2 text-xs">{s.startAt ? new Date(s.startAt).toLocaleDateString() : "—"}</td>
-                <td className="px-3 py-2 text-xs">{s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <AdminPage
+      kicker="Platform admin"
+      title="Subscriptions"
+      meta={`${subs.length} ${subs.length === 1 ? "subscription" : "subscriptions"}, soonest expiry first${expiring ? ` — ${expiring} due within 14 days` : ""}.`}
+    >
+      {subs.length === 0 ? (
+        <p className="ws-muted">No subscription has been recorded yet.</p>
+      ) : (
+        <AdminTable caption="Subscriptions" head={
+          <tr>
+            <th scope="col">Business</th>
+            <th scope="col">Account</th>
+            <th scope="col">Plan</th>
+            <th scope="col">Status</th>
+            <th scope="col">Started</th>
+            <th scope="col">Expires</th>
+          </tr>
+        }>
+          {subs.map((s) => (
+            <tr key={s.id}>
+              <td>{s.business.name}</td>
+              <td>{s.user.email}</td>
+              <td>{s.plan.name}</td>
+              <td><AdminStatus value={s.status} /></td>
+              <td>{s.startAt ? formatDate(s.startAt) : "—"}</td>
+              <td>{s.expiresAt ? formatDate(s.expiresAt) : "—"}</td>
+            </tr>
+          ))}
+        </AdminTable>
+      )}
+    </AdminPage>
   );
 }

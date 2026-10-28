@@ -9,8 +9,11 @@ passes. Use an **isolated test database only**, never production.
 
 ## Run (native Prisma engines, the release path)
 
-    PRISMA_TEST_DATABASE_URL=postgresql://... npx prisma migrate deploy   # migrations, in order, via Prisma
-    PRISMA_TEST_DATABASE_URL=postgresql://... npx vitest run tests/prisma
+    DATABASE_URL=postgresql://... npx prisma migrate deploy   # isolated DB, migrations via pinned Prisma
+    DATABASE_URL=postgresql://... PRISMA_TEST_DATABASE_URL=postgresql://... npx vitest run tests/prisma
+
+CI sets both URLs to its disposable PostgreSQL 16 service. The first is the schema datasource;
+the second explicitly opts into the real-Prisma suite. Neither may point at production.
 
 ## Run (WebAssembly build of the same Prisma query engine; used when native engine binaries cannot be downloaded)
 
@@ -32,8 +35,14 @@ Its results are reported as engine `wasm-query-engine+adapter-pg`, which is not 
   `/api/paystack/verify` on an order payment (no subscription created).
 
 - `subscription-payment` (real webhook route, real HMAC signatures): PENDING subscription activates (regression);
-  KNOWN GAP (current behaviour recorded): a charge.success after charge.failed is refused with 503 and never activates.
-  The gap test is `it.fails`: it passes while the gap exists and must be flipped when the gap is closed.
+  a provider-verified charge.success after charge.failed settles the payment and activates the subscription (gap
+  closed 2026-10-13 — the settlement now accepts the same provider-verified states as the order path: PENDING,
+  FAILED, CANCELLED, EXPIRED, never REFUNDED); the verify route re-checks a stored FAILED with Paystack and
+  activates on a verified success, while a still-failing provider verdict changes nothing.
+- `pos-publication-policy`: concurrent Option B settlement creates one PAID payment/entitlement/case; owner and
+  escalation notifications remain idempotent; the exact 72-hour boundary is enforced; failed publication remains
+  open until a real snapshot; legacy PAID repair requires and uses verified provider `paid_at` rather than mutable
+  row timestamps. All provider evidence is synthetic and no provider HTTP call is made.
 
 ## Not covered here
 

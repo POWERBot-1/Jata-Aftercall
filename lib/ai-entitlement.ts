@@ -8,6 +8,7 @@
  */
 
 import prisma from "./db";
+import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "./team-access";
 
 export const AI_FRONT_DESK_PLAN_KEY = "AI_BUSINESS_FRONT_DESK";
 export const AI_FRONT_DESK_PRICE_KES = 499;
@@ -25,6 +26,22 @@ export type AIEntitlementStatus =
   | "PREVIEW_ONLY"
   | "UNSUBSCRIBED";
 
+/**
+ * Whether the billing records behind a status could actually be read.
+ *
+ * `entitled: false` has two very different meanings and they must not be conflated:
+ *
+ *   VERIFIED    — the billing queries all succeeded; the business genuinely holds no eligible
+ *                 entitlement right now (never paid, pending, expired, cancelled, refunded…).
+ *   UNAVAILABLE — the billing query failed (database unreachable, read error). Nothing is known
+ *                 about the business, so the answer stays fail-closed (`entitled: false`) but is
+ *                 reported as an infrastructure failure, not as "not subscribed".
+ *
+ * Reporting the second case as the first is what made a billing outage look like a customer who
+ * had not paid: it misled the owner and produced the wrong HTTP contract (402 instead of 503).
+ */
+export type AIBillingVerification = "VERIFIED" | "UNAVAILABLE";
+
 export type AIPackageStatusResult = {
   active: boolean;
   entitled: boolean;
@@ -37,6 +54,8 @@ export type AIPackageStatusResult = {
   packageKey?: string;
   historicalAccessAllowed: boolean;
   reason: string;
+  /** Absent is treated as VERIFIED (pure derivations never read a database). */
+  verification?: AIBillingVerification;
 };
 
 export type AIPackageEntitlementSummary = AIPackageStatusResult;
@@ -88,6 +107,9 @@ export function deriveAIEntitlement(input: {
     billingCycleDays: entitlement?.billingCycleDays ?? AI_FRONT_DESK_DURATION_DAYS,
     packageKey: resolvedPlanKey,
     historicalAccessAllowed: true,
+    // Pure derivation over rows the caller already read: the verification question was answered
+    // before this function was called.
+    verification: "VERIFIED" as const,
   };
 
   if (!subscription && !entitlement) {
@@ -251,6 +273,22 @@ export function deriveAIEntitlement(input: {
   };
 }
 
+/** Synthetic non-billing entitlement for a verified team account (no payment record is created). */
+export function teamFreeAIEntitlement(): AIPackageStatusResult {
+  return {
+    active: true,
+    entitled: true,
+    status: "ACTIVE",
+    priceKES: AI_FRONT_DESK_PRICE_KES,
+    currency: "KES",
+    billingCycleDays: AI_FRONT_DESK_DURATION_DAYS,
+    packageKey: AI_FRONT_DESK_PLAN_KEY,
+    historicalAccessAllowed: true,
+    verification: "VERIFIED",
+    reason: TEAM_FREE_ACCESS_LABEL,
+  };
+}
+
 export async function getAIPackageStatus(businessId: string): Promise<AIPackageStatusResult> {
   if (!businessId) {
     return {
@@ -261,18 +299,52 @@ export async function getAIPackageStatus(businessId: string): Promise<AIPackageS
       currency: "KES",
       billingCycleDays: AI_FRONT_DESK_DURATION_DAYS,
       historicalAccessAllowed: false,
+      verification: "VERIFIED",
       reason: "Business ID is required.",
     };
   }
+  if (await hasTeamFreeAccessForBusiness(businessId)) return teamFreeAIEntitlement();
+
+  // A failed billing read is NOT an absent entitlement. Each read records its failure so the
+  // result can say "we could not verify" instead of "this business has not paid" — the two lead
+  // to different product behaviour (deny with the right HTTP contract vs. invite a payment that
+  // may already have been made).
+  let readFailed = false;
+  const readOrNull = async <T,>(read: () => Promise<T> | undefined): Promise<T | null> => {
+    try {
+      return (await read()) ?? null;
+    } catch {
+      readFailed = true;
+      return null;
+    }
+  };
 
   const [entitlement, subscription, paidPayment] = await Promise.all([
-    prisma.aIPackageEntitlement?.findUnique?.({ where: { businessId } }).catch(() => null) ?? null,
-    prisma.subscription?.findUnique?.({ where: { businessId } }).catch(() => null) ?? null,
-    prisma.payment?.findFirst?.({
-      where: { businessId, status: "PAID" },
-      select: { status: true, planId: true },
-    }).catch(() => null) ?? null,
+    readOrNull<EntitlementRowLike>(() => prisma.aIPackageEntitlement?.findUnique?.({ where: { businessId } })),
+    readOrNull<SubscriptionLike>(() => prisma.subscription?.findUnique?.({ where: { businessId } })),
+    readOrNull<{ status?: string | null; planId?: string | null }>(() =>
+      prisma.payment?.findFirst?.({
+        where: { businessId, status: "PAID" },
+        select: { status: true, planId: true },
+      }),
+    ),
   ]);
+
+  // Fail closed on a partial read: an unread subscription could be the paid one.
+  if (readFailed) {
+    return {
+      active: false,
+      entitled: false,
+      status: "NONE",
+      priceKES: AI_FRONT_DESK_PRICE_KES,
+      currency: "KES",
+      billingCycleDays: AI_FRONT_DESK_DURATION_DAYS,
+      historicalAccessAllowed: true,
+      verification: "UNAVAILABLE",
+      reason:
+        "We could not check the billing records for this business right now, so the AI Business Front Desk cannot be confirmed as active.",
+    };
+  }
 
   let planKey: string | null = null;
   if (subscription?.planId && prisma.planConfig?.findUnique) {
@@ -296,6 +368,7 @@ export async function getAIPackageStatus(businessId: string): Promise<AIPackageS
       graceUntil: subscription?.graceUntil ?? undefined,
       packageKey: planKey || undefined,
       historicalAccessAllowed: true,
+      verification: "VERIFIED",
       reason: "AI Business Front Desk entitlement is not active yet.",
     };
   }
@@ -310,6 +383,10 @@ export async function getAIPackageStatus(businessId: string): Promise<AIPackageS
 
 export async function syncAIPackageEntitlement(businessId: string): Promise<AIPackageStatusResult> {
   const state = await getAIPackageStatus(businessId);
+  // Never persist a guess. If the billing read failed, `state` is fail-closed and says nothing
+  // about this business — writing it would downgrade a paying customer's entitlement row during
+  // an outage. Nothing is written; the caller still gets the honest UNAVAILABLE result.
+  if (state.verification === "UNAVAILABLE") return state;
   if (prisma.aIPackageEntitlement?.upsert) {
     await prisma.aIPackageEntitlement.upsert({
       where: { businessId },

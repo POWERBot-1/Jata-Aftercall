@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { publicOrderView } from "@/lib/erp/storefront";
 import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, StatusTone, humanise } from "@/components/erp/ErpBits";
+import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false, follow: false } };
@@ -43,7 +44,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
             <div>
               <p className="erp-crumbs">Order {view.orderNumber}</p>
               <h1 style={{ fontSize: "1.4rem", margin: "4px 0" }}>{humanise(view.status)}</h1>
-              <p className="erp-muted erp-small">{view.businessName} · placed {new Date(view.placedAt).toLocaleString("en-KE")}</p>
+              <p className="erp-muted erp-small">{view.businessName} · placed {formatDateTime(view.placedAt)}</p>
             </div>
             <Badge tone={StatusTone(view.status)}>{humanise(view.fulfilment)}</Badge>
           </div>

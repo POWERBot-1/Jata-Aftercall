@@ -6,26 +6,41 @@ import { resolveTheme } from "@/lib/themes";
 import BusinessPage from "@/components/BusinessPage";
 import { publicPageDecision, type PublicBusinessAccess, type PublicViewer } from "@/lib/publication";
 import { ensureReferralCode, referralPath } from "@/lib/referral";
-import { getAIPackageStatus } from "@/lib/ai-entitlement";
+import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { loadStorefront } from "@/lib/experience/storefront";
+import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
+import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
+import { buildDemoShowcase } from "@/lib/demoShowcase";
+import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
+import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
+import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }>; searchParams?: Promise<{ preview?: string }> };
 
-async function getBusiness(slug: string) {
+// M11 #418: one per-request load shared by `generateMetadata` and the page body, so
+// the SSR root segment completes with the metadata and the hydration bootstrap
+// scripts are emitted after the content (see lib/request-cache.ts).
+const getBusiness = requestCache(async (slug: string) => {
   return prisma.business.findUnique({
     where: { slug },
     include: {
+      owner: { select: { email: true } },
+      payments: {
+        where: { NOT: { reference: { startsWith: DEMO_PAYMENT_PREFIX } } },
+        select: { reference: true },
+        take: 1,
+      },
       services: { orderBy: { sortOrder: "asc" } },
       offer: true,
       subscription: true,
       members: { select: { userId: true, role: true } },
     },
   });
-}
+});
 
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
   return {
@@ -35,11 +50,41 @@ function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>
   };
 }
 
-async function viewerFromSession(): Promise<PublicViewer> {
+function verifiedDemoFixture(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>) {
+  const identity = {
+    slug: business.slug,
+    name: business.name,
+    ownerEmail: business.owner?.email,
+    paymentReferences: business.payments?.map((payment) => payment.reference) ?? [],
+  };
+  const verified = isVerifiedDemoRecord(identity) || isPublicDemoRow(identity);
+  return verified ? DEMO_BUSINESSES.find((demo) => demo.slug === business.slug) : undefined;
+}
+
+async function viewerFromSessionUncached(): Promise<PublicViewer> {
   const session = await getSession();
   if (!session) return null;
   return { userId: session.userId, role: session.role };
 }
+
+// M11 #418: shared per-request with generateMetadata and the body (lib/request-cache.ts).
+const viewerFromSession = requestCache(viewerFromSessionUncached);
+
+// M11 #418: the classic-fallback tail (referral mint + AI entitlement) is part of the same
+// per-request data load metadata awaits — no body-only await may lag the root segment.
+const classicPageExtras = requestCache(async (businessId: string) => {
+  const code = await ensureReferralCode(businessId);
+  let aiFrontDeskLive = false;
+  try {
+    // The link is offered only for a Front Desk that would actually answer: published, switched
+    // on and covered by a server-verified subscription. An entitled-but-draft desk 404s at
+    // /b/<slug>/ai, so linking it would hand the customer a dead button.
+    aiFrontDeskLive = (await getAIFrontDeskPublication(businessId)).publiclyOperational === true;
+  } catch {
+    aiFrontDeskLive = false;
+  }
+  return { code, aiFrontDeskLive };
+});
 
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
   if (!viewer) return false;
@@ -48,7 +93,7 @@ function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusi
   return (business.members || []).some((member) => member.userId === viewer.userId);
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusiness(slug);
   if (!business) return { title: "Page not found", robots: { index: false, follow: false } };
@@ -58,14 +103,28 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Page not found", robots: { index: false, follow: false } };
   }
 
-  // Interactive Business websites own their metadata (§33).
-  const experience = await loadStorefront(slug, { allowDraft: canPreviewDraft(business, viewer) });
+  // Metadata must select the same authorized draft as the page, including after publication.
+  // A public/foreign preview query cannot select draft SEO or alter live indexing.
+  const draftAllowed = canPreviewDraft(business, viewer);
+  const preferDraft = draftAllowed && (await searchParams)?.preview === "draft";
+  // Interactive Business websites own their metadata (§33). Keep the same classic fallback
+  // as the renderer when experience loading fails; metadata must not blank an otherwise usable page.
+  let experience = null;
+  try {
+    experience = await loadStorefront(slug, { allowDraft: draftAllowed, preferDraft });
+  } catch {
+    experience = null;
+  }
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
+  // Share the classic-fallback tail with the body (M11 #418): one per-request load total.
+  if (decision === "public") await classicPageExtras(business.id);
 
   const title = `${business.name} | ${business.location || business.category}`;
+  const demoFixture = verifiedDemoFixture(business);
   const description =
+    demoFixture?.description ||
     business.description ||
     `${business.name} — ${business.category} in ${business.location || "Kenya"}. WhatsApp, call, directions, services & offers.`;
   return {
@@ -81,7 +140,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
     alternates: { canonical: `/b/${business.slug}` },
-    robots: decision === "preview" ? { index: false, follow: false } : undefined,
+    robots: decision === "preview" || preferDraft ? { index: false, follow: false } : undefined,
   };
 }
 
@@ -133,26 +192,76 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   const theme = resolveTheme(business.theme);
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
-  // suspended) page. The code is minted lazily on first eligible use.
+  // suspended) page. The code is minted lazily on first eligible use. Shared with
+  // generateMetadata through the request cache (M11 #418).
   let referralHref: string | null = null;
-  if (decision === "public") {
-    const code = await ensureReferralCode(business.id);
-    if (code) referralHref = referralPath(code);
-  }
-
-  // The "Ask AI Front Desk" entry is offered only when the paid AI package is live for this
-  // business — the AI page itself answers 404 otherwise. Same server-side check, fails closed.
   let aiFrontDeskLive = false;
   if (decision === "public") {
-    try {
-      aiFrontDeskLive = (await getAIPackageStatus(business.id)).entitled === true;
-    } catch {
-      aiFrontDeskLive = false;
-    }
+    const extras = await classicPageExtras(business.id);
+    if (extras.code) referralHref = referralPath(extras.code);
+    aiFrontDeskLive = extras.aiFrontDeskLive;
   }
+
+  const demoFixture = verifiedDemoFixture(business);
+  const isDemoBusiness = Boolean(demoFixture);
+  const isPropertyDemo = demoFixture?.slug === "john-kamau-properties";
+  // Read-only presentation resolution for VERIFIED fictional demo rows whose production data
+  // still holds the historical 0700 000 00x placeholders. No database write, no effect on a real
+  // customer row, and no invented number for an unverifiable business (Phase 15 proposal only).
+  const displayedContacts = resolveDemoContacts(
+    {
+      slug: business.slug,
+      name: business.name,
+      ownerEmail: business.owner?.email,
+      paymentReferences: business.payments?.map((payment) => payment.reference) ?? [],
+    },
+    { phone: business.phone, whatsapp: business.whatsapp },
+  );
+  const activeServices = business.services.filter(
+    (service) => service.isActive === true && Boolean(service.title?.trim()),
+  );
+  const displayedServices = demoFixture
+    ? activeServices.map((service) => {
+        const sample = demoFixture.services.find((entry) => entry.title === service.title);
+        return {
+          ...service,
+          description:
+            sample?.description ??
+            (isPropertyDemo
+              ? "Fictional property category only; this is not an available listing."
+              : "Fictional sample service entry; details and prices are examples only."),
+        };
+      })
+    : activeServices;
+  const currentOffer = isCurrentPublicOffer(business.offer) ? business.offer : null;
+  const demoOffer =
+    demoFixture && !isPropertyDemo && currentOffer
+      ? { title: demoFixture.offer.title, subtitle: demoFixture.offer.subtitle }
+      : null;
+  const displayedOffer = demoFixture ? demoOffer : currentOffer;
+
+  // The showcase requires both the verified seed identity and a public route with active services.
+  // Its sample offer text comes from the fixture, never arbitrary persisted wording.
+  const showcase = demoFixture
+    ? buildDemoShowcase({
+        slug: business.slug,
+        decision,
+        isVerifiedDemo: true,
+        business: { name: business.name, category: business.category, location: business.location },
+        services: displayedServices,
+        offer: business.offer,
+      })
+    : null;
 
   return (
     <>
+      {isDemoBusiness ? (
+        <p role="note" className="bg-amber-100 px-4 py-2 text-center text-xs font-semibold text-amber-950">
+          Fictional demo page. Names, contact details, services, offers and prices are synthetic examples — not a live
+          business or current offer, quote, property listing or availability.
+        </p>
+      ) : null}
+      {showcase ? <DemoShowcaseBand {...showcase} /> : null}
       {decision === "preview" && (
         <div className="bg-zinc-900 py-2 text-center text-xs font-semibold text-white">Draft preview. Only you can see this unpublished page.</div>
       )}
@@ -167,22 +276,23 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
           slug: business.slug,
           name: business.name,
           category: business.category,
-          phone: business.phone,
-          whatsapp: business.whatsapp,
+          phone: displayedContacts.phone,
+          whatsapp: displayedContacts.whatsapp,
           location: business.location,
           lat: business.lat,
           lng: business.lng,
-          description: business.description,
+          description: demoFixture?.description ?? business.description,
           theme: business.theme,
           aftercallMsg: business.aftercallMsg,
           openingHours: business.openingHours,
           socialLinks: business.socialLinks,
         }}
-        services={business.services}
-        offer={business.offer}
+        services={displayedServices}
+        offer={displayedOffer}
         theme={theme}
         referralHref={referralHref}
         aiFrontDeskLive={aiFrontDeskLive}
+        demoPage={isDemoBusiness}
       />
     </>
   );

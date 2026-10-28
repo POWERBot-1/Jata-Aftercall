@@ -1,0 +1,140 @@
+name: Production smoke (read-only)
+
+# Post-deployment verification.
+#
+# WHY THIS FILE IS BEING RE-ADDED
+# -------------------------------
+# A workflow with this name and path was registered in the Actions UI on
+# 2026-10-05 and last ran from `arena/01a10b8d-jata-aftercall` — a branch that
+# was never merged. It exists on no branch, so the repository has *appeared* to
+# have a post-deployment check that nothing could ever run. The registration
+# outlived the file, and two runs sat in the history as if the capability were
+# live.
+#
+# This is a re-implementation, not a restoration: the original source is not
+# recoverable from any live branch or from the commit history of this path.
+#
+# WHAT IT CHECKS — GET requests only
+#   /            the deployment serves HTML
+#   /health      the application reports db:up through a real connection
+#   /b/<slug>    an optional public storefront page
+#
+# WHAT IT WILL NEVER DO
+#   No POST/PUT/PATCH/DELETE, no authentication, no payment flow, no writes, no
+#   deployment trigger. Every request is a GET with a timeout.
+#
+# TRIGGER
+#   `deployment_status` is viable here: Vercel creates GitHub Deployments for
+#   this repository (observed: environment "Production", state "success", with an
+#   environment_url). The job is gated on state == success and
+#   environment == Production, so preview deployments are ignored.
+#   `workflow_dispatch` is provided for a manual run against any base URL.
+#
+# STATUS OF THIS WORKFLOW: NOT YET OBSERVED RUNNING. It has never executed on a
+# deployment since being re-added, and the production origin is not reachable
+# from the environment that wrote it. Do not describe post-deployment smoke
+# coverage as active until a run is green in the Actions UI.
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to check (defaults to the production origin)"
+        required: false
+        default: "https://jata-aftercall.vercel.app"
+      business_slug:
+        description: "Optional public storefront slug, e.g. a real published business"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-${{ github.event.deployment.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Read-only smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # Only a successful Production deployment is worth checking. A preview or a
+    # failed deployment is skipped deliberately and visibly, not silently.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Production')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+
+      - name: Resolve the target
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+          INPUT_SLUG: ${{ inputs.business_slug }}
+          CONFIGURED_PRODUCTION_URL: ${{ vars.SMOKE_PRODUCTION_URL }}
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs";
+          import { resolveSmokeTarget } from "./scripts/ci/smoke-production.mjs";
+
+          const resolved = resolveSmokeTarget({
+            eventName: process.env.EVENT_NAME,
+            inputBaseUrl: process.env.INPUT_BASE_URL,
+            inputSlug: process.env.INPUT_SLUG,
+            configuredProductionUrl: process.env.CONFIGURED_PRODUCTION_URL,
+            deploymentUrl: process.env.DEPLOYMENT_URL,
+          });
+          if (!resolved.ok) {
+            console.error(`::error::BLOCKED: ${resolved.reason}`);
+            process.exit(1);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `base_url=${resolved.baseUrl}\nslug=${resolved.slug}\n`);
+          const storefront = resolved.slug ? `\`/b/${resolved.slug}\`` : "not configured";
+          appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            [
+              "### Production smoke",
+              "",
+              "| | |",
+              "|---|---|",
+              `| Target | \`${resolved.baseUrl}\` |`,
+              `| Deployment URL (SSO-protected) | \`${resolved.deploymentUrl || "n/a"}\` |`,
+              `| Storefront | ${storefront} |`,
+              `| Trigger | ${process.env.EVENT_NAME || "unknown"} |`,
+              "",
+            ].join("\n"),
+          );
+          NODE
+
+      - name: Run read-only checks
+        env:
+          SMOKE_BASE_URL: ${{ steps.target.outputs.base_url }}
+          SMOKE_BUSINESS_SLUG: ${{ steps.target.outputs.slug }}
+        run: |
+          set -o pipefail
+          # No dependencies are installed: this script uses only node: builtins
+          # and global fetch, so the check cannot fail because of a broken
+          # dependency tree.
+          node scripts/ci/smoke-production.mjs 2>&1 | tee /tmp/step-smoke.log
+
+      - name: Record the outcome
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo ""
+            echo "```"
+            cat /tmp/step-smoke.log 2>/dev/null || echo "(no output captured)"
+            echo "```"
+          } >> "$GITHUB_STEP_SUMMARY"

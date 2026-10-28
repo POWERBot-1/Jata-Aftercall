@@ -746,6 +746,37 @@ export function themeCss(theme: ExperienceTheme, brand?: ExperienceBrand | null)
     "--eb-media-ratio": t.mediaRatio,
     "--eb-hero-min-height": t.heroMinHeight,
     "--eb-section-spacing": t.sectionSpacing,
+
+    /*
+     * JATA design-system foundation (2026-10-13).
+     *
+     * Every generated product — business website, catalogue, storefront, restaurant page,
+     * booking experience, service page, course page — inherits these through this one function,
+     * whatever its category, theme or brand override. A shared design-system change therefore
+     * reaches existing published products and every product generated later, with no per-template
+     * work. Enforcement: `PRODUCT_FOUNDATION_TOKENS` in lib/designSystem.ts is checked against
+     * this output by tests/unit/design-system.test.ts, so removing one fails the suite.
+     */
+    "--eb-space-1": "0.25rem",
+    "--eb-space-2": "0.5rem",
+    "--eb-space-3": "0.75rem",
+    "--eb-space-4": "1rem",
+    "--eb-space-5": "1.5rem",
+    "--eb-text-meta": "0.72rem",
+    "--eb-text-body": "0.9375rem",
+    "--eb-radius-pill": "999px",
+    "--eb-focus-width": "2px",
+    "--eb-focus-offset": "2px",
+    "--eb-touch-target": "2.75rem",
+    "--eb-dur-fast": "120ms",
+    "--eb-dur-base": "180ms",
+    "--eb-measure": "68ch",
+    "--eb-status-success": "#047857",
+    "--eb-status-success-surface": "#ecfdf5",
+    "--eb-status-warning": "#92400e",
+    "--eb-status-warning-surface": "#fffbeb",
+    "--eb-status-error": "#b91c1c",
+    "--eb-status-error-surface": "#fef2f2",
   };
 
   const declarations = Object.entries(vars).map(([name, value]) => `${name}: ${value};`).join(" ");

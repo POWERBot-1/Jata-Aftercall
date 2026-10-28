@@ -7,6 +7,7 @@
  */
 
 import { allowStubPrismaClient } from "./prismaRuntime";
+import { installInlineMediaPrismaWritePolicy } from "./media/prisma-write-policy";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -476,7 +477,93 @@ function createFallbackPrisma(): any {
       findMany: async () => [],
       create: async () => { throw new Error("DB not available"); },
     },
+    posPublicationResolution: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      upsert: async () => { throw new Error("DB not available"); },
+      updateMany: async () => { throw new Error("DB not available"); },
+    },
     posAuditEvent: {
+      findMany: async () => [],
+      create: async () => ({ id: "mock" }),
+      count: async () => 0,
+    },
+    // ── JATA Autopilot (additive product). Reads return empty, writes refuse offline. ──
+    autopilotSubscription: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      update: async () => { throw new Error("DB not available"); },
+      updateMany: async () => ({ count: 0 }),
+      upsert: async () => { throw new Error("DB not available"); },
+    },
+    autopilotEntitlement: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      updateMany: async () => ({ count: 0 }),
+      upsert: async () => { throw new Error("DB not available"); },
+    },
+    autopilotConfiguration: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      upsert: async () => { throw new Error("DB not available"); },
+    },
+    autopilotUsageLedger: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      aggregate: async () => ({ _sum: { estimatedCostMinorKES: 0, unitsIn: 0, unitsOut: 0 } }),
+      count: async () => 0,
+    },
+    autopilotCustomerProfile: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      upsert: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    autopilotConsentRecord: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      updateMany: async () => ({ count: 0 }),
+      upsert: async () => { throw new Error("DB not available"); },
+    },
+    autopilotSession: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+    },
+    autopilotMessage: {
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    autopilotIngestionRecord: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    autopilotActionProposal: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      findMany: async () => [],
+      create: async () => { throw new Error("DB not available"); },
+      update: async () => { throw new Error("DB not available"); },
+      updateMany: async () => ({ count: 0 }),
+      count: async () => 0,
+    },
+    autopilotAuditEvent: {
       findMany: async () => [],
       create: async () => ({ id: "mock" }),
       count: async () => 0,
@@ -535,7 +622,7 @@ function createRealPrisma(): any {
     const client = new PrismaClient({
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     });
-    return client;
+    return installInlineMediaPrismaWritePolicy(client);
   } catch (e) {
     if (!allowStubPrismaClient(databaseUrl)) {
       console.error("[db] Prisma client unavailable while DATABASE_URL is configured. Refusing stub fallback.");
@@ -547,7 +634,9 @@ function createRealPrisma(): any {
 }
 
 if (globalThis.__prisma) {
-  prismaInstance = globalThis.__prisma;
+  prismaInstance = installInlineMediaPrismaWritePolicy(globalThis.__prisma, {
+    required: Boolean(process.env.DATABASE_URL),
+  });
 } else {
   prismaInstance = createRealPrisma();
   if (process.env.NODE_ENV !== "production") {

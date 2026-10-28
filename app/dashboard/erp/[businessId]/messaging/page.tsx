@@ -4,6 +4,7 @@ import { loadMessagingOverview } from "@/lib/erp/loaders";
 import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { SENDER_STATUS_LABELS } from "@/lib/messaging/senderId";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,7 @@ export default async function MessagingPage({ params, searchParams }: { params: 
                   <tr key={campaign.id}>
                     <td>
                       <div className="erp-strong">{campaign.name}</div>
-                      <div className="erp-muted erp-small">{new Date(campaign.createdAt).toLocaleDateString("en-KE")}</div>
+                      <div className="erp-muted erp-small">{formatDate(campaign.createdAt)}</div>
                     </td>
                     <td>{humanise(campaign.channel)}<div className="erp-muted erp-small">{humanise(campaign.purpose)}</div></td>
                     <td><Badge tone={StatusTone(campaign.status)}>{humanise(campaign.status)}</Badge></td>

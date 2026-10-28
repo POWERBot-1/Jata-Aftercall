@@ -19,6 +19,10 @@ function posReturnHref(value: unknown): string | null {
   return typeof value === "string" && POS_BUSINESS_ID.test(value) ? `/dashboard/pos/${encodeURIComponent(value)}` : null;
 }
 
+function autopilotReturnHref(value: unknown): string | null {
+  return typeof value === "string" && POS_BUSINESS_ID.test(value) ? `/dashboard/autopilot/${encodeURIComponent(value)}` : null;
+}
+
 function CallbackInner() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference") || searchParams.get("trxref") || "";
@@ -26,6 +30,7 @@ function CallbackInner() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<CheckoutView>(LOADING);
   const [posHref, setPosHref] = useState<string | null>(null);
+  const [autopilotHref, setAutopilotHref] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,6 +48,7 @@ function CallbackInner() {
       const response = await fetch(`/api/paystack/verify?${query.toString()}`, { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       setPosHref(posReturnHref((data as { posBusinessId?: unknown } | null)?.posBusinessId));
+      setAutopilotHref(autopilotReturnHref((data as { autopilotBusinessId?: unknown } | null)?.autopilotBusinessId));
       setView(interpretVerifyResponse(response.status, data));
     } catch {
       setView({ state: "error", title: "Payment status unavailable", message: "We couldn’t reach payment verification. Check your connection — we’ll keep trying.", poll: true });
@@ -81,21 +87,23 @@ function CallbackInner() {
     {view.state === "paid" ? (
       // Somebody who paid for the Business POS lands in the POS they just bought, not in a
       // dashboard that has never mentioned it (§4 ends at "LIVE", §67 keeps the products apart).
-      <Link href={posHref ?? "/dashboard"} className="jata-btn jata-btn-primary mt-6">{posHref ? "Go to my POS" : "Go to dashboard"}</Link>
+      <Link href={autopilotHref ?? (posHref ?? "/dashboard")} className="jata-btn jata-btn-primary mt-6">
+        {posHref ? "Go to my POS" : autopilotHref ? "Go to JATA Autopilot" : "Go to dashboard"}
+      </Link>
     ) : view !== LOADING && (
       <>
         {view.state === "signin" ? (
           <Link href="/login" className="jata-btn jata-btn-primary mt-5">Sign in</Link>
         ) : view.state === "cancelled" || view.state === "expired" || view.state === "failed" ? (
-          <Link href={posHref ? `${posHref}/plan` : "/dashboard/subscription"} className="jata-btn jata-btn-primary mt-5">Try again</Link>
+          <Link href={autopilotHref ?? (posHref ? `${posHref}/plan` : "/dashboard/subscription")} className="jata-btn jata-btn-primary mt-5">Try again</Link>
         ) : (
           <button type="button" onClick={() => { setAttempt(0); void verify(); }} disabled={loading} className="jata-btn jata-btn-primary mt-5">
             {loading ? "Checking…" : "Check payment status"}
           </button>
         )}
         <div>
-          <Link href={posHref ? `${posHref}/plan` : "/dashboard/subscription"} className="jata-btn jata-btn-ghost mt-3 underline">
-            {posHref ? "Back to my POS plan" : "Back to subscription"}
+          <Link href={autopilotHref ?? (posHref ? `${posHref}/plan` : "/dashboard/subscription")} className="jata-btn jata-btn-ghost mt-3 underline">
+            {posHref ? "Back to my POS plan" : autopilotHref ? "Back to JATA Autopilot" : "Back to subscription"}
           </Link>
         </div>
       </>

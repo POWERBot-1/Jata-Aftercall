@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { loadErpPage } from "@/lib/erp/workspace";
 import { ErpSidebarGroup, ErpMobileBar } from "@/components/erp/ErpNavLink";
 import { Badge } from "@/components/erp/ErpBits";
+import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,7 @@ export default async function ErpLayout({ children, params }: Props) {
             <div style={{ marginBottom: 6 }}>
               <span className="erp-badge" data-tone={entitled ? "lime" : "warn"}>{planLabel}</span>
             </div>
-            <div>KES {workspace.plan.priceKES.toLocaleString("en-KE")} / month for the ERP workspace.</div>
+            <div>KES {formatNumber(workspace.plan.priceKES)} / month for the ERP workspace.</div>
             <div style={{ marginTop: 4 }}>Provider and network fees are separate.</div>
           </div>
         </aside>

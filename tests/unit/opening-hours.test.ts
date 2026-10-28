@@ -69,18 +69,28 @@ describe("public BusinessPage rendering", () => {
     expect(html).not.toContain("{&quot;");
   });
 
-  it.each(["clean", "dark", "warm"] as const)("%s theme: no fake disabled Call/WhatsApp/Directions controls when details are missing", (key) => {
+  it.each(["clean", "dark", "warm"] as const)("%s theme: missing destinations are honest unavailable states, never dead links", (key) => {
     const html = renderPage({ phone: null, whatsapp: "0712345678", location: null }, THEMES[key]);
     expect(html).not.toContain("opacity-50");
-    expect(html).not.toMatch(/<span[^>]*>Call<\/span>/);
-    expect(html).not.toMatch(/<span[^>]*>Directions<\/span>/);
-    expect(html).toMatch(/<a[^>]*>WhatsApp<\/a>/);
+    // Owner mandate (Phase 3): all four labelled actions stay visible. A missing number or
+    // address produces a focusable aria-disabled state with no href, never a fake destination.
+    for (const action of ["whatsapp", "call", "directions", "share"]) {
+      expect(html, action).toContain(`data-contact-action="${action}"`);
+    }
+    expect(html).toContain('data-contact-action="call" data-contact-state="unavailable"');
+    expect(html).toContain('data-contact-action="directions" data-contact-state="unavailable"');
+    expect(html).toContain('data-contact-action="whatsapp" data-contact-state="available"');
+    expect(html).not.toContain('href="tel:"');
+    expect(html).not.toContain('href="https://www.google.com/maps');
   });
 
-  it("explains missing contact details instead of rendering dead buttons", () => {
+  it("explains missing contact details and keeps the four controls visible", () => {
     const html = renderPage({ phone: null, whatsapp: null });
     expect(html).toContain("Contact details for this business are coming soon.");
-    expect(html).not.toMatch(/>WhatsApp</);
+    expect(html).toContain('data-contact-action="whatsapp" data-contact-state="unavailable"');
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain("wa.me/");
+    expect(html).not.toContain("tel:+");
   });
 
   it("uses the AA-compliant WhatsApp colour (emerald-700) instead of emerald-500", () => {

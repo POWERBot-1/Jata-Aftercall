@@ -36,7 +36,7 @@ export default function RegisterForm({ refCode = null }: { refCode?: string | nu
   }
 
   return (
-    <form onSubmit={submit} className="jata-card mt-6 space-y-3 p-5">
+    <form onSubmit={submit} className="space-y-3">
       <Field id="register-name" label="Your name" hint="The name on your account." error={err && !form.name ? err : undefined}>
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} autoComplete="name" />
       </Field>

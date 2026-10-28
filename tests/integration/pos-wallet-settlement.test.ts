@@ -14,6 +14,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// This fake DB does not support raw SQL, so no generated Prisma client is needed here.
+vi.mock("@prisma/client", () => ({ Prisma: {} }));
+
 vi.mock("@/lib/db", async () => {
   const { createFakeDb, standardSeed } = await import("@/tests/helpers/posFakeDb");
   const fake = createFakeDb(standardSeed());

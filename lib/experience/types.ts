@@ -11,6 +11,7 @@
  */
 
 import type { RenderPreference } from "./renderMode";
+import type { ArtDirection } from "./templateFamilies";
 
 /** Photography languages a website can use (§8, §30, §44). Shared so the document, the AI
  *  design context and the Studio picker cannot drift apart. */
@@ -185,6 +186,9 @@ export type ExperienceBrand = {
   tagline?: string;
   logoUrl?: string;
   heroImageUrl?: string;
+  /** Crop focal point for the hero image, in percent (5–95). Absent = the image's own centre. */
+  heroFocalX?: number;
+  heroFocalY?: number;
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
@@ -214,6 +218,8 @@ export type ExperienceSettings = {
 /** The full versioned document. Stored as JSON; edited by the section editor (§15). */
 export type ExperienceDocument = {
   version: number;
+  /** Explicit v2 registered composition; absent in unchanged legacy/v1 documents. */
+  artDirection?: ArtDirection;
   categoryKey: CategoryKey;
   themeKey: string;
   brand: ExperienceBrand;

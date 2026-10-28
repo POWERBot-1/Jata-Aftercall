@@ -1,0 +1,22 @@
+-- Booking-time contract, phase 1 of 1: one nullable marker column, nothing else touched.
+--
+-- Owner decision 2026-10-14 (release report §J.1): a new booking's date + time are Nairobi
+-- wall-clock values, converted to an unambiguous UTC instant before storage. This column records
+-- which clock a row was anchored to, so a reader never has to guess and a legacy row is never
+-- silently reinterpreted.
+--
+-- Additive and backward compatible in both directions:
+--   * ADD COLUMN with no NOT NULL and no DEFAULT — no table rewrite, no data change, no lock that
+--     blocks reads or writes on PostgreSQL 11+.
+--   * The previous application version never selects or writes this column, so it keeps working
+--     unchanged during and after the deploy (expand step; there is no contract step).
+--   * Every existing row keeps NULL, which is the documented meaning "anchored to the server's
+--     ambient zone (UTC) before the contract". No historical instant is recalculated, moved or
+--     normalized, and no backfill runs.
+--   * Rollback needs no DDL: redeploying the previous version ignores the column. Dropping it
+--     later would discard only the marker, never a startAt/endAt value.
+--
+-- Not applied to any database by this change set: it is staged in the repository for review, and
+-- production migration remains a separately authorized step.
+
+ALTER TABLE "Booking" ADD COLUMN "bookingTimeZone" TEXT;

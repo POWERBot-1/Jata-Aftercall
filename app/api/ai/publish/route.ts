@@ -36,7 +36,14 @@ export async function POST(req: Request) {
 
     if (result.ok === false) {
       const errResult = result as { code: string };
-      const status = errResult.code === "SUBSCRIPTION_REQUIRED" ? 402 : 422;
+      // 402 = verified and unpaid; 503 = we could not verify and therefore refuse; 422 = the desk
+      // itself is not ready to publish. A billing outage never shares the unpaid contract.
+      const status =
+        errResult.code === "SUBSCRIPTION_REQUIRED"
+          ? 402
+          : errResult.code === "BILLING_UNAVAILABLE"
+            ? 503
+            : 422;
       return NextResponse.json(result, { status });
     }
 

@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDateTime } from "@/lib/dateFormat";
 
 const DEVICES = [
   { id: "mobile", label: "Mobile", width: 390, height: 780 },
@@ -82,9 +83,12 @@ export function PreviewClient({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
+      {/* Both groups wrap and may shrink: on a 390 px phone the device row plus "Open in new tab"
+          used to squeeze that link into a one-character column and push the row wider than the
+          screen. `min-w-0` lets a group shrink instead of forcing the page to scroll sideways. */}
       <div className="jata-toolbar">
-        <div className="flex gap-2" role="group" aria-label="Preview mode">
+        <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Preview mode">
           <button type="button" className={`jata-btn ${mode === "draft" ? "jata-btn-primary" : "jata-btn-secondary"}`} aria-pressed={mode === "draft"} onClick={() => { setMode("draft"); setNonce((value) => value + 1); }}>
             Draft
           </button>
@@ -92,7 +96,7 @@ export function PreviewClient({
             Live
           </button>
         </div>
-        <div className="flex gap-2" role="group" aria-label="Device">
+        <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Device">
           {DEVICES.map((entry) => (
             <button
               key={entry.id}
@@ -105,7 +109,7 @@ export function PreviewClient({
             </button>
           ))}
           <button type="button" className="jata-btn jata-btn-ghost" onClick={() => setNonce((value) => value + 1)}>Reload</button>
-          <a className="jata-btn jata-btn-ghost" href={src} target="_blank" rel="noopener noreferrer">Open in new tab</a>
+          <a className="jata-btn jata-btn-ghost whitespace-nowrap" href={src} target="_blank" rel="noopener noreferrer">Open in new tab</a>
         </div>
       </div>
 
@@ -118,8 +122,11 @@ export function PreviewClient({
       </p>
 
       <div className="flex justify-center">
+        {/* `maxWidth` stays the device's own pixel width — the authenticated browser gate reads it
+            back to prove the frame really is a 390/834/1280 px viewport. `min-w-0` is what lets the
+            wrapper shrink inside a narrow phone column instead of forcing the page to scroll. */}
         <div
-          className="overflow-hidden rounded-2xl border bg-zinc-100"
+          className="w-full min-w-0 overflow-hidden rounded-2xl border bg-zinc-100"
           style={{ width: "100%", maxWidth: active.width }}
         >
           <iframe
@@ -143,7 +150,7 @@ export function PreviewClient({
                 <div className="min-w-0 flex-1 text-sm">
                   <p className="font-semibold">Version {version.version}</p>
                   <p className="text-xs text-zinc-600">
-                    {version.publishedAt ? new Date(version.publishedAt).toLocaleString("en-KE") : "Not published"}
+                    {version.publishedAt ? formatDateTime(version.publishedAt) : "Not published"}
                   </p>
                 </div>
                 <button type="button" className="jata-btn jata-btn-secondary" disabled={restoring} onClick={() => restore(version.version)}>

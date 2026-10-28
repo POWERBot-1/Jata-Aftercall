@@ -1,7 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { installInlineMediaPrismaWritePolicy } from "../lib/media/prisma-write-policy";
+import { DEMO_OWNER_EMAIL, DEMO_PAYMENT_PREFIX } from "../lib/demoData";
 
-const prisma = new PrismaClient();
+const prisma = installInlineMediaPrismaWritePolicy(new PrismaClient());
 
 async function main() {
   console.log("Seeding JATA AFTERCALL…");
@@ -19,6 +21,10 @@ async function main() {
     // Private plan: it is never listed on a public or customer-facing surface (§67), so it is
     // seeded here and sold only from inside the authenticated POS workspace.
     { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30 },
+    // JATA Autopilot workspace add-on plans (sold inside the authenticated Autopilot workspace).
+    { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30 },
+    { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30 },
+    { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });
@@ -46,7 +52,7 @@ async function main() {
   console.log("Admin:", admin.email);
 
   // Demo customer user
-  const demoUserEmail = "demo@jata.link";
+  const demoUserEmail = DEMO_OWNER_EMAIL;
   const demoHash = await bcrypt.hash("Demo1234!", 10);
   const demoUser = await prisma.user.upsert({
     where: { email: demoUserEmail },
@@ -54,19 +60,19 @@ async function main() {
     create: { email: demoUserEmail, name: "Demo Owner", phone: "0722000000", passwordHash: demoHash, role: "CUSTOMER" },
   });
 
-  // Demo businesses
+  // All demo rows are fictional examples; their names, contacts, offers and prices are not live business data.
   const demos = [
     {
       slug: "nyumbani-kitchen",
       name: "Nyumbani Kitchen",
       category: "Restaurant",
-      phone: "0722123456",
-      whatsapp: "0722123456",
+      phone: "0724317010",
+      whatsapp: "0724317010",
       location: "Kilimani, Nairobi",
-      description: "Homestyle Kenyan meals — pilau, chapati, nyama choma daily.",
+      description: "Fictional demo page with sample Kenyan meal-service entries; details, contact information and prices are examples, not current business information.",
       theme: "warm",
       aftercallMsg: "Thanks for contacting Nyumbani Kitchen 👋",
-      offer: { title: "Pilau Combo KES 650", subtitle: "Today only — chapati + stew" },
+      offer: { title: "Example meal combo — KES 650", subtitle: "Fictional sample only; not a current menu or offer." },
       services: [
         { title: "Pilau Combo", priceLabel: "KES 650" },
         { title: "Nyama Choma", priceLabel: "From KES 900" },
@@ -77,13 +83,13 @@ async function main() {
       slug: "marys-beauty-studio",
       name: "Mary's Beauty Studio",
       category: "Beauty",
-      phone: "0723987654",
-      whatsapp: "0723987654",
+      phone: "0724317010",
+      whatsapp: "0724317010",
       location: "Kitengela, Kajiado",
-      description: "Braids, nails & beauty in Kitengela — walk-ins welcome.",
+      description: "Fictional demo page with sample braiding, nail and makeup entries; details, contact information and prices are examples, not current business information.",
       theme: "clean",
       aftercallMsg: "Thanks for calling Mary! 💇‍♀️",
-      offer: { title: "Braids from KES 1,500", subtitle: "This week only" },
+      offer: { title: "Example braid price — from KES 1,500", subtitle: "Fictional sample only; not a current promotion." },
       services: [
         { title: "Braiding", priceLabel: "From KES 1,500" },
         { title: "Nails", priceLabel: "From KES 800" },
@@ -94,13 +100,13 @@ async function main() {
       slug: "kamau-auto-care",
       name: "Kamau Auto Care",
       category: "Mechanic",
-      phone: "0700111222",
-      whatsapp: "0700111222",
+      phone: "0724317010",
+      whatsapp: "0724317010",
       location: "Westlands, Nairobi",
-      description: "Diagnostics, oil change, brakes — honest fundi pricing.",
+      description: "Fictional demo page with sample diagnostics, oil-change and brake entries; details, contact information and prices are examples, not a current quote.",
       theme: "dark",
       aftercallMsg: "Thanks for contacting Kamau Auto Care 🔧",
-      offer: { title: "Oil Change KES 2,999", subtitle: "Includes filter" },
+      offer: { title: "Example oil-change price — KES 2,999", subtitle: "Fictional sample only; not a current quote." },
       services: [
         { title: "Diagnostics", priceLabel: "KES 1,500" },
         { title: "Oil Change", priceLabel: "KES 2,999" },
@@ -111,13 +117,13 @@ async function main() {
       slug: "john-kamau-properties",
       name: "John Kamau Properties",
       category: "Real Estate",
-      phone: "0733004455",
-      whatsapp: "0733004455",
+      phone: "0724317010",
+      whatsapp: "0724317010",
       location: "Kiambu Road, Kiambu",
-      description: "Rentals & sales in Kiambu — verified listings, no brokers.",
+      description: "Fictional property-page demonstration. Category labels and prices are examples, not current listings or viewing availability.",
       theme: "clean",
       aftercallMsg: "Thanks for contacting John Kamau Properties 🏠",
-      offer: { title: "1BR from KES 25,000/mo", subtitle: "Kiambu Road — viewing this weekend" },
+      offer: { title: "Example rent range — KES 25,000/month", subtitle: "Fictional sample only; not a current rental or sale listing." },
       services: [
         { title: "1BR Rentals", priceLabel: "From KES 25,000" },
         { title: "2BR Rentals", priceLabel: "From KES 35,000" },
@@ -127,6 +133,18 @@ async function main() {
   ];
 
   for (const d of demos) {
+    const existing = await prisma.business.findUnique({
+      where: { slug: d.slug },
+      select: { id: true, ownerId: true, payments: { select: { reference: true } } },
+    });
+    if (
+      existing &&
+      (existing.ownerId !== demoUser.id || existing.payments.some((payment) => !payment.reference.startsWith(DEMO_PAYMENT_PREFIX)))
+    ) {
+      console.warn(`Skipped ${d.slug}: row is not exclusively owned by the demo account or has a non-demo payment.`);
+      continue;
+    }
+
     const business = await prisma.business.upsert({
       where: { slug: d.slug },
       update: {
@@ -207,8 +225,8 @@ async function main() {
 
     await prisma.offer.upsert({
       where: { businessId: business.id },
-      update: { title: d.offer.title, subtitle: d.offer.subtitle },
-      create: { businessId: business.id, title: d.offer.title, subtitle: d.offer.subtitle },
+      update: { title: d.offer.title, subtitle: d.offer.subtitle, validUntil: null, isActive: true },
+      create: { businessId: business.id, title: d.offer.title, subtitle: d.offer.subtitle, validUntil: null, isActive: true },
     });
 
     console.log("Seeded business:", d.slug);

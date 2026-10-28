@@ -11,16 +11,25 @@ import { structuredDataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "./StorefrontShell";
 import { SectionRenderer } from "./Sections";
 import { RenderModeProbe } from "./RenderModeProbe";
-import { MotionReveal } from "./MotionReveal";
+import { FamilyComposition } from "./FamilyComposition";
+import { themeOf } from "@/lib/experience/document";
+import { templateForDocument } from "@/lib/experience/templateFamilies";
+import { ItemCard } from "./ItemCard";
 import { isRenderPreference } from "@/lib/experience/renderMode";
 
-export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
+export function ExperienceSite({ data: incoming, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
+  const data = incoming.document.version === 2 ? { ...incoming, theme: themeOf(incoming.document) } : incoming;
   const { document, theme, profile, business } = data;
+  const family = templateForDocument(document);
   const hero = document.sections.find((section) => section.type === "hero" && section.visible);
   const body = document.sections.filter((section) => section.visible && section.type !== "hero" && section.type !== "navigation");
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
   const heroImage = hero?.imageUrl || document.brand.heroImageUrl || null;
+  // The owner's chosen crop focal point applies to their brand hero image only.
+  const heroFocal = !hero?.imageUrl && document.brand.heroImageUrl
+    ? { objectPosition: `${document.brand.heroFocalX ?? 50}% ${document.brand.heroFocalY ?? 45}%` }
+    : undefined;
 
   const structuredData = structuredDataFor({
     business,
@@ -32,11 +41,11 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
   return (
     <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData}>
       {hero ? (
-        <section className={`eb-hero eb-hero--${theme.treatment.heroStyle}`}>
+        <section className={`eb-hero eb-hero--${theme.treatment.heroStyle}${family ? ` eb-hero-treatment--${family.heroTreatment}` : ""}${heroImage ? " eb-hero--has-media" : " eb-hero--text"}`}>
           {heroImage && theme.treatment.heroStyle !== "split" ? (
             <div className="eb-hero__media">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
+              <img src={heroImage} alt="" fetchPriority="high" decoding="async" style={heroFocal} />
               <div className="eb-hero__scrim" />
             </div>
           ) : null}
@@ -45,7 +54,7 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
               {heroImage && theme.treatment.heroStyle === "split" ? (
                 <div className="eb-hero__media">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={heroImage} alt="" fetchPriority="high" decoding="async" />
+                  <img src={heroImage} alt="" fetchPriority="high" decoding="async" style={heroFocal} />
                 </div>
               ) : null}
               <div className={theme.treatment.heroStyle === "split" ? "" : "eb-container"}>
@@ -75,17 +84,12 @@ export function ExperienceSite({ data, previewNotice }: { data: StorefrontData; 
         </section>
       ) : null}
 
-      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} />
+      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} enabled={theme.treatment.motion !== "none"} />
 
-      {body.map((section) =>
-        theme.treatment.motion === "none" ? (
-          <SectionRenderer key={section.id} section={section} data={data} />
-        ) : (
-          <MotionReveal key={section.id} expressive={theme.treatment.motion === "expressive"}>
-            <SectionRenderer section={section} data={data} />
-          </MotionReveal>
-        ),
-      )}
+      {family?.heroTreatment === "stage" && data.items.length > 0 ? <section className="eb-product-stage eb-container" aria-label="Product highlights">
+        {data.items.slice(0, 3).map((item) => <ItemCard key={item.id} item={item} data={data} />)}
+      </section> : null}
+      <FamilyComposition data={data} sections={body} />
 
       {body.length === 0 ? (
         <section className="eb-section">

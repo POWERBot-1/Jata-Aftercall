@@ -6,6 +6,7 @@ import { formatCentsShort } from "@/lib/erp/money";
 import { calculateSegments } from "@/lib/messaging/segments";
 import { Badge, Notice, PageHead, StatusTone, humanise } from "@/components/erp/ErpBits";
 import { approveCampaignAction, campaignLifecycleAction, dispatchCampaignAction, planCampaignAction, testSendAction } from "../../actions";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function CampaignDetailPage({
     <>
       <PageHead
         title={campaign.name}
-        description={`${humanise(campaign.channel)} · ${humanise(campaign.purpose)} · created ${new Date(campaign.createdAt).toLocaleDateString("en-KE")}`}
+        description={`${humanise(campaign.channel)} · ${humanise(campaign.purpose)} · created ${formatDate(campaign.createdAt)}`}
         actions={
           <>
             <Link href={`${base}/messaging`} className="erp-btn erp-btn-secondary erp-btn-sm">All campaigns</Link>
@@ -72,7 +73,7 @@ export default async function CampaignDetailPage({
             <li><span className="erp-muted erp-small">Encoding</span><span className="erp-small erp-strong">{segments.encoding} · {segments.segments} part{segments.segments === 1 ? "" : "s"}</span></li>
             <li><span className="erp-muted erp-small">Sender</span><span className="erp-small erp-strong">{detail.sender ? `${detail.sender.requestedId} (${humanise(detail.sender.status)})` : "None"}</span></li>
             <li><span className="erp-muted erp-small">Template</span><span className="erp-small erp-strong">{detail.template ? detail.template.name : "Written from scratch"}</span></li>
-            <li><span className="erp-muted erp-small">Test sent</span><span className="erp-small erp-strong">{campaign.testSentAt ? `${new Date(campaign.testSentAt).toLocaleString("en-KE")} → ${campaign.testSentTo}` : "Not yet"}</span></li>
+            <li><span className="erp-muted erp-small">Test sent</span><span className="erp-small erp-strong">{campaign.testSentAt ? `${formatDateTime(campaign.testSentAt)} → ${campaign.testSentTo}` : "Not yet"}</span></li>
           </ul>
         </div>
 
@@ -216,7 +217,7 @@ export default async function CampaignDetailPage({
             {events.map((event: any) => (
               <li key={event.id}>
                 <span className="erp-small">{humanise(event.type ?? event.status)}</span>
-                <span className="erp-muted erp-small">{new Date(event.receivedAt ?? event.createdAt).toLocaleString("en-KE")}</span>
+                <span className="erp-muted erp-small">{formatDateTime(event.receivedAt ?? event.createdAt)}</span>
               </li>
             ))}
           </ul>

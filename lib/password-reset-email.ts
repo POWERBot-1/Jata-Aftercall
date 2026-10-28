@@ -1,0 +1,85 @@
+import nodemailer, { type SMTPTransportOptions } from "nodemailer";
+
+export type PasswordResetMailConfig = {
+  smtpUrl: string;
+  from: string;
+  baseUrl: URL;
+};
+
+/** Validate configuration without exposing credentials to a caller or to browser code. */
+export function getPasswordResetMailConfig(env: NodeJS.ProcessEnv = process.env): PasswordResetMailConfig | null {
+  const smtpUrl = String(env.PASSWORD_RESET_SMTP_URL ?? "").trim();
+  const from = String(env.PASSWORD_RESET_FROM ?? "").trim();
+  const baseUrlText = String(env.PUBLIC_BASE_URL ?? "").trim();
+  if (!smtpUrl || !from || !baseUrlText || /[\r\n]/.test(from)) return null;
+
+  try {
+    const smtp = new URL(smtpUrl);
+    const baseUrl = new URL(baseUrlText);
+    if (!["smtp:", "smtps:"].includes(smtp.protocol) || !smtp.hostname) return null;
+    if (!["http:", "https:"].includes(baseUrl.protocol) || baseUrl.username || baseUrl.password) return null;
+    if (env.NODE_ENV === "production" && baseUrl.protocol !== "https:") return null;
+    return { smtpUrl, from, baseUrl };
+  } catch {
+    return null;
+  }
+}
+
+export function isPasswordResetEmailConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return getPasswordResetMailConfig(env) !== null;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
+  const config = getPasswordResetMailConfig();
+  if (!config) throw new Error("password_reset_delivery_unconfigured");
+
+  // Construct from the trusted deployment URL, never from Host/Origin/Forwarded request headers.
+  const resetUrl = new URL("/reset-password", config.baseUrl);
+  resetUrl.hash = new URLSearchParams({ token }).toString();
+  const link = resetUrl.toString();
+  const text = [
+    "We received a request to reset your JATA AFTERCALL password.",
+    "",
+    `Use this one-time link within 30 minutes: ${link}`,
+    "",
+    "If you did not request this, you can ignore this email. Your password will not change.",
+  ].join("\n");
+  const htmlLink = escapeHtml(link);
+  const html = [
+    "<p>We received a request to reset your JATA AFTERCALL password.</p>",
+    `<p><a href="${htmlLink}">Reset your password</a></p>`,
+    "<p>This one-time link expires in 30 minutes.</p>",
+    "<p>If you did not request this, you can ignore this email. Your password will not change.</p>",
+  ].join("\n");
+
+  const transportOptions: SMTPTransportOptions = {
+    url: config.smtpUrl,
+    requireTLS: true,
+    tls: { minVersion: "TLSv1.2", rejectUnauthorized: true },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  };
+  const transporter = nodemailer.createTransport(transportOptions);
+  try {
+    await transporter.sendMail({
+      from: config.from,
+      to,
+      subject: "Reset your JATA AFTERCALL password",
+      text,
+      html,
+    });
+  } finally {
+    transporter.close();
+  }
+}

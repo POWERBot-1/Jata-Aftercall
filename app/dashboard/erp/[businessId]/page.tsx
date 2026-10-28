@@ -3,6 +3,7 @@ import { loadErpWorkspace } from "@/lib/erp/workspace";
 import { loadAccounting, loadInvoices, loadMessagingOverview } from "@/lib/erp/loaders";
 import { formatCentsShort } from "@/lib/erp/money";
 import { Badge, EmptyState, Kpi, Notice, StatusTone, humanise } from "@/components/erp/ErpBits";
+import { formatDate, formatNumber, nairobiHour } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -193,10 +194,10 @@ export default async function ErpHomePage({ params }: { params: Promise<{ busine
       <section className="erp-grid erp-grid-3" aria-label="Plan and pack">
         <div className="erp-card">
           <h2>Your plan</h2>
-          <p className="erp-card-sub">KES {workspace.plan.priceKES.toLocaleString("en-KE")} per month, billed to the business.</p>
+          <p className="erp-card-sub">KES {formatNumber(workspace.plan.priceKES)} per month, billed to the business.</p>
           <p className="erp-small">
             <strong>Status:</strong> {humanise(workspace.entitlement.status)}
-            {workspace.entitlement.expiresAt ? ` · renews ${new Date(workspace.entitlement.expiresAt).toLocaleDateString("en-KE")}` : ""}
+            {workspace.entitlement.expiresAt ? ` · renews ${formatDate(workspace.entitlement.expiresAt)}` : ""}
           </p>
           <ul className="erp-list">
             {workspace.plan.inclusions.slice(0, 4).map((item) => (
@@ -230,7 +231,7 @@ export default async function ErpHomePage({ params }: { params: Promise<{ busine
 }
 
 function greeting(): string {
-  const hour = Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "Africa/Nairobi" }));
+  const hour = nairobiHour();
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";

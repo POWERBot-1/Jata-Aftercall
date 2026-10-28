@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatNumber } from "@/lib/dateFormat";
 
 /**
  * Paying into the JATA Payment Wallet from the till (§21, §25, §41, §112).
@@ -262,7 +263,7 @@ export function WalletPaymentPanel({
         )}
 
         <p className="pos-note">
-          {request.jataPaymentId} · KES {Number(request.amountKES ?? totalKES).toLocaleString("en-KE")}
+          {request.jataPaymentId} · KES {formatNumber(request.amountKES ?? totalKES)}
           {request.status ? ` · ${request.status.replace(/_/g, " ").toLowerCase()}` : ""}
         </p>
 
@@ -314,7 +315,7 @@ export function WalletPaymentPanel({
       {note ? <p className="pos-note" role="status">{note}</p> : null}
 
       <button type="button" className="jata-btn jata-btn-primary" onClick={ask} disabled={busy || disabled}>
-        {busy ? "Starting…" : `Request payment · KES ${totalKES.toLocaleString("en-KE")}`}
+        {busy ? "Starting…" : `Request payment · KES ${formatNumber(totalKES)}`}
       </button>
     </section>
   );

@@ -247,7 +247,12 @@ export async function publishAIBusinessFrontDesk(params: {
   actorId?: string | null;
 }): Promise<
   | { ok: true; readiness: AIReadinessReport; publishedVersion: number; sharePath: string }
-  | { ok: false; code: "READINESS_FAILED" | "SUBSCRIPTION_REQUIRED" | "PUBLISH_FAILED"; error: string; readiness: AIReadinessReport }
+  | {
+      ok: false;
+      code: "READINESS_FAILED" | "SUBSCRIPTION_REQUIRED" | "BILLING_UNAVAILABLE" | "PUBLISH_FAILED";
+      error: string;
+      readiness: AIReadinessReport;
+    }
 > {
   const readiness = await evaluateAIReadiness(params.businessId);
 
@@ -256,6 +261,19 @@ export async function publishAIBusinessFrontDesk(params: {
       ok: false,
       code: "READINESS_FAILED",
       error: `AI Readiness Gate not met: ${readiness.missingItems.join(" ")}`,
+      readiness,
+    };
+  }
+
+  // A billing outage is not a declined payment. When the billing records could not be read the
+  // publication attempt is refused exactly the same way, but it is reported as an unverifiable
+  // state (503) so the owner retries instead of buying a plan they may already hold.
+  if (readiness.subscription.verification === "UNAVAILABLE") {
+    return {
+      ok: false,
+      code: "BILLING_UNAVAILABLE",
+      error:
+        "We could not check your subscription just now, so nothing was published. Please try again in a moment.",
       readiness,
     };
   }
@@ -309,7 +327,9 @@ export async function publishAIBusinessFrontDesk(params: {
 
   let publishedConfig: Awaited<ReturnType<typeof publishAIConfigSnapshot>>;
   try {
-    publishedConfig = await publishAIConfigSnapshot(params.businessId);
+    // Activation is explicit and re-verified inside publishAIConfigSnapshot; the readiness gate
+    // above already required `subscription.entitled`, so this is defence in depth, not the gate.
+    publishedConfig = await publishAIConfigSnapshot(params.businessId, { activateLive: true });
   } catch (error) {
     if (previousPublication && prisma.business?.update) {
       await prisma.business

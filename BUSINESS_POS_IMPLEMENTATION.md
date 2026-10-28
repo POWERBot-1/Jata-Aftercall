@@ -6,6 +6,11 @@ Date: 2026-10-03 (Africa/Nairobi)
 Repo: `/home/user/Jata-Aftercall`
 Plan: `BUSINESS_POS` — **KES 499 / 30 days**
 
+> **2026-10-23 Option B addendum:** the branch/date and historical completion evidence below belong
+> to the original implementation record. Current paid-but-unpublished lifecycle, deadline, legacy
+> repair, notification, and unresolved escalation/remedy rules are in
+> `docs/POS_PUBLICATION_RESOLUTION.md`; this addendum is not a new completion claim.
+
 ---
 
 ## 1. What was asked
@@ -136,14 +141,20 @@ closed**.
 
 - States (§44): `DRAFT → CONFIGURED → PREVIEW → AWAITING_PAYMENT → PAYMENT_CONFIRMED →
   PROVISIONING → LIVE`, plus `SUSPENDED` / `CANCELLED`.
-- `derivePosEntitlement({ subscription, entitlement, paidPayment, configurationStatus, now })` is
-  the single authority. A business is **never** `LIVE` without an in-date `PosSubscription` on
-  `BUSINESS_POS`; `CANCELLED` wins over everything; an expired plan becomes `SUSPENDED` with
-  `nextAction: "renew"` (history stays readable, new money is refused).
+- `derivePosEntitlement({ subscription, entitlement, paidPayment, configurationStatus, publishedVersion, now })`
+  is the single authority. A business is **never** `LIVE` without an in-date `PosSubscription` on
+  `BUSINESS_POS` and a real published snapshot/version; `CANCELLED` wins over everything; an expired
+  plan becomes `SUSPENDED` with `nextAction: "renew"` (history stays readable, new money is refused).
 - `lifecycleWithoutPayment` collapses `CONFIGURED` → `AWAITING_PAYMENT` for display, so an unpaid
   business is never shown as trading.
 - `settlePosPayment(tx, …)` is idempotent: a `PENDING → PAID` `updateMany` plus a `ProcessedWebhook`
   row, then `provisionAfterPayment` in the **same transaction**. A replayed event settles once.
+  Under owner-selected Option B, blocked publication preserves PAID/entitled draft-backed selling
+  as `PAYMENT_CONFIRMED`, never fabricates LIVE or a snapshot, and opens a durable 72-hour
+  publication-resolution case. Legacy PAID repair requires verified provider `paid_at`; mutable
+  ledger/configuration/subscription timestamps are not confirmation evidence. See
+  `docs/POS_PUBLICATION_RESOLUTION.md` for deadline, notification, resolution, and unresolved
+  scheduler/support/refund rules.
 - `lib/paystack.ts:activateSubscriptionForPayment` needed no environment access, so tests drive the
   real settlement path without credentials.
 

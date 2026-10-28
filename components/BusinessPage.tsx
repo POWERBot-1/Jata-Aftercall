@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { normalizeKePhone, getWhatsAppUrl } from "@/lib/phone";
 import { getDirectionsUrl } from "@/lib/location";
 import { formatOpeningHours } from "@/lib/openingHours";
+import { formatNumber } from "@/lib/dateFormat";
+import { ContactActions } from "@/components/storefront/ContactActions";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -45,6 +47,7 @@ export default function BusinessPage({
   theme,
   referralHref = null,
   aiFrontDeskLive = false,
+  demoPage = false,
 }: {
   business: Business;
   services: Service[];
@@ -58,26 +61,12 @@ export default function BusinessPage({
    * customer tapping it would land on "Page not found".
    */
   aiFrontDeskLive?: boolean;
+  /** Whether this page contains only fictional demonstration content. */
+  demoPage?: boolean;
 }) {
-  const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
     track(business.id, "PAGE_VIEW");
   }, [business.id]);
-
-  async function sharePage() {
-    track(business.id, "SHARE_CLICK");
-    const url = window.location.href;
-    if (navigator.share) {
-      navigator.share({ title: business.name, url }).catch(() => {});
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareStatus("Link copied. Paste it into WhatsApp or SMS to share.");
-    } catch {
-      setShareStatus(`Copy this link to share: ${url}`);
-    }
-  }
 
   // Kenyan normalization: 07XXXXXXXX / 01XXXXXXXX -> 254XXXXXXXXX
   const waInquiryText = `Hi ${business.name}, I found your page and would like to know more.`;
@@ -96,6 +85,7 @@ export default function BusinessPage({
 
   // Request Quote fallback: WhatsApp -> tel: -> #quote
   const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
+  const quoteActionEvent = waQuoteLink ? "WHATSAPP_CLICK" : telLinkNormalized ? "CALL_CLICK" : null;
 
   const t = theme;
   const hours = formatOpeningHours(business.openingHours);
@@ -110,7 +100,7 @@ export default function BusinessPage({
 
       <main className="mx-auto max-w-[640px] px-4 pb-28 pt-4 sm:px-6">
         {/* Header */}
-        <div className={`rounded-[1.5rem] border ${t.colors.border} ${t.colors.card} p-5 shadow-sm`}>
+        <div className={`rounded-[1.5rem] border ${t.colors.border} ${t.colors.card} p-5 shadow-xs`}>
           <div className="flex items-start gap-4">
             <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${t.colors.primary} ${t.colors.primaryText} text-sm font-bold`}>
               {business.name.slice(0, 2).toUpperCase()}
@@ -122,55 +112,35 @@ export default function BusinessPage({
             </div>
           </div>
 
-          {/* Primary CTAs above the fold. Only real actions are rendered — no disabled look-alikes. */}
-          {waLink || telLinkNormalized ? (
-            <div className={`mt-5 grid gap-3 ${waLink && telLinkNormalized ? "grid-cols-2" : "grid-cols-1"}`}>
-              {waLink && (
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => track(business.id, "WHATSAPP_CLICK")}
-                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold shadow-sm ${whatsappCta}`}
-                >
-                  WhatsApp
-                </a>
-              )}
-              {telLinkNormalized && (
-                <a
-                  href={telLinkNormalized}
-                  onClick={() => track(business.id, "CALL_CLICK")}
-                  className={`jata-cta inline-flex items-center justify-center rounded-2xl px-4 py-4 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText} shadow-sm`}
-                >
-                  Call
-                </a>
-              )}
-            </div>
-          ) : (
+          {/* Owner mandate: all four contact actions are visibly rendered with icons and labels.
+              Unavailable destinations are honest, focusable states — never dead links. */}
+          {!waLink && !telLinkNormalized ? (
             <p className={`mt-5 text-sm ${t.colors.muted}`}>Contact details for this business are coming soon.</p>
-          )}
-
-          <div className={`mt-3 grid gap-3 ${mapsLink ? "grid-cols-2" : "grid-cols-1"}`}>
-            {mapsLink && (
-              <a
-                href={mapsLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track(business.id, "DIRECTION_CLICK")}
-                className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold hover:opacity-80`}
-              >
-                Get Directions
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={() => void sharePage()}
-              className={`jata-cta rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
-            >
-              Share
-            </button>
+          ) : null}
+          <div className="mt-5">
+            <ContactActions
+              business={{
+                slug: business.slug,
+                name: business.name,
+                category: business.category,
+                whatsapp: business.whatsapp,
+                phone: business.phone,
+                location: business.location,
+                lat: business.lat,
+                lng: business.lng,
+              }}
+              businessId={business.id}
+              variant="primary"
+              group="primary"
+              onShare={() => track(business.id, "SHARE_CLICK")}
+              skin={{
+                whatsapp: whatsappCta,
+                call: `${t.colors.primary} ${t.colors.primaryText}`,
+                neutral: `border ${t.colors.border}`,
+                muted: `text-xs ${t.colors.muted}`,
+              }}
+            />
           </div>
-          <p role="status" aria-live="polite" className={`text-center text-xs ${t.colors.muted} ${shareStatus ? "mt-2" : ""}`}>{shareStatus}</p>
 
           <div className="mt-3 grid grid-cols-2 gap-3">
             <a href="#info" className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}>
@@ -181,7 +151,7 @@ export default function BusinessPage({
                 href={quoteHref}
                 target={quoteHref.startsWith("http") ? "_blank" : undefined}
                 rel={quoteHref.startsWith("http") ? "noopener noreferrer" : undefined}
-                onClick={() => track(business.id, "WHATSAPP_CLICK")}
+                onClick={() => { if (quoteActionEvent) track(business.id, quoteActionEvent); }}
                 className={`jata-cta inline-flex items-center justify-center rounded-2xl border ${t.colors.border} py-3 text-center text-sm font-semibold`}
               >
                 Request quote
@@ -211,7 +181,7 @@ export default function BusinessPage({
         {/* Offer */}
         {offer && offer.title && (
           <div className={`mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950`}>
-            <p className="text-xs font-bold tracking-widest text-amber-700">TODAY&apos;S OFFER</p>
+            <p className="text-xs font-bold tracking-widest text-amber-700">{demoPage ? "SAMPLE OFFER · FICTIONAL, NOT CURRENT" : "TODAY'S OFFER"}</p>
             <p className="mt-1 text-base font-bold">{offer.title}</p>
             {offer.subtitle && <p className="text-sm text-amber-900/80">{offer.subtitle}</p>}
           </div>
@@ -232,7 +202,7 @@ export default function BusinessPage({
                   </div>
                   {(s.priceLabel || s.priceFrom) && (
                     <span className={`shrink-0 rounded-full border ${t.colors.border} ${t.colors.card} px-2.5 py-1 text-xs font-medium`}>
-                      {s.priceLabel || `From KES ${s.priceFrom?.toLocaleString()}`}
+                      {s.priceLabel || `From KES ${formatNumber(s.priceFrom)}`}
                     </span>
                   )}
                 </li>
@@ -250,7 +220,7 @@ export default function BusinessPage({
               <h3 className="text-xs font-bold tracking-widest">LOCATION</h3>
               <p className={`mt-1 text-sm ${t.colors.muted}`}>{business.location}</p>
               {mapsLink && (
-                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`jata-cta mt-2 inline-flex items-center rounded-full border ${t.colors.border} px-4 py-2 text-sm font-semibold`}>
+                <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTIONS_CLICK")} className={`jata-cta mt-2 inline-flex items-center rounded-full border ${t.colors.border} px-4 py-2 text-sm font-semibold`}>
                   Open in Maps
                 </a>
               )}
@@ -263,7 +233,7 @@ export default function BusinessPage({
           <h2 className="text-sm font-bold">Quote</h2>
           <p className={`mt-2 text-sm ${t.colors.muted}`}>Ask {business.name} for a quote. No payment is taken on this page.</p>
           {quoteHref && quoteHref !== "#quote" ? (
-            <a href={quoteHref} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
+            <a href={quoteHref} onClick={() => { if (quoteActionEvent) track(business.id, quoteActionEvent); }} className={`jata-cta mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${t.colors.primary} ${t.colors.primaryText}`}>Request quote</a>
           ) : (
             <p className={`mt-2 text-sm ${t.colors.muted}`}>Add a phone or WhatsApp number to receive quote requests.</p>
           )}
@@ -346,24 +316,31 @@ export default function BusinessPage({
         <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <Link href="/" className="underline">Create your page</Link></p>
       </main>
 
-      {/* Sticky bottom action bar — large touch targets (§5) */}
+      {/* Sticky bottom action bar — the same four actions, still >=44 px touch targets (§5). */}
       <div className={`safe-bottom fixed inset-x-0 bottom-0 border-t ${t.colors.border} ${t.colors.card} shadow-[0_-8px_24px_rgba(0,0,0,0.08)]`}>
-        <div className="mx-auto flex max-w-[640px] gap-2 px-3 py-3">
-          {waLink ? (
-            <a href={waLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "WHATSAPP_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${whatsappCta}`}>
-              WhatsApp
-            </a>
-          ) : null}
-          {telLinkNormalized ? (
-            <a href={telLinkNormalized} onClick={() => track(business.id, "CALL_CLICK")} className={`flex flex-1 items-center justify-center rounded-full py-3.5 text-sm font-bold ${t.colors.primary} ${t.colors.primaryText}`}>
-              Call
-            </a>
-          ) : null}
-          {mapsLink && (
-            <a href={mapsLink} target="_blank" rel="noopener noreferrer" onClick={() => track(business.id, "DIRECTION_CLICK")} className={`flex items-center justify-center rounded-full border ${t.colors.border} px-5 py-3.5 text-sm font-semibold`}>
-              Directions
-            </a>
-          )}
+        <div className="mx-auto max-w-[640px] px-3 py-2">
+          <ContactActions
+            business={{
+              slug: business.slug,
+              name: business.name,
+              category: business.category,
+              whatsapp: business.whatsapp,
+              phone: business.phone,
+              location: business.location,
+              lat: business.lat,
+              lng: business.lng,
+            }}
+            businessId={business.id}
+            variant="sticky"
+            group="sticky"
+            onShare={() => track(business.id, "SHARE_CLICK")}
+            skin={{
+              whatsapp: whatsappCta,
+              call: `${t.colors.primary} ${t.colors.primaryText}`,
+              neutral: `border ${t.colors.border}`,
+              muted: `text-xs ${t.colors.muted}`,
+            }}
+          />
         </div>
       </div>
     </div>

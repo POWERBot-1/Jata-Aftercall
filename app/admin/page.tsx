@@ -1,7 +1,19 @@
+import Link from "next/link";
+import { formatNumber } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
+import { AdminPage } from "@/components/admin/AdminUI";
+import { WorkspacePanel, WorkspaceStat } from "@/components/workspace/WorkspaceUI";
+
 export const dynamic = "force-dynamic";
 
+/**
+ * Platform overview.
+ *
+ * Every tile is a count or a sum the database actually returned — customers, businesses,
+ * publication state, subscriptions, recorded page events and settled revenue. No growth curve is
+ * drawn because the schema keeps events, not a daily roll-up: a chart here would be invented.
+ */
 export default async function AdminOverview() {
   await requireAdminPage();
   const [users, businesses, published, payments, subsActive, subsExpired, analytics] = await Promise.all([
@@ -17,37 +29,55 @@ export default async function AdminOverview() {
   const totalViews = analytics.find((a) => a.eventType === "PAGE_VIEW")?._count.eventType || 0;
   const waClicks = analytics.find((a) => a.eventType === "WHATSAPP_CLICK")?._count.eventType || 0;
   const callClicks = analytics.find((a) => a.eventType === "CALL_CLICK")?._count.eventType || 0;
-  const dirClicks = analytics.find((a) => a.eventType === "DIRECTION_CLICK")?._count.eventType || 0;
+  const dirClicks = analytics.find((a) => a.eventType === "DIRECTIONS_CLICK")?._count.eventType || 0;
   const revenuePaid = await prisma.payment.aggregate({ where: { status: "PAID" }, _sum: { amount: true } }).catch(() => ({ _sum: { amount: 0 } }));
 
-  return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold">Admin overview</h1>
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {[
-          ["Total customers", users],
-          ["Active businesses", businesses],
-          ["Published pages", published],
-          ["Active subs", subsActive],
-          ["Expiring/expired", subsExpired],
-          ["Page views", totalViews],
-          ["WhatsApp clicks", waClicks],
-          ["Call clicks", callClicks],
-          ["Direction clicks", dirClicks],
-          ["Revenue (KES)", revenuePaid._sum.amount ? (revenuePaid._sum.amount! / 100).toLocaleString() : "0"],
-        ].map(([label, val]) => (
-          <div key={String(label)} className="rounded-2xl border bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{label as string}</p>
-            <p className="mt-1 text-2xl font-bold">{String(val)}</p>
-          </div>
-        ))}
-      </div>
+  const accounts: Array<[string, string, string]> = [
+    ["Total customers", formatNumber(users), "Every registered account"],
+    ["Businesses", formatNumber(businesses), "Across all owners"],
+    ["Published pages", formatNumber(published), "Live to customers"],
+    ["Active subscriptions", formatNumber(subsActive), "Status ACTIVE"],
+    ["Expiring / expired", formatNumber(subsExpired), "Needs a renewal"],
+  ];
+  const activity: Array<[string, string, string]> = [
+    ["Payments recorded", formatNumber(payments), "All statuses, all time"],
+    ["Settled revenue (KES)", revenuePaid._sum.amount ? formatNumber(revenuePaid._sum.amount / 100) : "0", "Sum of PAID only"],
+    ["Page views", formatNumber(totalViews), "Recorded by owner pages"],
+    ["WhatsApp taps", formatNumber(waClicks), "Recorded button taps"],
+    ["Calls / directions", `${formatNumber(callClicks)} / ${formatNumber(dirClicks)}`, "Recorded button taps"],
+  ];
 
-      <div className="rounded-2xl border bg-white p-5">
-        <h2 className="text-sm font-bold">System health</h2>
-        <p className="text-xs text-zinc-500">Check <a href="/health" className="underline">/health</a> endpoint. All admin actions are audited.</p>
-        <a href="/health" target="_blank" className="mt-2 inline-flex rounded-full border px-4 py-1 text-xs font-semibold">Open /health</a>
-      </div>
-    </div>
+  return (
+    <AdminPage kicker="Platform admin" title="Admin overview" meta="Counts and sums only. Every figure below is read from the database at request time.">
+      <WorkspacePanel title="Accounts and access" meta="Coverage, not growth">
+        <div className="ws-stats ws-stats--5">
+          {accounts.map(([label, value, hint]) => (
+            <WorkspaceStat key={label} label={label} value={value} hint={hint} />
+          ))}
+        </div>
+      </WorkspacePanel>
+
+      <WorkspacePanel title="Activity recorded by owner pages" meta="Measured, never estimated">
+        <div className="ws-stats ws-stats--5">
+          {activity.map(([label, value, hint]) => (
+            <WorkspaceStat key={label} label={label} value={value} hint={hint} metric={label === "Page views" ? "views" : label === "WhatsApp taps" ? "whatsapp" : undefined} />
+          ))}
+        </div>
+        <p className="ws-muted ws-tiny">
+          There is no daily roll-up in the schema, so no trend line is drawn. An empty figure means nothing has been recorded — not zero demand.
+        </p>
+      </WorkspacePanel>
+
+      <WorkspacePanel title="System health" meta="Operational checks">
+        <p className="ws-muted">
+          The health endpoint reports database reachability and configuration state. Every admin action in this console is audited with the acting account.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/health" target="_blank" className="ws-btn-outline ws-btn-outline--ink">Open /health</Link>
+          <Link href="/admin/payments/wallet" className="ws-btn-outline ws-btn-outline--ink">Payment wallet</Link>
+          <Link href="/admin/plans" className="ws-btn-outline ws-btn-outline--ink">Plans &amp; pricing</Link>
+        </div>
+      </WorkspacePanel>
+    </AdminPage>
   );
 }

@@ -52,6 +52,8 @@ vi.mock("@/lib/db", () => ({
         if (!b) return null;
         return {
           ...structuredClone(b),
+          owner: { email: h.tables.user.find((user) => user.id === b.ownerId)?.email ?? null },
+          payments: h.tables.payment.filter((payment) => payment.businessId === b.id).map((payment) => ({ reference: payment.reference })),
           services: h.tables.service.filter((s) => s.businessId === b.id).sort((a, c) => a.sortOrder - c.sortOrder),
           offer: h.tables.offer.find((o) => o.businessId === b.id) ?? null,
           subscription: h.tables.subscription.find((s) => s.businessId === b.id) ?? null,
@@ -64,9 +66,21 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => null }));
 vi.mock("@/lib/referral", () => ({ ensureReferralCode: async () => null, referralPath: () => "/r/x" }));
-vi.mock("@/lib/ai-entitlement", () => ({ getAIPackageStatus: async () => ({ entitled: h.ai.entitled }) }));
+// The public business page now asks for the derived lifecycle, not the raw entitlement row:
+// a live link needs a published, activated, entitled Front Desk (lib/ai-publication.ts).
+vi.mock("@/lib/ai-publication", () => ({
+  getAIFrontDeskPublication: async () => ({
+    state: h.ai.entitled ? "LIVE" : "SUSPENDED",
+    publiclyOperational: h.ai.entitled,
+    isPublished: h.ai.entitled,
+    operationalStatus: h.ai.entitled ? "LIVE" : "DRAFT",
+    entitled: h.ai.entitled,
+    entitlementStatus: h.ai.entitled ? "ACTIVE" : "NONE",
+    reason: h.ai.entitled ? "Live." : "Not entitled.",
+  }),
+}));
 
-import { DEMO_BUSINESSES, DEMO_SLUGS, restoreDemoBusinesses } from "@/lib/demoData";
+import { DEMO_BUSINESSES, DEMO_OWNER_EMAIL, DEMO_SLUGS, restoreDemoBusinesses } from "@/lib/demoData";
 import { normalizeKePhone } from "@/lib/phone";
 import PublicBusinessPage from "@/app/b/[slug]/page";
 
@@ -77,7 +91,7 @@ const reset = () => {
   h.ai.entitled = false;
 };
 const seedEmptyDemos = () => {
-  h.tables.user.push({ id: "owner-1", email: "owner@example.com", role: "CUSTOMER" });
+  h.tables.user.push({ id: "owner-1", email: DEMO_OWNER_EMAIL, role: "CUSTOMER" });
   for (const [i, slug] of DEMO_SLUGS.entries()) {
     h.tables.business.push({ id: `demo-${i}`, slug, name: slug, category: "Other", ownerId: "owner-1", isPublished: true, status: "ACTIVE", ...EMPTY });
   }
@@ -96,16 +110,19 @@ describe("demo data definitions", () => {
     expect([...DEMO_SLUGS]).toEqual(["nyumbani-kitchen", "marys-beauty-studio", "kamau-auto-care", "john-kamau-properties"]);
   });
 
-  it("uses placeholder contact numbers that are valid, unique and not real-looking", () => {
-    const phones = DEMO_BUSINESSES.map((d) => d.phone);
-    expect(new Set(phones).size).toBe(4);
+  it("uses the official JATA AFTERCALL demonstration number 0724317010 on every demo business", () => {
+    // Owner directive 2026-10-27: the four fictional demo businesses share one official
+    // demonstration contact. It normalises to 254724317010 for generated wa.me/tel destinations.
     for (const d of DEMO_BUSINESSES) {
-      expect(d.phone).toMatch(/^070000000\d$/);
-      expect(normalizeKePhone(d.phone)).not.toBeNull();
-      expect(d.description).toContain("Example page");
+      expect(d.phone).toBe("0724317010");
+      expect(d.whatsapp).toBe("0724317010");
+      expect(normalizeKePhone(d.phone)).toBe("254724317010");
+      expect(normalizeKePhone(d.whatsapp)).toBe("254724317010");
+      expect(d.description).toMatch(/fictional/i);
       expect(d.services.length).toBeGreaterThanOrEqual(3);
     }
   });
+
 });
 
 describe("restoreDemoBusinesses", () => {
@@ -155,6 +172,9 @@ describe("restoreDemoBusinesses", () => {
       h.tables.payment,
     ]);
     expect(protectedAfter).toBe(protectedBefore);
+    // Owner directive 2026-10-27: the official demonstration number must never leak onto a real
+    // business row, even one restored alongside the demo slugs.
+    expect(h.tables.business.find((r) => r.id === "real-1")!.phone).not.toBe("0724317010");
   });
 
   it("creates no user or admin, and no subscription or payment", async () => {
@@ -193,7 +213,7 @@ describe("restoreDemoBusinesses", () => {
     expect(report.outcomes.find((o) => o.slug === "nyumbani-kitchen")).toMatchObject({ action: "skipped" });
     expect(h.tables.business.find((r) => r.slug === "nyumbani-kitchen")!.phone).toBeNull();
     expect(h.tables.service.filter((s) => s.businessId === "demo-0")).toHaveLength(0);
-    expect(h.tables.business.find((r) => r.slug === "kamau-auto-care")!.phone).toBe("0700000003");
+    expect(h.tables.business.find((r) => r.slug === "kamau-auto-care")!.phone).toBe("0724317010");
   });
 
   it("treats the seed's fabricated demo- payments as demo data, not real customer money", async () => {
@@ -211,17 +231,41 @@ describe("restoreDemoBusinesses", () => {
     expect(h.tables.user).toHaveLength(1);
   });
 
-  it("creates missing demos for an existing owner, published and with no billing rows", async () => {
+  it("does not create fictional demo businesses for an arbitrary real account", async () => {
     reset();
     real();
-    await restoreDemoBusinesses(h.db, { apply: true, ownerEmail: "REAL@customer.co.ke" });
-    for (const slug of DEMO_SLUGS) {
-      const b = h.tables.business.find((r) => r.slug === slug)!;
-      expect(b).toMatchObject({ ownerId: "cust-1", isPublished: true, status: "ACTIVE" });
-    }
+    const report = await restoreDemoBusinesses(h.db, { apply: true, ownerEmail: "REAL@customer.co.ke" });
+    expect(report.outcomes.every((outcome) => outcome.action === "skipped")).toBe(true);
+    expect(h.tables.business).toHaveLength(1);
+    expect(h.tables.business[0].id).toBe("real-1");
+    expect(h.tables.service).toHaveLength(1);
     expect(h.tables.subscription).toHaveLength(1);
     expect(h.tables.payment).toHaveLength(1);
-    expect(h.tables.service.filter((s) => s.businessId !== "real-1")).toHaveLength(12);
+  });
+
+  it("creates missing demos only for the existing dedicated demo owner", async () => {
+    reset();
+    real();
+    h.tables.user.push({ id: "demo-owner", email: DEMO_OWNER_EMAIL, role: "CUSTOMER" });
+    await restoreDemoBusinesses(h.db, { apply: true, ownerEmail: DEMO_OWNER_EMAIL.toUpperCase() });
+    for (const slug of DEMO_SLUGS) {
+      const business = h.tables.business.find((row) => row.slug === slug)!;
+      expect(business).toMatchObject({ ownerId: "demo-owner", isPublished: true, status: "ACTIVE" });
+    }
+    expect(h.tables.business).toHaveLength(5);
+    expect(h.tables.user).toHaveLength(2);
+    expect(h.tables.subscription).toHaveLength(1);
+    expect(h.tables.payment).toHaveLength(1);
+    expect(h.tables.service.filter((service) => service.businessId !== "real-1")).toHaveLength(12);
+  });
+
+  it("does not overwrite an authorized real owner row just because its slug matches", async () => {
+    const business = h.tables.business.find((row) => row.slug === "nyumbani-kitchen")!;
+    Object.assign(business, { ownerId: "cust-1", name: "Authorized Kitchen", phone: "0712345678", description: "Owner's real description" });
+    const before = JSON.stringify(business);
+    const report = await restoreDemoBusinesses(h.db, { apply: true });
+    expect(report.outcomes.find((outcome) => outcome.slug === "nyumbani-kitchen")).toMatchObject({ action: "skipped" });
+    expect(JSON.stringify(business)).toBe(before);
   });
 });
 
@@ -244,7 +288,13 @@ describe("public demo pages after restore", () => {
       expect(html).toContain(s.priceLabel);
     }
     expect(html).toContain(demo.location);
-    expect(html).toContain(demo.offer.title);
+    if (demo.slug === "john-kamau-properties") {
+      expect(html).not.toContain(demo.offer.title);
+      expect(html).not.toMatch(/verified listings|no brokers|viewing this weekend/i);
+    } else {
+      expect(html).toContain(demo.offer.title);
+    }
+    expect(html).toContain("Fictional demo page");
     expect(html).toContain(`tel:+254${demo.phone.slice(1)}`);
     expect(html).toContain(`wa.me/254${demo.whatsapp.slice(1)}`);
     expect(html).not.toContain("No services listed yet");

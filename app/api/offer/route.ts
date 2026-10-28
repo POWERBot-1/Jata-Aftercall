@@ -5,6 +5,7 @@ import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
 import { sanitizeText } from "@/lib/validation";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { safeUrl } from "@/lib/experience/document";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -17,9 +18,25 @@ export async function POST(req: Request) {
     if (!title) return NextResponse.json({ error: "Offer title required" }, { status: 400 });
     const subtitle = body.subtitle ? sanitizeText(body.subtitle, 240) : null;
     // Interactive Business presentation fields (§7, §8) — optional, validated, never trusted raw.
+    const existingOffer = body.imageUrl !== undefined
+      ? await prisma.offer.findUnique({ where: { businessId }, select: { imageUrl: true } })
+      : null;
+    const unchangedLegacyInlineImage = containsInlineImageDataUrl(body.imageUrl) && existingOffer?.imageUrl === body.imageUrl;
+    if (containsInlineImageDataUrl(body.imageUrl) && !unchangedLegacyInlineImage) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const imageUrl = safeUrl(body.imageUrl) || null;
     const ctaLabel = body.ctaLabel ? sanitizeText(body.ctaLabel, 40) : null;
     const badge = body.badge ? sanitizeText(body.badge, 30) : null;
+    if (containsInlineImageDataUrl({
+      title,
+      subtitle,
+      ctaLabel,
+      badge,
+      imageUrl: unchangedLegacyInlineImage ? undefined : imageUrl,
+    })) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
 
     const offer = await prisma.offer.upsert({
       where: { businessId },
@@ -27,11 +44,11 @@ export async function POST(req: Request) {
         title,
         subtitle,
         isActive: body.isActive !== undefined ? !!body.isActive : true,
-        ...(body.imageUrl !== undefined ? { imageUrl } : {}),
+        ...(body.imageUrl !== undefined && !unchangedLegacyInlineImage ? { imageUrl } : {}),
         ...(body.ctaLabel !== undefined ? { ctaLabel } : {}),
         ...(body.badge !== undefined ? { badge } : {}),
       },
-      create: { businessId, title, subtitle, isActive: true, imageUrl, ctaLabel, badge },
+      create: { businessId, title, subtitle, isActive: true, imageUrl: unchangedLegacyInlineImage ? null : imageUrl, ctaLabel, badge },
     });
     return NextResponse.json({ offer });
   } catch (e: unknown) {

@@ -17,8 +17,9 @@ import { PAYMENT_CURRENCY } from "../paymentCurrency";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
-import { classifyProviderStatus, validatePaymentEvidence } from "../paymentVerification";
-import { formatKES } from "../format";
+import { SETTLEABLE_PAYMENT_STATES, classifyProviderStatus, isProviderTransactionId, validatePaymentEvidence } from "../paymentVerification";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_MESSAGE, serializeJsonWithoutInlineImageData } from "../media/persistence-policy";
+import { formatBookingDateTime, formatKES } from "../format";
 
 export const PAYMENT_PURPOSE = {
   SUBSCRIPTION: "SUBSCRIPTION",
@@ -82,21 +83,88 @@ export type InitializeResult =
  */
 export type OrderPaymentRecord =
   | { kind: "error"; error: string; status: number }
-  | { kind: "record"; paymentId: string; reference: string; amount: number; ownerId: string };
+  | {
+      kind: "record";
+      paymentId: string;
+      reference: string;
+      amount: number;
+      ownerId: string;
+      customerEmail?: string;
+      businessId?: string;
+      orderId?: string | null;
+      purpose?: string;
+    };
+
+function normalizedPaymentEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const email = value.trim();
+  if (email.length === 0 || email.length > 160 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) return null;
+  return email;
+}
 
 /**
  * Database step only: create the PENDING payment row for an order. No network call, so it can run inside the
  * checkout transaction. The provider call is separate (startOrderPayment) and must run after commit.
+ * When an order ID is supplied, tenant, payable state, amount and any stored payer email are read from that order;
+ * caller/model arguments are not payment authority.
  */
 export async function createOrderPaymentRecord(input: InitializeOrderPaymentInput, client: any = prisma): Promise<OrderPaymentRecord> {
-  const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
-  if (amountKES <= 0) return { kind: "error", error: "This order has nothing to pay.", status: 400 };
+  if (containsInlineImageDataUrl(input)) {
+    return { kind: "error", error: INLINE_MEDIA_PERSISTENCE_MESSAGE, status: 503 };
+  }
+
+  const purpose = input.purpose || PAYMENT_PURPOSE.ORDER;
+  const orderId = typeof input.orderId === "string" ? input.orderId.trim() : "";
+  if (purpose === PAYMENT_PURPOSE.ORDER && !orderId) {
+    return { kind: "error", error: "An unpaid order is required before requesting payment.", status: 400 };
+  }
 
   const business = await client.business.findUnique({
     where: { id: input.businessId },
     select: { id: true, ownerId: true, slug: true },
   });
   if (!business) return { kind: "error", error: "Business not found.", status: 404 };
+
+  let order: {
+    id: string;
+    businessId: string;
+    totalKES: number;
+    status: string;
+    paymentStatus: string;
+    customerEmail?: string | null;
+  } | null = null;
+  if (orderId) {
+    if (typeof client.order?.findFirst !== "function") {
+      return { kind: "error", error: "Order payment verification is unavailable.", status: 503 };
+    }
+    order = await client.order.findFirst({
+      where: { id: orderId, businessId: business.id },
+      select: { id: true, businessId: true, totalKES: true, status: true, paymentStatus: true, customerEmail: true },
+    });
+    if (!order || order.id !== orderId || order.businessId !== business.id) {
+      return { kind: "error", error: "Order not found.", status: 404 };
+    }
+    if (order.status !== "PENDING_PAYMENT" || order.paymentStatus !== "UNPAID") {
+      return { kind: "error", error: "This order is not available for payment.", status: 409 };
+    }
+    if (containsInlineImageDataUrl(order)) {
+      return { kind: "error", error: INLINE_MEDIA_PERSISTENCE_MESSAGE, status: 503 };
+    }
+  }
+
+  const amountKES = order
+    ? Number(order.totalKES)
+    : Math.max(0, Math.round(Number(input.amountKES) || 0));
+  if (!Number.isSafeInteger(amountKES) || amountKES <= 0) {
+    return { kind: "error", error: "This order has nothing to pay.", status: 400 };
+  }
+
+  // The order's existing payer address wins. A customer-supplied address is accepted only as a fallback
+  // for legacy/AI-created orders that have no stored email, and it is never forwarded without validation.
+  const customerEmail = normalizedPaymentEmail(order?.customerEmail) || normalizedPaymentEmail(input.email);
+  if (!customerEmail) {
+    return { kind: "error", error: "Enter a valid customer email before requesting payment.", status: 400 };
+  }
 
   const reference = generatePaymentReference();
   const payment = await client.payment.create({
@@ -107,14 +175,24 @@ export async function createOrderPaymentRecord(input: InitializeOrderPaymentInpu
       amount: toKobo(amountKES),
       currency: PAYMENT_CURRENCY,
       status: "PENDING",
-      purpose: input.purpose || PAYMENT_PURPOSE.ORDER,
-      orderId: input.orderId || null,
+      purpose,
+      orderId: order?.id || null,
       bookingId: input.bookingId || null,
-      customerEmail: input.email.slice(0, 160),
+      customerEmail,
     },
     select: { id: true, reference: true, amount: true },
   });
-  return { kind: "record", paymentId: payment.id, reference: payment.reference, amount: payment.amount, ownerId: business.ownerId };
+  return {
+    kind: "record",
+    paymentId: payment.id,
+    reference: payment.reference,
+    amount: payment.amount,
+    ownerId: business.ownerId,
+    customerEmail,
+    businessId: business.id,
+    orderId: order?.id || null,
+    purpose,
+  };
 }
 
 /**
@@ -125,9 +203,20 @@ export async function startOrderPayment(
   record: Extract<OrderPaymentRecord, { kind: "record" }>,
   input: InitializeOrderPaymentInput,
 ): Promise<InitializeResult> {
-  const amountKES = Math.max(0, Math.round(Number(input.amountKES) || 0));
+  if (containsInlineImageDataUrl(input) || containsInlineImageDataUrl(record)) {
+    await prisma.payment.updateMany({ where: { id: record.paymentId, status: "PENDING" }, data: { status: "FAILED" } }).catch(() => undefined);
+    return { kind: "error", error: INLINE_MEDIA_PERSISTENCE_MESSAGE, status: 503 };
+  }
   const payment = { id: record.paymentId, reference: record.reference, amount: record.amount };
-  const business = { id: input.businessId, ownerId: record.ownerId };
+  const customerEmail = normalizedPaymentEmail(record.customerEmail) || normalizedPaymentEmail(input.email);
+  if (!customerEmail || !Number.isSafeInteger(payment.amount) || payment.amount <= 0) {
+    await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED" } }).catch(() => undefined);
+    return { kind: "error", error: "Payment details are invalid. Please review the order and try again.", status: 400 };
+  }
+  const amountKES = payment.amount / 100;
+  const business = { id: record.businessId || input.businessId, ownerId: record.ownerId };
+  const orderId = record.orderId ?? input.orderId ?? null;
+  const purpose = record.purpose || input.purpose || PAYMENT_PURPOSE.ORDER;
 
   const callbackUrl = `${getBaseUrl()}${input.callbackPath.startsWith("/") ? input.callbackPath : `/${input.callbackPath}`}`;
 
@@ -148,17 +237,17 @@ export async function startOrderPayment(
 
   try {
     const initialized = await initializeTransaction({
-      email: input.email,
+      email: customerEmail,
       amount: payment.amount,
       currency: PAYMENT_CURRENCY,
       reference: payment.reference,
       callbackUrl,
       metadata: {
-        businessId: business.id,
-        purpose: input.purpose || PAYMENT_PURPOSE.ORDER,
-        orderId: input.orderId || null,
-        bookingId: input.bookingId || null,
         ...(input.metadata || {}),
+        businessId: business.id,
+        purpose,
+        orderId,
+        bookingId: input.bookingId || null,
       },
     });
     await logAudit({ actorId: business.ownerId, action: "ORDER_PAYMENT_INITIATED", targetType: "PAYMENT", targetId: payment.id, metadata: { reference: payment.reference, amountKES } });
@@ -176,7 +265,6 @@ export async function initializeOrderPayment(input: InitializeOrderPaymentInput)
   return startOrderPayment(record, input);
 }
 
-const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
 
 /**
  * Settle a verified order/deposit payment. Idempotent: the compare-and-set on a settleable state means
@@ -204,13 +292,24 @@ export async function settleOrderPayment(
     if (!SETTLEABLE_PAYMENT_STATES.includes(payment.status as (typeof SETTLEABLE_PAYMENT_STATES)[number])) {
       throw new Error("PAYMENT_NOT_PENDING");
     }
+    const providerEvidence = isProviderTransactionId(options.verification?.paystackId);
+    if (!providerEvidence) throw new Error("PAYMENT_EVIDENCE_REQUIRED");
 
+    // Provider raw evidence is optional audit context, not settlement authority. Omit unsafe raw
+    // text but still apply the already-verified PAID state and the existing transactional checks.
+    const rawForStorage = options.verification?.raw === undefined
+      ? undefined
+      : serializeJsonWithoutInlineImageData(options.verification.raw);
+    const paystackIdForStorage = options.verification?.paystackId &&
+      !containsInlineImageDataUrl(options.verification.paystackId)
+      ? options.verification.paystackId
+      : undefined;
     const changed = await tx.payment.updateMany({
       where: { id: payment.id, status: { in: [...SETTLEABLE_PAYMENT_STATES] } },
       data: {
         status: "PAID",
-        ...(options.verification?.paystackId ? { paystackId: options.verification.paystackId } : {}),
-        ...(options.verification?.raw !== undefined ? { raw: JSON.stringify(options.verification.raw) } : {}),
+        ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+        ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
     });
     if (changed.count !== 1) {
@@ -322,25 +421,31 @@ export async function failOrderPayment(paymentId: string): Promise<void> {
 /**
  * Verify a customer's order payment directly with Paystack (used by the confirmation page).
  * Returns the explicit state — never assumes success.
+ *
+ * A missing, blank or non-string reference is not a payment lookup. It fails closed here,
+ * before Prisma, whose unique `where` clause rejects `reference: undefined` outright.
  */
 export type OrderPaymentVerdict = { state: PaymentState; orderId?: string | null; providerChecked: boolean };
 
 export async function verifyOrderPayment(reference: string): Promise<OrderPaymentVerdict> {
-  const payment = await prisma.payment.findUnique({ where: { reference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
+  const normalizedReference = typeof reference === "string" ? reference.trim() : "";
+  if (!normalizedReference) return { state: "NOT_STARTED", providerChecked: false };
+
+  const payment = await prisma.payment.findUnique({ where: { reference: normalizedReference }, select: { id: true, status: true, orderId: true, reference: true, amount: true, currency: true, purpose: true } });
   if (!payment) return { state: "NOT_STARTED", providerChecked: false };
   if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   if (payment.status === "REFUNDED") return { state: "CANCELLED", orderId: payment.orderId, providerChecked: false };
 
   if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
     // Test/demo confirmation path (no provider configured). Never reachable in production.
-    await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${reference}`, raw: { testMock: true } } });
+    await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${normalizedReference}`, raw: { testMock: true } } });
     return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   }
 
   // PENDING, FAILED, CANCELLED and EXPIRED are all re-checked with the provider. A local FAILED can be stale: Paystack can
   // report a failed card attempt and then a successful one on the same reference. The provider's verified answer decides.
   try {
-    const transaction = await verifyTransaction(reference);
+    const transaction = await verifyTransaction(normalizedReference);
     const evidence = validatePaymentEvidence(payment, transaction);
     if (evidence.ok === false) return { state: paymentStateOf(payment), orderId: payment.orderId, providerChecked: true };
     const outcome = classifyProviderStatus(transaction.status);
@@ -472,7 +577,7 @@ export async function notifyNewBooking(params: {
       businessId: params.businessId,
       eventType: "BOOKING",
       title: "New booking",
-      message: `${params.customerName} booked ${params.serviceName} on ${params.startAt.toLocaleString("en-KE")}.`,
+      message: `${params.customerName} booked ${params.serviceName} on ${formatBookingDateTime(params.startAt)}.`,
       referenceId: params.bookingId,
     });
   } catch {

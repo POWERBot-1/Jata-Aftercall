@@ -8,6 +8,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { formatKES } from "@/lib/format";
 
 type Product = {
   ref: string;
@@ -42,7 +43,7 @@ type Props = {
   acceptance: { open: boolean; reason: string };
 };
 
-const money = (cents: number) => `KES ${(cents / 100).toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const money = (cents: number) => formatKES(cents / 100);
 
 export function StoreCart({ slug, businessName, location, products, categories, settings, acceptance }: Props) {
   const [cart, setCart] = useState<Record<string, number>>({});

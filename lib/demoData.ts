@@ -7,11 +7,13 @@
  * also creates an admin with a known default password — so this module touches nothing but
  * these four slugs, never creates a user, and never writes subscriptions or payments.
  *
- * Safety boundary: there is no demo marker column on `Business`, so the exact slugs below are
- * the boundary. Nothing else is ever queried by name, slug pattern or category.
+ * Safety boundary: there is no demo marker column on `Business`, so exact slugs are combined with
+ * the dedicated `demo@jata.link` owner identity and the absence of non-demo payment references.
+ * A slug alone never proves that a real owner's row is synthetic.
  *
- * Contact numbers are deliberately placeholders (0700 000 00x), not anyone's real line, and each
- * description says it is an example page.
+ * Contact numbers are deliberately placeholders (0700 000 00x), not anyone's real line. Every
+ * business, contact detail, service, offer and price below is synthetic demo content, not a live
+ * business, current offer, quote, property listing or availability statement.
  */
 
 export type DemoService = {
@@ -37,84 +39,87 @@ export type DemoBusiness = {
   services: DemoService[];
 };
 
-const EXAMPLE_NOTE = "Example page — contact details and prices are for demonstration.";
+const EXAMPLE_NOTE = "Fictional demonstration data: contact details, services, offers and prices are samples, not a live business or current offer, quote, listing or availability.";
 
 export const DEMO_BUSINESSES: readonly DemoBusiness[] = [
   {
     slug: "nyumbani-kitchen",
     name: "Nyumbani Kitchen",
     category: "Restaurant",
-    description: `Homestyle Kenyan meals — pilau, chapati, nyama choma daily. ${EXAMPLE_NOTE}`,
-    phone: "0700000001",
-    whatsapp: "0700000001",
+    description: `Sample Kenyan meal-service entries for a fictional page. ${EXAMPLE_NOTE}`,
+    phone: "0724317010",
+    whatsapp: "0724317010",
     location: "Kilimani, Nairobi",
     theme: "warm",
     aftercallMsg: "Thanks for contacting Nyumbani Kitchen 👋",
     openingHours: { mon_sat: "08:00 – 21:00", sun: "10:00 – 18:00" },
-    offer: { title: "Pilau Combo KES 650", subtitle: "Today only — chapati + stew" },
+    offer: { title: "Example meal combo — KES 650", subtitle: "Fictional sample only; not a current menu or offer." },
     services: [
-      { title: "Pilau Combo", description: "Spiced pilau with kachumbari and a side of stew.", priceLabel: "KES 650", priceFrom: 650, category: "Meals" },
-      { title: "Nyama Choma", description: "Charcoal-grilled goat or beef, by the half kilo.", priceLabel: "From KES 900", priceFrom: 900, category: "Meals" },
-      { title: "Chapati (2 pcs)", description: "Soft, freshly made chapati.", priceLabel: "KES 100", priceFrom: 100, category: "Sides" },
+      { title: "Pilau Combo", description: "Fictional sample menu entry; not today's menu.", priceLabel: "KES 650", priceFrom: 650, category: "Meals" },
+      { title: "Nyama Choma", description: "Fictional sample menu entry; details and price are examples.", priceLabel: "From KES 900", priceFrom: 900, category: "Meals" },
+      { title: "Chapati (2 pcs)", description: "Fictional sample menu entry; details and price are examples.", priceLabel: "KES 100", priceFrom: 100, category: "Sides" },
     ],
   },
   {
     slug: "marys-beauty-studio",
     name: "Mary's Beauty Studio",
     category: "Beauty",
-    description: `Braids, nails & beauty in Kitengela — walk-ins welcome. ${EXAMPLE_NOTE}`,
-    phone: "0700000002",
-    whatsapp: "0700000002",
+    description: `Sample braiding, nail and makeup service entries for a fictional page. ${EXAMPLE_NOTE}`,
+    phone: "0724317010",
+    whatsapp: "0724317010",
     location: "Kitengela, Kajiado",
     theme: "clean",
     aftercallMsg: "Thanks for calling Mary! 💇‍♀️",
     openingHours: { mon_sat: "08:00 – 19:00", sun: "Closed" },
-    offer: { title: "Braids from KES 1,500", subtitle: "This week only" },
+    offer: { title: "Example braid price — from KES 1,500", subtitle: "Fictional sample only; not a current promotion." },
     services: [
-      { title: "Braiding", description: "Box braids, cornrows and twists.", priceLabel: "From KES 1,500", priceFrom: 1500, category: "Hair" },
-      { title: "Nails", description: "Manicure, pedicure and gel polish.", priceLabel: "From KES 800", priceFrom: 800, category: "Nails" },
-      { title: "Makeup", description: "Day and event makeup.", priceLabel: "From KES 2,500", priceFrom: 2500, category: "Makeup" },
+      { title: "Braiding", description: "Fictional sample braiding entry; details and price are examples.", priceLabel: "From KES 1,500", priceFrom: 1500, category: "Hair" },
+      { title: "Nails", description: "Fictional sample nail-service entry; details and price are examples.", priceLabel: "From KES 800", priceFrom: 800, category: "Nails" },
+      { title: "Makeup", description: "Fictional sample makeup entry; details and price are examples.", priceLabel: "From KES 2,500", priceFrom: 2500, category: "Makeup" },
     ],
   },
   {
     slug: "kamau-auto-care",
     name: "Kamau Auto Care",
     category: "Mechanic",
-    description: `Diagnostics, oil change, brakes — honest fundi pricing. ${EXAMPLE_NOTE}`,
-    phone: "0700000003",
-    whatsapp: "0700000003",
+    description: `Sample diagnostics, oil-change and brake service entries for a fictional page. ${EXAMPLE_NOTE}`,
+    phone: "0724317010",
+    whatsapp: "0724317010",
     location: "Westlands, Nairobi",
     theme: "dark",
     aftercallMsg: "Thanks for contacting Kamau Auto Care 🔧",
     openingHours: { mon_fri: "07:30 – 18:00", sat: "08:00 – 16:00", sun: "Closed" },
-    offer: { title: "Oil Change KES 2,999", subtitle: "Includes filter" },
+    offer: { title: "Example oil-change price — KES 2,999", subtitle: "Fictional sample only; not a current quote." },
     services: [
-      { title: "Diagnostics", description: "Computer scan and written fault report.", priceLabel: "KES 1,500", priceFrom: 1500, category: "Service" },
-      { title: "Oil Change", description: "Engine oil and filter replaced.", priceLabel: "KES 2,999", priceFrom: 2999, category: "Service" },
-      { title: "Brake Pads", description: "Front or rear pads, fitted and tested.", priceLabel: "From KES 4,500", priceFrom: 4500, category: "Repair" },
+      { title: "Diagnostics", description: "Fictional sample diagnostics entry; not a current quote.", priceLabel: "KES 1,500", priceFrom: 1500, category: "Service" },
+      { title: "Oil Change", description: "Fictional sample oil-change entry; not a current quote.", priceLabel: "KES 2,999", priceFrom: 2999, category: "Service" },
+      { title: "Brake Pads", description: "Fictional sample brake-service entry; not a current quote.", priceLabel: "From KES 4,500", priceFrom: 4500, category: "Repair" },
     ],
   },
   {
     slug: "john-kamau-properties",
     name: "John Kamau Properties",
     category: "Real Estate",
-    description: `Rentals & sales in Kiambu — verified listings, no brokers. ${EXAMPLE_NOTE}`,
-    phone: "0700000004",
-    whatsapp: "0700000004",
+    description: `Fictional property-page demonstration. Category labels and prices are examples, not current listings or viewing availability. ${EXAMPLE_NOTE}`,
+    phone: "0724317010",
+    whatsapp: "0724317010",
     location: "Kiambu Road, Kiambu",
     theme: "clean",
     aftercallMsg: "Thanks for contacting John Kamau Properties 🏠",
     openingHours: { mon_fri: "08:30 – 17:30", sat: "09:00 – 14:00", sun: "By appointment" },
-    offer: { title: "1BR from KES 25,000/mo", subtitle: "Kiambu Road — viewing this weekend" },
+    offer: { title: "Example rent range — KES 25,000/month", subtitle: "Fictional sample only; not a current rental or sale listing." },
     services: [
-      { title: "1BR Rentals", description: "One-bedroom homes with water and security.", priceLabel: "From KES 25,000", priceFrom: 25000, category: "Rentals" },
-      { title: "2BR Rentals", description: "Two-bedroom homes, family-sized.", priceLabel: "From KES 35,000", priceFrom: 35000, category: "Rentals" },
-      { title: "Land Sale", description: "Titled plots with site visits.", priceLabel: "From KES 1.2M", priceFrom: 1200000, category: "Sales" },
+      { title: "1BR Rentals", description: "Fictional category only; not an available rental listing.", priceLabel: "From KES 25,000", priceFrom: 25000, category: "Rentals" },
+      { title: "2BR Rentals", description: "Fictional category only; not an available rental listing.", priceLabel: "From KES 35,000", priceFrom: 35000, category: "Rentals" },
+      { title: "Land Sale", description: "Fictional category only; not an available land listing.", priceLabel: "From KES 1.2M", priceFrom: 1200000, category: "Sales" },
     ],
   },
 ];
 
 export const DEMO_SLUGS: readonly string[] = DEMO_BUSINESSES.map((demo) => demo.slug);
+
+/** Dedicated owner account created by the non-production demo seed. */
+export const DEMO_OWNER_EMAIL = "demo@jata.link";
 
 /** Reference prefix `prisma/seed.ts` uses for its fabricated demo payment rows. */
 export const DEMO_PAYMENT_PREFIX = "demo-";
@@ -156,14 +161,14 @@ function businessContent(demo: DemoBusiness) {
 /**
  * Restore the demo content. Dry-run unless `apply` is true.
  *
- * - Targets only `DEMO_SLUGS`, looked up by exact slug.
- * - Existing rows: only content fields are written. `ownerId`, `isPublished`, `status`, `slug`,
- *   members, subscriptions and payments are never written, so publication behaviour is unchanged.
- * - A row with any payment that is not one of the seed's `demo-` rows belongs to a real customer's
- *   money trail and is SKIPPED, never overwritten.
- * - Missing rows are created only when `ownerEmail` names an EXISTING user; users are never created.
- * - Services are matched by exact title inside the business and never deleted; the offer is
- *   upserted by business. Repeating the run changes nothing.
+ * - Targets only `DEMO_SLUGS`, looked up by exact slug, and only when the existing row belongs to
+ *   the dedicated `DEMO_OWNER_EMAIL` account.
+ * - Existing rows with another owner or any payment outside the seed's `demo-` namespace are
+ *   skipped, never overwritten.
+ * - Missing rows are created only for an EXISTING `DEMO_OWNER_EMAIL` user; a caller cannot assign
+ *   fictional demo content to an arbitrary real customer. Users are never created.
+ * - Services are matched by exact title inside the verified demo business and never deleted; the
+ *   offer is upserted by business. Repeating the run changes nothing.
  */
 export async function restoreDemoBusinesses(db: DemoDb, options: { apply: boolean; ownerEmail?: string | null }): Promise<DemoReport> {
   const outcomes: DemoOutcome[] = [];
@@ -174,9 +179,13 @@ export async function restoreDemoBusinesses(db: DemoDb, options: { apply: boolea
 
     if (!existing) {
       const email = (options.ownerEmail ?? "").trim().toLowerCase();
-      const owner = email ? await db.user.findUnique({ where: { email }, select: { id: true } }) : null;
+      if (email !== DEMO_OWNER_EMAIL) {
+        outcomes.push({ slug: demo.slug, action: "skipped", reason: `missing; creation is restricted to the existing ${DEMO_OWNER_EMAIL} demo account`, servicesCreated: 0, servicesUpdated: 0 });
+        continue;
+      }
+      const owner = await db.user.findUnique({ where: { email: DEMO_OWNER_EMAIL }, select: { id: true } });
       if (!owner) {
-        outcomes.push({ slug: demo.slug, action: "skipped", reason: "missing and no existing DEMO_OWNER_EMAIL user to own it (users are never created)", servicesCreated: 0, servicesUpdated: 0 });
+        outcomes.push({ slug: demo.slug, action: "skipped", reason: `missing and the existing ${DEMO_OWNER_EMAIL} demo account was not found (users are never created)`, servicesCreated: 0, servicesUpdated: 0 });
         continue;
       }
       if (!options.apply) {
@@ -190,6 +199,12 @@ export async function restoreDemoBusinesses(db: DemoDb, options: { apply: boolea
         return writeChildren(tx, created.id, demo);
       });
       outcomes.push({ slug: demo.slug, action: "created", ...counts });
+      continue;
+    }
+
+    const owner = await db.user.findUnique({ where: { id: existing.ownerId }, select: { id: true, email: true } });
+    if (owner?.email?.trim().toLowerCase() !== DEMO_OWNER_EMAIL) {
+      outcomes.push({ slug: demo.slug, action: "skipped", reason: "owned by a non-demo account; fictional content was not written", servicesCreated: 0, servicesUpdated: 0 });
       continue;
     }
 

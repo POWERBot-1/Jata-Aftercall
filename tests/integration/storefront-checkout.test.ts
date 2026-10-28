@@ -119,6 +119,7 @@ const order = {
 };
 
 beforeEach(() => {
+  vi.stubEnv("VERCEL", "1"); // Synthetic X-Forwarded-For headers model the trusted platform edge.
   vi.clearAllMocks();
   mocks.records.clear();
   mocks.products = [
@@ -154,6 +155,38 @@ describe("POST /api/storefront/checkout", () => {
     const created = mocks.orderCreate.mock.calls[0][0].data;
     expect(created.items.create[0].unitPriceKES).toBe(900);
     expect(created.businessId).toBe("business-a");
+  });
+
+  it("does not copy a legacy inline catalogue image into the new order snapshot", async () => {
+    mocks.products = [
+      { ...mocks.products[0], imageUrl: "data:image/png;base64,iVBORw0KGgo=" },
+    ];
+    const response = await POST(request(order));
+    expect(response.status).toBe(201);
+    const created = mocks.orderCreate.mock.calls[0][0].data;
+    expect(created.items.create[0].imageUrl).toBeNull();
+  });
+
+  it("rejects inline image data in guest checkout text before creating an order", async () => {
+    const response = await POST(request({
+      ...order,
+      location: "Kilimani data:image/png;base64,iVBORw0KGgo=",
+    }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+    expect(mocks.paymentRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects inline image data in resolved catalogue text before creating an order", async () => {
+    mocks.products = [
+      { ...mocks.products[0], name: "Chicken data:image/png;base64,iVBORw0KGgo=" },
+    ];
+    const response = await POST(request(order));
+    expect(response.status).toBe(503);
+    expect((await response.json()).code).toBe("inline_media_persistence_disabled");
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+    expect(mocks.paymentRecord).not.toHaveBeenCalled();
   });
 
   it("keeps an unpaid order visible when the payment gateway cannot start", async () => {

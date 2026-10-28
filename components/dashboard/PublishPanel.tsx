@@ -124,10 +124,19 @@ export function PublishPanel({
           ? ready
             ? "Everything checks out. Publish whenever you are happy with the preview."
             : "Finish the items above, then publish."
-          : "Activate the Interactive Business plan to unlock publishing."}
+          : "Activate the Website Studio plan to unlock publishing."}
       </p>
       {message ? (
-        <p className={`mt-3 text-sm ${message.tone === "error" ? "jata-error" : message.tone === "warn" ? "text-amber-700" : "text-emerald-700"}`} role="status">
+        <p
+          className={`mt-3 text-sm ${
+            message.tone === "error"
+              ? "jata-error"
+              : message.tone === "warn"
+                ? "text-[color:var(--ws-amber-deep)]"
+                : "text-[color:var(--ws-jade)]"
+          }`}
+          role="status"
+        >
           {message.text}
         </p>
       ) : null}

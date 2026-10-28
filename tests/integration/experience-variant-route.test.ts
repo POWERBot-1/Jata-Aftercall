@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   experienceUpdates: [] as any[],
   experienceFindArgs: [] as any[],
   versionFindArgs: [] as any[],
+  countArgs: [] as any[],
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
@@ -27,6 +28,8 @@ vi.mock("@/lib/tenant", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   default: {
+    product: { count: vi.fn(async (args) => { mocks.countArgs.push(args); return 0; }) },
+    service: { count: vi.fn(async (args) => { mocks.countArgs.push(args); return 0; }) },
     businessExperience: {
       findUnique: vi.fn(async (args: any) => {
         mocks.experienceFindArgs.push(args);
@@ -65,6 +68,7 @@ describe("POST /api/experience/variant", () => {
     mocks.experienceUpdates = [];
     mocks.experienceFindArgs = [];
     mocks.versionFindArgs = [];
+    mocks.countArgs = [];
   });
 
   it("refuses an unauthenticated request before touching the database", async () => {
@@ -80,6 +84,7 @@ describe("POST /api/experience/variant", () => {
     expect(response.status).toBe(403);
     expect(mocks.experienceFindArgs).toHaveLength(0);
     expect(mocks.versionFindArgs).toHaveLength(0);
+    expect(mocks.countArgs).toHaveLength(0);
   });
 
   it("returns a candidate as a preview and never writes the draft", async () => {
@@ -96,6 +101,7 @@ describe("POST /api/experience/variant", () => {
     await POST(request({ businessId: "biz-a" }));
     expect(mocks.experienceFindArgs[0].where).toEqual({ businessId: "biz-a" });
     expect(mocks.versionFindArgs[0].where).toEqual({ businessId: "biz-a" });
+    expect(mocks.countArgs).toEqual([{ where: { businessId: "biz-a", isActive: true } }, { where: { businessId: "biz-a", isActive: true } }]);
   });
 
   it("is reproducible for the same seed, and a client seed is sanitised", async () => {
@@ -122,4 +128,25 @@ describe("POST /api/experience/variant", () => {
     expect(body.attempts.length).toBeGreaterThanOrEqual(1);
     expect(typeof body.report.threshold).toBe("number");
   });
+  it("refuses invalid stored recipes before deriving or saving a candidate", async () => {
+    mocks.experience.draftJson = JSON.stringify({ ...draft, brand: { ...draft.brand, code: "alert(1)" } });
+    const response = await POST(request({ businessId: "biz-a" }));
+    expect(response.status).toBe(409); expect((await response.json()).code).toBe("experience_schema_invalid");
+    expect(mocks.countArgs).toHaveLength(0); expect(mocks.experienceUpdates).toHaveLength(0);
+  });
+  it("rejects unsupported brief/family/customer-flow combinations with safe400 and no writes", async () => {
+    for (const extra of [{ brief: { goal: "book" } }, { brief: { provider: "activate" } }, { family: "raw-code" }, { family: "service-journey", brief: { goal: "sell" } }]) {
+      const response = await POST(request({ businessId: "biz-a", ...extra }));
+      expect(response.status).toBe(400);
+    }
+    expect(mocks.experienceUpdates).toHaveLength(0);
+  });
+  it("returns renderer-supported v2 reasoning and never claims a provider operation", async () => {
+    const response = await POST(request({ businessId: "biz-a", family: "marketplace", brief: { goal: "sell", audience: "local", personality: "warm", density: "compact" } }));
+    expect(response.status).toBe(200); const body = await response.json();
+    expect(body.candidate.version).toBe(2); expect(body.candidate.artDirection.family).toBe("marketplace");
+    expect(body.providerCalled).toBe(false); expect(body.generationKind).toBe("deterministic-content-art-direction");
+    expect(body.direction.reasons.length).toBeGreaterThan(0); expect(body.saved).toBe(false);
+  });
+
 });

@@ -1,4 +1,15 @@
-/** Shared formatting helpers (client + server safe — no server-only imports). */
+/**
+ * Shared formatting helpers (client + server safe — no server-only imports).
+ *
+ * Dates and times delegate to `lib/dateFormat.ts`, which pins the locale and the
+ * Africa/Nairobi time zone. Formatting a timestamp with the *runtime* zone rendered it in UTC on
+ * the server and in Nairobi in the browser — a three-hour difference that becomes a different
+ * *day* between 21:00 and 24:00 UTC, i.e. React hydration error #418 in any client component that
+ * displayed it, and a wrong time on receipts, reports and notification messages everywhere else.
+ * The presentation shape ("12 Oct 2026", "14:30", joined with " · ") is unchanged.
+ */
+import { formatBookingDateTime as pinnedBookingDateTime, formatDate as pinnedDate, formatNumber as pinnedNumber, formatTime as pinnedTime, nairobiHour as pinnedNairobiHour } from "./dateFormat";
+
 
 export function formatKES(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || Number.isNaN(Number(amount))) return "—";
@@ -36,14 +47,14 @@ export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  return pinnedDate(date, "");
 }
 
 export function formatTime(value: string | Date | null | undefined): string {
   if (!value) return "";
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit" });
+  return pinnedTime(date, "");
 }
 
 export function formatDateTime(value: string | Date | null | undefined): string {
@@ -52,10 +63,38 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   return [date, time].filter(Boolean).join(" · ");
 }
 
+/**
+ * Booking instants render on the clock they were booked against. New bookings are Nairobi-anchored
+ * (`JATA_BOOKING_TIME_ZONE`, the default); pass `bookingRowTimeZone(row.bookingTimeZone)` for a row
+ * that may predate the contract, so a legacy row keeps the time it was entered with. The storage
+ * rule and the reasoning are in `lib/dateFormat.ts` and `lib/experience/bookingTime.ts`. Payments,
+ * orders and subscriptions keep the Nairobi-pinned helpers above.
+ */
+export function formatBookingDateTime(value: string | Date | null | undefined, timeZone?: string): string {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  return pinnedBookingDateTime(date, "", timeZone);
+}
+
+/** Deterministic grouping for counts and money amounts (en-KE, no ambient locale). */
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return pinnedNumber(value);
+}
+
 /** Mask a customer phone for display: 0712•••••• (§28). */
 export function maskPhone(phone: string | null | undefined): string {
   if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 4) return phone;
   return `${digits.slice(0, 4)}${"•".repeat(Math.max(3, digits.length - 4))}`;
+}
+
+/**
+ * Hour of the day (0–23) in Africa/Nairobi. Use this instead of `new Date().getHours()` when the
+ * copy depends on the time of day, so the server and the browser agree.
+ */
+export function nairobiHour(instant: Date | number = new Date()): number {
+  return pinnedNairobiHour(instant);
 }

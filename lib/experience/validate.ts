@@ -16,8 +16,10 @@ import { safeUrl } from "./document";
 import type { EntitlementState } from "./entitlement";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
+import { validateExperienceDocument } from "./schema";
 
 export type PublishCheckId =
+  | "schema"
   | "business-name"
   | "business-category"
   | "contact"
@@ -64,6 +66,8 @@ export type PublishValidationInput = {
   entitlement: EntitlementState;
   paidPayment?: { status?: string | null } | null;
   subscription?: { status?: string | null } | null;
+  /** Verified JATA Team Free Access satisfies the commercial checks without a fake payment. */
+  teamFreeAccess?: boolean;
 };
 
 export function validateForPublication(input: PublishValidationInput): PublishValidation {
@@ -74,6 +78,10 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
   const add = (id: PublishCheckId, label: string, passed: boolean, hint?: string, href?: string) => {
     checks.push({ id, label, status: passed ? "pass" : "fail", hint: passed ? undefined : hint, href: passed ? undefined : href });
   };
+
+  const schema = validateExperienceDocument(document);
+  add("schema", "Supported safe experience format", schema.ok,
+    schema.ok ? undefined : schema.issues[0]?.message, "/dashboard/website");
 
   add(
     "business-name",
@@ -125,9 +133,12 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
     "/dashboard/website",
   );
 
-  const needsCatalogue = profile.capabilities.includes("commerce") || profile.capabilities.includes("catalogue");
   const needsServices = profile.capabilities.includes("booking");
-  if (needsCatalogue) {
+  // Booking-only categories expose their Service rows as the catalogue. Requiring Product rows too
+  // prevents a complete salon/service business from publishing. Mixed commerce + booking still needs both.
+  const needsProductCatalogue = profile.capabilities.includes("commerce") ||
+    (profile.capabilities.includes("catalogue") && !needsServices);
+  if (needsProductCatalogue) {
     add(
       "catalogue",
       `${profile.itemNounPlural} added`,
@@ -166,23 +177,23 @@ export function validateForPublication(input: PublishValidationInput): PublishVa
 
   add(
     "payment",
-    "Payment verified",
-    input.paidPayment?.status === "PAID",
+    input.teamFreeAccess === true ? "Verified team entitlement (no payment required)" : "Payment verified",
+    input.paidPayment?.status === "PAID" || input.teamFreeAccess === true,
     "Complete your KES 999 payment to publish.",
     "/dashboard/subscription",
   );
 
   add(
     "subscription",
-    "Active subscription",
-    input.subscription?.status === "ACTIVE" || input.subscription?.status === "EXPIRING",
+    input.teamFreeAccess === true ? "Team access active" : "Active subscription",
+    input.subscription?.status === "ACTIVE" || input.subscription?.status === "EXPIRING" || input.teamFreeAccess === true,
     "Your subscription is not active. Renew to publish.",
     "/dashboard/subscription",
   );
 
   add(
     "entitlement",
-    "Interactive Business entitlement",
+    "Website Studio entitlement",
     input.entitlement.entitled,
     input.entitlement.reason,
     "/dashboard/subscription",

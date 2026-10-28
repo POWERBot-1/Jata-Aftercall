@@ -9,27 +9,17 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { normalizeExperienceDocument } from "@/lib/experience/document";
-import { bookingEndAt, freeSlotsFor, parseAvailability, validateBookingRequest } from "@/lib/experience/booking";
+import { bookingEndAt, contractBookingMarker, dayWindowInZone, freeSlotsFor, parseAvailability, validateBookingRequest } from "@/lib/experience/booking";
 import { initializeOrderPayment, notifyNewBooking, PAYMENT_PURPOSE } from "@/lib/experience/payments";
 import { recordEvent, hashSession } from "@/lib/analytics";
+import { rateLimitByIdentity, trustedClientIp } from "@/lib/rate-limit";
 import { sanitizeText } from "@/lib/validation";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 
 export const dynamic = "force-dynamic";
 
-const hits = new Map<string, { count: number; reset: number }>();
-function throttled(ip: string): boolean {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.reset) {
-    hits.set(ip, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > 20;
-}
-
 function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  return trustedClientIp(req.headers) ?? "unknown";
 }
 
 /** Public: the next free slots for a service, so the customer's picker matches the server's rules. */
@@ -49,10 +39,11 @@ export async function GET(req: Request) {
     });
     if (!service) return NextResponse.json({ slots: [] });
 
-    const dayStart = new Date(`${date}T00:00:00`);
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    // The customer asked about a *business* day (Africa/Nairobi), not a host-local one.
+    const window = dayWindowInZone(date);
+    if (!window) return NextResponse.json({ slots: [] });
     const taken = await prisma.booking.findMany({
-      where: { businessId: business.id, serviceId: service.id, startAt: { gte: dayStart, lt: dayEnd } },
+      where: { businessId: business.id, serviceId: service.id, startAt: { gte: window.start, lt: window.end } },
       select: { startAt: true, endAt: true, status: true },
     });
     const slots = freeSlotsFor({
@@ -69,7 +60,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  if (throttled(ip)) return NextResponse.json({ error: "Too many attempts. Please wait a moment and try again." }, { status: 429 });
+  const limit = rateLimitByIdentity(ip, { key: "storefront-booking", max: 20, windowMs: 60_000 });
+  if (!limit.allowed) return limit.response ?? NextResponse.json({ error: "Too many attempts. Please wait a moment and try again." }, { status: 429 });
 
   let body: Record<string, unknown>;
   try {
@@ -140,12 +132,12 @@ export async function POST(req: Request) {
 
     // Re-check availability server-side: the browser's slot list is never authoritative.
     if (serviceId) {
-      const dayStart = new Date(`${body.date}T00:00:00`);
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const window = dayWindowInZone(String(body.date));
+      if (!window) return NextResponse.json({ error: "That date could not be read." }, { status: 400 });
       const [service, taken] = await Promise.all([
         prisma.service.findFirst({ where: { id: serviceId, businessId: business.id }, select: { availability: true } }),
         prisma.booking.findMany({
-          where: { businessId: business.id, serviceId, startAt: { gte: dayStart, lt: dayEnd } },
+          where: { businessId: business.id, serviceId, startAt: { gte: window.start, lt: window.end } },
           select: { startAt: true, endAt: true, status: true },
         }),
       ]);
@@ -160,22 +152,29 @@ export async function POST(req: Request) {
       }
     }
 
+    const bookingData = {
+      businessId: business.id,
+      serviceId: serviceId || null,
+      serviceName,
+      customerName: String(body.customerName).trim().slice(0, 80),
+      customerPhone: String(body.customerPhone).trim().slice(0, 30),
+      customerEmail: typeof body.customerEmail === "string" ? body.customerEmail.trim().slice(0, 160) || null : null,
+      staffName: typeof body.staffName === "string" ? body.staffName.trim().slice(0, 60) || staffName : staffName,
+      startAt,
+      endAt: bookingEndAt(startAt, durationMinutes ?? document.settings.bookingSlotMinutes ?? 30),
+      // Records which clock this row was anchored to, so a reader never has to guess and a
+      // legacy row (no marker) is never reinterpreted as Nairobi-anchored.
+      bookingTimeZone: contractBookingMarker(),
+      notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : null,
+      status: depositKES > 0 ? "PENDING" : "CONFIRMED",
+      depositKES,
+      paymentStatus: depositKES > 0 ? "UNPAID" : "UNPAID",
+    };
+    if (containsInlineImageDataUrl(bookingData)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
     const booking = await prisma.booking.create({
-      data: {
-        businessId: business.id,
-        serviceId: serviceId || null,
-        serviceName,
-        customerName: String(body.customerName).trim().slice(0, 80),
-        customerPhone: String(body.customerPhone).trim().slice(0, 30),
-        customerEmail: typeof body.customerEmail === "string" ? body.customerEmail.trim().slice(0, 160) || null : null,
-        staffName: typeof body.staffName === "string" ? body.staffName.trim().slice(0, 60) || staffName : staffName,
-        startAt,
-        endAt: bookingEndAt(startAt, durationMinutes ?? document.settings.bookingSlotMinutes ?? 30),
-        notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : null,
-        status: depositKES > 0 ? "PENDING" : "CONFIRMED",
-        depositKES,
-        paymentStatus: depositKES > 0 ? "UNPAID" : "UNPAID",
-      },
+      data: bookingData,
       select: { id: true, serviceName: true, startAt: true, status: true, depositKES: true },
     });
 

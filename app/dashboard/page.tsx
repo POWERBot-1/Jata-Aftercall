@@ -4,23 +4,41 @@ import { getBusinessMetrics, EMPTY_METRICS } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
 import { ensureReferralCode, referralLink } from "@/lib/referral";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { getTeamAccessStatus } from "@/lib/team-access";
 
-export const metadata: Metadata = { title: "Dashboard" };
+export const metadata: Metadata = { title: "Workspace" };
 export const dynamic = "force-dynamic";
 
-
+/**
+ * The owner's workspace overview.
+ *
+ * Every value on this screen is read from the database for the signed-in owner (or every
+ * business, for an admin). Nothing is estimated, sampled or invented: the response counts
+ * come from `getBusinessMetrics`, the plan from the business's own subscription, and the
+ * "next step" from `nextActionFor`. A metric that cannot be read renders as zero with the
+ * same explanation the rest of the product uses, never as a made-up figure.
+ */
 export default async function DashboardPage() {
   const session = await getSession();
-  if (!session) return null;
+  // Only owners and members can see a workspace; an anonymous request goes to sign-in rather
+  // than rendering a blank page (the shell performs the same check for every other route).
+  if (!session) redirect("/login");
 
   const businesses = await prisma.business.findMany({
     where: session.role === "ADMIN" ? {} : { ownerId: session.userId },
-    include: { services: true, offer: true, subscription: { include: { plan: true } } },
+    include: {
+      services: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, title: true, priceLabel: true, priceFrom: true } },
+      offer: { select: { title: true, subtitle: true, isActive: true } },
+      subscription: { include: { plan: true } },
+      // One row only: the most recent payment, for the activity timeline.
+      payments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, createdAt: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
-  // Fetch metrics per business (simple sequential; acceptable for MVP)
+  // Metrics per business. A failure on one business must not blank the whole dashboard.
   const metricsMap: Record<string, Awaited<ReturnType<typeof getBusinessMetrics>>> = {};
   for (const b of businesses) {
     try {
@@ -74,37 +92,43 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-xl font-bold">{businesses.length > 1 ? "Your businesses" : "Your business"}</h1>
-      <p className="text-sm text-zinc-600">Your pages, the next thing to do, and how customers are responding. “Live” means customers can see your page.</p>
-      <DashboardClient
-        businesses={businesses.map((b) => ({
-          id: b.id,
-          slug: b.slug,
-          name: b.name,
-          category: b.category,
-          isPublished: b.isPublished,
-          status: b.status,
-          theme: b.theme,
-          phone: b.phone,
-          whatsapp: b.whatsapp,
-          location: b.location,
-          lat: b.lat,
-          lng: b.lng,
-          description: b.description,
-          aftercallMsg: b.aftercallMsg,
-          publicUrl: getBusinessUrl(b.slug),
-          referralUrl: referralUrls[b.id] || null,
-          subscription: b.subscription ? { status: b.subscription.status, expiresAt: b.subscription.expiresAt?.toISOString() || null, planName: b.subscription.plan.name } : null,
-          servicesCount: b.services.length,
-          hasOffer: !!b.offer,
-          hasExperience: interactive[b.id]?.hasExperience ?? false,
-          catalogueCount: interactive[b.id]?.catalogueCount ?? 0,
-          hasUnpublishedChanges: interactive[b.id]?.hasUnpublishedChanges ?? false,
-          entitlementStatus: interactive[b.id]?.entitlementStatus ?? null,
-        }))}
-        metricsMap={metricsMap}
-      />
-    </div>
+    <DashboardClient
+      accountEmail={session.email || ""}
+      teamFreeAccess={(await getTeamAccessStatus(session.userId)).entitled}
+      businesses={businesses.map((b) => ({
+        id: b.id,
+        slug: b.slug,
+        name: b.name,
+        category: b.category,
+        isPublished: b.isPublished,
+        status: b.status,
+        theme: b.theme,
+        phone: b.phone,
+        whatsapp: b.whatsapp,
+        location: b.location,
+        lat: b.lat,
+        lng: b.lng,
+        description: b.description,
+        aftercallMsg: b.aftercallMsg,
+        logoUrl: b.logoUrl,
+        coverUrl: b.coverUrl,
+        createdAt: b.createdAt.toISOString(),
+        publicUrl: getBusinessUrl(b.slug),
+        referralUrl: referralUrls[b.id] || null,
+        subscription: b.subscription
+          ? { status: b.subscription.status, expiresAt: b.subscription.expiresAt?.toISOString() || null, planName: b.subscription.plan.name }
+          : null,
+        lastPayment: b.payments[0] ? { status: b.payments[0].status, createdAt: b.payments[0].createdAt.toISOString() } : null,
+        services: b.services.map((service) => ({ id: service.id, title: service.title, priceLabel: service.priceLabel, priceFrom: service.priceFrom })),
+        servicesCount: b.services.length,
+        offer: b.offer ? { title: b.offer.title, subtitle: b.offer.subtitle, isActive: b.offer.isActive } : null,
+        hasOffer: !!b.offer,
+        hasExperience: interactive[b.id]?.hasExperience ?? false,
+        catalogueCount: interactive[b.id]?.catalogueCount ?? 0,
+        hasUnpublishedChanges: interactive[b.id]?.hasUnpublishedChanges ?? false,
+        entitlementStatus: interactive[b.id]?.entitlementStatus ?? null,
+      }))}
+      metricsMap={metricsMap}
+    />
   );
 }

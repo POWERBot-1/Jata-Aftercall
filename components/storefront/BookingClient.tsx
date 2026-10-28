@@ -8,10 +8,11 @@
  * never take the same appointment.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trackEvent } from "./Track";
 import { formatDuration, formatKES } from "@/lib/format";
+import type { BookingDay } from "@/lib/experience/bookingCalendar";
 
 type Bookable = {
   id: string;
@@ -29,6 +30,7 @@ export function BookingClient({
   slug,
   businessId,
   bookables,
+  calendar,
   preselectedId,
   enquiryItemId,
   enquiryItemName,
@@ -39,6 +41,7 @@ export function BookingClient({
   slug: string;
   businessId: string;
   bookables: Bookable[];
+  calendar: readonly BookingDay[];
   preselectedId?: string;
   enquiryItemId?: string;
   enquiryItemName?: string;
@@ -85,16 +88,9 @@ export function BookingClient({
     };
   }, [serviceId, date, slug, requireDate]);
 
-  const openDays = useMemo(() => {
-    // Next 14 days; the server still validates the final choice.
-    const days: string[] = [];
-    const today = new Date();
-    for (let offset = 0; offset < 21 && days.length < 14; offset += 1) {
-      const candidate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-      days.push(candidate.toISOString().slice(0, 10));
-    }
-    return days;
-  }, []);
+  // Reuse the server snapshot even if the customer's timezone differs or hydration crosses midnight.
+  // Never suppress a hydration mismatch or replace the date choices with a client-only placeholder.
+  const openDays = calendar.slice(0, 10);
 
   async function submit() {
     setError(null);
@@ -183,13 +179,13 @@ export function BookingClient({
               <div className="eb-chip-row">
                 {openDays.slice(0, 10).map((day) => (
                   <button
-                    key={day}
+                    key={day.date}
                     type="button"
-                    className={`eb-chip ${date === day ? "eb-chip--active" : ""}`}
-                    aria-pressed={date === day}
-                    onClick={() => { setDate(day); setTime(""); }}
+                    className={`eb-chip ${date === day.date ? "eb-chip--active" : ""}`}
+                    aria-pressed={date === day.date}
+                    onClick={() => { setDate(day.date); setTime(""); }}
                   >
-                    {new Date(`${day}T00:00:00`).toLocaleDateString("en-KE", { weekday: "short", day: "numeric", month: "short" })}
+                    {day.label}
                   </button>
                 ))}
               </div>

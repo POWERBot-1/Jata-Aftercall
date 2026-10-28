@@ -1,0 +1,214 @@
+name: Premium Screenshots (visual evidence)
+
+# Additive, evidence-only workflow for PR #69 (2026-10-27 owner correction: original design
+# restoration, nominated contact work and the fail-closed JATA Qi seam).
+#
+# It builds the candidate tree against a DISPOSABLE PostgreSQL service (never a deployment
+# database), seeds the fictional demo dataset, serves a local production build on localhost,
+# drives real Chrome through the public sign-in form with the seeded demo user and captures
+# full-page screenshots at the six owner-mandated viewports plus machine-readable layout
+# evidence (overflow, restored espresso/cream/amber tokens, plan order, demo-business
+# WhatsApp/tel/Directions/Share contact states, page errors, mobile nav journey).
+#
+# The screenshots and evidence.json are uploaded as a workflow artifact for review. This job
+# changes no production setting, touches no deployment secret and cannot deploy anything.
+#
+# Retrieval in restricted-egress environments (artifact blob host blocked): add the `visual-evidence`
+# label to the PR. With that label the run ALSO commits its evidence to the session branch under
+# verification/evidence (a transient, labelled channel — remove the label and reset the commit after
+# review). Without the label, nothing is committed to git.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+# Never cancel in-progress runs: this workflow itself pushes an evidence commit near the end,
+# which synchronises a new pull_request run, and cancellation could kill the publishing step.
+concurrency:
+  group: premium-screenshots-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    name: Real-Chrome six-viewport capture on a disposable database
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_shots
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Points only at this job's disposable PostgreSQL service, never at a deployment database.
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_shots?schema=public
+      AUTH_SECRET: premium-screenshots-test-secret
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Fictional seeded demo credentials only; the same values prisma/seed.ts creates and
+      # DEPLOYMENT.md documents. No production credential is used or stored here.
+      SCREENSHOT_LOGIN_EMAIL: demo@jata.link
+      SCREENSHOT_LOGIN_PASSWORD: Demo1234!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations to the disposable database
+        run: npx prisma migrate deploy
+
+      - name: Seed fictional plans and demo dataset
+        run: npm run seed
+
+      - name: Production build of the candidate tree
+        run: npm run build
+
+      - name: Start local production server
+        run: |
+          PUBLIC_BASE_URL=http://localhost:4100 \
+          NEXTAUTH_URL=http://localhost:4100 \
+          npx next start -p 4100 -H 127.0.0.1 > /tmp/next-start.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:4100/health > /tmp/health.log 2>/dev/null; then
+              cat /tmp/health.log
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server did not become ready" >&2
+          cat /tmp/next-start.log >&2
+          exit 1
+
+      - name: Capture six-viewport screenshots and layout evidence in real Chrome
+        run: |
+          set -o pipefail
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing - screenshot capture NOT RUN, not passed." >&2
+            exit 2
+          fi
+          echo "Using Chrome: $CHROME_PATH"
+          set +e
+          BASE_URL=http://localhost:4100 SHOT_DIR=./premium-shots \
+            npm run test:browser:premium-screenshots 2>&1 | tee /tmp/premium-shots.log
+          capture_exit=${PIPESTATUS[0]}
+          set -e
+          # Check-run annotations ARE retrievable through api.github.com even when the Actions log
+          # blob host is network-blocked. GitHub retains ~10 error annotations per check run, so
+          # group every FAIL line into ONE annotation; the totals are a notice. Full data stays in
+          # summary.log / evidence.json artifacts.
+          if [ -f premium-shots/summary.log ]; then
+            pass_count=$(grep -c '^PASS' premium-shots/summary.log || true)
+            fail_count=$(grep -c '^FAIL' premium-shots/summary.log || true)
+            echo "::notice title=Evidence totals (run ${GITHUB_RUN_ID})::PASS=${pass_count} FAIL=${fail_count} exit=${capture_exit}"
+            if [ "${fail_count}" -gt 0 ]; then
+              grouped=$(grep '^FAIL' premium-shots/summary.log | tr '\n' '|' | cut -c1-5800)
+              echo "::error title=Evidence failures (${fail_count})::${grouped}"
+            fi
+          fi
+          exit "$capture_exit"
+
+      - name: Show evidence summary in the Actions log
+        if: always()
+        run: |
+          if [ -f premium-shots/summary.log ]; then
+            cat premium-shots/summary.log
+          else
+            echo "No summary.log produced (capture did not start)."
+          fi
+
+      - name: Upload screenshot evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: premium-screenshots-${{ github.event.pull_request.number || github.run_id }}
+          path: premium-shots/
+          retention-days: 14
+          if-no-files-found: error
+
+      # Retrieval channel for restricted egress environments: when the PR carries the
+      # `visual-evidence` label, the run commits evidence into the SAME session branch under
+      # verification/evidence, reachable through ordinary git transport. It is off by default so
+      # ordinary runs leave no binary artifacts in git — the Actions artifact is the normal
+      # channel. Loop guard: a run whose HEAD is already a bot-authored evidence commit only
+      # verifies, it never re-publishes, so the synchronised run terminates without another push.
+      - name: Publish visual evidence into the session branch (label-gated)
+        if: >-
+          always()
+          && github.event_name == 'pull_request'
+          && contains(github.event.pull_request.labels.*.name, 'visual-evidence')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          trap 'echo "::warning title=Publish step failed::line $LINENO: $BASH_COMMAND"' ERR
+          echo "::notice title=Evidence publish::visual-evidence label present; publishing to head ref"
+          if git log -1 --pretty='%an' | grep -q '^github-actions\[bot\]$'; then
+            echo "::notice title=Evidence publish::HEAD is already an evidence commit; verifying only, no re-publish."
+            exit 0
+          fi
+          if [ ! -d premium-shots ] || [ -z "$(ls -A premium-shots 2>/dev/null)" ]; then
+            echo "No evidence captured; skipping branch publish."
+            exit 0
+          fi
+          # On pull_request events GITHUB_REF_NAME is the synthetic "<pr>/merge" ref, which can
+          # never be pushed; the real head branch is github.head_ref. Dispatch runs use ref_name.
+          evidence_ref="${{ github.head_ref || github.ref_name }}"
+          echo "::notice title=Evidence publish::publishing to head ref ${evidence_ref}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # On pull_request events the checkout is a synthetic merge ref; evidence must be built
+          # on the real head branch or the push is a non-fast-forward rejection. actions/checkout
+          # narrows the fetch refspec, so check out FETCH_HEAD rather than a remote-tracking name.
+          git fetch --no-tags --depth=1 origin "${evidence_ref}"
+          git checkout -B evidence-publish FETCH_HEAD
+          # Annotations are retrievable through api.github.com even when log blobs are blocked:
+          # what permissions does the workflow token actually hold on this repository?
+          perms=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.permissions' 2>&1 || echo "gh api failed")
+          echo "::notice title=Workflow token permissions::${perms}"
+          mkdir -p verification/evidence
+          rm -rf "verification/evidence/run-${GITHUB_RUN_ID}"
+          cp -r premium-shots "verification/evidence/run-${GITHUB_RUN_ID}"
+          cat > verification/evidence/README.md <<'MD'
+          # Transient visual evidence (not product code)
+
+          Real-Chrome screenshots produced by `.github/workflows/premium-screenshots.yml` on a
+          disposable PostgreSQL database with the fictional seeded demo user. This directory is
+          committed only while the PR carries the `visual-evidence` label and is removed from the
+          branch after review; the workflow never re-publishes on top of its own evidence commit.
+          The durable evidence channel is the workflow artifact (`premium-screenshots-*`).
+          MD
+          git add verification/evidence
+          if git commit -m "chore(evidence): transient PR69 visual screenshots run ${GITHUB_RUN_ID}"; then
+            if git push origin "HEAD:${evidence_ref}" 2>/tmp/evidence-push.err; then
+              echo "::notice title=Evidence publish::Evidence commit pushed to ${evidence_ref}"
+            else
+              echo "::warning title=Evidence push declined::Workflow artifact remains the evidence channel"
+              while IFS= read -r line; do echo "::warning title=Push stderr::${line}"; done < /tmp/evidence-push.err
+            fi
+          else
+            echo "::notice title=Evidence publish::Nothing to commit."
+          fi

@@ -226,6 +226,8 @@ export async function deliverPendingPaymentNotifications(params: {
   now?: Date;
   client?: PaymentClient;
   fetchImpl?: typeof fetch;
+  /** Optional bounded queue slice for an application-owned notification family. */
+  idempotencyKeyPrefix?: string;
 } = {}): Promise<DeliveryOutcome> {
   const client = params.client ?? prisma;
   const now = params.now ?? new Date();
@@ -235,6 +237,7 @@ export async function deliverPendingPaymentNotifications(params: {
   const pending = await client.paymentNotification.findMany({
     where: {
       ...(params.businessId ? { businessId: params.businessId } : {}),
+      ...(params.idempotencyKeyPrefix ? { idempotencyKey: { startsWith: params.idempotencyKeyPrefix } } : {}),
       status: "PENDING",
       OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
     },
@@ -355,7 +358,7 @@ export async function retryPaymentNotification(params: {
   return { ok: true as const, outcome };
 }
 
-export function notificationStatusLabel(status: string): string {
+export function notificationStatusLabel(status: string, reason?: string | null): string {
   switch (status) {
     case "SENT":
       return "Sent";
@@ -364,7 +367,9 @@ export function notificationStatusLabel(status: string): string {
     case "FAILED":
       return "Could not be sent";
     case "SKIPPED":
-      return "Not sent — channel not configured";
+      return reason?.startsWith("No longer required:")
+        ? "Not sent — no longer required"
+        : "Not sent — channel not configured";
     default:
       return status;
   }

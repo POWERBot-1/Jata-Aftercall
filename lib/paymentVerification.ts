@@ -4,11 +4,37 @@ export type PaymentExpectation = { reference: string; amount: number; currency: 
 export type PaymentEvidence = { reference?: unknown; amount?: unknown; currency?: unknown; status?: unknown };
 export type PaymentMismatch = "REFERENCE_MISMATCH" | "AMOUNT_MISMATCH" | "CURRENCY_MISMATCH";
 
+/** A provider transaction identifier is evidence, not an arbitrary non-empty payload. */
+export function isProviderTransactionId(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const id = value.trim();
+  return id.length > 0 && id.length <= 255 && !/^data:/i.test(id);
+}
+
 export function validatePaymentEvidence(expected: PaymentExpectation, evidence: PaymentEvidence): { ok: true } | { ok: false; reason: PaymentMismatch } {
   if (evidence.reference !== expected.reference) return { ok: false, reason: "REFERENCE_MISMATCH" };
   if (evidence.amount !== expected.amount) return { ok: false, reason: "AMOUNT_MISMATCH" };
   if (expected.currency !== PAYMENT_CURRENCY || evidence.currency !== PAYMENT_CURRENCY) return { ok: false, reason: "CURRENCY_MISMATCH" };
   return { ok: true };
+}
+
+/**
+ * Payment states a *provider-verified* success may settle.
+ *
+ * One rule for the whole payment stack (§25): once Paystack independently confirms that a charge
+ * succeeded — matching reference, amount, currency and transaction id — a local
+ * FAILED/CANCELLED/EXPIRED record is the stale side of the disagreement, and the money is with
+ * the business. Refusing the settlement does not protect anyone: it leaves a paying customer
+ * without what they bought while the provider retries the same webhook.
+ *
+ * REFUNDED is deliberately absent: money already returned is not money received, and no provider
+ * success may reactivate it. Every caller reaches a settlement only after verification evidence
+ * has been checked, and each one still writes through a compare-and-set inside a transaction.
+ */
+export const SETTLEABLE_PAYMENT_STATES = ["PENDING", "FAILED", "CANCELLED", "EXPIRED"] as const;
+
+export function isSettleablePaymentStatus(status: unknown): boolean {
+  return typeof status === "string" && (SETTLEABLE_PAYMENT_STATES as readonly string[]).includes(status);
 }
 
 export function subscriptionWindow(

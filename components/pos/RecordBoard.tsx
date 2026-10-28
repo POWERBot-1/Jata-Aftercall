@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
+import { nairobiCalendarDay } from "@/lib/dateFormat";
 import type { FieldSpec } from "@/lib/pos/forms";
 import type { EmptyState } from "@/lib/pos/presentation";
 
@@ -66,7 +67,9 @@ function rowForm(fields: FieldSpec[], row: RecordRow): Record<string, string | n
     const raw = row[field.key];
     if (raw === undefined || raw === null) continue;
     if (typeof raw === "boolean" || typeof raw === "number") values[field.key] = raw;
-    else if (raw instanceof Date) values[field.key] = raw.toISOString().slice(0, 10);
+    // A date input holds a Nairobi calendar day, not the UTC day of the instant: at 22:00 UTC
+    // the owner is already in tomorrow, and the form must open on the day they are working.
+    else if (raw instanceof Date) values[field.key] = nairobiCalendarDay(raw);
     else values[field.key] = String(raw);
   }
   return values;
