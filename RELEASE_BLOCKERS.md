@@ -310,7 +310,7 @@ rules as above:
 Full status table: `docs/POS_ERP_PRO_EVIDENCE.md`. Nothing here is a claim that the product is
 production-ready.
 
-**Merge gate (2026-10-28, head `00cdd71`):** PR #71 targets `main`; every required check is green
+**Merge gate (2026-10-28, head `cca017d` — code `00cdd71` + docs):** PR #71 targets `main`; every required check is green
 (`Journey against a real database`, `Migration target guard`, `Release gate (aggregate)`, plus the 11
 other check-runs and the Vercel status); `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. The PR has
 **no approving review**, and the repository ruleset carries
