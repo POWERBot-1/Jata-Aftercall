@@ -131,6 +131,15 @@ jobs:
           fi
           exit "$capture_exit"
 
+      - name: POS photo controls and honest storage refusal in real Chrome
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+          SHOT_DIR: ./premium-shots
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          node scripts/browser/pos-photo-refusal.check.mjs
+
       # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
       # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN
       # production server on a free port and seeds and removes its own rows, so it does not touch the
