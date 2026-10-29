@@ -4,8 +4,8 @@
  * What only the database can prove: the document number comes from the tenant sequence and does not
  * repeat, a supplier from another business cannot be bought from, a delivery writes the POS stock
  * ledger (so the till and the ERP agree), an over-receipt is refused before any stock moves, the bill
- * journal balances and its variance is audited, and two concurrent receives with one key leave one
- * receipt.
+ * journal balances and its variance is audited, a re-submitted supplier invoice cannot post twice, and
+ * two concurrent receives with one key leave one receipt.
  *
  * Environment: PRISMA_TEST_DATABASE_URL (an isolated, migrated database — never production) and,
  * where the native engine cannot be downloaded, PRISMA_WASM_HARNESS_DIR.
@@ -13,10 +13,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createPurchaseOrder,
+  recordPurchaseBill,
   receivePurchaseOrder,
   submitPurchaseOrder,
   purchaseOrderSummary,
 } from "@/lib/erp/procurement";
+import { ensureChartOfAccounts } from "@/lib/erp/accounting";
 import { decideApprovalRequest } from "@/lib/erp/approvals";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 
@@ -58,6 +60,9 @@ describe.skipIf(!enabled)("procurement against real PostgreSQL", () => {
     ids.businessA = businessA.id;
     ids.businessB = businessB.id;
 
+    // The supplier-bill journal posts to 1200 / 1150 / 2000, so the tenant needs its chart first.
+    await ensureChartOfAccounts(client, businessA.id);
+
     await client.businessMember.create({ data: { userId: staffA.id, businessId: businessA.id, role: "STAFF" } });
     await client.businessMember.create({ data: { userId: managerA.id, businessId: businessA.id, role: "MANAGER" } });
 
@@ -87,6 +92,9 @@ describe.skipIf(!enabled)("procurement against real PostgreSQL", () => {
       await client.erpNotification.deleteMany({ where: { businessId: { in: businesses } } });
       await client.erpJournalLine.deleteMany({ where: { businessId: { in: businesses } } });
       await client.erpJournal.deleteMany({ where: { businessId: { in: businesses } } });
+      await client.erpIdempotencyRecord.deleteMany({ where: { businessId: { in: businesses } } });
+      await client.erpPeriod.deleteMany({ where: { businessId: { in: businesses } } });
+      await client.erpAccount.deleteMany({ where: { businessId: { in: businesses } } });
       await client.erpAuditEvent.deleteMany({ where: { businessId: { in: businesses } } });
       await client.erpSequence.deleteMany({ where: { businessId: { in: businesses } } });
       await client.posInventoryMovement.deleteMany({ where: { businessId: { in: businesses } } });
@@ -219,6 +227,53 @@ describe.skipIf(!enabled)("procurement against real PostgreSQL", () => {
     ).rejects.toThrow(/not found/i);
     const untouched = await client.erpPurchaseOrderLine.findUnique({ where: { id: line.id } });
     expect(untouched.receivedQuantity).toBe(0);
+  });
+
+  it("posts a supplier bill once, balances its journal, and refuses the same invoice twice", async () => {
+    const { order } = await raiseOrder();
+    await submitPurchaseOrder(client, {
+      businessId: ids.businessA,
+      orderId: order.id,
+      requester: { userId: ids.ownerA, role: "OWNER", name: "Owner A" },
+    });
+
+    const billNumber = `INV-${stamp}`;
+    const bill = {
+      businessId: ids.businessA,
+      orderId: order.id,
+      billNumber,
+      netCents: 3_000_000,
+      taxCents: 480_000,
+      actorId: ids.ownerA,
+      actorName: "Owner A",
+    };
+
+    const first = await recordPurchaseBill(client, bill);
+    expect(first.bill.billNumber).toBe(billNumber);
+    expect(first.bill.totalCents).toBe(3_480_000);
+    expect(first.bill.status).toBe("OPEN");
+    expect(first.bill.journalId).toBe(first.journal.id);
+    // The order totals 3,000,000 net + 480,000 VAT, so the invoice matches it exactly.
+    expect(first.varianceCents).toBe(0);
+
+    // Balanced double entry: stocked lines debit inventory, VAT input is recoverable, AP is credited.
+    expect(first.journal.totalDebitCents).toBe(3_480_000);
+    expect(first.journal.totalCreditCents).toBe(3_480_000);
+    const journalLines = await client.erpJournalLine.findMany({ where: { journalId: first.journal.id } });
+    const byAccount = (code: string) => journalLines.find((line: any) => line.accountCode === code);
+    expect(byAccount("1200")).toMatchObject({ debitCents: 3_000_000, creditCents: 0 });
+    expect(byAccount("1150")).toMatchObject({ debitCents: 480_000, creditCents: 0 });
+    expect(byAccount("2000")).toMatchObject({ debitCents: 0, creditCents: 3_480_000 });
+
+    // A second submission of the same supplier invoice is refused, not posted a second time.
+    await expect(recordPurchaseBill(client, bill)).rejects.toThrow(/already recorded/i);
+
+    const bills = await client.erpSupplierBill.findMany({ where: { businessId: ids.businessA, purchaseOrderId: order.id } });
+    expect(bills).toHaveLength(1);
+    const journals = await client.erpJournal.findMany({ where: { businessId: ids.businessA, sourceType: "SUPPLIER_BILL", sourceId: order.id } });
+    expect(journals).toHaveLength(1);
+    const audits = await client.erpAuditEvent.findMany({ where: { businessId: ids.businessA, action: "SUPPLIER_BILL_POSTED", targetId: order.id } });
+    expect(audits).toHaveLength(1);
   });
 
   it("counts the order summary for this tenant only", async () => {
