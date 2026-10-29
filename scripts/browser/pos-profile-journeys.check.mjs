@@ -277,8 +277,10 @@ try {
   console.log("Salon service-only: default payments");
   await clickQuestion("How do customers pay");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do customers pay"));
+  const bankOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Bank transfer")));
+  await bankOption.asElement().click(); await bankOption.dispose();
   response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
-  await clickText(page, "button", "Skip for now →");
+  await clickText(page, "button", "Done — continue");
   if (!(await response).ok()) throw new Error("Service-only salon default payments save failed");
   await page.waitForFunction(() => !document.body.textContent.includes("Saving…"));
   await page.reload({ waitUntil:"load" });
