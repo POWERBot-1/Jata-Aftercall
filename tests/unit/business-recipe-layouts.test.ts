@@ -43,7 +43,7 @@ function dataFor(category: string): StorefrontData {
 function render(child: React.ReactNode, data: StorefrontData) {
   return renderToString(React.createElement(AppRouterContext.Provider, { value: router }, React.createElement(CartProvider,
     { slug: data.business.slug, businessId: data.business.id, cartNoun: data.profile.cta.cart, checkoutHref: "/b/owned-slug/checkout",
-      canCheckout: data.profile.capabilities.includes("commerce") }, child)));
+      canCheckout: data.profile.capabilities.includes("commerce"), children: child })));
 }
 function configWithLayout(category: string, layout: string): BusinessRecipeConfig {
   return { ...defaultBusinessRecipe(businessRecipeFor(category)!), layout: layout as BusinessRecipeConfig["layout"] };

@@ -123,6 +123,7 @@ describe("runtime and schema guards", () => {
       // optional purchaseOrderId is a plain column on purpose, so a request keeps its own audit
       // story even if a draft order is deleted. No existing table or row is touched.
       "20261033000000_erp_requisitions",
+      "20261101000000_pos_category_images",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -170,6 +171,7 @@ describe("runtime and schema guards", () => {
       "20261030000000_erp_approvals",
       "20261031000000_erp_approval_consumption",
       "20261032000000_erp_procurement",
+      "20261101000000_pos_category_images",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
