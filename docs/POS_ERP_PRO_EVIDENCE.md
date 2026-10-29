@@ -1363,7 +1363,7 @@ migration outcome). Production **data** changes as a workaround remain prohibite
 | Item | Value |
 | --- | --- |
 | PR | **#71**, `OPEN`, not a draft |
-| Head | **`39fab1e9483c0b40bbc9929b83766521b843a469`** = `origin/arena/7a3563c1-jata-aftercall` = the local worktree (after restoring this branch — the worktree had again been left on a foreign commit) |
+| Head | **`39fab1e9483c0b40bbc9929b83766521b843a469`** = the local worktree during this revalidation (after restoring this branch — the worktree had again been left on a foreign commit). The corrections in this section were then committed as `66b494f`, also **15/15**; any later documentation-only commit on this branch changes no executable file, and its checks are re-run in CI. |
 | Base | `main` = `a04124de6eafb4c1564734b1e9298d2f311b7516` |
 | Mergeability | `MERGEABLE` / `CLEAN` |
 | Review decision | **none** — `reviewDecision` is empty, no approving review exists |
