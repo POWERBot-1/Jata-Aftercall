@@ -2,7 +2,7 @@
 import type { CategoryKey, ExperienceDocument, ExperienceSection, SectionType } from "./types";
 import type { StorefrontData, StorefrontItem } from "./storefront";
 
-export type BusinessRecipeKey = "retail-stock" | "food-menu" | "salon-booking" | "professional-enquiry" | "technical-enquiry";
+export type BusinessRecipeKey = "retail-stock" | "farm-produce" | "food-menu" | "salon-booking" | "professional-enquiry" | "technical-enquiry";
 export type BusinessRecipeDetail = "brand" | "variants" | "stock" | "ingredients" | "portion" | "prep" | "options" | "duration" | "staff" | "deposit";
 /** Registered structural presentations only. A layout is presentation geometry — never content, prices or capability. */
 export type BusinessRecipeLayout = "product-grid" | "product-list" | "menu-list" | "menu-board" | "service-list" | "service-grid";
@@ -27,6 +27,9 @@ export const BUSINESS_RECIPES: readonly BusinessRecipe[] = [
   { version: 1, key: "retail-stock", category: "retail", label: "Retail stock & options", primarySection: "featured", sections: ["featured"],
     source: "products", layout: "product-grid", listLayout: "product-list", layouts: ["product-grid", "product-list"], availabilityLabel: "In stock only",
     details: [{ key: "brand", label: "Brand" }, { key: "variants", label: "Product options" }, { key: "stock", label: "Availability" }] },
+  { version: 1, key: "farm-produce", category: "farm", label: "Produce & availability", primarySection: "featured", sections: ["featured"],
+    source: "products", layout: "product-grid", listLayout: "product-list", layouts: ["product-grid", "product-list"], availabilityLabel: "Available produce only",
+    details: [{ key: "stock", label: "Availability" }, { key: "variants", label: "Produce options" }] },
   { version: 1, key: "food-menu", category: "food", label: "Food menu & ordering", primarySection: "menu", sections: ["menu", "featured"],
     source: "products", layout: "menu-list", listLayout: "menu-list", layouts: ["menu-list", "menu-board"], availabilityLabel: "Available dishes only",
     details: [{ key: "ingredients", label: "Ingredients" }, { key: "portion", label: "Portion" }, { key: "prep", label: "Preparation time" }, { key: "options", label: "Extras" }] },

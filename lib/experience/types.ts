@@ -34,6 +34,7 @@ export type CategoryKey =
   | "salon"
   | "fashion"
   | "retail"
+  | "farm"
   | "electronics"
   | "automotive"
   | "realestate"

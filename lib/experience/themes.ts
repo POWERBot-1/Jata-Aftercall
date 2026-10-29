@@ -414,6 +414,20 @@ const DEFINITIONS: ThemeDefinition[] = [
       footer: { bg: "#1B1608", text: "#FDF6E3" }, overlay: "rgba(27,22,8,0.58)" },
   },
 
+  // ── Farm produce ─────────────────────────────────────────────────────────
+  {
+    key: "farm-harvest", name: "Harvest", categoryKey: "farm", treatment: "warm",
+    description: "Earthy tones for produce and the farm story.",
+    palette: { bg: "#F8F7EE", surface: "#FFFFFF", text: "#1C2D1D", primary: "#35683E", accent: "#C58845",
+      footer: { bg: "#1C2D1D", text: "#F3F5E8" }, overlay: "rgba(28,45,29,0.55)" },
+  },
+  {
+    key: "farm-field", name: "Field", categoryKey: "farm", treatment: "minimal",
+    description: "Clear, light presentation for existing farm products.",
+    palette: { bg: "#F4F8F2", surface: "#FFFFFF", text: "#203024", primary: "#34664A", accent: "#A76B32",
+      footer: { bg: "#203024", text: "#F4F8F2" }, overlay: "rgba(32,48,36,0.55)" },
+  },
+
   // ── Electronics ──────────────────────────────────────────────────────────
   {
     key: "tech-precision", name: "Precision", categoryKey: "electronics", treatment: "technical",

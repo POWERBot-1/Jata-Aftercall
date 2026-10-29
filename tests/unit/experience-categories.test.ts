@@ -1,7 +1,7 @@
 /**
  * Experience profiles (§5, §6, §13)
  *
- * Sixteen categories, one engine. These tests are the guard against template lock-in: a
+ * Business categories, one engine. These tests are the guard against template lock-in: a
  * category may configure fields, wording and sections, but never a separate app.
  */
 
@@ -16,11 +16,11 @@ import {
 } from "@/lib/experience/categories";
 import { CATEGORIES, isValidCategory } from "@/lib/validation";
 
-describe("the sixteen categories", () => {
-  it("defines exactly sixteen unique profiles", () => {
-    expect(EXPERIENCE_PROFILES).toHaveLength(16);
-    expect(new Set(CATEGORY_KEYS).size).toBe(16);
-    expect(CATEGORIES).toHaveLength(16);
+describe("the business categories", () => {
+  it("defines exactly seventeen unique profiles", () => {
+    expect(EXPERIENCE_PROFILES).toHaveLength(17);
+    expect(new Set(CATEGORY_KEYS).size).toBe(17);
+    expect(CATEGORIES).toHaveLength(17);
   });
 
   it("gives every profile a complete configuration", () => {
@@ -66,6 +66,7 @@ describe("the sixteen categories", () => {
     expect(resolveExperienceProfile("Restaurant").key).toBe("food");
     expect(resolveExperienceProfile("  salon  ").key).toBe("salon");
     expect(resolveExperienceProfile("Mechanic").key).toBe("automotive");
+    expect(resolveExperienceProfile("Farm Produce").key).toBe("farm");
     expect(resolveExperienceProfile("Something else").key).toBe("other");
     expect(resolveExperienceProfile(null).key).toBe("other");
   });

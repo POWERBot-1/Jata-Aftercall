@@ -123,3 +123,32 @@ describe("content/intent-led reasoning and structural novelty", () => {
     expect(sectionLayout({ ...section, layout: "list" }, plan.artDirection)).toBe("list");
   });
 });
+
+describe("retail, farm and salon compositions", () => {
+  it("uses different real structures and preserves owner content through serialization", () => {
+    const cases = [
+      { category: "retail", family: "marketplace", goal: "sell" },
+      { category: "farm", family: "product-first", goal: "sell" },
+      { category: "salon", family: "service-journey", goal: "book" },
+    ] as const;
+    const signatures = new Set<string>();
+    for (const item of cases) {
+      const source = createExperienceDocument({ categoryKey: item.category, businessName: "Owner supplied name", description: "Owner supplied description", phone: "0712345678" });
+      source.brand.heroImageUrl = "https://example.test/owner-photo.jpg";
+      const candidate = buildArtDirectedCandidate(source, `test:${item.category}`, { family: item.family, brief: { goal: item.goal } }).document;
+      expect(candidate.categoryKey).toBe(item.category);
+      expect(candidate.brand).toEqual(source.brand);
+      expect(candidate.settings).toEqual(source.settings);
+      expect(factualSections(candidate)).toEqual(factualSections(source));
+      const restored = normalizeExperienceDocument(JSON.parse(JSON.stringify(candidate)));
+      expect(restored).toEqual(candidate);
+      expect(validateExperienceDocument(restored).ok).toBe(true);
+      signatures.add(familyGeometrySignature(templateForDocument(restored)!));
+      const data = motionFixture("lite");
+      const html = renderToStaticMarkup(createElement(AppRouterContext.Provider, { value: router }, createElement(ExperienceSite, { data: { ...data, document: restored } })));
+      expect(html).toContain(`data-template-family="${item.family}"`);
+      expect(html).toContain("Owner supplied name");
+    }
+    expect(signatures.size).toBe(3);
+  });
+});
