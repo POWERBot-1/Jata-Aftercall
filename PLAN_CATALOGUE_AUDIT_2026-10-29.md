@@ -10,11 +10,11 @@
 | Phase | Status | Why |
 | --- | --- | --- |
 | 1 — authoritative catalogue from repository evidence | **PASS** | Every intended plan, key, price, duration and visibility rule is named in the code; see §2. |
-| 2 — read-only production audit | **PASS** | Completed with owner-supplied Neon query output on 2026-10-29: **8 rows, all active, all prices and durations correct**. No credential entered this environment; the query text is quoted in Part II §12. |
+| 2 — read-only production audit | **PASS** | Completed with owner-supplied Neon query output on 2026-10-29: **8 rows, all active, all prices and durations correct**. No credential entered this environment; the row inventory is transcribed in Part II §12. |
 | 3 — Autopilot repair | **PASS — NO WRITE NEEDED** | All three Autopilot rows already exist at 2,499 / 6,999 / 19,999 with 30-day periods and `isActive = true`. **0 rows written**, and none should be. The prepared SQL in §5 is retained but must not run. |
 | 3 — POS / ERP-Oro changes | **ERP NOT AUTHORISED / NOT RUN** | `BUSINESS_POS` is present and correct. `ERP_PRO` is absent and `ERP_PRO_ENABLED` is unset; the prepared insert and flag change are in Part II §14 and were **not** executed. |
 | 4 — application verification | **PASS (public) / NOT TESTED (authenticated)** | Live `/`, `/pricing`, `/products`, `/products/business-pos` and `/health` verified through an external fetcher (Part II §15). `/onboarding` and every `/dashboard/*` route redirect to `/login`, so authenticated screens and checkout remain **NOT TESTED**. |
-| Repair-path code fixes (this branch) | **PASS locally / NOT DEPLOYED** | Admin plan-key truncation and the production-seed instruction are fixed with tests; see §8. |
+| Repair-path code fixes (this branch) | **PASS locally / NOT DEPLOYED** | Admin plan-key truncation, the production-seed instruction and the latent `ERP_PRO` public-list leak are fixed with tests; see §8 and Part II §16. |
 
 **Superseded note (2026-10-29, later):** The paragraphs above preserve the state of the investigation *before* the owner
 supplied the production query result. Part II records the verified 8-row inventory, the live surface matrix and the ERP
@@ -535,7 +535,7 @@ Prisma-DMMF failure; ESLint on changed files **0 errors**; `tsc --noEmit` shows 
 
 ## 17. Remaining approvals
 
-1. **Merge/deploy PR #73** — head `df8371d` passed **15/15 checks**, including Static/typecheck with a generated Prisma
+1. **Merge/deploy PR #73** — code commit `df8371d` passed **15/15 checks**, including Static/typecheck with a generated Prisma
    client, the unit suite, migrations against PostgreSQL 18, the Journey against a real database, and the Real-Chrome
    six-viewport capture. The diff contains nine related files (+777/−5) and no unrelated changes, but no merge or
    deployment is performed without an explicit instruction.
