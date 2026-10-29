@@ -5,6 +5,9 @@ import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { nairobiCalendarDay } from "@/lib/dateFormat";
 import type { FieldSpec } from "@/lib/pos/forms";
+import { FILE_INPUT_ACCEPT } from "@/lib/media/imageFormat";
+import { prepareUpload, uploadPreparedImage } from "@/lib/media/browserImage";
+import { safeImageUrl } from "@/lib/workspaceImagery";
 import type { EmptyState } from "@/lib/pos/presentation";
 
 /**
@@ -21,6 +24,7 @@ export type ValueColumn = { key: string; label?: string; money?: boolean; suffix
 
 type Props = {
   businessId: string;
+  productPhotos?: boolean;
   apiPath: string;
   word: string;
   plural: string;
@@ -89,6 +93,10 @@ export function RecordBoard(props: Props) {
   const [creating, setCreating] = useState(openNew);
   const [values, setValues] = useState<Record<string, string | number | boolean>>(() => emptyForm(fields));
   const [busy, setBusy] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoDirty, setPhotoDirty] = useState(false);
+  const [photoProgress, setPhotoProgress] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -111,6 +119,7 @@ export function RecordBoard(props: Props) {
     setEditing(null);
     setCreating(true);
     setValues(emptyForm(fields));
+    setPhoto(null); setPhotoDirty(false); setPhotoProgress("");
     setError(null);
     setSaved(null);
   }
@@ -119,6 +128,7 @@ export function RecordBoard(props: Props) {
     setEditing(row);
     setCreating(true);
     setValues(rowForm(fields, row));
+    setPhoto(safeImageUrl(row.imageUrl)); setPhotoDirty(false); setPhotoProgress("");
     setError(null);
     setSaved(null);
   }
@@ -127,6 +137,20 @@ export function RecordBoard(props: Props) {
     setCreating(false);
     setEditing(null);
     setError(null);
+  }
+
+  async function uploadPhoto(file: File) {
+    setPhotoBusy(true); setError(null); setPhotoProgress("Preparing photo…");
+    try {
+      const progress = (value: { message: string }) => setPhotoProgress(value.message);
+      const prepared = await prepareUpload(file, { onProgress: progress });
+      if (prepared.status !== "ok") { setError(prepared.issue.message); return; }
+      const uploaded = await uploadPreparedImage({ businessId, upload: prepared.upload, kind: "IMAGE", source: "UPLOAD", label: "ACTUAL", onProgress: progress });
+      if (uploaded.status !== "ok") { setError(uploaded.error); return; }
+      setPhoto(uploaded.asset.url); setPhotoDirty(true);
+      setPhotoProgress("Photo uploaded. Save the item to use it.");
+    } catch { setError("Could not upload the photo. Please try again."); }
+    finally { setPhotoBusy(false); }
   }
 
   async function submit(event: React.FormEvent) {
@@ -143,6 +167,7 @@ export function RecordBoard(props: Props) {
       else payload[field.key] = value;
     }
     if (editing) payload[updateIdKey] = editing.id;
+    if (props.productPhotos && photoDirty) payload.imageUrl = photo;
 
     try {
       const response = await fetch(updateMode === "patch" && editing ? `${apiPath}/${encodeURIComponent(editing.id)}` : apiPath, {
@@ -276,8 +301,17 @@ export function RecordBoard(props: Props) {
             </div>
           ))}
 
+          {props.productPhotos ? (
+            <div className="jata-field">
+              <label className="jata-label" htmlFor="pos-product-photo">Item photo</label>
+              {photo ? <img src={photo} alt="Selected item photo" width={120} height={120} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 12 }} /> : <p className="jata-hint">No photo selected.</p>}
+              <input id="pos-product-photo" type="file" accept={FILE_INPUT_ACCEPT} disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadPhoto(file); }} />
+              {photo ? <button type="button" className="jata-btn jata-btn-ghost" disabled={photoBusy} onClick={() => { setPhoto(null); setPhotoDirty(true); setPhotoProgress("Photo will be removed when you save."); }}>Remove photo</button> : null}
+              <p className="jata-hint" role="status" aria-live="polite">{photoProgress || "Choose a JPG, PNG or WebP. Photos remain in your media library when replaced or removed."}</p>
+            </div>
+          ) : null}
           <div className="pos-form-actions">
-            <button type="submit" className="jata-btn jata-btn-primary" disabled={busy}>
+            <button type="submit" className="jata-btn jata-btn-primary" disabled={busy || photoBusy}>
               {busy ? "Saving…" : editing ? "Save changes" : `Add ${word.toLowerCase()}`}
             </button>
             <button type="button" className="jata-btn jata-btn-ghost" onClick={close}>Cancel</button>
@@ -302,6 +336,7 @@ export function RecordBoard(props: Props) {
         <div className="pos-rows">
           {visible.map((row) => (
             <div className="pos-row" key={row.id}>
+              {props.productPhotos && safeImageUrl(row.imageUrl) ? <img src={safeImageUrl(row.imageUrl)!} alt="" width={56} height={56} loading="lazy" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
               <div className="pos-row-main">
                 {detailPath ? (
                   <Link href={`${basePath}/${detailPath}/${row.id}`}><strong>{String(row[titleKey] ?? "—")}</strong></Link>

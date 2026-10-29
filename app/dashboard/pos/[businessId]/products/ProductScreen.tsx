@@ -79,6 +79,7 @@ export async function ProductScreen({
           module === "services" ? field.key !== "trackInventory" || configuration.sales.products : true,
         )}
         rows={rows}
+        productPhotos
         titleKey="name"
         subtitleKeys={["category", "unitKey"]}
         valueColumns={[

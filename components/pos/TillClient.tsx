@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { safeImageUrl } from "@/lib/workspaceImagery";
 import type { MethodOption } from "@/lib/pos/money";
 import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos/WalletPaymentPanel";
 import type { ReceiptDocument } from "@/lib/pos/types";
@@ -23,6 +24,7 @@ export type TillProduct = {
   kind: "PRODUCT" | "SERVICE";
   priceKES: number;
   unitKey: string;
+  imageUrl?: string | null;
   barcode?: string | null;
   category?: string | null;
   stock?: number | null;
@@ -479,6 +481,7 @@ export function TillClient({
               const out = typeof product.stock === "number" && product.stock <= 0;
               return (
                 <button type="button" key={product.id} className="pos-item" data-out={out} onClick={() => add(product)}>
+                  {safeImageUrl(product.imageUrl) ? <img src={safeImageUrl(product.imageUrl)!} alt="" width={72} height={72} loading="lazy" style={{ width: "100%", maxHeight: 96, objectFit: "cover", borderRadius: 8 }} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
                   <strong>{product.name}</strong>
                   <span>KES {formatNumber(product.priceKES)}</span>
                   <small>

@@ -921,6 +921,28 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.products.some((row: any) => row.id === "p_b1")).toBe(false);
   });
 
+  it("attaches, replaces and removes only images owned by this tenant", async () => {
+    rows("mediaAsset").push(
+      { id: "photoA", businessId: "bizA", url: "https://media.example/a.png" },
+      { id: "photoA2", businessId: "bizA", url: "https://media.example/a2.png" },
+      { id: "photoB", businessId: "bizB", url: "https://media.example/b.png" },
+    );
+    const foreign = await call(await productsPost(post("bizA", "", { name: "Item", imageUrl: "https://media.example/b.png" }), context("bizA")));
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.code).toBe("product_image_not_owned");
+    const created = await call(await productsPost(post("bizA", "", { name: "Item", imageUrl: "https://media.example/a.png" }), context("bizA")));
+    expect(created.status).toBe(201);
+    const id = created.body.product.id;
+    const update = async (imageUrl: string | null) => call(await productPatch(patch("bizA", `/products/${id}`, { name: "Item", imageUrl }), context("bizA", { productId: id })));
+    expect((await update("https://media.example/b.png")).status).toBe(400);
+    expect((await update("https://media.example/a2.png")).status).toBe(200);
+    const listing = await call(await productsGet(get("bizA"), context("bizA")));
+    expect(listing.body.products.find((p: any) => p.id === id).imageUrl).toBe("https://media.example/a2.png");
+    expect((await update(null)).status).toBe(200);
+    expect(rows("posProduct").find((p) => p.id === id)?.imageUrl).toBeNull();
+    expect(rows("mediaAsset")).toHaveLength(3); // Shared library assets are not deleted implicitly.
+  });
+
   it("refuses inline image URLs with a 503 before creating a POS product", async () => {
     const before = rows("posProduct").length;
     const { status, body: refused } = await call(await productsPost(

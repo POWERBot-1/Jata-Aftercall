@@ -1,3 +1,4 @@
+import { ownsProductImage } from "@/lib/pos/productImage";
 import { fromOutcome, handlePosRequest, posFail } from "@/lib/pos/http";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logPosAudit } from "@/lib/pos/audit";
@@ -48,6 +49,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (containsInlineImageDataUrl(body.imageUrl)) {
         if (typeof body.imageUrl === "string" && body.imageUrl === existing.imageUrl) input.imageUrl = undefined;
         else return posFail(INLINE_MEDIA_PERSISTENCE_MESSAGE, 503, INLINE_MEDIA_PERSISTENCE_CODE);
+      }
+      if (input.imageUrl && input.imageUrl !== existing.imageUrl && !await ownsProductImage(businessId, input.imageUrl)) {
+        return posFail("Choose a photo from this business's media library.", 400, "product_image_not_owned");
       }
       await updateProduct(businessId, productId, input);
       await logPosAudit({

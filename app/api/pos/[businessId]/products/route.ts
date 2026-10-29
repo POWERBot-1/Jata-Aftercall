@@ -1,4 +1,6 @@
-import { fromOutcome, handlePosRequest, posOk, queryString, queryInt } from "@/lib/pos/http";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
+import { ownsProductImage } from "@/lib/pos/productImage";
+import { fromOutcome, handlePosRequest, posFail, posOk, queryString, queryInt } from "@/lib/pos/http";
 import { logPosAudit } from "@/lib/pos/audit";
 import { createProduct, listProducts } from "@/lib/pos/store";
 import { unitOptions } from "@/lib/pos/units";
@@ -54,6 +56,10 @@ export async function POST(request: Request, context: RouteContext) {
       const input = sanitizeProductInput(body);
       if (!input.name) return fromOutcome({ ok: false, message: "Give the item a name." });
       if (input.saleError) return fromOutcome({ ok: false, message: input.saleError });
+      if (containsInlineImageDataUrl(body.imageUrl)) return posFail(INLINE_MEDIA_PERSISTENCE_MESSAGE, 503, INLINE_MEDIA_PERSISTENCE_CODE);
+      if (input.imageUrl && !await ownsProductImage(businessId, input.imageUrl)) {
+        return posFail("Choose a photo from this business's media library.", 400, "product_image_not_owned");
+      }
       const product = await createProduct(businessId, input);
       await logPosAudit({
         businessId,

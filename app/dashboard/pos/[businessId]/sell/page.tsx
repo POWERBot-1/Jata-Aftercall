@@ -73,6 +73,7 @@ export default async function PosSellPage({ params }: Props) {
           unitKey: product.unitKey ?? "piece",
           barcode: product.barcode ?? null,
           category: product.category ?? null,
+          imageUrl: product.imageUrl ?? null,
           stock: configuration.inventory.enabled && product.trackInventory !== false
             ? stockByProduct.get(product.id) ?? 0
             : null,
