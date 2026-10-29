@@ -43,7 +43,10 @@ async function layout(page, profile, stage) {
 }
 async function fill(page, selector, text) {
   console.log(`Filling ${selector}`);
-  await page.waitForSelector(selector, { visible: true }); await page.click(selector, { clickCount: 3 }); await page.type(selector, String(text));
+  await page.waitForSelector(selector, { visible: true });
+  await page.click(selector);
+  await page.keyboard.down("Control"); await page.keyboard.press("A"); await page.keyboard.up("Control");
+  await page.type(selector, String(text));
 }
 try {
   const owner = await prisma.user.findUnique({ where: { email: process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link" } });
