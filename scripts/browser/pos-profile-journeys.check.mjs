@@ -96,6 +96,7 @@ try {
     if (!product || product.kind !== kind || product.category !== `Category ${profile.key}` || product.priceKES !== 100) throw new Error(`${profile.key} product persistence failed`);
     await page.reload({ waitUntil:"load" });
     await page.waitForFunction((name) => document.body.textContent.includes(name), {}, product.name);
+    await new Promise((done) => setTimeout(done, 1200));
     await clickText(page, ".pos-row-actions button", "Edit");
     await fill(page,"#f-category",`Updated ${profile.key}`);
     const edited = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/products/${product.id}`) && r.request().method() === "PATCH").catch(() => null);
@@ -107,6 +108,7 @@ try {
     if (product.category !== `Updated ${profile.key}`) throw new Error(`${profile.key} edited category missing`);
     console.log(`PASS ${profile.key} product/category create, reload and edit using real browser and PostgreSQL`);
     await page.goto(new URL(`${root}/sell`,base).href, { waitUntil:"load" });
+    await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "sell");
     await page.waitForSelector(".pos-item");
     await page.click(".pos-item");
