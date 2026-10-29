@@ -115,6 +115,11 @@ try {
     await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "sell");
     await page.waitForSelector(".pos-item");
+    if (await page.$('[data-pwa-install="available"] .jata-pwa__button--quiet')) {
+      await page.click('[data-pwa-install="available"] .jata-pwa__button--quiet');
+      await page.waitForSelector('[data-pwa-install="available"]', { hidden:true });
+      console.log("PASS dismiss install prompt before using till");
+    }
     await page.click(".pos-item");
     await page.waitForSelector('[aria-label^="One less "]', { visible:true }).catch(async () => {
       const details = await page.evaluate(() => { const el = document.querySelector(".pos-item"); const r = el.getBoundingClientRect(); const top = document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return { text:el.textContent.trim(), rect:{x:r.x,y:r.y,width:r.width,height:r.height}, top:top?.outerHTML.slice(0,200), body:document.body.textContent.slice(-1200) }; });
