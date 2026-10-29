@@ -10,14 +10,14 @@
 | Phase | Status | Why |
 | --- | --- | --- |
 | 1 — authoritative catalogue from repository evidence | **PASS** | Every intended plan, key, price, duration and visibility rule is named in the code; see §2. |
-| 2 — read-only production audit | **BLOCKED** | No production database credential exists in this environment and the live host / Vercel / Neon APIs are unreachable. No `SELECT` was executed. Row counts are **unknown**, not zero. |
+| 2 — read-only production audit | **BLOCKED** | No production database credential exists in this environment, the live host is unreachable, and no Neon query tool is connected. No `SELECT` was executed. Row counts are **unknown**, not zero. |
 | 3 — Autopilot repair | **BLOCKED** | Cannot reach the database; **0 rows written**. The authorised, idempotent SQL is ready in §5. |
 | 3 — POS / ERP-Oro changes | **NOT AUTHORISED / NOT RUN** | Configuration established in §2; exact proposed statements in §6. |
 | 4 — application verification | **BLOCKED / NOT TESTED** | `https://jata-aftercall.vercel.app` returns `000` from this sandbox; no browser session or database access exists. |
 | Repair-path code fixes (this branch) | **PASS locally / NOT DEPLOYED** | Admin plan-key truncation and the production-seed instruction are fixed with tests; see §8. |
 
 Nothing in this document is a claim that a production plan row exists, is missing, or was changed. The only facts about
-production are the deployed SHA, the deployment state, and the network results in §1.
+production are the deployment records, environment-variable names (never values) and network results in §1.
 
 ---
 
@@ -26,7 +26,7 @@ production are the deployed SHA, the deployment state, and the network results i
 | Item | Value | Evidence |
 | --- | --- | --- |
 | `main` / production SHA | `d49d6052fd0e3a487e88b7fa2b34d6a840d03a78` | GitHub API `commits/main` |
-| Vercel Production deployment | `7410857599`, created `2026-10-29T11:22:55Z`, state `success` | GitHub Deployments API |
+| Vercel Production deployment | `7410857599` (Vercel `dpl_CDQCAKEtMTctis97hJp5rxKHYDfA`), created `2026-10-29T11:22:55Z`, state `success` / `READY` (promoted) | GitHub Deployments API; Vercel connector |
 | Live host | `https://jata-aftercall.vercel.app` (deployment alias `jata-aftercall-dtvm2hi0d-powerbot-1.vercel.app`) | deployment record |
 | Documented database target | Neon project `damp-forest-92941163` (display name `jata-aftercall` in `docs/NEON-RECOVERY-READINESS.md`), branch `production` (`br-cold-snow-ax606swa`), database `neondb` | `docs/MIGRATION_TARGET_GUARD.md` §5, enrolment dated 2026-10-18 |
 | Target verified today? | **NO** | no credential and no network path; the enrolment record is historical evidence, not a live check |
@@ -37,7 +37,8 @@ production are the deployed SHA, the deployment state, and the network results i
 | --- | --- |
 | `DATABASE_URL`, `DIRECT_URL`, `POSTGRES_URL` in the environment | **unset** (names checked; values never read or printed) |
 | `.env*` files in the workspace | only `.env.example` |
-| Vercel / Neon CLI credential | none configured |
+| Vercel control plane | **available** through the Vercel connector (project, deployment, env-var names and build status); no database query tool |
+| Neon connector / database credential | none configured |
 | `https://jata-aftercall.vercel.app/health` | `000` (connection refused by sandbox egress) |
 | `https://jata-aftercall.vercel.app/pricing` | `000` |
 | `https://api.vercel.com/v2/user` | `000` |
@@ -46,6 +47,25 @@ production are the deployed SHA, the deployment state, and the network results i
 
 **Consequence:** the read-only inventory query could not be run. No connection string was requested, read, printed or
 transmitted. No development, preview, test or unrelated Lovable database was used.
+
+### What the Vercel control plane confirmed (names and states only; no values read)
+
+| Item | Result |
+| --- | --- |
+| Project | `jata-aftercall` (`prj_mXn1031amrZQo4gyaVumKS4FltjW`, team `powerbot-1`) |
+| Production deployment | `dpl_CDQCAKEtMTctis97hJp5rxKHYDfA`, state **READY**, substate `PROMOTED`, commit `d49d605`, target `production` |
+| Production aliases | `jataaftercall.co.ke`, `www.jataaftercall.co.ke`, `jata-aftercall.vercel.app` |
+| Production environment variable **names** | `DATABASE_URL` **present**, `DIRECT_URL` **present**, `AUTH_SECRET`, `NEXTAUTH_*`, `PAYSTACK_*`, `ADMIN_EMAILS`, `CLIENT_KEY`, `MPESA_*`, `NODE_ENV` also present |
+| `ERP_PRO_ENABLED` / `ERP_PRO_DISABLED` | **absent** from the production deployment environment → `erpFeatureEnabled()` evaluates **false** in production; ERP/Oro is switched off by design |
+| Preview deployment for this branch's commit `c129e3b` | `dpl_GkgBtgCz31WrQkXFGC5QTCmcmqJs`, state `CANCELED`, `buildSkipped: true` — the project's Ignored Build Step skips non-production builds, so **no preview build ran and no preview database was migrated** |
+
+The production build is **READY**, and `scripts/build.sh` runs `prisma migrate deploy` with `set -e` whenever
+`DATABASE_URL` is configured. A successful production build therefore proves the production database was reachable and
+the migration gate passed at build time. It proves **nothing** about `PlanConfig` contents.
+
+This also closes the previous session's open item: **`DIRECT_URL` is present in Vercel Production** (presence confirmed
+from the variable name; value never retrieved). It remains unverified whether it points at the direct endpoint of the
+same production branch — that requires the value or the Neon console.
 
 ---
 
@@ -320,5 +340,7 @@ connection works.
 ## 11. What was not done
 
 No production database read or write; no `npm run seed`; no payment or subscription change; no environment variable,
-domain, DNS or Vercel setting change; no merge and no deployment; no access to JATA Qi or TANYA-AI; no credential read,
-printed or transmitted.
+domain, DNS or Vercel setting change; no merge and no production deployment; no access to JATA Qi or TANYA-AI; no
+credential value read, printed or transmitted. Pushing the review branch caused Vercel to create a preview deployment
+record, but its build was skipped by the project's own Ignored Build Step (`buildSkipped: true`), so it ran no code and
+touched no database.
