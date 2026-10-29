@@ -111,6 +111,7 @@ const RELATIONS: Record<string, { field: string; key: string }[]> = {
  * guard — the whole point of the index — is never exercised.
  */
 const UNIQUE_INDEXES: Record<string, string[][]> = {
+  posCategoryImage: [["businessId", "category"]],
   // The till's replay guard: one unspent key per business, actor and action. A duplicate
   // submission must fail the insert, and with it the sale transaction that owns it.
   posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],

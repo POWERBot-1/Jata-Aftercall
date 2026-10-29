@@ -48,6 +48,7 @@ import { GET as planGet, POST as planPost } from "@/app/api/pos/[businessId]/pla
 import { GET as salesGet, POST as salesPost } from "@/app/api/pos/[businessId]/sales/route";
 import { GET as saleGet, POST as salePost } from "@/app/api/pos/[businessId]/sales/[saleId]/route";
 import { GET as productsGet, POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as categoryImagesGet, POST as categoryImagesPost } from "@/app/api/pos/[businessId]/category-images/route";
 import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[productId]/route";
 import { GET as customersGet, POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
@@ -919,6 +920,29 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.canEdit).toBe(true);
     // Another tenant's catalogue is invisible here (§5).
     expect(list.products.some((row: any) => row.id === "p_b1")).toBe(false);
+  });
+
+  it("isolates category photos and retains media on replacement/removal (in-memory DB)", async () => {
+    rows("posProduct").find((p) => p.id === "p_a1")!.category = "Food";
+    rows("mediaAsset").push(
+      { id: "cat-a", businessId: "bizA", url: "https://media.example/a.png" },
+      { id: "cat-a2", businessId: "bizA", url: "https://media.example/a2.png" },
+      { id: "cat-b", businessId: "bizB", url: "https://media.example/b.png" },
+    );
+    const set = async (category: string, imageUrl: string | null) => call(await categoryImagesPost(post("bizA", "/category-images", { category, imageUrl }), context("bizA")));
+    expect((await set("Food", "https://media.example/b.png")).body.code).toBe("category_image_not_owned");
+    expect((await set("Missing", "https://media.example/a.png")).status).toBe(404);
+    expect((await set("Food", INLINE_IMAGE_URL)).status).toBe(503);
+    expect((await set("Food", "https://media.example/a.png")).status).toBe(200);
+    expect((await set("Food", "https://media.example/a2.png")).status).toBe(200);
+    expect(rows("posCategoryImage")).toHaveLength(1);
+    expect((await call(await categoryImagesGet(get("bizA", "/category-images"), context("bizA")))).body.images[0].imageUrl).toBe("https://media.example/a2.png");
+    asStranger();
+    expect((await call(await categoryImagesPost(post("bizA", "/category-images", { category: "Food", imageUrl: null }), context("bizA")))).status).toBe(403);
+    asOwner();
+    expect((await set("Food", null)).status).toBe(200);
+    expect(rows("posCategoryImage")).toHaveLength(0);
+    expect(rows("mediaAsset")).toHaveLength(3);
   });
 
   it("attaches, replaces and removes only images owned by this tenant", async () => {

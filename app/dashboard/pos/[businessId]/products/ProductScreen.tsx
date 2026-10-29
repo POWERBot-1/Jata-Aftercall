@@ -3,6 +3,8 @@ import { formSpec } from "@/lib/pos/forms";
 import { listProducts, stockLevels } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
+import prisma from "@/lib/db";
+import { CategoryPhotos } from "@/components/pos/CategoryPhotos";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 import type { PosModuleKey } from "@/lib/pos/types";
 
@@ -32,9 +34,10 @@ export async function ProductScreen({
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "product");
 
-  const [products, stock] = await Promise.all([
+  const [products, stock, categoryImages] = await Promise.all([
     listProducts(businessId, { take: 400, kind }),
     configuration.inventory.enabled ? stockLevels(businessId) : Promise.resolve([]),
+    prisma.posCategoryImage.findMany({ where: { businessId }, select: { category: true, imageUrl: true } }),
   ]);
 
   const stockByProduct = new Map<string, number>();
@@ -69,6 +72,7 @@ export async function ProductScreen({
         </div>
       </div>
 
+      <CategoryPhotos businessId={businessId} categories={Array.from(new Set((products as any[]).map((product) => String(product.category || "").trim()).filter(Boolean))).sort()} initialImages={categoryImages} canEdit={workspace.permissions.includes("EDIT_INVENTORY")} />
       <RecordBoard
         businessId={businessId}
         basePath={workspace.basePath}

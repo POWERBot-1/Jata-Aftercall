@@ -120,6 +120,7 @@ model Business {
   posBranches              PosBranch[]
   posStaff                 PosStaff[]
   posProducts              PosProduct[]
+  posCategoryImages        PosCategoryImage[]
   posInventoryItems        PosInventoryItem[]
   posInventoryMovements    PosInventoryMovement[]
   posCustomers             PosCustomer[]
@@ -1195,6 +1196,21 @@ model PosBranch {
   updatedAt  DateTime @updatedAt
 
   @@unique([businessId, name])
+  @@index([businessId])
+}
+
+// Optional imagery for existing free-text POS product categories. Category names remain on
+// products; this table stores only their business-scoped presentation metadata.
+model PosCategoryImage {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category   String
+  imageUrl   String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, category])
   @@index([businessId])
 }
 

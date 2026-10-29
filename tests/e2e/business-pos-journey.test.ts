@@ -58,6 +58,7 @@ import { GET as planGet, POST as planPost } from "@/app/api/pos/[businessId]/pla
 import { GET as salesGet, POST as salesPost } from "@/app/api/pos/[businessId]/sales/route";
 import { GET as saleGet, POST as salePost } from "@/app/api/pos/[businessId]/sales/[saleId]/route";
 import { GET as productsGet, POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as categoryImagesGet, POST as categoryImagesPost } from "@/app/api/pos/[businessId]/category-images/route";
 import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[productId]/route";
 import { POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
@@ -992,6 +993,15 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const id = added.body.product.id;
     const listed = await callPos(productsGet, businessId);
     expect(listed.body.products.find((item: any) => item.id === id)).toMatchObject({ category: "Produce", imageUrl: ownUrl });
+    const setCategory = (imageUrl: string | null) => callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Produce", imageUrl } });
+    expect((await setCategory(foreignUrl)).body.code).toBe("category_image_not_owned");
+    expect((await setCategory(ownUrl)).status).toBe(200);
+    expect((await callPos(categoryImagesGet, businessId, { path: "/category-images" })).body.images).toContainEqual({ category: "Produce", imageUrl: ownUrl });
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await setCategory(null)).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect((await setCategory(null)).status).toBe(200);
+    expect(await prisma.posCategoryImage.count({ where: { businessId, category: "Produce" } })).toBe(0);
     const blocked = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: foreignUrl } });
     expect(blocked.status, blocked.text()).toBe(400);
     const removed = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: null } });
