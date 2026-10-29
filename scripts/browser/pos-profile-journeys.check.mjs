@@ -98,6 +98,7 @@ try {
     await page.waitForFunction((name) => document.body.textContent.includes(name), {}, product.name);
     await new Promise((done) => setTimeout(done, 1200));
     await clickText(page, ".pos-row-actions button", "Edit");
+    await page.waitForFunction((category) => document.querySelector("#f-category")?.value === category && document.querySelector('form.pos-form button[type="submit"]')?.textContent.trim() === "Save changes", {}, product.category);
     await fill(page,"#f-category",`Updated ${profile.key}`);
     const edited = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/products/${product.id}`) && r.request().method() === "PATCH").catch(() => null);
     const editNavigation = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
@@ -105,7 +106,7 @@ try {
     if (!(await edited)?.ok()) throw new Error(`${profile.key} edit failed`);
     await editNavigation;
     product = await prisma.posProduct.findUnique({ where:{ id:product.id } });
-    if (product.category !== `Updated ${profile.key}`) throw new Error(`${profile.key} edited category missing`);
+    if (product.category !== `Updated ${profile.key}`) throw new Error(`${profile.key} edited category missing: ${JSON.stringify(product.category)}`);
     console.log(`PASS ${profile.key} product/category create, reload and edit using real browser and PostgreSQL`);
     await page.goto(new URL(`${root}/sell`,base).href, { waitUntil:"load" });
     await new Promise((done) => setTimeout(done, 1200));
