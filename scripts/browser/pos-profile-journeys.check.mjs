@@ -269,6 +269,8 @@ try {
   await clickQuestion("How do you sell");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do you sell"));
   const serviceOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services")));
+  page.on("request", (req) => { if (req.url().endsWith(`/api/pos/${sid}/configuration`) && req.method() === "POST") console.log(`Salon questionnaire payload ${req.postData()}`); });
+  console.log(`Salon service selection before click ${await serviceOption.asElement().evaluate((el) => el.outerHTML)}`);
   await serviceOption.asElement().evaluate((el) => el.scrollIntoView({block:"center"}));
   if (await serviceOption.asElement().evaluate((el) => el.getAttribute("aria-pressed")) !== "true") await serviceOption.asElement().click();
   await serviceOption.dispose();
