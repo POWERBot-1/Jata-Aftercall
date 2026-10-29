@@ -66,7 +66,7 @@ one-line edit — and why it must not be merged without §3 being filled in firs
 Add a preflight to `scripts/migrate.sh`, before the existing `migration-target-guard.mjs`:
 
 ```
-scripts/lib/migration-url-guard.mjs   (new, pure function + CLI wrapper)
+scripts/lib/direct-url-guard.mjs      (new, pure function + CLI wrapper)
   input:  DATABASE_URL, DIRECT_URL (parsed, never printed)
   refuse when:
     - host is a Neon pooled endpoint (hostname contains "-pooler.") and DIRECT_URL is unset
@@ -170,19 +170,27 @@ export DATABASE_URL='postgresql://...-pooler.../rehearsal?sslmode=require&pgboun
 export DIRECT_URL='postgresql://.../rehearsal?sslmode=require'      # same host, no "-pooler"
 
 # 1. Prove the guard works BEFORE trusting it (offline, no provider needed):
-node scripts/lib/migration-url-guard.mjs check   # with DIRECT_URL unset  → exit 1, actionable message
-node scripts/lib/migration-url-guard.mjs check   # with DIRECT_URL=pooled → exit 1, "pooled host" message
-node scripts/lib/migration-url-guard.mjs check   # with the pair above   → exit 0
+#    (Real filename: an earlier revision said scripts/lib/migration-url-guard.mjs, which does not
+#    exist — that command failed with MODULE_NOT_FOUND rather than with a refusal.)
+env -u DIRECT_URL node scripts/lib/direct-url-guard.mjs check            # DIRECT_URL unset  → exit 1 (REFUSED_POOLED_WITHOUT_DIRECT_URL)
+DIRECT_URL="$DATABASE_URL" node scripts/lib/direct-url-guard.mjs check   # DIRECT_URL pooled → exit 1 (REFUSED_DIRECT_URL_IS_POOLED)
+node scripts/lib/direct-url-guard.mjs check                              # the pair above    → exit 0 (OK_DIRECT_URL_READY)
 
 # 2. Prove migrations apply over the direct connection (in CI, where engines download):
 npx prisma generate && npx prisma migrate deploy        # expect "Migrations applied" / "No pending"
 
 # 3. Prove the trap is real (this is the evidence E8 is missing):
-DATABASE_URL="$DATABASE_URL" DIRECT_URL="$DATABASE_URL" npx prisma migrate resolve --applied 0_init || true
-#    then point migrate at the pooled host and observe P1002 — record the exact text.
+#    Call prisma DIRECTLY with both URLs on the pooled host, bypassing our wrapper, and record
+#    whatever it actually says. The expected failure is P1002 (advisory lock) or P3009 (a failed
+#    migration left behind) — do not assume which, and quote the real text.
+DATABASE_URL="$DATABASE_URL" DIRECT_URL="$DATABASE_URL" npx prisma migrate deploy || true
+#    An earlier revision of this plan used `prisma migrate resolve --applied 0_init`. No `0_init`
+#    migration exists in this repository (the first directory is 20250915000000_init), so that
+#    command could not have demonstrated anything. If resolve is needed at all, use a real
+#    directory name from `ls prisma/migrations`.
 
 # 4. Prove the runtime path through the pooler:
-PRISMA_TEST_DATABASE_URL="$DATABASE_URL" npm run test:db:erp     # expect 67/67
+PRISMA_TEST_DATABASE_URL="$DATABASE_URL" npm run test:db:erp     # expect every test to pass (72 at this head; 67 before the supplier-bill, expense, order-transition and balance-sheet tests). A skipped suite is a failure: the ERP job fails on any skip.
 
 # 5. Prove cold start after auto-suspend (free tier suspends idle branches):
 sleep 360; PRISMA_TEST_DATABASE_URL="$DATABASE_URL" npm run test:db:erp | tail -5
@@ -191,7 +199,7 @@ sleep 360; PRISMA_TEST_DATABASE_URL="$DATABASE_URL" npm run test:db:erp | tail -
 ```
 
 **What to record afterwards** (this is what turns E8 from OPEN to PASS): the migration output, the
-P1002 text actually observed in step 3, the 67/67 result in steps 4 and 5, the Neon PostgreSQL version,
+the failure text actually observed in step 3, the full-suite result in steps 4 and 5, the Neon PostgreSQL version,
 whether `sslmode=require` needed anything extra, and the teardown confirmation. Without those, E8 stays
 open no matter how green CI is.
 
@@ -324,3 +332,11 @@ manual action:
 * Two owner actions are required before a production deploy could even be attempted: `DIRECT_URL` must
   exist in Vercel Production and Preview (a production configuration change this pass is not authorized
   to make), and the rehearsal above must run.
+
+**Correction (2026-10-29).** Steps 1 and 3 as originally written could not have worked: step 1 named a
+script that does not exist, and step 3 resolved a migration that does not exist. Both are fixed above.
+The guard's behaviour is unchanged and is exercised offline by `tests/unit/direct-url-guard.test.ts`
+(17/17) plus three synthetic-URL probes run on 2026-10-29: pooled without `DIRECT_URL` → exit 1,
+pooled with a pooled `DIRECT_URL` → exit 1, pooled with a genuinely direct `DIRECT_URL` → exit 0.
+This matters because §6 is the procedure the owner is asked to run; a procedure whose first command
+fails is not a procedure.

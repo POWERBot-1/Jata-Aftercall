@@ -1510,3 +1510,49 @@ equity + net income before and after a 50,000 expense, each side moving by exact
 
 Candidate suite after these additions: **3,779 passed (3,779)** in run `40806312337` /
 job `123225988401`; checks on `ca0e554`: 14/14 runs plus the `Vercel` status, all `success`.
+
+### 14.7 Correction: branch protection is readable, and it requires **zero** approvals (2026-10-29)
+
+Earlier sections said branch protection "could not be read from here" (`gh api …/branches/main/protection`
+→ `403 Resource not accessible by integration`) and treated the absence of an approving review as an
+unverifiable gate. Both statements were about the *classic* endpoint. The modern **rulesets** API answers
+without that permission, and it changes the picture:
+
+| Fact | Value |
+| --- | --- |
+| Ruleset | `main-protection`, id `25548981`, target `branch`, enforcement **active**, no bypass actors |
+| Rules | deletion (blocked), non-fast-forward (blocked), pull request, required status checks |
+| Required approvals | **`required_approving_review_count: 0`** |
+| Code-owner review | `false` — not required |
+| Extra approval for **unattributed** changes | **`true`** |
+| Review thread resolution | required |
+| Allowed merge methods | `merge`, `squash`, `rebase` — all three |
+| Required status checks (strict) | `Journey against a real database`, `Migration target guard`, `Release gate (aggregate)` — all three `success` on the current head |
+
+So "no approving review exists" was **not** the blocker it was reported to be: protection asks for none.
+The one approval-related fact that does matter is the unattributed-changes rule — every commit on this
+branch has author/committer `arena-agent <agent@arena.ai>`, which GitHub reports as `UNATTRIBUTED`
+(`.author: null`). With `require_extra_approval_for_unattributed_changes: true`, merging these commits is
+expected to require one approving review **even though the numeric requirement is zero**. That is the
+precise form of the gate, and it is a legitimate review to obtain — not something to work around.
+
+The release gate is therefore **not** "no approval exists". It is: an approving review for unattributed
+commits, a provider rehearsal on a non-production Neon target, and a verified production
+`DATABASE_URL`/`DIRECT_URL` pair. The last two remain impossible from this sandbox (§14.4) and nothing
+below changes that.
+
+### 14.8 Correction: the E8 rehearsal procedure named two things that do not exist
+
+`docs/POS_ERP_PRO_E8_DIRECTURL_PLAN.md` §6 is the procedure the owner is asked to run. Two of its
+commands could never have succeeded:
+
+* step 1 called `scripts/lib/migration-url-guard.mjs` — the file is `scripts/lib/direct-url-guard.mjs`,
+  so the command died with `MODULE_NOT_FOUND` instead of printing a refusal;
+* step 3 ran `prisma migrate resolve --applied 0_init` — there is no `0_init` migration; the first
+  directory is `20250915000000_init`.
+
+Both are corrected, along with the "expect 67/67" line, which is now 72 tests. The guard itself is
+sound and was re-probed on synthetic URLs: pooled `DATABASE_URL` with `DIRECT_URL` unset → exit 1
+(`REFUSED_POOLED_WITHOUT_DIRECT_URL`), pooled with a pooled `DIRECT_URL` → exit 1
+(`REFUSED_DIRECT_URL_IS_POOLED`), pooled with a genuinely direct `DIRECT_URL` → exit 0
+(`OK_DIRECT_URL_READY`). No URL, host or password is printed in any case.
