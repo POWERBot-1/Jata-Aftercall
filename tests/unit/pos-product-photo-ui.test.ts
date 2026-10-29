@@ -32,7 +32,7 @@ beforeEach(async () => {
     fields: [{ key: "name", label: "Name", kind: "text", required: true }],
     rows: [{ id: "one", name: "One", imageUrl: "https://example.test/one.png" }, { id: "two", name: "Two" }],
     titleKey: "name", canEdit: true, productPhotos: true, openNew: true, basePath: "/dashboard/pos/business-a",
-    emptyState: { title: "Empty", body: "Empty", action: { label: "Add" } },
+    emptyState: { title: "Empty", body: "Empty", action: { label: "Add", href: "/dashboard/pos/business-a" } },
   })));
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
