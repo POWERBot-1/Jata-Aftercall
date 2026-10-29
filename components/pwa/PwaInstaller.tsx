@@ -127,6 +127,7 @@ export function PwaInstaller() {
   const showInstall = Boolean(installEvent) && !installDismissed && !updateReady;
 
   return (
+    <>
     <div className="jata-pwa" data-pwa-registered={registered ? "true" : "false"}>
       {!online ? (
         <div className="jata-pwa__toast jata-pwa__toast--offline" role="status" data-pwa-online="false">
@@ -141,15 +142,16 @@ export function PwaInstaller() {
         </div>
       ) : null}
 
+    </div>
       {showInstall ? (
-        <div className="jata-pwa__toast" role="status" data-pwa-install="available">
+        <div className="jata-pwa__install jata-pwa__toast" role="status" data-pwa-install="available">
           <span>Install the app for a full-screen shortcut.</span>
           <button type="button" className="jata-pwa__button" onClick={() => void install()}>Install</button>
           <button type="button" className="jata-pwa__button jata-pwa__button--quiet" onClick={dismissInstall}>Not now</button>
           <Link href="/install" className="jata-pwa__link">iPhone / iPad guide</Link>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

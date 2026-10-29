@@ -64,6 +64,28 @@ try {
   const page = await browser.newPage(); page.setDefaultTimeout(30000);
   await page.setViewport({ width: 390,height:844 });
   await login(page, process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link", process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!");
+  // Synthetic browser event exercises presentation and dismissal, not the browser's native install flow.
+  await new Promise((done) => setTimeout(done, 1200));
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt", { cancelable:true })));
+  await page.waitForSelector('[data-pwa-install="available"]', { visible:true });
+  for (const [width,height] of sizes) {
+    await page.setViewport({ width,height });
+    const result = await page.evaluate(() => {
+      const banner = document.querySelector('[data-pwa-install="available"]');
+      const next = banner.nextElementSibling;
+      return { position: getComputedStyle(banner).position, bannerBottom: banner.getBoundingClientRect().bottom, nextTop: next?.getBoundingClientRect().top };
+    });
+    if (result.position === "fixed" || result.nextTop == null || result.bannerBottom > result.nextTop + 1) throw new Error(`Install prompt overlaps workspace at ${width}x${height}: ${JSON.stringify(result)}`);
+    console.log(`PASS install prompt in document flow ${width}x${height}`);
+  }
+  await clickText(page, '[data-pwa-install="available"] button', "Not now");
+  await page.waitForSelector('[data-pwa-install="available"]', { hidden:true });
+  await page.reload({ waitUntil:"load" });
+  await new Promise((done) => setTimeout(done, 1200));
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt", { cancelable:true })));
+  await new Promise((done) => setTimeout(done, 200));
+  if (await page.$('[data-pwa-install="available"]')) throw new Error("Dismissed install prompt reappeared after reload");
+  console.log("PASS install prompt dismissal persists across reload (synthetic event)");
   for (const [index, profile] of profiles.entries()) {
     const id = businesses[index], root = `/dashboard/pos/${id}`;
     await page.goto(new URL(`${root}/configure`, base).href, { waitUntil:"load" });

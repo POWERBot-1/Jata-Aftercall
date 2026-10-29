@@ -45,8 +45,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script id="jata-product-theme-boot" dangerouslySetInnerHTML={{ __html: productThemeBootScript() }} />
       </head>
       <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
-        <ProductThemeProvider>{children}</ProductThemeProvider>
         <PwaInstaller />
+        <ProductThemeProvider>{children}</ProductThemeProvider>
       </body>
     </html>
   );

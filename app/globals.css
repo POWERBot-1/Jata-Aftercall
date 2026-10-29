@@ -5460,12 +5460,13 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 .ws-pill--team { border-color: rgb(15 118 110); color: rgb(15 118 110); background: rgb(236 253 245); font-weight: 700; white-space: nowrap; }
 
 /* ── PWA lifecycle UI (Phase 8) ──────────────────────────────────────────────
- * Small, dismissible, bottom-left toasts. They never cover a payment or checkout
- * control and each button is >=44 px. Colours are rgb() so the token-only status
+ * Offline and update notices are fixed. The optional install prompt is in normal
+ * document flow so it cannot overlay checkout controls; buttons are >=44 px. Colours are rgb() so the token-only status
  * surface tests stay valid.
  */
 .jata-pwa { position: fixed; left: 0.75rem; bottom: calc(0.75rem + env(safe-area-inset-bottom)); z-index: 70; display: grid; gap: 0.5rem; max-width: min(26rem, calc(100vw - 1.5rem)); pointer-events: none; }
 .jata-pwa__toast { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid rgb(23 19 16 / 0.16); border-radius: 0.9rem; background: rgb(255 253 248); color: rgb(23 19 16); box-shadow: 0 12px 30px rgb(20 17 15 / 0.14); font-size: 0.8rem; line-height: 1.35; pointer-events: auto; }
+.jata-pwa__install { position: relative; border-radius: 0; box-shadow: none; }
 .jata-pwa__toast--offline { border-color: rgb(180 83 9 / 0.5); background: rgb(255 247 237); }
 .jata-pwa__toast--offline span { color: rgb(180 83 9); font-weight: 800; }
 .jata-pwa__button { min-height: 2.75rem; border: 0; border-radius: 0.65rem; padding: 0.45rem 0.8rem; background: rgb(20 17 15); color: rgb(247 242 232); font-size: 0.8rem; font-weight: 700; cursor: pointer; }
