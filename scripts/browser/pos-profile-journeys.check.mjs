@@ -269,6 +269,7 @@ try {
   await clickQuestion("How do you sell");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do you sell"));
   const serviceOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services")));
+  await serviceOption.asElement().evaluate((el) => el.scrollIntoView({block:"center"}));
   if (await serviceOption.asElement().evaluate((el) => el.getAttribute("aria-pressed")) !== "true") await serviceOption.asElement().click();
   await serviceOption.dispose();
   await page.waitForFunction(() => [...document.querySelectorAll(".pos-option")].some((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services") && el.getAttribute("aria-pressed") === "true"), { timeout:5000 }).catch(async () => { throw new Error(`Service selection did not stick: ${JSON.stringify(await page.evaluate(() => ({ title:document.querySelector(".pos-question")?.textContent, options:[...document.querySelectorAll(".pos-option")].map((el) => ({ text:el.textContent.trim(), pressed:el.getAttribute("aria-pressed") })), alert:document.querySelector("[role=alert]")?.textContent, saving:document.querySelector(".pos-ask")?.textContent.slice(0,300) })) )}`); });
