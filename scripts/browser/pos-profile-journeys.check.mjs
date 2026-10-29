@@ -269,7 +269,8 @@ try {
   await clickQuestion("How do you sell");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do you sell"));
   const serviceOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services")));
-  await serviceOption.asElement().click(); await serviceOption.dispose();
+  if (await serviceOption.asElement().evaluate((el) => el.getAttribute("aria-pressed")) !== "true") await serviceOption.asElement().click();
+  await serviceOption.dispose();
   await page.waitForFunction(() => [...document.querySelectorAll(".pos-option")].some((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services") && el.getAttribute("aria-pressed") === "true"));
   response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
   await clickText(page, "button", "Done — continue");
