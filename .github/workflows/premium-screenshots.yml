@@ -156,7 +156,15 @@ jobs:
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           set -o pipefail
+          set +e
           node scripts/browser/onboarding-authenticated.check.mjs 2>&1 | tee /tmp/onboarding-browser.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/onboarding-browser.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=Onboarding browser failure::$detail"
+          fi
+          exit "$result"
 
       # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
       # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN
