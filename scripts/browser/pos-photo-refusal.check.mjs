@@ -24,10 +24,19 @@ let browser;
 try {
   browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   const page = await browser.newPage();
+  await page.setCacheEnabled(false);
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
   await page.goto(`${base}/login`, { waitUntil: "load" });
+  await page.waitForSelector("#login-email", { timeout: 15000 });
+  // Wait for the client form to hydrate before typing controlled inputs.
+  await new Promise((done) => setTimeout(done, 1200));
   await page.type("#login-email", process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link");
   await page.type("#login-password", process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!");
-  await Promise.all([page.waitForFunction(() => location.pathname.startsWith("/dashboard"), { timeout: 30000 }), page.click('button[type="submit"]')]);
+  const loginResponse = page.waitForResponse((response) => response.url().endsWith("/api/auth/login") && response.request().method() === "POST", { timeout: 30000 });
+  await page.click('button[type="submit"]');
+  const login = await loginResponse;
+  if (!login.ok()) throw new Error(`Demo login rejected with HTTP ${login.status()}.`);
+  await page.waitForFunction(() => location.pathname.startsWith("/dashboard"), { timeout: 30000 });
   const url = `${base}/dashboard/pos/${encodeURIComponent(business.id)}/products?new=1`;
   for (const [width, height] of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
