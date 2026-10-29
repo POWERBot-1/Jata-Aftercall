@@ -426,7 +426,7 @@ npm run build                  # → [build] Build completed successfully
 | Document numbers that never repeat | **PASS** | `ErpSequence` (`PO-000001`), proven under concurrent inserts by the existing accounting suite |
 | Goods received notes | **PASS** | `ErpGoodsReceipt`/line; over-receipt refused per line |
 | Stock actually moves, once | **PASS** | POS `PosInventoryMovement` via `recordMovement`, asserted on real PostgreSQL |
-| Supplier bill posted | **PASS** | `ErpSupplierBill` + `buildSupplierBillJournal` (inventory/COGS, VAT input, AP) |
+| Supplier bill posted | **PASS — only since `c3c654e`** | `ErpSupplierBill` + `buildSupplierBillJournal` (inventory/COGS, VAT input, AP). The model and the journal builder existed, but the posting call itself threw `db.$transaction is not a function` (a nested transaction on the caller's client), so no bill could be recorded. It had never been exercised. Now proven on real PostgreSQL — balanced journal, zero variance, duplicate invoice refused: `tests/integration/erp-procurement-postgres.test.ts`, CI run `40800798919` (77 PASS / 0 FAIL). See §14.6. |
 | Variance against the order | **PASS (recorded)** | returned to the screen, audited, shown in the confirmation sentence |
 | Three-way *matching* enforced | **MISSING** | the three documents exist and are linked; a bill is not blocked when it disagrees with the receipt |
 | Requisition as a separate object | **MISSING** | a draft order is the requisition |
@@ -1446,3 +1446,42 @@ provider was called.
 The release stays where the authorization's own terms leave it: ready on every check that can be run
 here, **blocked on the two external systems and the missing approval** that cannot be produced from this
 sandbox.
+
+### 14.6 The gate caught a real defect — supplier bills and expenses never posted
+
+Adding the missing database test for `recordPurchaseBill` (it had none, unit or database) turned the
+ERP PostgreSQL job red on its first run — not because the test was wrong, but because the code was:
+
+```
+TypeError: db.$transaction is not a function
+  at postJournal   (lib/erp/accounting.ts:351)
+  at recordPurchaseBill (lib/erp/procurement.ts:654)
+```
+
+`postJournal(client, …)` always opened `client.$transaction(…)`, but two callers hand it the
+transaction they already own — the supplier-bill path and the expense action — precisely so the journal
+and the document commit together. A Prisma transaction client has no `$transaction`, so **every
+supplier bill and every ERP expense failed before writing anything**. Both were described in the
+documents as working; neither had a test that executed the path.
+
+| Step | Run / commit | Result |
+| --- | --- | --- |
+| Test added, unproven | `9b6012b` | **FAIL** — run `40799928019` / job `123206353684`: `db.$transaction is not a function` |
+| Root cause fixed | `c3c654e` — `postJournal` now joins the caller's transaction (`postJournalTx`) and still opens its own for a root client | — |
+| Contract pinned | `tests/unit/erp-postjournal-transaction.test.ts`, **2/2** locally | a tx-shaped client reaches `postJournalTx`; a root client's `$transaction` is called once |
+| Database proof | run `40800798919` / job `123208177298` | **77 PASS, 0 FAIL, 0 BLOCKED**; suite total **3,775 passed (3,775)** |
+
+What the new database test asserts: the bill is stored with the right total and status, the journal is
+balanced in both directions (inventory 3,000,000 debit, VAT input 480,000 debit, accounts payable
+3,480,000 credit), the variance against the order is zero, and a second submission of the same supplier
+invoice number is refused — leaving exactly one bill, one `SUPPLIER_BILL` journal and one
+`SUPPLIER_BILL_POSTED` audit row.
+
+This is the release gate doing the job it exists for. It is also a correction to the record: §6 of the
+BOS gap matrix listed "duplicate posting refused" as a PASS, and module 5 described the balanced bill
+journal as present, while the code path had never run. Both statements are now true and cited, and the
+matrix says so explicitly (§2.11 of `docs/POS_ERP_PRO_BOS_GAP.md`).
+
+The same defect means **an approved expense was recorded as a decision and then failed to post**. That
+fix is the same one line of routing in `postJournal`. It does not upgrade module 7: expenses are still
+**PARTIAL**, because the browser journey for approving and posting one has not been run.
