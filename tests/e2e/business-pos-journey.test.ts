@@ -57,7 +57,8 @@ import { GET as cloneGet, POST as clonePost } from "@/app/api/pos/[businessId]/c
 import { GET as planGet, POST as planPost } from "@/app/api/pos/[businessId]/plan/route";
 import { GET as salesGet, POST as salesPost } from "@/app/api/pos/[businessId]/sales/route";
 import { GET as saleGet, POST as salePost } from "@/app/api/pos/[businessId]/sales/[saleId]/route";
-import { POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as productsGet, POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[productId]/route";
 import { POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
 import { POST as suppliersPost } from "@/app/api/pos/[businessId]/suppliers/route";
@@ -974,6 +975,29 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       orderBy: { createdAt: "desc" },
     });
     expect(JSON.parse(attempt!.metadata as string).reason).toBe("TENANT_ID_MISMATCH");
+  }, 120_000);
+
+  it("21b — photo reference tenant isolation and lifecycle against PostgreSQL (metadata only)", async () => {
+    const businessId = ctx.owner.businessId;
+    // These are inert reference strings, not uploaded objects or proof of durable media.
+    const ownUrl = `https://images.invalid/${runId}/own.png`;
+    const foreignUrl = `https://images.invalid/${runId}/foreign.png`;
+    await prisma.mediaAsset.create({ data: { businessId, url: ownUrl } });
+    await prisma.mediaAsset.create({ data: { businessId: ctx.stranger.businessId, url: foreignUrl } });
+    const rejected = await callPos(productsPost, businessId, { method: "POST", body: { name: "Photo test", priceKES: 20, imageUrl: foreignUrl } });
+    expect(rejected.status, rejected.text()).toBe(400);
+    expect(rejected.body.code).toBe("product_image_not_owned");
+    const added = await callPos(productsPost, businessId, { method: "POST", body: { name: "Photo test", priceKES: 20, category: "Produce", imageUrl: ownUrl } });
+    expect(added.status, added.text()).toBe(201);
+    const id = added.body.product.id;
+    const listed = await callPos(productsGet, businessId);
+    expect(listed.body.products.find((item: any) => item.id === id)).toMatchObject({ category: "Produce", imageUrl: ownUrl });
+    const blocked = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: foreignUrl } });
+    expect(blocked.status, blocked.text()).toBe(400);
+    const removed = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: null } });
+    expect(removed.status, removed.text()).toBe(200);
+    expect((await prisma.posProduct.findUnique({ where: { id } }))?.imageUrl).toBeNull();
+    expect(await prisma.mediaAsset.count({ where: { businessId, url: ownUrl } })).toBe(1);
   }, 120_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {

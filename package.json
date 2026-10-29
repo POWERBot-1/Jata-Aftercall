@@ -73,6 +73,7 @@
     "@types/three": "^0.186.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
+    "jsdom": "^26.1.0",
     "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
