@@ -324,7 +324,7 @@ export function RecordBoard(props: Props) {
             <div className="jata-field">
               <label className="jata-label" htmlFor="pos-product-photo">Item photo</label>
               {(localPreview || photo) ? <img src={(localPreview || photo)!} alt="Selected item photo" width={120} height={120} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 12 }} /> : <p className="jata-hint">No photo selected.</p>}
-              <input id="pos-product-photo" type="file" accept={FILE_INPUT_ACCEPT} disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadPhoto(file); }} />
+              <input id="pos-product-photo" className="pos-file-input" type="file" accept={FILE_INPUT_ACCEPT} disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadPhoto(file); }} />
               {pendingPhoto && !photoBusy ? <button type="button" className="jata-btn jata-btn-secondary" onClick={() => void uploadPhoto(pendingPhoto)}>Retry upload</button> : null}
               {pendingPhoto ? <button type="button" className="jata-btn jata-btn-ghost" onClick={() => { resetPendingPhoto(); setError(null); setPhotoProgress("Selection discarded. The saved photo is unchanged."); }}>Discard selection</button> : null}
               {photo && !pendingPhoto ? <button type="button" className="jata-btn jata-btn-ghost" disabled={photoBusy} onClick={() => { setPhoto(null); setPhotoDirty(true); setPhotoProgress("Photo will be removed when you save."); }}>Remove photo</button> : null}

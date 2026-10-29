@@ -77,7 +77,7 @@ export function CategoryPhotos({ businessId, categories, initialImages, canEdit 
     {image ? <img src={image} alt={`${selected} category photo`} width={120} height={120} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 12 }} /> : <p className="jata-hint">No category photo selected.</p>}
     {canEdit ? <div className="space-y-2">
       <label className="jata-label" htmlFor="pos-category-photo">Choose a photo</label>
-      <input id="pos-category-photo" type="file" accept={FILE_INPUT_ACCEPT} disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} />
+      <input id="pos-category-photo" className="pos-file-input" type="file" accept={FILE_INPUT_ACCEPT} disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} />
       {pending && !busy ? <button type="button" className="jata-btn jata-btn-secondary" onClick={() => void upload(pending)}>Retry upload</button> : null}
       {pending && !busy ? <button type="button" className="jata-btn jata-btn-ghost" onClick={resetSelection}>Discard selection</button> : null}
       {!pending && images[selected] ? <button type="button" className="jata-btn jata-btn-ghost" disabled={busy} onClick={() => void remove()}>Remove category photo</button> : null}

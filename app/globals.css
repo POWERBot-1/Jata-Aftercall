@@ -1567,13 +1567,14 @@ button:focus-visible {
 .pos-row-values { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: center; font-size: 0.85rem; }
 .pos-row-actions { display: flex; gap: 0.4rem; }
 
-.pos-form { display: grid; gap: 0.75rem; }
+.pos-form { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 0.75rem; }
+.pos-file-input { display: block; width: 100%; max-width: 100%; min-width: 0; }
 .pos-form-group { display: grid; gap: 0.6rem; }
 .pos-form-group > h3 {
   font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--jata-muted); margin: 0;
 }
 .pos-form-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-.pos-grid-2 { display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.pos-grid-2 { display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); }
 
 .pos-chip {
   display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--jata-line);

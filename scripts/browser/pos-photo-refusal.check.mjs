@@ -43,8 +43,12 @@ try {
     await page.goto(url, { waitUntil: "load" });
     await page.waitForSelector("#pos-product-photo", { timeout: 15000 });
     await page.waitForSelector("#pos-category-photo", { timeout: 15000 });
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
-    if (overflow) throw new Error(`POS catalogue overflows at ${width}x${height}`);
+    const overflow = await page.evaluate(() => {
+      if (document.documentElement.scrollWidth <= innerWidth + 1) return null;
+      const offenders = Array.from(document.querySelectorAll("body *")).map((element) => ({ tag: element.tagName, className: element.className?.toString().slice(0, 80), right: Math.round(element.getBoundingClientRect().right), width: Math.round(element.getBoundingClientRect().width) })).filter((element) => element.right > innerWidth + 1).slice(0, 8);
+      return { documentWidth: document.documentElement.scrollWidth, offenders };
+    });
+    if (overflow) throw new Error(`POS catalogue overflows at ${width}x${height}: ${JSON.stringify(overflow)}`);
     await page.screenshot({ path: `${screenshots}/pos-photo-${width}x${height}.jpg`, type: "jpeg", quality: 70, fullPage: true });
     console.log(`PASS POS product and category controls render at ${width}x${height} without horizontal overflow`);
   }
