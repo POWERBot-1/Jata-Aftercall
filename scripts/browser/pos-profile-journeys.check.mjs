@@ -272,6 +272,7 @@ try {
   page.on("request", (req) => { if (req.url().endsWith(`/api/pos/${sid}/configuration`) && req.method() === "POST") console.log(`Salon questionnaire payload ${req.postData()}`); });
   console.log(`Salon service selection before click ${await serviceOption.asElement().evaluate((el) => el.outerHTML)}`);
   await serviceOption.asElement().evaluate((el) => el.scrollIntoView({block:"center"}));
+  console.log(`Salon hit test ${JSON.stringify(await serviceOption.asElement().evaluate((el) => { const r=el.getBoundingClientRect(); const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return { x:r.x,y:r.y,w:r.width,h:r.height,hit:hit?.outerHTML.slice(0,300) }; }))}`);
   if (await serviceOption.asElement().evaluate((el) => el.getAttribute("aria-pressed")) !== "true") await serviceOption.asElement().click();
   await serviceOption.dispose();
   await page.waitForFunction(() => [...document.querySelectorAll(".pos-option")].some((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services") && el.getAttribute("aria-pressed") === "true"), { timeout:5000 }).catch(async () => { throw new Error(`Service selection did not stick: ${JSON.stringify(await page.evaluate(() => ({ title:document.querySelector(".pos-question")?.textContent, options:[...document.querySelectorAll(".pos-option")].map((el) => ({ text:el.textContent.trim(), pressed:el.getAttribute("aria-pressed") })), alert:document.querySelector("[role=alert]")?.textContent, saving:document.querySelector(".pos-ask")?.textContent.slice(0,300) })) )}`); });
