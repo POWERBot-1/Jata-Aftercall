@@ -35,12 +35,20 @@ export async function getActivePlans(): Promise<Plan[]> {
  * `/dashboard/autopilot` (2026-10-27 owner order; see `homepagePlanCards`). Showing those cards
  * grants nothing: each product still switches on only from PlanConfig and confirmed payment
  * inside the workspace.
+ *
+ * POS / ERP - PRO (`ERP_PRO`) is private for the same reason but has no marketing card at all:
+ * it is reachable only from the authenticated `/dashboard/erp` workspace, and only when the
+ * deployment has switched the product on (`ERP_PRO_ENABLED`).
  */
 export const PRIVATE_PLAN_KEYS = [
   "BUSINESS_POS",
   "JATA_AUTOPILOT",
   "JATA_AUTOPILOT_PRO",
   "JATA_AUTOPILOT_ENTERPRISE",
+  // POS / ERP - PRO is an authenticated, feature-flagged product too. It has its own workspace
+  // and checkout flow, so it must never appear in onboarding or the AFTERCALL subscription list
+  // merely because an operator (or the seed) has created its PlanConfig row.
+  "ERP_PRO",
 ];
 
 export function isPubliclyListedPlan(key: string): boolean {

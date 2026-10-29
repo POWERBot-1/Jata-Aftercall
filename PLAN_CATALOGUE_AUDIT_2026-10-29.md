@@ -10,14 +10,16 @@
 | Phase | Status | Why |
 | --- | --- | --- |
 | 1 — authoritative catalogue from repository evidence | **PASS** | Every intended plan, key, price, duration and visibility rule is named in the code; see §2. |
-| 2 — read-only production audit | **BLOCKED** | No production database credential exists in this environment, the live host is unreachable, and no Neon query tool is connected. No `SELECT` was executed. Row counts are **unknown**, not zero. |
-| 3 — Autopilot repair | **BLOCKED** | Cannot reach the database; **0 rows written**. The authorised, idempotent SQL is ready in §5. |
-| 3 — POS / ERP-Oro changes | **NOT AUTHORISED / NOT RUN** | Configuration established in §2; exact proposed statements in §6. |
-| 4 — application verification | **PARTIAL PASS / BLOCKED** | Live `GET /` and `GET /health` passed in the post-deployment smoke run (§9). Plan-specific and authenticated checks are **NOT TESTED**: `https://jata-aftercall.vercel.app` returns `000` from this sandbox and no browser session exists. |
+| 2 — read-only production audit | **PASS** | Completed with owner-supplied Neon query output on 2026-10-29: **8 rows, all active, all prices and durations correct**. No credential entered this environment; the query text is quoted in Part II §12. |
+| 3 — Autopilot repair | **PASS — NO WRITE NEEDED** | All three Autopilot rows already exist at 2,499 / 6,999 / 19,999 with 30-day periods and `isActive = true`. **0 rows written**, and none should be. The prepared SQL in §5 is retained but must not run. |
+| 3 — POS / ERP-Oro changes | **ERP NOT AUTHORISED / NOT RUN** | `BUSINESS_POS` is present and correct. `ERP_PRO` is absent and `ERP_PRO_ENABLED` is unset; the prepared insert and flag change are in Part II §14 and were **not** executed. |
+| 4 — application verification | **PASS (public) / NOT TESTED (authenticated)** | Live `/`, `/pricing`, `/products`, `/products/business-pos` and `/health` verified through an external fetcher (Part II §15). `/onboarding` and every `/dashboard/*` route redirect to `/login`, so authenticated screens and checkout remain **NOT TESTED**. |
 | Repair-path code fixes (this branch) | **PASS locally / NOT DEPLOYED** | Admin plan-key truncation and the production-seed instruction are fixed with tests; see §8. |
 
-Nothing in this document is a claim that a production plan row exists, is missing, or was changed. The only facts about
-production are the deployment records, environment-variable names (never values) and network results in §1.
+**Superseded note (2026-10-29, later):** The paragraphs above preserve the state of the investigation *before* the owner
+supplied the production query result. Part II records the verified 8-row inventory, the live surface matrix and the ERP
+proposal. Where §1–§11 say a row state is unknown or blocked, Part II is authoritative. No production row was written at
+any point.
 
 ---
 
@@ -29,7 +31,7 @@ production are the deployment records, environment-variable names (never values)
 | Vercel Production deployment | `7410857599` (Vercel `dpl_CDQCAKEtMTctis97hJp5rxKHYDfA`), created `2026-10-29T11:22:55Z`, state `success` / `READY` (promoted) | GitHub Deployments API; Vercel connector |
 | Live host | `https://jata-aftercall.vercel.app` (deployment alias `jata-aftercall-dtvm2hi0d-powerbot-1.vercel.app`) | deployment record |
 | Documented database target | Neon project `damp-forest-92941163` (display name `jata-aftercall` in `docs/NEON-RECOVERY-READINESS.md`), branch `production` (`br-cold-snow-ax606swa`), database `neondb` | `docs/MIGRATION_TARGET_GUARD.md` §5, enrolment dated 2026-10-18 |
-| Target verified today? | **NO** | no credential and no network path; the enrolment record is historical evidence, not a live check |
+| Target verified today? | **YES (indirect)** | The Production build log for `dpl_CDQCAKEtMTctis97hJp5rxKHYDfA` records `[migration-guard] OK_ENROLLED_PRODUCTION … target=3439ca4ed940f77fde4d30f94a8873dc02ccf3daa1baec900804857450f3e8d5`, exactly the enrolled Production fingerprint, against database `neondb`; the owner's query addressed the same branch. No credential was read. See Part II §12. |
 
 ### Access probe (2026-10-29)
 
@@ -167,8 +169,10 @@ valid. No schema mismatch blocks the statement.
 
 ## 5. Authorised Autopilot repair — ready, NOT EXECUTED
 
-> **Status: BLOCKED.** Not one row was inserted or updated. This block is reproduced exactly as authorised. Run it only
-> against the verified production branch, after §7. If all three rows already exist and are correct, run nothing.
+> **Status: NOT NEEDED — DO NOT RUN.** The owner-supplied production query on 2026-10-29 shows all three rows already
+> present, active and correctly priced (2,499 / 6,999 / 19,999, 30 days). Not one row was inserted or updated. The block
+> is retained only as the historical authorised repair and as a template; running it now would touch rows that are
+> already correct and is outside the current instruction.
 
 ```sql
 INSERT INTO "PlanConfig"
@@ -304,12 +308,12 @@ plan-specific and authenticated check is **NOT TESTED**; none may be reported as
 | --- | --- | --- |
 | Live `GET /` serves the application | **PASS** | Production smoke run `40864949988`, `2026-10-29T11:22:57Z`; the script exits 0 only when the homepage is `200` HTML |
 | Live `GET /health` reports `status: ok` / `db: up` | **PASS** | same run; the script exits non-zero for `db: down` or `db: unconfigured`. This proves the runtime database connection — **not** that any plan row exists |
-| Production rows exist with expected keys/prices/durations/active flags | **BLOCKED** | §7 query on the production branch; report count and rows |
+| Production rows exist with expected keys/prices/durations/active flags | **PASS** | Owner-supplied Neon query, 8 rows, all active; Part II §12 |
 | Autopilot page shows all three tiers at the verified prices | **NOT TESTED** | owner session → `/dashboard/autopilot/<businessId>` |
 | Checkout resolves the correct plan server-side | **NOT TESTED** | activation must return 200 with the stored id/price; no payment needs to be completed |
 | POS plan page shows KES 499 and can start checkout | **NOT TESTED** | `/dashboard/pos/<businessId>/plan`; button enabled only with an active row |
-| ERP entry shows KES 3,000 and can start checkout | **NOT TESTED** | `/dashboard/erp/<businessId>/settings`; still gated by `ERP_PRO_ENABLED` |
-| `/pricing` and `/products` show the full six-card catalogue | **NOT TESTED** | live read |
+| ERP entry shows KES 3,000 and can start checkout | **FAIL / BLOCKED** | row absent **and** `ERP_PRO_ENABLED` unset; `access()` returns `503 PRODUCT_DISABLED` before any row read |
+| `/pricing` and `/products` show the full six-card catalogue | **PASS** | live read on 2026-10-29; Part II §15 |
 | `/onboarding` and `/dashboard/subscription` list the four public plans | **NOT TESTED** | signed-in read |
 | Mobile and desktop visibility | **NOT TESTED** | 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 |
 | No payment initiated / no unrelated data changed | **PASS (by construction)** | this work had no database connection and wrote nothing; no payment route was called, no seed was run, and no environment or DNS change was made. The only live requests were the workflow's read-only `GET /` and `GET /health`; the latter ran `SELECT 1`, not a `PlanConfig` read |
@@ -345,19 +349,198 @@ connection works.
 1. **The catalogue has no automatic bootstrap.** A migration-created database is empty and the app never falls back on
    onboarding/subscription. A one-off idempotent data migration (or a deploy-time, opt-in catalogue check) would prevent
    recurrence, but it writes production data on deploy and is outside this authorisation.
-2. **`ERP_PRO` is missing from the seed.** Even an authorised seed run would not create the ERP plan. The proposed row and
-   the `ERP_PRO_ENABLED` decision are in §6.
-3. **The four public plans are not covered by the current authorisation.** Repairing only the three Autopilot rows will
-   not fill an empty onboarding plan list. The audit in §7 must decide whether they too are missing.
-4. **The production database identity is historical evidence only.** The enrolment record names
-   `damp-forest-92941163` / `production` / `neondb`, but nothing in this environment could confirm it today.
+2. **`ERP_PRO` was missing from the seed.** Even an authorised seed run would not have created the ERP plan. A seed row
+   is now on this branch (3,000 / 30), and the two production changes remain proposals in Part II §14.
+3. **The four public plans are present.** The production query proved this; the earlier concern that they might be
+   missing is closed. No write was needed.
+4. **The production database identity is confirmed indirectly.** The deployment's own migration guard accepted the
+   enrolled Production fingerprint `3439ca4e…f3e8d5` for database `neondb`, and the owner's query addressed the same
+   Neon production branch.
 5. **Admin-key truncation is fixed on this branch, not deployed.** Until it is, creating `ERP_PRO` or
    `JATA_AUTOPILOT_ENTERPRISE` through `/admin/plans` produces a truncated key; use SQL (§5/§6) instead.
 
 ## 11. What was not done
 
-No production `PlanConfig` row read or written; no `npm run seed`; no payment or subscription change; no environment variable,
+No production `PlanConfig` row was read or written **by this agent**; the row inventory in Part II comes from owner-supplied
+query output, and zero writes were executed. No `npm run seed`; no payment or subscription change; no environment variable,
 domain, DNS or Vercel setting change; no merge and no production deployment; no access to JATA Qi or TANYA-AI; no
 credential value read, printed or transmitted. Pushing the review branch caused Vercel to create a preview deployment
 record, but its build was skipped by the project's own Ignored Build Step (`buildSkipped: true`), so it ran no code and
 touched no database.
+
+---
+
+# Part II — Verified production evidence (2026-10-29, later update)
+
+Part I was written before the owner supplied the production query result and before the live pages could be fetched.
+This part records what is now verified, what each reported "missing plan" actually is, and the exact ERP changes that
+are prepared but **not** applied.
+
+## 12. Verified production `PlanConfig` inventory
+
+Source: owner-supplied Neon SQL output for the production branch (database `neondb`), run 2026-10-29. The agent did
+not connect to the database; the values below are transcribed from that result.
+
+| # | Key | KES | Days | `isActive` | Visibility class |
+| ---: | --- | ---: | ---: | --- | --- |
+| 1 | `MONTHLY` | 149 | 30 | true | Public |
+| 2 | `ANNUAL` | 999 | 365 | true | Public |
+| 3 | `AI_BUSINESS_FRONT_DESK` | 499 | 30 | true | Public add-on |
+| 4 | `INTERACTIVE_BUSINESS` | 999 | 30 | true | Public add-on (branded “Website Studio”) |
+| 5 | `BUSINESS_POS` | 499 | 30 | true | Private workspace |
+| 6 | `JATA_AUTOPILOT` | 2,499 | 30 | true | Private workspace; advertised as one card |
+| 7 | `JATA_AUTOPILOT_PRO` | 6,999 | 30 | true | Private workspace; never advertised |
+| 8 | `JATA_AUTOPILOT_ENTERPRISE` | 19,999 | 30 | true | Private workspace; never advertised |
+| — | `ERP_PRO` | **absent** | **absent** | — | Feature-flagged authenticated product |
+
+**Before:** 8 rows. **After this investigation:** 8 rows. **Writes: 0.**
+
+* Every existing row matches the authoritative catalogue in §2 exactly.
+* All three Autopilot rows are correct, so the §5 repair is **unnecessary and must not be run**.
+* `ERP_PRO` is the only absent key.
+
+### Production-target identity
+
+The Production build log for `dpl_CDQCAKEtMTctis97hJp5rxKHYDfA` records:
+
+```
+[direct-url] OK (OK_DIRECT_URL_READY) — runtime uses the pooled URL; migrations use the direct URL
+[migration-guard] OK_ENROLLED_PRODUCTION env=production mode=enforce target=3439ca4ed940f77fde4d30f94a8873dc02ccf3daa1baec900804857450f3e8d5
+Datasource "db": PostgreSQL database "neondb", schema "public" at "<host redacted>"
+```
+
+`3439ca4e…f3e8d5` is exactly the single enrolled Production fingerprint in
+`scripts/lib/migration-target-allowlist.json` (Neon project `damp-forest-92941163`, branch `production`, database
+`neondb`). The Vercel Production runtime and the owner's query therefore address the same database. No credential
+value was read, printed or copied; the host is redacted here.
+
+## 13. Why each reported plan is or is not visible
+
+| Plan | `/` | `/pricing` | `/products` | Onboarding & subscription | Workspace entry | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `MONTHLY` | card, 149 | row, 149 | product | **Yes** | checkout | Visible |
+| `ANNUAL` | card, 999 | row, 999 | product | **Yes** | checkout | Visible |
+| `AI_BUSINESS_FRONT_DESK` | card, 499 | row, 499 | product | **Yes** | checkout | Visible |
+| `INTERACTIVE_BUSINESS` | card, 999 “Website Studio” | row, 999 | product | **Yes** | checkout | Visible |
+| `BUSINESS_POS` | card, 499, “Open Business POS” | row, 499 | product | **No — by design** | `/dashboard/pos` | Publicly advertised; private to the picker |
+| `JATA_AUTOPILOT` | card, 2,499, “Open JATA Autopilot” | row, 2,499 | product | **No — by design** | `/dashboard/autopilot` | Publicly advertised; private to the picker |
+| `JATA_AUTOPILOT_PRO` | **No** | **No** | **No** | **No** | Command Center tier 2 | Private by design; row exists |
+| `JATA_AUTOPILOT_ENTERPRISE` | **No** | **No** | **No** | **No** | Command Center tier 3 | Private by design; row exists |
+| `ERP_PRO` | **No** | **No** | **No** | **No** | `/dashboard/erp` | **Unprovisioned and switched off** |
+
+### The four distinct reasons a plan can look “missing”
+
+1. **Private by design, but advertised** — POS and the standard Autopilot. They are excluded from the
+   onboarding/subscription pickers by `PRIVATE_PLAN_KEYS` but deliberately appear as owner-only cards on the marketing
+   pages. Nothing is broken.
+2. **Private by design, not advertised** — Autopilot Pro and Enterprise. They are sold only inside the Command Center and
+   never appear publicly. Nothing is broken.
+3. **Genuinely unprovisioned** — `ERP_PRO`. No plan row exists, no marketing card exists, and `ERP_PRO_ENABLED` is unset.
+   The product fails closed with `503 PRODUCT_DISABLED`.
+4. **Latent code defect (fixed on this branch)** — `ERP_PRO` was absent from `PRIVATE_PLAN_KEYS`. Creating its row would
+   have inserted “POS / ERP - PRO” into the **public** onboarding/subscription list the moment the row appeared. That is
+   the one real visibility bug found, and it was latent precisely because the row did not exist.
+
+## 14. ERP / Oro — canonical configuration and proposed changes (NOT APPLIED)
+
+### Canonical values, verified in code and tests
+
+| Field | Value | Source |
+| --- | --- | --- |
+| Plan key | `ERP_PRO` | `lib/erp/entitlement.ts:16` |
+| Plan name | `POS / ERP - PRO` | `lib/erp/entitlement.ts:17` |
+| Price | KES **3,000** | `ERP_PLAN_PRICE_KES`, `lib/erp/entitlement.ts:18` |
+| Duration | **30 days** | `ERP_PLAN_DURATION_DAYS`, line 19 |
+| Grace | 3 days | `ERP_GRACE_DAYS`, line 20 |
+| Production flag | `ERP_PRO_ENABLED=true` required | `erpFeatureEnabled()`, lines 84-88 |
+| Dev-side override | `ERP_PRO_DISABLED` | same function |
+| Table | `"PlanConfig"`: `id TEXT PK`, `key TEXT UNIQUE`, `name TEXT`, `priceKES INT`, `durationDays INT`, `isActive BOOLEAN`, timestamps | init migration `20250915000000_init:118-129, 223` |
+| ERP tables | `ErpSubscription.planKey` and `ErpEntitlement.packageKey` both default to `ERP_PRO`; **no migration inserts a `PlanConfig` row** | `20261027000000_pos_erp_pro/migration.sql:44, 67` |
+| Tests pinning all of the above | `tests/unit/erp-entitlement.test.ts`, `tests/unit/erp-entitlement-access.test.ts` | both assert key, 3,000, 30, and the flag names |
+
+No “Oro” product exists in the codebase. The ERP product is `POS / ERP - PRO`.
+
+### Proposed production insert — **NOT EXECUTED**
+
+```sql
+INSERT INTO "PlanConfig"
+  ("id", "key", "name", "priceKES", "durationDays",
+   "isActive", "createdAt", "updatedAt")
+VALUES
+  ('plan_erp_pro', 'ERP_PRO', 'POS / ERP - PRO', 3000, 30, true, now(), now())
+ON CONFLICT ("key") DO UPDATE SET
+  "priceKES" = EXCLUDED."priceKES",
+  "durationDays" = EXCLUDED."durationDays",
+  "isActive" = true,
+  "updatedAt" = now();
+```
+
+Scope notes: touches exactly one key; inserts `plan_erp_pro` only if absent; `DO UPDATE` never changes an existing `id`,
+so historical `Payment.planId` / `ErpSubscription` references stay valid; the name is written only on insert. The unique
+index `PlanConfig_key_key` exists, so `ON CONFLICT ("key")` is valid. **Not run. Awaiting separate explicit
+authorisation.**
+
+### Proposed feature-flag change — **NOT APPLIED**
+
+Set `ERP_PRO_ENABLED=true` for the Vercel **Production** environment and redeploy, because a running deployment keeps the
+environment it was built with. `ERP_PRO_DISABLED` must remain unset. **Awaiting separate explicit authorisation.**
+
+### Order of operations after authorisation
+
+1. Re-run the §7 count: expect 8 rows and no `ERP_PRO`.
+2. Run the insert; confirm exactly one `ERP_PRO` row at 3,000 / 30 / active and that the other eight ids are unchanged.
+3. If separately approved, set `ERP_PRO_ENABLED=true` and redeploy.
+4. Signed in as an owner/admin, open `/dashboard/erp/<businessId>`: the settings page must show KES 3,000 and offer
+   “Continue to payment” without completing a payment.
+5. Do not set the flag without the row; the code fails closed, but the product would remain unusable and confusing.
+
+## 15. Live verification performed
+
+All reads below were unauthenticated GETs through an external page fetcher on 2026-10-29.
+
+| URL | Result | Status |
+| --- | --- | --- |
+| `/health` | `{"status":"ok","db":"up","version":"1.0.0","timestamp":"2026-10-29T12:28:08.628Z"}` | **PASS** |
+| `/pricing` | Six-row comparison: Monthly 149/30, Annual 999/year, AI Front Desk 499/30, Autopilot 2,499/30, Website Studio 999/30, Business POS 499/30. No ERP, Pro or Enterprise | **PASS** |
+| `/` | Six pricing cards in owner order (149, 999, 499, 2,499, 999, 499); POS → `/dashboard/pos`, Autopilot → `/dashboard/autopilot`; FAQ refers to “the four page plans” | **PASS** |
+| `/products` | “One account. Four customer products.” Six product cards, Autopilot 2,499 and POS 499 presented as dashboard-priced | **PASS** |
+| `/products/business-pos` | KES 499 / 30 days; states it is sold from inside the dashboard, “never from the public pricing list” | **PASS** (minor wording inconsistency: `/pricing` does show the POS row) |
+| `/dashboard/subscription` | Redirects to `/login` | **NOT TESTED** (auth) |
+| `/dashboard/erp` | Redirects to `/login` | **NOT TESTED** (auth) |
+| `/dashboard/autopilot` | Redirects to `/login` | **NOT TESTED** (auth) |
+| `/onboarding`, `/dashboard/pos`, checkout | Require a session | **NOT TESTED** |
+
+The GitHub production smoke run `40864949988` independently confirms `/` and `/health`; its script exits 0 only for
+`status: ok, db: up`. That proves connectivity, not row contents — the row contents are proven by §12.
+
+**Conclusion on the reported symptom:** every plan is either correctly visible, intentionally private, or (ERP) not
+provisioned. No existing plan row is missing or mispriced. The only code defect affecting visibility was the latent ERP
+public-list leak, now fixed and covered by tests.
+
+## 16. Regression tests added on this branch
+
+`tests/unit/plan-catalogue-visibility.test.ts` (9 tests) pins the verified production matrix:
+
+* the public/payable list is exactly the four page keys;
+* the homepage card order is `MONTHLY, ANNUAL, AI_BUSINESS_FRONT_DESK, JATA_AUTOPILOT, INTERACTIVE_BUSINESS,
+  BUSINESS_POS` with prices `149, 999, 499, 2499, 999, 499` and durations `30, 365, 30, 30, 30, 30`;
+* Pro and Enterprise never appear as cards but remain in `PRIVATE_PLAN_KEYS`;
+* `INTERACTIVE_BUSINESS` is branded “Website Studio” with its stored description preserved;
+* `ERP_PRO` is private, absent from the public list and absent from the homepage fallback set — so creating its row cannot
+  leak it onto `/onboarding` or `/dashboard/subscription`;
+* `prisma/seed.ts` provisions all nine keys, including `ERP_PRO` at 3,000 / 30.
+
+Evidence: targeted six suites **76/76 PASS**; full `tests/unit` **2,481 / 2,482** with the single pre-existing offline
+Prisma-DMMF failure; ESLint on changed files **0 errors**; `tsc --noEmit` shows the same four pre-existing offline errors.
+
+## 17. Remaining approvals
+
+1. **Merge/deploy PR #73** — 14/14 checks pass and the diff contains only related files, but no merge or deployment is
+   performed without an explicit instruction.
+2. **`ERP_PRO` row insert** — SQL in §14; requires separate explicit production-write authorisation.
+3. **`ERP_PRO_ENABLED=true` + redeploy** — requires separate explicit production-configuration authorisation.
+4. **Authenticated verification** — owner to confirm that `/onboarding` and `/dashboard/subscription` show the four public
+   plans, that the POS and Autopilot workspaces show their plans, and that ERP shows the disabled notice today.
+
+No production row, flag, seed, payment, subscription, account, secret, DNS record or deployment was changed in producing
+this part. The only production facts are the owner's query output and read-only HTTP GETs.
