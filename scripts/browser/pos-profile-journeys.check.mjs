@@ -42,7 +42,8 @@ async function layout(page, profile, stage) {
   }
 }
 async function fill(page, selector, text) {
-  await page.waitForSelector(selector); await page.click(selector, { clickCount: 3 }); await page.type(selector, String(text));
+  console.log(`Filling ${selector}`);
+  await page.waitForSelector(selector, { visible: true }); await page.click(selector, { clickCount: 3 }); await page.type(selector, String(text));
 }
 try {
   const owner = await prisma.user.findUnique({ where: { email: process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link" } });
@@ -79,7 +80,8 @@ try {
     // screens can be exercised. This deliberately proves neither payment nor publication workflow.
     await prisma.posConfiguration.update({ where:{ businessId:id }, data:{ status:"LIVE", configurationStatus:"PUBLISHED", publishedJson:config.draftJson, publishedVersion:1 } });
     await page.goto(new URL(`${root}/products?new=1`,base).href, { waitUntil:"load" });
-    await page.waitForSelector("#f-name");
+    await page.waitForSelector("#f-name", { visible:true });
+    await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "product-create");
     const kind = await page.$eval("#f-kind", (el) => el.value);
     if (kind !== "PRODUCT") throw new Error(`${profile.key} unexpected default ${kind}`);
