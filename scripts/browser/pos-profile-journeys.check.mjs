@@ -116,8 +116,12 @@ try {
     await layout(page, profile.key, "sell");
     await page.waitForSelector(".pos-item");
     await page.click(".pos-item");
+    await page.waitForSelector('[aria-label^="One less "]', { visible:true });
     await clickText(page,".pos-method", "Cash");
-    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.trim().startsWith("Complete ") && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.trim().startsWith("Complete ") && !button.disabled)).catch(async () => {
+      const diagnostic = await page.evaluate(() => ({ buttons: [...document.querySelectorAll("button")].filter((button) => button.textContent.trim().startsWith("Complete ")).map((button) => ({ text:button.textContent.trim(), disabled:button.disabled })), payment:document.querySelector("#pay-0")?.value, banner:document.querySelector(".pos-banner-text")?.textContent, cart:!!document.querySelector('[aria-label^="One less "]') }));
+      throw new Error(`Till did not enable: ${JSON.stringify(diagnostic)}`);
+    });
     const saleResponse = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/sales`) && r.request().method() === "POST").catch(() => null);
     const complete = await page.$$('button');
     const submit = (await Promise.all(complete.map(async (button) => [await button.evaluate((el) => el.textContent.trim()),button]))).find(([text]) => text.startsWith("Complete "))?.[1];
