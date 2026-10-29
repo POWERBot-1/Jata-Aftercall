@@ -114,6 +114,11 @@ try {
     await page.goto(new URL(`${root}/inventory`,base).href, { waitUntil:"load" });
     await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "inventory");
+    if (await page.$('[data-pwa-install="available"] .jata-pwa__button--quiet')) {
+      await page.click('[data-pwa-install="available"] .jata-pwa__button--quiet');
+      await page.waitForSelector('[data-pwa-install="available"]', { hidden:true });
+      console.log("PASS dismiss install prompt before adjusting stock");
+    }
     await clickText(page, "button.pos-tab", "Adjust");
     await page.waitForSelector("#inv-product", { visible:true });
     await page.select("#inv-product", product.id);
