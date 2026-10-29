@@ -4,7 +4,7 @@
 decide them for you. The measurements are automated and reproducible; the three questions below are
 yours, and each one is currently left at "as built" rather than at a default I invented.
 
-**Head reviewed:** `a018bbe0ac57f4525aefbcff0e7ba9fd8bbd779a` (PR #71, base `main`).
+**Head reviewed:** `39fab1e9483c0b40bbc9929b83766521b843a469` (PR #71, base `main`).
 **Status of E4:** **DECISIONS IMPLEMENTED — awaiting owner eyes on the result.**
 
 On 2026-10-28 the owner answered all three questions (`Q1 b`, `Q2 b`, `Q3 c`). They are implemented and
@@ -17,8 +17,8 @@ amount of measuring can supply.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| **ERP screens, six viewports (24 JPEGs + `evidence.json` + `summary.log`)** | GitHub artifact **`erp-visual-71`** — https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40757475711/artifacts/12846977106 | 3.29 MB zip. Produced on a GitHub runner in run `40757475711` (job `123053227834`). Expires **2026-11-11**. Requires a GitHub sign-in to download. |
-| Local copy of the same 24 images | `.cache/verification/erp-visual/` | git-ignored, 3.9 MB. Regenerate with `npm run test:erp:visual`. |
+| **ERP screens, seven viewports (28 JPEGs + `evidence.json` + `summary.log`)** | GitHub artifact **`erp-visual-71`** (artifact id `12857125248`) — https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40779051069/artifacts/12857125248 | 3.91 MB zip (`3,913,665` bytes). Produced on a GitHub runner in run `40779051069` (job `123135768801`) at head `39fab1e`; not expired as of 2026-10-29. Requires a GitHub sign-in to download. |
+| Local copy of the same 28 images | `.cache/verification/erp-visual/` | git-ignored, ~3.9 MB. Regenerate with `npm run test:erp:visual`. |
 | Local browsable gallery | run `npm run test:erp:visual:gallery`, then open `.cache/verification/erp-visual/gallery.html` | Generated from `evidence.json`, so the numbers beside each image are the measured ones. |
 | Storefront screenshots (not the ERP) | artifact `premium-screenshots-71` — https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/40757475711/artifacts/12845844465 | 13.2 MB, the existing public-shop evidence. |
 
@@ -31,12 +31,12 @@ by this package — say so and I will use it, or leave it off.
 
 | Measurement | Result |
 | --- | --- |
-| Captures | **24/24** `ok: true` (4 screens × 6 viewports) |
+| Captures | **28/28** `ok: true` (4 screens × 7 viewports), each with its own JPEG |
 | HTTP status | 200 on every capture |
 | Expected heading present | yes on every capture |
 | Horizontal overflow (`scrollWidth − clientWidth`) | **0px at every viewport, every screen** |
-| Main column width | exactly the viewport at 320 / 360 / 390 / 430 / 768; 1312px at 1366 (sidebar visible) |
-| Browser | HeadlessChrome 131.0.6778.0, real Chromium, production build over real HTTP |
+| Main column width | exactly the viewport at 320 / 360 / 390 / 430 / 768 / 1024; 1312px at 1366 (sidebar visible) |
+| Browser | Chrome 156.0.8078.47 in the current run (`40774913955` / `40775852674` reported the same); real Chromium, production build over real HTTP |
 
 Screens: **workspace**, **tasks**, **requisitions**, **procurement** — the four screens a person
 actually works in during a procurement cycle. The setup checklist, orders, invoices and reports are
@@ -98,8 +98,13 @@ label-gated `verification/evidence` channel because the artifact blob host is un
 
 | Run | Result | What the images showed |
 | --- | --- | --- |
-| `40774913955` | 32/32 pass | Q1/Q3 confirmed at every width — **and a defect the fixture could not see**: at 768×1024 the sidebar clipped text mid-letter ("OVERVIE" for Overview), squashed the business card into a sliver and squeezed the plan footer. |
-| `40775852674` | 32/32 pass | The clipping is **fixed**: the 701–859px rail is a clean glyph strip, the header is one row, KPI cards are two-up. |
+| `40774913955` | **28/28** pass | Q1/Q3 confirmed at every width — **and a defect the fixture could not see**: at 768×1024 the sidebar clipped text mid-letter ("OVERVIE" for Overview), squashed the business card into a sliver and squeezed the plan footer. |
+| `40775852674` | **28/28** pass | The clipping is **fixed**: the 701–859px rail is a clean glyph strip, the header is one row, KPI cards are two-up. |
+
+Why 28: the capture is **4 screens × 7 viewports**, and each run's `erp-visual/` directory holds
+30 files — 28 JPEGs, `evidence.json` (28 results, all `ok: true`) and `summary.log` (28 `PASS`
+lines, 0 `FAIL`). An earlier revision of this table said 32/32 for both runs; that number does not
+appear anywhere in the run artifacts and is corrected here rather than quietly dropped.
 
 That defect is the reason the fixture no longer renders a simplified sidebar: it now mirrors the real
 markup (business card, group headings, footer) and asserts that **nothing inside the sidebar is clipped**,
@@ -121,7 +126,7 @@ and every CI run re-produces them as the `erp-visual-71` artifact.
 ## 4. Reproducing any of it
 
 ```bash
-# 24 captures + evidence.json + summary.log (needs Chrome, a built app, a disposable database)
+# 28 captures + evidence.json + summary.log (needs Chrome, a built app, a disposable database)
 CHROME_PATH=/path/to/chrome AUTH_SECRET=... DATABASE_URL=postgresql://... \
   ERP_PRO_ENABLED=true SHOT_DIR=.cache/verification/erp-visual npm run test:erp:visual
 # then the browsable gallery

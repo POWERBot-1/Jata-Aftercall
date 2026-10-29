@@ -136,7 +136,7 @@ jobs:
       # production server on a free port and seeds and removes its own rows, so it does not touch the
       # server above. A BLOCKED result (no Chrome, no database) fails the job — an environment that
       # cannot take the images is not the same as images that passed.
-      - name: ERP screens at six viewports, real Chrome (overflow, headings, HTTP 200)
+      - name: ERP screens at seven viewports, real Chrome (overflow, headings, HTTP 200)
         run: |
           set -o pipefail
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"

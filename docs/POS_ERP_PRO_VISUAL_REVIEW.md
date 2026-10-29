@@ -15,6 +15,13 @@ seeded with fictional rows. Six owner-mandated viewports: 320×568, 360×800, 39
 **24 of 24 captures passed** their automated checks: HTTP 200, expected heading present, and
 `scrollWidth − clientWidth = 0` at every viewport.
 
+**Scope note (2026-10-29).** Everything above describes that six-viewport pass and is left as it was
+written. The capture has since been extended to a seventh viewport (1024×768) and now also asserts the
+navigation mode (sidebar vs bottom bar) and which module label is visible in each capture, so the
+current result is **28/28** (4 screens × 7 viewports), recorded in
+`docs/POS_ERP_PRO_E4_OWNER_REVIEW.md` §2 and CI run `40779051069`. The 24/24 figure above is not a
+statement about the current head.
+
 **Who reviewed.** The reviewing agent, not the owner and not a designer. That distinction matters and
 is stated plainly: this closes the "has anybody actually looked at these screens" question, it does
 **not** close the question of whether the owner likes them.

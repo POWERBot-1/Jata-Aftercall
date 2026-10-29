@@ -1305,6 +1305,13 @@ that E4/E5/E6/E8 are closed, or that a human approved the design.
 | Release gate (aggregate) | pass (2s) | run `40779050982` / job `123136883233` |
 | Vercel / Vercel Preview Comments | pass | preview only |
 
+The capture step was named "six viewports" when this run executed. The ERP capture itself had already
+been extended to seven viewports (1024×768 added), and the reruns show **28/28 assertions** (4 screens ×
+7 viewports), not 32; see §14.3 for the correction and the workflow step rename that followed.
+
+`check-runs` on this head: 14, all `success`. Plus the separate `Vercel` status context (`success`) —
+**15/15** in total, none pending, none skipped, none neutral.
+
 **No approving review exists on the PR.** Branch protection could not be read from here
 (`gh api .../branches/main/protection` → 403 "Resource not accessible by integration"), so whether a
 review is *required* is unverifiable from this sandbox — and a review cannot be manufactured anyway.
@@ -1337,3 +1344,105 @@ anything but NOT TESTED would be a fabrication.
 3. Add `DIRECT_URL` to Vercel **Preview** first, confirm a preview deploy migrates correctly, then add
    it to **Production**.
 4. Only then authorize the merge, knowing it will migrate production.
+
+---
+
+## 14. Revalidation under the 2026-10-29 completion authorization (head `39fab1e`)
+
+The owner authorized finishing the release: revalidate everything, complete the prerequisites, merge
+once every gate genuinely passes, deploy, and report. This section is that revalidation, run on
+**2026-10-29**. It re-reads every fact instead of trusting the previous round's notes. **Nothing was
+merged and nothing was deployed: the prerequisites gate is still shut**, for the reasons in §14.4.
+
+§13.3's statement that production migrations are outside the authorization is superseded by this
+authorization *only to the extent the release path requires them* (its Phase 4 requires verifying the
+migration outcome). Production **data** changes as a workaround remain prohibited.
+
+### 14.1 Identity — re-read, not assumed
+
+| Item | Value |
+| --- | --- |
+| PR | **#71**, `OPEN`, not a draft |
+| Head | **`39fab1e9483c0b40bbc9929b83766521b843a469`** = `origin/arena/7a3563c1-jata-aftercall` = the local worktree (after restoring this branch — the worktree had again been left on a foreign commit) |
+| Base | `main` = `a04124de6eafb4c1564734b1e9298d2f311b7516` |
+| Mergeability | `MERGEABLE` / `CLEAN` |
+| Review decision | **none** — `reviewDecision` is empty, no approving review exists |
+| Checks on the exact head | **14/14 check-runs `success`**, plus the `Vercel` status context `success` → **15/15** |
+| Branch protection | still unreadable here: `gh api .../branches/main/protection` → `403 Resource not accessible by integration` |
+| Merge methods | merge commit, squash and rebase are all enabled; default branch `main` |
+
+### 14.2 Local results, re-run at this head
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run tests/unit` | **2,449 passed / 1 failed** (1,845 test files: 184 passed, 1 failed) |
+| The single failure | `tests/unit/autopilot-phase1-hardening.test.ts` → "Priority 1: … DMMF parity & P2002 recovery" — `Prisma.dmmf` is `undefined` because this sandbox cannot generate the client |
+| Base-commit control `3d730ec` | **2,432 passed / 1 failed**, and the failing file is the *same* one — so the red line is environmental, not a candidate regression (the candidate adds 17 tests) |
+| `npx tsc --noEmit` | **4 errors**: 2× `tests/prisma/autopilot-constraints-and-concurrency.test.ts`, 1× `tests/prisma/experience-boundary.test.ts`, 1× `tests/unit/autopilot-phase1-hardening.test.ts` — the identical set measured on `3d730ec` |
+| `npm run lint` | **0 errors**, 44 warnings (all pre-existing) |
+| `npm audit` | **0 vulnerabilities** at every severity (info 0, low 0, moderate 0, high 0, critical 0) |
+| `node --test scripts/__tests__/*.test.mjs` | **298 pass / 0 fail** (the new migration-fixture contracts included) |
+| `tests/unit/direct-url-guard.test.ts` + 3 related ERP suites | **57/57** |
+| `npm run test:erp:layout-fixture` | **40/40** in real Chromium 153.0.8010.0 |
+| `prisma generate` | **still impossible here** — `binaries.prisma.sh` does not answer from this sandbox |
+
+`node --test scripts/__tests__` (the bare directory) is *not* the command: on Node 22.22.3 it is treated
+as a module path and dies with `MODULE_NOT_FOUND`. The glob form above is the one that runs 298 tests.
+
+None of the two red numbers (1 Vitest failure, 4 `tsc` errors) is caused by this branch: both reproduce,
+identically, on the base commit with the branch's changes absent. They are recorded as **environment
+limitations**, not as passes, and CI — which can generate the client — runs the same suites green
+(§14.1).
+
+### 14.3 Evidence-integrity correction: the ERP captures are 28/28, not 32/32
+
+Both real-app capture runs were re-inspected from their committed artifacts (the artifact blob host is
+unreachable from this sandbox, so the evidence channel is the only route):
+
+| Run | `erp-visual/summary.log` | `evidence.json` | Files in `erp-visual/` |
+| --- | --- | --- | --- |
+| `40774913955` | 28 `PASS`, 0 `FAIL` | 28 results, 28 `ok: true`, 7 viewports, 4 routes | 30 (28 JPEGs + JSON + log) |
+| `40775852674` | 28 `PASS`, 0 `FAIL` | 28 results, 28 `ok: true`, 7 viewports, 4 routes | 30 (28 JPEGs + JSON + log) |
+
+`docs/POS_ERP_PRO_E4_OWNER_REVIEW.md` said **32/32** for both runs. That number appears in no artifact
+and has been corrected to 28/28, with the arithmetic stated in place. Two related counts were stale for
+the same reason and are corrected too: the layout fixture is **40/40** (8 viewports × 5 checks, it grew
+the sidebar-clipping assertion), and `RELEASE_BLOCKERS.md` still quoted 32/32 for it. The CI step name
+"ERP screens at six viewports" was renamed to "seven viewports" because the capture it runs has seven.
+The older six-viewport pass (`24/24`) is left as written and explicitly scoped as historical in
+`docs/POS_ERP_PRO_VISUAL_REVIEW.md`.
+
+### 14.4 Prerequisite probes, re-run today — every one still closed
+
+| Prerequisite | Probe | Result |
+| --- | --- | --- |
+| Neon reachable | `curl https://api.neon.tech` | `http=000`, and `getent hosts api.neon.tech` returns **nothing** — no resolution at all |
+| Neon console | `curl https://console.neon.tech` | resolves, `http=000` (egress blocked) |
+| Vercel API | `curl https://api.vercel.com` | resolves, `http=000` |
+| Production host | `curl https://jata-aftercall.vercel.app` | resolves, `http=000` |
+| Prisma engines | `curl https://binaries.prisma.sh` | `http=000`; `scripts/lib/prisma-generate.sh` fails on TLS |
+| Control (egress works at all) | `curl https://api.github.com` | **`http=200`** — so the failures above are policy, not a dead network |
+| Credentials | `printenv`, filtered for `NEON` / `DATABASE_URL` / `DIRECT_URL` / `VERCEL` / `PRISMA` | **nothing set** |
+| CLIs | `which neon vercel`, `~/.vercel` | neither installed; no config directory |
+
+So: `DIRECT_URL` cannot be read from the approved secret source, cannot be written into Vercel Preview or
+Production, the documented Neon rehearsal cannot be executed against a non-production target, and the
+guard's pooled-connection refusal and migration idempotency cannot be demonstrated on Neon. Local
+PostgreSQL is **not** a substitute for that evidence and is not offered as one. **$0 spent**, and no
+provider was called.
+
+### 14.5 Status of this pass
+
+* **Merged:** no. **Deployed:** no. **Merge SHA:** none. **Deployment URL:** none.
+* **Production smoke tests:** **NOT TESTED** — there is nothing deployed to test.
+* **E8:** code **PASS** (guard 17/17, fixture contracts 298/298, `directUrl` split in the schema), Neon
+  rehearsal **BLOCKED** on the probes in §14.4.
+* **E4:** implementation and measurement **PASS**; owner visual sign-off still **OPEN**.
+* **E5 / E6:** **OPEN**. **BOS directive modules 2–5:** **NOT STARTED**. Unchanged gaps: three-way
+  matching enforcement, tolerances, exception queues, supplier history, reorder proposals, duplicate
+  posting, ERP AI assistant, document register, delegation/escalation — none implemented, and none is
+  labelled complete.
+
+The release stays where the authorization's own terms leave it: ready on every check that can be run
+here, **blocked on the two external systems and the missing approval** that cannot be produced from this
+sandbox.
