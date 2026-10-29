@@ -59,11 +59,10 @@ with environment **Preview only**. Do **not** add them to Production yet.
 
 Known platform caveat: this project's **Ignored Build Step** currently skips preview
 builds (`production` builds, everything else skips). Preview variables alone therefore do
-not produce a testable preview deployment. Options, owner’s choice: **(a)** change the
-Ignored Build Step in the Vercel dashboard to allow preview builds for the test branch, or
-**(b)** skip preview and make the production-activation decision with the mocked/fake-client
-test evidence plus a careful first-hours watch. Do not let anyone change that setting on
-your behalf without your explicit say-so.
+not produce a testable preview deployment. The owner must explicitly approve a testable preview-build policy or provide another
+authorized isolated environment. Mocked/fake-client evidence is not a substitute for a real
+preview upload and does not satisfy this release’s acceptance criteria. Do not change the
+build setting without explicit owner approval.
 
 ## Step 3 — Verify (after Step 2, with previews building)
 
@@ -71,11 +70,14 @@ your behalf without your explicit say-so.
 2. Sign in, open Website Studio → **Create**: the capability panel should now list durable
    storage-backed items as available; **Gallery → upload a photo** should succeed, survive a
    page reload, and the image URL should be on the r2.dev domain.
-3. In the Cloudflare dashboard, confirm objects appear under
-   `tenants/<businessId>/image-original/…` and that deleting the image in the app removes
-   the library row (object cleanup paths are covered by automated tests).
-4. Confirm a second business cannot see/use the first business's images.
-5. Check R2 metrics after a day: stored volume should be far below 10 GB-month.
+3. Exercise POS product and category photo upload, display, reload and a fresh authenticated
+   session; replace and remove references, and verify the saved state each time. Reference
+   removal does not promise object deletion: library assets may be retained.
+4. In the Cloudflare dashboard, confirm objects use tenant-scoped keys under
+   `tenants/<businessId>/image-original/…`. With separately authorized test accounts, verify
+   another business cannot read or attach the first business’s media through the application.
+   Public object URLs are deliberately publicly readable and are not private access controls.
+5. Check R2 metrics and billing alerts. Do not infer a spending cap from the free allowance.
 
 ## Step 4 — Production (SEPARATE owner approval, later)
 

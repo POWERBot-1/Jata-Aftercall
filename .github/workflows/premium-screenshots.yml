@@ -149,6 +149,15 @@ jobs:
           fi
           exit "$result"
 
+      - name: Onboarding draft journey in real Chrome
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          node scripts/browser/onboarding-authenticated.check.mjs 2>&1 | tee /tmp/onboarding-browser.log
+
       # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
       # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN
       # production server on a free port and seeds and removes its own rows, so it does not touch the
