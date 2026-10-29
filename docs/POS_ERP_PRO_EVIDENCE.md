@@ -1500,3 +1500,13 @@ person saw a unique-constraint error for what was a duplicate submission.
 
 Module 7 still stays **PARTIAL**: delegation, escalation and a stored tenant-wide threshold are not
 built, and no browser journey has approved and posted an expense end to end.
+
+**Two more untested paths, closed the same way.** `markPurchaseOrderOrdered` (the procurement "send to
+supplier" action) and `balanceSheet` (the figure behind `/reports` and the accounting API) were both
+unreachable by any test. `ca0e554` makes the first idempotent — a retried click no longer moves
+`orderedAt` or writes a second `PURCHASE_ORDER_ORDERED` audit row for one event — and adds a
+real-PostgreSQL test for it, plus an invariant test for the balance sheet (assets = liabilities +
+equity + net income before and after a 50,000 expense, each side moving by exactly that amount).
+
+Candidate suite after these additions: **3,779 passed (3,779)** in run `40806312337` /
+job `123225988401`; checks on `ca0e554`: 14/14 runs plus the `Vercel` status, all `success`.

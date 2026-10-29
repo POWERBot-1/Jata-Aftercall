@@ -143,6 +143,24 @@ What this changes: module 5 keeps **PARTIAL**, because three-way matching, toler
 history, reorder proposals, scorecards and exception queues are still not built. What it corrects is
 the *evidence*: two PASS-shaped statements in this document were describing code that had never run.
 
+### 2.12 Two more untested paths, and what testing them changed (2026-10-29)
+
+The same exercise — write the test that was missing — was applied to two more functions that the UI
+calls and no test reached.
+
+* **`markPurchaseOrderOrdered`** (the "send to supplier" button). A second call re-ran the update,
+  moved `orderedAt` forward and wrote a **second** `PURCHASE_ORDER_ORDERED` audit row. The status table
+  allows `ORDERED → ORDERED`, so nothing refused it; the history was simply duplicated. It is now a
+  no-op once the order is ordered (`ca0e554`), and a real-PostgreSQL test asserts one audit row after
+  the first call and no change after a retry.
+* **`balanceSheet`** (the figure behind `/reports` and the accounting API). It had no test; it now has
+  an invariant test on real postings: assets = liabilities + equity + net income both before and after
+  a 50,000 expense, with assets and net income each moving by exactly that amount. The report
+  reconciled, so nothing was changed.
+
+Neither upgrade a module: procurement and accounting keep the statuses they had. What changes is that
+two more "it works" statements now have a run behind them.
+
 ## 6. Verification status for directive item 6 (2026-10-28)
 
 Item 6 of the directive asks for specific verification, not a general statement that testing happened.
