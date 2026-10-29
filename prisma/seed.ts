@@ -25,6 +25,10 @@ async function main() {
     { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30 },
     { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30 },
     { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30 },
+    // POS / ERP - PRO — a separate, feature-flagged product (KES 3,000 / 30 days). The plan row
+    // lets the authenticated ERP workspace start checkout; it does not enable the product. In
+    // production `ERP_PRO_ENABLED` must be set explicitly before any ERP route is reachable.
+    { key: "ERP_PRO", name: "POS / ERP - PRO", priceKES: 3000, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });

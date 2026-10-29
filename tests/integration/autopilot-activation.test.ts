@@ -384,7 +384,10 @@ describe("4. invalid plans are rejected", () => {
     const { status, json } = await post({ businessId: "biz_a", planKey: "JATA_AUTOPILOT" });
     expect(status).toBe(503);
     expect(json.code).toBe("PLAN_NOT_CONFIGURED");
-    expect(String(json.error)).toContain("npm run seed");
+    // The operator needs the targeted repair, not the demo-data seed: `npm run seed` also writes
+    // demo businesses, themes and an admin account, so it must never be the production remedy.
+    expect(String(json.error)).toContain("PlanConfig");
+    expect(String(json.error)).not.toContain("npm run seed");
     expect(state.payments.size).toBe(0);
   });
 });

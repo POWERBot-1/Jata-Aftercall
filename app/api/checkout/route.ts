@@ -75,7 +75,7 @@ export async function POST(req: Request) {
         return fail(
           503,
           "PLAN_NOT_CONFIGURED",
-          "JATA Autopilot plans are not configured in this deployment yet. An administrator must run `npm run seed` before activation can start.",
+          "JATA Autopilot plans are not configured in this deployment yet. An administrator must add the missing PlanConfig records before activation can start. No payment was taken.",
         );
       }
     }

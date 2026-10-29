@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sanitizeText } from "@/lib/validation";
+import { normalizePlanKey } from "@/lib/planKey";
 import { logAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
@@ -9,11 +10,14 @@ export async function POST(req: Request) {
   if (!session || session.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
   try {
     const body = await req.json();
-    const key = sanitizeText((body.key || "").toUpperCase(), 20);
+    // Never truncate a key: `PlanConfig.key` is the identifier every product resolves by, and the
+    // two longest canonical keys exceed the old 20-character limit. Reject an invalid key instead.
+    const key = normalizePlanKey(body.key);
     const name = sanitizeText(body.name || "", 80);
     const priceKES = parseInt(String(body.priceKES), 10);
     const durationDays = parseInt(String(body.durationDays), 10);
-    if (!key || !name) return NextResponse.json({ error: "key and name required" }, { status: 400 });
+    if (!key) return NextResponse.json({ error: "key must be 2-64 characters: A-Z, 0-9 and underscore" }, { status: 400 });
+    if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
     if (!priceKES || priceKES < 1) return NextResponse.json({ error: "priceKES must be >0" }, { status: 400 });
     if (!durationDays || durationDays < 1) return NextResponse.json({ error: "durationDays >0" }, { status: 400 });
 
@@ -49,7 +53,11 @@ export async function PATCH(req: Request) {
       data.durationDays = v;
     }
     if (body.isActive !== undefined) data.isActive = !!body.isActive;
-    if (body.key !== undefined) data.key = sanitizeText(String(body.key).toUpperCase(), 20);
+    if (body.key !== undefined) {
+      const key = normalizePlanKey(body.key);
+      if (!key) return NextResponse.json({ error: "key must be 2-64 characters: A-Z, 0-9 and underscore" }, { status: 400 });
+      data.key = key;
+    }
 
     const plan = await prisma.planConfig.update({ where: { id }, data: data as any });
     await logAudit({ actorId: session.userId, action: "ADMIN_PLAN_UPDATED", targetType: "PLAN", targetId: id });
