@@ -251,6 +251,7 @@ try {
   const serviceBusiness = await prisma.business.create({ data:{ ownerId:owner.id, name:`Service salon ${uid}`, slug:`service-salon-${uid}`, category:"Other" } });
   const sid = serviceBusiness.id, serviceRoot = `/dashboard/pos/${sid}`;
   businesses.push(sid);
+  console.log("Salon service-only: loading configuration");
   await page.goto(new URL(`${serviceRoot}/configure`, base).href, { waitUntil:"load" });
   await page.waitForSelector(".pos-option", { visible:true });
   await new Promise((done) => setTimeout(done, 1200));
@@ -264,6 +265,7 @@ try {
     if (!chip.asElement()) throw new Error(`Question chip missing: ${title}`);
     await chip.asElement().click(); await chip.dispose();
   };
+  console.log("Salon service-only: select sells");
   await clickQuestion("How do you sell");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do you sell"));
   const serviceOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services")));
@@ -272,6 +274,7 @@ try {
   await clickText(page, "button", "Done — continue");
   if (!(await response).ok()) throw new Error("Service-only salon sells save failed");
   await page.waitForFunction(() => !document.body.textContent.includes("Saving…"));
+  console.log("Salon service-only: default payments");
   await clickQuestion("How do customers pay");
   await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do customers pay"));
   response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
@@ -284,12 +287,14 @@ try {
   if (JSON.stringify(salonAnswers.sells) !== JSON.stringify(["services"]) || !salonAnswers.payment_methods?.includes("cash")) throw new Error(`Service-only salon answers not persisted: ${JSON.stringify(salonAnswers)}`);
   const salonConfig = JSON.parse(salonDraft.draftJson);
   if (!salonConfig.sales.services || salonConfig.sales.products || salonConfig.inventory.enabled) throw new Error("Service-only salon config incorrectly enables products or inventory");
+  console.log("Salon service-only: unpaid gating");
   await page.goto(new URL(`${serviceRoot}/settings`,base).href, { waitUntil:"load" });
   const publishButton = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((el) => el.textContent.trim() === "Publish this setup"));
   if (!publishButton.asElement() || !(await publishButton.asElement().evaluate((el) => el.disabled))) throw new Error("Unpaid salon publish control not disabled");
   await publishButton.dispose();
   const unpaidStatus = await page.evaluate(async (path) => (await fetch(path, { method:"POST", headers:{"content-type":"application/json"}, body:"{}" })).status, `/api/pos/${sid}/configuration/publish`);
   if (unpaidStatus < 400 || (await prisma.posConfiguration.findUnique({ where:{ businessId:sid } })).publishedVersion !== 0) throw new Error(`Unpaid publication was not refused: ${unpaidStatus}`);
+  console.log("Salon service-only: synthetic entitlement and publication");
   await prisma.posSubscription.create({ data:{ businessId:sid, userId:owner.id, planId:plan.id, status:"ACTIVE", expiresAt:new Date(Date.now()+86400000) } });
   await page.reload({ waitUntil:"load" });
   await new Promise((done) => setTimeout(done, 1200));
