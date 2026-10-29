@@ -116,7 +116,10 @@ try {
     await layout(page, profile.key, "sell");
     await page.waitForSelector(".pos-item");
     await page.click(".pos-item");
-    await page.waitForSelector('[aria-label^="One less "]', { visible:true });
+    await page.waitForSelector('[aria-label^="One less "]', { visible:true }).catch(async () => {
+      const details = await page.evaluate(() => { const el = document.querySelector(".pos-item"); const r = el.getBoundingClientRect(); const top = document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return { text:el.textContent.trim(), rect:{x:r.x,y:r.y,width:r.width,height:r.height}, top:top?.outerHTML.slice(0,200), body:document.body.textContent.slice(-1200) }; });
+      throw new Error(`Cart did not respond to click: ${JSON.stringify(details)}`);
+    });
     await clickText(page,".pos-method", "Cash");
     await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.trim().startsWith("Complete ") && !button.disabled)).catch(async () => {
       const diagnostic = await page.evaluate(() => ({ buttons: [...document.querySelectorAll("button")].filter((button) => button.textContent.trim().startsWith("Complete ")).map((button) => ({ text:button.textContent.trim(), disabled:button.disabled })), payment:document.querySelector("#pay-0")?.value, banner:document.querySelector(".pos-banner-text")?.textContent, cart:!!document.querySelector('[aria-label^="One less "]') }));
