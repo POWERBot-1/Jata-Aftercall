@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Real Chrome, HTTP and disposable PostgreSQL. Synthetic subscriptions are test fixtures,
-// never payment or production evidence. Only the single simulated failure is intercepted.
+// never payment or production evidence. No requests are mocked or intercepted.
 import puppeteer from "puppeteer-core";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -163,8 +163,28 @@ try {
     if (Number(remaining?.quantity) !== 4) throw new Error(`${profile.key} sale did not reduce stock`);
     console.log(`PASS ${profile.key} cash sale and stock decrement recorded by browser, synthetic subscription`);
     await page.goto(new URL(`${root}/reports`,base).href, { waitUntil:"load" });
+    await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "reports");
-    console.log(`PASS ${profile.key} reports route rendered`);
+    const reportResponse = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/reports?`) && r.request().method() === "GET").catch(() => null);
+    const reportButton = await page.evaluateHandle(() => [...document.querySelectorAll("button.pos-option")].find((el) => el.querySelector("strong")?.textContent.trim() === "Daily sales"));
+    if (!reportButton.asElement()) throw new Error(`${profile.key} daily sales report missing`);
+    await reportButton.asElement().click(); await reportButton.dispose();
+    const report = await reportResponse;
+    if (!report?.ok()) throw new Error(`${profile.key} daily sales report failed`);
+    const reportData = await report.json();
+    if (!reportData.report?.summary?.some((row) => row.value === "1") || !reportData.report?.rows?.length) throw new Error(`${profile.key} daily sales did not report the recorded sale`);
+    await page.waitForFunction(() => document.querySelector(".jata-stat-grid")?.textContent.includes("100"));
+    console.log(`PASS ${profile.key} daily sales report shows recorded sale`);
+    await page.goto(new URL(`${root}/products`,base).href, { waitUntil:"load" });
+    await page.waitForSelector(".pos-row-actions button", { visible:true });
+    await new Promise((done) => setTimeout(done, 1200));
+    const removed = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/products/${product.id}`) && r.request().method() === "PATCH").catch(() => null);
+    const removeNavigation = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
+    await clickText(page, ".pos-row-actions button", "Remove");
+    if (!(await removed)?.ok()) throw new Error(`${profile.key} product removal failed`);
+    await removeNavigation;
+    if ((await prisma.posProduct.findUnique({ where:{ id:product.id } }))?.isActive !== false) throw new Error(`${profile.key} product archive missing`);
+    console.log(`PASS ${profile.key} product removed from active catalogue; historic sale retained`);
   }
   const strangerContext = await browser.createBrowserContext();
   const outsider = await strangerContext.newPage(); outsider.setDefaultTimeout(30000);
