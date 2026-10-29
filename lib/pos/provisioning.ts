@@ -138,18 +138,22 @@ export async function saveDraft(params: {
 }): Promise<SaveDraftResult> {
   const answers = pruneAnswers(sanitizeAnswers(params.answers));
   const built = finalize(buildConfiguration(answers, params.context ?? {}));
-  const configuration = finalize(applyTerminologyOverrides(built, params.terminology));
+  let configuration = finalize(applyTerminologyOverrides(built, params.terminology));
   // Free-text answers and terminology become JSON too; they are not an alternate image-storage
   // channel. Check the complete payload before any write.
   assertNoInlineImagePersistence({ answers, terminology: params.terminology, configuration });
   const readiness = configurationReadiness(answers);
-  const validation = validateConfiguration(configuration);
-  const fingerprint = configurationFingerprint(configuration);
   const existing = await loadConfigurationRow(params.businessId);
   // Normalize only after inspecting the original JSON: unknown nested fields must not disappear
   // silently when a legacy row is edited.
   rejectInlineImageInConfigurationRow(existing);
   const previous = toRecord(existing);
+  // Owner terminology is an explicit override, not an answer: retain it on later autosaves.
+  configuration = finalize(applyTerminologyOverrides(built, { ...previous?.draft.terminology, ...params.terminology }));
+  const validation = validateConfiguration(configuration);
+  const fingerprint = configurationFingerprint(configuration);
+  // Recompute rather than comparing legacy fingerprints from an older schema of the hash.
+  const changed = !previous || configurationFingerprint(previous.draft) !== fingerprint;
   // Presentation (the owner's header image) is not built from questionnaire answers, so a
   // rebuild must carry the previous choice forward instead of silently resetting it.
   configuration.presentation = previous?.draft.presentation ?? {};
@@ -166,7 +170,7 @@ export async function saveDraft(params: {
     status,
     answersJson: JSON.stringify(answers),
     draftJson: JSON.stringify(configuration),
-    draftVersion: previous && previous.fingerprint !== fingerprint ? previous.draftVersion + 1 : previous?.draftVersion ?? 1,
+    draftVersion: previous && changed ? previous.draftVersion + 1 : previous?.draftVersion ?? 1,
     fingerprint,
     configurationStatus: readiness.ready && validation.ok ? "READY" : "INCOMPLETE",
   };
@@ -176,7 +180,6 @@ export async function saveDraft(params: {
     : await prisma.posConfiguration.create({ data: { ...data, publishedVersion: 0 } as never });
 
   const record = toRecord(row)!;
-  const changed = !previous || previous.fingerprint !== fingerprint;
   if (changed) {
     await logPosAudit({
       businessId: params.businessId,

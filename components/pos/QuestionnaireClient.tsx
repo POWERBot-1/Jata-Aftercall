@@ -55,6 +55,7 @@ export function QuestionnaireClient(props: Props) {
   const [answers, setAnswers] = useState<QuestionnaireAnswers>(props.answers);
   const [view, setView] = useState<QuestionnaireView>(props.view);
   const [summary, setSummary] = useState<SummaryGroup[]>(props.summary);
+  const [headline, setHeadline] = useState(props.headline);
   const [description, setDescription] = useState<string[]>(props.description);
   const [terminology, setTerminology] = useState<Terminology>(props.terminology);
   const [missing, setMissing] = useState<ReadinessIssue[]>(props.missing);
@@ -70,7 +71,9 @@ export function QuestionnaireClient(props: Props) {
   const [words, setWords] = useState<Record<string, string>>({});
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inflight = useRef(false);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const revision = useRef(0);
+  const pending = useRef(0);
 
   const position = Math.max(0, view.questions.findIndex((question) => question.id === currentId));
   const current: SerializedQuestion | null = view.questions[position] ?? null;
@@ -88,51 +91,63 @@ export function QuestionnaireClient(props: Props) {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const send = useMemo(
-    () => async (nextAnswers: QuestionnaireAnswers, nextWords?: Record<string, string>) => {
-      if (inflight.current) return;
-      inflight.current = true;
+    () => (nextAnswers: QuestionnaireAnswers, nextWords?: Record<string, string>, version?: number) => {
+      const requestRevision = version ?? ++revision.current;
+      pending.current += 1;
       setSaving(true);
       setError(null);
-      try {
-        const response = await fetch(`/api/pos/${encodeURIComponent(props.businessId)}/configuration`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(nextWords && Object.keys(nextWords).length ? { answers: nextAnswers, terminology: nextWords } : { answers: nextAnswers }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          setError(data?.error ?? "We couldn't save that answer. Please try again.");
-          return;
+      // Serialize full-snapshot writes. Dropping an edit while another request was in flight
+      // silently lost answers; parallel writes could also let an older snapshot win.
+      queue.current = queue.current.then(async () => {
+        try {
+          const response = await fetch(`/api/pos/${encodeURIComponent(props.businessId)}/configuration`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(nextWords && Object.keys(nextWords).length ? { answers: nextAnswers, terminology: nextWords } : { answers: nextAnswers }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data?.error ?? "We couldn't save that answer. Please try again.");
+          // An older response must not replace newer local edits (including debounced ones).
+          if (revision.current === requestRevision) {
+            setAnswers(data.answers ?? nextAnswers);
+            if (data.view) setView(data.view);
+            if (data.summary) setSummary(data.summary);
+            if (data.headline) setHeadline(data.headline);
+            if (data.description) setDescription(data.description);
+            if (data.terminology) setTerminology(data.terminology);
+            if (data.readiness) {
+              setReady(Boolean(data.readiness.ready));
+              setMissing(data.readiness.missing ?? []);
+            }
+            if (data.draftVersion) setDraftVersion(data.draftVersion);
+            setSavedLabel(formatTime(new Date()));
+            setError(null);
+          }
+        } catch (reason) {
+          if (revision.current === requestRevision) {
+            setError(reason instanceof Error ? reason.message : "We couldn't save that answer. Please try again.");
+          }
+        } finally {
+          pending.current -= 1;
+          if (pending.current === 0 && !timer.current) setSaving(false);
         }
-        setAnswers(data.view ? nextAnswers : nextAnswers);
-        if (data.view) setView(data.view);
-        if (data.summary) setSummary(data.summary);
-        if (data.description) setDescription(data.description);
-        if (data.terminology) setTerminology(data.terminology);
-        if (data.readiness) {
-          setReady(Boolean(data.readiness.ready));
-          setMissing(data.readiness.missing ?? []);
-        }
-        if (data.draftVersion) setDraftVersion(data.draftVersion);
-        setSavedLabel(formatTime(new Date()));
-      } catch {
-        setError("We couldn't reach JATA. Check your connection — your answer is still on this screen.");
-      } finally {
-        inflight.current = false;
-        setSaving(false);
-      }
+      });
+      return queue.current;
     },
     [props.businessId],
   );
 
   function commit(nextAnswers: QuestionnaireAnswers, immediate: boolean) {
     setAnswers(nextAnswers);
+    setSavedLabel(null);
+    setSaving(true);
+    const version = ++revision.current;
     if (timer.current) clearTimeout(timer.current);
     if (immediate) {
-      void send(nextAnswers);
+      void send(nextAnswers, undefined, version);
       return;
     }
-    timer.current = setTimeout(() => void send(nextAnswers), 600);
+    timer.current = setTimeout(() => { timer.current = null; void send(nextAnswers, undefined, version); }, 600);
   }
 
   function setAnswer(question: SerializedQuestion, value: AnswerValue, immediate = true) {
@@ -151,17 +166,17 @@ export function QuestionnaireClient(props: Props) {
   }
 
   function saveWords() {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const clean: Record<string, string> = {};
     for (const [key, value] of Object.entries(words)) {
       const text = String(value ?? "").trim();
       if (text) clean[key] = text.slice(0, 40);
     }
-    setEditingWords(false);
     void send(answers, clean);
   }
 
-  const selectedValues = current && Array.isArray(current.value) ? (current.value as string[]) : [];
-  const currentValue = current?.value;
+  const currentValue = current ? (answers[current.id] ?? current.value) : undefined;
+  const selectedValues = Array.isArray(currentValue) ? currentValue : [];
 
   return (
     <div className="pos-ask">
@@ -180,7 +195,7 @@ export function QuestionnaireClient(props: Props) {
       </div>
 
       {error ? (
-        <p className="jata-error" role="alert">{error}</p>
+        <div role="alert"><p className="jata-error">{error}</p><button type="button" className="jata-btn jata-btn-secondary" onClick={() => void send(answers)} disabled={saving}>Retry save</button></div>
       ) : null}
 
       {current && !finished ? (
@@ -246,7 +261,7 @@ export function QuestionnaireClient(props: Props) {
                   ))}
                 </div>
                 <div className="pos-form-actions mt-3">
-                  <button type="button" className="jata-btn jata-btn-primary" onClick={() => void send(answers)}>
+                  <button type="button" className="jata-btn jata-btn-primary" onClick={() => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } void send(answers); }}>
                     Done — continue
                   </button>
                 </div>
@@ -259,6 +274,7 @@ export function QuestionnaireClient(props: Props) {
                   {current.kind === "amount" ? "Amount in Kenyan shillings" : current.kind === "number" ? `Number${current.unit ? ` (${current.unit})` : ""}` : "Your answer"}
                 </label>
                 <input
+                  key={current.id}
                   id={`q-${current.id}`}
                   className="jata-input"
                   type={current.kind === "text" ? "text" : "number"}
@@ -325,7 +341,7 @@ export function QuestionnaireClient(props: Props) {
       {ready || finished ? (
         <section className="jata-card p-5">
           <p className="jata-kicker">We&apos;ve configured your POS</p>
-          <h2 className="text-lg font-bold">{props.headline}</h2>
+          <h2 className="text-lg font-bold">{headline}</h2>
           <ul className="mt-3 grid gap-1.5">
             {description.map((line) => (
               <li key={line} className="flex gap-2 text-sm">

@@ -4401,15 +4401,11 @@ button:focus-visible {
 .ws-chrome .jata-btn-ghost { color: rgba(247, 242, 232, 0.78); }
 .ws-chrome .jata-btn-ghost:hover:not(:disabled) { background: rgba(247, 242, 232, 0.08); color: var(--ws-on-ink); }
 
-/* Section rail — the one navigation row on every owner screen. */
+/* Section rail shared by the workspace and admin navigation. */
 .ws-rail-wrap {
   border-top: 1px solid rgba(247, 242, 232, 0.09);
   background: rgba(255, 253, 248, 0.02);
-  /* The rail inside owns the horizontal scroll (overflow-x: auto); this wrapper guarantees its
-     scrollable overflow never propagates to the document on phone widths (real-Chrome evidence,
-     PR #69 six-viewport capture). min-width:0 lets the block shrink below the rail's min-content
-     width instead of expanding the chrome; clip creates no scroll container and does not trap
-     focus or affect the sticky header. */
+  /* Constrain either wrapped workspace links or the admin rail to the viewport. */
   min-width: 0;
   overflow-x: clip;
 }
@@ -4425,6 +4421,13 @@ button:focus-visible {
   scroll-snap-type: x proximity;
 }
 .ws-rail::-webkit-scrollbar { display: none; }
+/* Workspace links remain visible without a horizontal scroller. On phones the taller
+   header is not sticky, so wrapping navigation does not consume the working viewport. */
+.ws-rail--workspace { flex-wrap: wrap; overflow: visible; scroll-snap-type: none; }
+.ws-rail--workspace a { max-width: 100%; }
+.ws-rail a:focus-visible { outline: 3px solid var(--ws-amber); outline-offset: 2px; }
+@media (max-width: 899px) { .ws-chrome:has(.ws-rail--workspace) { position: static; } }
+
 @media (min-width: 900px) { .ws-rail { padding: 0.35rem 2.5rem 0.5rem; } }
 
 .ws-rail a {

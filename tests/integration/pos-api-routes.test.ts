@@ -342,6 +342,58 @@ describe("/configuration — answers become a Business Operating Profile (§4, �
     expect(changed.body.draftVersion).toBe(2);
   });
 
+  it.each([
+    { type: "retail", sells: ["products"], stock: true },
+    { type: "salon", sells: ["services"], stock: false },
+    { type: "farm", sells: ["products"], stock: true },
+  ])("returns the saved adaptive view and reloads edited $type answers", async ({ type, sells, stock }) => {
+    const answers = { business_type: type, sells, payment_methods: ["cash"], keeps_stock: stock };
+    const first = await configure("bizA", answers);
+    expect(first.status).toBe(200);
+    expect(first.body.answers.business_type).toBe(type);
+    expect(first.body.view.questions.find((q: any) => q.id === "business_type").value).toBe(type);
+    expect(first.body.description.length).toBeGreaterThan(0);
+    const edited = await configure("bizA", { ...answers, payment_methods: ["cash", "mpesa"] });
+    expect(edited.status).toBe(200);
+    const reloaded = await call(await configGet(get("bizA"), context("bizA")));
+    expect(reloaded.body.answers).toEqual(edited.body.answers);
+    expect(reloaded.body.answers.payment_methods).toEqual(["cash", "mpesa"]);
+    expect(reloaded.body.businessTypeKey).toBe(type);
+    expect(reloaded.body.view).toEqual(edited.body.view);
+  });
+
+  it("reloads draft presentation rather than the published configuration when live", async () => {
+    await configure("bizA", restaurantAnswers);
+    const row = rows("posConfiguration")[0];
+    row.publishedJson = row.draftJson;
+    row.publishedVersion = 1;
+    row.status = "LIVE";
+    const edited = await configure("bizA", { ...restaurantAnswers, business_type: "salon", sells: ["services"] });
+    expect(edited.status).toBe(200);
+    const loaded = await call(await configGet(get("bizA"), context("bizA")));
+    expect(loaded.body.businessTypeKey).toBe("salon");
+    expect(loaded.body.summary).toEqual(edited.body.summary);
+  });
+
+  it("versions operational settings even when the capability set is unchanged", async () => {
+    const first = await configure("bizA", { ...hardwareAnswers, business_type: "supermarket", variants: false });
+    const edited = await configure("bizA", { ...hardwareAnswers, business_type: "supermarket", variants: true });
+    expect(first.status).toBe(200);
+    expect(edited.status).toBe(200);
+    expect(edited.body.changed).toBe(true);
+    expect(edited.body.draftVersion).toBe(first.body.draftVersion + 1);
+    expect(JSON.parse(rows("posConfiguration")[0].draftJson).inventory.variants).toBe(true);
+  });
+
+  it("preserves owner terminology when a later answer is saved", async () => {
+    const first = await call(await configPost(post("bizA", "", { answers: restaurantAnswers, terminology: { customer: "Patron" } }), context("bizA")));
+    expect(first.body.terminology.customer).toBe("Patron");
+    const next = await configure("bizA", { ...restaurantAnswers, keeps_stock: false });
+    expect(next.body.terminology.customer).toBe("Patron");
+    const reloaded = await call(await configGet(get("bizA"), context("bizA")));
+    expect(reloaded.body.terminology.customer).toBe("Patron");
+  });
+
   it("drops answers it does not recognise instead of storing them (§22, §56)", async () => {
     const { status } = await configure("bizA", { ...restaurantAnswers, isAdmin: true, priceKES: 1, nope: "yes" });
     expect(status).toBe(200);

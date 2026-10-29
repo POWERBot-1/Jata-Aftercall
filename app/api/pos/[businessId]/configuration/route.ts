@@ -30,7 +30,8 @@ export async function GET(_request: Request, context: RouteContext) {
     options: { permission: "EDIT_CONFIGURATION", fast: true },
     fallback: "We couldn't load your POS setup.",
     handler: async ({ ctx }) => {
-      const configuration = ctx.configuration;
+      // Setup edits the draft; a live till intentionally continues using the published snapshot.
+      const configuration = ctx.record?.draft ?? ctx.configuration;
       const readiness = configurationReadiness(ctx.record?.answers ?? {});
       return posOk({
         businessTypeKey: configuration.business.typeKey,
@@ -48,7 +49,7 @@ export async function GET(_request: Request, context: RouteContext) {
         summary: configurationSummary(configuration),
         headline: configurationHeadline(configuration),
         description: describeConfiguration(configuration),
-        terminology: ctx.terminology,
+        terminology: resolveTerminology(configuration),
         capabilities: configuration.capabilities,
         view: questionnaireView(ctx.record?.answers ?? {}, readiness.missing),
       });
@@ -80,8 +81,12 @@ export async function POST(request: Request, context: RouteContext) {
           draftVersion: saved.record.draftVersion,
           readiness: saved.readiness,
           validation: saved.validation,
+          answers: saved.record.answers,
+          view: questionnaireView(saved.record.answers, saved.readiness.missing),
           summary: configurationSummary(saved.record.draft),
           headline: configurationHeadline(saved.record.draft),
+          description: describeConfiguration(saved.record.draft),
+          terminology: resolveTerminology(saved.record.draft),
         },
       );
     },

@@ -1034,20 +1034,10 @@ export function applyTerminologyOverrides(
 }
 
 export function configurationFingerprint(config: PosConfiguration): string {
-  const material = {
-    type: config.business.typeKey,
-    capabilities: [...config.capabilities].sort(),
-    payments: enabledPaymentMethods(config).sort(),
-    units: [...config.inventory.units].sort(),
-    credit: { enabled: config.credit.enabled, limit: config.credit.limitKES, terms: config.credit.termsDays },
-    suppliers: { enabled: config.suppliers.enabled, credit: config.suppliers.credit, terms: config.suppliers.termsDays },
-    staff: { enabled: config.staff.enabled, count: config.staff.count, roles: [...config.staff.roles].sort() },
-    branches: { enabled: config.branches.enabled, count: config.branches.count },
-    expenses: { enabled: config.expenses.enabled },
-    orders: { enabled: config.orders.enabled, workflow: config.orders.workflowKey },
-    tax: config.sales.tax,
-    terminology: config.terminology,
-  };
+  // Presentation is deliberately live and unversioned; every operational field must
+  // participate, including stock, receipt and other settings beyond capabilities.
+  const { presentation: _presentation, ...material } = config;
+  void _presentation;
   return stableStringify(material);
 }
 
