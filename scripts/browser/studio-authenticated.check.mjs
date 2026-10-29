@@ -382,7 +382,7 @@ try {
   const anonymous = await api(visitor, "/api/experience?businessId=unknown");
   check("anonymous private API refused", anonymous.status === 401);
 
-  for (const [category, itemName, price] of [["retail", "QA cotton tote", 650], ["food", "QA coastal lunch", 850], ["salon", "QA hair appointment", 1200], ["professional", "QA advisory request", null], ["technical", "QA technical visit", null]]) {
+  for (const [category, itemName, price] of [["retail", "QA cotton tote", 650], ["food", "QA coastal lunch", 850], ["salon", "QA hair appointment", 1200], ["professional", "QA advisory request", null], ["technical", "QA technical visit", null], ["farm", "QA farm produce", 300]]) {
     const ownerContext = await browser.createBrowserContext();
     const ownerPage = await pageFor(ownerContext);
     await ownerPage.setViewport({ width: 1440, height: 1000 });
@@ -396,6 +396,7 @@ try {
     if (business) created.push({ id: business.id, ownerId: business.ownerId, slug: business.slug, email, category });
     check(`${category}: actual HTTP registration`, registered.status === 200 && Boolean(business));
     const recipeSpec = { retail: { key: "retail-stock", section: "featured", label: "Featured", field: "brand", detail: "Brand", fact: "QA owner brand", layout: "product-list" },
+      farm: { key: "farm-produce", section: "featured", label: "Featured", field: "brand", detail: "Brand", fact: "QA owner farm brand", layout: "product-list" },
       food: { key: "food-menu", section: "menu", label: "Menu", field: "ingredients", detail: "Ingredients", fact: "QA owner ingredients", layout: "menu-board" },
       salon: { key: "salon-booking", section: "services", label: "Services", field: "staff", detail: "Specialist", fact: "QA owner specialist", layout: "service-grid" },
       professional: { key: "professional-enquiry", section: "services", label: "Services", field: "staff", detail: "Professional", fact: "QA owner adviser", layout: "service-grid" },
@@ -547,7 +548,7 @@ try {
       await clickText(visitor, 'button', 'Any duration');
       check(`${category}: actual duration filter restores owned service`, Boolean(await visitor.waitForSelector('[data-recipe-item]')));
     } else {
-      await clickText(visitor, 'button', category === "food" ? 'Available dishes only' : 'In stock only');
+      await clickText(visitor, 'button', category === "food" ? 'Available dishes only' : category === "farm" ? 'Available produce only' : 'In stock only');
       check(`${category}: actual category-appropriate availability filter`, Boolean(await visitor.$('[data-recipe-item]')));
     }
     await visitor.type('input[type="search"]', 'does-not-exist');
@@ -754,7 +755,7 @@ try {
   // Load timeouts under throttle skip the sample and never fail the journey.
   // Every attempt is recorded in results.json.
   {
-    const sampleFixtures = created; // all five representative business types
+    const sampleFixtures = created.filter((fixture) => REQUIRED_CATEGORIES.includes(fixture.category)); // Preserve all required hydration samples; the farm journey is checked above.
     for (const fixture of sampleFixtures) {
       // The session that opens a preview route must be the account that owns the business being
       // previewed. E5 (run 38604239350) measured exactly that: with each category's own owner page,

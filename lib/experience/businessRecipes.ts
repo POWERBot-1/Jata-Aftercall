@@ -29,7 +29,7 @@ export const BUSINESS_RECIPES: readonly BusinessRecipe[] = [
     details: [{ key: "brand", label: "Brand" }, { key: "variants", label: "Product options" }, { key: "stock", label: "Availability" }] },
   { version: 1, key: "farm-produce", category: "farm", label: "Produce & availability", primarySection: "featured", sections: ["featured"],
     source: "products", layout: "product-grid", listLayout: "product-list", layouts: ["product-grid", "product-list"], availabilityLabel: "Available produce only",
-    details: [{ key: "stock", label: "Availability" }, { key: "variants", label: "Produce options" }] },
+    details: [{ key: "brand", label: "Brand" }, { key: "stock", label: "Availability" }, { key: "variants", label: "Produce options" }] },
   { version: 1, key: "food-menu", category: "food", label: "Food menu & ordering", primarySection: "menu", sections: ["menu", "featured"],
     source: "products", layout: "menu-list", listLayout: "menu-list", layouts: ["menu-list", "menu-board"], availabilityLabel: "Available dishes only",
     details: [{ key: "ingredients", label: "Ingredients" }, { key: "portion", label: "Portion" }, { key: "prep", label: "Preparation time" }, { key: "options", label: "Extras" }] },
