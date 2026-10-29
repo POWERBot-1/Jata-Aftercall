@@ -117,6 +117,7 @@ try {
     await page.waitForSelector(".pos-item");
     await page.click(".pos-item");
     await clickText(page,".pos-method", "Cash");
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.trim().startsWith("Complete ") && !button.disabled));
     const saleResponse = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/sales`) && r.request().method() === "POST").catch(() => null);
     const complete = await page.$$('button');
     const submit = (await Promise.all(complete.map(async (button) => [await button.evaluate((el) => el.textContent.trim()),button]))).find(([text]) => text.startsWith("Complete "))?.[1];
