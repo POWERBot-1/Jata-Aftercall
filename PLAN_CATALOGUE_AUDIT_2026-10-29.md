@@ -281,8 +281,13 @@ Verification actually run in this environment:
 | `npx eslint app/api/admin/plans/route.ts lib/planKey.ts tests/unit/plan-key-normalization.test.ts` | **0 errors** |
 | `npx tsc --noEmit` | **4 errors, all pre-existing offline-Prisma test-file gaps**; no new error |
 
-Not run: `next build` (offline `prisma generate` fails, same limitation as the previous session), any browser or live
-network check.
+These changes are on `arena/df1ff801-jata-aftercall` and open as **PR #73** (`OPEN`, `MERGEABLE`). They are **not merged
+and not deployed**; production remains `d49d605`. At the time of writing, 12 of 14 PR checks had passed — including
+*Static (install, generate, lint, typecheck, audit)* with a real generated Prisma client, *Schema, types, unit suite,
+build*, the migration gates and *Release gate (aggregate)* — with the two long-running browser/database journeys still in
+progress.
+
+Not run: `next build` locally (offline `prisma generate` fails, same limitation as the previous session).
 
 ---
 
