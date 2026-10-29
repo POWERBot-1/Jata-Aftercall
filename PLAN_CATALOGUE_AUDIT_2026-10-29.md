@@ -13,7 +13,7 @@
 | 2 — read-only production audit | **BLOCKED** | No production database credential exists in this environment, the live host is unreachable, and no Neon query tool is connected. No `SELECT` was executed. Row counts are **unknown**, not zero. |
 | 3 — Autopilot repair | **BLOCKED** | Cannot reach the database; **0 rows written**. The authorised, idempotent SQL is ready in §5. |
 | 3 — POS / ERP-Oro changes | **NOT AUTHORISED / NOT RUN** | Configuration established in §2; exact proposed statements in §6. |
-| 4 — application verification | **BLOCKED / NOT TESTED** | `https://jata-aftercall.vercel.app` returns `000` from this sandbox; no browser session or database access exists. |
+| 4 — application verification | **PARTIAL PASS / BLOCKED** | Live `GET /` and `GET /health` passed in the post-deployment smoke run (§9). Plan-specific and authenticated checks are **NOT TESTED**: `https://jata-aftercall.vercel.app` returns `000` from this sandbox and no browser session exists. |
 | Repair-path code fixes (this branch) | **PASS locally / NOT DEPLOYED** | Admin plan-key truncation and the production-seed instruction are fixed with tests; see §8. |
 
 Nothing in this document is a claim that a production plan row exists, is missing, or was changed. The only facts about
@@ -58,6 +58,7 @@ transmitted. No development, preview, test or unrelated Lovable database was use
 | Production environment variable **names** | `DATABASE_URL` **present**, `DIRECT_URL` **present**, `AUTH_SECRET`, `NEXTAUTH_*`, `PAYSTACK_*`, `ADMIN_EMAILS`, `CLIENT_KEY`, `MPESA_*`, `NODE_ENV` also present |
 | `ERP_PRO_ENABLED` / `ERP_PRO_DISABLED` | **absent** from the production deployment environment → `erpFeatureEnabled()` evaluates **false** in production; ERP/Oro is switched off by design |
 | Preview deployment for this branch's commit `c129e3b` | `dpl_GkgBtgCz31WrQkXFGC5QTCmcmqJs`, state `CANCELED`, `buildSkipped: true` — the project's Ignored Build Step skips non-production builds, so **no preview build ran and no preview database was migrated** |
+| Post-deployment smoke, run `40864949988` | `deployment_status`, started `2026-10-29T11:22:57Z` (seconds after the production deployment), conclusion **success**, every step green |
 
 The production build is **READY**, and `scripts/build.sh` runs `prisma migrate deploy` with `set -e` whenever
 `DATABASE_URL` is configured. A successful production build therefore proves the production database was reachable and
@@ -287,10 +288,13 @@ network check.
 
 ## 9. Verification still required (Phase 4)
 
-None of these could be performed here. Each is **NOT TESTED**, not PASS.
+Two live transport checks passed through the repository's own read-only post-deployment smoke workflow. Every
+plan-specific and authenticated check is **NOT TESTED**; none may be reported as PASS.
 
 | Check | Status | How to close it |
 | --- | --- | --- |
+| Live `GET /` serves the application | **PASS** | Production smoke run `40864949988`, `2026-10-29T11:22:57Z`; the script exits 0 only when the homepage is `200` HTML |
+| Live `GET /health` reports `status: ok` / `db: up` | **PASS** | same run; the script exits non-zero for `db: down` or `db: unconfigured`. This proves the runtime database connection — **not** that any plan row exists |
 | Production rows exist with expected keys/prices/durations/active flags | **BLOCKED** | §7 query on the production branch; report count and rows |
 | Autopilot page shows all three tiers at the verified prices | **NOT TESTED** | owner session → `/dashboard/autopilot/<businessId>` |
 | Checkout resolves the correct plan server-side | **NOT TESTED** | activation must return 200 with the stored id/price; no payment needs to be completed |
@@ -299,7 +303,11 @@ None of these could be performed here. Each is **NOT TESTED**, not PASS.
 | `/pricing` and `/products` show the full six-card catalogue | **NOT TESTED** | live read |
 | `/onboarding` and `/dashboard/subscription` list the four public plans | **NOT TESTED** | signed-in read |
 | Mobile and desktop visibility | **NOT TESTED** | 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 |
-| No payment initiated / no unrelated data changed | **PASS (by construction)** | no database connection existed; no payment route was called; no seed was run; no environment or DNS change was made |
+| No payment initiated / no unrelated data changed | **PASS (by construction)** | no database connection existed; no payment route was called; no seed was run; no environment or DNS change was made. The only live requests were the workflow's read-only `GET /` and `GET /health` |
+
+Why the smoke PASS does not weaken the blocking finding: `/` renders the marketing grid through `homepagePlanCards()`, which
+substitutes canonical cards when rows are unavailable, and `/health` runs `SELECT 1` only. Neither reads `PlanConfig`, so
+neither can show whether the plans exist. This is exactly the distinction the repair must not blur.
 
 ### Post-repair read-only verification
 
