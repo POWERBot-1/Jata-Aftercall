@@ -102,6 +102,23 @@ jobs:
           cat /tmp/next-start.log >&2
           exit 1
 
+      - name: POS profile browser journeys on disposable PostgreSQL
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/pos-profile-journeys.check.mjs 2>&1 | tee /tmp/pos-profiles.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/pos-profiles.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=POS profile browser failure::$detail"
+          fi
+          exit "$result"
+
       - name: Capture six-viewport screenshots and layout evidence in real Chrome
         run: |
           set -o pipefail
@@ -146,23 +163,6 @@ jobs:
           if [ "$result" -ne 0 ]; then
             detail=$(tail -30 /tmp/pos-photo-check.log | tr '\n' '|' | cut -c1-5000)
             echo "::error title=POS photo browser failure::$detail"
-          fi
-          exit "$result"
-
-      - name: POS profile browser journeys on disposable PostgreSQL
-        env:
-          JATA_DISPOSABLE_BROWSER_DB: "1"
-          BASE_URL: http://localhost:4100
-        run: |
-          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
-          set -o pipefail
-          set +e
-          node scripts/browser/pos-profile-journeys.check.mjs 2>&1 | tee /tmp/pos-profiles.log
-          result=${PIPESTATUS[0]}
-          set -e
-          if [ "$result" -ne 0 ]; then
-            detail=$(tail -30 /tmp/pos-profiles.log | tr '\n' '|' | cut -c1-5000)
-            echo "::error title=POS profile browser failure::$detail"
           fi
           exit "$result"
 
