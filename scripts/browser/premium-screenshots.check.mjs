@@ -75,14 +75,16 @@ const MEMBER_ROUTES = [
   { slug: "business-pos", path: "/dashboard/pos" },
 ];
 
-// Owner-mandated 2026-10-27 homepage sequence.
+// Owner-mandated 2026-10-29 homepage sequence (mobile reading order): Autopilot moved to last
+// and JATA BOS PRO (ERP_PRO) inserted sixth when the full subscription catalogue shipped.
 const EXPECTED_PLAN_ORDER = [
   "MONTHLY",
   "ANNUAL",
   "AI_BUSINESS_FRONT_DESK",
-  "JATA_AUTOPILOT",
   "INTERACTIVE_BUSINESS",
   "BUSINESS_POS",
+  "ERP_PRO",
+  "JATA_AUTOPILOT",
 ];
 
 const failures = [];
@@ -776,7 +778,7 @@ for (const width of ["320x568", "390x844"]) {
   }
 }
 
-// Homepage design gates: palette really applies in a real browser, and the six cards keep the
+// Homepage design gates: palette really applies in a real browser, and the seven cards keep the
 // owner-mandated order at a phone width and at desktop width.
 for (const width of ["390x844", "1366x768"]) {
   const home = evidence.results.find((r) => r.viewport === width && r.route === "home");
@@ -785,8 +787,8 @@ for (const width of ["390x844", "1366x768"]) {
     continue;
   }
   const keys = home.planCards.map((c) => c.key);
-  record(keys.length === 6 && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
-    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS`,
+  record(keys.length === 7 && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
+    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk, Website Studio, POS, BOS PRO, Autopilot`,
     keys.join(" > "));
   // Original design tokens, scoped where the original stylesheet declares them.
   record(home.tokens.jataAccent === "#d97706", `root accent is the original amber at ${width}`, String(home.tokens.jataAccent));

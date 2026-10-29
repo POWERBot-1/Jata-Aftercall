@@ -37,12 +37,12 @@ function vercelHostToUrl(raw: string | undefined): string {
   return `https://${host}`;
 }
 
-export function getBaseUrl(): string {
-  const publicBase = process.env.PUBLIC_BASE_URL?.trim() || "";
-  const nextAuth = process.env.NEXTAUTH_URL?.trim() || "";
-  const vercelEnv = process.env.VERCEL_ENV?.trim().toLowerCase() || "";
-  const vercelProduction = vercelHostToUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL);
-  const vercelDeployment = vercelHostToUrl(process.env.VERCEL_URL);
+export function getBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const publicBase = env.PUBLIC_BASE_URL?.trim() || "";
+  const nextAuth = env.NEXTAUTH_URL?.trim() || "";
+  const vercelEnv = env.VERCEL_ENV?.trim().toLowerCase() || "";
+  const vercelProduction = vercelHostToUrl(env.VERCEL_PROJECT_PRODUCTION_URL);
+  const vercelDeployment = vercelHostToUrl(env.VERCEL_URL);
 
   // `vercel dev` reports VERCEL_ENV=development — treat it like any other local run.
   const onVercel = vercelEnv !== "development" && Boolean(vercelProduction || vercelDeployment);

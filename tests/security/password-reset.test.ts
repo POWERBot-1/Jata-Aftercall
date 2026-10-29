@@ -20,13 +20,22 @@ const mocks = vi.hoisted(() => {
       }),
       updateMany: vi.fn(async ({ where, data }: any) => {
         if (!state.user || state.user.id !== where.id) return { count: 0 };
-        const current = state.user.passwordResetRequestedAt;
-        const allowed = where.OR.some((condition: any) =>
-          condition.passwordResetRequestedAt === null
-            ? current === null
-            : current instanceof Date && current <= condition.passwordResetRequestedAt.lte,
-        );
-        if (!allowed) return { count: 0 };
+        if (where.OR) {
+          const current = state.user.passwordResetRequestedAt;
+          const allowed = where.OR.some((condition: any) =>
+            condition.passwordResetRequestedAt === null
+              ? current === null
+              : current instanceof Date && current <= condition.passwordResetRequestedAt.lte,
+          );
+          if (!allowed) return { count: 0 };
+        } else if ("passwordResetRequestedAt" in where) {
+          // Exact-match release of one specific attempt (cooldown rollback after delivery failure).
+          const current = state.user.passwordResetRequestedAt;
+          const expected = where.passwordResetRequestedAt;
+          if (!(current instanceof Date && expected instanceof Date && current.getTime() === expected.getTime())) {
+            return { count: 0 };
+          }
+        }
         Object.assign(state.user, data);
         return { count: 1 };
       }),
@@ -73,8 +82,8 @@ vi.mock("@/lib/auth", () => ({ hashPassword: vi.fn(async (password: string) => `
 vi.mock("@/lib/password-reset-email", () => ({
   isPasswordResetEmailConfigured: vi.fn(() => mocks.emailConfigured),
   sendPasswordResetEmail: vi.fn(async (to: string, token: string) => {
-    mocks.sent.push({ to, token });
     if (mocks.failEmail) throw new Error("SMTP transport details must not escape");
+    mocks.sent.push({ to, token });
   }),
 }));
 vi.mock("@/lib/audit", () => ({
@@ -200,6 +209,38 @@ describe("password-reset request", () => {
     expect(body.message).toMatch(/If an account exists/);
     expect(body.message).not.toContain("SMTP");
     expect(mocks.token.usedAt).toEqual(NOW);
+    // Regression: a delivery failure must not leave the account locked in its cooldown with a
+    // dead token — the user would see "check your email" for 15 minutes while retries vanished.
+    expect(mocks.user.passwordResetRequestedAt).toBeNull();
+  });
+
+  it("releases the cooldown after a delivery failure so an immediate retry delivers", async () => {
+    mocks.failEmail = true;
+    await request("owner@example.test", "198.51.100.41");
+    await flushAfterTasks();
+    expect(mocks.sent).toHaveLength(0);
+    expect(mocks.user.passwordResetRequestedAt).toBeNull();
+
+    mocks.failEmail = false;
+    const retry = await request("owner@example.test", "198.51.100.42");
+    await flushAfterTasks();
+
+    expect(retry.status).toBe(202);
+    expect(mocks.sent).toHaveLength(1);
+    expect(mocks.token.usedAt).toBeNull();
+    expect(mocks.token.tokenHash).toBe(createHash("sha256").update(mocks.sent[0].token).digest("hex"));
+  });
+
+  it("answers unknown accounts with the identical response and never creates a token", async () => {
+    const unknown = await request("nobody@example.test", "198.51.100.43");
+    await flushAfterTasks();
+
+    expect(unknown.status).toBe(202);
+    expect(await unknown.json()).toEqual({
+      message: "If an account exists for that address, we'll send a password reset link.",
+    });
+    expect(mocks.token).toBeNull();
+    expect(mocks.sent).toHaveLength(0);
   });
 
   it("applies an IP abuse limit before account lookup", async () => {

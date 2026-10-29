@@ -7,9 +7,9 @@
  * 2. When the plan read failed the page fell back to Monthly and Annual only, silently dropping
  *    two advertised products. The fallback now lists every advertised plan.
  *
- * 2026-10-27 owner order: six cards in one grid — Monthly, Annual, AI Business Front Desk,
- * JATA Autopilot, Website Studio, Business POS (last). The POS and Autopilot are still never
- * payable plan choices (§67).
+ * 2026-10-29 owner order: seven cards in one grid — Monthly, Annual, AI Business Front Desk,
+ * Website Studio, Business POS, JATA BOS PRO (ERP_PRO, marketing surface only), JATA Autopilot
+ * (last). The POS, BOS PRO and Autopilot are still never payable plan choices (§67).
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
