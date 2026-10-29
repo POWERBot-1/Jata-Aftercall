@@ -2012,7 +2012,12 @@ button:focus-visible {
   --jata-dur-fast: 120ms;
   --jata-dur-base: 180ms;
   --jata-dur-slow: 260ms;
+  /* A state change is slower than a hover and slower than a press: a status pill or a row that
+     changes meaning gets read, so it settles rather than snaps. Kept under 320ms because a till
+     operator must never wait on it. */
+  --jata-dur-state: 220ms;
   --jata-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --jata-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Containers. */
   --jata-container-md: 42rem;
@@ -2278,6 +2283,87 @@ button:focus-visible {
   .jata-btn .jata-spinner { animation: none; }
   .jata-surface--interactive { transition: none; }
 }
+
+/* ── Motion layer ───────────────────────────────────────────────────────────
+ * The interaction half of the design system. Every duration and curve here comes from the tokens
+ * above, so the whole product moves at one tempo and a single edit retunes it.
+ *
+ * What this layer deliberately does NOT do:
+ *   • it adds no colour, radius, shadow or size — only timing;
+ *   • nothing animates anything that carries meaning on its own: the label, the number and the
+ *     status text are always present before, during and after the transition;
+ *   • no continuous animation. Everything settles and stops, so a dashboard left open on a counter
+ *     screen is not repainting forever.
+ *
+ * Buttons and interactive cards already define hover/press in their own rules further up; these
+ * rules cover the primitives that had no motion at all.
+ * ------------------------------------------------------------------------ */
+
+/* Navigation: it had no hover state and no transition, so the top bar felt inert. Colour only —
+   nothing moves, so a link can never shift under the pointer. */
+.jata-nav-link {
+  transition: color var(--jata-dur-fast) var(--jata-ease-out),
+    background-color var(--jata-dur-fast) var(--jata-ease-out),
+    border-color var(--jata-dur-fast) var(--jata-ease-out);
+}
+.jata-nav-link:hover { color: var(--jata-ink); }
+.jata-nav-link:active { color: var(--jata-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .jata-nav-link { transition: none; }
+}
+
+/* Status pills change tone when an operation moves from working to completed or failed. The
+   transition makes the change followable; the text inside is what actually states it. */
+.jata-pill {
+  transition: background-color var(--jata-dur-state) var(--jata-ease-in-out),
+    border-color var(--jata-dur-state) var(--jata-ease-in-out),
+    color var(--jata-dur-state) var(--jata-ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-pill { transition: none; }
+}
+
+/* Table rows: the hover tint already existed and snapped. Fading it keeps a long transaction list
+   from strobing as the pointer tracks down it. */
+.jata-table tbody tr {
+  transition: background-color var(--jata-dur-fast) var(--jata-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-table tbody tr { transition: none; }
+}
+
+/* Dialogs and sheets. A dialog may fade and rise by two pixels as it opens; it must never scale
+   from nothing or slide across the screen, because that delays the first readable frame. The
+   animation is `both`-filled so the final state is the painted state even if the animation is
+   interrupted. */
+@keyframes jata-dialog-in {
+  from { opacity: 0; transform: translate3d(0, 2px, 0); }
+  to { opacity: 1; transform: none; }
+}
+.jata-dialog-in,
+.jata-sheet,
+.jata-history-sheet {
+  animation: jata-dialog-in var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-dialog-in,
+  .jata-sheet,
+  .jata-history-sheet { animation: none; opacity: 1; transform: none; }
+}
+
+/* Charts draw their bars once, when the panel appears. The data is unchanged and the same numbers
+   are always printed as a table beneath, so the chart is never the only way to read them. */
+@keyframes jata-chart-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.jata-chart-shell {
+  animation: jata-chart-in var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-chart-shell { animation: none; opacity: 1; }
+}
+
 
 /* ── Dashboard section navigation (extends .jata-nav) ───────────────────── */
 
@@ -5415,3 +5501,23 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 
 /* Local browser evidence fixtures: hide the product-theme picker (real /b/ pages never show it). */
 body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
+
+/* ── Reduced motion: one global guarantee ───────────────────────────────────
+ * The blocks above are scoped to a surface (the landing, a customer product, the storefront, the
+ * workspace). That left any `jata-*` primitive outside those scopes free to animate for a customer
+ * who asked the operating system for stillness. This final rule closes that gap product-wide.
+ *
+ * `0.01ms` rather than `none` is deliberate: animations here are `both`-filled, so collapsing the
+ * duration jumps straight to the painted end state. Content appears immediately and completely —
+ * nothing is hidden, nothing waits.
+ * ------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

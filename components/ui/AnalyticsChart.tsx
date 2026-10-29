@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useReducedMotion } from "motion/react";
 import { formatNumber } from "@/lib/dateFormat";
 import { cn } from "@/lib/ui";
 
@@ -26,6 +27,10 @@ export function AnalyticsChart({
   className?: string;
   height?: number;
 }) {
+  // Recharts animates bars by default and knows nothing about `prefers-reduced-motion`, so the
+  // chart used to grow from zero on every mount even for a customer who asked the operating system
+  // for stillness. The decision is read from the same preference the rest of the product uses.
+  const reducedMotion = useReducedMotion();
   const total = series.reduce((sum, entry) => sum + entry.value, 0);
   if (total === 0) {
     return (
@@ -59,7 +64,7 @@ export function AnalyticsChart({
               }}
               formatter={(value: number) => [formatNumber(value), title]}
             />
-            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44}>
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={!reducedMotion}>
               {series.map((entry) => (
                 <Cell key={entry.label} fill={entry.colour ?? "var(--jata-accent)"} />
               ))}
