@@ -345,10 +345,20 @@ export async function postJournalTx(tx: any, input: PostJournalInput): Promise<P
   return posted;
 }
 
-/** Open a transaction, post, and audit the result. */
+/**
+ * Post and audit a journal.
+ *
+ * The client may be the root Prisma client *or* a transaction a caller already owns. Two callers
+ * pass their own `tx` — supplier bills and expenses — because the journal and the document must
+ * commit together. A transaction client has no `$transaction` of its own, so opening one there
+ * throws `db.$transaction is not a function`; that is why this joins the caller's transaction
+ * instead of nesting a new one. With a root client it still opens one.
+ */
 export async function postJournal(client: any, input: PostJournalInput): Promise<PostedJournal> {
   const db = client ?? prisma;
-  const posted = await db.$transaction(async (tx: any) => postJournalTx(tx, input));
+  const posted = typeof db.$transaction === "function"
+    ? await db.$transaction(async (tx: any) => postJournalTx(tx, input))
+    : await postJournalTx(db, input);
   await logErpAudit({
     businessId: input.businessId,
     actorId: input.actorId,
