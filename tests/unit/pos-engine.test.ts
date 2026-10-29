@@ -363,6 +363,13 @@ describe("forms are generated from configuration (§24)", () => {
     expect(formSpec(restaurant, "customer").fields.some((field) => field.key === "creditLimitKES")).toBe(false);
   });
 
+  it("defaults a service-only catalogue item to a valid service kind", () => {
+    const salon = finalize(buildConfiguration({ business_type: "salon", sells: ["services"] }, {}));
+    const kind = formSpec(salon, "product").fields.find((field) => field.key === "kind");
+    expect(kind?.defaultValue).toBe("SERVICE");
+    expect(kind?.options?.map((option) => option.id)).toEqual(["SERVICE"]);
+  });
+
   it("offers only the units the business chose (§13)", () => {
     const hardware = finalize(buildConfiguration(hardwareAnswers(), {}));
     const keys = unitOptions(hardware).map((unit) => unit.key);

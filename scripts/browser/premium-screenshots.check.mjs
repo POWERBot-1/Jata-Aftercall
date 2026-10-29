@@ -69,6 +69,8 @@ const PUBLIC_ROUTES = [
 
 const MEMBER_ROUTES = [
   { slug: "overview", path: "/dashboard" },
+  { slug: "subscription", path: "/dashboard/subscription" },
+  { slug: "bos", path: "/dashboard/erp" },
   { slug: "ai-front-desk", path: "/dashboard/ai" },
   { slug: "autopilot", path: "/dashboard/autopilot" },
   { slug: "website-studio", path: "/dashboard/studio" },
@@ -332,6 +334,12 @@ function measureFacts() {
     images,
     blankImages,
     overflowImages,
+    workspaceNav: Array.from(document.querySelectorAll('nav[aria-label="Workspace sections"] a')).map((a) => {
+      const r = a.getBoundingClientRect();
+      const style = getComputedStyle(a);
+      return { href: a.getAttribute("href"), label: a.textContent?.trim(), active: a.getAttribute("aria-current"),
+        visible: r.width > 0 && r.height >= 44 && r.left >= -1 && r.right <= innerWidth + 1 && style.visibility === "visible" };
+    }),
     h1: document.querySelector("h1")?.textContent?.trim().slice(0, 120) ?? "",
   };
 }
@@ -404,6 +412,11 @@ if (loginOk) {
     for (const route of MEMBER_ROUTES) {
       const result = await openPage(memberContext, route, viewport);
       evidence.results.push({ viewport: viewport.label, route: route.slug, access: "member", ...result });
+      const nav = result.workspaceNav;
+      const bos = nav.find((link) => link.href === "/dashboard/erp");
+      record(Boolean(bos && bos.label === "BOS" && nav.every((link) => link.visible) &&
+        nav.find((link) => link.href === route.path)?.active === "page" && !result.horizontalOverflow),
+        `${viewport.label} ${route.slug} workspace navigation visible and active`, JSON.stringify(nav));
     }
   }
 
@@ -423,17 +436,26 @@ if (loginOk) {
     const hrefs = await navPage.$$eval('nav a[href^="/dashboard"]', (anchors) =>
       anchors.map((a) => a.getAttribute("href")),
     );
-    const wanted = ["/dashboard", "/dashboard/ai", "/dashboard/autopilot", "/dashboard/studio", "/dashboard/pos"];
+    const wanted = ["/dashboard", "/dashboard/subscription", "/dashboard/ai", "/dashboard/studio", "/dashboard/pos", "/dashboard/erp", "/dashboard/autopilot"];
     for (const href of wanted) {
       if (!hrefs.includes(href)) {
         navSteps.push({ href, ok: false, detail: "nav link absent" });
         continue;
       }
-      await navPage.click(`nav a[href="${href}"]`);
+      const selector = `nav[aria-label="Workspace sections"] a[href="${href}"]`;
+      await navPage.focus(selector);
+      await navPage.keyboard.down("Shift");
+      await navPage.keyboard.press("Tab");
+      await navPage.keyboard.up("Shift");
+      await navPage.keyboard.press("Tab");
+      const focused = await navPage.$eval(selector, (link) => document.activeElement === link && link.matches(":focus-visible"));
+      if (!focused) { navSteps.push({ href, ok: false, detail: "keyboard focus not visible" }); continue; }
+      await navPage.keyboard.press("Enter");
       await navPage.waitForSelector("h1, main", { timeout: 15000 });
       await navPage.evaluate(() => new Promise((resolve) => setTimeout(resolve, 350)));
       const at = new URL(navPage.url());
-      const ok = at.pathname === href && !at.pathname.startsWith("/login");
+      const active = await navPage.$eval(selector, (link) => link.getAttribute("aria-current") === "page");
+      const ok = at.pathname === href && active && !at.pathname.startsWith("/login");
       navSteps.push({ href, ok, detail: at.pathname });
     }
     await navPage.screenshot({ path: `${shotDir}/390x844__nav-journey.jpg`, type: "jpeg", quality: 74, fullPage: false });

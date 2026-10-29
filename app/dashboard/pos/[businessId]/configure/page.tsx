@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { configurationHeadline, configurationSummary, describeConfiguration } from "@/lib/pos/configuration";
 import { configurationReadiness } from "@/lib/pos/questionnaire";
+import { resolveTerminology } from "@/lib/pos/terminology";
 import { questionnaireView } from "@/lib/pos/questionnaireView";
 import { loadPosWorkspaceCached } from "@/lib/pos/workspace";
 import { QuestionnaireClient } from "@/components/pos/QuestionnaireClient";
@@ -39,7 +40,7 @@ export default async function PosConfigurePage({ params }: Props) {
 
   const answers = workspace.record?.answers ?? {};
   const readiness = configurationReadiness(answers);
-  const configuration = workspace.configuration;
+  const configuration = workspace.record?.draft ?? workspace.configuration;
   const view = questionnaireView(answers, readiness.missing);
 
   return (
@@ -61,7 +62,7 @@ export default async function PosConfigurePage({ params }: Props) {
         summary={configurationSummary(configuration)}
         headline={configurationHeadline(configuration)}
         description={describeConfiguration(configuration)}
-        terminology={workspace.terminology}
+        terminology={resolveTerminology(configuration)}
         wordsEditable={Boolean(answers.custom_words)}
         ready={readiness.ready}
         missing={readiness.missing}

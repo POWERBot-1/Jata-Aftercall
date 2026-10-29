@@ -56,7 +56,7 @@ export function productFields(config: PosConfiguration): FieldSpec[] {
       key: "kind",
       label: "Is it something you keep, or something you do?",
       kind: "select",
-      defaultValue: "PRODUCT",
+      defaultValue: config.sales.products ? "PRODUCT" : "SERVICE",
       column: true,
       options: [
         ...(config.sales.products ? [{ id: "PRODUCT", label: words.product }] : []),
