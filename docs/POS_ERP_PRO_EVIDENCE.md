@@ -1485,3 +1485,18 @@ matrix says so explicitly (§2.11 of `docs/POS_ERP_PRO_BOS_GAP.md`).
 The same defect means **an approved expense was recorded as a decision and then failed to post**. That
 fix is the same one line of routing in `postJournal`. It does not upgrade module 7: expenses are still
 **PARTIAL**, because the browser journey for approving and posting one has not been run.
+
+**The expense path, proven the same way.** The expense posting transaction was inline in
+`recordExpenseAction`, which no test could reach without a browser and a session — which is why the
+same defect lived there too. `69746d5` moves it to `recordExpense` in `lib/erp/expenses.ts` and adds two
+real-PostgreSQL tests: the stored expense, a balanced journal (5300 debit 100,000 / 1150 debit 16,000 /
+1000 credit 116,000), a replay of the same submission key that returns the recorded expense and posts
+nothing, and a refusal when VAT exceeds the total. The candidate suite reports **3,777 passed (3,777)**
+in run `40803616393` / job `123217247828`, and the ERP PostgreSQL job passes in run `40803616469`.
+
+The replay path is a behaviour change worth naming: before it, a double-submitted expense returned the
+journal from the idempotency record and then failed on `@@unique([businessId, idempotencyKey])`, so the
+person saw a unique-constraint error for what was a duplicate submission.
+
+Module 7 still stays **PARTIAL**: delegation, escalation and a stored tenant-wide threshold are not
+built, and no browser journey has approved and posted an expense end to end.
