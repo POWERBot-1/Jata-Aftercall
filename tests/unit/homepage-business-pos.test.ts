@@ -64,7 +64,7 @@ const gridMarkup = (html: string) => {
 };
 
 describe("the homepage renders the Business POS in the shared pricing grid (2026-10-25)", () => {
-  it("keeps the POS sixth (last) in the one grid under the 2026-10-27 owner order", async () => {
+  it("keeps the POS fifth in the one grid under the 2026-10-29 owner order", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
@@ -72,13 +72,14 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
-      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "ERP_PRO",
+      "JATA_AUTOPILOT",
     ]);
-    // One grid container holds all six cards.
+    // One grid container holds all seven cards.
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="6"');
+    expect(html).toContain('data-plan-count="7"');
     expect(gridMarkup(html)).toContain('data-plan="BUSINESS_POS"');
   });
 
@@ -177,7 +178,7 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     expect(cards.find((card) => card.key === "BUSINESS_POS")!.inner).not.toContain('href="/register"');
   });
 
-  it("still renders all six cards when the database is unavailable (the existing fallback)", async () => {
+  it("still renders all seven cards when the database is unavailable (the existing fallback)", async () => {
     const db = await import("@/lib/db");
     const findMany = db.default.planConfig.findMany as unknown as { mockImplementationOnce: (fn: () => Promise<never>) => void };
     findMany.mockImplementationOnce(async () => {
@@ -189,9 +190,10 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
-      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "ERP_PRO",
+      "JATA_AUTOPILOT",
     ]);
     expect(html).toContain("Monthly — KES 149/month");
     expect(html).toContain("Annual — KES 999/year");

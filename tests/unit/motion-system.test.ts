@@ -97,9 +97,10 @@ describe("plan icons and order are untouched", () => {
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
-      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "ERP_PRO",
+      "JATA_AUTOPILOT",
     ]);
   });
 });

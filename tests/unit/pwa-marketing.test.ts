@@ -112,6 +112,7 @@ describe("public marketing pages", () => {
       "/login", "/register", "/forgot-password", "/dashboard", "/dashboard/subscription",
       "/help", "/faq", "/contact", "/install", "/privacy", "/terms", "/products", "/pricing",
       "/products/business-page", "/products/ai-front-desk", "/products/website-studio", "/products/business-pos",
+      "/products/erp-pro", "/products/jata-autopilot", "/dashboard/erp", "/dashboard/pos", "/dashboard/autopilot",
       "/b/nyumbani-kitchen", "/b/marys-beauty-studio", "/b/kamau-auto-care", "/b/john-kamau-properties",
     ]);
     const sources = [...pages, "components/marketing/MarketingShell.tsx", "components/landing/FaqAndFooter.tsx"];
@@ -153,7 +154,7 @@ describe("public marketing pages", () => {
     expect(pricing).toContain("There is no self-service in-app refund button");
     expect(pricing).not.toMatch(/automatic refund|money-back guarantee/i);
     const planOrder = read("lib/pricing.ts");
-    expect(planOrder).toContain('["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "JATA_AUTOPILOT", "INTERACTIVE_BUSINESS", "BUSINESS_POS"]');
+    expect(planOrder).toContain('["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT"]');
   });
 
   it("contact page does not invent a support email or phone number", () => {

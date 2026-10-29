@@ -282,7 +282,7 @@ export async function requireErpAccess(
 
   if (!erpFeatureEnabled()) {
     throw new ErpAccessError(
-      "POS / ERP - PRO is not switched on for this environment yet. Your data is safe; nothing has been sent or charged.",
+      "JATA BOS PRO is not switched on for this environment yet. Your data is safe; nothing has been sent or charged.",
       503,
       "PRODUCT_DISABLED",
     );

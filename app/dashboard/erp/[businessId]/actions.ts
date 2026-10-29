@@ -1057,7 +1057,7 @@ export async function startErpPlanAction(form: FormData) {
     const { ERP_PLAN_KEY, ERP_PLAN_PRICE_KES, ERP_PLAN_DURATION_DAYS } = await import("@/lib/erp/entitlement");
     const { getCheckoutUrl } = await import("@/lib/subscriptionFlow");
     const plan = await prisma.planConfig.findUnique({ where: { key: ERP_PLAN_KEY } });
-    if (!plan) throw new ActionError("The POS / ERP - PRO plan has not been configured on this deployment yet. Nothing was charged.");
+    if (!plan) throw new ActionError("The JATA BOS PRO plan has not been configured on this deployment yet. Nothing was charged.");
     if (Number(plan.priceKES) !== ERP_PLAN_PRICE_KES || Number(plan.durationDays) !== ERP_PLAN_DURATION_DAYS) {
       throw new ActionError("The plan price on the server does not match the published price. Payment is blocked until an administrator corrects it.");
     }

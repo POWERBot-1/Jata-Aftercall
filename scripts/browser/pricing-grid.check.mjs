@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Pricing grid browser check — all six plans in one grid (2026-10-27 owner order: Monthly,
- * Annual, AI Front Desk, JATA Autopilot, Website Studio, Business POS).
+ * Pricing grid browser check — all seven offers in one grid (2026-10-29 owner order: Monthly,
+ * Annual, AI Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot).
  *
  *   CHROME_PATH=/path/to/chromium BASE_URL=http://localhost:3000 npm run test:browser:pricing
  *
  * Requires a running server (dev or `next start`). What it proves, in a real browser at the
- * widths the brief names (320, 360, 390, 414, 768, 1024, 1280, 1440):
- *   1. Exactly six `.lp-plan` cards, all inside the single `.lp-plans` grid — none rendered
+ * widths the brief names (320, 360, 390, 430, 768, 1366):
+ *   1. Exactly seven `.lp-plan` cards, all inside the single `.lp-plans` grid — none rendered
  *      outside it in a separate section.
  *   2. No horizontal overflow (`documentElement.scrollWidth` within the viewport) and no card
  *      crossing the viewport edge at any width.
@@ -18,8 +18,9 @@
  *   4. Cards in the same row share a width, and their icon/name/price/period/feature/CTA rows
  *      line up; every card renders a visible product icon.
  *   5. The order, prices, billing periods and CTA destinations are the authoritative ones, with
- *      the Business POS card ending in `/dashboard/pos`, the JATA Autopilot card in
- *      `/dashboard/autopilot` and the page plans in `/register`.
+ *      the Business POS card ending in `/dashboard/pos`, the JATA BOS PRO card in
+ *      `/products/erp-pro`, the JATA Autopilot card in `/dashboard/autopilot` and the page plans
+ *      in `/register`.
  *
  * Set SHOT_DIR to write screenshots (JPEG) for review. Exits 2 when Chrome is missing, so a run
  * without a browser is reported as NOT RUN rather than as a pass.
@@ -50,22 +51,22 @@ const VIEWPORTS = [
   { label: "320", width: 320, height: 640, columns: 1 },
   { label: "360", width: 360, height: 740, columns: 1 },
   { label: "390", width: 390, height: 844, columns: 1 },
-  { label: "414", width: 414, height: 896, columns: 1 },
+  { label: "430", width: 430, height: 932, columns: 1 },
   { label: "768", width: 768, height: 1024, columns: 2 },
-  { label: "1024", width: 1024, height: 768, columns: 2 },
-  { label: "1280", width: 1280, height: 800, columns: 3 },
-  { label: "1440", width: 1440, height: 900, columns: 3 },
+  { label: "1366", width: 1366, height: 768, columns: 3 },
 ];
 
 // The authoritative commercial data this change must not alter. Order is the owner-mandated
-// 2026-10-27 homepage sequence: Monthly, Annual, AI Front Desk, Autopilot, Website Studio, POS.
+// 2026-10-29 mobile-first homepage sequence: Monthly, Annual, AI Front Desk, Website Studio,
+// Business POS, JATA BOS PRO, JATA Autopilot.
 const EXPECTED = [
   { key: "MONTHLY", price: "KES 149", period: "per 30 days", cta: "/register" },
   { key: "ANNUAL", price: "KES 999", period: "per year", cta: "/register" },
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
-  { key: "JATA_AUTOPILOT", price: "KES 2,499", period: "per 30 days", cta: "/dashboard/autopilot" },
   { key: "INTERACTIVE_BUSINESS", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "BUSINESS_POS", price: "KES 499", period: "per 30 days", cta: "/dashboard/pos" },
+  { key: "ERP_PRO", price: "KES 3,000", period: "per 30 days", cta: "/products/erp-pro" },
+  { key: "JATA_AUTOPILOT", price: "KES 2,499", period: "per 30 days", cta: "/dashboard/autopilot" },
 ];
 
 const browser = await puppeteer.launch({
@@ -142,7 +143,7 @@ for (const viewport of VIEWPORTS) {
   await page.evaluate(() => document.querySelector("#pricing")?.scrollIntoView());
   const f = await facts(page);
 
-  check(`${viewport.label}px: one pricing grid holds exactly six plan cards`, f.gridCount === 1 && f.cards.length === 6 && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length}`);
+  check(`${viewport.label}px: one pricing grid holds exactly seven plan cards`, f.gridCount === 1 && f.cards.length === 7 && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length}`);
   check(`${viewport.label}px: every card renders a visible product icon`, f.cards.every((c) => c.iconVisible), f.cards.map((c) => `${c.key}:${c.iconVisible}`).join(" | "));
   check(`${viewport.label}px: no separate POS section`, !f.separatePosSection);
   check(`${viewport.label}px: no horizontal overflow`, f.docScrollWidth <= f.viewport && f.cards.every((c) => c.box.right <= f.viewport + 0.5 && c.box.left >= -0.5), `scrollWidth=${f.docScrollWidth} viewport=${f.viewport}`);
@@ -185,8 +186,9 @@ for (const viewport of VIEWPORTS) {
     }),
     f.cards.map((card) => `${card.key}:${card.price}:${card.ctaHref}`).join(" | "),
   );
-  check(`${viewport.label}px: the Autopilot card is fourth and keeps its own CTA`, f.cards[3]?.key === "JATA_AUTOPILOT" && f.cards[3]?.ctaText === "Open JATA Autopilot" && f.cards[3]?.name.includes("JATA Autopilot"), f.cards[3]?.ctaText ?? "missing");
-  check(`${viewport.label}px: the POS card is sixth (last) and keeps its own CTA`, f.cards[5]?.key === "BUSINESS_POS" && f.cards[5]?.ctaText === "Open Business POS", f.cards[5]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the BOS PRO card is sixth and links to its product page`, f.cards[5]?.key === "ERP_PRO" && f.cards[5]?.ctaText === "Explore JATA BOS PRO" && f.cards[5]?.name.includes("JATA BOS PRO") && f.cards[5]?.ctaHref === "/products/erp-pro", f.cards[5]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the Autopilot card is seventh (last) and keeps its own CTA`, f.cards[6]?.key === "JATA_AUTOPILOT" && f.cards[6]?.ctaText === "Open JATA Autopilot" && f.cards[6]?.name.includes("JATA Autopilot"), f.cards[6]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the POS card is fifth and keeps its own CTA`, f.cards[4]?.key === "BUSINESS_POS" && f.cards[4]?.ctaText === "Open Business POS", f.cards[4]?.ctaText ?? "missing");
 
   await shot(page, `pricing-${viewport.label}`);
   await page.close();

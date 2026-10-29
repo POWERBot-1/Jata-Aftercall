@@ -2,9 +2,10 @@
  * Production catalogue visibility — the verified 2026-10-29 rows.
  *
  * The production `PlanConfig` query returned eight active rows. The public/payable list must be
- * exactly the four page products; the advertising grid must carry those four plus the POS and the
- * standard Autopilot. Pro, Enterprise, POS and ERP are private workspace products and must never
- * appear in onboarding or the AFTERCALL subscription list.
+ * exactly the four page products; the advertising grid must carry those four plus the Business
+ * POS, JATA BOS PRO (ERP_PRO) and the standard Autopilot — the seven customer offers, exactly
+ * once each. Pro, Enterprise, POS, ERP and Autopilot are private workspace products and must
+ * never appear in onboarding or the AFTERCALL subscription payable list.
  *
  * Regression guard for ERP: before this change `ERP_PRO` was absent from `PRIVATE_PLAN_KEYS`, so
  * creating its plan row (the documented production repair) would have inserted POS / ERP - PRO
@@ -15,6 +16,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ERP_PRO_FALLBACK_CARD,
   FALLBACK_PLANS,
   HOMEPAGE_PLAN_ORDER,
   homepagePlanCards,
@@ -50,11 +52,13 @@ describe("public plan catalogue with the verified production rows", () => {
     ]);
   });
 
-  it("advertises six cards in the owner order, including POS and standard Autopilot", () => {
+  it("advertises seven cards in the owner order, including POS, BOS PRO and standard Autopilot", () => {
     const cards = homepagePlanCards(PRODUCTION_ROWS);
     expect(cards.map((card) => card.key)).toEqual([...HOMEPAGE_PLAN_ORDER]);
-    expect(cards.map((card) => card.priceKES)).toEqual([149, 999, 499, 2499, 999, 499]);
-    expect(cards.map((card) => card.durationDays)).toEqual([30, 365, 30, 30, 30, 30]);
+    // The BOS PRO slot carries the documented KES 3,000 / 30 days fallback here because the
+    // production inventory has no ERP_PRO row yet; every other card is the stored value.
+    expect(cards.map((card) => card.priceKES)).toEqual([149, 999, 499, 999, 499, 3000, 2499]);
+    expect(cards.map((card) => card.durationDays)).toEqual([30, 365, 30, 30, 30, 30, 30]);
   });
 
   it("keeps Pro and Enterprise off every public card while leaving them private", () => {
@@ -68,32 +72,43 @@ describe("public plan catalogue with the verified production rows", () => {
   });
 });
 
-describe("ERP/Oro visibility", () => {
-  it("is private, so creating its row cannot add it to onboarding or the subscription list", () => {
+describe("ERP (JATA BOS PRO) visibility", () => {
+  it("is private, so creating its row cannot add it to onboarding or the payable subscription list", () => {
     expect(PRIVATE_PLAN_KEYS).toContain("ERP_PRO");
     expect(publiclyListedPlans([...PRODUCTION_ROWS, ERP_ROW])).toHaveLength(4);
     expect(publiclyListedPlans([ERP_ROW])).toEqual([]);
   });
 
-  it("never appears on the advertising grid, even when its row exists", () => {
+  it("appears exactly once on the advertising grid as a marketing card, with the stored price preferred", () => {
+    // Publicly listed (payable) surfaces still never see it…
     expect(publiclyListedPlans([...PRODUCTION_ROWS, ERP_ROW]).map((plan) => plan.key)).not.toContain("ERP_PRO");
-    expect(homepagePlanCards([...PRODUCTION_ROWS, ERP_ROW]).map((card) => card.key)).toEqual([...HOMEPAGE_PLAN_ORDER]);
-    expect(homepagePlanCards([...PRODUCTION_ROWS, ERP_ROW]).map((card) => card.key)).not.toContain("ERP_PRO");
+    // …but the marketing grid shows it exactly once, in its fixed slot, priced from the stored row.
+    const cards = homepagePlanCards([...PRODUCTION_ROWS, ERP_ROW]);
+    expect(cards.map((card) => card.key)).toEqual([...HOMEPAGE_PLAN_ORDER]);
+    const erpCards = cards.filter((card) => card.key === "ERP_PRO");
+    expect(erpCards).toHaveLength(1);
+    expect(erpCards[0]).toMatchObject({ priceKES: 3000, durationDays: 30 });
+    // A stored row with an operator-edited price is shown as stored — never silently overwritten.
+    const repriced = homepagePlanCards([...PRODUCTION_ROWS, { ...ERP_ROW, priceKES: 2500 }]);
+    expect(repriced.find((card) => card.key === "ERP_PRO")).toMatchObject({ priceKES: 2500 });
   });
 
-  it("has no canonical fallback row, so a missing PlanConfig row cannot be faked into checkout", () => {
+  it("has no canonical FALLBACK_PLANS row, so a missing PlanConfig row cannot be faked into checkout", () => {
+    // The documented KES 3,000 / 30 days fallback lives only in the marketing constant
+    // (`ERP_PRO_FALLBACK_CARD`), which feeds `homepagePlanCards()` and nothing money-adjacent.
     expect(FALLBACK_PLANS.some((plan) => plan.key === "ERP_PRO")).toBe(false);
+    expect(ERP_PRO_FALLBACK_CARD).toMatchObject({ key: "ERP_PRO", priceKES: 3000, durationDays: 30 });
   });
 });
 
 describe("catalogue bootstrap (prisma/seed.ts)", () => {
   const seed = readFileSync(path.join(root, "prisma/seed.ts"), "utf8");
 
-  it("provisions every canonical product plan, including POS / ERP - PRO", () => {
+  it("provisions every canonical product plan, including JATA BOS PRO (ERP_PRO)", () => {
     for (const key of [...PRODUCTION_ROWS.map((plan) => plan.key), "ERP_PRO"]) {
       expect(seed, key).toContain(`key: "${key}"`);
     }
-    expect(seed).toContain('key: "ERP_PRO", name: "POS / ERP - PRO", priceKES: 3000, durationDays: 30');
+    expect(seed).toContain('key: "ERP_PRO", name: "JATA BOS PRO — Business Operating System Pro", priceKES: 3000, durationDays: 30');
   });
 
   it("keeps the seed upsert reactivating rows rather than leaving them inactive", () => {

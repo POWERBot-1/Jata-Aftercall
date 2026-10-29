@@ -111,7 +111,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
 
       <section className="erp-card" id="plan">
         <h2>Plan and billing</h2>
-        <p className="erp-card-sub">POS / ERP - PRO is KES {formatNumber(workspace.plan.priceKES)} per month, billed per business.</p>
+        <p className="erp-card-sub">JATA BOS PRO is KES {formatNumber(workspace.plan.priceKES)} per month, billed per business.</p>
         <dl className="erp-grid erp-grid-3">
           <div className="erp-kpi"><dt>Status</dt><dd>{humanise(workspace.entitlement.status)}</dd><small>{workspace.entitlement.reason}</small></div>
           <div className="erp-kpi"><dt>Renews</dt><dd>{workspace.entitlement.expiresAt ? formatDate(workspace.entitlement.expiresAt) : "—"}</dd><small>{workspace.entitlement.inGrace ? "Inside the approved grace window" : "Monthly term"}</small></div>

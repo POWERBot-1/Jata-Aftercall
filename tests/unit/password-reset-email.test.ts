@@ -79,4 +79,75 @@ describe("password recovery delivery configuration", () => {
       .rejects.toThrow("provider secret must not be surfaced");
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
+
+  it("builds links from the stable Vercel production URL when PUBLIC_BASE_URL is not configured", async () => {
+    // Regression: requiring PUBLIC_BASE_URL outright answered 503 on deployments that relied on
+    // the Vercel-provided production URL, even with a working SMTP relay.
+    vi.stubEnv("PASSWORD_RESET_SMTP_URL", "smtps://mailer:secret@mail.example.test:465");
+    vi.stubEnv("PASSWORD_RESET_FROM", "JATA <reset@example.test>");
+    vi.stubEnv("PUBLIC_BASE_URL", "");
+    vi.stubEnv("NEXTAUTH_URL", "");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "jataaftercall.co.ke");
+    vi.stubEnv("VERCEL_URL", "jata-aftercall-abc123-powerbot-1.vercel.app");
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(isPasswordResetEmailConfigured()).toBe(true);
+    await sendPasswordResetEmail("owner@example.test", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+    const mail = mocks.sendMail.mock.calls[0][0] as any;
+    expect(mail.text).toContain("https://jataaftercall.co.ke/reset-password#token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    expect(mail.text).not.toContain("vercel.app");
+  });
+
+  it("ignores a localhost PUBLIC_BASE_URL on Vercel so links use the production domain", async () => {
+    vi.stubEnv("PASSWORD_RESET_SMTP_URL", "smtps://mailer:secret@mail.example.test:465");
+    vi.stubEnv("PASSWORD_RESET_FROM", "JATA <reset@example.test>");
+    vi.stubEnv("PUBLIC_BASE_URL", "http://localhost:3000");
+    vi.stubEnv("NEXTAUTH_URL", "http://localhost:3000");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "jataaftercall.co.ke");
+    vi.stubEnv("VERCEL_URL", "jata-aftercall-abc123-powerbot-1.vercel.app");
+    vi.stubEnv("NODE_ENV", "production");
+
+    await sendPasswordResetEmail("owner@example.test", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+    const mail = mocks.sendMail.mock.calls[0][0] as any;
+    expect(mail.text).toContain("https://jataaftercall.co.ke/reset-password#token=");
+    expect(mail.text).not.toContain("localhost");
+  });
+
+  it("prefers an explicit non-localhost PUBLIC_BASE_URL over the Vercel default", async () => {
+    vi.stubEnv("PASSWORD_RESET_SMTP_URL", "smtps://mailer:secret@mail.example.test:465");
+    vi.stubEnv("PASSWORD_RESET_FROM", "JATA <reset@example.test>");
+    vi.stubEnv("PUBLIC_BASE_URL", "https://www.jataaftercall.co.ke");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "jataaftercall.co.ke");
+    vi.stubEnv("NODE_ENV", "production");
+
+    await sendPasswordResetEmail("owner@example.test", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+    const mail = mocks.sendMail.mock.calls[0][0] as any;
+    expect(mail.text).toContain("https://www.jataaftercall.co.ke/reset-password#token=");
+  });
+
+  it("pins a private-CA bundle only when PASSWORD_RESET_SMTP_CA is configured", async () => {
+    vi.stubEnv("PASSWORD_RESET_SMTP_URL", "smtps://mailer:secret@mail.example.test:465");
+    vi.stubEnv("PASSWORD_RESET_FROM", "JATA <reset@example.test>");
+    vi.stubEnv("PUBLIC_BASE_URL", "https://jata.example.test");
+    vi.stubEnv("NODE_ENV", "production");
+
+    vi.stubEnv("PASSWORD_RESET_SMTP_CA", "");
+    await sendPasswordResetEmail("owner@example.test", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    let options = mocks.createTransport.mock.calls[0][0] as any;
+    expect(options.tls.rejectUnauthorized).toBe(true);
+    expect(options.tls.ca).toBeUndefined();
+
+    vi.stubEnv("PASSWORD_RESET_SMTP_CA", "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----");
+    await sendPasswordResetEmail("owner@example.test", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    options = mocks.createTransport.mock.calls[1][0] as any;
+    expect(options.tls.rejectUnauthorized).toBe(true);
+    expect(options.tls.ca).toContain("BEGIN CERTIFICATE");
+    expect(options.tls.minVersion).toBe("TLSv1.2");
+  });
 });

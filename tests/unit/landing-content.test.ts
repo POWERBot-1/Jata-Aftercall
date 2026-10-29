@@ -17,6 +17,7 @@ import {
   LANDING_STEPS,
   LANDING_STORY,
   AUTOPILOT_PLAN_CARD,
+  ERP_PRO_PLAN_CARD,
   PLAN_BADGES,
   PLAN_ICONS,
   PLAN_INCLUDES,
@@ -65,6 +66,12 @@ const marketingCopy = () =>
     AUTOPILOT_PLAN_CARD.blurb,
     AUTOPILOT_PLAN_CARD.fine,
     ...AUTOPILOT_PLAN_CARD.includes,
+    ERP_PRO_PLAN_CARD.badge,
+    ERP_PRO_PLAN_CARD.name,
+    ERP_PRO_PLAN_CARD.subtitle,
+    ERP_PRO_PLAN_CARD.blurb,
+    ERP_PRO_PLAN_CARD.fine,
+    ...ERP_PRO_PLAN_CARD.includes,
   ].join("\n");
 
 describe("landing copy makes no unverified claim", () => {
@@ -160,9 +167,36 @@ describe("landing copy makes no unverified claim", () => {
 
   it("gives every advertised plan its established product icon", () => {
     expect(Object.keys(PLAN_ICONS)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
-    // The owner-only cards carry the marks the workspace already uses for those products.
+    // The separate-product cards carry dedicated marks: the storefront, the spark and the ledger.
     expect(POS_PLAN_CARD.icon).toBe("store");
     expect(AUTOPILOT_PLAN_CARD.icon).toBe("spark");
+    expect(ERP_PRO_PLAN_CARD.icon).toBe("ledger");
+    // The ledger icon exists in the landing icon set with an accessible-hidden SVG.
+    const icons = readFileSync(path.join(root, "components/landing/Icons.tsx"), "utf8");
+    expect(icons).toMatch(/ledger:\s*\(/);
+    expect(icons).toContain('aria-hidden="true"');
+  });
+
+  it("keeps the JATA BOS PRO card truthful: renamed product, separate from POS, exclusions stated, no eTIMS claim", () => {
+    // Customer-facing name and subtitle exactly as renamed; the internal key is never marketing copy.
+    expect(ERP_PRO_PLAN_CARD.name).toBe("JATA BOS PRO");
+    expect(ERP_PRO_PLAN_CARD.subtitle).toBe("Business Operating System Pro");
+    // Explains how it differs from the separate Business POS product.
+    const copy = [ERP_PRO_PLAN_CARD.blurb, ...ERP_PRO_PLAN_CARD.includes, ERP_PRO_PLAN_CARD.fine].join(" ");
+    expect(copy).toMatch(/Business POS/);
+    expect(copy).toMatch(/Beyond the separate Business POS till/);
+    // States the excluded provider charges.
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/SMS and WhatsApp usage charges/);
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/Sender ID fees/);
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/payment-provider fees/);
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/KRA eTIMS certification or integrator fees are excluded/);
+    // Claims no eTIMS certification or hardware integration, and no price inside the copy.
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/eTIMS submission is not claimed as certified/i);
+    expect(copy).not.toMatch(/KES\s?[\d,]+/);
+    expect(copy).not.toMatch(/certified (adapter|integration) (is|available)/i);
+    // Viewing starts nothing: activation wording is explicit.
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/Viewing the product starts nothing/);
+    expect(ERP_PRO_PLAN_CARD.fine).toMatch(/after the server confirms the payment/i);
   });
 
   it("answers the POS question in the FAQ by separating it from the page plans", () => {

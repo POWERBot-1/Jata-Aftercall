@@ -26,7 +26,7 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     bullets: ["Customer-facing /b/<slug>/ai page", "Grounded in your configured products, services and FAQs", "Live only after the plan is confirmed"],
   },
   JATA_AUTOPILOT: {
-    slug: "business-page",
+    slug: "jata-autopilot",
     blurb: "Business-health diagnostics and draft actions for your approval, configured in the workspace.",
     bullets: ["Preview diagnostics without a plan", "Live actions require the standard Autopilot package", "Priced and activated inside the dashboard"],
   },
@@ -39,6 +39,11 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     slug: "business-pos",
     blurb: "An owner-only point of sale configured around how your business actually works.",
     bullets: ["Products, inventory, sales and receipts", "Staff roles and branch scoping", "Sold per business from the dashboard"],
+  },
+  ERP_PRO: {
+    slug: "erp-pro",
+    blurb: "JATA BOS PRO — Business Operating System Pro: the books, the stock and the buying behind the counter.",
+    bullets: ["Accounting, invoicing, inventory and purchasing", "Broader than the separate Business POS till", "Priced per business; switched on from the ERP workspace after payment"],
   },
 };
 
@@ -54,7 +59,7 @@ export default async function ProductsPage() {
   return (
     <MarketingLayout
       eyebrow="Products"
-      title="One account. Four customer products. One place to pay."
+      title="One account. Every plan and product. One place to pay."
       intro="JATA AFTERCALL keeps your business details, conversations and sales tools on the same Next.js application and the same database. Prices below come from the live plan catalogue; showing a card never activates a product."
     >
       <MarketingSection title="What you can switch on" id="catalogue">

@@ -107,7 +107,7 @@ describe("the POS plan is never advertised publicly (§67)", () => {
   });
 
   it("advertises the POS on the homepage as a card that only opens the authenticated flow", () => {
-    // 2026-10-27 owner order: one pricing grid, with the POS sixth (last). That is a presentation
+    // 2026-10-29 owner order: one pricing grid, with the POS fifth. That is a presentation
     // change only — the card links into /dashboard/pos, never to register or checkout.
     const page = readFileSync(path.join(root, "app/page.tsx"), "utf8");
     expect(page).toContain("homepagePlanCards");
@@ -118,8 +118,9 @@ describe("the POS plan is never advertised publicly (§67)", () => {
       { key: "MONTHLY", name: "Monthly", priceKES: 149, durationDays: 30 },
       { key: POS_PLAN_KEY, name: POS_PLAN_NAME, priceKES: 499, durationDays: 30 },
     ]);
-    // 2026-10-27 order: Autopilot sorts before the POS; the POS remains the last grid card.
-    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "JATA_AUTOPILOT", POS_PLAN_KEY]);
+    // 2026-10-29 order: the POS sits between Website Studio and BOS PRO; the separate products
+    // fill their canonical fallback slots, and the POS stays a grid card only.
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", POS_PLAN_KEY, "ERP_PRO", "JATA_AUTOPILOT"]);
     // The POS row is still not a member of the publicly listed set.
     expect(publiclyListedPlans(cards).map((card) => card.key)).toEqual(["MONTHLY"]);
   });

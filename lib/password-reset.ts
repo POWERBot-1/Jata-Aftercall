@@ -75,6 +75,13 @@ export async function requestPasswordReset(email: string, now = new Date()): Pro
       where: { userId: user.id, tokenHash, usedAt: null },
       data: { usedAt: now },
     });
+    // Release the cooldown claimed for this attempt (and only this attempt — a newer request
+    // carries a later timestamp and keeps its own cooldown). Without this, a transient SMTP
+    // outage left the account silent for 15 minutes while retries were swallowed invisibly.
+    await prisma.user.updateMany({
+      where: { id: user.id, passwordResetRequestedAt: now },
+      data: { passwordResetRequestedAt: null },
+    });
     console.error("Password reset email delivery failed; recovery token invalidated.");
   }
 }

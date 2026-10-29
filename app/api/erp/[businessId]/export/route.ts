@@ -45,7 +45,7 @@ export async function GET(request: Request, context: { params: Promise<{ busines
       ]);
 
       const payload = {
-        product: "POS / ERP - PRO",
+        product: "JATA BOS PRO",
         businessId,
         exportedAt: new Date().toISOString(),
         schemaVersion: "2026-10-27",

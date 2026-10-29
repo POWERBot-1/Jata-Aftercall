@@ -14,7 +14,7 @@
 import prisma from "../db";
 
 export const ERP_PLAN_KEY = "ERP_PRO";
-export const ERP_PLAN_NAME = "POS / ERP - PRO";
+export const ERP_PLAN_NAME = "JATA BOS PRO";
 export const ERP_PLAN_PRICE_KES = 3000;
 export const ERP_PLAN_DURATION_DAYS = 30;
 export const ERP_GRACE_DAYS = 3;
@@ -105,7 +105,7 @@ export function deriveErpEntitlement(input: EntitlementInput): ErpEntitlementSta
   if (input.entitlement?.status === "CANCELLED" || subscription?.status === "CANCELLED") {
     return {
       ...base, entitled: false, inGrace: false, status: "CANCELLED", lifecycle: "CANCELLED",
-      reason: "POS / ERP - PRO was cancelled. Subscribe again to bring your workspace back.",
+      reason: "JATA BOS PRO was cancelled. Subscribe again to bring your workspace back.",
       nextAction: "pay",
     };
   }
@@ -130,7 +130,7 @@ export function deriveErpEntitlement(input: EntitlementInput): ErpEntitlementSta
   if (subscription.planKey && subscription.planKey !== ERP_PLAN_KEY) {
     return {
       ...base, entitled: false, inGrace: false, status: "NONE", lifecycle: "SETUP",
-      reason: "Your current plan does not include POS / ERP - PRO. Add it for KES 3,000/month.",
+      reason: "Your current plan does not include JATA BOS PRO. Add it for KES 3,000/month.",
       nextAction: "pay",
     };
   }
@@ -156,7 +156,7 @@ export function deriveErpEntitlement(input: EntitlementInput): ErpEntitlementSta
   if (status === "ACTIVE" && !expired) {
     return {
       ...base, entitled: true, inGrace: false, status: "ACTIVE", lifecycle: "ACTIVE",
-      reason: "POS / ERP - PRO is active on your KES 3,000/month plan.",
+      reason: "JATA BOS PRO is active on your KES 3,000/month plan.",
       nextAction: "none",
     };
   }
@@ -173,7 +173,7 @@ export function deriveErpEntitlement(input: EntitlementInput): ErpEntitlementSta
   if (expired || status === "EXPIRED") {
     return {
       ...base, entitled: false, inGrace: false, status: "EXPIRED", lifecycle: "EXPIRED",
-      reason: "Your POS / ERP - PRO subscription has expired. Renew for KES 3,000/month to keep trading.",
+      reason: "Your JATA BOS PRO subscription has expired. Renew for KES 3,000/month to keep trading.",
       nextAction: "renew",
     };
   }

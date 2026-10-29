@@ -29,25 +29,29 @@ export async function getActivePlans(): Promise<Plan[]> {
  * POS plan is never part of a payable plan list: onboarding, the AFTERCALL subscription screen
  * and checkout all resolve their choices through `publiclyListedPlans()`.
  *
- * The one presentation exception is the homepage pricing grid, which shows the POS as the sixth
- * (last), clearly-labelled owner-only card that links into the authenticated `/dashboard/pos`
- * flow, and the standard JATA Autopilot package as the fourth card linking into
- * `/dashboard/autopilot` (2026-10-27 owner order; see `homepagePlanCards`). Showing those cards
- * grants nothing: each product still switches on only from PlanConfig and confirmed payment
- * inside the workspace.
+ * The one presentation exception is the marketing grids (homepage, public pricing, products and
+ * the subscription page's full-catalogue section), which show the owner-only products as
+ * clearly-labelled cards that link to their own product pages or authenticated workspaces
+ * (2026-10-29 owner order; see `homepagePlanCards`). Showing those cards grants nothing: each
+ * product still switches on only from PlanConfig and confirmed payment inside its own workspace.
  *
- * POS / ERP - PRO (`ERP_PRO`) is private for the same reason but has no marketing card at all:
- * it is reachable only from the authenticated `/dashboard/erp` workspace, and only when the
- * deployment has switched the product on (`ERP_PRO_ENABLED`).
+ * JATA BOS PRO (`ERP_PRO`, formerly "POS / ERP - PRO") is private for the same reason: its
+ * purchase and entitlement live only in the authenticated `/dashboard/erp` workspace, and only
+ * when the deployment has switched the product on (`ERP_PRO_ENABLED`). Its public marketing card
+ * (`ERP_PRO_FALLBACK_CARD` slot in `homepagePlanCards`, the `/products/erp-pro` detail page) is
+ * presentation only — it is never a payable choice on onboarding, the AFTERCALL subscription
+ * screen or any checkout selection, and it is never routed through the ordinary business-page
+ * checkout.
  */
 export const PRIVATE_PLAN_KEYS = [
   "BUSINESS_POS",
   "JATA_AUTOPILOT",
   "JATA_AUTOPILOT_PRO",
   "JATA_AUTOPILOT_ENTERPRISE",
-  // POS / ERP - PRO is an authenticated, feature-flagged product too. It has its own workspace
-  // and checkout flow, so it must never appear in onboarding or the AFTERCALL subscription list
-  // merely because an operator (or the seed) has created its PlanConfig row.
+  // JATA BOS PRO (internal key ERP_PRO) is an authenticated, feature-flagged product too. It has
+  // its own workspace and its own purchase flow, so it must never appear in onboarding or the
+  // AFTERCALL subscription payable list merely because an operator (or the seed) has created its
+  // PlanConfig row.
   "ERP_PRO",
 ];
 
@@ -63,11 +67,13 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
 /**
  * Marketing order only; never changes stored IDs, prices, durations or checkout selection.
  *
- * Owner-mandated homepage sequence (2026-10-27): Monthly → Annual → AI Business Front Desk →
- * JATA Autopilot → Website Studio (INTERACTIVE_BUSINESS) → Business POS. The three owner-only
- * products keep their stored plan keys and their own CTAs; only the presentation rank moves.
+ * Owner-mandated homepage sequence (2026-10-29, mobile-first): JATA Monthly → JATA Annual →
+ * AI Business Front Desk → Website Studio (INTERACTIVE_BUSINESS) → Business POS → JATA BOS PRO
+ * (`ERP_PRO`) → JATA Autopilot. The owner-only products keep their stored plan keys and their own
+ * CTAs; only the presentation rank moves. This exact sequence is the mobile reading order too:
+ * the pricing grid is a single column on phones, so DOM order is visual order.
  */
-export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "JATA_AUTOPILOT", "INTERACTIVE_BUSINESS", "BUSINESS_POS"] as const;
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT"] as const;
 
 /**
  * The owner-only POS plan the homepage advertises sixth (last card), without ever making it a
@@ -78,14 +84,26 @@ export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK
 export const HOMEPAGE_POS_PLAN_KEY = "BUSINESS_POS";
 
 /**
- * The standard JATA Autopilot package the homepage advertises fourth, without ever making it a
- * payable choice. A literal rather than an import for the same cycle reason as the POS key above:
- * it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
+ * The standard JATA Autopilot package the homepage advertises seventh (last card), without ever
+ * making it a payable choice. A literal rather than an import for the same cycle reason as the POS
+ * key above: it names the same stored key as `AUTOPILOT_PLAN_CATALOG.JATA_AUTOPILOT` in
  * `lib/autopilot/entitlement.ts`, and `assertAutopilotPlanPricing` still guards the price itself
  * (KES 2,499 / 30 days) at checkout. Only the standard package is advertised here; the Pro and
  * Enterprise tiers stay inside the authenticated Autopilot flow and are never homepage cards.
  */
 export const HOMEPAGE_AUTOPILOT_PLAN_KEY = "JATA_AUTOPILOT";
+
+/**
+ * JATA BOS PRO (internal key `ERP_PRO`) — the sixth homepage card. A literal for the same cycle
+ * reason as the keys above: `lib/erp/access.ts` imports this module, so importing
+ * `ERP_PLAN_KEY` from `lib/erp/entitlement.ts` here would be a cycle. Both name the same stored
+ * key, and `assertErpPlanPricing` still guards the price itself (KES 3,000 / 30 days) in the
+ * product's own purchase flow. The card is presentation only: `ERP_PRO` stays in
+ * `PRIVATE_PLAN_KEYS`, so it is never a payable choice on onboarding, the AFTERCALL subscription
+ * screen or checkout selection, and it is never routed through the ordinary business-page
+ * checkout. Its public detail page is `/products/erp-pro`.
+ */
+export const HOMEPAGE_ERP_PRO_PLAN_KEY = "ERP_PRO";
 
 export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[]): T[] {
   const rank = (key: string) => {
@@ -99,21 +117,43 @@ export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[
 export type HomepagePlanCard = { key: string; name: string; priceKES: number; durationDays: number };
 
 /**
- * The six plans the homepage advertises, in marketing order.
+ * The documented fallback for the JATA BOS PRO marketing card, used only when the stored
+ * `PlanConfig` row is genuinely unavailable or inactive under the existing catalogue rules (the
+ * marketing pages read `where: { isActive: true }`, so an inactive row reads as unavailable).
+ * KES 3,000 / 30 days is the canonical commercial term (`ERP_PLAN_PRICE_KES` in
+ * `lib/erp/entitlement.ts`, guarded by `assertErpPlanPricing` at purchase time). A valid stored
+ * row always wins over this constant — the fallback is never allowed to overwrite a stored price.
  *
- * The four page plans come from `publiclyListedPlans()` as before; under the 2026-10-27 owner
- * order the standard JATA Autopilot package is the fourth card and the owner-only Business POS
- * the sixth (last), so an owner can see the whole product range in one grid instead of separate
- * promotional blocks below it. This is presentation only:
+ * Deliberately outside `FALLBACK_PLANS`: that list feeds `getPlanConfig()`, and a missing
+ * `ERP_PRO` row must stay missing for every money-adjacent resolver. This constant feeds the
+ * marketing grid only.
+ */
+export const ERP_PRO_FALLBACK_CARD: HomepagePlanCard = {
+  key: "ERP_PRO",
+  name: "JATA BOS PRO",
+  priceKES: 3000,
+  durationDays: 30,
+};
+
+/**
+ * The seven offers the homepage advertises, in marketing order.
  *
- *   • POS and Autopilot stay in `PRIVATE_PLAN_KEYS`, so they are still absent from onboarding,
- *     the AFTERCALL subscription screen and every payable list — the cards link to
- *     `/dashboard/pos` and `/dashboard/autopilot`, not to `/register` or checkout. The Autopilot
- *     Pro/Enterprise tiers are never appended: only the standard package is advertised.
+ * The four page plans come from `publiclyListedPlans()` as before; the three owner-only products
+ * (Business POS fifth, JATA BOS PRO sixth, JATA Autopilot standard seventh) are appended as
+ * presentation cards so a customer can discover the complete catalogue in one grid. This is
+ * presentation only:
+ *
+ *   • POS, BOS PRO (`ERP_PRO`) and Autopilot stay in `PRIVATE_PLAN_KEYS`, so they are still
+ *     absent from onboarding, the AFTERCALL subscription payable list and every checkout
+ *     selection — the cards link to `/products/erp-pro`, `/dashboard/pos` and
+ *     `/dashboard/autopilot`, never to `/register` or checkout. The Autopilot Pro/Enterprise
+ *     tiers are never appended: only the standard package is advertised. BOS PRO appears exactly
+ *     once, and showing it never grants workspace access.
  *   • Each owner-only card's price and duration are the stored `PlanConfig` row when it can be
- *     read, and the canonical `FALLBACK_PLANS` row (POS KES 499 / 30 days; Autopilot standard
- *     KES 2,499 / 30 days, guarded by `assertAutopilotPlanPricing`) when the database is
- *     unavailable — never a number written into the page.
+ *     read, and only otherwise the canonical fallback rows (POS KES 499 / 30 days; BOS PRO
+ *     KES 3,000 / 30 days via `ERP_PRO_FALLBACK_CARD`; Autopilot standard KES 2,499 / 30 days,
+ *     guarded by `assertAutopilotPlanPricing`) — never a number written into the page, and never
+ *     a hardcoded price silently replacing a valid stored one.
  *   • If a plan row is missing entirely the canonical row still fills its slot, so the grid is
  *     never left with a hole and never invents a different price.
  */
@@ -123,8 +163,11 @@ export function homepagePlanCards(plans: readonly HomepagePlanCard[]): HomepageP
   const pos = storedPos ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_POS_PLAN_KEY);
   const storedAutopilot = plans.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
   const autopilot = storedAutopilot ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
+  const storedErpPro = plans.find((plan) => plan.key === HOMEPAGE_ERP_PRO_PLAN_KEY);
+  const erpPro = storedErpPro ?? ERP_PRO_FALLBACK_CARD;
   const cards: HomepagePlanCard[] = [...listed];
   if (pos && !cards.some((card) => card.key === HOMEPAGE_POS_PLAN_KEY)) cards.push(pos);
+  if (erpPro && !cards.some((card) => card.key === HOMEPAGE_ERP_PRO_PLAN_KEY)) cards.push(erpPro);
   if (autopilot && !cards.some((card) => card.key === HOMEPAGE_AUTOPILOT_PLAN_KEY)) cards.push(autopilot);
   return orderHomepagePlans(cards);
 }
@@ -136,12 +179,20 @@ export function homepagePlanCards(plans: readonly HomepagePlanCard[]): HomepageP
  * client with the wrong encoding it holds U+FFFD ("�") — which is what the public
  * homepage was observed rendering for the AI Business Front Desk and Interactive Business cards.
  * A known plan then shows its canonical name instead of a corrupted or blank one; any other
- * stored name is shown exactly as the operator wrote it, except the Website Studio product
- * whose stable INTERACTIVE_BUSINESS key always uses the requested customer-facing brand.
+ * stored name is shown exactly as the operator wrote it, except two stable product brands:
+ * the Website Studio product (`INTERACTIVE_BUSINESS`) and JATA BOS PRO (`ERP_PRO`, formerly
+ * "POS / ERP - PRO") always use their requested customer-facing names. Renaming BOS PRO happens
+ * here at the display layer only — the internal plan ID `ERP_PRO` and every stored price stay
+ * unchanged, and no stored row is migrated.
  */
 export function planDisplayName(plan: { key: string; name?: string | null }): string {
   if (plan.key === "INTERACTIVE_BUSINESS") {
     return FALLBACK_PLANS.find((fallback) => fallback.key === plan.key)!.name;
+  }
+  if (plan.key === "ERP_PRO") {
+    // The customer-facing product is JATA BOS PRO (subtitle: Business Operating System Pro);
+    // the legacy stored name "POS / ERP - PRO" must never reach a customer-facing surface.
+    return ERP_PRO_FALLBACK_CARD.name;
   }
   const stored = typeof plan.name === "string" ? plan.name.trim() : "";
   if (stored && !stored.includes("\uFFFD")) return stored;

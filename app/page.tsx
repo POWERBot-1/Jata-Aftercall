@@ -7,10 +7,10 @@ import { FaqSection, LandingFooter } from "@/components/landing/FaqAndFooter";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { formatNumber } from "@/lib/format";
-import { FALLBACK_PLANS, HOMEPAGE_AUTOPILOT_PLAN_KEY, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { FALLBACK_PLANS, HOMEPAGE_AUTOPILOT_PLAN_KEY, HOMEPAGE_ERP_PRO_PLAN_KEY, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { LandingIcon } from "@/components/landing/Icons";
-import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
+import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
 import { isPublicDemoRow } from "@/lib/demoContact";
 import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
@@ -25,13 +25,17 @@ export const dynamic = "force-dynamic";
  * demo tab switcher; everything else — including the phone, marquee and reveal motion — is CSS.
  *
  * Data rules that predate this redesign and still hold:
- *   • Plans are read from the database; the private Business POS and JATA Autopilot plans never
- *     become payable choices. Marketing order comes from `homepagePlanCards()`.
+ *   • Plans are read from the database; the private Business POS, JATA BOS PRO (ERP_PRO) and
+ *     JATA Autopilot plans never become payable choices. Marketing order comes from
+ *     `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • The Business POS card is the fifth card in the same grid and the standard JATA Autopilot
- *     package is the sixth. They link to the authenticated `/dashboard/pos` and
- *     `/dashboard/autopilot` flows — never to `/register` or checkout — and their prices are the
- *     stored plan prices, so showing the cards grants nothing.
+ *   • Under the 2026-10-29 mobile-first owner order the grid runs Monthly, Annual, AI Business
+ *     Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot — the exact mobile
+ *     reading order, since the grid is a single column on phones. The three owner-only products
+ *     keep their own CTAs: Business POS links to the authenticated `/dashboard/pos` flow, JATA
+ *     BOS PRO to its public detail page `/products/erp-pro`, and the standard JATA Autopilot
+ *     package to `/dashboard/autopilot` — never to `/register` or the business-page checkout —
+ *     and their prices are the stored plan prices, so showing the cards grants nothing.
  *   • The four fictional demo cards show active services only; fallback content is labelled
  *     synthetic. Links require the dedicated demo owner, no non-demo payment rows, and a published
  *     ACTIVE business with active services — not a matching slug alone.
@@ -115,12 +119,13 @@ export default async function HomePage() {
 
             <div className="lp-plans" data-plan-count={plans.length}>
               {plans.map((p) => {
-                // The POS and JATA Autopilot are cards in this grid but never page-plan purchases:
-                // each keeps its own copy and CTA, and the four page-plan maps in lib/landing.ts
-                // never mention them.
+                // The POS, JATA BOS PRO and JATA Autopilot are cards in this grid but never
+                // page-plan purchases: each keeps its own copy and CTA, and the four page-plan
+                // maps in lib/landing.ts never mention them.
                 const isPos = p.key === POS_PLAN_KEY;
+                const isErpPro = p.key === HOMEPAGE_ERP_PRO_PLAN_KEY;
                 const isAutopilot = p.key === HOMEPAGE_AUTOPILOT_PLAN_KEY;
-                const ownerCard = isPos ? POS_PLAN_CARD : isAutopilot ? AUTOPILOT_PLAN_CARD : null;
+                const ownerCard = isPos ? POS_PLAN_CARD : isErpPro ? ERP_PRO_PLAN_CARD : isAutopilot ? AUTOPILOT_PLAN_CARD : null;
                 const includes = ownerCard ? ownerCard.includes : PLAN_INCLUDES[p.key] ?? [];
                 const badge = ownerCard ? ownerCard.badge : PLAN_BADGES[p.key];
                 const blurb = ownerCard
@@ -138,13 +143,22 @@ export default async function HomePage() {
                     className="lp-plan"
                     data-featured={featured}
                     data-plan={p.key}
-                    aria-label={planDisplayName(p)}
+                    aria-label={isErpPro ? `${ERP_PRO_PLAN_CARD.name} — ${ERP_PRO_PLAN_CARD.subtitle}` : planDisplayName(p)}
                   >
                     {/* One direct child per card row, so the cards can share those rows (see `.lp-plan` in globals.css). */}
                     <span className="lp-plan__icon" aria-hidden="true">
                       <LandingIcon name={icon} />
                     </span>
-                    <p className="lp-plan__name">{planDisplayName(p)}</p>
+                    <p className="lp-plan__name">
+                      {isErpPro ? (
+                        <>
+                          {planDisplayName(p)}
+                          <span className="lp-plan__subtitle">{ERP_PRO_PLAN_CARD.subtitle}</span>
+                        </>
+                      ) : (
+                        planDisplayName(p)
+                      )}
+                    </p>
                     {badge ? <span className="lp-plan__badge">{badge}</span> : null}
                     <p className="lp-plan__price">KES {formatNumber(p.priceKES)}</p>
                     <p className="lp-plan__period">{p.durationDays === 365 ? "per year" : `per ${p.durationDays} days`} • {p.durationDays} days access</p>
@@ -159,8 +173,11 @@ export default async function HomePage() {
                         ))}
                       </ul>
                     ) : null}
-                    {/* Owner-only products open their existing authenticated flows; nothing here sells or activates them. */}
-                    <Link href={isPos ? "/dashboard/pos" : isAutopilot ? "/dashboard/autopilot" : "/register"} className="lp-plan__cta">
+                    {/* Separate products open their own verified routes; nothing here sells or activates them. */}
+                    <Link
+                      href={isPos ? "/dashboard/pos" : isErpPro ? "/products/erp-pro" : isAutopilot ? "/dashboard/autopilot" : "/register"}
+                      className="lp-plan__cta"
+                    >
                       {ownerCard ? ownerCard.cta : "Get my business page"}
                     </Link>
                     <p className="lp-plan__fine">
@@ -172,8 +189,9 @@ export default async function HomePage() {
             </div>
             <p className="lp-pricing__note">
               Prices are shown in Kenyan shillings. Plans renew for the period you choose and can be changed from your
-              dashboard. The owner-only Business POS and JATA Autopilot are separate products, sold per business: they
-              are not part of your page plan and each switches on only once Paystack confirms the payment.
+              dashboard. The separate owner products — Business POS, JATA BOS PRO and JATA Autopilot — are sold per
+              business: they are not part of your page plan, each is paid for in its own workspace, and each switches on
+              only once the payment is confirmed.
             </p>
           </div>
         </section>

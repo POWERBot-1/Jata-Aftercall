@@ -6,7 +6,7 @@ import { ERP_MODULES } from "@/lib/erp/navigation";
 import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "POS / ERP - PRO" };
+export const metadata = { title: "JATA BOS PRO — Business Operating System Pro" };
 
 /**
  * Product landing page.
@@ -22,7 +22,7 @@ export default async function ErpIndexPage() {
       <div className="erp">
         <main className="erp-content">
           <section className="erp-card">
-            <h1>POS / ERP - PRO</h1>
+            <h1>JATA BOS PRO — Business Operating System Pro</h1>
             <p className="erp-muted">Sign in to open your workspace.</p>
             <Link href="/login" className="erp-btn erp-btn-primary">Sign in</Link>
           </section>
@@ -42,9 +42,9 @@ export default async function ErpIndexPage() {
           <span className="erp-hero-chip">Premium product · KES {formatNumber(ERP_PLAN_PRICE_KES)}/month</span>
           <h1>Run sales, books and customer contact in one workspace.</h1>
           <p>
-            POS / ERP - PRO adds double-entry accounting, invoices, a Kenya tax engine, your public ordering page and
-            native SMS/WhatsApp campaigns to the Business POS you already use. Your existing POS keeps working exactly as it
-            does today.
+            JATA BOS PRO — Business Operating System Pro — adds double-entry accounting, invoices, a Kenya tax engine,
+            your public ordering page and native SMS/WhatsApp campaigns to the Business POS you already use. Your existing
+            POS keeps working exactly as it does today.
           </p>
           <div className="erp-actions">
             <Link href="/dashboard/pos" className="erp-btn erp-btn-secondary">Business POS (KES 499)</Link>
