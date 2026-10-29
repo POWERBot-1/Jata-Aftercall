@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Real Chrome, HTTP and disposable PostgreSQL. Synthetic subscriptions are test fixtures,
-// never payment or production evidence. No requests are mocked or intercepted.
+// never payment or production evidence. A single product-save 503 per profile is simulated.
 import puppeteer from "puppeteer-core";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -112,6 +112,26 @@ try {
     const kind = await page.$eval("#f-kind", (el) => el.value);
     if (kind !== "PRODUCT") throw new Error(`${profile.key} unexpected default ${kind}`);
     await fill(page,"#f-name",`Fixture ${profile.key}`); await fill(page,"#f-category",`Category ${profile.key}`); await fill(page,"#f-priceKES","100");
+    // A controlled 503 tests the UI's error and recovery path, not a real database outage.
+    let failNext = true;
+    await page.setRequestInterception(true);
+    const rejectOnce = (request) => {
+      if (failNext && request.url().endsWith(`/api/pos/${id}/products`) && request.method() === "POST") {
+        failNext = false;
+        return void request.respond({ status:503, contentType:"application/json", body:JSON.stringify({ error:"Temporary test failure. Try again." }) });
+      }
+      void request.continue();
+    };
+    page.on("request", rejectOnce);
+    const failedSave = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/products`) && r.status() === 503);
+    await page.click('form.pos-form button[type="submit"]');
+    await failedSave;
+    await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes("Temporary test failure"));
+    if (await prisma.posProduct.count({ where:{ businessId:id, name:`Fixture ${profile.key}` } })) throw new Error(`${profile.key} failed save created a product`);
+    await page.setRequestInterception(false); page.off("request", rejectOnce);
+    if ((await page.$eval("#f-name", (el) => el.value)) !== `Fixture ${profile.key}`) throw new Error(`${profile.key} lost form values after failed save`);
+    console.log(`PASS ${profile.key} simulated product-save failure preserves form and supports retry`);
+    await page.waitForFunction(() => !document.querySelector('form.pos-form button[type="submit"]')?.disabled);
     const created = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/products`) && r.request().method() === "POST").catch(() => null);
     const createNavigation = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
     await page.click('form.pos-form button[type="submit"]');
