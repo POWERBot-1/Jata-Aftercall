@@ -535,8 +535,10 @@ Prisma-DMMF failure; ESLint on changed files **0 errors**; `tsc --noEmit` shows 
 
 ## 17. Remaining approvals
 
-1. **Merge/deploy PR #73** — 14/14 checks pass and the diff contains only related files, but no merge or deployment is
-   performed without an explicit instruction.
+1. **Merge/deploy PR #73** — head `df8371d` passed **15/15 checks**, including Static/typecheck with a generated Prisma
+   client, the unit suite, migrations against PostgreSQL 18, the Journey against a real database, and the Real-Chrome
+   six-viewport capture. The diff contains nine related files (+777/−5) and no unrelated changes, but no merge or
+   deployment is performed without an explicit instruction.
 2. **`ERP_PRO` row insert** — SQL in §14; requires separate explicit production-write authorisation.
 3. **`ERP_PRO_ENABLED=true` + redeploy** — requires separate explicit production-configuration authorisation.
 4. **Authenticated verification** — owner to confirm that `/onboarding` and `/dashboard/subscription` show the four public
