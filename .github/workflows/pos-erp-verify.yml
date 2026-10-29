@@ -1,0 +1,167 @@
+name: POS / ERP - PRO verify
+
+# Independent verification for the POS / ERP - PRO work. It runs on every pull request (including
+# the arena integration branches) instead of only `main`, because the existing
+# interactive-business-e2e workflow is scoped to main and therefore never exercises these changes
+# before they land.
+#
+# Three gates, each able to fail on its own:
+#   1. static  — schema validates, the client generates, code references match real Prisma models,
+#                TypeScript compiles, the unit suite passes, the production build succeeds offline.
+#   2. migrations — the committed SQL applies to a clean database, applies over the previous
+#                release with existing POS rows present, and rolls back/re-applies safely
+#                (scripts/erp/migration-verify.sh).
+#   3. database — the ERP PostgreSQL suite runs the real code paths against a migrated database.
+#
+# Node 22: the repository's unit suite asserts the runtime it runs on (main pins ^20.19 || >=22.12
+# and its own workflows use 22), so a Node 20 runner fails that guard before any test runs.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pos-erp-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Schema, types, unit suite, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Deliberately no DATABASE_URL: this job proves the offline/preview path still builds.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `prisma validate`/`generate` only need the variable to exist; they do not connect. The value
+      # is a placeholder so this job never reaches a real database (and so the build below stays on
+      # the offline/preview path, which is the path this job exists to prove).
+      - name: Validate the Prisma schema
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/validate_only?schema=public
+        run: bash scripts/lib/prisma-cli.sh validate
+
+      - name: Generate the Prisma client
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/validate_only?schema=public
+        run: bash scripts/lib/prisma-generate.sh
+
+      - name: Check code references against the generated client
+        run: npx tsx scripts/erp/check-models.ts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit suite
+        run: npx vitest run tests/unit
+
+      - name: Production build (offline path, no database)
+        run: npm run build
+
+  database:
+    name: Migrations and PostgreSQL suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: static
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGPASSWORD: jata
+      DATABASE_URL: postgresql://jata:jata@127.0.0.1:5432/jata_ci?schema=public
+      VERIFY_DATABASE_URL: postgresql://jata:jata@127.0.0.1:5432/jata_verify?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata:jata@127.0.0.1:5432/jata_ci?schema=public
+      AUTH_SECRET: pos-erp-ci-test-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+
+      - name: Prepare the evidence log directory
+        run: mkdir -p ci-logs
+
+      - name: Ensure PostgreSQL client tools
+        run: |
+          if ! command -v psql >/dev/null || ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Create the verification database
+        run: psql -h 127.0.0.1 -U jata -d postgres -c 'CREATE DATABASE jata_verify;'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the Prisma client
+        run: bash scripts/lib/prisma-generate.sh
+
+      - name: Apply the committed migrations with Prisma
+        run: |
+          set -o pipefail
+          bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee ci-logs/migrate-deploy.log
+          bash scripts/lib/prisma-cli.sh migrate status 2>&1 | tee ci-logs/migrate-status.log
+
+      - name: 'Prove the migration chain: clean install, upgrade path, rollback and recovery'
+        run: |
+          set -o pipefail
+          DATABASE_URL="$VERIFY_DATABASE_URL" bash scripts/erp/migration-verify.sh all 2>&1 | tee ci-logs/migration-verify.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' ci-logs/migration-verify.log)
+          if printf '%s' "$plain" | grep -q '^FAIL'; then
+            echo "A migration scenario failed." >&2
+            exit 1
+          fi
+          printf '%s' "$plain" | grep -q 'RESULT: PASS'
+
+      - name: ERP PostgreSQL suites (POS/ERP core + tasks)
+        run: |
+          set -o pipefail
+          npm run test:db:erp 2>&1 | tee ci-logs/erp-postgres.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' ci-logs/erp-postgres.log)
+          # A skipped database suite is not a passing one.
+          if printf '%s' "$plain" | grep -qE '[1-9][0-9]* skipped'; then
+            echo "The ERP PostgreSQL suite skipped — PRISMA_TEST_DATABASE_URL did not reach vitest." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE '[1-9][0-9]* passed'; then
+            echo "The ERP PostgreSQL suite reported no passing tests." >&2
+            exit 1
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-erp-verify-logs
+          path: ci-logs/
+          if-no-files-found: ignore
+          retention-days: 14

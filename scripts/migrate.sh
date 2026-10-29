@@ -17,6 +17,18 @@ fi
 # The guard decides whether this environment is entitled to migrate this
 # target. It runs before prisma and fails closed: on refusal, npx is never
 # reached. See docs/MIGRATION_TARGET_GUARD.md.
+# `directUrl` support: default DIRECT_URL to DATABASE_URL (see scripts/lib/prisma-env.sh), then refuse
+# a pooled migration target before Prisma is invoked. Both run before `npx`, so a misconfiguration
+# fails with one sentence instead of P1002/P3009 after partial work.
+# shellcheck source=scripts/lib/prisma-env.sh
+. "$(dirname "$0")/lib/prisma-env.sh"
+
+echo "[migrate] checking the migration connection (pooled vs direct)..."
+if ! node "$(dirname "$0")/lib/direct-url-guard.mjs" check; then
+  echo "[migrate] ERROR: refusing to migrate over a pooled connection — aborting before prisma"
+  exit 1
+fi
+
 echo "[migrate] checking migration target..."
 if ! node scripts/lib/migration-target-guard.mjs check; then
   echo "[migrate] ERROR: migration target refused — aborting before prisma"

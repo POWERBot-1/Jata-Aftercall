@@ -7,6 +7,12 @@ set -euo pipefail
 
 echo "[build] Starting JATA AFTERCALL build gate (Option I)"
 
+# `prisma generate` reads the datasource, and a declared-but-unset `directUrl` is a hard P1012. This
+# defaults DIRECT_URL to DATABASE_URL when unset so no environment has to add a second variable to
+# build; the guard in migrate.sh refuses the one case where that default would be unsafe.
+# shellcheck source=scripts/lib/prisma-env.sh
+. "$(dirname "$0")/lib/prisma-env.sh"
+
 # Step 1: Migration gate (isolated)
 if [ -n "${DATABASE_URL:-}" ]; then
   echo "[build] DATABASE_URL detected — invoking migration gate"

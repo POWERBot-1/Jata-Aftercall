@@ -1,0 +1,334 @@
+/**
+ * Industry packs
+ *
+ * A pack is a configuration, not a veneer: it declares which modules appear, which fields matter,
+ * which reports are useful, which automation presets are offered and which tax treatments are
+ * relevant. Its status is honest — SCOPED, IN DEVELOPMENT, TESTED, VERIFIED FOR RELEASE or
+ * BLOCKED — and the UI shows that status instead of implying every pack is ready.
+ */
+
+export type PackStatus = "SCOPED" | "IN DEVELOPMENT" | "TESTED" | "VERIFIED FOR RELEASE" | "BLOCKED";
+
+export type IndustryPack = {
+  key: string;
+  label: string;
+  blurb: string;
+  status: PackStatus;
+  /** Modules that are meaningful for this industry. `core` is always included. */
+  modules: string[];
+  /** Fields that should be prominent in forms for this pack. */
+  keyFields: string[];
+  workflows: string[];
+  reports: string[];
+  taxKeys: string[];
+  automationPresets: string[];
+  complianceNotes: string[];
+  unsupported: string[];
+};
+
+// Modules every industry pack carries. Tasks, notifications, approvals, requisitions, procurement,
+// setup and orders are listed because they are universal workflow, not pack-specific capability: a
+// shop, a workshop and a clinic all own work, approve spending, buy stock and take store orders, and
+// all of them go through onboarding. Omission from this list removes a module from `allowed` in
+// navigationFor(), which is how five READY modules ended up unreachable from the sidebar in every
+// pack (found by scripts/erp/erp-pages.check.mjs; E14). Add new core modules here.
+const CORE_MODULES = ["home", "sell", "products", "inventory", "customers", "invoices", "payments", "expenses", "accounting", "messaging", "sender", "automation", "reports", "store", "compliance", "settings", "tasks", "notifications", "approvals", "requisitions", "procurement", "setup", "orders"];
+
+export const INDUSTRY_PACKS: IndustryPack[] = [
+  {
+    key: "retail",
+    label: "Retail and shop",
+    blurb: "Fast counter sales, stock and simple customer credit.",
+    status: "TESTED",
+    modules: [...CORE_MODULES, "suppliers", "purchases"],
+    keyFields: ["barcode", "unit", "reorderLevel", "priceKES"],
+    workflows: ["Barcode checkout", "Receive stock", "Record a credit sale", "Send a receipt"],
+    reports: ["Sales today", "Stock on hand", "Receivables ageing", "Profit and loss"],
+    taxKeys: ["VAT_STANDARD", "VAT_ZERO", "VAT_EXEMPT"],
+    automationPresets: ["Low stock alert", "New order alert"],
+    complianceNotes: ["County trade licence", "eTIMS obligation applies to business income"],
+    unsupported: ["Scale integration", "eTIMS submission"],
+  },
+  {
+    key: "supermarket",
+    label: "Supermarket / multi-branch",
+    blurb: "Multiple tills, branch stock and transfers.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "branches", "suppliers", "purchases", "transfers"],
+    keyFields: ["barcode", "batch", "expiry", "reorderLevel"],
+    workflows: ["Multi-till checkout", "Branch transfer", "Stocktake"],
+    reports: ["Branch sales", "Stock by branch", "Shrinkage"],
+    taxKeys: ["VAT_STANDARD", "VAT_ZERO", "VAT_EXEMPT"],
+    automationPresets: ["Low stock alert", "Expiry alert"],
+    complianceNotes: ["County permits per branch", "Liquor licensing where applicable"],
+    unsupported: ["Weighing scales", "Label printers"],
+  },
+  {
+    key: "restaurant",
+    label: "Restaurant, café and catering",
+    blurb: "Table service, kitchen tickets and split bills.",
+    status: "IN DEVELOPMENT",
+    modules: [...CORE_MODULES, "tables", "kitchen", "suppliers"],
+    keyFields: ["menuCategory", "prepMinutes", "modifiers"],
+    workflows: ["Open a table", "Send to kitchen", "Split a bill", "Takeaway order"],
+    reports: ["Menu mix", "Table turns", "Daily close"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Order received alert", "Daily close report"],
+    complianceNotes: ["Food hygiene certificate", "Service charge treatment requires professional review"],
+    unsupported: ["Kitchen display hardware", "Modifier pricing engine"],
+  },
+  {
+    key: "wholesale",
+    label: "Wholesale and distribution",
+    blurb: "Price tiers, purchase orders and trade credit.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "suppliers", "purchases", "procurement", "branches"],
+    keyFields: ["wholesalePriceKES", "termsDays", "creditLimitKES"],
+    workflows: ["Quotation", "Sales order", "Delivery note", "Credit control"],
+    reports: ["Sales by customer", "Payables ageing", "Gross margin"],
+    taxKeys: ["VAT_STANDARD", "VAT_ZERO"],
+    automationPresets: ["Overdue invoice follow-up", "Low stock purchase suggestion"],
+    complianceNotes: ["VAT on taxable supplies", "Credit notes for returns"],
+    unsupported: ["Route and van sales"],
+  },
+  {
+    key: "manufacturing",
+    label: "Manufacturing and assembly",
+    blurb: "Bills of materials, production runs and costing.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "manufacturing", "suppliers", "purchases"],
+    keyFields: ["bom", "batch", "yield", "costKES"],
+    workflows: ["Build a product", "Record a production run", "Consume materials"],
+    reports: ["Cost of production", "Material usage", "Inventory valuation"],
+    taxKeys: ["VAT_STANDARD", "VAT_ZERO"],
+    automationPresets: ["Low raw-material alert"],
+    complianceNotes: ["Input VAT on eligible purchases", "Excise may apply"],
+    unsupported: ["Work-in-progress costing", "MRP scheduling"],
+  },
+  {
+    key: "hardware",
+    label: "Hardware and building supplies",
+    blurb: "Bulk units, delivery and project pricing.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "suppliers", "purchases", "delivery", "projects"],
+    keyFields: ["unit", "weightKg", "wholesalePriceKES"],
+    workflows: ["Quote a project", "Deliver materials", "Account for returns"],
+    reports: ["Project profitability", "Stock on hand"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Low stock alert", "Overdue quote reminder"],
+    complianceNotes: ["VAT on supplies", "Withholding may apply on contracts"],
+    unsupported: ["Retention accounting"],
+  },
+  {
+    key: "agriculture",
+    label: "Agriculture and farm inputs",
+    blurb: "Weighed produce, seasonal inputs and farmer accounts.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "suppliers", "purchases", "weighing"],
+    keyFields: ["weightKg", "grade", "season"],
+    workflows: ["Intake weighing", "Grade and price", "Farmer payment"],
+    reports: ["Intake by farmer", "Input usage", "Season profitability"],
+    taxKeys: ["VAT_ZERO", "VAT_EXEMPT", "VAT_STANDARD"],
+    automationPresets: ["Input stock alert"],
+    complianceNotes: ["Zero-rated and exempt produce varies by item — confirm per product"],
+    unsupported: ["Scale protocols (untested)"],
+  },
+  {
+    key: "pharmacy",
+    label: "Pharmacy and healthcare supplies",
+    blurb: "Batch, expiry and controlled stock.",
+    status: "BLOCKED",
+    modules: [...CORE_MODULES, "suppliers", "batches", "prescriptions"],
+    keyFields: ["batch", "expiry", "controlledSchedule"],
+    workflows: ["Dispense", "Batch recall", "Expiry handling"],
+    reports: ["Expiry report", "Controlled stock register"],
+    taxKeys: ["VAT_EXEMPT", "VAT_ZERO", "VAT_STANDARD"],
+    automationPresets: ["Expiry alert", "Low stock alert"],
+    complianceNotes: ["Pharmacy and Poisons Board licensing", "Health data is sensitive personal data"],
+    unsupported: ["Clinical records", "Prescription validation", "Controlled-drug reporting"],
+  },
+  {
+    key: "salon",
+    label: "Salon, spa and personal care",
+    blurb: "Appointments, packages and staff commission.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "appointments", "staff", "commissions"],
+    keyFields: ["durationMinutes", "staffId", "package"],
+    workflows: ["Book an appointment", "Redeem a package", "Pay commission"],
+    reports: ["Staff utilisation", "Repeat clients", "Service revenue"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Appointment reminder", "No-show follow-up"],
+    complianceNotes: ["County health permit", "Client treatment records are sensitive"],
+    unsupported: ["Consumable costing", "SMS reminders require an approved Sender ID"],
+  },
+  {
+    key: "automotive",
+    label: "Garage, parts and vehicle services",
+    blurb: "Job cards, parts and service history.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "jobs", "appointments", "suppliers"],
+    keyFields: ["registration", "mileage", "jobStatus"],
+    workflows: ["Open a job card", "Add parts", "Complete and invoice"],
+    reports: ["Job profitability", "Technician output", "Parts usage"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Service due reminder", "Low parts stock"],
+    complianceNotes: ["Trade licence", "Vehicle owner data"],
+    unsupported: ["Diagnostic device integration"],
+  },
+  {
+    key: "professional_services",
+    label: "Professional services and consultancies",
+    blurb: "Quotes, time, milestones and retainers.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "projects", "time", "quotes"],
+    keyFields: ["projectId", "milestone", "billableHours"],
+    workflows: ["Quote", "Log time", "Invoice a milestone"],
+    reports: ["Project profitability", "Utilisation", "WIP"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Overdue invoice follow-up", "Budget threshold alert"],
+    complianceNotes: ["Professional body registration", "Client confidentiality"],
+    unsupported: ["Trust/escrow accounting"],
+  },
+  {
+    key: "property",
+    label: "Property management and rentals",
+    blurb: "Units, tenants, rent and maintenance.",
+    status: "BLOCKED",
+    modules: [...CORE_MODULES, "properties", "tenants", "maintenance"],
+    keyFields: ["unit", "leaseStart", "rentKES"],
+    workflows: ["Lease a unit", "Invoice rent", "Log maintenance"],
+    reports: ["Rent roll", "Arrears", "Occupancy"],
+    taxKeys: ["VAT_EXEMPT", "VAT_STANDARD"],
+    automationPresets: ["Rent due reminder", "Maintenance task"],
+    complianceNotes: ["Residential rent generally exempt; commercial treatment requires legal review"],
+    unsupported: ["Lease accounting", "Deposit regulation"],
+  },
+  {
+    key: "education",
+    label: "Education and training",
+    blurb: "Enrolment, terms and fee invoices.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "students", "courses", "invoices"],
+    keyFields: ["admissionNumber", "course", "term"],
+    workflows: ["Enrol", "Invoice fees", "Record a payment"],
+    reports: ["Fee collection", "Arrears by class", "Enrolment"],
+    taxKeys: ["VAT_EXEMPT", "VAT_STANDARD"],
+    automationPresets: ["Fee reminder", "Term report"],
+    complianceNotes: ["Ministry registration", "Student data, including minors, requires care"],
+    unsupported: ["Examination integrations"],
+  },
+  {
+    key: "logistics",
+    label: "Logistics, courier and delivery",
+    blurb: "Dispatch, delivery notes and proof of delivery.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "dispatch", "delivery", "drivers"],
+    keyFields: ["consignment", "route", "deliveryStatus"],
+    workflows: ["Create a consignment", "Assign a rider", "Capture proof of delivery"],
+    reports: ["On-time delivery", "Delivery cost", "Failed deliveries"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Delayed delivery alert"],
+    complianceNotes: ["Transport licensing and insurance"],
+    unsupported: ["Live courier API adapters"],
+  },
+  {
+    key: "cleaning",
+    label: "Cleaning, maintenance and field service",
+    blurb: "Schedules, sites and recurring jobs.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "jobs", "schedules", "staff"],
+    keyFields: ["site", "frequency", "assignedTo"],
+    workflows: ["Schedule a visit", "Complete a checklist", "Invoice a client"],
+    reports: ["Job completion", "Client profitability"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Scheduled job reminder", "Client follow-up"],
+    complianceNotes: ["Worker insurance and safety obligations"],
+    unsupported: ["Offline field app"],
+  },
+  {
+    key: "electronics",
+    label: "Electronics and appliance retail",
+    blurb: "Serial numbers, warranties and repairs.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "serials", "warranty", "jobs"],
+    keyFields: ["serialNumber", "warrantyMonths", "brand"],
+    workflows: ["Sell with a serial", "Register a warranty", "Receive a repair"],
+    reports: ["Serial traceability", "Warranty claims"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Low stock alert", "Warranty expiry reminder"],
+    complianceNotes: ["Consumer protection requirements"],
+    unsupported: ["Barcode label printing"],
+  },
+  {
+    key: "fashion",
+    label: "Clothing, footwear and fashion",
+    blurb: "Variants, seasons and returns.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "variants", "returns", "suppliers"],
+    keyFields: ["size", "colour", "season"],
+    workflows: ["Sell a variant", "Process a return", "Reorder a size"],
+    reports: ["Sell-through by variant", "Returns", "Stock ageing"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Size reorder alert"],
+    complianceNotes: ["VAT on taxable goods"],
+    unsupported: ["Variant barcode printing"],
+  },
+  {
+    key: "hotel",
+    label: "Hotels and accommodation",
+    blurb: "Rooms, nights and guest folios.",
+    status: "BLOCKED",
+    modules: [...CORE_MODULES, "rooms", "bookings", "guests"],
+    keyFields: ["roomType", "checkIn", "checkOut"],
+    workflows: ["Book a room", "Check in", "Check out and invoice"],
+    reports: ["Occupancy", "Revenue per room", "Guest ledger"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Booking confirmation"],
+    complianceNotes: ["Tourism Regulatory Authority licensing", "Tourism levy may apply"],
+    unsupported: ["Tourism levy calculation", "Channel manager integration"],
+  },
+  {
+    key: "agency",
+    label: "Agencies and multi-client operations",
+    blurb: "Clients, projects and pass-through costs.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "projects", "quotes", "time", "branches"],
+    keyFields: ["clientId", "retainer", "projectId"],
+    workflows: ["Open a client", "Run a retainer", "Invoice time"],
+    reports: ["Client profitability", "Utilisation", "WIP"],
+    taxKeys: ["VAT_STANDARD"],
+    automationPresets: ["Overdue invoice follow-up", "Weekly client report"],
+    complianceNotes: ["Client confidentiality", "Campaign data requires consent"],
+    unsupported: ["Cross-client data walls beyond explicit project scoping"],
+  },
+  {
+    key: "bookkeeping",
+    label: "Bookkeeping and business services",
+    blurb: "Client books, filing checklists and reports.",
+    status: "SCOPED",
+    modules: [...CORE_MODULES, "clients", "filings", "reports"],
+    keyFields: ["clientId", "period", "filingDue"],
+    workflows: ["Open a client period", "Reconcile", "Produce reports"],
+    reports: ["Trial balance", "VAT summary", "Client profitability"],
+    taxKeys: ["VAT_STANDARD", "VAT_ZERO", "VAT_EXEMPT"],
+    automationPresets: ["Filing deadline reminder", "Monthly report delivery"],
+    complianceNotes: ["Professional indemnity and client confidentiality"],
+    unsupported: ["Direct KRA filing", "Multi-client consolidated accounts"],
+  },
+];
+
+export function industryPack(key: string | null | undefined): IndustryPack {
+  return INDUSTRY_PACKS.find((pack) => pack.key === key) ?? INDUSTRY_PACKS[0];
+}
+
+export function packSupportsModule(pack: IndustryPack, moduleKey: string): boolean {
+  return pack.modules.includes(moduleKey) || CORE_MODULES.includes(moduleKey);
+}
+
+export const PACK_STATUS_TONE: Record<PackStatus, "good" | "warn" | "bad" | "neutral"> = {
+  "VERIFIED FOR RELEASE": "good",
+  TESTED: "good",
+  "IN DEVELOPMENT": "warn",
+  SCOPED: "neutral",
+  BLOCKED: "bad",
+};

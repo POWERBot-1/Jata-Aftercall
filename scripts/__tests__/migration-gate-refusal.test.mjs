@@ -27,10 +27,17 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PROD_FP = "3439ca4ed940f77fde4d30f94a8873dc02ccf3daa1baec900804857450f3e8d5";
 
+// Neon's pooled endpoint: what the runtime uses, and what the documented deployment pasted into
+// DATABASE_URL. Migrations must NOT run through it (PgBouncer transaction mode does not reliably hold
+// Prisma's session advisory lock), so every production case below also supplies the unpooled URL.
 const PROD_URL =
   "postgresql://user:sup3rs3cret@ep-autumn-sea-axqkyeaf-pooler.c-4.us-east-2.aws.neon.tech/neondb";
+const PROD_DIRECT_URL =
+  "postgresql://user:sup3rs3cret@ep-autumn-sea-axqkyeaf.c-4.us-east-2.aws.neon.tech/neondb";
 const PREVIEW_URL =
   "postgresql://user:previewpw@ep-orange-water-axziuiqn-pooler.c-4.us-east-2.aws.neon.tech/jata_preview";
+const PREVIEW_DIRECT_URL =
+  "postgresql://user:previewpw@ep-orange-water-axziuiqn.c-4.us-east-2.aws.neon.tech/jata_preview";
 
 let workDir;
 let stubDir;
@@ -137,8 +144,22 @@ const migrate = (extra) => runScript("scripts/migrate.sh", extra);
 
 // ---------------------------------------------------------------------------
 describe("migrate.sh — refusals never reach npx", () => {
-  test("production with the shipped enrolled allowlist reaches prisma", () => {
+  test("a pooled DATABASE_URL with no DIRECT_URL never reaches npx (E8)", () => {
     const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
+    assert.equal(r.status, 1, "the run must fail closed");
+    assert.deepEqual(r.calls, [], "prisma must not be invoked at all");
+    assert.match(r.stdout + r.stderr, /REFUSED_POOLED_WITHOUT_DIRECT_URL/);
+  });
+
+  test("a DIRECT_URL that is itself pooled never reaches npx (E8)", () => {
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL, DIRECT_URL: PROD_URL });
+    assert.equal(r.status, 1);
+    assert.deepEqual(r.calls, []);
+    assert.match(r.stdout + r.stderr, /REFUSED_DIRECT_URL_IS_POOLED/);
+  });
+
+  test("production with the shipped enrolled allowlist reaches prisma", () => {
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL, DIRECT_URL: PROD_DIRECT_URL });
     assert.equal(r.status, 0);
     assert.deepEqual(r.calls, ["prisma migrate deploy"]);
     assert.match(r.stdout, /OK_ENROLLED_PRODUCTION/);
@@ -149,6 +170,7 @@ describe("migrate.sh — refusals never reach npx", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowUnenrolledPath,
     });
     assert.equal(r.status, 1);
@@ -162,6 +184,7 @@ describe("migrate.sh — refusals never reach npx", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowOtherPath,
     });
     assert.equal(r.status, 1);
@@ -170,14 +193,14 @@ describe("migrate.sh — refusals never reach npx", () => {
   });
 
   test("a Vercel build with no VERCEL_ENV is refused", () => {
-    const r = migrate({ VERCEL: "1", DATABASE_URL: PROD_URL });
+    const r = migrate({ VERCEL: "1", DATABASE_URL: PROD_URL, DIRECT_URL: PROD_DIRECT_URL });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, []);
     assert.match(r.stderr, /REFUSED_UNKNOWN_ENVIRONMENT/);
   });
 
   test("a Vercel build with an unrecognised VERCEL_ENV is refused", () => {
-    const r = migrate({ VERCEL: "1", VERCEL_ENV: "staging", DATABASE_URL: PROD_URL });
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "staging", DATABASE_URL: PROD_URL, DIRECT_URL: PROD_DIRECT_URL });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, []);
   });
@@ -206,6 +229,7 @@ describe("migrate.sh — refusals never reach npx", () => {
       VERCEL: "1",
       VERCEL_ENV: "preview",
       DATABASE_URL: PREVIEW_URL,
+      DIRECT_URL: PREVIEW_DIRECT_URL,
       MIGRATION_GUARD_MODE: "disable",
     });
     assert.equal(r.status, 1);
@@ -218,6 +242,7 @@ describe("migrate.sh — refusals never reach npx", () => {
       VERCEL: "1",
       VERCEL_ENV: "preview",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowEnrolledPath,
     });
     assert.equal(r.status, 1);
@@ -243,7 +268,7 @@ describe("migrate.sh — refusals never reach npx", () => {
 // ---------------------------------------------------------------------------
 describe("migrate.sh — allowed paths still run prisma", () => {
   test("preview with a preview database runs exactly one migration command", () => {
-    const r = migrate({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: PREVIEW_URL });
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: PREVIEW_URL, DIRECT_URL: PREVIEW_DIRECT_URL });
     assert.equal(r.status, 0);
     assert.deepEqual(r.calls, ["prisma migrate deploy"]);
     assert.match(r.stdout, /OK_PREVIEW/);
@@ -254,6 +279,7 @@ describe("migrate.sh — allowed paths still run prisma", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowEnrolledPath,
     });
     assert.equal(r.status, 0);
@@ -282,6 +308,7 @@ describe("build.sh — a refused migration stops the whole build", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowUnenrolledPath,
     });
     assert.equal(r.status, 1);
@@ -295,6 +322,7 @@ describe("build.sh — a refused migration stops the whole build", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowOtherPath,
     });
     assert.equal(r.status, 1);
@@ -306,6 +334,7 @@ describe("build.sh — a refused migration stops the whole build", () => {
       VERCEL: "1",
       VERCEL_ENV: "preview",
       DATABASE_URL: PREVIEW_URL,
+      DIRECT_URL: PREVIEW_DIRECT_URL,
     });
     assert.equal(r.status, 0);
     assert.deepEqual(r.calls, ["prisma migrate deploy", "prisma generate", "next build --webpack"]);
@@ -321,7 +350,7 @@ describe("build.sh — a refused migration stops the whole build", () => {
 // ---------------------------------------------------------------------------
 describe("no secret material in gate output", () => {
   test("refusal output never contains the password, host, or connection string", () => {
-    const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL });
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "production", DATABASE_URL: PROD_URL, DIRECT_URL: PROD_DIRECT_URL });
     const combined = `${r.stdout}${r.stderr}`;
     for (const needle of ["sup3rs3cret", "ep-autumn-sea-axqkyeaf", "postgresql://", "user:"]) {
       assert.equal(combined.includes(needle), false, needle);
@@ -329,7 +358,7 @@ describe("no secret material in gate output", () => {
   });
 
   test("allowed output never contains the password or connection string", () => {
-    const r = migrate({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: PREVIEW_URL });
+    const r = migrate({ VERCEL: "1", VERCEL_ENV: "preview", DATABASE_URL: PREVIEW_URL, DIRECT_URL: PREVIEW_DIRECT_URL });
     const combined = `${r.stdout}${r.stderr}`;
     for (const needle of ["previewpw", "postgresql://", "ep-orange-water"]) {
       assert.equal(combined.includes(needle), false, needle);

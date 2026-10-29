@@ -46,8 +46,13 @@ const CI_FP = "f6fc2354ab2f064b9c8e0e4dcea44ec74cc1a14a3f24fb46df6486423bfc80d3"
 const PROD_HOST = "ep-autumn-sea-axqkyeaf-pooler.c-4.us-east-2.aws.neon.tech";
 const PROD_DB = "neondb";
 const PROD_URL = `postgresql://user:sup3rs3cret@${PROD_HOST}/${PROD_DB}`;
+// The unpooled twin of PROD_URL. Migrations must not run through PgBouncer's transaction pooling, so
+// every case that actually reaches `migrate deploy` supplies this beside the pooled runtime URL.
+const PROD_DIRECT_URL = `postgresql://user:sup3rs3cret@${PROD_HOST.replace("-pooler", "")}/${PROD_DB}`;
 const PREVIEW_URL =
   "postgresql://user:previewpw@ep-orange-water-axziuiqn-pooler.c-4.us-east-2.aws.neon.tech/jata_preview";
+const PREVIEW_DIRECT_URL =
+  "postgresql://user:previewpw@ep-orange-water-axziuiqn.c-4.us-east-2.aws.neon.tech/jata_preview";
 /** The disposable database the e2e job provisions; never a deployment identity. */
 const CI_URL = "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public";
 const UNKNOWN_URL = "postgresql://user:pw@db.somewhere-else.invalid/app";
@@ -221,6 +226,7 @@ describe("migrate.sh with the shipped allowlist", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
     });
     assert.equal(r.status, 0);
     assert.deepEqual(r.calls, ["prisma migrate deploy"]);
@@ -232,6 +238,7 @@ describe("migrate.sh with the shipped allowlist", () => {
       VERCEL: "1",
       VERCEL_ENV: "preview",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
     });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, [], "npx must not run");
@@ -243,6 +250,7 @@ describe("migrate.sh with the shipped allowlist", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
       MIGRATION_GUARD_ALLOWLIST: allowUnenrolledPath,
     });
     assert.equal(r.status, 1);
@@ -257,6 +265,7 @@ describe("migrate.sh with the shipped allowlist", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PROD_URL,
+      DIRECT_URL: PROD_DIRECT_URL,
     });
     assert.equal(r.status, 0);
     assert.deepEqual(r.calls, ["prisma migrate deploy", "prisma generate", "next build --webpack"]);
@@ -268,6 +277,7 @@ describe("migrate.sh with the shipped allowlist", () => {
       VERCEL: "1",
       VERCEL_ENV: "production",
       DATABASE_URL: PREVIEW_URL,
+      DIRECT_URL: PREVIEW_DIRECT_URL,
     });
     assert.equal(r.status, 1);
     assert.deepEqual(r.calls, []);

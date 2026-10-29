@@ -85,7 +85,10 @@ describe("runtime and schema guards", () => {
     // token table, per-account cooldown, and a defaulted session revocation counter), and the
     // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only),
     // and the additive JATA Autopilot foundation (tenant-scoped Autopilot* tables, indexes, and
-    // foreign keys only).
+    // foreign keys only), and POS / ERP - PRO (38 new tenant-scoped ERP, accounting, messaging and
+    // storefront tables that
+    // sit beside the existing POS without touching it; every statement is CREATE TABLE, CREATE INDEX
+    // or a guarded foreign key on a table the same migration creates).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -109,6 +112,17 @@ describe("runtime and schema guards", () => {
       "20261018000000_password_reset_security",
       "20261023000000_pos_publication_resolution",
       "20261025000000_jata_autopilot_foundation",
+      "20261027000000_pos_erp_pro",
+      "20261028000000_erp_tasks",
+      "20261029000000_erp_notifications",
+      "20261030000000_erp_approvals",
+      "20261031000000_erp_approval_consumption",
+      "20261032000000_erp_procurement",
+      // Requisitions: the request to buy, before the order. Two additive tenant-scoped tables
+      // (ErpRequisition, ErpRequisitionLine) with their indexes and guarded foreign keys; the
+      // optional purchaseOrderId is a plain column on purpose, so a request keeps its own audit
+      // story even if a draft order is deleted. No existing table or row is touched.
+      "20261033000000_erp_requisitions",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -150,6 +164,12 @@ describe("runtime and schema guards", () => {
       "20261018000000_password_reset_security",
       "20261023000000_pos_publication_resolution",
       "20261025000000_jata_autopilot_foundation",
+      "20261027000000_pos_erp_pro",
+      "20261028000000_erp_tasks",
+      "20261029000000_erp_notifications",
+      "20261030000000_erp_approvals",
+      "20261031000000_erp_approval_consumption",
+      "20261032000000_erp_procurement",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -291,6 +311,52 @@ describe("runtime and schema guards", () => {
     expect(sql).not.toMatch(/ALTER TABLE "(?!Pos)/);
     expect(schema).toContain("posConfiguration         PosConfiguration?");
     expect(schema).toContain("posSales                 PosSale[]");
+  });
+
+  it("adds POS / ERP - PRO as new tenant-scoped tables beside the POS, altering no existing table", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const sql = readFileSync(path.join(root, "prisma/migrations/20261027000000_pos_erp_pro/migration.sql"), "utf8");
+
+    // The premium product sits beside the POS: every model it adds is tenant-scoped in the data
+    // model as well as in the access layer, and every table cascades from Business.
+    const erpModels = [
+      "ErpConfiguration", "ErpSubscription", "ErpEntitlement", "ErpSequence", "ErpAuditEvent",
+      "ErpIdempotencyRecord", "ErpAccount", "ErpPeriod", "ErpJournal", "ErpJournalLine", "ErpInvoice",
+      "ErpInvoiceLine", "ErpPayment", "ErpPaymentAllocation", "ErpCreditNote", "ErpExpense",
+      "ErpSupplierBill", "ErpTaxRule", "ErpComplianceProfile", "ErpStoreOrder", "ErpStoreOrderItem",
+      "ErpNotification", "ErpAutomationRule", "ErpAutomationRun", "ErpKycDocument",
+      "MsgChannelConnection", "MsgSenderId", "MsgSenderIdEvent", "MsgContact", "MsgConsentRecord",
+      "MsgSuppression", "MsgAudience", "MsgTemplate", "MsgCampaign", "MsgCampaignRecipient",
+      "MsgMessageEvent", "MsgWallet", "MsgLedgerEntry",
+    ];
+    for (const model of erpModels) {
+      const start = schema.indexOf(`model ${model} {`);
+      expect(start, `${model} is missing`).toBeGreaterThan(-1);
+      const block = schema.slice(start, schema.indexOf("\n}", start));
+      expect(block, `${model} must be tenant-scoped`).toContain("businessId");
+      // Either a plain tenant index or a tenant unique key is fine — the guard only insists that
+      // every table is indexed by businessId so a tenant scan never reads another tenant's rows.
+      expect(sql, `${model} must index its tenant`).toMatch(
+        new RegExp(`INDEX IF NOT EXISTS "${model}_businessId`),
+      );
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS "${model}"`);
+    }
+
+    // Only new tables are created: no POS, commerce, wallet or studio table is touched, and no
+    // column of an existing table is redefined.
+    const created = [...sql.matchAll(/CREATE TABLE IF NOT EXISTS "(\w+)"/g)].map((match) => match[1]);
+    expect(created.sort()).toEqual([...erpModels].sort());
+    expect(sql.toUpperCase()).not.toContain("ALTER COLUMN");
+    expect(sql).not.toMatch(/ALTER TABLE "(?!Erp|Msg)/);
+    expect(sql.toUpperCase()).not.toContain("DROP ");
+
+    // One configuration per business and one public slug, so `findUnique({ where: { businessId } })`
+    // is valid and two tenants cannot claim the same shop address.
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpConfiguration_businessId_key"');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpConfiguration_storefrontSlug_key"');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "MsgWallet_businessId_key"');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpStoreOrder_publicToken_key"');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "ErpJournal_businessId_journalNumber_key"');
   });
 
   it("adds JATA Autopilot as new tenant-scoped tables and touches no existing table", () => {

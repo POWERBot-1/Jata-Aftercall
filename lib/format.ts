@@ -8,7 +8,7 @@
  * displayed it, and a wrong time on receipts, reports and notification messages everywhere else.
  * The presentation shape ("12 Oct 2026", "14:30", joined with " · ") is unchanged.
  */
-import { formatBookingDateTime as pinnedBookingDateTime, formatDate as pinnedDate, formatNumber as pinnedNumber, formatTime as pinnedTime } from "./dateFormat";
+import { formatBookingDateTime as pinnedBookingDateTime, formatDate as pinnedDate, formatNumber as pinnedNumber, formatTime as pinnedTime, nairobiHour as pinnedNairobiHour } from "./dateFormat";
 
 
 export function formatKES(amount: number | null | undefined): string {
@@ -89,4 +89,12 @@ export function maskPhone(phone: string | null | undefined): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 4) return phone;
   return `${digits.slice(0, 4)}${"•".repeat(Math.max(3, digits.length - 4))}`;
+}
+
+/**
+ * Hour of the day (0–23) in Africa/Nairobi. Use this instead of `new Date().getHours()` when the
+ * copy depends on the time of day, so the server and the browser agree.
+ */
+export function nairobiHour(instant: Date | number = new Date()): number {
+  return pinnedNairobiHour(instant);
 }

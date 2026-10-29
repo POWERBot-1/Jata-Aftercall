@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+// POS / ERP - PRO styles live in their own sheet: globals.css is pinned by the design-restoration
+// and workspace-token contracts, so the ERP block must not append hex literals after them.
+import "./erp.css";
 import { getBaseUrl } from "@/lib/url";
 import ProductThemeProvider from "@/components/ProductThemeProvider";
 import { productThemeBootScript, productThemeCss } from "@/lib/productThemes";

@@ -91,8 +91,8 @@ jobs:
           # (validation_only@127.0.0.1). validate/generate only need the variable
           # to RESOLVE; nothing connects. If a future step in this job opens a
           # connection, it must set its own real URL — do not reuse this one.
-          npx prisma validate 2>&1 | tee /tmp/step-validate.log
-          npx prisma generate 2>&1 | tee /tmp/step-generate.log
+          bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-validate.log
+          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
           # An engine download that silently fails leaves a client-less tree and
           # a typecheck full of spurious errors. Make that an explicit blocker.
           if [ ! -f node_modules/.prisma/client/index.js ]; then
@@ -236,8 +236,8 @@ jobs:
 
       - name: Generate Prisma Client
         run: |
-          npx prisma validate
-          npx prisma generate
+          bash scripts/lib/prisma-cli.sh validate
+          bash scripts/lib/prisma-generate.sh
           if [ ! -f node_modules/.prisma/client/index.js ]; then
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1
@@ -265,12 +265,12 @@ jobs:
       - name: Apply the complete migration history
         run: |
           set -o pipefail
-          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate-deploy.log
+          bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate-deploy.log
 
       - name: Migration status reports no pending or failed migrations
         run: |
           set -o pipefail
-          npx prisma migrate status 2>&1 | tee /tmp/step-migrate-status.log
+          bash scripts/lib/prisma-cli.sh migrate status 2>&1 | tee /tmp/step-migrate-status.log
           plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-migrate-status.log)
           if printf '%s' "$plain" | grep -qiE 'failed migration|following migration'; then
             echo "::error::FAIL: migration status reports a pending or failed migration"
@@ -290,7 +290,7 @@ jobs:
           # check-schema-drift.mjs in BOTH cases guarantees that any new drift
           # fails AND any leftover stale baseline entry also fails closed.
           set +e
-          npx prisma migrate diff \
+          bash scripts/lib/prisma-cli.sh migrate diff \
             --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code 2>&1 | tee /tmp/step-migrate-diff.log
@@ -313,7 +313,7 @@ jobs:
       - name: Re-running migrate deploy is a no-op (idempotent)
         run: |
           set -o pipefail
-          npx prisma migrate deploy 2>&1 | tee /tmp/step-migrate-again.log
+          bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate-again.log
           plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-migrate-again.log)
           if printf '%s' "$plain" | grep -qiE 'applying migration|applied migration'; then
             echo "::error::FAIL: the second deployment applied migrations that should already have been applied"
@@ -509,13 +509,13 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client
-        run: npx prisma generate
+        run: bash scripts/lib/prisma-generate.sh
 
       - name: "Control 1 — a broken migration must fail the gate"
         run: |
           set -o pipefail
           # Baseline: the real history applies.
-          npx prisma migrate deploy
+          bash scripts/lib/prisma-cli.sh migrate deploy
           # Add a deliberately invalid migration in a scratch copy and prove the
           # pipeline refuses it. The repository itself is never modified.
           # Tracked files only: `cp -a .` copied node_modules (hundreds of MB)
@@ -527,7 +527,7 @@ jobs:
           cd /tmp/broken
           ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
           set +e
-          npx prisma migrate deploy > /tmp/step-negative-broken-migration.log 2>&1
+          bash scripts/lib/prisma-cli.sh migrate deploy > /tmp/step-negative-broken-migration.log 2>&1
           status=$?
           set -e
           cat /tmp/step-negative-broken-migration.log
@@ -653,7 +653,7 @@ jobs:
             fs.writeFileSync("/tmp/drift-control.prisma", next);
           '
           set +e
-          npx prisma migrate diff \
+          bash scripts/lib/prisma-cli.sh migrate diff \
             --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel /tmp/drift-control.prisma \
             --exit-code > /tmp/step-negative-drift.log 2>&1
@@ -721,8 +721,8 @@ jobs:
       - name: Validate and generate Prisma Client from the reconciled datamodel
         run: |
           set -o pipefail
-          npx prisma validate 2>&1 | tee /tmp/step-recon-validate.log
-          npx prisma generate 2>&1 | tail -n 15
+          bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-recon-validate.log
+          bash scripts/lib/prisma-generate.sh 2>&1 | tail -n 15
           test -f node_modules/.prisma/client/index.js || {
             echo "::error::BLOCKED: Prisma Client missing after generate"
             exit 1
@@ -730,13 +730,13 @@ jobs:
           echo "PASS: validated and generated Prisma Client from reconciled prisma/schema.prisma"
 
       - name: Apply the complete migration history
-        run: npx prisma migrate deploy
+        run: bash scripts/lib/prisma-cli.sh migrate deploy
 
       - name: The reconciled schema has zero drift against the migrated database
         run: |
           set -o pipefail
           set +e
-          npx prisma migrate diff \
+          bash scripts/lib/prisma-cli.sh migrate diff \
             --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code 2>&1 | tee /tmp/step-recon-after.log

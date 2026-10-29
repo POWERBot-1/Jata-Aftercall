@@ -1,0 +1,186 @@
+# POS / ERP - PRO — Business Operating System gap matrix
+
+**Directive:** "Unified Business Operating System" (owner, 2026-10-28) — ~20 integrated modules.
+**Head reviewed:** `e500664` for the original matrix; rows 7, 9, 10 and the notification/dashboard rows
+were re-checked on `0109e7c` on `arena/7a3563c1-jata-aftercall` (PR #71, base `main`).
+**Report date:** 2026-10-28. Row 5 was re-checked and **corrected** against `c3c654e` on 2026-10-29:
+supplier-bill posting had never been executed, was broken, and is now fixed and proven (§2.11).
+
+This document exists because the directive's scope is much wider than the software, and the gap
+must be stated in the same units the directive uses. Each row was checked against the repository,
+not against the roadmap. Labels: **PASS** (works and is proven), **PARTIAL** (a real subset works),
+**FAIL** (present but broken), **NOT TESTED** (code exists, no proof), **MISSING** (not built).
+
+The ERP Pro product is **additive** beside the existing Business POS: 46 new models
+(`Erp*` / `Msg*`), six additive migrations (`20261027000000_pos_erp_pro`, `20261028000000_erp_tasks`,
+`20261029000000_erp_notifications`, `20261030000000_erp_approvals`,
+`20261031000000_erp_approval_consumption`, `20261032000000_erp_procurement`),
+its own plan (`ERP_PRO`, KES 3,000/30 days). No existing POS model, order transition, payment path or
+migration was modified.
+
+## 1. What the directive asks for, versus what exists
+
+| # | Module | Status | What actually exists | What is missing |
+|---|---|---|---|---|
+| 1 | POS and sales | **PARTIAL** | Pre-existing POS: `PosSale`, `PosSaleItem`, `PosPayment`, `PosInventoryMovement`, branches, staff, receipt sequences, idempotency records, refund path. ERP Pro adds storefront orders on top of the same catalogue. | Shift open/close and cash-drawer reconciliation as first-class objects; barcode-driven flow verified in a browser; offline queue for the ERP storefront. |
+| 2 | CRM and customer lifecycle | **PARTIAL** | `PosCustomer`, `MsgContact`, consent + suppression + audience models, segmentation (`lib/messaging/segments.ts`), import with de-duplication (`lib/messaging/import.ts`), ERP `/customers` page. | Leads/pipeline/stages, quotes, opportunities, support cases, merge workflow, retention automation. |
+| 3 | Products and inventory | **PARTIAL** | `PosProduct`, `PosInventoryItem`, `PosInventoryMovement` (signed delta + reason + unit, multi-branch), stock reads inside ERP, low-stock surfacing. | Warehouses as entities, batches/lots/expiry/serials, transfers UI, stocktake reconciliation, explicit costing method, valuation reports. |
+| 4 | Orders and fulfilment | **PARTIAL** | `ErpStoreOrder` + items, a validated state machine (`orderTransitions`, 16 PG tests), public tracking page with a token, `PosOrderEvent` audit. | Picking/packing/dispatch, proof of delivery, partial fulfilment, delivery assignment/fleet, profitability reporting. |
+| 5 | Procurement and suppliers | **PARTIAL** | `ErpPurchaseOrder` + lines, `ErpGoodsReceipt` + lines, tenant-scoped `PO-000001` numbering from `ErpSequence`, and a `/procurement` screen. An order above the requester's approval limit waits for a decision and consumes the single-use grant exactly as expenses do (the consuming UPDATE is now atomic — see §2.9). Receiving writes **POS** `PosInventoryMovement` rows so the till and the ERP share one stock ledger, and over-receipt is refused per line. The supplier invoice posts a balanced journal (inventory or cost of sales, VAT input, accounts payable) into `ErpSupplierBill`, and the variance against the order is audited. `PosSupplier` remains the supplier record. **Requisitions are now first-class** (`ErpRequisition` + lines, `REQ-000001` numbering, DRAFT → SUBMITTED → APPROVED/REJECTED → CONVERTED, `/requisitions` screen): separation of duties (the requester can never decide their own request), amendment returns a submitted request to draft and audits both versions, conversion goes through `createPurchaseOrder` exactly once, and every transition is audited. Proven by 23 domain + 7 real-PostgreSQL tests, plus the existing 22 + 8 + 7 procurement tests. **Duplicate posting is covered:** re-submitting a supplier invoice number is refused by an explicit check, a `@@unique([businessId, supplierId, billNumber])` index, and a per-order journal idempotency key (`supplier-bill:<orderId>:<billNumber>`); a real-PostgreSQL test now proves the refusal leaves one bill, one journal and one audit row (`tests/integration/erp-procurement-postgres.test.ts`, CI run `40800798919`, 77 PASS / 0 FAIL). **This row previously read as working while it did not work at all:** `postJournal` opened a nested transaction on the caller's transaction client and threw `db.$transaction is not a function`, so *no* supplier bill and *no* expense could be recorded. Nothing exercised the path, so nothing noticed. Fixed in `c3c654e`, proven by the new test that found it (see §2.11). **Not enforced yet:** three-way *matching* with tolerances (the bill-vs-receipt-vs-order variance is recorded, not gated), price/lead-time history, reorder proposals, supplier scorecards, and exception queues for partial delivery/overbilling/price change/disputed invoices. |
+
+| 6 | Accounting and finance | **PASS (core)** | Real double-entry: `ErpAccount`, `ErpPeriod`, `ErpJournal`, `ErpJournalLine`, immutable posted journals, controlled reversals, period close/reopen, trial balance, invoices + payments + allocations, credit notes, expenses, supplier bills, Kenya tax rules. Proven by the PG suite. | Bank feed import and reconciliation matching; P&L/cash-flow *reports* beyond trial balance (data is there, report surface is thin); no statutory filing. |
+| 7 | Approvals and finance operations | **PARTIAL** | `ErpApprovalRequest` + append-only `ErpApprovalEvent`: submit, approve, reject (with a required reason), withdraw by the requester, comment in the decision note. Authority is re-derived on the server from the role, the amount and a per-tenant threshold, so a crafted POST is refused where a legitimate click is accepted; self-approval is refused in the domain; `APPROVE_SPEND` gates the action and the queue is scoped per viewer (finance roles see everything, everybody else sees what they raised or what names them). Requests raise deduplicated `APPROVAL_REQUESTED` / `APPROVAL_DECIDED` notifications and audit rows. Proven by 23 domain + 6 render + 10 real-PostgreSQL tests. Role limits (`ERP_APPROVAL_LIMITS_CENTS`) and immutable `ErpAuditEvent` were already in place. | Delegate and escalate (an unanswered request does not yet rise to a higher role); a settings field to store a tenant-wide threshold (the domain honours one, nothing stores it). Expenses and manual journals now **must** raise a request above the actor's limit and spend a granted one once — campaigns still do not spend a grant. **The expense posting that follows the gate was broken until `c3c654e`** (same nested-transaction defect as supplier bills, §2.11), so an approved expense was recorded as a decision and then failed to post. It posts now, and the posting moved out of the server action into `lib/erp/expenses.ts` (`69746d5`) so it can be tested: two real-PostgreSQL tests assert the stored expense, the balanced journal (utilities 100,000 debit / VAT input 16,000 debit / cash 116,000 credit), a replayed submission that posts nothing at all, and the refusal of VAT above the total. Manual journals used the root client and were never affected. |
+| 8 | Documents and records | **MISSING** | `ErpKycDocument` only (compliance evidence placeholder). The repo has a separate durable media stack for the POS/website. | Document register, versions, categories, expiry reminders, retention, access-controlled download, tenant-scoped storage paths for ERP records. |
+| 9 | Tasks, projects, workflow | **PARTIAL** | `ErpTask`: title, detail, `OPEN → IN_PROGRESS → DONE|CANCELLED` (terminal states enforced), priority, named assignee restricted to members of the tenant, role-based assignment, due date, source (`MANUAL`/`AUTOMATION`), idempotency key unique per tenant. `/tasks` board: overdue → open → recently finished, KPIs, create form, start/done/cancel controls gated by `MANAGE_TASKS`, cancel requires a reason. Server-side enforcement in the server actions; audit rows `TASK_CREATED` and `TASK_STATUS_CHANGED`. The automation engine's `CREATE_TASK` action now persists a real task instead of only previewing one. Proven by 22 domain tests, 9 render tests and 13 real-PostgreSQL tests. | Projects, checklist items, dependencies, recurrence, escalation/reminders, calendar view, per-project reporting, task inbox aggregation across modules. |
+| 10 | Messaging and communication | **PASS (engine), MISSING (inbox)** | SMS/WhatsApp campaign engine with consent, suppression, audiences, templates, sender-ID registry + events, wallet with reservations, idempotent dispatch, dry-run preview, per-recipient ledger. | Shared inbox / conversation threading, assignment, SLA escalation, email channel, internal announcements. |
+| 11 | HR, workforce, payroll | **MISSING** | `PosStaff` (POS operators). | Employee records, shifts, attendance, leave, payroll inputs/exports, offboarding. |
+| 12 | Assets, maintenance, fleet | **MISSING** | `PosCustomerAsset` (customer-owned item history). | Internal asset register, preventive maintenance, work orders, downtime, fleet/fuel/driver records. |
+| 13 | Customer service | **MISSING** | — | Cases, SLA, knowledge base, internal notes. |
+| 14 | Marketing and growth | **PARTIAL** | Campaign engine + segments + consent + opt-out enforcement. | Attribution, coupons/promotions, drip/re-engagement builders, performance dashboards. |
+| 15 | Compliance, risk, safety | **PARTIAL** | `ErpComplianceProfile`, Kenya sector matrix, tax-rule registry with version, eTIMS readiness posture and submission states (uncertainty modelled explicitly), `lib/erp/compliance.ts`. | Licence/permit register with expiry, inspections, incidents, risk register, training records. |
+| 16 | Business intelligence | **PARTIAL** | `/reports` page, trial balance, wallet/usage reporting, `app/api/erp/[businessId]/export` (CSV), `/api/erp/status` health. | Documented metric definitions, drill-down everywhere, saved views, scheduled exports, margin analytics. |
+| 17 | AI business assistant | **MISSING (ERP)** | The platform has AI front-desk / autopilot features elsewhere; **none of it is wired to ERP data**, and no grounded ERP assistant exists. | Tenant-scoped retrieval, citations to records, permission filtering, kill switch, usage limits, audit of AI actions. |
+| 18 | Automation engine | **PARTIAL** | `ErpAutomationRule`, `ErpAutomationRun`, validated triggers/conditions, kill switch, approval flags, idempotency, run history, starter rules per industry pack. Only the **LOW-impact** actions are implemented (`NOTIFY`, `CREATE_TASK`, `SUGGEST_PURCHASE`, `ADD_TAG`); `SEND_TEMPLATE`, `PAUSE_CAMPAIGN`, `POST_JOURNAL` are declared `implemented: false` and refuse. | Scheduled/cron execution, retries + dead-letter, loop protection limits, dry-run UI, the three unwired actions. |
+| 19 | Integrations and API platform | **PARTIAL** | `MsgChannelConnection` (provider credentials per tenant), provider adapters behind flags, webhook routes, idempotent event processing, sender-ID and delivery-event ingestion. eTIMS is readiness-only. | OAuth-style connection lifecycle, secret rotation, versioned public API, integration health dashboard, accounting/logistics/email connectors. |
+| 20 | Continuity and disaster recovery | **PARTIAL** | Migration rollback rehearsed with `pg_dump`/`pg_restore` into a scratch database and row-count comparison (`scripts/erp/migration-verify.sh`, 24 PASS); documented reverse-dependency drop order; idempotent re-apply. | Application-level backup/restore rehearsal on real data volumes, RPO/RTO numbers, job-failure monitoring, incident runbook, tested restore-from-snapshot on the provider. |
+
+**Count (re-counted against the table, not carried over):** 1 PASS-core (accounting), 1 PASS-engine
+with a missing inbox (messaging), **12 PARTIAL**, **6 MISSING**.
+No module in the directive is falsely marked complete, and no module in this table is represented
+in the UI as a working feature when the row above says otherwise.
+
+## 2. Architecture facts the directive assumes
+
+| Assumption | Reality on this head |
+| --- | --- |
+| Multi-tenant hierarchy Platform → Business → Location → Department → User | Business → (branch/staff for POS) → user roles. **No department entity.** Every ERP query is keyed by `businessId`; tenant isolation is proven by a real-PostgreSQL test that crosses two tenants. |
+| Server-enforced permissions | Yes — `requireErpAccess` / `resolveErpRole` resolve the role from the database on every action; navigation hides links but is never the enforcement point. |
+| Role-aware UI | Yes (`lib/erp/navigation.ts`, per-page role gates). |
+| Unified global search / command launcher | **Missing.** Each module has its own filters. |
+| Notification centre / task inbox | **Partial** — the notification centre is live (`/notifications`, per-person read state, unread bell in the shell, dashboard widgets for own work, overdue counts, unread notices and pending approvals), and approvals now raise `APPROVAL_REQUESTED` / `APPROVAL_DECIDED` notices. What is missing: one combined inbox that interleaves tasks and notices, and escalation notices for requests nobody answers. |
+| Location/branch scoping in ERP | **Partial** — POS has `PosBranch`; the ERP itself is business-wide, not branch-scoped. |
+| Brand identity | Original espresso / cream / amber, via `--jata-*` tokens only (`app/erp.css`). The withdrawn graphite/lime look is gone. |
+| Runtime | Next.js 16.4.2, React 18.3.1, Prisma 5.22.0, Neon PostgreSQL, Vercel — unchanged. |
+
+## 3. What "one dashboard" would require that does not exist yet
+
+1. A **shell** (`app/dashboard/erp/[businessId]/layout.tsx` exists) with company switcher, global
+   search over permitted records, notification centre, task inbox and quick-create — the notification
+   bell and unread count are now in the shell, and the board and inbox exist. Still missing: global
+   search, quick-create, and a workspace (company) switcher inside the sidebar.
+2. **Widgets bound to persisted queries.** Building them against invented numbers is the one thing
+   the directive forbids, so each widget must land with the query and the test that proves it reads
+   real rows.
+3. **A task entity** — four separate directive modules (9, 15, 18, and the notification centre) all
+   converge on "create a task". The entity now exists (`ErpTask`), the automation action writes real
+   rows, and the board is live. Still missing for the dashboard: an aggregated inbox widget, overdue
+   *notifications* (the engine can raise a task, not yet a notification), and escalation.
+
+## 4. Honest sequencing
+
+The dependency order that actually works here, given what is built:
+
+1. **Task/notification spine** — *done in part (2026-10-28)*: `ErpTask` + assignment + due dates are
+   wired to the automation engine and the sidebar, with tests. Remaining: escalation, reminders, and
+   the notification surface that the dashboard inbox needs.
+2. **Approval request object** — *done in part (2026-10-30)*: submit/approve/reject/withdraw with an
+   append-only history and server-side authority. Remaining: delegate and escalate, and spending a grant from
+   campaigns. Expenses and journals are gated and single-use as of 2026-10-31.
+3. **Procurement slice** — *done in part (2026-10-31)*: purchase order → approval → goods received
+   (real POS stock movements) → supplier bill with a balanced journal and an audited variance. The
+   MGAS bulk-order scenario now runs end to end. Remaining: requisitions as their own object,
+   three-way matching, lead-time and price history, reorder proposals.
+4. **Document register** — reuse the existing media stack; adds expiry reminders on top of (1).
+5. **Dashboard widgets + global search** — only after (1)–(4) give them real data.
+6. **ERP AI assistant** — last, because it must read from a schema whose semantics are settled.
+
+Each step is additive (new tables + new migration), reversible by dropping the new tables in
+reverse dependency order, and separable into its own reviewable PR.
+
+## 5. What was *not* done in this pass
+
+The earlier remediation pass (head `e500664`) was scoped to retargeting PR #71 to `main`, clearing
+the merge with `main`, restoring the brand identity and re-running every gate. That pass added no
+module.
+
+**Two passes implement section 4 step 1.** `00cdd71` added the task spine: `ErpTask`, one additive
+migration, `lib/erp/tasks.ts`, the `/tasks` board, two server actions, a navigation entry and the
+automation `CREATE_TASK` action rewritten to persist (22 domain + 9 render + 13 PostgreSQL tests).
+`c57a3a3` added the notification foundation: `ErpNotificationRead` and ten defaulted columns on
+`ErpNotification`, `lib/erp/notifications.ts`, the `/notifications` centre, the shell unread bell, the
+dashboard "What needs you today" widgets, task-assignment and daily-overdue notices, and paginated
+finished work on the board (23 domain + 8 render + 10 PostgreSQL tests).
+`0109e7c` added approvals: `ErpApprovalRequest` + `ErpApprovalEvent`, the `APPROVE_SPEND`
+permission, `lib/erp/approvals.ts`, the `/approvals` screen, request/decision notifications and the
+dashboard's pending-approval figure (23 domain + 6 render + 10 PostgreSQL tests).
+
+**Nothing else in section 1 moved.** Modules 5, 8, 11, 12, 13 and 17 are still MISSING; no
+placeholder screen was created for any of them, and no capability above is claimed as working
+beyond what its row states.
+
+### 2.11 A defect this matrix got wrong, found by testing the claim (2026-10-29)
+
+Row 5 described supplier bills as posting a balanced journal, and §6 separately listed "duplicate
+posting refused" as proven. Neither was true, and neither had ever been exercised: `recordPurchaseBill`
+had no test of any kind. Adding one, on real PostgreSQL, failed immediately with
+
+```
+TypeError: db.$transaction is not a function
+  at postJournal (lib/erp/accounting.ts:351)
+  at recordPurchaseBill (lib/erp/procurement.ts:654)
+```
+
+`postJournal` always opened `client.$transaction(...)`, but supplier bills and the expense action both
+pass the transaction they already own (so the journal and the document commit together), and a Prisma
+transaction client has no `$transaction` of its own. **Every supplier bill and every expense failed**
+before writing anything. `c3c654e` makes `postJournal` join the caller's transaction, and
+`tests/unit/erp-postjournal-transaction.test.ts` pins which of the two paths runs. The database test
+now passes: bill stored, journal balanced (inventory 3,000,000 debit / VAT input 480,000 debit /
+accounts payable 3,480,000 credit), variance 0, and a re-submitted invoice number refused with one bill,
+one journal and one audit row left behind — CI run `40800798919`, "77 PASS, 0 FAIL, 0 BLOCKED".
+
+What this changes: module 5 keeps **PARTIAL**, because three-way matching, tolerances, price/lead-time
+history, reorder proposals, scorecards and exception queues are still not built. What it corrects is
+the *evidence*: two PASS-shaped statements in this document were describing code that had never run.
+
+### 2.12 Two more untested paths, and what testing them changed (2026-10-29)
+
+The same exercise — write the test that was missing — was applied to two more functions that the UI
+calls and no test reached.
+
+* **`markPurchaseOrderOrdered`** (the "send to supplier" button). A second call re-ran the update,
+  moved `orderedAt` forward and wrote a **second** `PURCHASE_ORDER_ORDERED` audit row. The status table
+  allows `ORDERED → ORDERED`, so nothing refused it; the history was simply duplicated. It is now a
+  no-op once the order is ordered (`ca0e554`), and a real-PostgreSQL test asserts one audit row after
+  the first call and no change after a retry.
+* **`balanceSheet`** (the figure behind `/reports` and the accounting API). It had no test; it now has
+  an invariant test on real postings: assets = liabilities + equity + net income both before and after
+  a 50,000 expense, with assets and net income each moving by exactly that amount. The report
+  reconciled, so nothing was changed.
+
+Neither upgrade a module: procurement and accounting keep the statuses they had. What changes is that
+two more "it works" statements now have a run behind them.
+
+## 6. Verification status for directive item 6 (2026-10-28)
+
+Item 6 of the directive asks for specific verification, not a general statement that testing happened.
+This table records each requested type, its exact status, and the artifact that supports it. **Modules are
+not moved by this table** — it says what was verified, not what was built.
+
+| Requested verification | Status | Artifact / what actually ran |
+| --- | --- | --- |
+| Unit and integration tests | **PASS** | Vitest suites per slice; the ERP domain, render and PostgreSQL files run in CI on every head. |
+| Real-PostgreSQL tests | **PASS** | 6 files against disposable PostgreSQL 16.2, in pooler mode (`?pgbouncer=true`), with `connection_limit=1`, and with `connection_limit=2` on a cluster capped at `max_connections=8` — every test passed in each mode. That run held **67** tests; the six files now hold **72** after the supplier-bill, expense, order-transition and balance-sheet tests were added on 2026-10-29, and the same job is green on the current head. |
+| Migration forward + rollback | **PASS** | `scripts/erp/migration-verify.sh all`: 24 PASS — 48 ERP tables created, 87 pre-existing created, 55 foreign keys, upgrade path, `pg_dump` export, documented reverse-dependency drop, no ERP tables left after rollback, all 87 pre-existing survive, then re-applied for recovery. |
+| Tenant isolation and authorisation | **PASS (local) / pending CI** | `npm run test:erp:pages` — **24/24**: signed-out redirect, owner sees real rows, staff cannot approve what they raised, manager sees the decision, viewer is refused the write controls with a stated reason, and cross-tenant requests disclose no foreign title, page or record **and** answer with an explicit refusal. Plus `npm run test:erp:tasks-page` **19/19**. |
+| Concurrency, idempotency, failure paths | **PASS** | PostgreSQL suites: grant consumption is a single conditional UPDATE (verified under real concurrency), requisition conversion goes through `createPurchaseOrder` exactly once, a re-submitted supplier invoice is refused with exactly one bill, one journal and one audit row left behind, over-receipt refused per line, terminal task states enforced, automation idempotency keys unique per tenant. Failure paths assert refusal, not silent success. The duplicate-posting line was **claimed before it was tested**; the test that finally exercised it found a different, worse defect (§2.11). |
+| End-to-end across connected workflows | **PARTIAL** | Proven across requisition → approval → purchase order → goods receipt → POS stock movement → supplier bill → balanced journal → audit — the last two links **only since `c3c654e`**, because the bill posting threw before that. **Not** an end-to-end browser journey: the ERP browser checks drive the real pages but each screen is asserted separately, not as one person's session across the chain. |
+| Responsive browser at the seven viewports | **PASS** | `npm run test:erp:visual` — **28/28** captures (4 screens × 7 viewports) in CI run `40779051069`, real Chrome 156 at 320×568, 360×800, 390×844, 430×932, 768×1024, 1024×768, 1366×768; HTTP 200, expected heading, `scrollWidth − clientWidth = 0` everywhere, plus the navigation mode and visible module label asserted per viewport. An earlier six-viewport pass captured 24/24 (see §10.2 of the evidence document). |
+| Lint / typecheck / build / model check / full CI | **PASS** | Locally: `npx tsc --noEmit` clean, `npm run build` completed successfully, `npm run lint` 0 errors, unit 2426/2426. CI on `15020e3`: the PR's checks, including the unit/build, static-analysis and PostgreSQL-18 jobs. |
+| Human visual review with screenshots and recorded findings | **BLOCKED** | The review exists (`docs/POS_ERP_PRO_VISUAL_REVIEW.md`, findings V1–V8, two defects fixed) but the reviewer was the **agent**, not the owner or a designer. Owner/designer sign-off has not happened. **BLOCKED pending owner review**, not PASS. |
+| Storefront 360px failures investigated via recorded run IDs | **PASS** | Root cause: the harness measured before the stylesheet applied (unstyled 800px hero + 48px padding inside 360px = exactly the reported 488px). Fixed in the measurement precondition only; no assertion or threshold changed; closure recorded on two green CI heads. |
+
+**Deliberately not claimed:** three-way matching, tolerances, exception queues, price/lead-time history,
+reorder proposals and scorecards remain **NOT IMPLEMENTED**; modules 2–5 of the directive remain **NOT
+STARTED**; the provider-database rehearsal (E8) remains **BLOCKED** on a real Neon project; and no
+out-of-product notification delivery is claimed anywhere.

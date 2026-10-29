@@ -563,9 +563,20 @@ function section(title) {
 }
 
 function run(command, args, { cwd, env = {}, timeout = 900000 } = {}) {
+  // `prisma/schema.prisma` declares `directUrl = env("DIRECT_URL")`, and Prisma validates the
+  // datasource on every CLI call, so an unset variable is a hard P1012 here too.
+  //
+  // It is derived from THIS call's DATABASE_URL rather than inherited from the workflow on purpose:
+  // the rehearsal migrates several different databases in turn (an empty schema, the built schema,
+  // a deliberately broken one). A DIRECT_URL inherited from the job environment could point at a
+  // different database than the one being tested, and migrate would then act on the wrong one. This
+  // way the two always name the same target, and a caller that genuinely needs a separate direct
+  // endpoint can still pass one explicitly.
+  const mergedEnv = { ...process.env, ...env };
+  if (mergedEnv.DATABASE_URL && !mergedEnv.DIRECT_URL) mergedEnv.DIRECT_URL = mergedEnv.DATABASE_URL;
   const result = spawnSync(command, args, {
     cwd,
-    env: { ...process.env, ...env },
+    env: mergedEnv,
     encoding: "utf8",
     timeout,
     maxBuffer: 64 * 1024 * 1024,

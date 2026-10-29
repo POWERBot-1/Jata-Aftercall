@@ -252,6 +252,32 @@ export function formatKes(value: number | null | undefined, fallback = "—"): s
 }
 
 /**
+ * The hour of the day (0–23) in Africa/Nairobi, never the runtime zone.
+ *
+ * A greeting computed from `new Date().getHours()` is the server's hour on a UTC runtime and the
+ * visitor's hour in a browser — two different greetings for one page. Callers that switch copy on
+ * the time of day read it from here instead.
+ */
+export function nairobiHour(instant: Date | number = new Date()): number {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) return 0;
+  try {
+    const part = new Intl.DateTimeFormat(JATA_LOCALE, {
+      timeZone: JATA_TIME_ZONE,
+      hour: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(date)
+      .find((entry) => entry.type === "hour");
+    const hour = Number(part?.value ?? "0");
+    // `24` is a legal hour-12-clock artefact in some ICU versions; midnight is 0.
+    return Number.isFinite(hour) ? hour % 24 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Whole days from `now` until `value` (negative when already past). Used for renewal copy.
  * `now` is injected so callers stay testable and deterministic.
  */
