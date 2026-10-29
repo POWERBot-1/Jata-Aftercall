@@ -45,6 +45,10 @@ production are the deployment records, environment-variable names (never values)
 | `https://api.github.com/rate_limit` | `200` |
 | Secrets referenced by the workflow definitions | `GITHUB_TOKEN` only — CI uses a disposable local PostgreSQL, not the production database |
 
+The `000` results are this sandbox's egress policy, not the site's state: a GitHub-hosted read-only smoke run reached the
+same origin successfully seconds after the production deployment (§9). No request from this sandbox ever reached the
+application or the database.
+
 **Consequence:** the read-only inventory query could not be run. No connection string was requested, read, printed or
 transmitted. No development, preview, test or unrelated Lovable database was used.
 
@@ -308,7 +312,7 @@ plan-specific and authenticated check is **NOT TESTED**; none may be reported as
 | `/pricing` and `/products` show the full six-card catalogue | **NOT TESTED** | live read |
 | `/onboarding` and `/dashboard/subscription` list the four public plans | **NOT TESTED** | signed-in read |
 | Mobile and desktop visibility | **NOT TESTED** | 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 |
-| No payment initiated / no unrelated data changed | **PASS (by construction)** | no database connection existed; no payment route was called; no seed was run; no environment or DNS change was made. The only live requests were the workflow's read-only `GET /` and `GET /health` |
+| No payment initiated / no unrelated data changed | **PASS (by construction)** | this work had no database connection and wrote nothing; no payment route was called, no seed was run, and no environment or DNS change was made. The only live requests were the workflow's read-only `GET /` and `GET /health`; the latter ran `SELECT 1`, not a `PlanConfig` read |
 
 Why the smoke PASS does not weaken the blocking finding: `/` renders the marketing grid through `homepagePlanCards()`, which
 substitutes canonical cards when rows are unavailable, and `/health` runs `SELECT 1` only. Neither reads `PlanConfig`, so
@@ -352,7 +356,7 @@ connection works.
 
 ## 11. What was not done
 
-No production database read or write; no `npm run seed`; no payment or subscription change; no environment variable,
+No production `PlanConfig` row read or written; no `npm run seed`; no payment or subscription change; no environment variable,
 domain, DNS or Vercel setting change; no merge and no production deployment; no access to JATA Qi or TANYA-AI; no
 credential value read, printed or transmitted. Pushing the review branch caused Vercel to create a preview deployment
 record, but its build was skipped by the project's own Ignored Build Step (`buildSkipped: true`), so it ran no code and
