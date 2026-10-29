@@ -260,6 +260,11 @@ h1, h2, h3 {
   gap: 0.35rem;
 }
 
+.onboarding-form .jata-field,
+.onboarding-form .jata-input {
+  min-width: 0;
+}
+
 .jata-label {
   font-size: 0.8rem;
   font-weight: 650;
