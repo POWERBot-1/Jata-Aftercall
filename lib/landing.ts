@@ -55,7 +55,8 @@ export type LandingIconKey =
   | "calendar"
   | "bot"
   | "wand"
-  | "store";
+  | "store"
+  | "ledger";
 
 export const LANDING_BENEFITS: readonly LandingBenefit[] = [
   { icon: "phone", title: "WhatsApp & Call in one tap", body: "Large, thumb-sized contact buttons above the fold. Customers can reach you without filling in a form." },
@@ -187,6 +188,45 @@ export const AUTOPILOT_PLAN_CARD = {
   fine: "Sign in from your dashboard. The preview is free; live actions switch on only once Paystack confirms the payment.",
 } as const;
 
+/**
+ * The JATA BOS PRO card (internal plan key `ERP_PRO`, formerly "POS / ERP - PRO") — copy only,
+ * deliberately outside `PLAN_INCLUDES`/`PLAN_BADGES` like the POS and Autopilot cards: those maps
+ * describe the four page plans, and a page plan must never read as including BOS PRO.
+ *
+ * JATA BOS PRO — Business Operating System Pro — is a separate, per-business product. The card
+ * shows its customer-facing name "JATA BOS PRO" and the subtitle "Business Operating System Pro";
+ * its price and billing period always come from the stored `PlanConfig` row (or the documented
+ * KES 3,000 / 30 days fallback for the marketing card only — see `ERP_PRO_FALLBACK_CARD` in
+ * `lib/pricing.ts`), never from this copy. Its call to action links to the public detail page
+ * `/products/erp-pro`, which explains the product and routes sign-in, account creation and the
+ * authenticated ERP workspace to their verified endpoints. The card never sends BOS PRO into the
+ * ordinary business-page checkout and never activates anything: purchase and entitlement live in
+ * the ERP workspace behind the existing payment and `ERP_PRO_ENABLED` checks.
+ *
+ * The wording stays inside what the product verifiably does today: double-entry accounting,
+ * invoicing, inventory, purchasing and business operations with messaging tools whose message
+ * charges are billed by the provider. It explicitly separates BOS PRO from the standalone
+ * Business POS till, states the provider charges excluded from the advertised price, and claims
+ * no KRA eTIMS certification or submission capability and no hardware integrations.
+ */
+export const ERP_PRO_PLAN_CARD = {
+  icon: "ledger" as LandingIconKey,
+  name: "JATA BOS PRO",
+  subtitle: "Business Operating System Pro",
+  badge: "Owner workspace",
+  blurb:
+    "The business operating system for a trading business — the books, the stock and the buying behind the counter, not just the till. Per business, separate from your page plan.",
+  includes: [
+    "Accounting: invoicing, payments, journals and reports",
+    "Inventory, purchasing, customers and suppliers",
+    "Business operations with an audit trail",
+    "Messaging tools — you pay the messaging provider for what is sent",
+    "Beyond the separate Business POS till: POS covers counter sales, BOS PRO runs the records and operations around them",
+  ],
+  cta: "Explore JATA BOS PRO",
+  fine: "SMS and WhatsApp usage charges, Sender ID fees, payment-provider fees, and KRA eTIMS certification or integrator fees are excluded. eTIMS submission is not claimed as certified and no hardware integration is promised. Viewing the product starts nothing: the workspace switches on only after the server confirms the payment.",
+} as const;
+
 /* ── FAQ ─────────────────────────────────────────────────────────────────── */
 
 export type LandingFaq = { question: string; answer: string };
@@ -226,6 +266,11 @@ export const LANDING_FAQ: readonly LandingFaq[] = [
     question: "Is JATA Autopilot part of these plans?",
     answer:
       "No. JATA Autopilot is a separate owner-only add-on that checks your business health and drafts actions for your approval. You can preview it free inside your dashboard; it is paid for per business and live actions start only after Paystack confirms the payment. It is not included in, and not required for, the four page plans.",
+  },
+  {
+    question: "Is JATA BOS PRO part of these plans?",
+    answer:
+      "No. JATA BOS PRO — Business Operating System Pro — is a separate per-business product covering accounting, invoicing, inventory and purchasing, alongside the separate Business POS till. You can read what it does on its product page; it switches on only from its own workspace after the server confirms the payment, and it is not included in, and not required for, the four page plans.",
   },
   {
     question: "How do I pay for a plan?",

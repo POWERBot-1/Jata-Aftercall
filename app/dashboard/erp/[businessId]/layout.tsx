@@ -28,7 +28,7 @@ export default async function ErpLayout({ children, params }: Props) {
       <div className="erp">
         <main className="erp-content" style={{ paddingTop: 48 }}>
           <section className="erp-card" style={{ maxWidth: 560 }}>
-            <p className="erp-badge" data-tone={gate.refusal.status >= 500 ? "warn" : "bad"}>POS / ERP - PRO</p>
+            <p className="erp-badge" data-tone={gate.refusal.status >= 500 ? "warn" : "bad"}>JATA BOS PRO</p>
             <h1 style={{ fontSize: "1.4rem", margin: "12px 0 6px" }}>We can&apos;t open this workspace</h1>
             <p className="erp-muted" style={{ fontSize: "0.9rem" }}>{gate.refusal.message}</p>
             <div className="erp-actions" style={{ marginTop: 18 }}>
@@ -55,7 +55,7 @@ export default async function ErpLayout({ children, params }: Props) {
           <div className="erp-brand">
             <span className="erp-brand-mark" aria-hidden="true">P</span>
             <div>
-              <div className="erp-brand-name">POS / ERP - PRO</div>
+              <div className="erp-brand-name">JATA BOS PRO</div>
               <div className="erp-brand-sub">Premium workspace</div>
             </div>
           </div>
@@ -99,7 +99,7 @@ export default async function ErpLayout({ children, params }: Props) {
                 {/* Owner decision Q3: the long label wraps the header onto several rows on a
                     320–430px screen, so below 430px it shortens to "ERP". Both spans are server
                     rendered; the stylesheet picks one, so nothing depends on hydration. */}
-                <span className="erp-label-full">POS / ERP - PRO</span>
+                <span className="erp-label-full">JATA BOS PRO</span>
                 <span className="erp-label-short">ERP</span>
               </div>
             </div>
@@ -133,7 +133,7 @@ export default async function ErpLayout({ children, params }: Props) {
 
           <footer className="erp-footer">
             <p style={{ margin: 0 }}>
-              POS / ERP - PRO · every figure on these screens came from your records. Delivery results are provider-reported, and tax notes are not statutory advice.
+              JATA BOS PRO · every figure on these screens came from your records. Delivery results are provider-reported, and tax notes are not statutory advice.
             </p>
           </footer>
         </div>

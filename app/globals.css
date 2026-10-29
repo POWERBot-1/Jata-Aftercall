@@ -3291,6 +3291,16 @@ button:focus-visible {
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+/* Product subtitle (JATA BOS PRO — Business Operating System Pro). Sits inside the name row so
+   the shared subgrid rows stay nine for every card. */
+.lp-plan__subtitle {
+  display: block;
+  margin-top: 0.15rem;
+  color: rgba(247, 242, 232, 0.62);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 .lp-plan__badge {
   align-self: flex-start;
   justify-self: start;
@@ -3351,17 +3361,21 @@ button:focus-visible {
 }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /*
- * Six plans, one grid: three across on a desktop in two even rows (3 + 3) instead of stretched
- * into six narrow columns. Six equal tracks let every card span two, so all six cards stay
- * exactly one third of the row wide — the same card width in both rows. The count-5 centring
- * below is kept for the degraded case where a stored plan row is missing and only five cards
- * render: the fourth and fifth then centre under the first row instead of leaving a hole.
+ * Seven offers, one grid: three across on a desktop in two full rows plus a centred last card
+ * (3 + 3 + 1) instead of stretched into six narrow columns. Six equal tracks let every card span
+ * two, so all cards stay exactly one third of the row wide — the same card width in every row.
+ * The count-7 rule centres the lone seventh card (JATA Autopilot) under the first two rows. The
+ * count-5 centring below is kept for the degraded case where stored plan rows are missing and
+ * only five cards render: the fourth and fifth then centre under the first row instead of
+ * leaving a hole. At every width the DOM order is the mobile reading order — Monthly, Annual,
+ * AI Business Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot.
  */
 @media (min-width: 1080px) {
   .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .lp-pricing .lp-plans .lp-plan { grid-column: span 2; }
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(4) { grid-column: 2 / span 2; }
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(5) { grid-column: 4 / span 2; }
+  .lp-pricing .lp-plans[data-plan-count="7"] .lp-plan:nth-child(7) { grid-column: 3 / span 2; }
 }
 
 /*
@@ -5476,6 +5490,8 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 .mk-card h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 .mk-card p { margin: 0 0 0.6rem; font-size: 0.9rem; line-height: 1.65; color: rgb(90 81 72); }
 .mk-card__price { font-weight: 800; color: rgb(20 17 15); }
+.mk-card__scope { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em; color: rgb(146 64 14); }
+.mk-card__kind { font-size: 0.74rem; color: rgb(90 81 72); }
 .mk-card a { display: inline-flex; min-height: 2.75rem; align-items: center; font-weight: 800; font-size: 0.85rem; color: rgb(180 83 9); text-underline-offset: 3px; }
 .mk-table-wrap { overflow-x: auto; margin-top: 1.25rem; border: 1px solid rgb(23 19 16 / 0.12); border-radius: 1rem; background: rgb(255 253 248); }
 .mk-table { width: 100%; border-collapse: collapse; min-width: 34rem; font-size: 0.88rem; }

@@ -12,6 +12,8 @@ type ProductPage = {
   intro: string;
   sections: Array<{ heading: string; body: string[] }>;
   demo?: { href: string; label: string };
+  /** Verified routes rendered ahead of the default actions (sign-in, workspace, price, register). */
+  actions?: Array<{ href: string; label: string }>;
 };
 
 const PRODUCTS: Record<string, ProductPage> = {
@@ -92,6 +94,61 @@ const PRODUCTS: Record<string, ProductPage> = {
       ] },
     ],
   },
+  "erp-pro": {
+    key: "ERP_PRO",
+    eyebrow: "JATA BOS PRO",
+    title: "Business Operating System Pro — the books, the stock and the buying.",
+    intro:
+      "JATA BOS PRO is the business operating system for a trading business: accounting, invoicing, inventory, purchasing and business operations, with supported messaging tools. KES 3,000 per 30 days, billed per business. Reading this page begins nothing.",
+    sections: [
+      { heading: "What it includes", body: [
+        "Double-entry accounting — chart of accounts, journals, invoices, payments and reports — with the Kenya tax engine applied to the figures you record.",
+        "Inventory, purchasing, customers, suppliers and multi-branch operations, with an audit trail across the workspace.",
+        "Supported messaging tools where configured; SMS and WhatsApp message charges are billed to you by the messaging provider at their rates.",
+        "Sender ID application tracking and KYC workspace, automation rules and industry packs.",
+      ] },
+      { heading: "How JATA BOS PRO differs from Business POS", body: [
+        "The separate Business POS product is the counter till: sales, stock, credit and reports for the front of the business.",
+        "JATA BOS PRO runs the records and operations around the counter — the accounts, the buying, the suppliers and the reporting — of which selling at the till is one part.",
+        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the four page plans.",
+      ] },
+      { heading: "Price and billing", body: [
+        "KES 3,000 per 30 days, billed per business (plan key ERP_PRO). The workspace shows the amount before any payment starts, and that amount always comes from the stored plan catalogue on the server — never from the browser.",
+        "The advertised price excludes SMS and WhatsApp usage charges, Sender ID registration or network fees, payment-provider transaction fees, and KRA eTIMS certification or integrator fees.",
+      ] },
+      { heading: "KRA eTIMS and hardware limits", body: [
+        "JATA AFTERCALL does not claim KRA eTIMS certification, and it does not submit invoices to eTIMS on your behalf today. The product keeps a submission seam that refuses to submit without a certified, configured adapter, and an invoice stays queued rather than being reported as accepted.",
+        "No hardware integrations beyond the browser workspace — scanners, printers, scales or physical tills — are claimed as operational.",
+      ] },
+      { heading: "Viewing, buying and access", body: [
+        "Four separate stages: viewing this page, beginning a purchase, the server confirming the payment, and the workspace entitlement switching on. A page visit or a checkout initiation activates nothing.",
+        "Access needs an account, a business, a server-confirmed payment for plan key ERP_PRO, and a deployment with the ERP product switched on. Until an operator enables it, the ERP screens state plainly that the product is not switched on and nothing is charged.",
+        "If the workspace is not enabled for your account, the ERP screen explains exactly what is missing instead of offering a payment.",
+      ] },
+    ],
+    actions: [
+      { href: "/login", label: "Sign in" },
+      { href: "/dashboard/erp", label: "Open the ERP workspace" },
+    ],
+  },
+  "jata-autopilot": {
+    key: "JATA_AUTOPILOT",
+    eyebrow: "JATA Autopilot",
+    title: "Business-health diagnostics and draft actions, under your approval.",
+    intro:
+      "JATA Autopilot checks your business health and drafts offer and FAQ actions for you to approve. The standard package is KES 2,499 per 30 days, billed per business; the preview inside your dashboard is free before you pay.",
+    sections: [
+      { heading: "What it does", body: [
+        "Business health diagnosis with 15 industry packs, and draft offer and FAQ actions collected in an approval queue.",
+        "Nothing runs without your approval — every action waits for the owner to approve or reject it.",
+        "You can preview it free in your dashboard before you pay; live actions switch on only after the payment is confirmed.",
+      ] },
+      { heading: "Entitlement and price", body: [
+        "JATA Autopilot standard package — KES 2,499 / 30 days, sold per business from the authenticated Autopilot workspace. Pro and Enterprise tiers are offered only inside that workspace.",
+      ] },
+    ],
+    actions: [{ href: "/dashboard/autopilot", label: "Open JATA Autopilot" }],
+  },
 };
 
 export function generateStaticParams() {
@@ -119,8 +176,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       ))}
       <MarketingSection title="Try it" tone="cream" id="try">
         <div className="mk-btn-row">
-          {product.demo ? <Link href={product.demo.href} className="mk-btn">{product.demo.label}</Link> : null}
-          <Link href="/pricing" className={`mk-btn ${product.demo ? "mk-btn--ghost" : ""}`}>See the price</Link>
+          {(product.actions ?? []).map((action) => (
+            <Link key={action.href} href={action.href} className="mk-btn">
+              {action.label}
+            </Link>
+          ))}
+          {product.demo ? <Link href={product.demo.href} className={`mk-btn ${product.actions?.length ? "mk-btn--ghost" : ""}`}>{product.demo.label}</Link> : null}
+          <Link href="/pricing" className={`mk-btn ${product.demo || product.actions?.length ? "mk-btn--ghost" : ""}`}>See the price</Link>
           <Link href="/register" className="mk-btn mk-btn--ghost">Create an account</Link>
         </div>
       </MarketingSection>

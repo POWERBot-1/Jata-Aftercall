@@ -60,7 +60,7 @@ const planCards = (html: string) =>
   }));
 
 describe("the homepage renders the standard JATA Autopilot package in the shared pricing grid", () => {
-  it("puts JATA Autopilot fourth in the one grid under the 2026-10-27 owner order", async () => {
+  it("puts JATA Autopilot seventh (last) in the one grid under the 2026-10-29 owner order", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
@@ -68,12 +68,13 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
-      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "ERP_PRO",
+      "JATA_AUTOPILOT",
     ]);
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="6"');
+    expect(html).toContain('data-plan-count="7"');
     expect(html.match(/data-plan="JATA_AUTOPILOT"/g)).toHaveLength(1);
   });
 
@@ -89,7 +90,7 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
       { key: "JATA_AUTOPILOT_PRO", name: "Pro", priceKES: 6999, durationDays: 30 },
       { key: "JATA_AUTOPILOT_ENTERPRISE", name: "Enterprise", priceKES: 19999, durationDays: 30 },
     ]);
-    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "JATA_AUTOPILOT", "BUSINESS_POS"]);
+    expect(cards.map((card) => card.key)).toEqual(["MONTHLY", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT"]);
   });
 
   it("gives the Autopilot card its product icon and the same structure as every other card", async () => {
@@ -105,7 +106,7 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
     expect(autopilot.inner.indexOf("lp-plan__icon")).toBeLessThan(autopilot.inner.indexOf("lp-plan__name"));
     // Every card renders an icon, so the shared rows stay aligned at every width.
     for (const card of cards) expect(card.inner, card.key).toContain("lp-plan__icon");
-    expect(html.match(/lp-plan__icon/g)).toHaveLength(6);
+    expect(html.match(/lp-plan__icon/g)).toHaveLength(7);
   });
 
   it("names the standard package, the verified price and the way in", async () => {

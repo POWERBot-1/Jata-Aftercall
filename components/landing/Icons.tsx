@@ -95,6 +95,16 @@ const paths: Record<LandingIconKey, React.ReactNode> = {
       <path d="M9.5 20v-5h5v5" />
     </>
   ),
+  /* Accounting ledger — the book with ruled entries JATA BOS PRO keeps. */
+  ledger: (
+    <>
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 3.5v17" />
+      <path d="M11 8h6" />
+      <path d="M11 12h6" />
+      <path d="M11 16h3.5" />
+    </>
+  ),
 };
 
 export function LandingIcon({ name, className = "" }: { name: LandingIconKey; className?: string }) {

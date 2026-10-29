@@ -128,14 +128,15 @@ describe("original plan-card icon identities and positions", () => {
     expect(pageTsx).toContain('const featured = p.key === "ANNUAL";');
   });
 
-  it("keeps the owner-mandated 2026-10-27 homepage sequence while restoring original visuals", () => {
+  it("keeps the owner-mandated homepage sequence while restoring original visuals (2026-10-29 order)", () => {
     expect([...HOMEPAGE_PLAN_ORDER]).toEqual([
       "MONTHLY",
       "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
-      "JATA_AUTOPILOT",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
+      "ERP_PRO",
+      "JATA_AUTOPILOT",
     ]);
   });
 });
