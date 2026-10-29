@@ -16,7 +16,8 @@ import { erpBasePath, requireErpAccess, ErpAccessError, hasErpPermission } from 
 import { logErpAudit } from "@/lib/erp/audit";
 import { bootstrapErpWorkspace } from "@/lib/erp/bootstrap";
 import { parseKesToCents, formatCentsShort } from "@/lib/erp/money";
-import { postJournal, closePeriod, buildExpenseJournal, reopenPeriod } from "@/lib/erp/accounting";
+import { postJournal, closePeriod, reopenPeriod } from "@/lib/erp/accounting";
+import { recordExpense } from "@/lib/erp/expenses";
 import { createInvoice, issueInvoice, recordPayment, issueCreditNote } from "@/lib/erp/invoicing";
 import { createAutomationRule, pauseAutomation, activateAutomation, runAutomation } from "@/lib/erp/automationActions";
 import prisma from "@/lib/db";
@@ -562,7 +563,6 @@ export async function recordExpenseAction(form: FormData) {
     const accountCode = text(form, "accountCode", "5700");
     const paidFromCode = text(form, "paidFromCode", "1000");
     const requestKey = text(form, "requestKey") || randomUUID();
-    const netCents = amountCents - taxCents;
 
     // Above this role's limit the expense is not posted: it becomes a request. An approval granted
     // earlier is spent here, once, inside the same write.
@@ -584,28 +584,24 @@ export async function recordExpenseAction(form: FormData) {
       });
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
-      const journal = await postJournal(tx, {
-        businessId,
-        actorId: context.session.userId,
-        actorName: context.session.name ?? null,
-        entryDate: occurredAt,
-        description: `Expense: ${description}`,
-        sourceType: "EXPENSE",
-        lines: buildExpenseJournal({ netCents, taxCents, description, expenseCode: accountCode, paidFromCode }),
-        idempotencyKey: `expense-journal:${requestKey}`,
-      });
-      const expense = await tx.erpExpense.create({
-        data: {
-          businessId, category, accountCode, description, amountCents, taxCents,
-          method: text(form, "method", "cash"), paidFromCode, occurredAt,
-          status: "POSTED", journalId: journal.id, idempotencyKey: `expense:${requestKey}`,
-          createdById: context.session.userId,
-        },
-      });
-      return { expense, journal };
+    // The posting lives in the domain so a PostgreSQL test can exercise it without a browser.
+    const result = await recordExpense(prisma, {
+      businessId,
+      category,
+      accountCode,
+      paidFromCode,
+      description,
+      amountCents,
+      taxCents,
+      method: text(form, "method", "cash"),
+      occurredAt,
+      requestKey,
+      actorId: context.session.userId,
+      actorName: context.session.name ?? null,
     });
-    ok = `Expense recorded and posted as ${result.journal.journalNumber}.`;
+    ok = result.replayed
+      ? "Expense already recorded — nothing was posted twice."
+      : `Expense recorded and posted as ${result.journal?.journalNumber}.`;
     revalidatePath(`${base}/expenses`);
     revalidatePath(`${base}/accounting`);
   } catch (err) {

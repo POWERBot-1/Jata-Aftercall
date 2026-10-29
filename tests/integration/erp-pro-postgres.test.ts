@@ -47,6 +47,7 @@ import {
 } from "@/lib/erp/storefront";
 import { postJournal, closePeriod, reopenPeriod, reverseJournal, trialBalance } from "@/lib/erp/accounting";
 import { createInvoice, issueInvoice, recordPayment } from "@/lib/erp/invoicing";
+import { recordExpense } from "@/lib/erp/expenses";
 import { creditWallet, reserveFunds, walletSummary } from "@/lib/messaging/billing";
 import { commitImport, validateImportRows } from "@/lib/messaging/import";
 import { submitInvoiceToEtims, etimsSubmissionPosture } from "@/lib/erp/etims";
@@ -445,6 +446,70 @@ describe.skipIf(!enabled)("POS / ERP - PRO against real PostgreSQL", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("posts an expense once: balanced journal, stored row, and a replay that writes nothing", async () => {
+    const requestKey = `expense-${stamp}`;
+    const expense = {
+      businessId: ids.business,
+      category: "Utilities",
+      accountCode: "5300",
+      paidFromCode: "1000",
+      description: "KPLC token",
+      amountCents: 116_000,
+      taxCents: 16_000,
+      method: "mpesa",
+      occurredAt: new Date("2026-03-04T09:00:00.000Z"),
+      requestKey,
+      actorId: ids.owner,
+      actorName: "ERP Owner",
+    };
+
+    const first = await recordExpense(client, expense);
+    expect(first.replayed).toBe(false);
+    expect(first.expense.status).toBe("POSTED");
+    expect(first.expense.amountCents).toBe(116_000);
+    expect(first.expense.taxCents).toBe(16_000);
+    expect(first.expense.journalId).toBe(first.journal!.id);
+
+    // Net 100,000 to utilities, 16,000 recoverable VAT, 116,000 out of cash.
+    expect(first.journal!.totalDebitCents).toBe(116_000);
+    expect(first.journal!.totalCreditCents).toBe(116_000);
+    const lines = await client.erpJournalLine.findMany({ where: { journalId: first.journal!.id } });
+    const at = (code: string) => lines.find((line: any) => line.accountCode === code);
+    expect(at("5300")).toMatchObject({ debitCents: 100_000, creditCents: 0 });
+    expect(at("1150")).toMatchObject({ debitCents: 16_000, creditCents: 0 });
+    expect(at("1000")).toMatchObject({ debitCents: 0, creditCents: 116_000 });
+
+    // The same submission key must not post a second journal or a second expense.
+    const replay = await recordExpense(client, expense);
+    expect(replay.replayed).toBe(true);
+    expect(replay.journal).toBeNull();
+    expect(replay.expense.id).toBe(first.expense.id);
+
+    const expenses = await client.erpExpense.findMany({ where: { businessId: ids.business } });
+    expect(expenses.filter((row: any) => row.description === "KPLC token")).toHaveLength(1);
+    const journals = await client.erpJournal.findMany({ where: { businessId: ids.business, description: "Expense: KPLC token" } });
+    expect(journals).toHaveLength(1);
+  });
+
+  it("refuses an expense whose VAT exceeds the total, before writing anything", async () => {
+    const before = await client.erpExpense.count({ where: { businessId: ids.business } });
+    await expect(
+      recordExpense(client, {
+        businessId: ids.business,
+        category: "Utilities",
+        accountCode: "5300",
+        paidFromCode: "1000",
+        description: "Impossible VAT",
+        amountCents: 10_000,
+        taxCents: 20_000,
+        occurredAt: new Date("2026-03-04T09:00:00.000Z"),
+        requestKey: `expense-bad-${stamp}`,
+        actorId: ids.owner,
+      }),
+    ).rejects.toThrow(/VAT cannot be more than the total/i);
+    expect(await client.erpExpense.count({ where: { businessId: ids.business } })).toBe(before);
   });
 
   it("credits the messaging wallet exactly once per idempotency key and refuses to overspend", async () => {
