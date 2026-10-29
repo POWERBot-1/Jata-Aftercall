@@ -88,7 +88,7 @@ export default async function ErpIndexPage() {
           <h2>Your businesses</h2>
           <p className="erp-card-sub">{businesses.length === 0 ? "You don't have a business yet." : "Choose a business to open its PRO workspace."}</p>
           {businesses.length === 0 ? (
-            <Link href="/onboarding/business" className="erp-btn erp-btn-primary">Create a business</Link>
+            <Link href="/onboarding" className="erp-btn erp-btn-primary">Create a business</Link>
           ) : (
             <div className="erp-card-grid">
               {businesses.map((business: any) => (

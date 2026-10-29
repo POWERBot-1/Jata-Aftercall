@@ -5,7 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { validateEmail } from "@/lib/validation";
 
 const accepted = {
-  message: "If an account exists for that address, we'll send a password reset link.",
+  message: "If an account exists for that address, a password reset link may arrive by email.",
 };
 
 export async function POST(req: Request) {

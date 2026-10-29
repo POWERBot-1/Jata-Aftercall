@@ -237,7 +237,7 @@ describe("password-reset request", () => {
 
     expect(unknown.status).toBe(202);
     expect(await unknown.json()).toEqual({
-      message: "If an account exists for that address, we'll send a password reset link.",
+      message: "If an account exists for that address, a password reset link may arrive by email.",
     });
     expect(mocks.token).toBeNull();
     expect(mocks.sent).toHaveLength(0);

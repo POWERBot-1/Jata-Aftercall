@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Bot, CreditCard, LayoutGrid, PlusCircle, ShieldCheck, Sparkles, Store, Wand2 } from "lucide-react";
+import { BarChart3, Bot, CreditCard, LayoutGrid, Network, PlusCircle, ShieldCheck, Sparkles, Store, Wand2 } from "lucide-react";
 
 /**
  * The workspace section rail.
  *
- * One row of sections (Overview, Subscription, AI Front Desk, Website Studio, Business POS)
- * plus "Add a business" and, for admins, Admin. It lives inside the graphite chrome, scrolls
- * horizontally on a phone, keeps a 44px touch target per link and marks the current section
- * with `aria-current="page"` plus a filled amber pill — so the owner always knows where they
- * are without a hover-only menu hiding a product behind it.
+ * All workspace sections share this rail. Links wrap on narrow screens and keep a 44px
+ * touch target; the active section is identified visually and with aria-current.
  */
 const LINKS = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },
@@ -19,6 +16,7 @@ const LINKS = [
   { href: "/dashboard/ai", label: "AI Front Desk", icon: Bot },
   { href: "/dashboard/studio", label: "Website Studio", icon: Wand2 },
   { href: "/dashboard/pos", label: "Business POS", icon: Store },
+  { href: "/dashboard/erp", label: "BOS", icon: Network },
   { href: "/dashboard/autopilot", label: "Autopilot", icon: Sparkles },
   { href: "/onboarding", label: "Add a business", icon: PlusCircle },
 ] as const;
@@ -31,7 +29,7 @@ export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="ws-rail-wrap">
-      <nav className="ws-rail" aria-label="Workspace sections">
+      <nav className="ws-rail ws-rail--workspace" aria-label="Workspace sections">
         <span className="sr-only">
           <BarChart3 size={14} aria-hidden="true" /> Your workspace
         </span>

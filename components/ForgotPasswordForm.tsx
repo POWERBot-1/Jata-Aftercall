@@ -36,7 +36,7 @@ export default function ForgotPasswordForm() {
     return (
       <div className="jata-card mt-6 space-y-3 p-5" role="status" aria-live="polite">
         <p className="font-medium text-zinc-900">Check your email</p>
-        <p className="text-sm text-zinc-600">If an account exists for that address, we&apos;ll send a one-time reset link. It expires in 30 minutes.</p>
+        <p className="text-sm text-zinc-600">If an account exists for that address, a reset link may arrive by email. Links expire in 30 minutes. If it does not arrive, try again later.</p>
         <a href="/login" className="inline-flex font-semibold underline">Back to sign in</a>
       </div>
     );
