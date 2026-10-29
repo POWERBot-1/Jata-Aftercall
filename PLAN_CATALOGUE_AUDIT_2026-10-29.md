@@ -286,10 +286,10 @@ Verification actually run in this environment:
 | `npx tsc --noEmit` | **4 errors, all pre-existing offline-Prisma test-file gaps**; no new error |
 
 These changes are on `arena/df1ff801-jata-aftercall` and open as **PR #73** (`OPEN`, `MERGEABLE`). They are **not merged
-and not deployed**; production remains `d49d605`. At the time of writing, 12 of 14 PR checks had passed — including
-*Static (install, generate, lint, typecheck, audit)* with a real generated Prisma client, *Schema, types, unit suite,
-build*, the migration gates and *Release gate (aggregate)* — with the two long-running browser/database journeys still in
-progress.
+and not deployed**; production remains `d49d605`. On the first code commit `c129e3b`, 12 of 14 PR checks passed —
+including *Static (install, generate, lint, typecheck, audit)* with a real generated Prisma client, *Schema, types, unit
+suite, build*, the migration gates and *Release gate (aggregate)* — with the two long-running browser/database journeys
+still in progress. The later commits are documentation only; they restart CI without changing code.
 
 Not run: `next build` locally (offline `prisma generate` fails, same limitation as the previous session).
 
