@@ -86,6 +86,24 @@ try {
   await new Promise((done) => setTimeout(done, 200));
   if (await page.$('[data-pwa-install="available"]')) throw new Error("Dismissed install prompt reappeared after reload");
   console.log("PASS install prompt dismissal persists across reload (synthetic event)");
+  // Chrome network emulation tests the offline notice, not a real connectivity outage.
+  await page.setOfflineMode(true);
+  await page.waitForSelector('[data-pwa-online="false"]', { visible:true });
+  for (const [width,height] of sizes) {
+    await page.setViewport({ width,height });
+    const geometry = await page.evaluate(() => {
+      const wrapper = document.querySelector(".jata-pwa");
+      const next = wrapper.nextElementSibling;
+      return { position:getComputedStyle(wrapper).position, bottom:wrapper.getBoundingClientRect().bottom, nextTop:next?.getBoundingClientRect().top, overflow:document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    if (geometry.position === "fixed" || geometry.nextTop == null || geometry.bottom > geometry.nextTop + 1 || geometry.overflow) throw new Error(`Offline notice obstructs workspace at ${width}x${height}: ${JSON.stringify(geometry)}`);
+    console.log(`PASS emulated offline notice in document flow ${width}x${height}`);
+  }
+  await page.setOfflineMode(false);
+  await page.waitForSelector('[data-pwa-online="false"]', { hidden:true });
+  await page.reload({ waitUntil:"load" });
+  if (await page.$('[data-pwa-online="false"]')) throw new Error("Offline notice remained after reconnect and reload");
+  console.log("PASS emulated offline notice clears on reconnect and reload");
   for (const [index, profile] of profiles.entries()) {
     const id = businesses[index], root = `/dashboard/pos/${id}`;
     await page.goto(new URL(`${root}/configure`, base).href, { waitUntil:"load" });
@@ -228,14 +246,84 @@ try {
     if ((await prisma.posProduct.findUnique({ where:{ id:product.id } }))?.isActive !== false) throw new Error(`${profile.key} product archive missing`);
     console.log(`PASS ${profile.key} product removed from active catalogue; historic sale retained`);
   }
+  // Separate, initially unpaid salon. Publication uses the application's UI and API;
+  // its later active subscription is a synthetic disposable-database fixture, not payment.
+  const serviceBusiness = await prisma.business.create({ data:{ ownerId:owner.id, name:`Service salon ${uid}`, slug:`service-salon-${uid}`, category:"Other" } });
+  const sid = serviceBusiness.id, serviceRoot = `/dashboard/pos/${sid}`;
+  businesses.push(sid);
+  await page.goto(new URL(`${serviceRoot}/configure`, base).href, { waitUntil:"load" });
+  await page.waitForSelector(".pos-option", { visible:true });
+  await new Promise((done) => setTimeout(done, 1200));
+  let response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
+  const salonChoice = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Salon")));
+  await salonChoice.asElement().click(); await salonChoice.dispose();
+  if (!(await response).ok()) throw new Error("Service-only salon type save failed");
+  await page.waitForFunction(() => !document.body.textContent.includes("Saving…"));
+  const clickQuestion = async (title) => {
+    const chip = await page.evaluateHandle((t) => [...document.querySelectorAll("button.pos-chip")].find((el) => el.textContent.trim().startsWith(t)), title);
+    if (!chip.asElement()) throw new Error(`Question chip missing: ${title}`);
+    await chip.asElement().click(); await chip.dispose();
+  };
+  await clickQuestion("How do you sell");
+  await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do you sell"));
+  const serviceOption = await page.evaluateHandle(() => [...document.querySelectorAll(".pos-option")].find((el) => el.querySelector("strong")?.textContent.trim().endsWith("Services")));
+  await serviceOption.asElement().click(); await serviceOption.dispose();
+  response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
+  await clickText(page, "button", "Done — continue");
+  if (!(await response).ok()) throw new Error("Service-only salon sells save failed");
+  await page.waitForFunction(() => !document.body.textContent.includes("Saving…"));
+  await clickQuestion("How do customers pay");
+  await page.waitForFunction(() => document.querySelector(".pos-question")?.textContent.includes("How do customers pay"));
+  response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration`) && r.request().method() === "POST");
+  await clickText(page, "button", "Skip for now →");
+  if (!(await response).ok()) throw new Error("Service-only salon default payments save failed");
+  await page.waitForFunction(() => !document.body.textContent.includes("Saving…"));
+  await page.reload({ waitUntil:"load" });
+  const salonDraft = await prisma.posConfiguration.findUnique({ where:{ businessId:sid } });
+  const salonAnswers = JSON.parse(salonDraft.answersJson);
+  if (JSON.stringify(salonAnswers.sells) !== JSON.stringify(["services"]) || !salonAnswers.payment_methods?.includes("cash")) throw new Error(`Service-only salon answers not persisted: ${JSON.stringify(salonAnswers)}`);
+  const salonConfig = JSON.parse(salonDraft.draftJson);
+  if (!salonConfig.sales.services || salonConfig.sales.products || salonConfig.inventory.enabled) throw new Error("Service-only salon config incorrectly enables products or inventory");
+  await page.goto(new URL(`${serviceRoot}/settings`,base).href, { waitUntil:"load" });
+  const publishButton = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((el) => el.textContent.trim() === "Publish this setup"));
+  if (!publishButton.asElement() || !(await publishButton.asElement().evaluate((el) => el.disabled))) throw new Error("Unpaid salon publish control not disabled");
+  await publishButton.dispose();
+  const unpaidStatus = await page.evaluate(async (path) => (await fetch(path, { method:"POST", headers:{"content-type":"application/json"}, body:"{}" })).status, `/api/pos/${sid}/configuration/publish`);
+  if (unpaidStatus < 400 || (await prisma.posConfiguration.findUnique({ where:{ businessId:sid } })).publishedVersion !== 0) throw new Error(`Unpaid publication was not refused: ${unpaidStatus}`);
+  await prisma.posSubscription.create({ data:{ businessId:sid, userId:owner.id, planId:plan.id, status:"ACTIVE", expiresAt:new Date(Date.now()+86400000) } });
+  await page.reload({ waitUntil:"load" });
+  await new Promise((done) => setTimeout(done, 1200));
+  response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/configuration/publish`) && r.request().method() === "POST");
+  await clickText(page, "button", "Publish this setup");
+  if (!(await response).ok()) throw new Error("Service-only salon UI publication failed");
+  await page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
+  const publishedSalon = await prisma.posConfiguration.findUnique({ where:{ businessId:sid } });
+  if (publishedSalon?.publishedVersion !== 1 || !publishedSalon.publishedJson) throw new Error("Salon publication not persisted");
+  await page.goto(new URL(`${serviceRoot}/products?new=1`,base).href, { waitUntil:"load" });
+  await page.waitForSelector("#f-kind", { visible:true });
+  if (await page.$eval("#f-kind", (el) => el.value) !== "SERVICE") throw new Error("Salon service-only new-item default is not SERVICE");
+  console.log("PASS salon service-only saved defaults, unpaid refusal and UI publication with synthetic entitlement (not payment)");
   const strangerContext = await browser.createBrowserContext();
   const outsider = await strangerContext.newPage(); outsider.setDefaultTimeout(30000);
   await login(outsider, `pos-stranger-${uid}@jata.test`, "Fixture#2026");
   for (const id of businesses) {
     const status = await outsider.evaluate(async (path) => (await fetch(path)).status, `/api/pos/${id}/products`);
     if (![403,404].includes(status)) throw new Error(`Cross-tenant products unexpectedly returned ${status}`);
+    const beforeConfig = await prisma.posConfiguration.findUnique({ where:{ businessId:id } });
+    const beforeProducts = await prisma.posProduct.count({ where:{ businessId:id } });
+    for (const [path,payload] of [
+      [`/api/pos/${id}/products`, { name:"Forbidden item", kind:"PRODUCT", priceKES:1 }],
+      [`/api/pos/${id}/configuration`, { answers:{ business_type:"retail" } }],
+      [`/api/pos/${id}/configuration/publish`, {}],
+      [`/api/pos/${id}/inventory`, { productId:"not-owned", quantity:10, reason:"OPENING" }],
+    ]) {
+      const denied = await outsider.evaluate(async (url,body) => (await fetch(url, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(body) })).status, path, payload);
+      if (![403,404].includes(denied)) throw new Error(`Cross-tenant mutation ${path} returned ${denied}`);
+    }
+    const afterConfig = await prisma.posConfiguration.findUnique({ where:{ businessId:id } });
+    if (await prisma.posProduct.count({ where:{ businessId:id } }) !== beforeProducts || afterConfig.answersJson !== beforeConfig.answersJson || afterConfig.publishedVersion !== beforeConfig.publishedVersion) throw new Error("Cross-tenant mutation changed victim data");
   }
-  console.log("PASS cross-tenant catalogue requests refused from independent authenticated browser session");
+  console.log("PASS cross-tenant catalogue reads and product/configuration/publication/inventory mutations refused from independent authenticated browser session");
   await strangerContext.close();
 } finally {
   if (browser) await browser.close();
