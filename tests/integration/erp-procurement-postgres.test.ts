@@ -13,6 +13,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createPurchaseOrder,
+  markPurchaseOrderOrdered,
   recordPurchaseBill,
   receivePurchaseOrder,
   submitPurchaseOrder,
@@ -217,6 +218,38 @@ describe.skipIf(!enabled)("procurement against real PostgreSQL", () => {
     const receipts = await client.erpGoodsReceipt.findMany({ where: { businessId: ids.businessA, purchaseOrderId: order.id } });
     expect(receipts).toHaveLength(1);
   }, 60_000);
+
+  it("marks an approved order as ordered once, and a second click neither resets it nor re-audits it", async () => {
+    const { order } = await raiseOrder();
+    await submitPurchaseOrder(client, {
+      businessId: ids.businessA,
+      orderId: order.id,
+      requester: { userId: ids.ownerA, role: "OWNER", name: "Owner A" },
+    });
+
+    const ordered = await markPurchaseOrderOrdered(client, {
+      businessId: ids.businessA,
+      orderId: order.id,
+      actorId: ids.ownerA,
+      actorName: "Owner A",
+    });
+    expect(ordered.status).toBe("ORDERED");
+    expect(ordered.orderedAt).toBeTruthy();
+
+    const audits = () =>
+      client.erpAuditEvent.findMany({ where: { businessId: ids.businessA, action: "PURCHASE_ORDER_ORDERED", targetId: order.id } });
+    expect(await audits()).toHaveLength(1);
+
+    // A retried click is idempotent: same timestamp, still one audit row for one event.
+    const again = await markPurchaseOrderOrdered(client, {
+      businessId: ids.businessA,
+      orderId: order.id,
+      actorId: ids.ownerA,
+      actorName: "Owner A",
+    });
+    expect(again.orderedAt).toEqual(ordered.orderedAt);
+    expect(await audits()).toHaveLength(1);
+  });
 
   it("cannot be received by another tenant", async () => {
     const { order } = await raiseOrder();

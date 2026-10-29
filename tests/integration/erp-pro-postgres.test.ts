@@ -45,7 +45,7 @@ import {
   ORDER_STATUS_LABELS,
   publicProductRef,
 } from "@/lib/erp/storefront";
-import { postJournal, closePeriod, reopenPeriod, reverseJournal, trialBalance } from "@/lib/erp/accounting";
+import { balanceSheet, postJournal, closePeriod, reopenPeriod, reverseJournal, trialBalance } from "@/lib/erp/accounting";
 import { createInvoice, issueInvoice, recordPayment } from "@/lib/erp/invoicing";
 import { recordExpense } from "@/lib/erp/expenses";
 import { creditWallet, reserveFunds, walletSummary } from "@/lib/messaging/billing";
@@ -510,6 +510,33 @@ describe.skipIf(!enabled)("POS / ERP - PRO against real PostgreSQL", () => {
       }),
     ).rejects.toThrow(/VAT cannot be more than the total/i);
     expect(await client.erpExpense.count({ where: { businessId: ids.business } })).toBe(before);
+  });
+
+  it("reports a balance sheet that reconciles, and moves by exactly the amount posted", async () => {
+    const before = await balanceSheet(client, ids.business);
+    expect(before.balanced).toBe(true);
+    expect(before.totalAssetsCents).toBe(before.totalLiabilitiesCents + before.totalEquityCents + before.netIncomeCents);
+
+    // Utilities paid from cash: assets down 50,000, expenses up 50,000, everything else unchanged.
+    await recordExpense(client, {
+      businessId: ids.business,
+      category: "Utilities",
+      accountCode: "5700",
+      paidFromCode: "1000",
+      description: "Water bill",
+      amountCents: 50_000,
+      taxCents: 0,
+      occurredAt: new Date("2026-03-05T09:00:00.000Z"),
+      requestKey: `expense-sheet-${stamp}`,
+      actorId: ids.owner,
+      actorName: "ERP Owner",
+    });
+
+    const after = await balanceSheet(client, ids.business);
+    expect(after.balanced).toBe(true);
+    expect(after.totalAssetsCents).toBe(before.totalAssetsCents - 50_000);
+    expect(after.netIncomeCents).toBe(before.netIncomeCents - 50_000);
+    expect(after.totalAssetsCents).toBe(after.totalLiabilitiesCents + after.totalEquityCents + after.netIncomeCents);
   });
 
   it("credits the messaging wallet exactly once per idempotency key and refuses to overspend", async () => {

@@ -386,6 +386,9 @@ export async function markPurchaseOrderOrdered(
   if (!order) throw Object.assign(new Error("That purchase order was not found."), { status: 404 });
   const transition = purchaseOrderTransitionAllowed(order.status, "ORDERED");
   if (!transition.ok) throw Object.assign(new Error(transition.reason ?? "That change is not allowed."), { status: 400 });
+  // Marking an order twice is a no-op: it must not reset orderedAt or write a second audit row for
+  // what is one event. The status machine allows ORDERED -> ORDERED so a retried click stays valid.
+  if (normalizePurchaseOrderStatus(order.status) === "ORDERED") return order;
   const updated = await client.erpPurchaseOrder.update({
     where: { id: order.id },
     data: { status: "ORDERED", orderedAt: new Date() },
