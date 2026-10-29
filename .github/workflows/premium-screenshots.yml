@@ -138,7 +138,16 @@ jobs:
           SHOT_DIR: ./premium-shots
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
-          node scripts/browser/pos-photo-refusal.check.mjs
+          set -o pipefail
+          set +e
+          node scripts/browser/pos-photo-refusal.check.mjs 2>&1 | tee /tmp/pos-photo-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/pos-photo-check.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=POS photo browser failure::$detail"
+          fi
+          exit "$result"
 
       # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
       # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN
