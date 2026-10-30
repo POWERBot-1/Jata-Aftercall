@@ -3,6 +3,7 @@ import { formatDate, formatKES } from "@/lib/format";
 import { ageingBucket, creditExposure, daysOverdue, supplierSummary } from "@/lib/pos/credit";
 import { partiesWithBalances } from "@/lib/pos/store";
 import { ReportLimitError } from "@/lib/pos/report-limit";
+import { CreditAgeError } from "@/lib/pos/credit-age";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 
@@ -38,7 +39,7 @@ export default async function PosCreditPage({ params }: Props) {
       configuration.suppliers.credit ? partiesWithBalances(businessId, "SUPPLIER", undefined, { requireComplete: true }) : Promise.resolve([]),
     ]);
   } catch (error) {
-    if (!(error instanceof ReportLimitError)) throw error;
+    if (!(error instanceof ReportLimitError) && !(error instanceof CreditAgeError)) throw error;
     return <div className="jata-card p-6" role="alert"><h2 className="text-lg font-bold">Credit figures unavailable</h2><p>{error.message}</p><Link href={workspace.basePath} className="jata-btn jata-btn-secondary mt-4">Back to the dashboard</Link></div>;
   }
 
@@ -54,9 +55,9 @@ export default async function PosCreditPage({ params }: Props) {
   const buckets = ["CURRENT", "1-30", "31-60", "61-90", "90+"] as const;
   const byBucket = buckets.map((bucket) => ({
     bucket,
-    amountKES: owing
-      .filter((party) => ageingBucket(daysOverdue(party.oldestEntryAt, configuration.credit.termsDays)) === bucket)
-      .reduce((total, party) => total + Number(party.balanceKES ?? 0), 0),
+    amountKES: owing.flatMap((party: any) => party.unpaidLots)
+      .filter((lot: any) => ageingBucket(daysOverdue(lot.createdAt, configuration.credit.termsDays)) === bucket)
+      .reduce((total: number, lot: any) => total + lot.amountKES, 0),
   }));
 
   return (
@@ -82,7 +83,7 @@ export default async function PosCreditPage({ params }: Props) {
 
           <section className="jata-card p-4">
             <p className="jata-kicker">How old is it?</p>
-            <p className="pos-note">Approximate: based on each account&apos;s oldest recorded debit, not allocation of outstanding entries.</p>
+            <p className="pos-note">Based on FIFO allocation across account debits, not invoice-specific settlement.</p>
             <div className="pos-bars mt-2">
               {byBucket.map((entry) => {
                 const max = Math.max(1, ...byBucket.map((row) => row.amountKES));

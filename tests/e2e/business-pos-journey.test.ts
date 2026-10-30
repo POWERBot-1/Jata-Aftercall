@@ -49,7 +49,7 @@ import { publiclyListedPlans } from "@/lib/pricing";
 import { runReport } from "@/lib/pos/reporting";
 import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
 import { oldestCreditDebit, paymentsForReport } from "@/lib/pos/store";
-import { CreditAgeError, loadOldestUnpaidDebit } from "@/lib/pos/credit-age";
+import { CreditAgeError, loadOldestUnpaidDebit, unpaidDebitLots } from "@/lib/pos/credit-age";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
 import { GET as categoriesGet, POST as categoriesPost } from "@/app/api/pos/[businessId]/categories/route";
@@ -1372,6 +1372,11 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
         { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 50, note: marker, createdAt: last },
       ] });
       expect((await loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 50))?.toISOString()).toBe(last.toISOString());
+      await prisma.posCreditEntry.updateMany({ where: { businessId, note: marker, direction: "CREDIT" }, data: { amountKES: 60 } });
+      const persisted = await prisma.posCreditEntry.findMany({ where: { businessId, partyType: "CUSTOMER", partyId }, orderBy: { createdAt: "asc" } });
+      expect(unpaidDebitLots(persisted, 90)).toEqual([
+        { createdAt: first, amountKES: 40 }, { createdAt: last, amountKES: 50 },
+      ]);
       await expect(loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 49)).rejects.toBeInstanceOf(CreditAgeError);
       await expect(loadOldestUnpaidDebit(prisma, ctx.stranger.businessId, "CUSTOMER", partyId, 50)).rejects.toBeInstanceOf(CreditAgeError);
     } finally {

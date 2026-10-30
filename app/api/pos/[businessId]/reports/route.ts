@@ -1,5 +1,6 @@
 import { handlePosRequest, posOk, queryString } from "@/lib/pos/http";
 import { defaultRangeFor, reportCatalogueFor, ReportLimitError, runDailyClosing, runReport } from "@/lib/pos/reporting";
+import { CreditAgeError } from "@/lib/pos/credit-age";
 import { sanitizeRange } from "@/lib/pos/validation";
 import type { ReportKey } from "@/lib/pos/types";
 
@@ -42,6 +43,7 @@ export async function GET(request: Request, context: RouteContext) {
           : defaultRangeFor(key);
         return posOk({ report: await runReport(businessId, ctx.configuration, key, range, { branchId: ctx.branchId }) });
       } catch (error) {
+        if (error instanceof CreditAgeError) return { status: 422, data: { error: error.message, code: "CREDIT_HISTORY_UNAVAILABLE" } };
         if (error instanceof ReportLimitError) return { status: 422, data: { error: error.message, code: "REPORT_LIMIT" } };
         throw error;
       }

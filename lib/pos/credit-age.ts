@@ -6,10 +6,10 @@ import { ReportLimitError } from "./report-limit";
  * Refuse when the complete ledger cannot be reconciled with the party's stored balance.
  */
 export class CreditAgeError extends Error {
-  constructor() { super("Credit history cannot be reconciled with the account balance. Contact support before extending credit."); }
+  constructor() { super("Credit ageing is unavailable because the account history is ambiguous or does not reconcile. Contact support."); }
 }
 
-export function oldestUnpaidDebit(entries: { direction: string; amountKES: number; createdAt: Date | string; saleId?: string | null }[], balanceKES: number): Date | null {
+export function unpaidDebitLots(entries: { direction: string; amountKES: number; createdAt: Date | string; saleId?: string | null }[], balanceKES: number): { createdAt: Date; amountKES: number }[] {
   if (!Number.isSafeInteger(balanceKES) || balanceKES < 0) throw new CreditAgeError();
   let debits = 0, credits = 0;
   for (const row of entries) {
@@ -20,20 +20,27 @@ export function oldestUnpaidDebit(entries: { direction: string; amountKES: numbe
     if (!Number.isSafeInteger(debits) || !Number.isSafeInteger(credits)) throw new CreditAgeError();
   }
   if (debits - credits !== balanceKES) throw new CreditAgeError();
-  if (balanceKES === 0) return null;
+  if (balanceKES === 0) return [];
   // Sale-linked reversals need invoice-specific allocations, which this ledger does not have.
   // Applying them FIFO could age the wrong invoice, so refuse instead of guessing.
   if (entries.some((row) => row.direction === "CREDIT" && row.saleId)) throw new CreditAgeError();
   let remaining = balanceKES;
+  const lots: { createdAt: Date; amountKES: number }[] = [];
   const newestFirst = entries.filter((row) => row.direction === "DEBIT").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   for (const debit of newestFirst) {
     if (debit.amountKES === 0) continue;
     const date = new Date(debit.createdAt);
     if (!Number.isFinite(date.getTime())) throw new CreditAgeError();
-    remaining -= debit.amountKES;
-    if (remaining <= 0) return date;
+    const outstanding = Math.min(remaining, debit.amountKES);
+    lots.push({ createdAt: date, amountKES: outstanding });
+    remaining -= outstanding;
+    if (remaining === 0) return lots.reverse();
   }
   throw new CreditAgeError();
+}
+
+export function oldestUnpaidDebit(entries: Parameters<typeof unpaidDebitLots>[0], balanceKES: number): Date | null {
+  return unpaidDebitLots(entries, balanceKES)[0]?.createdAt ?? null;
 }
 
 /** Complete party ledger, bounded with an explicit refusal rather than silent paging. */

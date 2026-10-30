@@ -274,8 +274,10 @@ export async function runReport(
       const totalKES = owing.reduce((sum: number, party: any) => sum + Number(party.balanceKES ?? 0), 0);
       const buckets = new Map<string, number>();
       for (const party of owing) {
-        const bucket = ageingBucket(daysOverdue(party.oldestEntryAt, termsDays));
-        buckets.set(bucket, (buckets.get(bucket) ?? 0) + Number(party.balanceKES ?? 0));
+        for (const lot of party.unpaidLots) {
+          const bucket = ageingBucket(daysOverdue(lot.createdAt, termsDays));
+          buckets.set(bucket, (buckets.get(bucket) ?? 0) + lot.amountKES);
+        }
       }
       return payload(definition, range, {
         summary: [
@@ -294,7 +296,7 @@ export async function runReport(
           oldest: party.oldestEntryAt ? formatDate(party.oldestEntryAt) : "—",
           ageing: ageingBucket(daysOverdue(party.oldestEntryAt, termsDays)),
         })),
-        notice: owing.length === 0 ? "Nothing outstanding. Everyone is square." : null,
+        notice: owing.length === 0 ? "Nothing outstanding. Everyone is square." : "Ageing uses FIFO account-level allocation, not invoice-specific settlement; balances are current, not historical period-end balances.",
       });
     }
 

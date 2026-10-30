@@ -2,6 +2,7 @@ import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
 import { negativeStockAllowed } from "./inventory";
 import { ReportLimitError } from "./report-limit";
+import { unpaidDebitLots } from "./credit-age";
 import type { InventoryMovementReason } from "./types";
 import type { PosConfiguration } from "./types";
 import { InlineMediaPersistenceError, containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
@@ -1302,20 +1303,27 @@ export async function partiesWithBalances(
   const rows = partyType === "SUPPLIER"
     ? await client.posSupplier.findMany({ where: { businessId }, select: { id: true, name: true, balanceKES: true, termsDays: true, phone: true } })
     : await client.posCustomer.findMany({
-        where: { businessId, creditEnabled: true },
+        where: { businessId, OR: [{ creditEnabled: true }, { balanceKES: { gt: 0 } }] },
         select: { id: true, name: true, balanceKES: true, creditLimitKES: true, phone: true },
       });
+  // Dashboard totals only need account balances. Ageing screens need the complete ledger,
+  // not a sample of debits, and must never age a later balance from an already-paid debit.
+  if (!options.requireComplete) return rows.map((row: any) => ({ ...row, oldestEntryAt: null }));
   const entries = await client.posCreditEntry.findMany({
-    where: { businessId, partyType, direction: "DEBIT" },
-    select: { partyId: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-    take: REPORT_ROW_LIMIT,
+    where: { businessId, partyType },
+    select: { partyId: true, direction: true, amountKES: true, createdAt: true, saleId: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: REPORT_ROW_LIMIT + 1,
   });
-  // The age of an account whose entry fell beyond the cap is unknown, not "current".
-  if (options.requireComplete && entries.length >= REPORT_ROW_LIMIT) throw new ReportLimitError();
-  const oldest = new Map<string, Date>();
+  if (entries.length > REPORT_ROW_LIMIT) throw new ReportLimitError();
+  const byParty = new Map<string, any[]>();
   for (const entry of entries) {
-    if (!oldest.has(entry.partyId)) oldest.set(entry.partyId, entry.createdAt);
+    const list = byParty.get(entry.partyId) ?? [];
+    list.push(entry);
+    byParty.set(entry.partyId, list);
   }
-  return rows.map((row: any) => ({ ...row, oldestEntryAt: oldest.get(row.id) ?? null }));
+  return rows.map((row: any) => {
+    const lots = unpaidDebitLots(byParty.get(row.id) ?? [], Number(row.balanceKES ?? 0));
+    return { ...row, oldestEntryAt: lots[0]?.createdAt ?? null, unpaidLots: lots };
+  });
 }
