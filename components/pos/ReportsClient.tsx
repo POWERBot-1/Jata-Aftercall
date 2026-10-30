@@ -176,7 +176,7 @@ export function ReportsClient({
         </div>
         {captures.length ? <ul className="space-y-2">{captures.map((item) => (
           <li key={item.id}><button type="button" className="pos-option" disabled={busy} onClick={() => void loadCaptures(item.id)}>
-            <strong>{item.periodStart.slice(0, 10)} to {new Date(new Date(item.periodEnd).getTime() - 1).toISOString().slice(0, 10)} UTC · revision {item.revision}</strong>
+            <strong>{item.periodStart.slice(0, 10)} to {item.lastDay} UTC · revision {item.revision}</strong>
             <small>Finalized {item.finalizedAt}{item.reason ? ` · ${item.reason}` : ""}</small>
           </button></li>
         ))}</ul> : <p className="pos-note">Load captures to see up to the 100 most recent revisions.</p>}
@@ -193,7 +193,7 @@ export function ReportsClient({
           {canCloseDay ? <div className="space-y-2">
             <label className="jata-label" htmlFor="capture-reason">Reason for correction</label>
             <input id="capture-reason" className="jata-input" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} />
-            <button type="button" className="jata-btn jata-btn-secondary" disabled={busy || !correctionReason.trim() || from !== capture.periodStart.slice(0, 10) || to !== new Date(new Date(capture.periodEnd).getTime() - 1).toISOString().slice(0, 10)} onClick={() => void finalizeCapture(capture.id)}>Create replacement revision</button>
+            <button type="button" className="jata-btn jata-btn-secondary" disabled={busy || !correctionReason.trim() || from !== capture.periodStart.slice(0, 10) || to !== capture.lastDay} onClick={() => void finalizeCapture(capture.id)}>Create replacement revision</button>
             <p className="pos-note">Select the capture dates above and explain the correction. Only the latest revision can be replaced.</p>
           </div> : null}
         </div> : null}
