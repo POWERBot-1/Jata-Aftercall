@@ -18,6 +18,8 @@ await mkdir(output, { recursive: true });
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
 try {
   const page = await browser.newPage();
+  // Each viewport must fetch the page independently rather than passing on a 304 cache hit.
+  await page.setCacheEnabled(false);
   await page.setRequestInterception(true);
   page.on("request", (request) => {
     let url;
@@ -35,18 +37,23 @@ try {
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     }));
     if (response?.status() !== 200 || !state.title?.includes("Agent") || !state.hasApplication || !state.hasStatus || state.overflow) {
-      throw new Error(`Landing failed at ${width}x${height}: ${JSON.stringify(state)}`);
+      throw new Error(`Landing failed at ${width}x${height}: HTTP ${response?.status()} ${JSON.stringify(state)}`);
     }
     await page.screenshot({ path: path.join(output, `landing-${width}x${height}.png`) });
     console.log(`PASS ${width}x${height}: landing, links, no page overflow`);
   }
   await page.setViewport({ width: 390, height: 844 });
+  const home = await page.goto(new URL("/", base).href, { waitUntil: "networkidle0" });
+  if (home?.status() !== 200 || !(await page.$('a[href="/agents"]'))) throw new Error("Homepage agent entry is missing.");
+  console.log("PASS homepage agent entry");
   await page.goto(new URL("/agents/apply", base).href, { waitUntil: "networkidle0" });
   await page.waitForFunction(() => document.body.innerText.includes("Sign in with an existing JATA"));
+  await page.screenshot({ path: path.join(output, "application-signed-out-390x844.png") });
   const response = await page.goto(new URL("/agents/dashboard", base).href, { waitUntil: "networkidle0" });
   if (response?.status() !== 200 || new URL(page.url()).pathname !== "/login" || new URL(page.url()).searchParams.get("next") !== "agents") {
     throw new Error("Anonymous dashboard did not redirect to the allowlisted login destination.");
   }
+  await page.screenshot({ path: path.join(output, "agent-login-390x844.png") });
   console.log("PASS signed-out application and dashboard redirect");
 } finally {
   await browser.close();
