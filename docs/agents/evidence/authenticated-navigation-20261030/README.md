@@ -1,0 +1,5 @@
+# Authenticated application-status navigation — 2026-10-30
+
+The six images show synthetic signed-in application status at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. They were captured against a loopback-only disposable PostgreSQL 18.6 database using a test-only Prisma WASM/pg injection because native Prisma binaries were unavailable locally. The entered code is synthetic and was not submitted. No provider or production system was contacted.
+
+Each image was inspected. The authenticated header now shows “My account”, not “Log in”; navigation is visible, the status and verification field are readable, and the page has no horizontal overflow. Automated checks validated navigation bounds, minimum input/navigation height and input contrast. The images do not show the active dashboard, tables, dialogs or the complete agent lifecycle. Public marketing pages and the application form retain the existing anonymous-style header; only the authenticated status page was changed. Full programme browser and visual acceptance remains outstanding.

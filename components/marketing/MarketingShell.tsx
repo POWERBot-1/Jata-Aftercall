@@ -17,7 +17,7 @@ const NAV = [
   { href: "/contact", label: "Support" },
 ] as const;
 
-export function MarketingHeader() {
+export function MarketingHeader({ signedIn = false }: { signedIn?: boolean } = {}) {
   return (
     <header className="mk-header">
       <div className="lp-wrap mk-header__inner">
@@ -28,8 +28,10 @@ export function MarketingHeader() {
           {NAV.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
         </nav>
         <div className="mk-header__actions">
-          <Link href="/login" className="mk-link">Log in</Link>
-          <Link href="/register" className="mk-cta">Get started</Link>
+          {signedIn ? <Link href="/dashboard" className="mk-cta">My account</Link> : <>
+            <Link href="/login" className="mk-link">Log in</Link>
+            <Link href="/register" className="mk-cta">Get started</Link>
+          </>}
         </div>
       </div>
     </header>
@@ -79,17 +81,19 @@ export function MarketingLayout({
   eyebrow,
   title,
   intro,
+  signedIn = false,
   children,
 }: {
   eyebrow: string;
   title: string;
   intro: string;
+  signedIn?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="lp-page mk-page">
       <a href="#main" className="jata-skip-link">Skip to content</a>
-      <MarketingHeader />
+      <MarketingHeader signedIn={signedIn} />
       <main id="main">
         <section className="lp-section lp-section--cream mk-hero">
           <div className="lp-wrap">

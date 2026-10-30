@@ -75,7 +75,9 @@ try {
     const controls = await first.page.evaluate(() => {
       const input = document.querySelector("#agent-verification-code");
       const nav = document.querySelector('nav[aria-label="Main navigation"]');
-      if (!input || !nav) return false;
+      const account = document.querySelector('.mk-header__actions a[href="/dashboard"]');
+      const login = document.querySelector('.mk-header__actions a[href="/login"]');
+      if (!input || !nav || !account || login) return false;
       const field = input.getBoundingClientRect();
       const style = getComputedStyle(input);
       return style.color === "rgb(20, 17, 15)" && style.backgroundColor === "rgb(255, 255, 255)" &&

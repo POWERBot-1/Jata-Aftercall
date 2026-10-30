@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { MarketingHeader } from "@/components/marketing/MarketingShell";
 const mocks = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/db", () => ({ default: { agentApplication: { findUnique: mocks.find } } }));
@@ -10,6 +12,12 @@ const originalEnv = { ...process.env };
 describe("personal agent application status", () => {
   afterEach(() => { process.env = { ...originalEnv }; });
   beforeEach(() => { vi.clearAllMocks(); mocks.session.mockResolvedValue({ userId: "account-a" }); mocks.find.mockResolvedValue(null); });
+  it("keeps anonymous marketing navigation unchanged", () => {
+    const html = renderToStaticMarkup(createElement(MarketingHeader));
+    expect(html).toContain('href="/login"');
+    expect(html).toContain('href="/register"');
+    expect(html).not.toContain("My account");
+  });
   it("redirects anonymous visitors without querying private applications", async () => {
     mocks.session.mockResolvedValue(null);
     await expect(AgentDashboardPage()).rejects.toMatchObject({ path: "/login?next=agents" });
@@ -21,6 +29,10 @@ describe("personal agent application status", () => {
     expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "account-a" }, select: { fullName: true, status: true, agentStatus: true, createdAt: true, phoneVerifiedAt: true } });
     expect(html).toContain("Awaiting verification");
     expect(html).toContain("not available yet");
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain("My account");
+    expect(html).not.toContain('href="/login"');
+    expect(html).not.toContain('href="/register"');
     expect(html).not.toContain("Active agent");
   });
   it("renders reviewed states without exposing other accounts or claiming commissions", async () => {
@@ -49,6 +61,7 @@ describe("personal agent application status", () => {
     mocks.find.mockRejectedValue(new Error("private database details"));
     const html = renderToStaticMarkup(await AgentDashboardPage());
     expect(html).toContain("We could not load your application");
+    expect(html).toContain("My account");
     expect(html).not.toContain("private database details");
   });
 });

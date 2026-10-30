@@ -26,11 +26,11 @@ export default async function AgentDashboardPage() {
       select: { fullName: true, status: true, agentStatus: true, createdAt: true, phoneVerifiedAt: true },
     });
   } catch {
-    return <MarketingLayout eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
+    return <MarketingLayout signedIn eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
       <MarketingSection title="Temporarily unavailable" id="unavailable"><div className="mk-prose"><p role="alert">We could not load your application. Please try again later.</p><Link href="/agents/dashboard">Try again</Link></div></MarketingSection>
     </MarketingLayout>;
   }
-  return <MarketingLayout eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
+  return <MarketingLayout signedIn eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
     <MarketingSection title="Your application" id="application">
       <div className="mk-prose">
         {!application ? <><p>No application is recorded for this account.</p><Link href="/agents/apply">Apply as an agent</Link></> : <>
