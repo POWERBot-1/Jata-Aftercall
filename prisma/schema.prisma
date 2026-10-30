@@ -45,6 +45,9 @@ model AgentApplication {
   user                  User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   fullName              String
   phoneE164             String
+  verifiedPhoneE164     String?  @unique
+  phoneVerifiedAt       DateTime?
+  phoneChallenge        AgentPhoneChallenge?
   status                String   @default("PENDING")
   privacyAcknowledgedAt DateTime
   createdAt             DateTime @default(now())
@@ -52,6 +55,23 @@ model AgentApplication {
 
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+// A challenge is not an agent entitlement and never stores the OTP itself.
+model AgentPhoneChallenge {
+  id            String   @id @default(cuid())
+  applicationId String   @unique
+  application   AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  phoneE164     String
+  nonce         String
+  codeDigest    String
+  expiresAt     DateTime
+  sentAt        DateTime?
+  consumedAt    DateTime?
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 // A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.

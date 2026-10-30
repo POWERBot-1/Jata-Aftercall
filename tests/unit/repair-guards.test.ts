@@ -126,6 +126,7 @@ describe("runtime and schema guards", () => {
       "20261101000000_agent_applications",
       "20261102000000_agent_registration_throttle",
       "20261103000000_agent_application_review",
+      "20261104000000_agent_phone_verification",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -176,6 +177,7 @@ describe("runtime and schema guards", () => {
       "20261101000000_agent_applications",
       "20261102000000_agent_registration_throttle",
       "20261103000000_agent_application_review",
+      "20261104000000_agent_phone_verification",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -211,6 +213,10 @@ describe("runtime and schema guards", () => {
     expect(agentThrottle).toContain('CREATE INDEX "AgentRegistrationThrottle_expiresAt_idx"');
     expect(agentReview).toContain(`CHECK ("status" IN ('PENDING', 'REJECTED'))`);
     expect(agentReview).toContain(`ADD COLUMN "status" TEXT NOT NULL DEFAULT 'PENDING'`);
+    const agentPhone = readFileSync(path.join(root, "prisma/migrations/20261104000000_agent_phone_verification/migration.sql"), "utf8");
+    expect(agentPhone).toContain('CREATE UNIQUE INDEX "AgentApplication_verifiedPhoneE164_key"');
+    expect(agentPhone).toContain('CREATE UNIQUE INDEX "AgentPhoneChallenge_applicationId_key"');
+    expect(agentPhone).toContain('CHECK ("attempts" >= 0 AND "attempts" <= 5)');
 
     const walletHardening = readFileSync(
       path.join(root, "prisma/migrations/20261005010000_payment_wallet_stk_receipt/migration.sql"),

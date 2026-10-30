@@ -30,8 +30,8 @@ export default async function AgentApplications({ searchParams }: { searchParams
     return <AdminPage title="Agent applications"><WorkspacePanel title="Unavailable"><p>Applications could not be loaded. Please try again later.</p></WorkspacePanel></AdminPage>;
   }
   const hasNext = rows.length > PAGE_SIZE;
-  return <AdminPage title="Agent applications" meta="No phone has been verified and no applicant has been activated.">
-    <WorkspacePanel title="Applications" meta="Phone numbers are masked. Approval and verification are not yet available.">
+  return <AdminPage title="Agent applications" meta="Phone verification does not activate applicants.">
+    <WorkspacePanel title="Applications" meta="Phone numbers are masked. Eligibility review and activation are not yet available.">
       {rows.length === 0 ? <p>No applications on this page.</p> : <ul>
         {rows.slice(0, PAGE_SIZE).map((row) => <li key={row.id}>
           <strong>{row.fullName}</strong> · {row.phoneE164.slice(0, 4)}•••••{row.phoneE164.slice(-3)} · {new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }).format(row.createdAt)} · {row.status === "REJECTED" ? "Rejected" : "Awaiting verification"}

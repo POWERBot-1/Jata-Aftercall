@@ -1,0 +1,50 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MockMessagingProvider, registerProvider, resetProviderRegistry } from "@/lib/messaging/providers";
+
+const mocks = vi.hoisted(() => ({ session: vi.fn(), query: vi.fn(), cleanup: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
+vi.mock("@/lib/db", () => ({ default: { $queryRaw: mocks.query, agentRegistrationThrottle: { deleteMany: mocks.cleanup } } }));
+import { verificationConfig, verificationLimit } from "@/lib/agents/phone-verification";
+import { POST as requestCode } from "@/app/api/agents/verification/request/route";
+import { POST as confirmCode } from "@/app/api/agents/verification/confirm/route";
+
+const env = { ...process.env };
+function request(origin = "https://example.test") {
+  return new Request("https://example.test/api/agents/verification/confirm", { method: "POST", headers: { host: "example.test", origin, "content-type": "application/json" }, body: JSON.stringify({ code: "123456" }) });
+}
+
+describe("agent phone verification boundaries", () => {
+  beforeEach(() => { vi.resetAllMocks(); resetProviderRegistry(); mocks.cleanup.mockResolvedValue({ count: 0 }); mocks.session.mockResolvedValue({ userId: "u1" }); });
+  afterEach(() => { process.env = { ...env }; resetProviderRegistry(); });
+  it("refuses unconfigured or sandbox providers even when flags are set", () => {
+    process.env.AGENT_PHONE_VERIFICATION_ENABLED = "true";
+    process.env.MESSAGING_LIVE_ENABLED = "true";
+    process.env.AGENT_VERIFICATION_HMAC_SECRET = "synthetic-secret-with-more-than-32-characters";
+    process.env.AGENT_VERIFICATION_SENDER_ID = "test";
+    process.env.AGENT_VERIFICATION_PROVIDER_KEY = "mock";
+    registerProvider(new MockMessagingProvider());
+    expect(verificationConfig()).toBeNull();
+  });
+  it("denies anonymous and cross-origin requests without accessing storage", async () => {
+    expect((await requestCode(request("https://evil.test"))).status).toBe(403);
+    mocks.session.mockResolvedValue(null);
+    expect((await requestCode(request())).status).toBe(401);
+    expect((await confirmCode(request())).status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+  it("fails closed with no approved provider, for both issuance and confirmation", async () => {
+    delete process.env.AGENT_PHONE_VERIFICATION_ENABLED;
+    expect((await requestCode(request())).status).toBe(503);
+    expect((await confirmCode(request())).status).toBe(503);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+  it("uses keyed per-account atomic limits and rejects fallback data", async () => {
+    mocks.query.mockResolvedValueOnce([{ count: 1 }]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ "?column?": 1 }]);
+    const secret = "test-secret";
+    expect(await verificationLimit(secret, "private-user", "issue")).toBe(true);
+    expect(await verificationLimit(secret, "private-user", "issue")).toBe(false);
+    expect(await verificationLimit(secret, "private-user", "confirm")).toBe(false);
+    expect(mocks.query.mock.calls[0][1]).toMatch(/^[a-f0-9]{64}$/);
+    expect(mocks.query.mock.calls[0][1]).not.toContain("private-user");
+  });
+});

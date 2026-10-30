@@ -574,6 +574,7 @@ function createFallbackPrisma(): any {
     // Offline reads remain empty and every write refuses; this is not an agent database.
     agentApplication: emptyModel(),
     agentRegistrationThrottle: emptyModel(),
+    agentPhoneChallenge: emptyModel(),
     // POS / ERP - PRO and messaging models. Same contract as the rest of the stub.
     erpTask: emptyModel(),
     erpPurchaseOrder: emptyModel(),
