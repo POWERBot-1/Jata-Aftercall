@@ -1148,6 +1148,14 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     } });
     expect(voidSale.status, voidSale.text()).toBe(201);
     const voidId = voidSale.body.sale.id;
+    // A second historical fixture is captured before a later real void. Revision 3 freezes
+    // the pre-void state; revision 4 is an explicit replacement with the void audit reference.
+    await prisma.posSale.update({ where: { id: voidId }, data: { createdAt: prior } });
+    await prisma.posPayment.updateMany({ where: { businessId, saleId: voidId, direction: "IN" }, data: { createdAt: prior } });
+    const beforeVoid = await snapshotPost({ from: day, to: day, supersedesId: revised.body.snapshot.id, reason: "Capture second sale" });
+    expect(beforeVoid.status, beforeVoid.text()).toBe(201);
+    const beforeVoidSale = beforeVoid.body.snapshot.payload.saleCohort.sales.find((s: any) => s.id === voidId);
+    expect(beforeVoidSale.status).toBe("COMPLETED");
     const voidCall = () => callPos(salePost, businessId, { path: `/sales/${voidId}`, params: { saleId: voidId }, method: "POST", body: { void: true } });
     const voided = await voidCall();
     expect(voided.status, voided.text()).toBe(200);
@@ -1161,6 +1169,12 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(voidPayments).toHaveLength(2);
     expect((await voidCall()).status).toBe(400);
     expect(await prisma.posPayment.count({ where: { businessId, saleId: voidId, direction: "OUT" } })).toBe(2);
+    expect((await snapshotGet(beforeVoid.body.snapshot.id)).body.snapshot.payload).toEqual(beforeVoid.body.snapshot.payload);
+    const afterVoid = await snapshotPost({ from: day, to: day, supersedesId: beforeVoid.body.snapshot.id, reason: "Void recorded after finalization" });
+    expect(afterVoid.status, afterVoid.text()).toBe(201);
+    expect(afterVoid.body.snapshot.payload.saleCohort.sales.find((s: any) => s.id === voidId).status).toBe("VOIDED");
+    expect(afterVoid.body.snapshot.payload.saleCohort.refundAndVoidEvents).toEqual(expect.arrayContaining([expect.objectContaining({ action: "POS_SALE_VOIDED", targetId: voidId })]));
+    expect((await snapshotGet(beforeVoid.body.snapshot.id)).body.snapshot.payload).toEqual(beforeVoid.body.snapshot.payload);
   }, 120_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {
