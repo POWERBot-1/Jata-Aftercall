@@ -121,6 +121,7 @@ model Business {
   posStaff                 PosStaff[]
   posProducts              PosProduct[]
   posCategoryImages        PosCategoryImage[]
+  posReportSnapshots       PosReportSnapshot[]
   posInventoryItems        PosInventoryItem[]
   posInventoryMovements    PosInventoryMovement[]
   posCustomers             PosCustomer[]
@@ -1219,6 +1220,26 @@ model PosCategoryImage {
 // login, so `userId` is nullable and intentionally not a foreign key: staff are business
 // records first, platform users only once invited.
 //
+// Finalized, append-only sale-cohort and period-ledger captures. Revisions supersede rather
+// than alter an earlier capture; they are alternatives, never additive entries.
+model PosReportSnapshot {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scopeKey     String   @default("")
+  periodStart  DateTime
+  periodEnd    DateTime
+  revision     Int
+  supersedesId String?
+  reason       String?  @db.Text
+  finalizedById String
+  finalizedAt  DateTime @default(now())
+  payload      Json
+
+  @@unique([businessId, scopeKey, periodStart, periodEnd, revision])
+  @@index([businessId, scopeKey, periodStart, periodEnd])
+}
+
 model PosStaff {
   id                String    @id @default(cuid())
   businessId        String

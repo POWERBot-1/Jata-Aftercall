@@ -24,6 +24,7 @@ const POS_MIGRATIONS = [
   "20261010000100_pos_sale_price_windows",
   "20261023000000_pos_publication_resolution",
   "20261101000000_pos_category_images",
+  "20261102000000_pos_report_snapshots",
 ];
 const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");

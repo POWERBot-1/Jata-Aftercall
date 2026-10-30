@@ -48,6 +48,7 @@ import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { publiclyListedPlans } from "@/lib/pricing";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
+import { GET as snapshotsGet, POST as snapshotsPost } from "@/app/api/pos/[businessId]/reports/snapshots/route";
 import { GET as workspaceGet } from "@/app/api/pos/[businessId]/route";
 import { GET as configGet, POST as configPost } from "@/app/api/pos/[businessId]/configuration/route";
 import { GET as previewGet, POST as previewPost } from "@/app/api/pos/[businessId]/configuration/preview/route";
@@ -1073,6 +1074,17 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const prior = new Date(); prior.setDate(prior.getDate() - 1); prior.setHours(12, 0, 0, 0);
     await prisma.posSale.update({ where: { id: saleId }, data: { createdAt: prior } });
     await prisma.posPayment.updateMany({ where: { businessId, saleId, direction: "IN" }, data: { createdAt: prior } });
+    const day = prior.toISOString().slice(0, 10);
+    const snapshotPost = (body: object) => callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body });
+    const snapshotGet = (id: string) => callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id } });
+    const finalized = await snapshotPost({ from: day, to: day });
+    expect(finalized.status, finalized.text()).toBe(201);
+    const originalId = finalized.body.snapshot.id;
+    expect(finalized.body.snapshot.payload.saleCohort.totals.netKES).toBe(100);
+    expect(finalized.body.snapshot.payload.saleCohort.sales[0].payments).toHaveLength(2);
+    expect((await snapshotPost({ from: day, to: day })).status).toBe(409);
+    await expect(prisma.posReportSnapshot.update({ where: { id: originalId }, data: { reason: "forged" } })).rejects.toThrow();
+    await expect(prisma.posReportSnapshot.delete({ where: { id: originalId } })).rejects.toThrow();
     const historical = () => callPos(reportsGet, businessId, { query: { report: "daily_sales", from: prior.toISOString(), to: prior.toISOString() } });
     const initial = await historical();
     expect(initial.status, initial.text()).toBe(200);
@@ -1113,6 +1125,21 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect((await refund({ amountKES: 1 })).status).toBe(400);
     expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(payments.length);
     expect((await historical()).body.report.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 0" }]));
+    const unchanged = await snapshotGet(originalId);
+    expect(unchanged.status, unchanged.text()).toBe(200);
+    expect(unchanged.body.snapshot.payload).toEqual(finalized.body.snapshot.payload);
+    expect((await snapshotPost({ from: day, to: day, supersedesId: originalId })).body.code).toBe("REASON_REQUIRED");
+    const revised = await snapshotPost({ from: day, to: day, supersedesId: originalId, reason: "Refund recorded after initial finalization" });
+    expect(revised.status, revised.text()).toBe(201);
+    expect(revised.body.snapshot).toMatchObject({ revision: 2, supersedesId: originalId });
+    expect(revised.body.snapshot.payload.saleCohort.totals.netKES).toBe(0);
+    expect(revised.body.snapshot.payload.saleCohort.refundAndVoidEvents).toHaveLength(2);
+    expect((await snapshotGet(originalId)).body.snapshot.payload).toEqual(finalized.body.snapshot.payload);
+    expect((await snapshotPost({ from: day, to: day, supersedesId: originalId, reason: "stale" })).status).toBe(409);
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await snapshotGet(originalId)).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect(await prisma.posAuditEvent.count({ where: { businessId, action: "POS_REPORT_FINALIZED", targetType: "REPORT_SNAPSHOT" } })).toBe(2);
 
     // A separate mixed-tender void returns both tenders and stock once.
     const voidSale = await callPos(salesPost, businessId, { method: "POST", body: {

@@ -372,6 +372,12 @@ function createFallbackPrisma(): any {
       update: async () => { throw new Error("DB not available"); },
       count: async () => 0,
     },
+    posReportSnapshot: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
     posCategoryImage: {
       findMany: async () => [],
       findFirst: async () => null,
