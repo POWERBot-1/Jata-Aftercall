@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS "PosReportSnapshot" (
   "payload" JSONB NOT NULL,
   CONSTRAINT "PosReportSnapshot_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "PosReportSnapshot_businessId_scopeKey_periodStart_periodEnd_revision_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "PosReportSnapshot_businessId_scopeKey_periodStart_periodEnd_key"
   ON "PosReportSnapshot"("businessId", "scopeKey", "periodStart", "periodEnd", "revision");
 CREATE INDEX IF NOT EXISTS "PosReportSnapshot_businessId_scopeKey_periodStart_periodEnd_idx"
   ON "PosReportSnapshot"("businessId", "scopeKey", "periodStart", "periodEnd");
