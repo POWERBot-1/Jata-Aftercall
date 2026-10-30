@@ -484,6 +484,9 @@ export async function receivePurchase(params: {
     (params.items ?? []).filter((item) => item && typeof item === "object").map((item) => [String(item.purchaseItemId), quantity(item.quantity)] as [string, number]),
   );
   const paymentAmount = params.payment ? sanitizeAmountKES(params.payment.amountKES) : 0;
+  if (paymentAmount > 0 && !actorCan(actor, "RECORD_SUPPLIER_PAYMENT")) {
+    return failure("NOT_ALLOWED", "You don't have permission to pay a supplier.", warnings);
+  }
 
   return inTransaction(params.client, async (tx: PosClient) => {
     // Receipt decisions and item updates must share the same locked, current purchase. A
@@ -511,6 +514,26 @@ export async function receivePurchase(params: {
       warnings.push("Partial receiving is switched off, so the full outstanding quantity was received.");
     }
     const receivedValue = lines.reduce((total, line) => total + Math.round(Number(line.item.unitCostKES ?? 0) * line.amount), 0);
+    let supplier: any = null;
+    if (paymentAmount > 0) {
+      if (!purchase.supplierId) return failure("SUPPLIER_REQUIRED", "Choose a supplier before recording a payment.", warnings);
+      if (paymentAmount > Math.max(0, Number(purchase.totalKES ?? 0) - Number(purchase.paidKES ?? 0))) {
+        return failure("PAYMENT_INVALID", "The payment cannot exceed the unpaid purchase amount.", warnings);
+      }
+      // Both the receipt and the direct supplier-payment path lock the same row. Revalidate
+      // before touching stock or recording money, so a simultaneous payment cannot overpay it.
+      await store.lockPartyRow(tx, PAYABLE, businessId, purchase.supplierId);
+      supplier = await store.findSupplier(businessId, purchase.supplierId, tx);
+      if (!supplier) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
+      if (configuration.suppliers.credit) {
+        const check = validateRepayment(Number(supplier.balanceKES ?? 0), paymentAmount);
+        if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
+      } else if (Number(supplier.balanceKES ?? 0) !== 0) {
+        // The old purchase schema does not identify which purchase created a payable. Once
+        // credit is switched off, a non-zero legacy balance cannot safely be attributed here.
+        return failure("PAYMENT_INVALID", "Supplier credit is off but this supplier has a balance; reconcile it before recording this payment.", warnings);
+      }
+    }
     let received = 0;
     for (const line of lines) {
       await tx.posPurchaseItem.updateMany({
@@ -553,8 +576,7 @@ export async function receivePurchase(params: {
     });
 
     if (paymentAmount > 0 && purchase.supplierId) {
-      const supplier = await store.findSupplier(businessId, purchase.supplierId, tx);
-      await tx.posPayment.create({
+      const payment = await tx.posPayment.create({
         data: {
           businessId,
           supplierId: purchase.supplierId,
@@ -569,11 +591,11 @@ export async function receivePurchase(params: {
           createdById: actor.actorId,
         },
       });
-      if (supplier) {
+      if (supplier && configuration.suppliers.credit) {
         await store.applyBalanceChange(
           businessId,
           { partyType: PAYABLE, partyId: supplier.id, partyName: supplier.name },
-          { deltaKES: -paymentAmount, direction: "CREDIT", note: `Payment for ${purchase.reference}` },
+          { deltaKES: -paymentAmount, direction: "CREDIT", paymentId: payment.id, note: `Payment for ${purchase.reference}` },
           tx,
         );
       }
