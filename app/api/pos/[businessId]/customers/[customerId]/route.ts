@@ -99,21 +99,20 @@ export async function POST(request: Request, context: RouteContext) {
     options: {},
     fallback: "We couldn't save that.",
     handler: async ({ ctx, body }) => {
+      // This shared endpoint accepts two distinct mutations; authorize the actual action,
+      // including active staff, before revealing whether a customer exists.
+      const isAsset = Boolean(bool(body, "asset") || body.asset);
+      const authorized = await requirePosAccess(businessId, ctx.session, { permission: isAsset ? "MANAGE_CUSTOMERS" : "RECORD_REPAYMENT" });
       const customer = await findCustomer(businessId, customerId);
       if (!customer) return fromOutcome({ ok: false, message: "That customer was not found.", code: "NOT_FOUND" });
 
-      if (bool(body, "asset") || body.asset) {
-        // This shared endpoint accepts two distinct mutations; authorize the actual action,
-        // including the active-staff check, rather than merely authenticating the tenant.
-        await requirePosAccess(businessId, ctx.session, { permission: "MANAGE_CUSTOMERS" });
+      if (isAsset) {
         const asset = sanitizeAssetInput(body.asset && typeof body.asset === "object" ? (body.asset as Record<string, unknown>) : body);
         if (!asset.name) return fromOutcome({ ok: false, message: "Give it a name." });
         const created = await addCustomerAsset(businessId, customerId, asset);
         return fromOutcome({ ok: true, warnings: [] }, { asset: created }, 201);
       }
 
-      // Re-resolve action permission and staff state before a financial write.
-      const authorized = await requirePosAccess(businessId, ctx.session, { permission: "RECORD_REPAYMENT" });
       // A repayment moves money, so it needs a live subscription (§44).
       if (!authorized.entitlement.entitled) {
         return fromOutcome({ ok: false, message: authorized.entitlement.reason, code: "PAYMENT_REQUIRED" });

@@ -1065,6 +1065,8 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     const before = rows("posCustomerAsset").length;
     const response = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
     expect(response.status).toBe(403);
+    const missing = await call(await customerPost(post("bizA", "/customers/missing", { asset: { name: "Vehicle" } }), context("bizA", { customerId: "missing" })));
+    expect(missing.status).toBe(403);
     expect(rows("posCustomerAsset")).toHaveLength(before);
   });
 
