@@ -1521,22 +1521,28 @@ export async function recordRepayment(params: {
   const { businessId, configuration, actor } = params;
   const client: PosClient = params.client ?? prisma;
   const warnings: string[] = [];
+  // An injected client may be an interactive transaction with earlier writes. A refusal must
+  // escape that transaction, just like a database error, instead of allowing those writes to commit.
+  const refuse = (code: string, message: string): RepaymentOutcome => {
+    if (params.client && params.client !== prisma) throw new RepaymentRefused(code, message);
+    return { ok: false, code, message, warnings };
+  };
 
   if (!actorCan(actor, "RECORD_REPAYMENT")) {
-    return { ok: false, code: "NOT_ALLOWED", message: "You don't have permission to record a repayment.", warnings };
+    return refuse("NOT_ALLOWED", "You don't have permission to record a repayment.");
   }
   if (!configuration.credit.enabled) {
-    return { ok: false, code: "CREDIT_DISABLED", message: "Credit is not switched on for this business.", warnings };
+    return refuse("CREDIT_DISABLED", "Credit is not switched on for this business.");
   }
 
   const customerId = clampNote(params.customerId, 64);
-  if (!customerId) return { ok: false, code: "CUSTOMER_REQUIRED", message: `Choose the ${customerWord(configuration)}.`, warnings };
+  if (!customerId) return refuse("CUSTOMER_REQUIRED", `Choose the ${customerWord(configuration)}.`);
 
   const customer = await store.findCustomer(businessId, customerId, client);
-  if (!customer) return { ok: false, code: "CUSTOMER_NOT_FOUND", message: "That record was not found.", warnings };
+  if (!customer) return refuse("CUSTOMER_NOT_FOUND", "That record was not found.");
 
   const key = store.normalizeIdempotencyKey(params.idempotencyKey);
-  if (!key) return { ok: false, code: "IDEMPOTENCY_KEY_REQUIRED", message: "A repayment request key is required.", warnings };
+  if (!key) return refuse("IDEMPOTENCY_KEY_REQUIRED", "A repayment request key is required.");
   // Do not round or cap a financial posting: the amount collected must be exactly the amount
   // recorded. Keep the validity check after the replay lookup so an invalid reuse of a spent
   // key cannot be mistaken for an uncommitted request by a retrying client.
@@ -1606,7 +1612,10 @@ export async function recordRepayment(params: {
     });
     return { amountKES: check.amountKES, balanceKES: balanceAfterKES, balanceAfterKES };
   }).catch(async (error: unknown) => {
-    if (error instanceof RepaymentAborted) return { invalid: error.message };
+    if (error instanceof RepaymentAborted) {
+      if (params.client && params.client !== prisma) throw new RepaymentRefused("REPAYMENT_INVALID", error.message);
+      return { invalid: error.message };
+    }
     // Different customer rows do not serialize on the party lock. If they race for the same
     // business-wide key, the unique index rolls the loser back; resolve it only after an owned
     // transaction has ended. A caller-owned transaction must receive the error and roll back.
@@ -1626,10 +1635,18 @@ export async function recordRepayment(params: {
     return { ok: false, code: "REPAYMENT_INVALID", message: result.invalid, warnings };
   }
   if (result && "conflict" in result) {
-    return { ok: false, code: "IDEMPOTENCY_CONFLICT", message: "This repayment key was already used for a different request.", warnings };
+    return refuse("IDEMPOTENCY_CONFLICT", "This repayment key was already used for a different request.");
   }
   const done = result as { amountKES: number; balanceKES: number; balanceAfterKES: number; replayed?: boolean } | undefined;
   return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined, balanceAfterKES: done?.balanceAfterKES, replayed: done?.replayed ?? false };
+}
+
+/** A refusal in a caller-owned transaction must propagate so the caller can roll back. */
+export class RepaymentRefused extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "RepaymentRefused";
+  }
 }
 
 /** Raised inside the repayment transaction when the re-validated balance no longer fits (§30). */

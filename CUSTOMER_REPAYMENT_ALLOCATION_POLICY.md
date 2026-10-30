@@ -20,6 +20,8 @@ These are design requirements, not a release approval. Until implemented and val
 
 New repayment requests require an exact whole-shilling amount from 1 to 100,000,000 KES and an `Idempotency-Key` (1–128 characters). Amounts are refused rather than silently rounded or capped. The key is scoped to the business, not the cashier; customer identity is checked and the normalized amount, method, reference and note are hashed. A matching retry returns the original amount and separately labelled post-transaction balance, plus the current account balance; changing the request under the same key is refused. The immutable request record, payment, balance movement, ledger entry and audit record commit together under the customer lock. The request record is linked by tenant/customer-constrained foreign keys. The migration does not attach keys to historical payments or allocate them to sales.
 
+When the caller supplies an existing transaction, a repayment refusal is raised with a typed code so earlier writes in that transaction are not silently committed. A caller that catches the exception inside its transaction remains responsible for explicitly aborting that transaction.
+
 The browser stores a pending request in session storage before submission and retries its same key and body after an uncertain result. It does not coordinate separate tabs or recover a request if the browser discards that storage; a fresh key cannot identify a prior payment. Existing clients without the required header are refused rather than silently bypassing replay protection. This safeguard is independent of and **does not implement** FIFO allocation or repayment reversal. Sale-level credit refunds remain guarded.
 
 ## Temporary safety boundary

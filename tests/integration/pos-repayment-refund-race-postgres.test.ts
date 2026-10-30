@@ -228,6 +228,48 @@ describe.skipIf(!realPrismaConfigured)("customer repayment versus credit refund 
     expect(await db.posRepaymentRequest.count({ where: { businessId, key: "forced-key-race" } })).toBe(1);
   }, 30000);
 
+  it("propagates a repayment refusal so the caller's earlier financial writes roll back", async () => {
+    const customer = await db.posCustomer.create({ data: { businessId, name: "Refused transaction", balanceKES: 100 } });
+    const configuration = baselineConfiguration(); configuration.credit.enabled = true;
+    const actor = { actorId: ownerId, actorName: "Owner", roleKey: "OWNER", permissions: ["RECORD_REPAYMENT" as const], staffId: null, branchId: null };
+    const marker = `refused-repayment-${stamp}`;
+    await expect(db.$transaction(async (tx: any) => {
+      await tx.posExpense.create({ data: { businessId, categoryKey: "other", label: marker, amountKES: 20 } });
+      return recordRepayment({ businessId, customerId: customer.id, amountKES: 101, configuration, actor, idempotencyKey: marker, client: tx });
+    })).rejects.toMatchObject({ code: "REPAYMENT_INVALID" });
+    expect(await db.posExpense.count({ where: { businessId, label: marker } })).toBe(0);
+    expect(await db.posPayment.count({ where: { businessId, customerId: customer.id } })).toBe(0);
+    expect((await db.posCustomer.findUnique({ where: { id: customer.id } })).balanceKES).toBe(100);
+  });
+
+  it("propagates an early permission refusal through a caller-owned transaction", async () => {
+    const customer = await db.posCustomer.create({ data: { businessId, name: "Unauthorized transaction", balanceKES: 100 } });
+    const configuration = baselineConfiguration(); configuration.credit.enabled = true;
+    const actor = { actorId: ownerId, actorName: "User", roleKey: "WAITER", permissions: [] as ("RECORD_REPAYMENT")[], staffId: null, branchId: null };
+    const marker = `unauthorized-repayment-${stamp}`;
+    await expect(db.$transaction(async (tx: any) => {
+      await tx.posExpense.create({ data: { businessId, categoryKey: "other", label: marker, amountKES: 20 } });
+      return recordRepayment({ businessId, customerId: customer.id, amountKES: 20, configuration, actor, idempotencyKey: marker, client: tx });
+    })).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+    expect(await db.posExpense.count({ where: { businessId, label: marker } })).toBe(0);
+    expect(await db.posPayment.count({ where: { businessId, customerId: customer.id } })).toBe(0);
+  });
+
+  it("propagates a key conflict so a caller-owned transaction cannot commit earlier writes", async () => {
+    const customer = await db.posCustomer.create({ data: { businessId, name: "Conflicting transaction", balanceKES: 100 } });
+    const configuration = baselineConfiguration(); configuration.credit.enabled = true;
+    const actor = { actorId: ownerId, actorName: "Owner", roleKey: "OWNER", permissions: ["RECORD_REPAYMENT" as const], staffId: null, branchId: null };
+    const key = `conflicting-transaction-${stamp}`;
+    expect((await recordRepayment({ businessId, customerId: customer.id, amountKES: 20, configuration, actor, idempotencyKey: key })).ok).toBe(true);
+    await expect(db.$transaction(async (tx: any) => {
+      await tx.posExpense.create({ data: { businessId, categoryKey: "other", label: key, amountKES: 10 } });
+      return recordRepayment({ businessId, customerId: customer.id, amountKES: 25, configuration, actor, idempotencyKey: key, client: tx });
+    })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    expect(await db.posExpense.count({ where: { businessId, label: key } })).toBe(0);
+    expect(await db.posPayment.count({ where: { businessId, customerId: customer.id } })).toBe(1);
+    expect((await db.posCustomer.findUnique({ where: { id: customer.id } })).balanceKES).toBe(80);
+  });
+
   it("rolls back a key and its financial writes together, allowing a genuine retry", async () => {
     const customer = await db.posCustomer.create({ data: { businessId, name: "Rollback replay", balanceKES: 100 } });
     const configuration = baselineConfiguration(); configuration.credit.enabled = true;
