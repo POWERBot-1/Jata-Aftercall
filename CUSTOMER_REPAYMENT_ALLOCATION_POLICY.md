@@ -15,3 +15,7 @@ The owner selected **oldest eligible sale first (FIFO)** for future customer rep
 - Original sale unpaid values shown by existing reports and captures are labelled as such, with repayment limitations; they are not current sale-level debt. Customer-level stored balances are not automatically verified historical openings.
 
 These are design requirements, not a release approval. Until implemented and validated in real PostgreSQL with the full accounting matrix, sale-level current balances remain unsupported.
+
+## Temporary safety boundary
+
+A credit refund or void is refused when a settled, sale-unlinked customer repayment exists, because the current account balance cannot prove which sale remains unpaid. This is deliberately conservative: it can also refuse a legitimate credit refund after a fully settled earlier account. Cash-only refunds remain available. The guard is not a replacement for persistent FIFO allocations or reconciliation, and it does not establish historical balances. Credit refunds and repayments serialize on the customer row. Caller-owned transactions must propagate refund aborts so claimed return items roll back.

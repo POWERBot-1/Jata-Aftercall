@@ -959,6 +959,11 @@ export async function refundSale(params: {
     if (!sale) return { returnedToStock: 0, code: "SALE_NOT_FOUND" as string | undefined, message: "That sale was not found.", refundKES: 0 };
     if (sale.status === "VOIDED") return { returnedToStock: 0, code: "ALREADY_VOIDED" as string | undefined, message: "That sale was already voided.", refundKES: 0 };
 
+    // Credit refunds and customer repayments both reduce the same receivable. Lock the
+    // customer before reading its balance so a repayment cannot commit between the refund's
+    // eligibility check and its balance update. Sale creation also serializes on this row.
+    if (sale.customerId) await store.lockPartyRow(tx, RECEIVABLE, businessId, sale.customerId);
+
     // A sale the payment wallet settled has its own refund flow; refunding it here would open a
     // second ledger for the same money (§112).
     const walletTransaction = await tx.paymentTransaction.findFirst({ where: { businessId, posSaleId: sale.id } });
@@ -1081,6 +1086,16 @@ export async function refundSale(params: {
     // funded, and never through a method the customer did not pay with.
     const cashPart = Math.min(Math.max(0, requestedAmount), fundableKES);
     const creditPart = Math.min(Math.max(0, requestedAmount - cashPart), creditRefundableKES);
+    // Account-level repayments have no sale allocation. The customer's overall balance can
+    // belong to a different sale, so it cannot establish how much credit remains on this one.
+    // Preserve cash-only refunds, but refuse a credit reversal until the ambiguity is resolved.
+    if (creditPart > 0 && sale.customerId) {
+      const repayment = await tx.posPayment.findFirst({
+        where: { businessId, customerId: sale.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", status: "SETTLED", saleId: null },
+        select: { id: true },
+      });
+      if (repayment) throw new RefundAborted("CREDIT_ALLOCATION_UNVERIFIED", "This credit refund cannot be calculated because customer repayments are not allocated to sales. Review the account before refunding.");
+    }
     const refundKES = cashPart + creditPart;
 
     // The authoritative split: one row per tender, each capped by what that tender funded and
@@ -1203,9 +1218,15 @@ export async function refundSale(params: {
 
     return { returnedToStock, code: undefined, message: undefined, refundKES };
   }).catch(async (error: unknown) => {
+    // An injected transaction belongs to the caller. Do not swallow failures inside it: the
+    // caller must roll back any claimed return lines and other earlier writes before responding.
+    if (params.client && params.client !== prisma) throw error;
     if (error instanceof RefundAborted) {
       if (error.message === "REFUND_INVALID") {
         return { returnedToStock: 0, code: "REFUND_INVALID" as string | undefined, message: error.publicMessage, refundKES: 0 };
+      }
+      if (error.message === "CREDIT_ALLOCATION_UNVERIFIED") {
+        return { returnedToStock: 0, code: "CREDIT_ALLOCATION_UNVERIFIED" as string | undefined, message: error.publicMessage, refundKES: 0 };
       }
       if (error.message === "CREDIT_PARTY_MISSING") {
         return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That refund could not be recorded — try again.", refundKES: 0 };

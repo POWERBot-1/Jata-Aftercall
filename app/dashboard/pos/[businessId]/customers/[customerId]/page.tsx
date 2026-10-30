@@ -85,7 +85,7 @@ export default async function PosCustomerDetailPage({ params }: Props) {
                 </div>
                 <div className="pos-row-values">
                   <span>{formatKES(Number(sale.totalKES))}</span>
-                  {Number(sale.balanceKES) > 0 ? <span className="pos-pill" data-tone="warn">Owes {formatKES(Number(sale.balanceKES))}</span> : null}
+                  {Number(sale.balanceKES) > 0 ? <span className="pos-pill" data-tone="warn">Unpaid at sale {formatKES(Number(sale.balanceKES))} (repayments not allocated)</span> : null}
                 </div>
               </Link>
             ))}

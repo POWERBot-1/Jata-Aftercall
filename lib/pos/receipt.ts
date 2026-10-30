@@ -168,7 +168,7 @@ export function receiptToText(document: ReceiptDocument): string {
   for (const payment of document.payments) {
     lines.push(`${payment.method} ${money(payment.amountKES)}${payment.reference ? ` (${payment.reference})` : ""}`);
   }
-  if (document.balanceKES > 0) lines.push(`Balance due ${money(document.balanceKES)}`);
+  if (document.balanceKES > 0) lines.push(`Unpaid at sale ${money(document.balanceKES)} (later repayments not allocated)`);
   if (document.creditBalanceKES && document.creditBalanceKES > 0) {
     lines.push(`Account balance ${money(document.creditBalanceKES)}`);
   }
