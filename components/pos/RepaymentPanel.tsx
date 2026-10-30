@@ -107,6 +107,7 @@ export function RepaymentPanel({
 
       {error ? <p className="jata-error" role="alert">{error}</p> : null}
       {pending ? <p className="pos-note">A previous request needs confirmation. Retry this same payment before recording a different one.</p> : null}
+      {pending && !Number.isSafeInteger(amountKES) ? <p className="jata-error" role="alert">This earlier request has a fractional amount and cannot be retried automatically. Check the account before recording another payment.</p> : null}
 
       <div className="pos-grid-2">
         <div className="jata-field">
@@ -116,6 +117,7 @@ export function RepaymentPanel({
             className="jata-input"
             type="number"
             min={1}
+            step={1}
             max={balanceKES}
             value={amountKES || ""}
             disabled={!!pending || !ready}
@@ -138,7 +140,7 @@ export function RepaymentPanel({
       </div>
 
       <div className="pos-form-actions">
-        <button type="button" className="jata-btn jata-btn-primary" onClick={submit} disabled={busy || !ready || amountKES <= 0 || !entitled}>
+        <button type="button" className="jata-btn jata-btn-primary" onClick={submit} disabled={busy || !ready || !Number.isSafeInteger(amountKES) || amountKES <= 0 || !entitled}>
           {busy ? "Saving…" : pending ? `Retry ${formatKES(amountKES)}` : `Record ${formatKES(amountKES)}`}
         </button>
         {!entitled ? <span className="pos-note">Renew the plan to collect payments.</span> : null}

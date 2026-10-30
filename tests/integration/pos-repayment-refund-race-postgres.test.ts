@@ -143,6 +143,21 @@ describe.skipIf(!realPrismaConfigured)("customer repayment versus credit refund 
     expect(await db.posCreditEntry.count({ where: { businessId, partyId: customer.id, direction: "CREDIT" } })).toBe(1);
     expect((await db.posSale.findFirst({ where: { businessId, id: sale.id } })).creditRefundedKES).toBe(0);
   }, 30000);
+  it("refuses fractional or capped repayments without spending a key or moving money", async () => {
+    const customer = await db.posCustomer.create({ data: { businessId, name: "Exact amount", balanceKES: 100_000_001 } });
+    const configuration = baselineConfiguration(); configuration.credit.enabled = true;
+    const actor = { actorId: ownerId, actorName: "Owner", roleKey: "OWNER", permissions: ["RECORD_REPAYMENT" as const], staffId: null, branchId: null };
+    const base = { businessId, customerId: customer.id, configuration, actor, idempotencyKey: "exact-amount", amountKES: 100_000_001 };
+    expect(await recordRepayment(base)).toMatchObject({ ok: false, code: "REPAYMENT_INVALID" });
+    expect(await recordRepayment({ ...base, amountKES: 100.4 })).toMatchObject({ ok: false, code: "REPAYMENT_INVALID" });
+    expect(await db.posPayment.count({ where: { businessId, customerId: customer.id } })).toBe(0);
+    expect(await db.posRepaymentRequest.count({ where: { businessId, customerId: customer.id } })).toBe(0);
+    expect((await db.posCustomer.findUnique({ where: { id: customer.id } })).balanceKES).toBe(100_000_001);
+    expect(await recordRepayment({ ...base, amountKES: 100 })).toMatchObject({ ok: true, amountKES: 100 });
+    expect(await recordRepayment({ ...base, amountKES: 100.4 })).toMatchObject({ ok: false, code: "IDEMPOTENCY_CONFLICT" });
+    expect(await db.posPayment.count({ where: { businessId, customerId: customer.id } })).toBe(1);
+  });
+
   it("serializes simultaneous retries, rejects changed payloads and replays the original result", async () => {
     const customer = await db.posCustomer.create({ data: { businessId, name: "Replay customer", balanceKES: 200 } });
     const configuration = baselineConfiguration(); configuration.credit.enabled = true;

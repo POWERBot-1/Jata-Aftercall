@@ -18,7 +18,7 @@ import { decideCredit, validateRepayment, RECEIVABLE } from "./credit";
 import { CreditAgeError, loadOldestUnpaidDebit } from "./credit-age";
 import { ReportLimitError } from "./report-limit";
 import { checkAvailability, movementsForReturn, movementsForSale } from "./inventory";
-import { calculateSale, discountFromPercent, isCreditMethod, sanitizeAmountKES, validatePayments, validateRefund } from "./money";
+import { calculateSale, discountFromPercent, isCreditMethod, MAX_AMOUNT_KES, sanitizeAmountKES, validatePayments, validateRefund } from "./money";
 import { logPosAuditInTransaction } from "./audit";
 import { buildReceipt, formatReceiptNumber, receiptPrefixFromBusinessName, receiptToText } from "./receipt";
 import type { ReceiptBusiness } from "./receipt";
@@ -1537,7 +1537,11 @@ export async function recordRepayment(params: {
 
   const key = store.normalizeIdempotencyKey(params.idempotencyKey);
   if (!key) return { ok: false, code: "IDEMPOTENCY_KEY_REQUIRED", message: "A repayment request key is required.", warnings };
-  const amountKES = sanitizeAmountKES(params.amountKES);
+  // Do not round or cap a financial posting: the amount collected must be exactly the amount
+  // recorded. Keep the validity check after the replay lookup so an invalid reuse of a spent
+  // key cannot be mistaken for an uncommitted request by a retrying client.
+  const amountKES = params.amountKES;
+  const amountIsExact = Number.isSafeInteger(amountKES) && amountKES > 0 && amountKES <= MAX_AMOUNT_KES;
   const method = clampNote(params.method, 32) ?? "cash";
   const reference = clampNote(params.reference, 80);
   const note = clampNote(params.note);
@@ -1551,11 +1555,12 @@ export async function recordRepayment(params: {
     await store.lockPartyRow(tx, RECEIVABLE, businessId, customerId);
     const existing = await tx.posRepaymentRequest.findFirst({ where: { businessId, key } });
     if (existing) {
-      if (existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
+      if (!amountIsExact || existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
       const currentCustomer = await store.findCustomer(businessId, customerId, tx);
       if (!currentCustomer) throw new Error("REPAYMENT_CUSTOMER_MISSING");
       return { amountKES: existing.amountKES, balanceKES: Number(currentCustomer.balanceKES), balanceAfterKES: existing.balanceAfterKES, replayed: true };
     }
+    if (!amountIsExact) throw new RepaymentAborted(`Enter a whole-shilling amount between 1 and ${MAX_AMOUNT_KES.toLocaleString("en-KE")} KES.`);
     const current = await store.findCustomer(businessId, customerId, tx);
     const check = validateRepayment(Number(current?.balanceKES ?? 0), amountKES);
     if (!check.ok) throw new RepaymentAborted(check.message ?? "That repayment could not be recorded.");

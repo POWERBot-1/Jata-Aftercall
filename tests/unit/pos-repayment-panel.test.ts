@@ -24,6 +24,17 @@ describe("repayment request recovery", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not discard or retry an old fractional pending request automatically", async () => {
+    sessionStorage.setItem("pos-repayment:b:c", JSON.stringify({ key: "legacy-key", amountKES: 100.4, method: "cash", reference: "" }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => root.render(createElement(RepaymentPanel, props)));
+    expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
+    expect(container.textContent).toContain("fractional amount");
+    expect(sessionStorage.getItem("pos-repayment:b:c")).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("unlocks fields after a definite pre-write repayment refusal", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({ code: "REPAYMENT_INVALID", error: "Invalid amount" }) }));
     await act(async () => root.render(createElement(RepaymentPanel, props)));

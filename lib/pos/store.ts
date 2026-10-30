@@ -1,4 +1,3 @@
-import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
 import { negativeStockAllowed } from "./inventory";
 import { ReportLimitError } from "./report-limit";
@@ -410,23 +409,14 @@ export async function applyBalanceChange(
  */
 export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "SUPPLIER", businessId: string, partyId: string): Promise<void> {
   if (!client?.$queryRaw) return;
-  // The table name is a fixed identifier chosen here (never user input), so it is spliced with
-  // Prisma's raw-identifier helper; the ids are bound parameters. When the generated client is
-  // not available (offline build), the helper is absent and the lock is a no-op — the atomic
-  // balance increment still makes the write itself safe.
-  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
-  if (typeof rawIdentifier !== "function") return;
-  // Quoted, and it has to be. Prisma's raw helper splices the string in verbatim, so an unquoted
-  // PosCustomer is folded to lower case by PostgreSQL and matches nothing — the table is created
-  // as "PosCustomer". The unquoted form failed with 42P01 ("relation \"poscustomer\" does not
-  // exist") on every call, which the bare catch below used to hide while leaving the caller's
-  // transaction aborted.
-  const table = partyType === "SUPPLIER" ? '"PosSupplier"' : '"PosCustomer"';
-  // No try/catch: see lockSaleRow. A failed statement aborts the transaction, and swallowing it
-  // here let the credit decision and the balance move run on inside a dead transaction, where
-  // the next statement failed with 25P02. The two capability guards above already cover a client
-  // that genuinely cannot run raw SQL.
-  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier(table)} WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  // Static, quoted table names avoid constructing SQL identifiers from user data or relying on
+  // a Prisma.raw object from a different client runtime. Values remain bound parameters.
+  // Database failures must propagate so the surrounding financial transaction rolls back.
+  if (partyType === "SUPPLIER") {
+    await client.$queryRaw`SELECT 1 FROM "PosSupplier" WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  } else {
+    await client.$queryRaw`SELECT 1 FROM "PosCustomer" WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  }
 }
 
 /**
@@ -440,18 +430,8 @@ export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "S
  */
 export async function lockSaleRow(client: PosClient, businessId: string, saleId: string): Promise<void> {
   if (!client?.$queryRaw) return;
-  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
-  if (typeof rawIdentifier !== "function") return;
-  // No try/catch here, deliberately.
-  //
-  // A client that cannot run raw SQL is already handled by the two guards above, so the only
-  // thing a catch would still swallow is a real database error — and on PostgreSQL a failed
-  // statement aborts the whole transaction. Swallowing it here used to let the refund carry on
-  // inside a dead transaction, where the very next read failed with 25P02 ("current transaction
-  // is aborted") and surfaced as an opaque engine error instead of the retryable conflict it
-  // actually was. A deadlock or a lock timeout has to reach the caller so the transaction rolls
-  // back cleanly and the caller can say so.
-  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier('"PosSale"')} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
+  // A database error must reach the caller; swallowing it would leave the transaction aborted.
+  await client.$queryRaw`SELECT 1 FROM "PosSale" WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
 }
 
 export async function listCreditEntries(

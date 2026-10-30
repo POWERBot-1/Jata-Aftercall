@@ -895,6 +895,12 @@ describe("/sales — selling over HTTP (§27, §31, §32, §33, §54, §62)", ()
     expect(replay.body).toMatchObject({ replayed: true, amountKES: 200, balanceKES: 300 });
     expect((await call(await retry(100, "journey-key"))).body.code).toBe("IDEMPOTENCY_CONFLICT");
     expect((await call(await retry(100, null))).body.code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+    expect((await call(await retry(200.4, "journey-key"))).body.code).toBe("IDEMPOTENCY_CONFLICT");
+    const malformed = await call(await customerPost(new Request(url("bizA", "/customers/c_a1"), {
+      method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": "invalid-amount" },
+      body: JSON.stringify({ amountKES: "1e2", method: "cash" }),
+    }), context("bizA", { customerId: "c_a1" })));
+    expect(malformed.body.code).toBe("REPAYMENT_INVALID");
     expect(rows("posPayment").filter((row) => row.purpose === "CREDIT_REPAYMENT")).toHaveLength(1);
     expect(rows("posCustomer").find((row) => row.id === "c_a1")?.balanceKES).toBe(300);
   });
