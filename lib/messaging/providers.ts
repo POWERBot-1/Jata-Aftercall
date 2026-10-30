@@ -35,6 +35,8 @@ export type SendResult = {
   code?: string | null;
   message?: string | null;
   retryable?: boolean;
+  /** True only for a provider-confirmed rejection that definitely created no message. */
+  safeToFallback?: boolean;
 };
 
 export type ProviderDeliveryStatus = {

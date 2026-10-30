@@ -1,31 +1,36 @@
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import prisma from "@/lib/db";
+import { createMetaWhatsAppProvider, metaConfig, META_WHATSAPP_KEY } from "@/lib/messaging/meta-whatsapp";
 import { getMessagingProvider, liveProviderReady, type MessagingProviderAdapter } from "@/lib/messaging/providers";
 
 const TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 5;
 
-type Config = { secret: string; sender: string; provider: MessagingProviderAdapter; template?: { name: string; language: string } };
+type Config = { secret: string; sender: string; provider: MessagingProviderAdapter; template?: { name: string; language: string }; fallback?: { sender: string; provider: MessagingProviderAdapter } };
 /** Only explicitly registered live adapters can be used; a WhatsApp auth template must be approved. */
 export function verificationConfig(): Config | null {
   const secret = process.env.AGENT_VERIFICATION_HMAC_SECRET || "";
   if (process.env.AGENT_PHONE_VERIFICATION_ENABLED !== "true" || process.env.MESSAGING_LIVE_ENABLED !== "true" || secret.length < 32) return null;
+  const smsKey = process.env.AGENT_VERIFICATION_PROVIDER_KEY || "";
+  const smsSender = process.env.AGENT_VERIFICATION_SENDER_ID || "";
+  const sms = smsKey && smsSender && liveProviderReady(smsKey) ? getMessagingProvider(smsKey) : null;
+  const fallback = sms?.live && sms.configured && sms.channel === "SMS" ? { sender: smsSender, provider: sms } : undefined;
   const waKey = process.env.AGENT_VERIFICATION_WHATSAPP_PROVIDER_KEY || "";
   const waSender = process.env.AGENT_VERIFICATION_WHATSAPP_SENDER_ID || "";
   const name = process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_NAME || "";
   const language = process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_LANGUAGE || "";
   if (waKey && waSender && /^[a-z0-9_]{1,128}$/.test(name) && /^[A-Za-z0-9_-]{2,20}$/.test(language) &&
-      process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_APPROVED === "true" && liveProviderReady(waKey)) {
-    const provider = getMessagingProvider(waKey);
-    if (provider.live && provider.configured && provider.channel === "WHATSAPP" && provider.supportsWhatsAppAuthenticationTemplates === true) {
-      return { secret, sender: waSender, provider, template: { name, language } };
+      process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_APPROVED === "true") {
+    const meta = waKey === META_WHATSAPP_KEY ? metaConfig() : null;
+    const provider = meta && waSender === meta.phoneNumberId ? createMetaWhatsAppProvider(meta) :
+      (waKey !== META_WHATSAPP_KEY && liveProviderReady(waKey) ? getMessagingProvider(waKey) : null);
+    if (provider && provider.live && provider.configured && provider.channel === "WHATSAPP" && provider.supportsWhatsAppAuthenticationTemplates === true) {
+      return { secret, sender: waSender, provider, template: { name, language }, fallback };
     }
   }
-  const key = process.env.AGENT_VERIFICATION_PROVIDER_KEY || "";
-  const sender = process.env.AGENT_VERIFICATION_SENDER_ID || "";
-  if (!sender || !key || !liveProviderReady(key)) return null;
-  const provider = getMessagingProvider(key);
-  return provider.live && provider.configured && provider.channel === "SMS" ? { secret, sender, provider } : null;
+  // A configured WhatsApp preference that fails validation must not silently switch channels.
+  if (waKey) return null;
+  return fallback ? { secret, ...fallback } : null;
 }
 
 function digest(secret: string, applicationId: string, nonce: string, code: string): string {
@@ -65,7 +70,7 @@ export async function issuePhoneChallenge(userId: string, config: Config): Promi
   const nonce = randomUUID();
   const codeDigest = digest(config.secret, app.id, nonce, code);
   const expiresAt = new Date(Date.now() + TTL_MS);
-  const channel = config.provider.channel;
+  let channel = config.provider.channel;
   if (channel !== "SMS" && channel !== "WHATSAPP") return "unavailable";
   if (channel === "WHATSAPP" && !config.template) return "unavailable";
   // One atomic claim per unexpired challenge. An uncertain outcome is never retried or switched
@@ -77,7 +82,7 @@ export async function issuePhoneChallenge(userId: string, config: Config): Promi
     ON CONFLICT ("applicationId") DO UPDATE SET
       "phoneE164" = EXCLUDED."phoneE164", "nonce" = EXCLUDED."nonce", "codeDigest" = EXCLUDED."codeDigest",
       "expiresAt" = EXCLUDED."expiresAt", "deliveryChannel" = EXCLUDED."deliveryChannel", "deliveryState" = 'PENDING',
-      "providerMessageId" = NULL, "sentAt" = NULL, "consumedAt" = NULL, "attempts" = 0
+      "providerMessageId" = NULL, "providerStatus" = NULL, "providerStatusAt" = NULL, "sentAt" = NULL, "consumedAt" = NULL, "attempts" = 0
     WHERE "AgentPhoneChallenge"."expiresAt" <= NOW()
     RETURNING "id"`;
   if (rows.length !== 1 || typeof rows[0].id !== "string") {
@@ -99,8 +104,24 @@ export async function issuePhoneChallenge(userId: string, config: Config): Promi
     await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING" }, data: { deliveryState: "UNKNOWN" } });
     return "unavailable";
   } finally { if (timeout) clearTimeout(timeout); }
+  // Fallback is allowed only for explicit, provider-confirmed non-acceptance. Timeouts,
+  // rate limits, ambiguous errors and malformed responses never lead to a second send.
+  if (channel === "WHATSAPP" && result.outcome === "FAILED" && result.safeToFallback === true && config.fallback) {
+    const switched = await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING", deliveryChannel: "WHATSAPP" }, data: { deliveryChannel: "SMS" } });
+    if (switched.count !== 1) return "unavailable";
+    channel = "SMS";
+    let fallbackTimeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      result = await Promise.race([config.fallback.provider.send({ to: app.phoneE164, channel: "SMS", senderId: config.fallback.sender,
+        idempotencyKey: `agent-phone-${nonce}-sms`, body: `Your JATA verification code is ${code}. It expires in 10 minutes. Do not share it.` }),
+        new Promise<never>((_, reject) => { fallbackTimeout = setTimeout(() => reject(new Error("Provider timed out")), 10_000); })]);
+    } catch {
+      await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING" }, data: { deliveryState: "UNKNOWN" } });
+      return "unavailable";
+    } finally { if (fallbackTimeout) clearTimeout(fallbackTimeout); }
+  }
   const accepted = result.outcome === "ACCEPTED" || result.outcome === "SENT";
-  const messageId = typeof result.providerMessageId === "string" && /^[A-Za-z0-9._:-]{1,200}$/.test(result.providerMessageId) && !result.providerMessageId.includes(code) && !result.providerMessageId.includes(app.phoneE164.replace(/\D/g, "")) ? result.providerMessageId : null;
+  const messageId = typeof result.providerMessageId === "string" && /^[A-Za-z0-9._:+/=-]{1,256}$/.test(result.providerMessageId) && !result.providerMessageId.includes(code) && !result.providerMessageId.includes(app.phoneE164.replace(/\D/g, "")) ? result.providerMessageId : null;
   const state = ["ACCEPTED", "SENT", "FAILED"].includes(result.outcome) ? result.outcome : "UNKNOWN";
   const marked = await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING" },
     data: { deliveryState: state, providerMessageId: messageId, ...(accepted ? { sentAt: new Date() } : {}) } });

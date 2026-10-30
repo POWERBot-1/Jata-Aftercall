@@ -39,10 +39,12 @@ describe("agent phone verification boundaries", () => {
     const wa = new MockMessagingProvider() as MockMessagingProvider & { supportsWhatsAppAuthenticationTemplates: boolean };
     wa.key = "wa-fixture"; wa.live = true; wa.channel = "WHATSAPP"; wa.supportsWhatsAppAuthenticationTemplates = true;
     registerProvider(sms); registerProvider(wa);
-    expect(verificationConfig()?.provider).toBe(sms);
+    expect(verificationConfig()).toBeNull();
     process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_APPROVED = "true";
     expect(verificationConfig()?.provider).toBe(wa);
     wa.supportsWhatsAppAuthenticationTemplates = false;
+    expect(verificationConfig()).toBeNull();
+    delete process.env.AGENT_VERIFICATION_WHATSAPP_PROVIDER_KEY;
     expect(verificationConfig()?.provider).toBe(sms);
     sms.configured = false;
     expect(verificationConfig()).toBeNull();

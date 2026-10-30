@@ -68,6 +68,9 @@ model AgentPhoneChallenge {
   deliveryChannel String?
   deliveryState String @default("UNKNOWN")
   providerMessageId String?
+  providerStatus String?
+  providerStatusAt DateTime?
+  webhookEvents AgentWhatsAppWebhookEvent[]
   expiresAt     DateTime
   sentAt        DateTime?
   consumedAt    DateTime?
@@ -75,6 +78,19 @@ model AgentPhoneChallenge {
   createdAt     DateTime @default(now())
 
   @@index([expiresAt])
+  @@index([providerMessageId])
+}
+
+model AgentWhatsAppWebhookEvent {
+  id String @id
+  challengeId String
+  challenge AgentPhoneChallenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  providerMessageId String
+  status String
+  eventAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([challengeId])
 }
 
 // A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.

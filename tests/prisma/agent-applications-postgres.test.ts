@@ -8,6 +8,7 @@ const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role:
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session }));
 import { GET, POST } from "@/app/api/agents/application/route";
+import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
 import { MockMessagingProvider } from "@/lib/messaging/providers";
 import { issuePhoneChallenge, confirmPhoneChallenge } from "@/lib/agents/phone-verification";
 import { allowAgentApplication } from "@/lib/agent-application-throttle";
@@ -38,6 +39,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     if (throttleKeys.length || userKeys.length) await p.agentRegistrationThrottle.deleteMany({ where: { key: { in: [...throttleKeys, ...userKeys] } } });
     if (originalSecret === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = originalSecret;
     await p.auditEvent.deleteMany({ where: { actorId: { in: users } } });
+    await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
     await p.agentApplication.deleteMany({ where: { userId: { in: users } } });
     await p.user.deleteMany({ where: { id: { in: users } } });
@@ -104,6 +106,39 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     expect(stored.codeDigest).not.toContain(code);
     expect(await confirmPhoneChallenge(user.id, code, secret)).toBe("verified");
     expect((await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } })).status).toBe("PENDING");
+  });
+
+  it("correlates webhook status once without activating the applicant", async () => {
+    const user = await p.user.create({ data: { email: `hook-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(user.id);
+    const app = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic Hook", phoneE164: "+254700000004", privacyAcknowledgedAt: new Date() } });
+    const messageId = `wamid.synthetic${uid()}`;
+    await p.agentPhoneChallenge.create({ data: { applicationId: app.id, phoneE164: app.phoneE164, nonce: uid(), codeDigest: "fixture", expiresAt: new Date(Date.now() + 60000), sentAt: new Date(), deliveryChannel: "WHATSAPP", deliveryState: "ACCEPTED", providerMessageId: messageId } });
+    const event = { id: messageId, status: "delivered" as const, timestamp: "1700000000" };
+    expect((await Promise.all([applyMetaStatus(event, "12345678"), applyMetaStatus(event, "12345678")])).sort()).toEqual(["applied", "duplicate"]);
+    expect(await applyMetaStatus({ ...event, status: "read", timestamp: "1700000001" }, "12345678")).toBe("applied");
+    expect(await applyMetaStatus({ ...event, status: "sent", timestamp: "1699999999" }, "12345678")).toBe("applied");
+    const challenge = await p.agentPhoneChallenge.findUniqueOrThrow({ where: { applicationId: app.id } });
+    expect(challenge.providerStatus).toBe("read");
+    expect(await p.agentWhatsAppWebhookEvent.count({ where: { challengeId: challenge.id } })).toBe(3);
+    expect((await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } })).phoneVerifiedAt).toBeNull();
+    expect(await applyMetaStatus({ ...event, id: "wamid.unknown" }, "12345678")).toBe("unmatched");
+  });
+
+  it("falls back to SMS only after explicit safe rejection, never after an unknown response", async () => {
+    const secret = "fallback-fixture-secret-at-least-32-chars";
+    for (const [i, safe] of [true, false].entries()) {
+      const phone = `+25470000001${i}`;
+      throttleKeys.push(createHmac("sha256", secret).update(`agent-phone-limit:v1:phone:${phone}`).digest("hex"));
+      const user = await p.user.create({ data: { email: `fallback-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(user.id);
+      const app = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic Fallback", phoneE164: phone, privacyAcknowledgedAt: new Date() } });
+      const wa = new MockMessagingProvider(); wa.channel = "WHATSAPP";
+      vi.spyOn(wa, "send").mockResolvedValue(safe ? { outcome: "FAILED", safeToFallback: true } : { outcome: "UNKNOWN" });
+      const sms = new MockMessagingProvider();
+      const result = await issuePhoneChallenge(user.id, { provider: wa, secret, sender: "fixture", template: { name: "auth", language: "en" }, fallback: { sender: "fixture", provider: sms } });
+      expect(result).toBe(safe ? "sent" : "unavailable");
+      expect(sms.sent).toHaveLength(safe ? 1 : 0);
+      expect((await p.agentPhoneChallenge.findUniqueOrThrow({ where: { applicationId: app.id } })).deliveryChannel).toBe(safe ? "SMS" : "WHATSAPP");
+    }
   });
 
   it("records an uncertain provider failure and refuses an immediate retry", async () => {

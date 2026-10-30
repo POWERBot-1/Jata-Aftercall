@@ -128,6 +128,7 @@ describe("runtime and schema guards", () => {
       "20261103000000_agent_application_review",
       "20261104000000_agent_phone_verification",
       "20261105000000_agent_verification_delivery",
+      "20261106000000_meta_whatsapp_webhooks",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -180,6 +181,7 @@ describe("runtime and schema guards", () => {
       "20261103000000_agent_application_review",
       "20261104000000_agent_phone_verification",
       "20261105000000_agent_verification_delivery",
+      "20261106000000_meta_whatsapp_webhooks",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
