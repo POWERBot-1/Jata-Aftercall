@@ -1050,6 +1050,39 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.customers.some((row: any) => row.id === "c_b1")).toBe(false);
   });
 
+  it("permits an active cashier with customer-management permission to create a tenant-scoped asset", async () => {
+    asCashier();
+    const before = rows("posCustomerAsset").length;
+    const response = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    expect(response.status).toBe(201);
+    expect(rows("posCustomerAsset")).toHaveLength(before + 1);
+    expect(rows("posCustomerAsset").at(-1)).toMatchObject({ businessId: "bizA", customerId: "c_a1", name: "Vehicle" });
+  });
+
+  it("requires customer-management permission to create customer assets", async () => {
+    rows("posStaff").find((row) => row.id === "st_a1")!.roleKey = "WAITER";
+    asCashier();
+    const before = rows("posCustomerAsset").length;
+    const response = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    expect(response.status).toBe(403);
+    expect(rows("posCustomerAsset")).toHaveLength(before);
+  });
+
+  it("refuses repayment and asset writes from inactive staff even when membership grants a privileged role", async () => {
+    rows("posStaff").find((row) => row.id === "st_a1")!.isActive = false;
+    rows("businessMember").find((row) => row.userId === "cashierA")!.role = "MANAGER";
+    rows("posCustomer").find((row) => row.id === "c_a1")!.balanceKES = 100;
+    asCashier();
+    const assets = rows("posCustomerAsset").length;
+    const payments = rows("posPayment").length;
+    const asset = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    const repayment = await call(await customerPost(post("bizA", "/customers/c_a1", { amountKES: 20, method: "cash" }), context("bizA", { customerId: "c_a1" })));
+    expect(asset.status).toBe(403);
+    expect(repayment.status).toBe(403);
+    expect(rows("posCustomerAsset")).toHaveLength(assets);
+    expect(rows("posPayment")).toHaveLength(payments);
+  });
+
   it("refuses inline image data hidden in POS customer-asset details before creating an asset", async () => {
     const before = rows("posCustomerAsset").length;
     const refused = await call(await customerPost(
