@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { baselineConfiguration } from "@/lib/pos/configuration";
-import { runReport } from "@/lib/pos/reporting";
+import { ReportLimitError, runReport } from "@/lib/pos/reporting";
 import * as store from "@/lib/pos/store";
 
 const from = new Date("2026-10-29T00:00:00Z");
@@ -19,16 +19,17 @@ describe("period refund payout report", () => {
     }));
   });
 
-  it("explicitly warns and sums only displayed rows when payout rows exceed the limit", async () => {
+  it("refuses truncated payouts rather than presenting a subtotal as a total", async () => {
     const row = { id: "p", saleId: "s", createdAt: from, method: "cash", amountKES: 2 };
-    vi.spyOn(store, "refundPayoutsForReport").mockResolvedValue(Array.from({ length: 5001 }, (_, i) => ({ ...row, id: `p${i}` })));
+    const query = vi.spyOn(store, "refundPayoutsForReport");
     const config = baselineConfiguration();
     config.capabilities.push("refunds");
+    query.mockResolvedValue(Array.from({ length: 5001 }, (_, i) => ({ ...row, id: `p${i}` })));
+    await expect(runReport("business-a", config, "refunds", { from, to })).rejects.toBeInstanceOf(ReportLimitError);
+    query.mockResolvedValue(Array.from({ length: 5000 }, (_, i) => ({ ...row, id: `p${i}` })));
     const report = await runReport("business-a", config, "refunds", { from, to });
-    expect(report.partial).toBe(true);
+    expect(report.partial).toBe(true); // Credit reversals and wallet refunds remain excluded.
     expect(report.rows).toHaveLength(5000);
     expect(report.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 10,000" }]));
-    expect(report.notice).toContain("More than 5,000 refund payouts match");
-    expect(report.notice).toContain("only the first 5,000 are shown and summed");
   });
 });

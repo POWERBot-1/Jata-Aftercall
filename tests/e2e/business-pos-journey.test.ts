@@ -1358,6 +1358,27 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     }
   }, 120_000);
 
+  it("21e-refund-cap — PostgreSQL refuses truncated refund totals and isolates tenants", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `refund-cap-${runId}`;
+    const date = new Date("2011-05-01T12:00:00.000Z");
+    const range = { from: new Date("2011-05-01T00:00:00.000Z"), to: new Date("2011-05-01T23:59:59.999Z") };
+    const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+    if (!config.capabilities.includes("refunds")) config.capabilities.push("refunds");
+    try {
+      await prisma.posPayment.createMany({ data: Array.from({ length: 5000 }, () => ({ businessId, direction: "OUT", purpose: "REFUND", status: "SETTLED", method: "cash", amountKES: 1, notes: marker, createdAt: date })) });
+      const report = await runReport(businessId, config, "refunds", range);
+      expect(report.rows).toHaveLength(5000);
+      expect(report.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 5,000" }]));
+      const other = await runReport(ctx.stranger.businessId, config, "refunds", range);
+      expect(other.rows).toHaveLength(0);
+      await prisma.posPayment.create({ data: { businessId, direction: "OUT", purpose: "REFUND", status: "SETTLED", method: "cash", amountKES: 1, notes: marker, createdAt: date } });
+      await expect(runReport(businessId, config, "refunds", range)).rejects.toThrow(/5,000-record safety limit/);
+    } finally {
+      await prisma.posPayment.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
   it("21e-fifo — real PostgreSQL credit ageing excludes a fully paid older debit", async () => {
     const businessId = ctx.owner.businessId;
     const marker = `fifo-${runId}`;

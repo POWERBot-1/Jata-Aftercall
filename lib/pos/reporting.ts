@@ -220,8 +220,10 @@ export async function runReport(
       // refund payments, so a mixed-tender refund can have multiple rows and must be summed only
       // once. Credit reversals and external wallet flows are not represented by these rows.
       const payments = await store.refundPayoutsForReport(businessId, range, undefined, { branchId });
-      const truncated = payments.length > store.REPORT_ROW_LIMIT;
-      const refunds = payments.slice(0, store.REPORT_ROW_LIMIT);
+      // Fetch one beyond the limit so that exactly 5,000 can be distinguished from
+      // an incomplete result. Never present a truncated subtotal as a financial total.
+      if (payments.length > store.REPORT_ROW_LIMIT) throw new ReportLimitError();
+      const refunds = payments;
       const totalKES = refunds.reduce((sum: number, entry: any) => sum + Number(entry.amountKES ?? 0), 0);
       return payload(definition, range, {
         partial: true,
@@ -236,7 +238,7 @@ export async function runReport(
           method: entry.method,
           amount: formatKES(Number(entry.amountKES ?? 0)),
         })),
-        notice: `Settled POS refund payments recorded during this period, including refunds of earlier sales. Multiple tenders produce multiple rows. Credit reversals, returned goods and payment-wallet refunds are not included; this is not a complete refund-liability report. ${truncated ? "More than 5,000 refund payouts match; only the first 5,000 are shown and summed. Choose a shorter period." : "At most 5,000 refund payouts can be shown; this period is within that limit."}`,
+        notice: `Settled POS refund payments recorded during this period, including refunds of earlier sales. Multiple tenders produce multiple rows. Credit reversals, returned goods and payment-wallet refunds are not included; this is not a complete refund-liability report. At most 5,000 refund payouts can be shown; this period is within that limit.`,
       });
     }
 
