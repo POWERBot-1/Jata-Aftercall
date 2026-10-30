@@ -22,6 +22,9 @@ export type SendRequest = {
   campaignId?: string;
   channel: MessagingChannel;
   metadata?: Record<string, string>;
+  /** WhatsApp authentication templates are passed only to explicitly capable adapters. Values may
+   * contain OTPs: adapters MUST NOT persist or log parameters or raw requests. */
+  authenticationTemplate?: { name: string; language: string; code: string };
 };
 
 export type SendOutcome = "ACCEPTED" | "SENT" | "FAILED" | "UNKNOWN";
@@ -61,6 +64,8 @@ export type MessagingProviderAdapter = {
   /** False for mock/sandbox adapters and for a live adapter without credentials. */
   live: boolean;
   configured: boolean;
+  /** Explicit opt-in by an approved adapter that enforces WhatsApp authentication templates. */
+  supportsWhatsAppAuthenticationTemplates?: boolean;
   send(request: SendRequest): Promise<SendResult>;
   status(providerMessageId: string): Promise<ProviderDeliveryStatus>;
   health(): Promise<ProviderHealth>;

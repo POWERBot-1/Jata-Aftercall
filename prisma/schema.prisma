@@ -65,6 +65,9 @@ model AgentPhoneChallenge {
   phoneE164     String
   nonce         String
   codeDigest    String
+  deliveryChannel String?
+  deliveryState String @default("UNKNOWN")
+  providerMessageId String?
   expiresAt     DateTime
   sentAt        DateTime?
   consumedAt    DateTime?

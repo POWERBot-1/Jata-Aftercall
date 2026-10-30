@@ -82,6 +82,49 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     expect((await p.agentApplication.findUniqueOrThrow({ where: { userId: second.id } })).phoneVerifiedAt).toBeNull();
   });
 
+  it("uses a synthetic WhatsApp authentication template once under concurrent requests", async () => {
+    const secret = "whatsapp-synthetic-only-secret-at-least-32";
+    const phone = "+254700000002";
+    throttleKeys.push(createHmac("sha256", secret).update(`agent-phone-limit:v1:phone:${phone}`).digest("hex"));
+    const user = await p.user.create({ data: { email: `wa-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    users.push(user.id);
+    const app = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic WhatsApp", phoneE164: phone, privacyAcknowledgedAt: new Date() } });
+    const provider = new MockMessagingProvider();
+    provider.channel = "WHATSAPP";
+    const config = { provider, secret, sender: "fixture", template: { name: "fixture_auth", language: "en" } };
+    await Promise.all([issuePhoneChallenge(user.id, config), issuePhoneChallenge(user.id, config)]);
+    expect(provider.sent).toHaveLength(1);
+    expect(provider.sent[0].body).toBe("");
+    expect(provider.sent[0].authenticationTemplate?.name).toBe("fixture_auth");
+    const code = provider.sent[0].authenticationTemplate!.code;
+    const stored = await p.agentPhoneChallenge.findUniqueOrThrow({ where: { applicationId: app.id } });
+    expect(stored.deliveryChannel).toBe("WHATSAPP");
+    expect(stored.deliveryState).toBe("ACCEPTED");
+    expect(stored.providerMessageId).toBeTruthy();
+    expect(stored.codeDigest).not.toContain(code);
+    expect(await confirmPhoneChallenge(user.id, code, secret)).toBe("verified");
+    expect((await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } })).status).toBe("PENDING");
+  });
+
+  it("records an uncertain provider failure and refuses an immediate retry", async () => {
+    const secret = "uncertain-fixture-secret-more-than-32-chars";
+    const phone = "+254700000003";
+    throttleKeys.push(createHmac("sha256", secret).update(`agent-phone-limit:v1:phone:${phone}`).digest("hex"));
+    const user = await p.user.create({ data: { email: `unknown-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    users.push(user.id);
+    const app = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic Unknown", phoneE164: phone, privacyAcknowledgedAt: new Date() } });
+    const provider = new MockMessagingProvider();
+    const send = vi.spyOn(provider, "send").mockRejectedValue(new Error("simulated timeout"));
+    const config = { provider, secret, sender: "fixture" };
+    expect(await issuePhoneChallenge(user.id, config)).toBe("unavailable");
+    expect(await issuePhoneChallenge(user.id, config)).toBe("unavailable");
+    expect(send).toHaveBeenCalledTimes(1);
+    const record = await p.agentPhoneChallenge.findUniqueOrThrow({ where: { applicationId: app.id } });
+    expect(record.deliveryState).toBe("UNKNOWN");
+    expect(record.sentAt).toBeNull();
+    expect(record.providerMessageId).toBeNull();
+  });
+
   it("rejects expired, unsent and brute-forced synthetic challenges", async () => {
     const secret = "another-test-only-secret-at-least-32-chars";
     const phone = "+254700000001";
@@ -93,11 +136,17 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     expect(await issuePhoneChallenge(user.id, { provider: failed, secret, sender: "fixture" })).toBe("unavailable");
     const unsentCode = failed.sent[0].body.match(/\b\d{6}\b/)![0];
     expect(await confirmPhoneChallenge(user.id, unsentCode, secret)).toBe("invalid");
+    // No duplicate send is attempted after rejection until the previous challenge expires.
     const mock = new MockMessagingProvider();
+    expect(await issuePhoneChallenge(user.id, { provider: mock, secret, sender: "fixture" })).toBe("unavailable");
+    expect(mock.sent).toHaveLength(0);
+    await p.agentPhoneChallenge.update({ where: { applicationId: app.id }, data: { expiresAt: new Date(0) } });
     expect(await issuePhoneChallenge(user.id, { provider: mock, secret, sender: "fixture" })).toBe("sent");
     const code = mock.sent[0].body.match(/\b\d{6}\b/)![0];
     await p.agentPhoneChallenge.update({ where: { applicationId: app.id }, data: { expiresAt: new Date(0) } });
     expect(await confirmPhoneChallenge(user.id, code, secret)).toBe("invalid");
+    // Advance the isolated throttle window too; no production time or policy is changed.
+    await p.agentRegistrationThrottle.update({ where: { key: throttleKeys[throttleKeys.length - 1] }, data: { expiresAt: new Date(0) } });
     expect(await issuePhoneChallenge(user.id, { provider: mock, secret, sender: "fixture" })).toBe("sent");
     const newCode = mock.sent[1].body.match(/\b\d{6}\b/)![0];
     const wrong = newCode === "000000" ? "000001" : "000000";

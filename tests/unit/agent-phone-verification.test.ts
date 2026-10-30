@@ -25,6 +25,28 @@ describe("agent phone verification boundaries", () => {
     registerProvider(new MockMessagingProvider());
     expect(verificationConfig()).toBeNull();
   });
+  it("prefers explicitly template-capable WhatsApp and falls back only to configured SMS", () => {
+    process.env.AGENT_PHONE_VERIFICATION_ENABLED = "true";
+    process.env.MESSAGING_LIVE_ENABLED = "true";
+    process.env.AGENT_VERIFICATION_HMAC_SECRET = "synthetic-secret-with-more-than-32-characters";
+    process.env.AGENT_VERIFICATION_PROVIDER_KEY = "sms-fixture";
+    process.env.AGENT_VERIFICATION_SENDER_ID = "sms";
+    process.env.AGENT_VERIFICATION_WHATSAPP_PROVIDER_KEY = "wa-fixture";
+    process.env.AGENT_VERIFICATION_WHATSAPP_SENDER_ID = "wa";
+    process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_NAME = "auth_fixture";
+    process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_LANGUAGE = "en";
+    const sms = new MockMessagingProvider(); sms.key = "sms-fixture"; sms.live = true;
+    const wa = new MockMessagingProvider() as MockMessagingProvider & { supportsWhatsAppAuthenticationTemplates: boolean };
+    wa.key = "wa-fixture"; wa.live = true; wa.channel = "WHATSAPP"; wa.supportsWhatsAppAuthenticationTemplates = true;
+    registerProvider(sms); registerProvider(wa);
+    expect(verificationConfig()?.provider).toBe(sms);
+    process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_APPROVED = "true";
+    expect(verificationConfig()?.provider).toBe(wa);
+    wa.supportsWhatsAppAuthenticationTemplates = false;
+    expect(verificationConfig()?.provider).toBe(sms);
+    sms.configured = false;
+    expect(verificationConfig()).toBeNull();
+  });
   it("denies anonymous and cross-origin requests without accessing storage", async () => {
     expect((await requestCode(request("https://evil.test"))).status).toBe(403);
     mocks.session.mockResolvedValue(null);

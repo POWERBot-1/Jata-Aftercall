@@ -5,17 +5,27 @@ import { getMessagingProvider, liveProviderReady, type MessagingProviderAdapter 
 const TTL_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 5;
 
-type Config = { secret: string; sender: string; provider: MessagingProviderAdapter };
-/** The mock/sandbox registry can never establish a live ownership claim. */
+type Config = { secret: string; sender: string; provider: MessagingProviderAdapter; template?: { name: string; language: string } };
+/** Only explicitly registered live adapters can be used; a WhatsApp auth template must be approved. */
 export function verificationConfig(): Config | null {
-  const key = process.env.AGENT_VERIFICATION_PROVIDER_KEY || "";
   const secret = process.env.AGENT_VERIFICATION_HMAC_SECRET || "";
+  if (process.env.AGENT_PHONE_VERIFICATION_ENABLED !== "true" || process.env.MESSAGING_LIVE_ENABLED !== "true" || secret.length < 32) return null;
+  const waKey = process.env.AGENT_VERIFICATION_WHATSAPP_PROVIDER_KEY || "";
+  const waSender = process.env.AGENT_VERIFICATION_WHATSAPP_SENDER_ID || "";
+  const name = process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_NAME || "";
+  const language = process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_LANGUAGE || "";
+  if (waKey && waSender && /^[a-z0-9_]{1,128}$/.test(name) && /^[A-Za-z0-9_-]{2,20}$/.test(language) &&
+      process.env.AGENT_VERIFICATION_WHATSAPP_TEMPLATE_APPROVED === "true" && liveProviderReady(waKey)) {
+    const provider = getMessagingProvider(waKey);
+    if (provider.live && provider.configured && provider.channel === "WHATSAPP" && provider.supportsWhatsAppAuthenticationTemplates === true) {
+      return { secret, sender: waSender, provider, template: { name, language } };
+    }
+  }
+  const key = process.env.AGENT_VERIFICATION_PROVIDER_KEY || "";
   const sender = process.env.AGENT_VERIFICATION_SENDER_ID || "";
-  if (process.env.AGENT_PHONE_VERIFICATION_ENABLED !== "true" || process.env.MESSAGING_LIVE_ENABLED !== "true" ||
-      secret.length < 32 || !sender || !key || !liveProviderReady(key)) return null;
+  if (!sender || !key || !liveProviderReady(key)) return null;
   const provider = getMessagingProvider(key);
-  if (!provider.live || !provider.configured || provider.channel !== "SMS") return null;
-  return { secret, sender, provider };
+  return provider.live && provider.configured && provider.channel === "SMS" ? { secret, sender, provider } : null;
 }
 
 function digest(secret: string, applicationId: string, nonce: string, code: string): string {
@@ -55,17 +65,46 @@ export async function issuePhoneChallenge(userId: string, config: Config): Promi
   const nonce = randomUUID();
   const codeDigest = digest(config.secret, app.id, nonce, code);
   const expiresAt = new Date(Date.now() + TTL_MS);
-  await prisma.agentPhoneChallenge.upsert({
-    where: { applicationId: app.id },
-    create: { applicationId: app.id, phoneE164: app.phoneE164, nonce, codeDigest, expiresAt },
-    update: { phoneE164: app.phoneE164, nonce, codeDigest, expiresAt, sentAt: null, consumedAt: null, attempts: 0 },
-  });
-  const result = await config.provider.send({ to: app.phoneE164, channel: "SMS", senderId: config.sender,
-    idempotencyKey: `agent-phone-${nonce}`, body: `Your JATA verification code is ${code}. It expires in 10 minutes. Do not share it.` });
-  if (result.outcome !== "ACCEPTED" && result.outcome !== "SENT") return "unavailable";
-  // A concurrent issue invalidates the older message; never mark a newer challenge as sent.
-  const marked = await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, sentAt: null }, data: { sentAt: new Date() } });
-  return marked.count === 1 ? "sent" : "unavailable";
+  const channel = config.provider.channel;
+  if (channel !== "SMS" && channel !== "WHATSAPP") return "unavailable";
+  if (channel === "WHATSAPP" && !config.template) return "unavailable";
+  // One atomic claim per unexpired challenge. An uncertain outcome is never retried or switched
+  // to another channel until expiry; otherwise a timeout could send duplicate messages.
+  const id = randomUUID();
+  const rows: Array<{ id: string }> = await prisma.$queryRaw`
+    INSERT INTO "AgentPhoneChallenge" ("id", "applicationId", "phoneE164", "nonce", "codeDigest", "expiresAt", "deliveryChannel", "deliveryState")
+    VALUES (${id}, ${app.id}, ${app.phoneE164}, ${nonce}, ${codeDigest}, ${expiresAt}, ${channel}, 'PENDING')
+    ON CONFLICT ("applicationId") DO UPDATE SET
+      "phoneE164" = EXCLUDED."phoneE164", "nonce" = EXCLUDED."nonce", "codeDigest" = EXCLUDED."codeDigest",
+      "expiresAt" = EXCLUDED."expiresAt", "deliveryChannel" = EXCLUDED."deliveryChannel", "deliveryState" = 'PENDING',
+      "providerMessageId" = NULL, "sentAt" = NULL, "consumedAt" = NULL, "attempts" = 0
+    WHERE "AgentPhoneChallenge"."expiresAt" <= NOW()
+    RETURNING "id"`;
+  if (rows.length !== 1 || typeof rows[0].id !== "string") {
+    const existing = await prisma.agentPhoneChallenge.findUnique({ where: { applicationId: app.id }, select: { sentAt: true, expiresAt: true, consumedAt: true } });
+    return existing?.sentAt && !existing.consumedAt && existing.expiresAt > new Date() ? "sent" : "unavailable";
+  }
+  let result;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // The provider may still finish after a timeout: the persisted UNKNOWN state prevents an
+    // immediate resend or cross-channel fallback while the outcome is uncertain.
+    result = await Promise.race([config.provider.send({ to: app.phoneE164, channel, senderId: config.sender,
+      idempotencyKey: `agent-phone-${nonce}`,
+      body: channel === "SMS" ? `Your JATA verification code is ${code}. It expires in 10 minutes. Do not share it.` : "",
+      ...(config.template ? { authenticationTemplate: { ...config.template, code } } : {}) }),
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Provider timed out")), 10_000); }),
+    ]);
+  } catch {
+    await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING" }, data: { deliveryState: "UNKNOWN" } });
+    return "unavailable";
+  } finally { if (timeout) clearTimeout(timeout); }
+  const accepted = result.outcome === "ACCEPTED" || result.outcome === "SENT";
+  const messageId = typeof result.providerMessageId === "string" && /^[A-Za-z0-9._:-]{1,200}$/.test(result.providerMessageId) && !result.providerMessageId.includes(code) && !result.providerMessageId.includes(app.phoneE164.replace(/\D/g, "")) ? result.providerMessageId : null;
+  const state = ["ACCEPTED", "SENT", "FAILED"].includes(result.outcome) ? result.outcome : "UNKNOWN";
+  const marked = await prisma.agentPhoneChallenge.updateMany({ where: { applicationId: app.id, codeDigest, deliveryState: "PENDING" },
+    data: { deliveryState: state, providerMessageId: messageId, ...(accepted ? { sentAt: new Date() } : {}) } });
+  return accepted && marked.count === 1 ? "sent" : "unavailable";
 }
 
 /** One-time compare-and-set, including audit and globally unique verified phone in one transaction. */
