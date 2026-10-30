@@ -47,16 +47,18 @@ describe("application route", () => {
     expect(mocks.audit).toHaveBeenCalledWith({ data: { actorId: "u1", action: "AGENT_APPLICATION_SUBMITTED", targetType: "AGENT_APPLICATION", targetId: "a1" } });
   });
   it("treats a repeated application as a no-op and never updates contact details", async () => {
-    mocks.find.mockResolvedValue({ id: "existing" });
-    expect((await POST(request(valid))).status).toBe(200);
+    mocks.find.mockResolvedValue({ status: "REJECTED" });
+    const response = await POST(request(valid));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "REJECTED" });
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.audit).not.toHaveBeenCalled();
   });
   it("resolves a concurrent uniqueness conflict only when this account has an application", async () => {
     mocks.transaction.mockRejectedValue({ code: "P2002" });
-    mocks.find.mockResolvedValue({ id: "winner" });
+    mocks.find.mockResolvedValue({ status: "PENDING" });
     expect((await POST(request(valid))).status).toBe(200);
-    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "u1" }, select: { id: true } });
+    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "u1" }, select: { status: true } });
     mocks.find.mockResolvedValue(null);
     expect((await POST(request(valid))).status).toBe(503);
   });

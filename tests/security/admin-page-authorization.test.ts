@@ -22,12 +22,17 @@ vi.mock("@/lib/auth", () => ({
   SESSION_COOKIE_NAME: "jata_session",
 }));
 
-const queried = vi.hoisted(() => ({ calls: 0 }));
+const queried = vi.hoisted(() => ({ calls: 0, databaseRole: "ADMIN" }));
 vi.mock("@/lib/db", () => {
   const model = new Proxy({}, {
     get: () => async () => { queried.calls += 1; return Object.assign([], { _sum: { amount: 0 }, _count: 0 }); },
   });
-  return { default: new Proxy({}, { get: () => model }) };
+  const user = new Proxy({}, {
+    get: (_target, method) => method === "findUnique"
+      ? async () => { queried.calls += 1; return { role: queried.databaseRole }; }
+      : Reflect.get(model, method),
+  });
+  return { default: new Proxy({}, { get: (_target, name) => name === "user" ? user : model }) };
 });
 vi.mock("@/components/AdminBusinessActions", () => ({ default: () => null }));
 vi.mock("@/components/PlansClient", () => ({ default: () => null }));
@@ -36,6 +41,7 @@ const pages: Array<[string, () => Promise<{ default: (props: any) => Promise<unk
   ["/admin", () => import("@/app/admin/page")],
   ["/admin/businesses", () => import("@/app/admin/businesses/page")],
   ["/admin/customers", () => import("@/app/admin/customers/page")],
+  ["/admin/agents", () => import("@/app/admin/agents/page")],
   ["/admin/payments", () => import("@/app/admin/payments/page")],
   ["/admin/plans", () => import("@/app/admin/plans/page")],
   ["/admin/subscriptions", () => import("@/app/admin/subscriptions/page")],
@@ -47,7 +53,7 @@ const pages: Array<[string, () => Promise<{ default: (props: any) => Promise<unk
 ];
 
 describe("every admin page enforces ADMIN itself, before reading data", () => {
-  beforeEach(() => { queried.calls = 0; mocks.session = null; });
+  beforeEach(() => { queried.calls = 0; queried.databaseRole = "ADMIN"; mocks.session = null; });
 
   it.each(pages)("%s refuses an anonymous request without querying", async (_path, load) => {
     const { default: Page } = await load();
@@ -67,6 +73,14 @@ describe("every admin page enforces ADMIN itself, before reading data", () => {
     const { default: Page } = await load();
     await expect(Page({ searchParams: Promise.resolve({}) })).resolves.toBeTruthy();
     expect(queried.calls).toBeGreaterThan(0);
+  });
+
+  it("agent applications refuses a stale ADMIN session before reading applications", async () => {
+    mocks.session = { userId: "a1", email: "admin@example.com", role: "ADMIN" };
+    queried.databaseRole = "CUSTOMER";
+    const { default: Page } = await import("@/app/admin/agents/page");
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toMatchObject({ to: "/dashboard" });
+    expect(queried.calls).toBe(1);
   });
 
   it("no page under app/admin skips the guard (new pages cannot forget it)", async () => {

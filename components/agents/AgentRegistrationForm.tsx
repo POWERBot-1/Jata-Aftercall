@@ -30,7 +30,7 @@ export default function AgentRegistrationForm() {
     <h2>Request processed</h2>
     <p>If this email was not already registered, an account and application have been created. If it was already registered, the existing account was not changed. Sign in with your existing credentials, then return to the application page.</p>
     <p>Phone verification and agent activation are not available yet. No commission or referral entitlement is created.</p>
-    <Link href="/login">Sign in</Link>{" · "}<Link href="/agents/apply">Application page</Link>
+    <Link href="/login?next=agents">Sign in</Link>{" · "}<Link href="/agents/apply">Application page</Link>
   </div>;
   return <form onSubmit={submit} className="mk-prose">
     <p>A business is not required. This records an application only; phone verification, activation, programme terms and referral tools are not yet available.</p>

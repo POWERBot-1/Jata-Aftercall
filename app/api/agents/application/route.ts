@@ -49,19 +49,21 @@ export async function POST(req: Request) {
   try {
     // Unique userId makes retries and concurrent submissions idempotent. The audit and application
     // are committed together; no submitted personal details are copied to the audit record.
-    await prisma.$transaction(async (tx: typeof prisma) => {
-      const existing = await tx.agentApplication.findUnique({ where: { userId: session.userId }, select: { id: true } });
-      if (existing) return;
+    const status = await prisma.$transaction(async (tx: typeof prisma) => {
+      const existing = await tx.agentApplication.findUnique({ where: { userId: session.userId }, select: { status: true } });
+      if (existing) return existing.status;
       const application = await tx.agentApplication.create({ data: { userId: session.userId, ...fields, privacyAcknowledgedAt: new Date() }, select: { id: true } });
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_APPLICATION_SUBMITTED", targetType: "AGENT_APPLICATION", targetId: application.id } });
+      return "PENDING";
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, status });
   } catch (error) {
     // A concurrent submission can win the unique constraint. Only return success when this account
     // now has an application, never when another invariant or the audit write failed.
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       try {
-        if (await prisma.agentApplication.findUnique({ where: { userId: session.userId }, select: { id: true } })) return NextResponse.json({ ok: true });
+        const existing = await prisma.agentApplication.findUnique({ where: { userId: session.userId }, select: { status: true } });
+        if (existing) return NextResponse.json({ ok: true, status: existing.status });
       } catch { /* report unavailable below */ }
     }
     return NextResponse.json({ error: "We could not save your application. Please try again." }, { status: 503 });

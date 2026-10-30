@@ -7,9 +7,12 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Log in" };
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  const params = await searchParams;
+  // Only an explicit local destination is permitted; never use an arbitrary next URL.
+  const destination = params.next === "agents" ? "/agents/dashboard" : "/dashboard";
   const session = await getSession();
-  if (session) redirect("/dashboard");
+  if (session) redirect(destination);
   return (
     <WorkspaceAuthShell
       title="Welcome back"
@@ -36,7 +39,7 @@ export default async function LoginPage() {
         </>
       }
     >
-      <LoginForm />
+      <LoginForm destination={destination} />
     </WorkspaceAuthShell>
   );
 }

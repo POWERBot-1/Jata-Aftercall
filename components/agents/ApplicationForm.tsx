@@ -49,16 +49,16 @@ export default function ApplicationForm() {
       if (!response.ok) {
         if (response.status === 401) setStatus("signed-out");
         else setMessage(data.error || "Unable to submit. Please try again.");
-      } else setStatus("submitted");
+      } else setStatus(data.status === "REJECTED" ? "rejected" : "submitted");
     } catch { setMessage("Connection interrupted. Please try again; repeat submissions will not create another application."); }
     finally { setBusy(false); }
   }
 
   if (status === "loading") return <p role="status">Checking your application…</p>;
-  if (status === "signed-out") return <div className="mk-prose"><p>Sign in with an existing JATA AFTERCALL account to apply. A separate agent-only registration path may be available when enabled.</p><Link href="/login">Sign in</Link>{" · "}<Link href="/agents/register">Agent-only registration</Link></div>;
+  if (status === "signed-out") return <div className="mk-prose"><p>Sign in with an existing JATA AFTERCALL account to apply. A separate agent-only registration path may be available when enabled.</p><Link href="/login?next=agents">Sign in</Link>{" · "}<Link href="/agents/register">Agent-only registration</Link></div>;
   if (status === "error") return <div role="alert"><p>We could not check your application. Please try again.</p><button type="button" className="mk-btn" onClick={() => { setStatus("loading"); void loadStatus(); }}>Try again</button></div>;
   if (status === "rejected") return <div role="status" className="mk-prose"><h2>Application rejected</h2><p>This application was rejected and has not activated an agent account. No referral or commission entitlement has been created.</p><Link href="/contact">Support options</Link></div>;
-  if (status === "submitted") return <div role="status" className="mk-prose"><h2>Application received</h2><p>Your phone is not verified and you are not an active agent. Self-service phone verification, agent terms and referral tools are not yet available. Submitting this application does not guarantee activation or commission.</p></div>;
+  if (status === "submitted") return <div role="status" className="mk-prose"><h2>Application received</h2><p>Your phone is not verified and you are not an active agent. Self-service phone verification, agent terms and referral tools are not yet available. Submitting this application does not guarantee activation or commission.</p><Link href="/agents/dashboard">View application status</Link></div>;
   return (
     <form onSubmit={submit} className="mk-prose">
       <p>Applications can be recorded, but activation and phone verification are not yet available. Do not submit if you do not want your details stored while these features are being developed.</p>

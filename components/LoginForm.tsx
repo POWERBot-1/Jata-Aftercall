@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
-export default function LoginForm() {
+export default function LoginForm({ destination = "/dashboard" }: { destination?: "/dashboard" | "/agents/dashboard" }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function LoginForm() {
         setErr(data.error || "We couldn't sign you in. Please try again.");
         return;
       }
-      router.push("/dashboard");
+      router.push(destination);
       router.refresh();
     } catch {
       setErr("We couldn't sign you in. Please try again.");
