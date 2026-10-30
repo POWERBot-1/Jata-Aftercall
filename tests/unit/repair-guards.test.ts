@@ -129,6 +129,7 @@ describe("runtime and schema guards", () => {
       "20261104000000_agent_phone_verification",
       "20261105000000_agent_verification_delivery",
       "20261106000000_meta_whatsapp_webhooks",
+      "20261107000000_agent_activation_review",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -182,9 +183,15 @@ describe("runtime and schema guards", () => {
       "20261104000000_agent_phone_verification",
       "20261105000000_agent_verification_delivery",
       "20261106000000_meta_whatsapp_webhooks",
+      "20261107000000_agent_activation_review",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
-      if (migration === "20260930000000_commerce_baseline") {
+      if (migration === "20261107000000_agent_activation_review") {
+        const previousConstraint = 'ALTER TABLE "AgentApplication" DROP CONSTRAINT "AgentApplication_status_check";';
+        expect(sql).toContain(previousConstraint);
+        expect(sql).toContain('CHECK ("status" IN (\'PENDING\', \'REJECTED\', \'ACTIVE\', \'SUSPENDED\'))');
+        sql = sql.replace(previousConstraint, "");
+      } else if (migration === "20260930000000_commerce_baseline") {
         for (const line of authorizedBackfill) {
           expect(sql).toContain(line);
           sql = sql.replace(line, "");

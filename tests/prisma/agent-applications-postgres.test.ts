@@ -12,6 +12,7 @@ import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
 import { MockMessagingProvider } from "@/lib/messaging/providers";
 import { issuePhoneChallenge, confirmPhoneChallenge } from "@/lib/agents/phone-verification";
 import { allowAgentApplication } from "@/lib/agent-application-throttle";
+import { POST as decide } from "@/app/api/admin/agents/applications/[id]/decision/route";
 import { POST as reject } from "@/app/api/admin/agents/applications/[id]/reject/route";
 
 const p = realPrismaConfigured ? sharedPrisma() : null;
@@ -106,6 +107,40 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     expect(stored.codeDigest).not.toContain(code);
     expect(await confirmPhoneChallenge(user.id, code, secret)).toBe("verified");
     expect((await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } })).status).toBe("PENDING");
+  });
+
+  it("requires separate reviewed, verified activation and serializes decisions with audit", async () => {
+    const admin = await p.user.create({ data: { email: `reviewer-${uid()}@test.invalid`, passwordHash: "test-only", role: "ADMIN" } });
+    const applicant = await p.user.create({ data: { email: `reviewee-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    users.push(admin.id, applicant.id);
+    const app = await p.agentApplication.create({ data: { userId: applicant.id, fullName: "Review Fixture", phoneE164: "+254700000099", privacyAcknowledgedAt: new Date() } });
+    const params = Promise.resolve({ id: app.id });
+    const approve = () => request(`/api/admin/agents/applications/${app.id}/decision`, { action: "approve", reason: "MANUAL_ELIGIBILITY_REVIEW" });
+    const suspend = () => request(`/api/admin/agents/applications/${app.id}/decision`, { action: "suspend", reason: "COMPLIANCE_REVIEW" });
+    const old = process.env.AGENT_ACTIVATION_ENABLED;
+    try {
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      delete process.env.AGENT_ACTIVATION_ENABLED;
+      expect((await decide(approve(), { params })).status).toBe(503);
+      process.env.AGENT_ACTIVATION_ENABLED = "true";
+      expect((await decide(approve(), { params })).status).toBe(409);
+      await p.agentApplication.update({ where: { id: app.id }, data: { verifiedPhoneE164: app.phoneE164, phoneVerifiedAt: new Date() } });
+      mock.session = { userId: applicant.id, role: "ADMIN", email: applicant.email };
+      expect((await decide(approve(), { params })).status).toBe(403); // database role, not session
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      const decisions = await Promise.all([decide(approve(), { params }), decide(approve(), { params })]);
+      expect(decisions.map((r) => r.status)).toEqual([200, 200]);
+      expect(await p.auditEvent.count({ where: { actorId: admin.id, action: "AGENT_APPLICATION_APPROVED", targetId: app.id } })).toBe(1);
+      expect((await p.user.findUniqueOrThrow({ where: { id: applicant.id } })).role).toBe("CUSTOMER");
+      delete process.env.AGENT_ACTIVATION_ENABLED;
+      expect((await decide(suspend(), { params })).status).toBe(200);
+      expect((await decide(suspend(), { params })).status).toBe(200);
+      expect(await p.auditEvent.count({ where: { actorId: admin.id, action: "AGENT_APPLICATION_SUSPENDED", targetId: app.id } })).toBe(1);
+      process.env.AGENT_ACTIVATION_ENABLED = "true";
+      expect((await decide(approve(), { params })).status).toBe(409);
+      const selfApp = await p.agentApplication.create({ data: { userId: admin.id, fullName: "Admin Fixture", phoneE164: "+254700000098", verifiedPhoneE164: "+254700000098", phoneVerifiedAt: new Date(), privacyAcknowledgedAt: new Date() } });
+      expect((await decide(request(`/api/admin/agents/applications/${selfApp.id}/decision`, { action: "approve", reason: "MANUAL_ELIGIBILITY_REVIEW" }), { params: Promise.resolve({ id: selfApp.id }) })).status).toBe(403);
+    } finally { if (old === undefined) delete process.env.AGENT_ACTIVATION_ENABLED; else process.env.AGENT_ACTIVATION_ENABLED = old; mock.session = null; }
   });
 
   it("correlates webhook status once without activating the applicant", async () => {

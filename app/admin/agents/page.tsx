@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 import { AdminPage } from "@/components/admin/AdminUI";
+import ReviewApplication from "@/components/agents/ReviewApplication";
 import RejectApplication from "@/components/agents/RejectApplication";
 import { WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 
@@ -31,11 +32,12 @@ export default async function AgentApplications({ searchParams }: { searchParams
   }
   const hasNext = rows.length > PAGE_SIZE;
   return <AdminPage title="Agent applications" meta="Phone verification does not activate applicants.">
-    <WorkspacePanel title="Applications" meta="Phone numbers are masked. Eligibility review and activation are not yet available.">
+    <WorkspacePanel title="Applications" meta="Phone numbers are masked. Manual review requires a verified phone and privacy acknowledgement. Approval is disabled unless separately enabled.">
       {rows.length === 0 ? <p>No applications on this page.</p> : <ul>
         {rows.slice(0, PAGE_SIZE).map((row) => <li key={row.id}>
-          <strong>{row.fullName}</strong> · {row.phoneE164.slice(0, 4)}•••••{row.phoneE164.slice(-3)} · {new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }).format(row.createdAt)} · {row.status === "REJECTED" ? "Rejected" : "Awaiting verification"}
-          {row.status === "PENDING" && <RejectApplication id={row.id} />}
+          <strong>{row.fullName}</strong> · {row.phoneE164.slice(0, 4)}•••••{row.phoneE164.slice(-3)} · {new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }).format(row.createdAt)} · {row.status === "REJECTED" ? "Rejected" : row.status === "ACTIVE" ? "Active" : row.status === "SUSPENDED" ? "Suspended" : "Pending review"}
+          {row.status === "PENDING" && <><RejectApplication id={row.id} />{process.env.AGENT_ACTIVATION_ENABLED === "true" && <ReviewApplication id={row.id} action="approve" />}</>}
+          {row.status === "ACTIVE" && <ReviewApplication id={row.id} action="suspend" />}
         </li>)}
       </ul>}
       <nav aria-label="Application pages">
