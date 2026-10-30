@@ -235,6 +235,62 @@ try {
     if (!reportData.report?.summary?.some((row) => row.value === "1") || !reportData.report?.rows?.length) throw new Error(`${profile.key} daily sales did not report the recorded sale`);
     await page.waitForFunction(() => document.querySelector(".jata-stat-grid")?.textContent.includes("100"));
     console.log(`PASS ${profile.key} daily sales report shows recorded sale`);
+    if (profile.key === "retail") {
+      // Actual browser refund controls and isolated PostgreSQL, not a payment-provider refund.
+      const saleRow = await prisma.posSale.findFirst({ where:{ businessId:id }, include:{ items:true } });
+      await page.goto(new URL(`${root}/sales/${saleRow.id}`,base).href, { waitUntil:"load" });
+      await page.waitForSelector("#refund-amount", { visible:true });
+      await new Promise((done) => setTimeout(done, 1200));
+      await fill(page, "#refund-amount", "40");
+      let refundResponse = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/sales/${saleRow.id}`) && r.request().method() === "POST").catch(() => null);
+      let reload = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
+      await clickText(page, "button", "Record refund");
+      const first = await refundResponse;
+      if (!first?.ok()) throw new Error(`Partial browser refund failed: ${first?.status()} ${first ? await first.text() : "no response"}`);
+      await reload;
+      let stored = await prisma.posSale.findUnique({ where:{ id:saleRow.id }, include:{ payments:true } });
+      if (stored.refundedKES !== 40 || stored.status !== "PARTIALLY_REFUNDED" || stored.payments.filter((p) => p.direction === "OUT").reduce((n,p) => n+p.amountKES,0) !== 40) throw new Error("Partial refund ledger incorrect");
+      if (Number((await prisma.posInventoryItem.findFirst({ where:{ businessId:id, productId:product.id } }))?.quantity) !== 4) throw new Error("Money-only refund changed stock");
+      await page.goto(new URL(`${root}/reports`,base).href, { waitUntil:"load" });
+      await new Promise((done) => setTimeout(done, 1200));
+      let reportWait = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/reports?`) && r.request().method() === "GET").catch(() => null);
+      let dailyButton = await page.evaluateHandle(() => [...document.querySelectorAll("button.pos-option")].find((el) => el.querySelector("strong")?.textContent.trim() === "Daily sales"));
+      await dailyButton.asElement().click(); await dailyButton.dispose();
+      const partialResult = await reportWait;
+      if (!partialResult?.ok()) throw new Error("Partial refund daily report failed");
+      const partialReport = (await partialResult.json()).report;
+      for (const [label,value] of [["Refunded","KES 40"],["Net retained","KES 60"],["Collected","KES 60"]]) {
+        if (!partialReport.summary.some((row) => row.label === label && row.value === value)) throw new Error(`Partial report missing ${label} ${value}: ${JSON.stringify(partialReport.summary)}`);
+      }
+      await page.waitForFunction(() => document.body.innerText.includes("Net retained") && document.body.innerText.includes("KES 60"));
+      await page.goto(new URL(`${root}/sales/${saleRow.id}`,base).href, { waitUntil:"load" });
+      await page.waitForSelector("#refund-amount", { visible:true });
+      await new Promise((done) => setTimeout(done, 1200));
+      await clickText(page, `[aria-label="One more ${product.name}"]`, "+");
+      refundResponse = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${id}/sales/${saleRow.id}`) && r.request().method() === "POST").catch(() => null);
+      reload = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
+      await clickText(page, "button", "Record refund");
+      const second = await refundResponse;
+      if (!second?.ok()) throw new Error(`Final browser refund failed: ${second?.status()} ${second ? await second.text() : "no response"}`);
+      await reload;
+      stored = await prisma.posSale.findUnique({ where:{ id:saleRow.id }, include:{ payments:true } });
+      if (stored.refundedKES !== 100 || stored.status !== "REFUNDED" || stored.payments.filter((p) => p.direction === "OUT").reduce((n,p) => n+p.amountKES,0) !== 100) throw new Error("Full refund ledger incorrect");
+      if (Number((await prisma.posInventoryItem.findFirst({ where:{ businessId:id, productId:product.id } }))?.quantity) !== 5) throw new Error("Returned product did not restore stock exactly once");
+      const duplicateStatus = await page.evaluate(async (url) => (await fetch(url, { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ amountKES:1, method:"cash" }) })).status, `/api/pos/${id}/sales/${saleRow.id}`);
+      if (duplicateStatus < 400 || (await prisma.posSale.findUnique({ where:{ id:saleRow.id } })).refundedKES !== 100) throw new Error("Repeat refund was accepted");
+      await page.goto(new URL(`${root}/reports`,base).href, { waitUntil:"load" });
+      await new Promise((done) => setTimeout(done, 1200));
+      reportWait = page.waitForResponse((r) => r.url().includes(`/api/pos/${id}/reports?`) && r.request().method() === "GET").catch(() => null);
+      dailyButton = await page.evaluateHandle(() => [...document.querySelectorAll("button.pos-option")].find((el) => el.querySelector("strong")?.textContent.trim() === "Daily sales"));
+      await dailyButton.asElement().click(); await dailyButton.dispose();
+      const fullResult = await reportWait;
+      if (!fullResult?.ok()) throw new Error("Full refund daily report failed");
+      const fullReport = (await fullResult.json()).report;
+      for (const [label,value] of [["Refunded","KES 100"],["Net retained","KES 0"],["Collected","KES 0"]]) {
+        if (!fullReport.summary.some((row) => row.label === label && row.value === value)) throw new Error(`Full report missing ${label} ${value}`);
+      }
+      console.log("PASS retail browser partial and final cash refunds, retained totals, duplicate refusal and stock return; synthetic subscription");
+    }
     await page.goto(new URL(`${root}/products`,base).href, { waitUntil:"load" });
     await page.waitForSelector(".pos-row-actions button", { visible:true });
     await new Promise((done) => setTimeout(done, 1200));
