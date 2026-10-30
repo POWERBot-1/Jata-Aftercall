@@ -477,39 +477,40 @@ export async function receivePurchase(params: {
   if (!configuration.suppliers.enabled) return failure("SUPPLIERS_OFF", "Purchases are switched off for this business.");
   if (!actorCan(actor, "CREATE_PURCHASE")) return failure("NOT_ALLOWED", "You don't have permission to receive stock.");
 
-  const purchase = await store.findPurchase(businessId, text(params.purchaseId, 64) ?? "", client);
-  if (!purchase) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
-  if (purchase.status === "CANCELLED") return failure("CANCELLED", "That purchase order was cancelled.", warnings);
-
-  // Receiving moves stock; stock moves only where the actor's scope allows it (§16, §75).
-  // An order placed at a different location than a branch-bound actor's is refused rather than
-  // silently received into someone else's stock room.
-  if (actor.branchId && purchase.branchId && purchase.branchId !== actor.branchId) {
-    return failure("BRANCH_OUT_OF_SCOPE", "That order belongs to a different location than the one you are assigned to.", warnings);
-  }
+  const initial = await store.findPurchase(businessId, text(params.purchaseId, 64) ?? "", client);
+  if (!initial) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
 
   const requested = new Map<string, number>(
     (params.items ?? []).filter((item) => item && typeof item === "object").map((item) => [String(item.purchaseItemId), quantity(item.quantity)] as [string, number]),
   );
-
-  const lines: { item: any; amount: number }[] = [];
-  for (const item of purchase.items ?? []) {
-    const outstanding = Math.max(0, Number(item.quantity ?? 0) - Number(item.receivedQty ?? 0));
-    if (outstanding <= 0) continue;
-    const asked = requested.size ? requested.get(item.id) ?? 0 : outstanding;
-    const amount = configuration.suppliers.partialReceiving ? Math.min(asked, outstanding) : asked >= outstanding ? outstanding : 0;
-    if (amount <= 0) continue;
-    lines.push({ item, amount });
-  }
-  if (!lines.length) return failure("NOTHING_TO_RECEIVE", "Everything on that order has already been received.", warnings);
-  if (requested.size && !configuration.suppliers.partialReceiving) {
-    warnings.push("Partial receiving is switched off, so the full outstanding quantity was received.");
-  }
-
-  const receivedValue = lines.reduce((total, line) => total + Math.round(Number(line.item.unitCostKES ?? 0) * line.amount), 0);
   const paymentAmount = params.payment ? sanitizeAmountKES(params.payment.amountKES) : 0;
 
-  const updated = await inTransaction(params.client, async (tx: PosClient) => {
+  return inTransaction(params.client, async (tx: PosClient) => {
+    // Receipt decisions and item updates must share the same locked, current purchase. A
+    // stale snapshot here can create duplicate stock movements and payments under concurrency.
+    if (tx.$queryRaw) {
+      await tx.$queryRaw`SELECT 1 FROM "PosPurchase" WHERE "id" = ${initial.id} AND "businessId" = ${businessId} FOR UPDATE`;
+    }
+    const purchase = await store.findPurchase(businessId, initial.id, tx);
+    if (!purchase) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
+    if (purchase.status === "CANCELLED") return failure("CANCELLED", "That purchase order was cancelled.", warnings);
+    if (actor.branchId && purchase.branchId && purchase.branchId !== actor.branchId) {
+      return failure("BRANCH_OUT_OF_SCOPE", "That order belongs to a different location than the one you are assigned to.", warnings);
+    }
+
+    const lines: { item: any; amount: number }[] = [];
+    for (const item of purchase.items ?? []) {
+      const outstanding = Math.max(0, Number(item.quantity ?? 0) - Number(item.receivedQty ?? 0));
+      if (outstanding <= 0) continue;
+      const asked = requested.size ? requested.get(item.id) ?? 0 : outstanding;
+      const amount = configuration.suppliers.partialReceiving ? Math.min(asked, outstanding) : asked >= outstanding ? outstanding : 0;
+      if (amount > 0) lines.push({ item, amount });
+    }
+    if (!lines.length) return failure("NOTHING_TO_RECEIVE", "Everything on that order has already been received.", warnings);
+    if (requested.size && !configuration.suppliers.partialReceiving) {
+      warnings.push("Partial receiving is switched off, so the full outstanding quantity was received.");
+    }
+    const receivedValue = lines.reduce((total, line) => total + Math.round(Number(line.item.unitCostKES ?? 0) * line.amount), 0);
     let received = 0;
     for (const line of lines) {
       await tx.posPurchaseItem.updateMany({
@@ -590,10 +591,8 @@ export async function receivePurchase(params: {
       metadata: { reference: purchase.reference, received, receivedValueKES: receivedValue, paymentKES: paymentAmount },
     });
 
-    return { received, status };
+    return { ok: true, warnings, received, purchase: await store.findPurchase(businessId, purchase.id, tx) };
   });
-
-  return { ok: true, warnings, received: updated.received, purchase: await store.findPurchase(businessId, purchase.id, client) };
 }
 
 /** Pays a supplier down — the payables side of the credit engine (§30, §31). */

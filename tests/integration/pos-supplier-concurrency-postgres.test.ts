@@ -13,7 +13,7 @@ vi.mock("@prisma/client", async (original) => {
 
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 import { baselineConfiguration } from "@/lib/pos/configuration";
-import { paySupplier } from "@/lib/pos/operations";
+import { paySupplier, receivePurchase } from "@/lib/pos/operations";
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let db: any;
@@ -85,6 +85,49 @@ describe.skipIf(!realPrismaConfigured)("supplier concurrent repayments on Postgr
     expect(payments).toHaveLength(1);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ direction: "CREDIT", amountKES: 60, balanceAfterKES: 40, paymentId: payments[0].id });
+  }, 30000);
+
+  it("serializes simultaneous receipts against the same outstanding purchase quantity", async () => {
+    const supplier = await db.posSupplier.create({ data: { businessId, name: "Receipt supplier", balanceKES: 100 } });
+    const product = await db.posProduct.create({ data: { businessId, name: "Receipt item", trackInventory: true } });
+    const purchase = await db.posPurchase.create({ data: { businessId, supplierId: supplier.id, reference: `race-${stamp}`, status: "ORDERED", totalKES: 100, items: { create: [{ businessId, productId: product.id, name: "Item", quantity: 1, unitCostKES: 100, totalKES: 100 }] } } });
+    const config = baselineConfiguration();
+    config.suppliers.enabled = true;
+    const actor = { actorId: ownerId, actorName: "Test owner", roleKey: "OWNER", permissions: ["CREATE_PURCHASE" as const], staffId: null, branchId: null };
+    let arrivals = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    const run = () => db.$transaction(async (tx: any) => {
+      let firstRead = true;
+      const wrapped = new Proxy(tx, {
+        get(target, property) {
+          if (property === "posPurchase") return new Proxy(target.posPurchase, {
+            get(model, key) {
+              if (key !== "findFirst") return Reflect.get(model, key, model);
+              return async (...args: any[]) => {
+                const result = await model.findFirst(...args);
+                if (firstRead) { firstRead = false; if (++arrivals === 2) release(); await barrier; }
+                return result;
+              };
+            },
+          });
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      return receivePurchase({ businessId, configuration: config, actor, purchaseId: purchase.id, payment: { amountKES: 60, method: "cash" }, client: wrapped });
+    }, { timeout: 15000 });
+    const outcomes = await Promise.all([run(), run()]);
+    expect(arrivals).toBe(2);
+    expect(outcomes.filter((result: any) => result.ok)).toHaveLength(1);
+    expect(outcomes.filter((result: any) => result.code === "NOTHING_TO_RECEIVE")).toHaveLength(1);
+    const item = await db.posPurchaseItem.findFirst({ where: { businessId, purchaseId: purchase.id } });
+    expect(item.receivedQty).toBe(1);
+    expect((await db.posInventoryItem.findFirst({ where: { businessId, productId: product.id } })).quantity).toBe(1);
+    expect(await db.posInventoryMovement.count({ where: { businessId, productId: product.id, refId: purchase.id } })).toBe(1);
+    expect(await db.posPayment.count({ where: { businessId, supplierId: supplier.id } })).toBe(1);
+    expect((await db.posSupplier.findUnique({ where: { id: supplier.id } })).balanceKES).toBe(40);
+    expect((await db.posPurchase.findUnique({ where: { id: purchase.id } })).paidKES).toBe(60);
   }, 30000);
 
   it("rolls back payment and credit entry when the surrounding transaction fails", async () => {
