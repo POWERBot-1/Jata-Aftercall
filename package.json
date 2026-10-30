@@ -26,7 +26,7 @@
     "test:erp:visual:gallery": "node scripts/erp/erp-visual-gallery.mjs",
     "test:erp:layout-fixture": "node scripts/erp/erp-layout-fixture.check.mjs",
     "test:erp:tasks-page": "node scripts/erp/tasks-page.check.mjs",
-    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts tests/integration/erp-procurement-postgres.test.ts tests/integration/erp-requisitions-postgres.test.ts tests/integration/pos-supplier-concurrency-postgres.test.ts",
+    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts tests/integration/erp-procurement-postgres.test.ts tests/integration/erp-requisitions-postgres.test.ts tests/integration/pos-supplier-concurrency-postgres.test.ts tests/integration/pos-snapshot-exclusion-postgres.test.ts tests/integration/pos-provider-reversal-postgres.test.ts",
     "test:browser:motion": "node scripts/browser/storefront-motion.check.mjs",
     "test:browser:layout": "node scripts/browser/fixture-layout.check.mjs",
     "test:browser:families": "node scripts/browser/storefront-families.check.mjs",

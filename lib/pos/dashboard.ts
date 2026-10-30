@@ -108,7 +108,8 @@ export function buildDashboardCards(
       creditRefundedKES: Number(sale.creditRefundedKES ?? 0),
       channel: sale.channel,
       staffName: sale.staffName,
-      payments: (sale.payments ?? []).map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0) })),
+      payments: (sale.payments ?? []).filter((payment: any) => !payment.status || payment.status === "SETTLED")
+        .map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0), direction: payment.direction })),
       items: (sale.items ?? []).map((item: any) => ({ name: item.name, quantity: Number(item.quantity ?? 0), totalKES: Number(item.totalKES ?? 0) })),
     })),
     today,
@@ -149,7 +150,7 @@ export function buildDashboardCards(
       key: "today_sales",
       label: cardLabel("today_sales"),
       value: formatKES(summary.netKES),
-      hint: `${summary.count} sale${summary.count === 1 ? "" : "s"}${summary.outstandingKES > 0 ? ` · ${formatKES(summary.outstandingKES)} still owed` : ""}`,
+      hint: `${summary.count} sale${summary.count === 1 ? "" : "s"}${summary.outstandingKES > 0 ? ` · ${formatKES(summary.outstandingKES)} unpaid at sale less credit refunds; repayments not allocated` : ""}`,
       href: `${basePath}/sales`,
       tone: "success",
     }),

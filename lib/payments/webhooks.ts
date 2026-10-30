@@ -258,10 +258,12 @@ export async function applyProviderEvent(input: WebhookInput): Promise<WebhookRe
       transactionId: "transactionId" in result ? result.transactionId ?? null : null,
       providerReference: outcome.providerReference || null,
       payload: outcome.sanitized,
-      errorCode: result.kind === "no_match" ? "NO_MATCHING_TRANSACTION" : null,
+      errorCode: result.kind === "no_match" ? "NO_MATCHING_TRANSACTION" : result.kind === "exception" ? result.reason : null,
     });
     if (result.kind === "no_match") await handleUnmatched(client, { provider, outcome, eventRowId, destinationIdentified: false });
-    return { status: "processed", httpStatus: 200, body: { status: "processed" } };
+    if (result.kind === "exception") return { status: "failed", httpStatus: 200, body: { status: "review_required", reason: result.reason } };
+    if (result.kind === "no_match") return { status: "unmatched", httpStatus: 200, body: { status: "unmatched" } };
+    return { status: result.kind === "duplicate" ? "duplicate" : "processed", httpStatus: 200, body: { status: result.kind === "duplicate" ? "duplicate" : "processed" } };
   }
 
   if (outcome.kind === "failure") {

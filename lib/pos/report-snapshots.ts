@@ -6,7 +6,6 @@
  */
 import prisma from "@/lib/db";
 import { logPosAuditInTransaction } from "./audit";
-import { CreditPeriodError, projectCreditPeriod } from "./credit-period";
 import { paymentBreakdown, summarizeSales, type SaleRecord } from "./reports";
 
 const LIMIT = 5000;
@@ -56,7 +55,7 @@ export async function finalizeReportSnapshot(input: {
       const time = { gte: start, lt: end };
       const capturedAt = new Date();
       // take LIMIT+1 and refuse rather than silently finalize an incomplete report.
-      const [sales, ledger, expenses, audit, credit, movements, priorCredit] = await Promise.all([
+      const [sales, ledger, expenses, audit, credit, movements] = await Promise.all([
         tx.posSale.findMany({ where: { businessId: input.businessId, ...scoped, createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
           include: { payments: { select: { id: true, method: true, amountKES: true, direction: true, status: true, purpose: true, createdAt: true } } } }),
         tx.posPayment.findMany({ where: { businessId: input.businessId, ...scoped, status: "SETTLED", createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
@@ -69,8 +68,6 @@ export async function finalizeReportSnapshot(input: {
           select: { id: true, partyType: true, partyId: true, saleId: true, paymentId: true, direction: true, amountKES: true, balanceAfterKES: true, createdAt: true } }),
         tx.posInventoryMovement.findMany({ where: { businessId: input.businessId, ...scoped, createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
           select: { id: true, productId: true, branchId: true, refType: true, refId: true, reason: true, delta: true, unitKey: true, createdAt: true } }),
-        tx.posCreditEntry.findMany({ where: { businessId: input.businessId, createdAt: { lt: start } }, orderBy: { id: "asc" }, take: LIMIT + 1,
-          select: { partyType: true, partyId: true, direction: true, amountKES: true } }),
       ]);
       for (const [label, rows] of Object.entries({ Sales: sales, Payments: ledger, Expenses: expenses, Audits: audit, Credit: credit, Movements: movements })) bounded(rows as any[], label);
       const cohortActions = bounded(await tx.posAuditEvent.findMany({
@@ -90,24 +87,12 @@ export async function finalizeReportSnapshot(input: {
         if (p.direction === "OUT") periodMethods[key].outKES += p.amountKES;
       }
       const cash = periodMethods.cash ?? { inKES: 0, outKES: 0 };
-      // This projection is recorded-ledger arithmetic only. An incomplete, corrupt or oversized
-      // history produces no balances; it must never be mistaken for an authoritative statement.
-      let creditProjection: { available: boolean; note: string; accounts?: ReturnType<typeof projectCreditPeriod> };
-      if (priorCredit.length > LIMIT) {
-        creditProjection = { available: false, note: "Recorded credit history exceeds 5,000 entries before this period; no balances calculated." };
-      } else {
-        try {
-          creditProjection = { available: true, note: "Projection of recorded credit entries only; not verified opening balances or a complete financial statement.", accounts: projectCreditPeriod(priorCredit, credit) };
-        } catch (error) {
-          if (!(error instanceof CreditPeriodError)) throw error;
-          creditProjection = { available: false, note: "Recorded credit history contains invalid or unsafe amounts; no balances calculated." };
-        }
-      }
       const payload = JSON.parse(JSON.stringify({
         version: 1, capturedAt, basis: "sale-cohort-at-finalization-and-period-ledger", timezone: "UTC",
-        note: "A finalized capture of current sale-cohort status and period ledger; not an as-of period-end reconstruction. Revisions replace, never add to, prior captures.",
+        saleBalanceNotice: "Sale balances are original unpaid amounts, not current amounts owed; account-level repayments are not allocated.",
+        note: "A finalized capture of current sale-cohort status and period ledger; not an as-of period-end reconstruction. Sale balances are original unpaid amounts; repayments are not allocated and these are not current amounts owed. Revisions replace, never add to, prior captures.",
         saleCohort: { totals, tenders, refundAndVoidEvents: cohortActions, sales: sales.map((s: any) => ({ id: s.id, createdAt: s.createdAt, status: s.status, totalKES: s.totalKES, paidKES: s.paidKES, balanceKES: s.balanceKES, refundedKES: s.refundedKES, creditRefundedKES: s.creditRefundedKES, payments: s.payments })) },
-        periodLedger: { methods: periodMethods, cashInKES: cash.inKES, cashOutKES: cash.outKES, cashNetKES: cash.inKES - cash.outKES, payments: ledger, expenses, refundAndVoidEvents: audit, creditEntries: credit, creditProjection, inventoryMovements: movements },
+        periodLedger: { methods: periodMethods, cashInKES: cash.inKES, cashOutKES: cash.outKES, cashNetKES: cash.inKES - cash.outKES, payments: ledger, expenses, refundAndVoidEvents: audit, creditEntries: credit, inventoryMovements: movements },
       }));
       const snapshot = await tx.posReportSnapshot.create({ data: { ...where, revision: (latest?.revision ?? 0) + 1, supersedesId: latest?.id ?? null, reason: reason || null, finalizedById: input.actorId, payload } });
       await logPosAuditInTransaction(tx, { businessId: input.businessId, actorId: input.actorId, actorName: input.actorName, branchId: input.branchId,
@@ -125,6 +110,21 @@ export async function listReportSnapshots(businessId: string, branchId: string |
   return prisma.posReportSnapshot.findMany({ where: { businessId, scopeKey: branchId ?? "" }, orderBy: [{ periodStart: "desc" }, { revision: "desc" }], take: 100,
     select: { id: true, periodStart: true, periodEnd: true, revision: true, supersedesId: true, reason: true, finalizedAt: true, finalizedById: true } });
 }
+/** Do not expose unverified balances from older captures; never modify the immutable DB row. */
+export function withoutUnverifiedCreditProjection(snapshot: any) {
+  const payload = snapshot?.payload;
+  const ledger = payload?.periodLedger;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return snapshot;
+  const safeLedger = ledger && typeof ledger === "object" && !Array.isArray(ledger) ? { ...ledger } : ledger;
+  if (safeLedger) delete safeLedger.creditProjection;
+  return { ...snapshot, payload: {
+    ...payload,
+    ...(safeLedger ? { periodLedger: safeLedger } : {}),
+    saleBalanceNotice: "Sale balances are original unpaid amounts, not current amounts owed; account-level repayments are not allocated.",
+  } };
+}
+
 export async function getReportSnapshot(businessId: string, branchId: string | null, id: string) {
-  return prisma.posReportSnapshot.findFirst({ where: { businessId, scopeKey: branchId ?? "", id } });
+  const snapshot = await prisma.posReportSnapshot.findFirst({ where: { businessId, scopeKey: branchId ?? "", id } });
+  return snapshot ? withoutUnverifiedCreditProjection(snapshot) : null;
 }

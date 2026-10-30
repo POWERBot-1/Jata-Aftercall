@@ -17,6 +17,11 @@ describe("sale-cohort refund snapshots", () => {
     const summary = summarizeSales([sale({ paidKES:400, balanceKES:600, refundedKES:500, creditRefundedKES:100 })]);
     expect(summary).toMatchObject({ refundedKES:500, netKES:500, paidKES:0, outstandingKES:500 });
   });
+  it("uses settled payment outflows for provider reversals even when sale refund totals are unchanged", () => {
+    const reversed = sale({ status: "REVERSED", refundedKES: 0, payments: [{ method: "mpesa", amountKES: 1000, direction: "IN" }, { method: "mpesa", amountKES: 1000, direction: "OUT" }] });
+    expect(summarizeSales([reversed]).paidKES).toBe(0);
+    expect(paymentBreakdown([reversed])[0].amountKES).toBe(0);
+  });
   it("nets settled outflows by original tender without changing drawer ledger", () => {
     const rows = [sale({ refundedKES:300, payments:[{ method:"cash", amountKES:400 }, { method:"mpesa", amountKES:600 }, { method:"cash", amountKES:300, direction:"OUT" }] })];
     expect(paymentBreakdown(rows)).toEqual([{ method:"mpesa", amountKES:600, count:1 }, { method:"cash", amountKES:100, count:2 }]);

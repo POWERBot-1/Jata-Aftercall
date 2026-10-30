@@ -587,15 +587,20 @@ export async function applyReversal(params: {
       }
     }
 
-    const transaction = event.providerReference
+    const candidate = event.providerReference
       ? await tx.paymentTransaction.findFirst({ where: { provider, OR: [{ providerReference: event.providerReference }, { providerTransactionId: event.providerReference }] } })
       : event.providerTransactionId
         ? await tx.paymentTransaction.findFirst({ where: { provider, providerTransactionId: event.providerTransactionId } })
         : null;
-    if (!transaction) return { kind: "no_match" as const, reason: "NO_MATCHING_TRANSACTION" };
+    if (!candidate) return { kind: "no_match" as const, reason: "NO_MATCHING_TRANSACTION" };
 
+    // Serialize with refund reservation and completion, which lock this same payment row.
+    if (typeof tx.$queryRaw !== "function") throw new Error("Reversal safety requires PostgreSQL row-level locking.");
+    await tx.$queryRaw`SELECT "id" FROM "PaymentTransaction" WHERE "id" = ${candidate.id} AND "businessId" = ${candidate.businessId} FOR UPDATE`;
+    const transaction = await tx.paymentTransaction.findFirst({ where: { id: candidate.id, businessId: candidate.businessId } });
+    if (!transaction) return { kind: "no_match" as const, reason: "NO_MATCHING_TRANSACTION" };
     const businessId = String(transaction.businessId);
-    const reversalMinor = event.amountMinor > 0 ? event.amountMinor : transaction.amountMinor;
+    const reversalMinor = Number(event.amountMinor);
     const status = transaction.status as PaymentStatus;
     if (status === "REVERSED") return { kind: "duplicate" as const, transactionId: transaction.id };
     if (!canTransition(status, "REVERSED")) {
@@ -612,10 +617,42 @@ export async function applyReversal(params: {
       return { kind: "exception" as const, reason: `REVERSAL_IN_STATE_${status}`, transactionId: transaction.id };
     }
 
-    await tx.paymentTransaction.updateMany({
-      where: { id: transaction.id, businessId, status: { in: ["PAID", "PARTIALLY_PAID", "PARTIALLY_REFUNDED", "CONFIRMED"] } },
-      data: { status: "REVERSED", amountRefundedMinor: Math.max(Number(transaction.amountRefundedMinor ?? 0), reversalMinor) },
+    const pendingRefund = await tx.refund.findFirst({ where: { businessId, transactionId: transaction.id, status: { in: ["REQUESTED", "PENDING_PROVIDER"] } }, select: { id: true } });
+    if (pendingRefund) {
+      await recordReconciliationException({
+        businessId, transactionId: transaction.id, provider, providerReference: transaction.providerReference,
+        result: "UNCONFIRMED", expectedAmountMinor: transaction.amountMinor, receivedAmountMinor: reversalMinor,
+        notes: "An unmatched reversal arrived while a refund reservation was outstanding; no outflow was posted. Reconcile the provider records.",
+      }, tx);
+      return { kind: "exception" as const, reason: "REVERSAL_WITH_PENDING_REFUND", transactionId: transaction.id };
+    }
+    const paidMinor = Number(transaction.amountPaidMinor ?? 0);
+    const previouslyRefunded = Number(transaction.amountRefundedMinor ?? 0);
+    const remaining = paidMinor - previouslyRefunded;
+    // Partial provider refunds are handled through their uniquely matched refund reservation.
+    // An unmatched callback cannot be safely deduplicated as a partial reversal; nor may a
+    // missing amount be silently interpreted as a full reversal. Leave it for reconciliation.
+    if (!Number.isSafeInteger(reversalMinor) || reversalMinor <= 0 || !Number.isSafeInteger(remaining) || reversalMinor !== remaining) {
+      await recordReconciliationException({
+        businessId, transactionId: transaction.id, provider,
+        providerReference: transaction.providerReference, result: "UNCONFIRMED",
+        expectedAmountMinor: remaining, receivedAmountMinor: Number.isSafeInteger(reversalMinor) ? reversalMinor : null,
+        notes: "Unmatched reversal amount is missing, partial, or does not match the remaining verified payment. No outflow was posted; review required.",
+      }, tx);
+      return { kind: "exception" as const, reason: "UNSUPPORTED_REVERSAL_AMOUNT", transactionId: transaction.id };
+    }
+
+    const transition = await tx.paymentTransaction.updateMany({
+      where: { id: transaction.id, businessId, status },
+      data: { status: "REVERSED", amountRefundedMinor: previouslyRefunded + reversalMinor },
     });
+    // A concurrent callback can read the same state before either transaction updates it.
+    // Only the transaction that actually changes that state may write the POS outflow.
+    if (!transition.count) {
+      const current = await tx.paymentTransaction.findFirst({ where: { id: transaction.id, businessId }, select: { status: true } });
+      if (current?.status === "REVERSED") return { kind: "duplicate" as const, transactionId: transaction.id };
+      return { kind: "exception" as const, reason: "REVERSAL_STATE_CHANGED", transactionId: transaction.id };
+    }
     await logPaymentAudit({
       businessId,
       transactionId: transaction.id,

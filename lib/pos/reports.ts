@@ -87,7 +87,9 @@ export type SalesSummary = {
   taxKES: number;
   netKES: number;
   paidKES: number;
+  /** Original unpaid amounts less credit refunds; account-level repayments are not allocated. */
   outstandingKES: number;
+  outstandingNotice: string;
   refundedKES: number;
   averageKES: number;
   basis: "recorded";
@@ -102,7 +104,15 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
   // collected money, while credit refunds reduce the receivable, never the drawer.
   const refundedKES = scoped.reduce((total, sale) => total + num(sale.refundedKES), 0);
   const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES) - num(sale.refundedKES), 0);
-  const paidKES = scoped.reduce((total, sale) => total + num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES)), 0);
+  const paidKES = scoped.reduce((total, sale) => {
+    // When actual settled payment rows are present they are the source for collections:
+    // provider reversals can create an OUT without changing the sale's refundedKES field.
+    if (sale.payments?.length) {
+      return total + sale.payments.reduce((sum, payment) => sum + (payment.direction === "OUT" ? -1 : 1) * num(payment.amountKES), 0);
+    }
+    // Older callers can lack payment rows; preserve the legacy calculation for those callers.
+    return total + num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES));
+  }, 0);
   const outstandingKES = scoped.reduce((total, sale) => total + Math.max(0, num(sale.balanceKES) - num(sale.creditRefundedKES)), 0);
   return {
     count: scoped.length,
@@ -112,6 +122,7 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
     netKES,
     paidKES,
     outstandingKES,
+    outstandingNotice: "Original unpaid at sale less credit refunds; account-level repayments are not allocated. This is not the current amount owed.",
     refundedKES,
     averageKES: scoped.length ? Math.round(netKES / scoped.length) : 0,
     basis: "recorded",

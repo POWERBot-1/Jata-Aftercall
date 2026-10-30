@@ -193,7 +193,7 @@ export async function runReport(
           { label: "Refunded", value: formatKES(summary.refundedKES) },
           { label: "Net retained", value: formatKES(summary.netKES) },
           { label: "Collected", value: formatKES(summary.paidKES) },
-          { label: "Still owed", value: formatKES(summary.outstandingKES) },
+          { label: "Unpaid at sale, less credit refunds (repayments not allocated)", value: formatKES(summary.outstandingKES) },
           { label: "Average sale", value: formatKES(summary.averageKES) },
         ],
         rows: sales
@@ -211,7 +211,7 @@ export async function runReport(
             balance: sale.balanceKES - (sale.creditRefundedKES ?? 0) > 0 ? formatKES(sale.balanceKES - (sale.creditRefundedKES ?? 0)) : "—",
           })),
         series: series.map((point) => ({ label: point.date, value: point.netKES })),
-        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : `Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period.${summary.count > 200 ? " Totals include the full cohort; only the latest 200 non-voided sales are shown." : ""}`,
+        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : `Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period. Sale balances are original unpaid amounts less credit refunds; account-level repayments are not allocated, so they are not current amounts owed.${summary.count > 200 ? " Totals include the full cohort; only the latest 200 non-voided sales are shown." : ""}`,
       });
     }
 
@@ -610,7 +610,7 @@ export async function runDailyClosing(businessId: string, config: PosConfigurati
       { label: "Sales", value: String(closing.sales.count) },
       { label: "Net sales", value: formatKES(closing.sales.netKES) },
       { label: "Collected", value: formatKES(closing.sales.paidKES) },
-      { label: "Still owed", value: formatKES(closing.sales.outstandingKES) },
+      { label: "Unpaid at sale, less credit refunds (repayments not allocated)", value: formatKES(closing.sales.outstandingKES) },
       { label: "Expenses", value: formatKES(closing.expensesKES) },
       { label: "Net settled cash movement (not drawer balance)", value: formatKES(closing.expectedCashKES) },
     ],

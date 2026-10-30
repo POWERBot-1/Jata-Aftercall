@@ -26,7 +26,8 @@ import { reserveAutopilotBudget } from "@/lib/autopilot/usage";
 function expectPrismaCode(promise: Promise<unknown>, code: string) {
   return expect(promise).rejects.toSatisfy((err: unknown) => {
     return (
-      err instanceof Prisma.PrismaClientKnownRequestError && err.code === code
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      typeof err === "object" && err !== null && "code" in err && err.code === code
     );
   });
 }

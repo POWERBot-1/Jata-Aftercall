@@ -1425,7 +1425,7 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     }
   }, 120_000);
 
-  it("21e-credit-period — PostgreSQL captures independently expected opening, movement and closing", async () => {
+  it("21e-credit-period — PostgreSQL captures raw period entries without unverified opening or closing balances", async () => {
     const businessId = ctx.owner.businessId;
     const marker = `credit-period-${runId}`;
     const partyId = `${marker}-party`;
@@ -1442,13 +1442,14 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       ] });
       const capture = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: "2005-02-02", to: "2005-02-02" } });
       expect(capture.status, capture.text()).toBe(201);
-      const projected = capture.body.snapshot.payload.periodLedger.creditProjection;
-      expect(projected.available).toBe(true);
-      expect(projected.note).toContain("not verified opening balances");
-      expect(projected.accounts.filter((a: any) => a.partyId === partyId)).toEqual([
-        { partyType: "CUSTOMER", partyId, openingKES: 100, debitsKES: 40, creditsKES: 30, closingKES: 110 },
-        { partyType: "SUPPLIER", partyId, openingKES: 80, debitsKES: 0, creditsKES: 20, closingKES: 60 },
-      ]);
+      expect(capture.body.snapshot.payload.periodLedger.creditProjection).toBeUndefined();
+      const entries = capture.body.snapshot.payload.periodLedger.creditEntries.filter((a: any) => a.partyId === partyId);
+      expect(entries).toHaveLength(3);
+      expect(entries).toEqual(expect.arrayContaining([
+        expect.objectContaining({ partyType: "CUSTOMER", direction: "CREDIT", amountKES: 30 }),
+        expect.objectContaining({ partyType: "CUSTOMER", direction: "DEBIT", amountKES: 40 }),
+        expect.objectContaining({ partyType: "SUPPLIER", direction: "CREDIT", amountKES: 20 }),
+      ]));
       await prisma.posCreditEntry.create({ data: { businessId, partyType: "CUSTOMER", partyId, direction: "CREDIT", amountKES: 10, note: marker } });
       const history = await callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id: capture.body.snapshot.id } });
       expect(history.status).toBe(200);
@@ -1456,8 +1457,7 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       await prisma.posCreditEntry.createMany({ data: Array.from({ length: 5001 }, () => ({ businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 1, createdAt: before, note: marker })) });
       const capped = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: "2005-02-03", to: "2005-02-03" } });
       expect(capped.status, capped.text()).toBe(201);
-      expect(capped.body.snapshot.payload.periodLedger.creditProjection).toMatchObject({ available: false });
-      expect(capped.body.snapshot.payload.periodLedger.creditProjection.accounts).toBeUndefined();
+      expect(capped.body.snapshot.payload.periodLedger.creditProjection).toBeUndefined();
       h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
       const foreign = await callPos(snapshotsGet, ctx.stranger.businessId, { path: "/reports/snapshots", query: { id: capture.body.snapshot.id } });
       expect([403, 404]).toContain(foreign.status);

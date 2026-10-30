@@ -90,7 +90,7 @@ export default async function PosBranchesPage({ params }: Props) {
         <dl className="jata-stat-grid mt-2">
           <div className="jata-stat"><dt>{workspace.terminology.sales}</dt><dd>{totals.count}</dd></div>
           <div className="jata-stat"><dt>Taken</dt><dd>{formatKES(totals.totalKES)}</dd></div>
-          <div className="jata-stat"><dt>Still owed</dt><dd>{formatKES(totals.balanceKES)}</dd></div>
+          <div className="jata-stat"><dt>Unpaid at sale (repayments not allocated)</dt><dd>{formatKES(totals.balanceKES)}</dd></div>
           <div className="jata-stat"><dt>{workspace.terminology.branches}</dt><dd>{rows.length}</dd></div>
         </dl>
         <Link href={`${workspace.basePath}/inventory`} className="jata-btn jata-btn-secondary mt-3">Open the stock room</Link>

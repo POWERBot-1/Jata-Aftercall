@@ -120,8 +120,8 @@ export default async function PosSaleDetailPage({ params }: Props) {
       <dl className="jata-stat-grid">
         <div className="jata-stat"><dt>Items</dt><dd>{formatKES(sale.subtotalKES)}</dd></div>
         <div className="jata-stat"><dt>Discount</dt><dd>{formatKES(sale.discountKES)}</dd></div>
-        <div className="jata-stat"><dt>Paid</dt><dd>{formatKES(sale.paidKES)}</dd></div>
-        <div className="jata-stat"><dt>Balance</dt><dd>{formatKES(sale.balanceKES)}</dd></div>
+        <div className="jata-stat"><dt>Paid at sale</dt><dd>{formatKES(sale.paidKES)}</dd></div>
+        <div className="jata-stat"><dt>Unpaid at sale (repayments not allocated)</dt><dd>{formatKES(sale.balanceKES)}</dd></div>
       </dl>
 
       {(sale.payments ?? []).length ? (
