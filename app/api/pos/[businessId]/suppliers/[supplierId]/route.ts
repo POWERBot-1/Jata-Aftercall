@@ -1,6 +1,6 @@
 import { fromOutcome, handlePosRequest, posOk } from "@/lib/pos/http";
 import { logPosAudit } from "@/lib/pos/audit";
-import { buildStatement, PAYABLE, toCreditEntries } from "@/lib/pos/credit";
+import { verifiedStatement, PAYABLE } from "@/lib/pos/credit";
 import { paySupplier } from "@/lib/pos/operations";
 import { findSupplier, listCreditEntries, listPurchases, updateSupplier } from "@/lib/pos/store";
 import { bool, sanitizeSupplierInput, text, positiveNumber, optionalText } from "@/lib/pos/validation";
@@ -28,11 +28,11 @@ export async function GET(_request: Request, context: RouteContext) {
         // Deliveries from this supplier are read for the actor's own location (§16, §75).
         listPurchases(businessId, { take: 25, branchId: ctx.branchId }),
       ]);
-      const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, PAYABLE), PAYABLE);
+      const { statement, notice } = verifiedStatement(entries, PAYABLE, Number(supplier.balanceKES));
       return posOk({
         supplier,
         statement,
-        statementNotice: statement ? null : "Statement unavailable: more than 200 ledger entries; contact support for a complete statement.",
+        statementNotice: notice,
         purchases: purchases.filter((purchase: any) => purchase.supplierId === supplierId),
       });
     },

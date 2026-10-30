@@ -1358,6 +1358,36 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     }
   }, 120_000);
 
+  it("21e-statement-reconciliation — PostgreSQL refuses mismatched receivables and payables", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `statement-reconcile-${runId}`;
+    const customer = await prisma.posCustomer.create({ data: { businessId, name: marker, creditEnabled: true, balanceKES: 100 } });
+    const supplier = await prisma.posSupplier.create({ data: { businessId, name: marker, balanceKES: 100 } });
+    try {
+      await prisma.posCreditEntry.createMany({ data: [
+        { businessId, partyType: "CUSTOMER", partyId: customer.id, direction: "DEBIT", amountKES: 100, note: marker },
+        { businessId, partyType: "SUPPLIER", partyId: supplier.id, direction: "DEBIT", amountKES: 100, note: marker },
+      ] });
+      const readCustomer = () => callPos(customerGet, businessId, { path: `/customers/${customer.id}`, params: { customerId: customer.id } });
+      const readSupplier = () => callPos(supplierGet, businessId, { path: `/suppliers/${supplier.id}`, params: { supplierId: supplier.id } });
+      for (const result of [await readCustomer(), await readSupplier()]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement.closingBalanceKES).toBe(100);
+      }
+      await prisma.posCustomer.update({ where: { id: customer.id }, data: { balanceKES: 99 } });
+      await prisma.posSupplier.update({ where: { id: supplier.id }, data: { balanceKES: 99 } });
+      for (const result of [await readCustomer(), await readSupplier()]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement).toBeNull();
+        expect(result.body.statementNotice).toContain("does not reconcile");
+      }
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+      await prisma.posCustomer.delete({ where: { id: customer.id } });
+      await prisma.posSupplier.delete({ where: { id: supplier.id } });
+    }
+  }, 120_000);
+
   it("21e-refund-cap — PostgreSQL refuses truncated refund totals and isolates tenants", async () => {
     const businessId = ctx.owner.businessId;
     const marker = `refund-cap-${runId}`;

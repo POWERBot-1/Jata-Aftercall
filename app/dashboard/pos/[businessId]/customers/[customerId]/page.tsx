@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatKES, formatDateTime } from "@/lib/format";
-import { buildStatement, RECEIVABLE, toCreditEntries } from "@/lib/pos/credit";
+import { verifiedStatement, RECEIVABLE } from "@/lib/pos/credit";
 import { findCustomer, listCreditEntries, listCustomerAssets, listSales } from "@/lib/pos/store";
 import { assetFields } from "@/lib/pos/forms";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
@@ -37,7 +37,7 @@ export default async function PosCustomerDetailPage({ params }: Props) {
     listCustomerAssets(businessId, customerId),
   ]);
 
-  const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
+  const { statement, notice: statementNotice } = verifiedStatement(entries, RECEIVABLE, Number(customer.balanceKES));
 
   const lifetimeKES = (sales as any[]).reduce((total, sale) => total + Number(sale.totalKES ?? 0), 0);
 
@@ -93,7 +93,7 @@ export default async function PosCustomerDetailPage({ params }: Props) {
         </section>
       ) : null}
 
-      {configuration.credit.statements && !statement ? <p className="pos-note" role="status">Statement unavailable: more than 200 ledger entries; contact support for a complete statement.</p> : null}
+      {configuration.credit.statements && !statement ? <p className="pos-note" role="status">{statementNotice}</p> : null}
       {configuration.credit.statements && statement && statement.lines.length ? (
         <section className="jata-card p-4">
           <p className="jata-kicker">Statement</p>

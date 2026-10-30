@@ -257,6 +257,7 @@ export type DailyClosing = {
   methods: MethodBreakdown;
   expensesKES: number;
   /** Cash the ledger says the drawer should hold: every settled cash movement, in and out. */
+  /** Legacy name: net period cash movement, not an expected drawer balance. */
   expectedCashKES: number;
   cashInKES: number;
   cashOutKES: number;
@@ -266,10 +267,10 @@ export type DailyClosing = {
 /**
  * Daily closing (§8 finance, §57).
  *
- * The drawer figure is read from the till's payment ledger — the single record of money
- * physically in and out — not from a category label:
+ * The net movement is read from the till's payment ledger, not from a category label.
+ * It is not a physical count and excludes opening drawer cash:
  *
- *   expected = Σ settled cash IN  (sales, deposits, credit repayments)
+ *   net movement = Σ settled cash IN  (sales, deposits, credit repayments)
  *            − Σ settled cash OUT (refunds, supplier payments, expenses)
  *
  * A sale paid by M-Pesa never touches the drawer, a cash refund empties it, and an expense

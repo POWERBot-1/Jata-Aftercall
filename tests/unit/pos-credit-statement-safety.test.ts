@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { verifiedStatement, RECEIVABLE, PAYABLE } from "@/lib/pos/credit";
 import { oldestCreditDebit } from "@/lib/pos/store";
 import { profitability, type SaleRecord } from "@/lib/pos/reports";
 
@@ -10,6 +11,20 @@ describe("credit and profit completeness", () => {
       where: { businessId: "tenant", partyType: "CUSTOMER", partyId: "customer", direction: "DEBIT" },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true },
     });
+  });
+
+  it("refuses inconsistent, invalid, or incomplete statements instead of inventing balances", () => {
+    const entries = [
+      { id: "a", partyId: "one", direction: "DEBIT", amountKES: 100, createdAt: new Date("2025-01-01Z") },
+      { id: "b", partyId: "one", direction: "CREDIT", amountKES: 40, createdAt: new Date("2025-02-01Z") },
+    ];
+    for (const type of [RECEIVABLE, PAYABLE]) {
+      expect(verifiedStatement(entries, type, 60).statement?.closingBalanceKES).toBe(60);
+      expect(verifiedStatement(entries, type, 59).notice).toContain("does not reconcile");
+      expect(verifiedStatement([{ ...entries[0], direction: "UNKNOWN" }], type, 100).statement).toBeNull();
+      expect(verifiedStatement([{ ...entries[0], amountKES: 1.5 }], type, 1).statement).toBeNull();
+      expect(verifiedStatement(Array.from({ length: 201 }, () => entries[0]), type, 20100).notice).toContain("more than 200");
+    }
   });
 
   it("marks profit partial when any sale lacks cost, even if other sales have costs", () => {

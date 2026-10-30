@@ -51,5 +51,8 @@ describe("report safety limits", () => {
     vi.spyOn(store, "paymentsForReport").mockResolvedValue([]);
     const closing = await runDailyClosing("tenant", baselineConfiguration());
     expect(closing.expectedCashKES).toBe(0);
+    expect(closing.netCashMovementKES).toBe(0);
+    expect(closing.cashMovementNotice).toContain("not an expected drawer balance");
+    expect(closing.summary).toEqual(expect.arrayContaining([{ label: "Net settled cash movement (not drawer balance)", value: "KES 0" }]));
   });
 });

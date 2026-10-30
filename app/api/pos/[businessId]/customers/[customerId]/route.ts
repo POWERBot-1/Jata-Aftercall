@@ -1,6 +1,6 @@
 import { fromOutcome, handlePosRequest, posOk } from "@/lib/pos/http";
 import { logPosAudit } from "@/lib/pos/audit";
-import { buildStatement, RECEIVABLE, toCreditEntries } from "@/lib/pos/credit";
+import { verifiedStatement, RECEIVABLE } from "@/lib/pos/credit";
 import { recordRepayment } from "@/lib/pos/sales";
 import { addCustomerAsset, findCustomer, listCreditEntries, listSales, updateCustomer } from "@/lib/pos/store";
 import { bool, sanitizeAssetInput, sanitizeCustomerInput, sanitizeRepayment } from "@/lib/pos/validation";
@@ -30,12 +30,12 @@ export async function GET(_request: Request, context: RouteContext) {
         listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 201 }),
         listSales(businessId, { customerId, take: 50 }),
       ]);
-      const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
+      const { statement, notice } = verifiedStatement(entries, RECEIVABLE, Number(customer.balanceKES));
       return posOk({
         customer,
         assets: customer.assets ?? [],
         statement,
-        statementNotice: statement ? null : "Statement unavailable: more than 200 ledger entries; contact support for a complete statement.",
+        statementNotice: notice,
         recentSales: sales.map((sale: any) => ({
           id: sale.id,
           receiptNumber: sale.receiptNumber,

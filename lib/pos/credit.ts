@@ -209,6 +209,21 @@ export function buildStatement(entries: CreditEntry[], partyType: CreditPartyTyp
   return { lines, closingBalanceKES: running };
 }
 
+/** Refuse a statement when the complete bounded ledger cannot explain the stored balance. */
+export function verifiedStatement(rows: any[], partyType: CreditPartyType, balanceKES: number) {
+  if (rows.length > 200) return { statement: null, notice: "Statement unavailable: more than 200 ledger entries; contact support for a complete statement." };
+  const unavailable = { statement: null, notice: "Statement unavailable: credit history does not reconcile with the account balance; contact support." };
+  if (!Number.isSafeInteger(balanceKES) || balanceKES < 0) return unavailable;
+  let total = 0;
+  for (const row of rows) {
+    if (!row || (row.direction !== "DEBIT" && row.direction !== "CREDIT") || !Number.isSafeInteger(row.amountKES) || row.amountKES < 0 || !row.createdAt || !Number.isFinite(new Date(row.createdAt).getTime())) return unavailable;
+    total += row.direction === "DEBIT" ? row.amountKES : -row.amountKES;
+    if (!Number.isSafeInteger(total)) return unavailable;
+  }
+  if (total !== balanceKES) return unavailable;
+  return { statement: buildStatement(toCreditEntries(rows, partyType), partyType), notice: null };
+}
+
 export type RepaymentValidation = { ok: boolean; amountKES: number; newBalanceKES: number; message?: string };
 
 /**

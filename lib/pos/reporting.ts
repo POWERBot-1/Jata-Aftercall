@@ -602,13 +602,17 @@ export async function runDailyClosing(businessId: string, config: PosConfigurati
   const closing = dailyClosing(toSaleRecords(sales), toExpenseRecords(expenses), toPaymentLedgerRecords(payments), now);
   return {
     ...closing,
+    // Compatibility: expectedCashKES is retained for existing clients, but it has always
+    // been a movement, not an expected drawer balance. Expose the unambiguous name too.
+    netCashMovementKES: closing.expectedCashKES,
+    cashMovementNotice: "Net settled cash movement excludes opening cash and is not an expected drawer balance or a physical count.",
     summary: [
       { label: "Sales", value: String(closing.sales.count) },
       { label: "Net sales", value: formatKES(closing.sales.netKES) },
       { label: "Collected", value: formatKES(closing.sales.paidKES) },
       { label: "Still owed", value: formatKES(closing.sales.outstandingKES) },
       { label: "Expenses", value: formatKES(closing.expensesKES) },
-      { label: "Expected in the drawer", value: formatKES(closing.expectedCashKES) },
+      { label: "Net settled cash movement (not drawer balance)", value: formatKES(closing.expectedCashKES) },
     ],
     rows: closing.methods.map((method) => ({ method: method.method, transactions: method.count, amount: formatKES(method.amountKES) })),
     canCloseDay: hasCapability(config, "daily_closing"),
