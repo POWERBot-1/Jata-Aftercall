@@ -59,15 +59,15 @@ export async function finalizeReportSnapshot(input: {
         tx.posSale.findMany({ where: { businessId: input.businessId, ...scoped, createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
           include: { payments: { select: { id: true, method: true, amountKES: true, direction: true, status: true, purpose: true, createdAt: true } } } }),
         tx.posPayment.findMany({ where: { businessId: input.businessId, ...scoped, status: "SETTLED", createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
-          select: { id: true, saleId: true, method: true, amountKES: true, direction: true, purpose: true, createdAt: true } }),
+          select: { id: true, saleId: true, customerId: true, supplierId: true, branchId: true, method: true, amountKES: true, direction: true, purpose: true, reference: true, createdAt: true } }),
         tx.posExpense.findMany({ where: { businessId: input.businessId, ...scoped, occurredAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
-          select: { id: true, occurredAt: true, amountKES: true, method: true } }),
+          select: { id: true, branchId: true, categoryKey: true, reference: true, occurredAt: true, createdAt: true, amountKES: true, method: true } }),
         tx.posAuditEvent.findMany({ where: { businessId: input.businessId, ...scoped, action: { in: ["POS_SALE_REFUNDED", "POS_SALE_VOIDED"] }, createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
           select: { id: true, action: true, targetId: true, createdAt: true, metadata: true } }),
         tx.posCreditEntry.findMany({ where: { businessId: input.businessId, createdAt: time,  }, orderBy: { id: "asc" }, take: LIMIT + 1,
-          select: { id: true, saleId: true, paymentId: true, direction: true, amountKES: true, createdAt: true } }),
+          select: { id: true, partyType: true, partyId: true, saleId: true, paymentId: true, direction: true, amountKES: true, balanceAfterKES: true, createdAt: true } }),
         tx.posInventoryMovement.findMany({ where: { businessId: input.businessId, ...scoped, createdAt: time }, orderBy: { id: "asc" }, take: LIMIT + 1,
-          select: { id: true, productId: true, refId: true, reason: true, delta: true, createdAt: true } }),
+          select: { id: true, productId: true, branchId: true, refType: true, refId: true, reason: true, delta: true, unitKey: true, createdAt: true } }),
       ]);
       for (const [label, rows] of Object.entries({ Sales: sales, Payments: ledger, Expenses: expenses, Audits: audit, Credit: credit, Movements: movements })) bounded(rows as any[], label);
       const cohortActions = bounded(await tx.posAuditEvent.findMany({

@@ -1082,8 +1082,24 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const day = prior.toISOString().slice(0, 10);
     const snapshotPost = (body: object) => callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body });
     const snapshotGet = (id: string) => callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id } });
-    const finalized = await snapshotPost({ from: day, to: day });
-    expect(finalized.status, finalized.text()).toBe(201);
+    // Synthetic prior-date rows exercise immutable audit linkage, not actual midnight.
+    const marker = `snapshot-credit-${runId}`;
+    const seededPayment = await prisma.posPayment.create({ data: { businessId, customerId: ctx.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", method: "cash", amountKES: 20, createdAt: prior, notes: marker } });
+    const seededCredit = await prisma.posCreditEntry.create({ data: { businessId, partyType: "CUSTOMER", partyId: ctx.customerId, saleId, paymentId: seededPayment.id, direction: "CREDIT", amountKES: 20, balanceAfterKES: 80, createdAt: prior, note: marker } });
+    let finalized: any;
+    try {
+      finalized = await snapshotPost({ from: day, to: day });
+      expect(finalized.status, finalized.text()).toBe(201);
+      expect(finalized.body.snapshot.payload.periodLedger.creditEntries).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: seededCredit.id, partyType: "CUSTOMER", partyId: ctx.customerId, saleId, paymentId: seededPayment.id, direction: "CREDIT", amountKES: 20, balanceAfterKES: 80 }),
+      ]));
+      expect(finalized.body.snapshot.payload.periodLedger.payments).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: seededPayment.id, customerId: ctx.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", amountKES: 20 }),
+      ]));
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+      await prisma.posPayment.deleteMany({ where: { businessId, notes: marker } });
+    }
     const originalId = finalized.body.snapshot.id;
     expect(finalized.body.snapshot.payload.saleCohort.totals.netKES).toBe(100);
     expect(finalized.body.snapshot.payload.saleCohort.sales[0].payments).toHaveLength(2);
