@@ -6,6 +6,7 @@ import { buildReceipt, channelLabel, receiptToText } from "@/lib/pos/receipt";
 import { branchRecordInScope, findSale } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RefundPanel } from "@/components/pos/RefundPanel";
+import { PrintReceiptButton } from "@/components/pos/PrintReceiptButton";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
@@ -144,7 +145,7 @@ export default async function PosSaleDetailPage({ params }: Props) {
       <section className="jata-card p-4">
         <div className="pos-toolbar">
           <p className="jata-kicker">Receipt</p>
-          <button className="jata-btn jata-btn-ghost" onClick={() => window.print()} type="button">Print</button>
+          <PrintReceiptButton />
         </div>
         <pre className="pos-receipt mt-2">{receiptToText(receipt)}</pre>
         {receiptLink ? (
