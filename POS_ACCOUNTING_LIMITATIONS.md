@@ -20,3 +20,7 @@ This describes the implementation, **not** an approved complete accounting polic
 - Profitability combines a mutable sale cohort with expenses in their occurrence period; it is always marked partial, and missing costs or unallocated refund costs make its numerical estimate less reliable.
 - A complete authoritative period statement needs a consistent event/settlement model covering credit, returns, wallet/provider settlement, adjustments and each supported tender, plus tests for actual cross-period operations, concurrency and limits. Historical mutable sale fields must not be presented as immutable period facts.
 - The actual UTC-midnight scenario remains unexecuted. A short elapsed boundary or backdated test is not equivalent.
+
+The offline `npm run release:acceptance` inventory explicitly marks authoritative financial
+reconciliation incomplete. It cannot establish database, provider or cross-period accounting
+correctness and is not a substitute for the required independent PostgreSQL acceptance suite.

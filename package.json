@@ -46,7 +46,8 @@
     "test:browser:autopilot-activation": "node scripts/browser/autopilot-activation.check.mjs",
     "test:browser:pricing": "node scripts/browser/pricing-grid.check.mjs",
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
-    "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts"
+    "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
+    "release:acceptance": "node scripts/verification/release-acceptance.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

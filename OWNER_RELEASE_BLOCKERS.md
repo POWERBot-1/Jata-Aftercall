@@ -44,3 +44,14 @@ Production authenticated checks require an authorized production session and sep
 for any mutation. Do not fabricate entitlements, change configuration, merge, or deploy while
 required acceptance remains incomplete. Existing isolated synthetic-entitlement evidence is not
 payment or production evidence.
+
+## Local acceptance inventory
+
+Run `npm run release:acceptance` from an isolated checkout with no `.env*` files (the
+example file is allowed). It runs offline lint, typecheck, regression and build with a
+restricted child environment and reports each command's exit status. It refuses to run if
+Next.js could load a local environment file. It does not connect to PostgreSQL, R2, SMTP,
+or a browser; it reports those requirements as unverified, and exits non-zero while the
+release criteria remain incomplete. A successful local subcommand is not a release PASS.
+This runner does not replace the separate real-database CI journey, migration rehearsal,
+native installation, actual UTC-boundary observation or full browser acceptance.

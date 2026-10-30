@@ -98,3 +98,6 @@ approval after preview evidence is reviewed:
 - Tenant-scoped keys, server-side validation, 12 MB/object cap, rate limits, AI quotas,
   250 MB/business + 5 GB global storage ceilings — all enforced before writes.
 - Database rows store durable URLs + provenance only, never image bytes.
+
+The offline `npm run release:acceptance` inventory does not connect to R2 and must not
+be used as evidence of durable object storage, deletion or cross-session persistence.
