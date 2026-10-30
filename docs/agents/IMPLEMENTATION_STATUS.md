@@ -6,8 +6,11 @@ This branch is **not** a complete agent network and is not ready for release. Ex
 
 - Existing-account application captures a name, unverified Kenyan mobile number and privacy acknowledgement. One row per user and an audit event are written transactionally. Retries return the existing application, without updating it. Phone uniqueness must be enforced only after trusted verification, not against unverified claims.
 - `GET` and `POST /api/agents/application` require a session; POST checks origin, validates input and uses the existing process-local limiter. The authenticated admin page lists masked phones and checks the current database role. It is read-only: it cannot approve, verify or activate anyone.
-- An additive migration is included but has not been applied or tested against PostgreSQL. Rollback (only after assessing data loss and dependencies): drop the `AgentApplication` table, then reconcile Prisma's migration history through the established operational process. Deleting the table deletes applications. **Never run this rollback in production without explicit authorization.**
+- Two additive migrations are included but have not been applied or tested against PostgreSQL. Rollback (only after assessing data loss and dependencies): drop `AgentRegistrationThrottle`, then `AgentApplication`, and reconcile Prisma's migration history through the established operational process. Deleting the latter table deletes applications. **Never run this rollback in production without explicit authorization.**
 - Applications have no self-service deletion or correction; a retention schedule and operational privacy response path must be established before production use. This slice is not release-ready.
+
+- Agent-only account and application creation is implemented behind `AGENT_SELF_SERVICE_REGISTRATION_ENABLED=true`, default off. It creates a CUSTOMER user without a business and never grants an agent entitlement. Duplicate email and new registration have the same response and no automatic login. The application, user and audit event share a transaction. Website terms are acknowledged; programme terms remain unavailable.
+- A database-backed per-network registration limiter stores keyed fingerprints rather than IPs and uses atomic PostgreSQL upserts; the limiter migration has not been applied or integration-tested. The configured Vercel ingress must overwrite forwarding headers. The limiter alone does not constitute comprehensive bot protection. Expired buckets are opportunistically purged; a documented retention job is still needed.
 
 ## Discovery
 
@@ -21,7 +24,7 @@ This branch is **not** a complete agent network and is not ready for release. Ex
 
 ## Required follow-up before release
 
-1. Implement self-service account creation without forcing a business, durable abuse controls, terms acceptance, phone ownership verification and a review/activation state machine. The existing admin-assisted team verification does not satisfy this requirement.
+1. Verify and harden the disabled-by-default agent-only account flow, complete durable abuse/bot controls and programme terms acceptance, and implement phone ownership verification and a review/activation state machine. The existing admin-assisted team verification does not satisfy this requirement.
 2. Add reviewed migrations and transactional, unique agent identity, invitation, first-eligible attribution and audited correction models. Enforce server-side ownership, consent, self-referral protection, expiration and replay prevention.
 3. Connect verified onboarding and payment events to attribution, agent dashboard and a disabled-by-default versioned commission policy and append-only ledger. Test idempotency, refunds, reconciliation and cross-account isolation against disposable PostgreSQL and Paystack sandbox fixtures.
 4. Add durable outbox delivery, retries and accurate provider states, administration and independently scheduled Nairobi-period reports. Configure designated recipients only server-side; prove authorized delivery before claiming it works.

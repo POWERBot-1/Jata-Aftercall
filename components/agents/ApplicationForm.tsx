@@ -44,7 +44,7 @@ export default function ApplicationForm() {
   }
 
   if (status === "loading") return <p role="status">Checking your application…</p>;
-  if (status === "signed-out") return <div className="mk-prose"><p>Sign in with an existing JATA AFTERCALL account to apply. The existing account registration flow also creates a business; a separate agent-only account flow is not yet available.</p><Link href="/login">Sign in</Link></div>;
+  if (status === "signed-out") return <div className="mk-prose"><p>Sign in with an existing JATA AFTERCALL account to apply. A separate agent-only registration path may be available when enabled.</p><Link href="/login">Sign in</Link>{" · "}<Link href="/agents/register">Agent-only registration</Link></div>;
   if (status === "error") return <div role="alert"><p>We could not check your application. Please try again.</p><button type="button" className="mk-btn" onClick={() => { setStatus("loading"); void loadStatus(); }}>Try again</button></div>;
   if (status === "submitted") return <div role="status" className="mk-prose"><h2>Application received</h2><p>Your phone is not verified and you are not an active agent. Self-service phone verification, agent terms and referral tools are not yet available. Submitting this application does not guarantee activation or commission.</p></div>;
   return (

@@ -52,6 +52,15 @@ model AgentApplication {
   @@index([createdAt])
 }
 
+// A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.
+model AgentRegistrationThrottle {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 enum Role {
   CUSTOMER
   ADMIN
