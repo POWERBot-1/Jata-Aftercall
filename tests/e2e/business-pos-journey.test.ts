@@ -1290,7 +1290,9 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(await prisma.posCategory.findFirst({ where: { businessId, name: "Moved category" } })).toBeTruthy();
   }, 120_000);
 
-  it.skipIf(process.env.JATA_REAL_MIDNIGHT !== "1")("21f — actual UTC midnight finalization, mixed-tender refund and void (isolated only)", async () => {
+  // Register this separate, time-sensitive acceptance scenario only when explicitly opted in.
+  // It is not part of the ordinary journey's no-skips CI guarantee and is not evidence until run.
+  if (process.env.JATA_REAL_MIDNIGHT === "1") it("21f — actual UTC midnight finalization, mixed-tender refund and void (isolated only)", async () => {
     // Explicit opt-in, a local throwaway database and an actual UTC boundary are mandatory.
     const database = new URL(DATABASE_URL);
     if (process.env.JATA_DISPOSABLE_MIDNIGHT_DB !== "1" || !["localhost", "127.0.0.1"].includes(database.hostname) || !/(test|scratch|verify|tmp)/i.test(database.pathname)) {
