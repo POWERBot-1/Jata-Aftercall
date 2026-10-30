@@ -1,5 +1,5 @@
 import { handlePosRequest, posOk, queryString } from "@/lib/pos/http";
-import { defaultRangeFor, reportCatalogueFor, runDailyClosing, runReport } from "@/lib/pos/reporting";
+import { defaultRangeFor, reportCatalogueFor, ReportLimitError, runDailyClosing, runReport } from "@/lib/pos/reporting";
 import { sanitizeRange } from "@/lib/pos/validation";
 import type { ReportKey } from "@/lib/pos/types";
 
@@ -28,18 +28,23 @@ export async function GET(request: Request, context: RouteContext) {
       if (!requested) {
         return posOk({ catalogue: reportCatalogueFor(ctx.configuration) });
       }
-      if (requested === "daily_closing") {
-        if (!ctx.permissions.includes("CLOSE_DAY")) {
-          return { status: 403, data: { error: "You don't have permission to close the day.", code: "NOT_ALLOWED" } };
+      try {
+        if (requested === "daily_closing") {
+          if (!ctx.permissions.includes("CLOSE_DAY")) {
+            return { status: 403, data: { error: "You don't have permission to close the day.", code: "NOT_ALLOWED" } };
+          }
+          // A staff member bound to a location closes the books for that location (§16, §75).
+          return posOk({ closing: await runDailyClosing(businessId, ctx.configuration, undefined, { branchId: ctx.branchId }) });
         }
-        // A staff member bound to a location closes the books for that location (§16, §75).
-        return posOk({ closing: await runDailyClosing(businessId, ctx.configuration, undefined, { branchId: ctx.branchId }) });
+        const key = requested as ReportKey;
+        const range = queryString(url, "from") || queryString(url, "to")
+          ? sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 0)
+          : defaultRangeFor(key);
+        return posOk({ report: await runReport(businessId, ctx.configuration, key, range, { branchId: ctx.branchId }) });
+      } catch (error) {
+        if (error instanceof ReportLimitError) return { status: 422, data: { error: error.message, code: "REPORT_LIMIT" } };
+        throw error;
       }
-      const key = requested as ReportKey;
-      const range = queryString(url, "from") || queryString(url, "to")
-        ? sanitizeRange({ from: queryString(url, "from") ?? undefined, to: queryString(url, "to") ?? undefined }, 0)
-        : defaultRangeFor(key);
-      return posOk({ report: await runReport(businessId, ctx.configuration, key, range, { branchId: ctx.branchId }) });
     },
   });
 }

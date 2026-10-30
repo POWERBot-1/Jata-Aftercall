@@ -1,6 +1,7 @@
 import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
 import { negativeStockAllowed } from "./inventory";
+import { ReportLimitError } from "./report-limit";
 import type { InventoryMovementReason } from "./types";
 import type { PosConfiguration } from "./types";
 import { InlineMediaPersistenceError, containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
@@ -1288,6 +1289,7 @@ export async function partiesWithBalances(
   businessId: string,
   partyType: "CUSTOMER" | "SUPPLIER",
   client: PosClient = db(),
+  options: { requireComplete?: boolean } = {},
 ) {
   const rows = partyType === "SUPPLIER"
     ? await client.posSupplier.findMany({ where: { businessId }, select: { id: true, name: true, balanceKES: true, termsDays: true, phone: true } })
@@ -1301,6 +1303,8 @@ export async function partiesWithBalances(
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
   });
+  // The age of an account whose entry fell beyond the cap is unknown, not "current".
+  if (options.requireComplete && entries.length >= REPORT_ROW_LIMIT) throw new ReportLimitError();
   const oldest = new Map<string, Date>();
   for (const entry of entries) {
     if (!oldest.has(entry.partyId)) oldest.set(entry.partyId, entry.createdAt);

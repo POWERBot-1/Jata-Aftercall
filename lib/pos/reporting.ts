@@ -33,6 +33,8 @@ import {
   type SaleRecord,
 } from "./reports";
 import * as store from "./store";
+import { ReportLimitError } from "./report-limit";
+export { ReportLimitError } from "./report-limit";
 import { resolveTerminology } from "./terminology";
 import { isTerminal, stateLabel } from "./workflow";
 import type { PosConfiguration, ReportKey } from "./types";
@@ -132,6 +134,14 @@ function unavailable(definition: ReportDefinition, range: DateRange, notice: str
   return payload(definition, range, { available: false, partial: true, notice, basis: definition.basis });
 }
 
+async function completeRows(promise: Promise<any[]>): Promise<any[]> {
+  const rows = await promise;
+  // The underlying queries return at most 5,000 rows. Exactly 5,000 might be complete, but
+  // cannot be distinguished from truncation, so refuse conservatively rather than guess.
+  if (rows.length >= store.REPORT_ROW_LIMIT) throw new ReportLimitError();
+  return rows;
+}
+
 /** Which range a report covers when the owner did not choose one. */
 export function defaultRangeFor(key: ReportKey, now: Date = new Date()): DateRange {
   if (key === "daily_sales" || key === "refunds") return dayRange(now);
@@ -172,7 +182,7 @@ export async function runReport(
     case "monthly_sales":
     case "gross_sales":
     case "net_sales": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const summary = summarizeSales(sales, range);
       const series = dailySeries(sales, 7, range.to);
       return payload(definition, range, {
@@ -201,7 +211,7 @@ export async function runReport(
             balance: sale.balanceKES - (sale.creditRefundedKES ?? 0) > 0 ? formatKES(sale.balanceKES - (sale.creditRefundedKES ?? 0)) : "—",
           })),
         series: series.map((point) => ({ label: point.date, value: point.netKES })),
-        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : "Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period.",
+        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : `Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period.${summary.count > 200 ? " Totals include the full cohort; only the latest 200 non-voided sales are shown." : ""}`,
       });
     }
 
@@ -231,7 +241,7 @@ export async function runReport(
     }
 
     case "payment_breakdown": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const methods = paymentBreakdown(sales, range);
       const total = methods.reduce((sum, method) => sum + method.amountKES, 0);
       return payload(definition, range, {
@@ -256,7 +266,7 @@ export async function runReport(
       if (partyType === "CUSTOMER" && !config.credit.enabled) {
         return unavailable(definition, range, "Customer credit is switched off for this business.");
       }
-      const parties = await store.partiesWithBalances(businessId, partyType);
+      const parties = await store.partiesWithBalances(businessId, partyType, undefined, { requireComplete: true });
       const owing = parties
         .filter((party: any) => Number(party.balanceKES ?? 0) > 0)
         .sort((a: any, b: any) => new Date(a.oldestEntryAt ?? Date.now()).getTime() - new Date(b.oldestEntryAt ?? Date.now()).getTime());
@@ -289,7 +299,7 @@ export async function runReport(
     }
 
     case "expenses": {
-      const expenses = toExpenseRecords(await store.expensesForReport(businessId, range, undefined, { branchId }));
+      const expenses = toExpenseRecords(await completeRows(store.expensesForReport(businessId, range, undefined, { branchId })));
       const summary = summarizeExpenses(expenses, range);
       return payload(definition, range, {
         summary: [
@@ -308,8 +318,8 @@ export async function runReport(
 
     case "profitability": {
       const [sales, expenses] = await Promise.all([
-        store.salesForReport(businessId, range, undefined, { branchId }),
-        store.expensesForReport(businessId, range, undefined, { branchId }),
+        completeRows(store.salesForReport(businessId, range, undefined, { branchId })),
+        completeRows(store.expensesForReport(businessId, range, undefined, { branchId })),
       ]);
       const result = profitability(toSaleRecords(sales), toExpenseRecords(expenses), range);
       return payload(definition, range, {
@@ -368,7 +378,7 @@ export async function runReport(
     }
 
     case "best_sellers": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const top = bestSellers(sales, 20, range);
       return payload(definition, range, {
         rows: top.map((item) => ({ item: item.name, sold: item.quantity, revenue: formatKES(item.revenueKES) })),
@@ -378,7 +388,7 @@ export async function runReport(
     }
 
     case "slow_movers": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const items = await store.stockWithProducts(businessId, undefined, { branchId });
       const names = items.map((item: any) => String(item.product?.name ?? ""));
       const slow = slowMovers(sales, names, range, 20);
@@ -390,7 +400,7 @@ export async function runReport(
     }
 
     case "customer_activity": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const byCustomer = new Map<string, { visits: number; revenueKES: number; lastVisit: Date }>();
       for (const sale of sales) {
         const name = sale.customerName ?? "Walk-in";
@@ -422,7 +432,7 @@ export async function runReport(
 
     case "staff_performance":
     case "commissions": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const staff = await store.listStaff(businessId, { activeOnly: false });
       const byName: Record<string, number> = {};
       for (const member of staff) byName[String(member.name)] = Number(member.commissionPercent ?? 0);
@@ -445,7 +455,7 @@ export async function runReport(
     }
 
     case "channel_attribution": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const rows = channelAttribution(sales, range);
       const total = rows.reduce((sum, row) => sum + row.revenueKES, 0);
       return payload(definition, range, {
@@ -462,7 +472,7 @@ export async function runReport(
     }
 
     case "ingredient_usage": {
-      const movements = await store.movementsForReport(businessId, range, undefined, { branchId });
+      const movements = await completeRows(store.movementsForReport(businessId, range, undefined, { branchId }));
       const used = movements.filter((movement: any) => ["SALE", "DAMAGE", "EXPIRY", "WASTAGE"].includes(movement.reason));
       const byItem = new Map<string, { name: string; unit: string; quantity: number; wasted: number }>();
       for (const movement of used) {
@@ -489,7 +499,7 @@ export async function runReport(
     }
 
     case "production": {
-      const movements = await store.movementsForReport(businessId, range, undefined, { branchId });
+      const movements = await completeRows(store.movementsForReport(businessId, range, undefined, { branchId }));
       const rows = movements.filter((movement: any) => ["PRODUCTION_IN", "PRODUCTION_OUT"].includes(movement.reason));
       return payload(definition, range, {
         rows: rows.slice(-200).reverse().map((movement: any) => ({
@@ -504,9 +514,9 @@ export async function runReport(
     }
 
     case "job_profitability": {
-      const orders = await store.ordersForReport(businessId, range, undefined, { branchId });
+      const orders = await completeRows(store.ordersForReport(businessId, range, undefined, { branchId }));
       const jobs = orders.filter((order: any) => !isTerminal(order.workflowKey, order.stateKey) || order.stateKey !== "CANCELLED");
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
+      const sales = toSaleRecords(await completeRows(store.salesForReport(businessId, range, undefined, { branchId })));
       const saleById = new Map(sales.map((sale) => [sale.id, sale]));
       const rows = jobs.map((order: any) => {
         const sale = order.saleId ? saleById.get(order.saleId) : null;
@@ -534,7 +544,7 @@ export async function runReport(
     }
 
     case "projects": {
-      const orders = await store.ordersForReport(businessId, range, undefined, { branchId });
+      const orders = await completeRows(store.ordersForReport(businessId, range, undefined, { branchId }));
       const projects = orders.filter((order: any) => order.workflowKey === "project");
       const deposits = projects.reduce((sum: number, order: any) => sum + Number(order.depositKES ?? 0), 0);
       const balances = projects.reduce((sum: number, order: any) => sum + Math.max(0, Number(order.totalKES ?? 0) - Number(order.depositKES ?? 0)), 0);
@@ -581,9 +591,9 @@ export async function runDailyClosing(businessId: string, config: PosConfigurati
   const branchId = options.branchId ?? null;
   const range = dayRange(now);
   const [sales, expenses, payments] = await Promise.all([
-    store.salesForReport(businessId, range, undefined, { branchId }),
-    store.expensesForReport(businessId, range, undefined, { branchId }),
-    store.paymentsForReport(businessId, range, undefined, { branchId }),
+    completeRows(store.salesForReport(businessId, range, undefined, { branchId })),
+    completeRows(store.expensesForReport(businessId, range, undefined, { branchId })),
+    completeRows(store.paymentsForReport(businessId, range, undefined, { branchId })),
   ]);
   const closing = dailyClosing(toSaleRecords(sales), toExpenseRecords(expenses), toPaymentLedgerRecords(payments), now);
   return {

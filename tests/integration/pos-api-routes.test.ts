@@ -61,6 +61,7 @@ import { GET as expensesGet, POST as expensesPost } from "@/app/api/pos/[busines
 import { GET as purchasesGet, POST as purchasesPost } from "@/app/api/pos/[businessId]/purchases/route";
 import { POST as purchaseReceivePost } from "@/app/api/pos/[businessId]/purchases/[purchaseId]/receive/route";
 import { GET as reportsGet } from "@/app/api/pos/[businessId]/reports/route";
+import * as reportStore from "@/lib/pos/store";
 import { GET as auditGet } from "@/app/api/pos/[businessId]/audit/route";
 import { GET as staffGet, POST as staffPost } from "@/app/api/pos/[businessId]/staff/route";
 import { GET as branchesGet, POST as branchesPost } from "@/app/api/pos/[businessId]/branches/route";
@@ -1201,6 +1202,17 @@ describe("/reports and /audit (§35, §37)", () => {
     await liveRestaurant();
     await salesPost(saleOf([{ productId: "p_a1", quantity: 2 }], [{ method: "cash", amountKES: 100 }]), context("bizA"));
     await salesPost(saleOf([{ productId: "p_a2", quantity: 1 }], [{ method: "mpesa", amountKES: 250, reference: "MP1" }]), context("bizA"));
+  });
+
+  it("returns an actionable refusal instead of capped sales totals", async () => {
+    const capped = vi.spyOn(reportStore, "salesForReport").mockResolvedValue(Array.from({ length: 5000 }, () => ({})));
+    try {
+      const { status, body } = await call(await reportsGet(get("bizA", "", { report: "daily_sales" }), context("bizA")));
+      expect(status).toBe(422);
+      expect(body.code).toBe("REPORT_LIMIT");
+      expect(body.error).toContain("5,000-record safety limit");
+      expect(body.report).toBeUndefined();
+    } finally { capped.mockRestore(); }
   });
 
   it("offers the catalogue this business is configured for, and only that", async () => {
