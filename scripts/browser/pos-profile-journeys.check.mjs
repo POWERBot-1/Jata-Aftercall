@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 
 const db = new URL(process.env.DATABASE_URL || "postgresql://invalid.invalid/invalid");
 const base = new URL(process.env.BASE_URL || "http://127.0.0.1:4100");
@@ -15,7 +15,9 @@ const prisma = new PrismaClient();
 const uid = randomUUID().slice(0, 8);
 const sizes = [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
 const profiles = [{ key: "retail", label: "Retail shop" }, { key: "salon", label: "Salon" }, { key: "farm", label: "Farm" }];
-let browser, strangerId;
+let browser, strangerId, retailCaptureId;
+const shotDir = process.env.SHOT_DIR || "premium-shots";
+mkdirSync(shotDir, { recursive:true });
 const businesses = [];
 async function login(page, email, password) {
   await page.goto(new URL("/login", base).href, { waitUntil: "load" });
@@ -290,6 +292,74 @@ try {
         if (!fullReport.summary.some((row) => row.label === label && row.value === value)) throw new Error(`Full report missing ${label} ${value}`);
       }
       console.log("PASS retail browser partial and final cash refunds, retained totals, duplicate refusal and stock return; synthetic subscription");
+
+      // Snapshot UI with real HTTP and PostgreSQL. The completed period is empty; it is not a
+      // simulation of a sale spanning midnight or evidence of a period-end reconstruction.
+      const snapshotsUrl = `/api/pos/${id}/reports/snapshots`;
+      let captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "GET");
+      await clickText(page, "button", "Load finalized captures");
+      if (!(await captureResponse).ok()) throw new Error("Snapshot list failed");
+      await page.waitForFunction(() => document.body.innerText.includes("No finalized captures yet."));
+      const dates = async (day) => {
+        for (const selector of ["#report-from", "#report-to"]) await page.$eval(selector, (el, value) => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+          el.dispatchEvent(new Event("input", { bubbles:true })); el.dispatchEvent(new Event("change", { bubbles:true }));
+        }, day);
+      };
+      const today = new Date().toISOString().slice(0,10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+      await dates(today);
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Finalize selected dates" && !b.disabled));
+      captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Finalize selected dates");
+      if ((await captureResponse).status() !== 400) throw new Error("Unfinished period was not refused");
+      await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes("completed UTC"));
+      if (await prisma.posReportSnapshot.count({ where:{ businessId:id } })) throw new Error("Refused snapshot created a row");
+      await dates(yesterday);
+      captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Finalize selected dates");
+      const captured = await captureResponse;
+      if (captured.status() !== 201) throw new Error(`Snapshot finalization failed: ${captured.status()} ${await captured.text()}`);
+      const firstCapture = (await captured.json()).snapshot;
+      retailCaptureId = firstCapture.id;
+      await page.waitForFunction(() => document.body.innerText.includes("Finalized revision 1"));
+      const revisionButton = async () => page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Create replacement revision"));
+      let revButton = await revisionButton();
+      if (!(await revButton.asElement().evaluate((el) => el.disabled))) throw new Error("Correction allowed without reason");
+      await revButton.dispose();
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Finalize selected dates" && !b.disabled));
+      captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Finalize selected dates");
+      if ((await captureResponse).status() !== 409) throw new Error("Duplicate snapshot was not refused");
+      await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes("already has a capture"));
+      await fill(page, "#capture-reason", "Reviewed correction");
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Create replacement revision" && !b.disabled));
+      captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Create replacement revision");
+      const revised = await captureResponse;
+      if (revised.status() !== 201) throw new Error(`Snapshot correction failed: ${revised.status()} ${await revised.text()}`);
+      if ((await revised.json()).snapshot.supersedesId !== retailCaptureId) throw new Error("Snapshot correction did not supersede original");
+      await page.waitForFunction(() => document.body.innerText.includes("Finalized revision 2") && document.body.innerText.includes("Reviewed correction"));
+      await page.reload({ waitUntil:"load" });
+      await new Promise((done) => setTimeout(done, 1200));
+      captureResponse = page.waitForResponse((r) => r.url().endsWith(snapshotsUrl) && r.request().method() === "GET");
+      await clickText(page, "button", "Load finalized captures"); await captureResponse;
+      await page.waitForFunction(() => [...document.querySelectorAll('[aria-labelledby="capture-heading"] li')].length === 2);
+      const firstRevision = await page.evaluateHandle(() => [...document.querySelectorAll('[aria-labelledby="capture-heading"] li button')].find((el) => el.textContent.includes("revision 1")));
+      captureResponse = page.waitForResponse((r) => r.url().includes(`${snapshotsUrl}?id=`) && r.request().method() === "GET");
+      await firstRevision.asElement().click(); await firstRevision.dispose();
+      const reopened = await captureResponse;
+      if (!reopened.ok() || JSON.stringify((await reopened.json()).snapshot.payload) !== JSON.stringify(firstCapture.payload)) throw new Error("Original capture changed or could not be reopened");
+      await page.waitForFunction(() => document.body.innerText.includes("Finalized revision 1"));
+      await page.$eval('[aria-labelledby="capture-heading"] details', (el) => { el.open = true; });
+      for (const [width,height] of sizes) {
+        await page.setViewport({ width,height });
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1 ? { width:document.documentElement.scrollWidth, offenders:[...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > innerWidth + 1).slice(0,6).map((el) => `${el.tagName}.${String(el.className).slice(0,60)}`) } : null);
+        if (overflow) throw new Error(`Snapshot report overflows ${width}x${height}: ${JSON.stringify(overflow)}`);
+        await page.screenshot({ path:`${shotDir}/snapshot-report-${width}x${height}.jpg`, type:"jpeg", quality:70, fullPage:true });
+        console.log(`PASS finalized capture history and references at ${width}x${height}`);
+      }
+      console.log("PASS browser snapshot empty state, invalid period, duplicate, correction, history and reload (empty period fixture)");
     }
     await page.goto(new URL(`${root}/products`,base).href, { waitUntil:"load" });
     await page.waitForSelector(".pos-row-actions button", { visible:true });
@@ -430,6 +500,24 @@ try {
     const afterConfig = await prisma.posConfiguration.findUnique({ where:{ businessId:id } });
     if (await prisma.posProduct.count({ where:{ businessId:id } }) !== beforeProducts || afterConfig.answersJson !== beforeConfig.answersJson || afterConfig.publishedVersion !== beforeConfig.publishedVersion) throw new Error("Cross-tenant mutation changed victim data");
   }
+  const retailId = businesses[0];
+  const captureUrl = `/api/pos/${retailId}/reports/snapshots`;
+  const deniedRead = await outsider.evaluate(async (url) => (await fetch(url)).status, `${captureUrl}?id=${retailCaptureId}`);
+  const deniedWrite = await outsider.evaluate(async (url) => (await fetch(url, { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ from:"2026-01-01", to:"2026-01-01" }) })).status, captureUrl);
+  if (![403,404].includes(deniedRead) || ![403,404].includes(deniedWrite)) throw new Error(`Cross-tenant snapshot access allowed: ${deniedRead}/${deniedWrite}`);
+  // Inventory staff may read reports but do not have CLOSE_DAY. Authenticate as an actual
+  // member in a separate browser context and check both the rendered controls and server refusal.
+  await prisma.businessMember.create({ data:{ businessId:retailId, userId:stranger.id, role:"STAFF" } });
+  await prisma.posStaff.create({ data:{ businessId:retailId, userId:stranger.id, name:"Inventory fixture", roleKey:"INVENTORY" } });
+  await outsider.goto(new URL(`/dashboard/pos/${retailId}/reports`,base).href, { waitUntil:"load" });
+  await outsider.waitForSelector('[aria-labelledby="capture-heading"]', { visible:true });
+  await new Promise((done) => setTimeout(done, 1200));
+  const controls = await outsider.evaluate(() => [...document.querySelectorAll('[aria-labelledby="capture-heading"] button')].map((button) => button.textContent.trim()));
+  if (controls.includes("Finalize selected dates") || controls.includes("Create replacement revision")) throw new Error("Report-only staff saw finalization controls");
+  const staffRead = await outsider.evaluate(async (url) => (await fetch(url)).status, `${captureUrl}?id=${retailCaptureId}`);
+  const staffWrite = await outsider.evaluate(async (url) => (await fetch(url, { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ from:"2026-01-01", to:"2026-01-01" }) })).status, captureUrl);
+  if (staffRead !== 200 || staffWrite !== 403) throw new Error(`Report-only permissions wrong: ${staffRead}/${staffWrite}`);
+  console.log("PASS snapshot cross-tenant denial and report-only staff read/write permissions in browser");
   console.log("PASS cross-tenant catalogue reads and product/configuration/publication/inventory mutations refused from independent authenticated browser session");
   await strangerContext.close();
 } finally {

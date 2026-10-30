@@ -56,6 +56,7 @@ export function ReportsClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captures, setCaptures] = useState<any[]>([]);
+  const [capturesLoaded, setCapturesLoaded] = useState(false);
   const [capture, setCapture] = useState<any | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
 
@@ -65,7 +66,7 @@ export function ReportsClient({
       const url = `/api/pos/${encodeURIComponent(businessId)}/reports/snapshots${id ? `?id=${encodeURIComponent(id)}` : ""}`;
       const response = await fetch(url); const data = await response.json();
       if (!response.ok) throw new Error(data?.error ?? "Couldn't load finalized captures.");
-      if (id) setCapture(data.snapshot); else setCaptures(data.snapshots);
+      if (id) setCapture(data.snapshot); else { setCaptures(data.snapshots); setCapturesLoaded(true); }
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn't load finalized captures."); }
     finally { setBusy(false); }
   }
@@ -81,7 +82,7 @@ export function ReportsClient({
       if (!response.ok) throw new Error(data?.error ?? "Couldn't finalize the capture.");
       setCapture(data.snapshot); setCorrectionReason("");
       const list = await fetch(`/api/pos/${encodeURIComponent(businessId)}/reports/snapshots`);
-      if (list.ok) setCaptures((await list.json()).snapshots);
+      if (list.ok) { setCaptures((await list.json()).snapshots); setCapturesLoaded(true); }
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn't finalize the capture."); }
     finally { setBusy(false); }
   }
@@ -169,7 +170,7 @@ export function ReportsClient({
 
       <section className="jata-card p-4 space-y-3" aria-labelledby="capture-heading">
         <h3 id="capture-heading" className="text-base font-semibold">Finalized financial captures</h3>
-        <p className="pos-note">Choose completed UTC dates above. A capture freezes the current status of that sale cohort and the period ledger at finalization. It is not a reconstruction of period-end balances. A correction creates a replacement revision; never add revisions together.</p>
+        <p className="pos-note">Choose completed UTC dates above. A capture is made manually for the whole business; it freezes the sale cohort’s current status and the period ledger during finalization, not at the end of the period. The range starts at 00:00 UTC on the first date and ends at 00:00 UTC after the last date (exclusive). Corrections replace earlier revisions; do not add revisions or overlapping periods together.</p>
         <div className="pos-toolbar">
           <button type="button" className="jata-btn jata-btn-secondary" disabled={busy} onClick={() => void loadCaptures()}>Load finalized captures</button>
           {canCloseDay ? <button type="button" className="jata-btn jata-btn-secondary" disabled={busy || !from || !to} onClick={() => void finalizeCapture()}>Finalize selected dates</button> : null}
@@ -177,11 +178,13 @@ export function ReportsClient({
         {captures.length ? <ul className="space-y-2">{captures.map((item) => (
           <li key={item.id}><button type="button" className="pos-option" disabled={busy} onClick={() => void loadCaptures(item.id)}>
             <strong>{item.periodStart.slice(0, 10)} to {item.lastDay} UTC · revision {item.revision}</strong>
-            <small>Finalized {item.finalizedAt}{item.reason ? ` · ${item.reason}` : ""}</small>
+            <small>Finalization started {item.finalizedAt}{item.reason ? ` · ${item.reason}` : ""}</small>
           </button></li>
-        ))}</ul> : <p className="pos-note">Load captures to see up to the 100 most recent revisions.</p>}
+        ))}</ul> : <p className="pos-note">{capturesLoaded ? "No finalized captures yet." : "Load captures to see up to the 100 most recent revisions."}</p>}
         {capture ? <div className="space-y-2">
-          <h4 className="font-semibold">Finalized revision {capture.revision} · {capture.finalizedAt}</h4>
+          <h4 className="font-semibold">Finalized revision {capture.revision}</h4>
+          <p className="pos-note">Business-wide period: {capture.periodStart} inclusive to {capture.periodEnd} exclusive (UTC). Finalization transaction started: {capture.finalizedAt}. Capture read time, approximate: {capture.payload.capturedAt}. Finalized by: {capture.finalizedById}.</p>
+          {capture.reason ? <p className="pos-note">Correction reason: {capture.reason}. Replaces capture {capture.supersedesId}.</p> : null}
           <p className="pos-note">{capture.payload.note}</p>
           <dl className="jata-stat-grid">
             <div className="jata-stat"><dt>Cohort retained</dt><dd>{formatKES(capture.payload.saleCohort.totals.netKES)}</dd></div>
