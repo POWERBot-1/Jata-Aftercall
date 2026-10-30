@@ -206,22 +206,26 @@ export async function runReport(
     }
 
     case "refunds": {
-      const sales = toSaleRecords(await store.salesForReport(businessId, range, undefined, { branchId }));
-      const refunded = sales.filter((sale) => Number(sale.refundedKES ?? 0) > 0 || sale.status === "VOIDED");
-      const totalKES = refunded.reduce((sum, sale) => sum + Number(sale.refundedKES ?? 0), 0);
+      // Cash-flow period, not the status of the sales created in this period. Rows are settled
+      // refund payments, so a mixed-tender refund can have multiple rows and must be summed only
+      // once. Credit reversals and external wallet flows are not represented by these rows.
+      const payments = await store.paymentsForReport(businessId, range, undefined, { branchId });
+      const refunds = payments.filter((entry: any) => entry.direction === "OUT" && entry.purpose === "REFUND");
+      const totalKES = refunds.reduce((sum: number, entry: any) => sum + Number(entry.amountKES ?? 0), 0);
       return payload(definition, range, {
+        partial: true,
         summary: [
-          { label: "Refunded sales", value: String(refunded.length) },
-          { label: "Money returned", value: formatKES(totalKES) },
+          { label: "Settled refund payout rows", value: String(refunds.length) },
+          { label: "Settled refund payouts", value: formatKES(totalKES) },
         ],
-        rows: refunded.map((sale) => ({
-          receipt: sale.receiptNumber ?? "",
-          when: formatDateTime(sale.createdAt),
-          status: sale.status ?? "",
-          sold: formatKES(sale.totalKES),
-          refunded: formatKES(Number(sale.refundedKES ?? 0)),
+        rows: refunds.map((entry: any) => ({
+          payment: entry.id,
+          sale: entry.saleId ?? "—",
+          when: formatDateTime(entry.createdAt),
+          method: entry.method,
+          amount: formatKES(Number(entry.amountKES ?? 0)),
         })),
-        notice: refunded.length === 0 ? "No refunded sales created in this period." : "Sales created in this period, shown at their current refund status; refunds can have occurred later.",
+        notice: "Settled POS refund payments recorded during this period, including refunds of earlier sales. Multiple tenders produce multiple rows. Credit reversals, returned goods and payment-wallet refunds are not included; this is not a complete refund-liability report. The first 5,000 settled period payments are considered.",
       });
     }
 

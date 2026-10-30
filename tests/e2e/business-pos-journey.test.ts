@@ -1225,6 +1225,12 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const end = await dbTime();
     const later = { from: boundary, to: end };
     const laterLedger = await paymentsForReport(businessId, later);
+    const refundsReport = await runReport(businessId, config, "refunds", later);
+    expect(refundsReport.partial).toBe(true);
+    expect(refundsReport.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 100" }]));
+    expect(refundsReport.rows).toHaveLength(3);
+    expect(refundsReport.rows.every((row) => row.sale === saleId)).toBe(true);
+    expect((await runReport(businessId, config, "refunds", earlier)).summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 0" }]));
     expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.direction === "OUT").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(100);
     expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "cash").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(40);
     expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "mpesa").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(60);
@@ -1283,6 +1289,75 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(await prisma.posCategory.findFirst({ where: { businessId, id } })).toBeNull();
     expect(await prisma.posCategory.findFirst({ where: { businessId, name: "Moved category" } })).toBeTruthy();
   }, 120_000);
+
+  it.skipIf(process.env.JATA_REAL_MIDNIGHT !== "1")("21f — actual UTC midnight finalization, mixed-tender refund and void (isolated only)", async () => {
+    // Explicit opt-in, a local throwaway database and an actual UTC boundary are mandatory.
+    const database = new URL(DATABASE_URL);
+    if (process.env.JATA_DISPOSABLE_MIDNIGHT_DB !== "1" || !["localhost", "127.0.0.1"].includes(database.hostname) || !/(test|scratch|verify|tmp)/i.test(database.pathname)) {
+      throw new Error("Midnight journey requires an explicitly disposable local test database.");
+    }
+    const dbTime = async (): Promise<Date> => (await prisma.$queryRaw`SELECT clock_timestamp() AS now`)[0].now;
+    const start = await dbTime();
+    const midnight = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 1));
+    const remaining = midnight.getTime() - start.getTime();
+    if (remaining < 10_000 || remaining > 200_000) throw new Error("Start the midnight scenario 10–200 seconds before UTC midnight; no timestamp substitution is permitted.");
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const createSale = (quantity: number, cash: number, mpesa: number) => callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity }], payments: [{ method: "cash", amountKES: cash }, { method: "mpesa", amountKES: mpesa }],
+    } });
+    const mixed = await createSale(2, 40, 60);
+    const toVoid = await createSale(1, 20, 30);
+    expect(mixed.status, mixed.text()).toBe(201); expect(toVoid.status, toVoid.text()).toBe(201);
+    const saleId = mixed.body.sale.id, voidId = toVoid.body.sale.id;
+    const sold = await prisma.posSale.findUnique({ where: { id: saleId }, include: { items: true, payments: true } });
+    const voidSale = await prisma.posSale.findUnique({ where: { id: voidId }, include: { payments: true } });
+    expect(sold!.createdAt.getTime()).toBeLessThan(midnight.getTime());
+    expect(voidSale!.createdAt.getTime()).toBeLessThan(midnight.getTime());
+    expect([...sold!.payments, ...voidSale!.payments].every((p: any) => p.createdAt.getTime() < midnight.getTime())).toBe(true);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 3);
+    // Actual elapsed wall-clock time. No injected clock, database timestamp edits or backdating.
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, midnight.getTime() - Date.now()) + 1200));
+    expect((await dbTime()).getTime()).toBeGreaterThanOrEqual(midnight.getTime());
+    const firstDay = sold!.createdAt.toISOString().slice(0, 10);
+    const secondDay = midnight.toISOString().slice(0, 10);
+    const snap = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: firstDay, to: firstDay } });
+    expect(snap.status, snap.text()).toBe(201);
+    const snapshot = snap.body.snapshot;
+    expect(snapshot.payload.saleCohort.sales).toEqual(expect.arrayContaining([expect.objectContaining({ id: saleId, refundedKES: 0 }), expect.objectContaining({ id: voidId, status: "COMPLETED" })]));
+    const closingBefore = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingBefore.status, closingBefore.text()).toBe(200);
+    const action = (id: string, body: object) => callPos(salePost, businessId, { path: `/sales/${id}`, params: { saleId: id }, method: "POST", body });
+    const partial = await action(saleId, { amountKES: 70, method: "cash" });
+    const full = await action(saleId, { amountKES: 30, items: [{ saleItemId: sold!.items[0].id, quantity: 2 }] });
+    const voided = await action(voidId, { void: true });
+    expect(partial.status, partial.text()).toBe(200); expect(full.status, full.text()).toBe(200); expect(voided.status, voided.text()).toBe(200);
+    expect((await action(saleId, { amountKES: 1 })).status).toBe(400);
+    expect((await action(voidId, { void: true })).status).toBe(400);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    const out = await prisma.posPayment.findMany({ where: { businessId, saleId: { in: [saleId, voidId] }, direction: "OUT" }, orderBy: { createdAt: "asc" } });
+    expect(out.every((p: any) => p.createdAt.getTime() >= midnight.getTime())).toBe(true);
+    expect(out.filter((p: any) => p.method === "cash").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(60);
+    expect(out.filter((p: any) => p.method === "mpesa").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(90);
+    const refunds = await callPos(reportsGet, businessId, { query: { report: "refunds", from: secondDay, to: secondDay } });
+    expect(refunds.body.report.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 150" }]));
+    expect(refunds.body.report.rows).toHaveLength(out.length);
+    const earlierRefunds = await callPos(reportsGet, businessId, { query: { report: "refunds", from: firstDay, to: firstDay } });
+    const earlierIds = earlierRefunds.body.report.rows.map((row: any) => row.payment);
+    expect(out.every((p: any) => !earlierIds.includes(p.id))).toBe(true);
+    const closingAfter = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES).toBe(60);
+    expect(closingAfter.body.closing.expectedCashKES - closingBefore.body.closing.expectedCashKES).toBe(-60);
+    const historical = await callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id: snapshot.id } });
+    expect(historical.status).toBe(200); expect(historical.body.snapshot.payload).toEqual(snapshot.payload);
+    console.log("MIDNIGHT_EVIDENCE", JSON.stringify({ firstDay, secondDay, boundaryUTC: midnight.toISOString(),
+      finalizedAt: snapshot.finalizedAt, snapshotId: snapshot.id,
+      sales: [{ id: saleId, receipt: sold!.receiptNumber, createdAt: sold!.createdAt, in: sold!.payments.map((p: any) => ({ id: p.id, method: p.method, amountKES: p.amountKES, at: p.createdAt })) },
+        { id: voidId, receipt: voidSale!.receiptNumber, createdAt: voidSale!.createdAt, in: voidSale!.payments.map((p: any) => ({ id: p.id, method: p.method, amountKES: p.amountKES, at: p.createdAt })) }],
+      out: out.map((p: any) => ({ id: p.id, saleId: p.saleId, method: p.method, amountKES: p.amountKES, at: p.createdAt })),
+      expected: { refundsKES: 150, cashOutKES: 60, mpesaOutKES: 90, stockAfter: stockBefore },
+      actual: { refunds: refunds.body.report.summary, cashOutDelta: closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES, stockAfter: await stockOf(businessId, ctx.chapatiId) } }));
+  }, 240_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {
     const businessId = ctx.owner.businessId;

@@ -249,7 +249,7 @@ export function ReportsClient({
               </p>
             </div>
             <span className="pos-pill" data-tone={report.basis === "recorded" ? "success" : report.partial ? "warn" : "info"}>
-              {report.partial ? "Estimate — something is missing" : BASIS_LABELS[report.basis] ?? report.basis}
+              {report.partial ? "Partial — some information is missing" : BASIS_LABELS[report.basis] ?? report.basis}
             </span>
           </div>
 

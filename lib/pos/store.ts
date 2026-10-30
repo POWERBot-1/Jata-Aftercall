@@ -1243,7 +1243,7 @@ export async function paymentsForReport(businessId: string, range: DateRange = {
     where: { businessId, status: "SETTLED", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
-    select: { id: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
+    select: { id: true, saleId: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
   });
 }
 
