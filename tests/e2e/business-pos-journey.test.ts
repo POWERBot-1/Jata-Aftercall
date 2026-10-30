@@ -1295,7 +1295,16 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const businessId = ctx.owner.businessId;
     const marker = `cap-${runId}`;
     try {
+      const before = await callPos(expensesGet, businessId);
+      expect(before.status, before.text()).toBe(200);
       await prisma.posExpense.createMany({ data: Array.from({ length: 5000 }, () => ({ businessId, categoryKey: "test", amountKES: 1, method: "cash", notes: marker })) });
+      const expenses = await callPos(expensesGet, businessId);
+      expect(expenses.status, expenses.text()).toBe(200);
+      expect(expenses.body.totals.amountKES - before.body.totals.amountKES).toBe(5000);
+      const category = (payload: any) => payload.totals.byCategory.find((row: any) => row.categoryKey === "test")?.amountKES ?? 0;
+      expect(category(expenses.body) - category(before.body)).toBe(5000);
+      expect(expenses.body.rowsMayBeLimited).toBe(true);
+      expect(expenses.body.expenses).toHaveLength(200);
       const closing = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
       expect(closing.status, closing.text()).toBe(422);
       expect(closing.body.code).toBe("REPORT_LIMIT");
@@ -1307,6 +1316,20 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       expect(card.hint).toContain("5,000-record limit");
     } finally {
       await prisma.posExpense.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
+  it("21e-top-limit — real PostgreSQL refuses a sampled top-item ranking above 2,000 sales", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `top-cap-${runId}`;
+    try {
+      await prisma.posSale.createMany({ data: Array.from({ length: 2001 }, (_, index) => ({ businessId, receiptNumber: `${marker}-${index}`, notes: marker })) });
+      const result = await callPos(salesGet, businessId);
+      expect(result.status, result.text()).toBe(200);
+      expect(result.body.topItems).toBeNull();
+      expect(result.body.topItemsNotice).toContain("more than 2,000 sales");
+    } finally {
+      await prisma.posSale.deleteMany({ where: { businessId, notes: marker } });
     }
   }, 120_000);
 

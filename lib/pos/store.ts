@@ -890,8 +890,10 @@ export async function topItems(businessId: string, range: DateRange = {}, limit 
   const sales = await client.posSale.findMany({
     where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     select: { id: true },
-    take: 2000,
+    take: 2001,
   });
+  // The ranking cannot be calculated honestly from only a prefix of sales.
+  if (sales.length > 2000) return null;
   const saleIds = sales.map((sale: any) => sale.id);
   if (!saleIds.length) return [];
   const items = await client.posSaleItem.findMany({
@@ -950,19 +952,16 @@ export async function expenseTotals(
   client: PosClient = db(),
   options: { branchId?: string | null } = {},
 ) {
-  // The total is the total of the rows this actor is allowed to read — a location's spend is
-  // summed for the people who work that location, not for the whole business (§16, §75).
-  const expenses = await listExpenses(businessId, { range, take: 500, branchId: options.branchId }, client);
-  const byCategory = new Map<string, { categoryKey: string; amountKES: number }>();
-  let amountKES = 0;
-  for (const expense of expenses) {
-    const value = asInt(expense.amountKES);
-    amountKES += value;
-    const row = byCategory.get(expense.categoryKey) ?? { categoryKey: expense.categoryKey, amountKES: 0 };
-    row.amountKES += value;
-    byCategory.set(expense.categoryKey, row);
-  }
-  return { amountKES, byCategory: [...byCategory.values()].sort((a, b) => b.amountKES - a.amountKES) };
+  // Aggregate in PostgreSQL rather than summing a capped list: totals and category subtotals
+  // cover the same tenant, location and occurrence-time range, however many expenses exist.
+  const from = toDate(range.from);
+  const to = toDate(range.to);
+  const where = { businessId, ...(options.branchId != null ? { branchId: options.branchId } : {}),
+    ...((from || to) ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) };
+  const groups = await client.posExpense.groupBy({ by: ["categoryKey"], where, _sum: { amountKES: true } });
+  const byCategory = groups.map((row: any) => ({ categoryKey: row.categoryKey, amountKES: asInt(row._sum.amountKES) }))
+    .sort((a: any, b: any) => b.amountKES - a.amountKES);
+  return { amountKES: byCategory.reduce((total: number, row: any) => total + row.amountKES, 0), byCategory };
 }
 
 export async function createExpense(

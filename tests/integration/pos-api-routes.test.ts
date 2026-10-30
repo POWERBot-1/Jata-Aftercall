@@ -785,6 +785,16 @@ describe("/sales — selling over HTTP (§27, §31, §32, §33, §54, §62)", ()
     expect(list.topItems.length).toBeGreaterThan(0);
   });
 
+  it("does not present a truncated top-items ranking as complete", async () => {
+    const capped = vi.spyOn(reportStore, "topItems").mockResolvedValue(null);
+    try {
+      const result = await call(await salesGet(get("bizA"), context("bizA")));
+      expect(result.status).toBe(200);
+      expect(result.body.topItems).toBeNull();
+      expect(result.body.topItemsNotice).toContain("more than 2,000 sales");
+    } finally { capped.mockRestore(); }
+  });
+
   it("returns one sale with its receipt, and the same answer for a foreign and a missing id (§75)", async () => {
     const created = await body(await salesPost(saleOf([{ productId: "p_a1", quantity: 1 }], [{ method: "cash", amountKES: 50 }]), context("bizA")));
     const saleId = created.sale.id;

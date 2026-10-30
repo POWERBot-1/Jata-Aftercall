@@ -29,6 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
       ]);
       return posOk({
         expenses,
+        rowsMayBeLimited: expenses.length >= 200,
         totals,
         categories: ctx.configuration.expenses.categories,
         categoryLabels: EXPENSE_CATEGORY_OPTIONS,

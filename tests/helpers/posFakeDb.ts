@@ -193,6 +193,19 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         for (const key of Object.keys(_sum ?? {})) sum[key] = scoped.reduce((total, row) => total + Number(row[key] ?? 0), 0);
         return { _sum: sum, _count: { _all: scoped.length } };
       }),
+      groupBy: vi_fn(async ({ where, by, _sum }: any) => {
+        const groups = new Map<string, { values: Row; rows: Row[] }>();
+        for (const row of rows.filter((entry) => rowMatches(entry, where))) {
+          const values = Object.fromEntries((by as string[]).map((field) => [field, row[field]]));
+          const key = JSON.stringify(values);
+          const group = groups.get(key) ?? { values, rows: [] };
+          group.rows.push(row);
+          groups.set(key, group);
+        }
+        return [...groups.values()].map((group) => ({ ...group.values, _sum: Object.fromEntries(
+          Object.keys(_sum ?? {}).map((field) => [field, group.rows.reduce((total, row) => total + Number(row[field] ?? 0), 0)]),
+        ) }));
+      }),
       create: vi_fn(async ({ data }: any) => {
         assertUnique(name, data);
         const row = { id: data.id ?? `${name}_${++counter}`, createdAt: new Date(), ...data };

@@ -92,6 +92,7 @@ export async function GET(request: Request, context: RouteContext) {
         totals,
         paymentMix: mix,
         topItems: top,
+        topItemsNotice: top === null ? "Top items unavailable: more than 2,000 sales match; choose a shorter period." : "Top items use sale creation dates and original item quantities, including voids and returns; they are not net retained sales.",
         nextReceiptNumber: formatReceiptNumber(
           receiptPrefixFromBusinessName(ctx.configuration.receipt.businessName || ctx.business.name),
           totals.count + 1,
