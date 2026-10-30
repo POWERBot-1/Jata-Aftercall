@@ -13,6 +13,7 @@ import { MockMessagingProvider } from "@/lib/messaging/providers";
 import { issuePhoneChallenge, confirmPhoneChallenge } from "@/lib/agents/phone-verification";
 import { allowAgentApplication } from "@/lib/agent-application-throttle";
 import { POST as registerAgent } from "@/app/api/agents/register/route";
+import { GET as referralSummary } from "@/app/api/agents/referrals/summary/route";
 import { POST as rotateReferral } from "@/app/api/agents/referrals/route";
 import { POST as decide } from "@/app/api/admin/agents/applications/[id]/decision/route";
 import { POST as reject } from "@/app/api/admin/agents/applications/[id]/reject/route";
@@ -178,6 +179,15 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
         if (index === 0) expect(evidence?.referrerApplicationId).toBe(app.id); else expect(evidence).toBeNull();
       }
       expect(await p.agentReferralAttribution.count({ where: { referrerApplicationId: app.id } })).toBe(1);
+      mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
+      const ownSummary = await referralSummary(); expect(ownSummary.status).toBe(200); expect(await ownSummary.json()).toEqual({ registrationCount: 1 });
+      const other = await p.user.create({ data: { email: `other-referrer-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(other.id);
+      await p.agentApplication.create({ data: { userId: other.id, fullName: "Other Agent", phoneE164: "+254700000095", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+      mock.session = { userId: other.id, role: "CUSTOMER", email: other.email };
+      const invokeSummary = referralSummary as (request: Request) => Promise<Response>;
+      const otherSummary = await invokeSummary(new Request(`https://agent.test/api/agents/referrals/summary?agentId=${app.id}`)); expect(otherSummary.status).toBe(200); expect(await otherSummary.json()).toEqual({ registrationCount: 0 });
+      mock.session = null; expect((await referralSummary()).status).toBe(401);
+
       const existing = await p.agentReferralAttribution.findFirstOrThrow({ where: { referrerApplicationId: app.id } });
       await expect(p.agentReferralAttribution.create({ data: { referrerApplicationId: app.id, referredApplicationId: existing.referredApplicationId, linkId: existing.linkId, consentedAt: new Date() } })).rejects.toMatchObject({ code: "P2002" });
       mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
@@ -188,6 +198,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       await p.agentApplication.update({ where: { id: app.id }, data: { agentStatus: "SUSPENDED" } });
       mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
       expect((await rotateReferral(request("/api/agents/referrals", {}))).status).toBe(403);
+      expect((await referralSummary()).status).toBe(403);
     } finally { for (const key of envNames) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; } mock.session = null; }
   });
 

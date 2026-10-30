@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import RegistrationReferralSummary from "@/components/agents/RegistrationReferralSummary";
 import RegistrationReferralLink from "@/components/agents/RegistrationReferralLink";
 import { referralLifetimeSeconds } from "@/lib/agents/referral-registration";
 import PhoneVerification from "@/components/agents/PhoneVerification";
@@ -35,7 +36,7 @@ export default async function AgentDashboardPage() {
         {!application ? <><p>No application is recorded for this account.</p><Link href="/agents/apply">Apply as an agent</Link></> : <>
           <p><strong>Applicant:</strong> {application.fullName}</p>
           <p><strong>Submitted:</strong> {formatDateTime(application.createdAt)} (Africa/Nairobi)</p>
-          {application.agentStatus === "ACTIVE" ? <p><strong>Status:</strong> Active after administrator review. Referral and commission tools are not available.</p> :
+          {application.agentStatus === "ACTIVE" ? <p><strong>Status:</strong> Active after administrator review. Commission tools are not available.</p> :
             application.agentStatus === "SUSPENDED" ? <p><strong>Status:</strong> Agent access suspended. Please contact support.</p> :
             application.status === "PENDING" ? <><p><strong>Status:</strong> {application.phoneVerifiedAt ? "Phone verified; awaiting administrator eligibility review." : "Awaiting verification. Your phone has not been verified."} Your agent account is not active.</p>{!application.phoneVerifiedAt && <PhoneVerification />}</> :
             application.status === "REJECTED" ? <p><strong>Status:</strong> Application rejected. This account is not active as an agent.</p> :
@@ -44,7 +45,7 @@ export default async function AgentDashboardPage() {
       </div>
     </MarketingSection>
     <MarketingSection title="Referrals and commissions" id="programme-status" tone="cream">
-      <div className="mk-prose">{application?.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <RegistrationReferralLink />}<p>Sales performance reporting and commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
+      <div className="mk-prose">{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <><RegistrationReferralSummary /><RegistrationReferralLink /></>}<p>Sales performance reporting and commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
     </MarketingSection>
   </MarketingLayout>;
 }

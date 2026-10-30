@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 const mocks = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
@@ -6,7 +6,9 @@ vi.mock("@/lib/db", () => ({ default: { agentApplication: { findUnique: mocks.fi
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), redirect: (path: string) => { throw Object.assign(new Error("redirect"), { path }); } }));
 import AgentDashboardPage from "@/app/agents/dashboard/page";
 
+const originalEnv = { ...process.env };
 describe("personal agent application status", () => {
+  afterEach(() => { process.env = { ...originalEnv }; });
   beforeEach(() => { vi.clearAllMocks(); mocks.session.mockResolvedValue({ userId: "account-a" }); mocks.find.mockResolvedValue(null); });
   it("redirects anonymous visitors without querying private applications", async () => {
     mocks.session.mockResolvedValue(null);
@@ -26,6 +28,18 @@ describe("personal agent application status", () => {
     expect(renderToStaticMarkup(await AgentDashboardPage())).toContain("Active after administrator review");
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "SUSPENDED", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
     expect(renderToStaticMarkup(await AgentDashboardPage())).toContain("Agent access suspended");
+  });
+  it("shows registration evidence only to an active account when explicitly enabled", async () => {
+    process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600";
+    mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
+    const active = renderToStaticMarkup(await AgentDashboardPage());
+    expect(active).toContain("Consented registration referrals");
+    expect(active).toContain("not verified sales or commission eligibility");
+    mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "SUSPENDED", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented registration referrals");
+    delete process.env.AGENT_REGISTRATION_REFERRALS_ENABLED;
+    mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented registration referrals");
   });
   it("distinguishes rejected and missing applications, and fails safely on storage errors", async () => {
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "REJECTED", createdAt: new Date("2026-10-29T10:00:00Z") });
