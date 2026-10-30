@@ -26,6 +26,7 @@ const POS_MIGRATIONS = [
   "20261101000000_pos_category_images",
   "20261102000000_pos_report_snapshots",
   "20261103000000_pos_categories",
+  "20261104000000_pos_repayment_idempotency",
 ];
 const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");
@@ -223,6 +224,16 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
     expect(migration).toContain(`"channel" TEXT NOT NULL DEFAULT 'walk_in'`);
     // A stock location uses "" for "the business's own stock room" so the unique pair holds (§16).
     expect(schema).toContain('branchId     String     @default("")');
+  });
+
+  it("keeps repayment keys tenant-bound to both their customer and payment", () => {
+    const request = posModels.find((model) => model.name === "PosRepaymentRequest")!;
+    expect(request.body).toContain("@@unique([businessId, key])");
+    expect(request.body).toContain("fields: [businessId, customerId], references: [businessId, id], onDelete: NoAction");
+    expect(request.body).toContain("fields: [businessId, customerId, paymentId], references: [businessId, customerId, id], onDelete: NoAction");
+    expect(migration).toContain('FOREIGN KEY ("businessId", "customerId") REFERENCES "PosCustomer"("businessId", "id") ON DELETE NO ACTION');
+    expect(migration).toContain('FOREIGN KEY ("businessId", "customerId", "paymentId") REFERENCES "PosPayment"("businessId", "customerId", "id") ON DELETE NO ACTION');
+    expect(migration).toContain("pos_repayment_request_immutable_guard");
   });
 
   it("creates the indexes and foreign keys the schema asks for", () => {

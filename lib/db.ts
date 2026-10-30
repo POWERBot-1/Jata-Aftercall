@@ -459,6 +459,11 @@ function createFallbackPrisma(): any {
       findFirst: async () => null,
       create: async () => { throw new Error("DB not available"); },
     },
+    // Replay records must never be faked as successful writes in an offline build.
+    posRepaymentRequest: {
+      findFirst: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+    },
     posPayment: {
       findMany: async () => [],
       create: async () => { throw new Error("DB not available"); },
