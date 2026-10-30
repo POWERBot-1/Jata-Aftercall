@@ -49,6 +49,7 @@ import { publiclyListedPlans } from "@/lib/pricing";
 import { runReport } from "@/lib/pos/reporting";
 import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
 import { oldestCreditDebit, paymentsForReport } from "@/lib/pos/store";
+import { CreditAgeError, loadOldestUnpaidDebit } from "@/lib/pos/credit-age";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
 import { GET as categoriesGet, POST as categoriesPost } from "@/app/api/pos/[businessId]/categories/route";
@@ -1352,6 +1353,27 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       expect((await oldestCreditDebit(businessId, "CUSTOMER", ctx.customerId))?.createdAt.toISOString()).toBe(old.toISOString());
       expect((await oldestCreditDebit(businessId, "SUPPLIER", ctx.supplierId))?.createdAt.toISOString()).toBe(old.toISOString());
       expect(await oldestCreditDebit(ctx.stranger.businessId, "CUSTOMER", ctx.customerId)).toBeNull();
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+    }
+  }, 120_000);
+
+  it("21e-fifo — real PostgreSQL credit ageing excludes a fully paid older debit", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `fifo-${runId}`;
+    const partyId = `${marker}-party`;
+    const first = new Date("2020-01-01T00:00:00.000Z");
+    const last = new Date("2021-01-01T00:00:00.000Z");
+    // Synthetic ledger dates exercise FIFO, not the genuine midnight acceptance criterion.
+    try {
+      await prisma.posCreditEntry.createMany({ data: [
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 100, note: marker, createdAt: first },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "CREDIT", amountKES: 100, note: marker, createdAt: new Date("2020-02-01T00:00:00.000Z") },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 50, note: marker, createdAt: last },
+      ] });
+      expect((await loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 50))?.toISOString()).toBe(last.toISOString());
+      await expect(loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 49)).rejects.toBeInstanceOf(CreditAgeError);
+      await expect(loadOldestUnpaidDebit(prisma, ctx.stranger.businessId, "CUSTOMER", partyId, 50)).rejects.toBeInstanceOf(CreditAgeError);
     } finally {
       await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
     }

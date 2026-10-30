@@ -14,6 +14,8 @@ import prisma from "@/lib/db";
 import { baselineConfiguration, normalizeConfiguration } from "./configuration";
 import { hasCapability } from "./capabilities";
 import { decideCredit, validateRepayment, RECEIVABLE } from "./credit";
+import { CreditAgeError, loadOldestUnpaidDebit } from "./credit-age";
+import { ReportLimitError } from "./report-limit";
 import { checkAvailability, movementsForReturn, movementsForSale } from "./inventory";
 import { calculateSale, discountFromPercent, isCreditMethod, sanitizeAmountKES, validatePayments, validateRefund } from "./money";
 import { logPosAuditInTransaction } from "./audit";
@@ -445,7 +447,13 @@ export async function createSale(params: {
   // This early pass exists so the till answers in the same order it always has — a declined
   // credit is refused before a stock question, and the refusal is audited either way.
   if (creditKES > 0 && customer) {
-    const oldestDebit = (await store.oldestCreditDebit(businessId, RECEIVABLE, customer.id, client))?.createdAt ?? null;
+    let oldestDebit: Date | null;
+    try {
+      oldestDebit = await loadOldestUnpaidDebit(client, businessId, RECEIVABLE, customer.id, Number(customer.balanceKES ?? 0));
+    } catch (error) {
+      if (error instanceof CreditAgeError || error instanceof ReportLimitError) return problem("CREDIT_HISTORY_UNAVAILABLE", "Credit history cannot be verified; contact support before extending credit.", warnings);
+      throw error;
+    }
     const earlyDecision = decideCredit({
       config: configuration,
       party: {
@@ -577,7 +585,13 @@ export async function createSale(params: {
     if (creditKES > 0 && customer) {
       await store.lockPartyRow(tx, RECEIVABLE, businessId, customer.id);
       const current = await store.findCustomer(businessId, customer.id, tx);
-      const oldestDebit = (await store.oldestCreditDebit(businessId, RECEIVABLE, customer.id, tx))?.createdAt ?? null;
+      let oldestDebit: Date | null;
+      try {
+        oldestDebit = await loadOldestUnpaidDebit(tx, businessId, RECEIVABLE, customer.id, Number(current?.balanceKES ?? customer.balanceKES ?? 0));
+      } catch (error) {
+        if (error instanceof CreditAgeError || error instanceof ReportLimitError) throw new CreditDecisionRefused("CREDIT_HISTORY_UNAVAILABLE", "Credit history cannot be verified; contact support before extending credit.");
+        throw error;
+      }
       const decision = decideCredit({
         config: configuration,
         party: {
