@@ -33,13 +33,13 @@ describe("personal agent application status", () => {
     process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600";
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
     const active = renderToStaticMarkup(await AgentDashboardPage());
-    expect(active).toContain("Consented registration referrals");
+    expect(active).toContain("Consented application referrals");
     expect(active).toContain("not verified sales or commission eligibility");
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "SUSPENDED", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
-    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented registration referrals");
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented application referrals");
     delete process.env.AGENT_REGISTRATION_REFERRALS_ENABLED;
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
-    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented registration referrals");
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Consented application referrals");
   });
   it("distinguishes rejected and missing applications, and fails safely on storage errors", async () => {
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "REJECTED", createdAt: new Date("2026-10-29T10:00:00Z") });

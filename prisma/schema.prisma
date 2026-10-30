@@ -85,6 +85,7 @@ model AgentReferralAttribution {
   linkId String
   link AgentReferralLink @relation(fields: [linkId, referrerApplicationId], references: [id, referrerApplicationId], onDelete: Restrict)
   consentedAt DateTime
+  source String @default("REGISTRATION")
   createdAt DateTime @default(now())
 
   @@index([referrerApplicationId])

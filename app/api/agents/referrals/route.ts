@@ -30,6 +30,6 @@ export async function POST(req: Request) {
       return true;
     });
     if (!result) return NextResponse.json({ error: "An active agent account is required." }, { status: 403 });
-    return NextResponse.json({ path: `/agents/register?ref=${token}`, expiresAt: expiresAt.toISOString() }, { headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+    return NextResponse.json({ path: `/agents/register?ref=${token}`, applicationPath: `/agents/apply?ref=${token}`, expiresAt: expiresAt.toISOString() }, { headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
   } catch { return NextResponse.json({ error: "Referral link is temporarily unavailable." }, { status: 503 }); }
 }

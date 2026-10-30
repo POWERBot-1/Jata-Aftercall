@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isSameOriginRequest, validateAgentApplication } from "@/lib/agent-application";
 import { rateLimit } from "@/lib/rate-limit";
+import { recordRegistrationReferral, referralLifetimeSeconds, referralTokenHash } from "@/lib/agents/referral-registration";
 import { allowAgentApplication } from "@/lib/agent-application-throttle";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,13 @@ export async function POST(req: Request) {
       if (existing) return existing.status;
       const application = await tx.agentApplication.create({ data: { userId: session.userId, ...fields, privacyAcknowledgedAt: new Date() }, select: { id: true } });
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_APPLICATION_SUBMITTED", targetType: "AGENT_APPLICATION", targetId: application.id } });
+      const referral = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : null;
+      if (referralLifetimeSeconds() && referral?.referralConsent === true && referralTokenHash(referral.referralCode)) {
+        // Do not trust the email or user ID supplied in the browser; read the authenticated account.
+        const account = await tx.user.findUnique({ where: { id: session.userId }, select: { email: true } });
+        if (!account || typeof account.email !== "string") throw new Error("Account unavailable");
+        await recordRegistrationReferral(tx, { input, applicationId: application.id, userId: session.userId, email: account.email.toLowerCase(), phoneE164: fields.phoneE164, source: "EXISTING_ACCOUNT" });
+      }
       return "PENDING";
     });
     return NextResponse.json({ ok: true, status });

@@ -180,12 +180,12 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       }
       expect(await p.agentReferralAttribution.count({ where: { referrerApplicationId: app.id } })).toBe(1);
       mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
-      const ownSummary = await referralSummary(); expect(ownSummary.status).toBe(200); expect(await ownSummary.json()).toEqual({ registrationCount: 1 });
+      const ownSummary = await referralSummary(); expect(ownSummary.status).toBe(200); expect(await ownSummary.json()).toEqual({ registrationCount: 1, existingApplicationCount: 0 });
       const other = await p.user.create({ data: { email: `other-referrer-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(other.id);
       await p.agentApplication.create({ data: { userId: other.id, fullName: "Other Agent", phoneE164: "+254700000095", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
       mock.session = { userId: other.id, role: "CUSTOMER", email: other.email };
       const invokeSummary = referralSummary as (request: Request) => Promise<Response>;
-      const otherSummary = await invokeSummary(new Request(`https://agent.test/api/agents/referrals/summary?agentId=${app.id}`)); expect(otherSummary.status).toBe(200); expect(await otherSummary.json()).toEqual({ registrationCount: 0 });
+      const otherSummary = await invokeSummary(new Request(`https://agent.test/api/agents/referrals/summary?agentId=${app.id}`)); expect(otherSummary.status).toBe(200); expect(await otherSummary.json()).toEqual({ registrationCount: 0, existingApplicationCount: 0 });
       mock.session = null; expect((await referralSummary()).status).toBe(401);
 
       const existing = await p.agentReferralAttribution.findFirstOrThrow({ where: { referrerApplicationId: app.id } });
@@ -199,6 +199,41 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
       expect((await rotateReferral(request("/api/agents/referrals", {}))).status).toBe(403);
       expect((await referralSummary()).status).toBe(403);
+    } finally { for (const key of envNames) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; } mock.session = null; }
+  });
+
+  it("attributes a consented existing-account application once without allowing reassignment", async () => {
+    const envNames = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS"] as const;
+    const before = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));
+    const owner = await p.user.create({ data: { email: `owner-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    const referred = await p.user.create({ data: { email: `existing-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    users.push(owner.id, referred.id);
+    const app = await p.agentApplication.create({ data: { userId: owner.id, fullName: "Owner Fixture", phoneE164: "+254700000091", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+    try {
+      process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600";
+      mock.session = { userId: owner.id, role: "CUSTOMER", email: owner.email };
+      const linkResponse = await rotateReferral(request("/api/agents/referrals", {}));
+      expect(linkResponse.status).toBe(200);
+      const links = await linkResponse.json();
+      const code = new URL(links.applicationPath, "https://agent.test").searchParams.get("ref");
+      expect(code).toEqual(new URL(links.path, "https://agent.test").searchParams.get("ref"));
+      const submission = { fullName: "Existing Fixture", phone: "0700000092", privacyAccepted: true, referralCode: code, referralConsent: true };
+      mock.session = { userId: referred.id, role: "CUSTOMER", email: referred.email };
+      const decisions = await Promise.all([POST(request("/api/agents/application", submission)), POST(request("/api/agents/application", submission))]);
+      expect(decisions.map((response) => response.status)).toEqual([200, 200]);
+      const referredApp = await p.agentApplication.findUniqueOrThrow({ where: { userId: referred.id } });
+      const attribution = await p.agentReferralAttribution.findUniqueOrThrow({ where: { referredApplicationId: referredApp.id } });
+      expect(attribution.referrerApplicationId).toBe(app.id); expect(attribution.source).toBe("EXISTING_ACCOUNT");
+      expect(await p.auditEvent.count({ where: { targetId: referredApp.id, action: "AGENT_EXISTING_ACCOUNT_ATTRIBUTION_RECORDED" } })).toBe(1);
+      expect((await POST(request("/api/agents/application", { ...submission, referralCode: "A".repeat(43) }))).status).toBe(200);
+      expect((await p.agentReferralAttribution.findUniqueOrThrow({ where: { referredApplicationId: referredApp.id } })).linkId).toBe(attribution.linkId);
+      mock.session = { userId: owner.id, role: "CUSTOMER", email: owner.email };
+      expect(await (await referralSummary()).json()).toEqual({ registrationCount: 0, existingApplicationCount: 1 });
+      const withoutConsent = await p.user.create({ data: { email: `no-consent-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(withoutConsent.id);
+      mock.session = { userId: withoutConsent.id, role: "CUSTOMER", email: withoutConsent.email };
+      expect((await POST(request("/api/agents/application", { ...submission, referralConsent: false, phone: "0700000093" }))).status).toBe(200);
+      const noConsentApp = await p.agentApplication.findUniqueOrThrow({ where: { userId: withoutConsent.id } });
+      expect(await p.agentReferralAttribution.findUnique({ where: { referredApplicationId: noConsentApp.id } })).toBeNull();
     } finally { for (const key of envNames) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; } mock.session = null; }
   });
 

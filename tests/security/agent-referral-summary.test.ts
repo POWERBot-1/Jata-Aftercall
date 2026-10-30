@@ -15,10 +15,10 @@ describe("agent registration referral summary", () => {
   });
   it("uses only the current session for an active-owner aggregate and returns no private records", async () => {
     process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600";
-    mocks.session.mockResolvedValue({ userId: "user-a" }); mocks.query.mockResolvedValue([{ registrationCount: 3 }]);
+    mocks.session.mockResolvedValue({ userId: "user-a" }); mocks.query.mockResolvedValue([{ registrationCount: 3, existingApplicationCount: 2 }]);
     const response = await GET();
     expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(await response.json()).toEqual({ registrationCount: 3 });
+    expect(await response.json()).toEqual({ registrationCount: 3, existingApplicationCount: 2 });
     expect(mocks.query.mock.calls[0][1]).toBe("user-a");
     const sql = mocks.query.mock.calls[0][0].join("?");
     expect(sql).toContain('a."userId" = ?'); expect(sql).toContain('a."agentStatus" = \'ACTIVE\'');
