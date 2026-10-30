@@ -45,11 +45,13 @@ model AgentApplication {
   user                  User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   fullName              String
   phoneE164             String
+  status                String   @default("PENDING")
   privacyAcknowledgedAt DateTime
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 // A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.

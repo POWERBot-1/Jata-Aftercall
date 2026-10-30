@@ -11,8 +11,8 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Sign in to view your application." }, { status: 401 });
   try {
-    const application = await prisma.agentApplication.findUnique({ where: { userId: session.userId }, select: { createdAt: true } });
-    return NextResponse.json({ applied: !!application, createdAt: application?.createdAt ?? null }, { headers: { "Cache-Control": "no-store" } });
+    const application = await prisma.agentApplication.findUnique({ where: { userId: session.userId }, select: { createdAt: true, status: true } });
+    return NextResponse.json({ applied: !!application, status: application?.status ?? null, createdAt: application?.createdAt ?? null }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Application status is temporarily unavailable." }, { status: 503 });
   }

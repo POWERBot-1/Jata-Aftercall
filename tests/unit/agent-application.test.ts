@@ -61,10 +61,10 @@ describe("application route", () => {
     expect((await POST(request(valid))).status).toBe(503);
   });
   it("reads status only for the signed-in account", async () => {
-    mocks.find.mockResolvedValue({ createdAt: new Date("2026-01-01T00:00:00Z") });
+    mocks.find.mockResolvedValue({ status: "PENDING", createdAt: new Date("2026-01-01T00:00:00Z") });
     const response = await GET();
-    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "u1" }, select: { createdAt: true } });
-    expect(await response.json()).toEqual({ applied: true, createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "u1" }, select: { createdAt: true, status: true } });
+    expect(await response.json()).toEqual({ applied: true, status: "PENDING", createdAt: "2026-01-01T00:00:00.000Z" });
   });
   it("does not claim success when audit or storage fails", async () => {
     mocks.transaction.mockRejectedValue(new Error("database unavailable"));

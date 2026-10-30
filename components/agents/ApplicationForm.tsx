@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Status = "loading" | "new" | "submitted" | "signed-out" | "error";
+type Status = "loading" | "new" | "submitted" | "rejected" | "signed-out" | "error";
 
 export default function ApplicationForm() {
   const [status, setStatus] = useState<Status>("loading");
@@ -19,10 +19,21 @@ export default function ApplicationForm() {
       if (response.status === 401) { setStatus("signed-out"); return; }
       if (!response.ok) { setStatus("error"); return; }
       const data = await response.json();
-      setStatus(data.applied ? "submitted" : "new");
+      setStatus(data.applied ? (data.status === "REJECTED" ? "rejected" : "submitted") : "new");
     } catch { setStatus("error"); }
   }
-  useEffect(() => { void loadStatus(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/agents/application", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (response.status === 401) { setStatus("signed-out"); return; }
+        if (!response.ok) { setStatus("error"); return; }
+        const data = await response.json();
+        setStatus(data.applied ? (data.status === "REJECTED" ? "rejected" : "submitted") : "new");
+      })
+      .catch(() => { if (!controller.signal.aborted) setStatus("error"); });
+    return () => controller.abort();
+  }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +57,7 @@ export default function ApplicationForm() {
   if (status === "loading") return <p role="status">Checking your application…</p>;
   if (status === "signed-out") return <div className="mk-prose"><p>Sign in with an existing JATA AFTERCALL account to apply. A separate agent-only registration path may be available when enabled.</p><Link href="/login">Sign in</Link>{" · "}<Link href="/agents/register">Agent-only registration</Link></div>;
   if (status === "error") return <div role="alert"><p>We could not check your application. Please try again.</p><button type="button" className="mk-btn" onClick={() => { setStatus("loading"); void loadStatus(); }}>Try again</button></div>;
+  if (status === "rejected") return <div role="status" className="mk-prose"><h2>Application rejected</h2><p>This application was rejected and has not activated an agent account. No referral or commission entitlement has been created.</p><Link href="/contact">Support options</Link></div>;
   if (status === "submitted") return <div role="status" className="mk-prose"><h2>Application received</h2><p>Your phone is not verified and you are not an active agent. Self-service phone verification, agent terms and referral tools are not yet available. Submitting this application does not guarantee activation or commission.</p></div>;
   return (
     <form onSubmit={submit} className="mk-prose">
