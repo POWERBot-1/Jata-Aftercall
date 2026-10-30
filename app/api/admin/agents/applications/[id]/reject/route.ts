@@ -24,8 +24,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       // Authoritative role is checked within the write transaction, not only in the session.
-      const actor = await tx.user.findUnique({ where: { id: session.userId }, select: { role: true } });
-      if (actor?.role !== "ADMIN") return "forbidden";
+      // Serialize review with concurrent role changes, as for approval and suspension.
+      const actors: Array<{ role: string }> = await tx.$queryRaw`SELECT "role" FROM "User" WHERE "id" = ${session.userId} FOR UPDATE`;
+      if (actors.length !== 1 || actors[0].role !== "ADMIN") return "forbidden";
       const application = await tx.agentApplication.findUnique({ where: { id }, select: { userId: true, status: true, agentStatus: true } });
       if (!application) return "not_found";
       if (application.userId === session.userId) return "forbidden";

@@ -144,6 +144,27 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     } finally { if (old === undefined) delete process.env.AGENT_ACTIVATION_ENABLED; else process.env.AGENT_ACTIVATION_ENABLED = old; mock.session = null; }
   });
 
+  it("serializes competing approval and rejection without contradictory audits", async () => {
+    const admin = await p.user.create({ data: { email: `race-admin-${uid()}@test.invalid`, passwordHash: "test-only", role: "ADMIN" } });
+    const applicant = await p.user.create({ data: { email: `race-applicant-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    users.push(admin.id, applicant.id);
+    const app = await p.agentApplication.create({ data: { userId: applicant.id, fullName: "Race Fixture", phoneE164: "+254700000097", verifiedPhoneE164: "+254700000097", phoneVerifiedAt: new Date(), privacyAcknowledgedAt: new Date() } });
+    const previous = process.env.AGENT_ACTIVATION_ENABLED;
+    try {
+      process.env.AGENT_ACTIVATION_ENABLED = "true";
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      const params = { params: Promise.resolve({ id: app.id }) };
+      const [approval, rejection] = await Promise.all([
+        decide(request(`/api/admin/agents/applications/${app.id}/decision`, { action: "approve", reason: "MANUAL_ELIGIBILITY_REVIEW" }), params),
+        reject(request(`/api/admin/agents/applications/${app.id}/reject`, { reason: "APPLICANT_REQUEST" }), params),
+      ]);
+      expect([approval.status, rejection.status].sort()).toEqual([200, 409]);
+      const current = await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } });
+      expect([["PENDING", "ACTIVE"], ["REJECTED", "INACTIVE"]]).toContainEqual([current.status, current.agentStatus]);
+      expect(await p.auditEvent.count({ where: { targetId: app.id, action: { in: ["AGENT_APPLICATION_APPROVED", "AGENT_APPLICATION_REJECTED"] } } })).toBe(1);
+    } finally { if (previous === undefined) delete process.env.AGENT_ACTIVATION_ENABLED; else process.env.AGENT_ACTIVATION_ENABLED = previous; mock.session = null; }
+  });
+
   it("correlates webhook status once without activating the applicant", async () => {
     const user = await p.user.create({ data: { email: `hook-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(user.id);
     const app = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic Hook", phoneE164: "+254700000004", privacyAcknowledgedAt: new Date() } });

@@ -13,11 +13,11 @@ describe("agent application rejection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ userId: "admin-1", role: "ADMIN" });
-    mocks.actor.mockResolvedValue({ role: "ADMIN" });
+    mocks.actor.mockResolvedValue([{ role: "ADMIN" }]);
     mocks.application.mockResolvedValue({ userId: "applicant-1", status: "PENDING", agentStatus: "INACTIVE" });
     mocks.update.mockResolvedValue({ count: 1 });
     mocks.audit.mockResolvedValue({});
-    mocks.transaction.mockImplementation(async (fn) => fn({ user: { findUnique: mocks.actor }, agentApplication: { findUnique: mocks.application, updateMany: mocks.update }, auditEvent: { create: mocks.audit } }));
+    mocks.transaction.mockImplementation(async (fn) => fn({ $queryRaw: mocks.actor, agentApplication: { findUnique: mocks.application, updateMany: mocks.update }, auditEvent: { create: mocks.audit } }));
   });
   it("requires same-origin and an administrator session", async () => {
     expect((await POST(request({}, "https://evil.test"), params)).status).toBe(403);
@@ -28,9 +28,9 @@ describe("agent application rejection", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
   it("checks the current database role and disallows self-review", async () => {
-    mocks.actor.mockResolvedValue({ role: "CUSTOMER" });
+    mocks.actor.mockResolvedValue([{ role: "CUSTOMER" }]);
     expect((await POST(request(), params)).status).toBe(403);
-    mocks.actor.mockResolvedValue({ role: "ADMIN" });
+    mocks.actor.mockResolvedValue([{ role: "ADMIN" }]);
     mocks.application.mockResolvedValue({ userId: "admin-1", status: "PENDING", agentStatus: "INACTIVE" });
     expect((await POST(request(), params)).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
