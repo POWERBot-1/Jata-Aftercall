@@ -116,6 +116,8 @@ jobs:
           if [ "$result" -ne 0 ]; then
             detail=$(tail -30 /tmp/pos-profiles.log | tr '\n' '|' | cut -c1-5000)
             echo "::error title=POS profile browser failure::$detail"
+            server_detail=$(tail -60 /tmp/next-start.log | tr '\n' '|' | cut -c1-5000)
+            echo "::notice title=Disposable server diagnostics::$server_detail"
           fi
           exit "$result"
 
