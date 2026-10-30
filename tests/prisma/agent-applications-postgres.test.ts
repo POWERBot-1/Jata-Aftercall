@@ -20,7 +20,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
   beforeAll(() => {
     const url = new URL(PRISMA_TEST_DATABASE_URL);
     // Opt-in is insufficient: refuse remote databases and names other than disposable JATA CI DBs.
-    if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test)$/.test(url.pathname)) {
+    if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) {
       throw new Error("Agent integration tests require a loopback disposable JATA test database.");
     }
   });
