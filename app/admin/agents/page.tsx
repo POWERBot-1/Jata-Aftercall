@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { AdminPage } from "@/components/admin/AdminUI";
 import ReviewApplication from "@/components/agents/ReviewApplication";
 import RejectApplication from "@/components/agents/RejectApplication";
+import { agentAdminNotificationReadiness } from "@/lib/agents/admin-notification-config";
 import { WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function AgentApplications({ searchParams }: { searchParams
   // application data, in addition to the standard per-page admin guard.
   const account = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } });
   if (account?.role !== "ADMIN") redirect("/dashboard");
+  const notificationReadiness = agentAdminNotificationReadiness();
   const params = await searchParams;
   const parsedPage = Number(params.page || "1");
   const page = Number.isSafeInteger(parsedPage) && parsedPage >= 1 && parsedPage <= 10000 ? parsedPage : 1;
@@ -32,6 +34,9 @@ export default async function AgentApplications({ searchParams }: { searchParams
   }
   const hasNext = rows.length > PAGE_SIZE;
   return <AdminPage title="Agent applications" meta="Phone verification does not activate applicants.">
+    <WorkspacePanel title="Administrator notifications" meta="Configuration check only; notifications are not sent.">
+      <p>{notificationReadiness === "CONFIGURED" ? "Recipient configuration is present." : notificationReadiness === "INVALID" ? "Recipient configuration is invalid; correct it securely on the server." : "Recipient configuration is not set."} Delivery, retries and provider approval are not yet available.</p>
+    </WorkspacePanel>
     <WorkspacePanel title="Applications" meta="Phone numbers are masked. Manual review requires a verified phone and privacy acknowledgement. Activation and reinstatement are independently disabled unless separately enabled.">
       {rows.length === 0 ? <p>No applications on this page.</p> : <ul>
         {rows.slice(0, PAGE_SIZE).map((row) => <li key={row.id}>

@@ -16,6 +16,7 @@ class Redirected extends Error {
   constructor(public to: string) { super(`NEXT_REDIRECT:${to}`); }
 }
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Redirected(to); } }));
 vi.mock("@/lib/auth", () => ({
   getSession: vi.fn(async () => mocks.session),
