@@ -8,6 +8,7 @@ const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role:
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session, hashPassword: async () => "synthetic-hash" }));
 import { GET, POST } from "@/app/api/agents/application/route";
+import { enqueueApplicationSubmitted } from "@/lib/agents/admin-notification-event";
 import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
 import { MockMessagingProvider } from "@/lib/messaging/providers";
 import { issuePhoneChallenge, confirmPhoneChallenge } from "@/lib/agents/phone-verification";
@@ -47,6 +48,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
+    await p.agentAdminNotificationEvent.deleteMany({ where: { application: { userId: { in: users } } } });
     await p.agentApplication.deleteMany({ where: { userId: { in: users } } });
     await p.user.deleteMany({ where: { id: { in: users } } });
     await p.$disconnect();
@@ -187,8 +189,38 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     } finally { if (old === undefined) delete process.env.AGENT_REINSTATEMENT_ENABLED; else process.env.AGENT_REINSTATEMENT_ENABLED = old; mock.session = null; }
   });
 
+  it("records a single transactional notification event only for enabled new applications", async () => {
+    const old = process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED;
+    const applicant = await p.user.create({ data: { email: `event-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    const noQueue = await p.user.create({ data: { email: `off-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+    const rollback = await p.user.create({ data: { email: `rollback-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(applicant.id, noQueue.id, rollback.id);
+    try {
+      process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED = "true";
+      mock.session = { userId: applicant.id, email: applicant.email, role: "CUSTOMER" };
+      const responses = await Promise.all([POST(request("/api/agents/application", body)), POST(request("/api/agents/application", body))]);
+      expect(responses.map((r) => r.status)).toEqual([200, 200]);
+      const application = await p.agentApplication.findUniqueOrThrow({ where: { userId: applicant.id } });
+      const events = await p.agentAdminNotificationEvent.findMany({ where: { applicationId: application.id } });
+      expect(events).toHaveLength(1); expect(Object.keys(events[0]).sort()).toEqual(["applicationId", "createdAt", "eventType"]);
+      expect(events[0].eventType).toBe("APPLICATION_SUBMITTED");
+      expect(await p.auditEvent.count({ where: { actorId: applicant.id, action: "AGENT_APPLICATION_SUBMITTED" } })).toBe(1);
+      await expect(p.$transaction(async (tx: typeof p) => {
+        const app = await tx.agentApplication.create({ data: { userId: rollback.id, fullName: "Rollback Fixture", phoneE164: "+254700000060", privacyAcknowledgedAt: new Date() } });
+        await enqueueApplicationSubmitted(tx, app.id);
+        throw new Error("synthetic rollback");
+      })).rejects.toThrow("synthetic rollback");
+      expect(await p.agentApplication.findUnique({ where: { userId: rollback.id } })).toBeNull();
+      expect(await p.agentAdminNotificationEvent.count({ where: { application: { userId: rollback.id } } })).toBe(0);
+      delete process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED;
+      mock.session = { userId: noQueue.id, email: noQueue.email, role: "CUSTOMER" };
+      expect((await POST(request("/api/agents/application", body))).status).toBe(200);
+      const offApp = await p.agentApplication.findUniqueOrThrow({ where: { userId: noQueue.id } });
+      expect(await p.agentAdminNotificationEvent.findUnique({ where: { applicationId: offApp.id } })).toBeNull();
+    } finally { if (old === undefined) delete process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED; else process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED = old; mock.session = null; }
+  });
+
   it("rotates active-agent links and records only explicitly consented registration evidence", async () => {
-    const envNames = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS", "AGENT_SELF_SERVICE_REGISTRATION_ENABLED"] as const;
+    const envNames = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS", "AGENT_SELF_SERVICE_REGISTRATION_ENABLED", "AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED"] as const;
     const before = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
     throttleKeys.push(createHmac("sha256", secret).update("agent-registration:v1:untrusted-proxy").digest("hex"));
@@ -208,12 +240,15 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       mock.session = null;
       for (const [index, token, consent] of [[0, code, true], [1, oldCode, true], [2, code, false], [3, code, true], [4, code, true]] as const) {
         if (index === 4) await p.agentReferralLink.updateMany({ where: { referrerApplicationId: app.id, revokedAt: null }, data: { expiresAt: new Date(0) } });
+        if (index === 0) process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED = "true"; else delete process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED;
         const email = `referred-${uid()}@test.invalid`;
         const response = await registerAgent(request("/api/agents/register", { fullName: "Synthetic Applicant", email, phone: index === 3 ? "0700000096" : `07000000${80 + index}`, password: "synthetic-pass-123", privacyAccepted: true, termsAccepted: true, referralCode: token, referralConsent: consent }));
         expect(response.status).toBe(200);
         const user = await p.user.findUniqueOrThrow({ where: { email } }); users.push(user.id);
         const referred = await p.agentApplication.findUniqueOrThrow({ where: { userId: user.id } });
         const evidence = await p.agentReferralAttribution.findUnique({ where: { referredApplicationId: referred.id } });
+        const event = await p.agentAdminNotificationEvent.findUnique({ where: { applicationId: referred.id } });
+        if (index === 0) expect(event?.eventType).toBe("APPLICATION_SUBMITTED"); else expect(event).toBeNull();
         if (index === 0) expect(evidence?.referrerApplicationId).toBe(app.id); else expect(evidence).toBeNull();
       }
       expect(await p.agentReferralAttribution.count({ where: { referrerApplicationId: app.id } })).toBe(1);

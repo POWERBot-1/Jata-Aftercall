@@ -47,6 +47,7 @@ model AgentApplication {
   phoneE164             String
   verifiedPhoneE164     String?  @unique
   phoneVerifiedAt       DateTime?
+  adminNotificationEvent AgentAdminNotificationEvent?
   phoneChallenge        AgentPhoneChallenge?
   referralLinks         AgentReferralLink[]
   referrals             AgentReferralAttribution[] @relation("AgentReferrer")
@@ -59,6 +60,14 @@ model AgentApplication {
 
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+// Durable application event only. Delivery and recipient selection are intentionally not implemented.
+model AgentAdminNotificationEvent {
+  applicationId String @id
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  eventType String
+  createdAt DateTime @default(now())
 }
 
 // Registration attribution is consented evidence only, not commission eligibility.

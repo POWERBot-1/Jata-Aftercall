@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { enqueueApplicationSubmitted } from "@/lib/agents/admin-notification-event";
 import { isSameOriginRequest, validateAgentApplication } from "@/lib/agent-application";
 import { rateLimit } from "@/lib/rate-limit";
 import { recordRegistrationReferral, referralLifetimeSeconds, referralTokenHash } from "@/lib/agents/referral-registration";
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
       if (existing) return existing.status;
       const application = await tx.agentApplication.create({ data: { userId: session.userId, ...fields, privacyAcknowledgedAt: new Date() }, select: { id: true } });
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_APPLICATION_SUBMITTED", targetType: "AGENT_APPLICATION", targetId: application.id } });
+      await enqueueApplicationSubmitted(tx, application.id);
       const referral = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : null;
       if (referralLifetimeSeconds() && referral?.referralConsent === true && referralTokenHash(referral.referralCode)) {
         // Do not trust the email or user ID supplied in the browser; read the authenticated account.
