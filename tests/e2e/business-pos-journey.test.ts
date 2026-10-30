@@ -47,6 +47,7 @@ import { POST as checkoutPost } from "@/app/api/checkout/route";
 import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { publiclyListedPlans } from "@/lib/pricing";
 import { runReport } from "@/lib/pos/reporting";
+import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
 import { paymentsForReport } from "@/lib/pos/store";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
@@ -1288,6 +1289,25 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(await prisma.posProduct.findUnique({ where: { id: productId } })).toMatchObject({ category: "Moved category", isActive: false });
     expect(await prisma.posCategory.findFirst({ where: { businessId, id } })).toBeNull();
     expect(await prisma.posCategory.findFirst({ where: { businessId, name: "Moved category" } })).toBeTruthy();
+  }, 120_000);
+
+  it("21e-limit — real PostgreSQL refuses a capped daily closing and hides the capped expense card", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `cap-${runId}`;
+    try {
+      await prisma.posExpense.createMany({ data: Array.from({ length: 5000 }, () => ({ businessId, categoryKey: "test", amountKES: 1, method: "cash", notes: marker })) });
+      const closing = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+      expect(closing.status, closing.text()).toBe(422);
+      expect(closing.body.code).toBe("REPORT_LIMIT");
+      expect(closing.body.closing).toBeUndefined();
+      const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+      const sources = await loadCardSources(businessId, config, ["expenses"]);
+      const [card] = buildDashboardCards(config, `/dashboard/pos/${businessId}`, ["expenses"], sources);
+      expect(card.value).toBe("Unavailable");
+      expect(card.hint).toContain("5,000-record limit");
+    } finally {
+      await prisma.posExpense.deleteMany({ where: { businessId, notes: marker } });
+    }
   }, 120_000);
 
   // Register this separate, time-sensitive acceptance scenario only when explicitly opted in.

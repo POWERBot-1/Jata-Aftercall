@@ -103,11 +103,11 @@ export default async function PosDashboardPage({ params }: Props) {
             <dd>{workspace.today.count}</dd>
           </div>
           <div className="jata-stat">
-            <dt>Taken</dt>
+            <dt>Gross recorded (including voids)</dt>
             <dd>{formatKES(workspace.today.totalKES)}</dd>
           </div>
           <div className="jata-stat">
-            <dt>Still owed</dt>
+            <dt>Original sale balances (before corrections)</dt>
             <dd>{formatKES(workspace.today.balanceKES)}</dd>
           </div>
           <div className="jata-stat">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatDate, formatKES } from "@/lib/format";
 import { ageingBucket, creditExposure, daysOverdue, supplierSummary } from "@/lib/pos/credit";
 import { partiesWithBalances } from "@/lib/pos/store";
+import { ReportLimitError } from "@/lib/pos/report-limit";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 
@@ -30,10 +31,16 @@ export default async function PosCreditPage({ params }: Props) {
   const workspace = gate.workspace;
   const configuration = workspace.configuration;
 
-  const [debtors, creditors] = await Promise.all([
-    configuration.credit.enabled ? partiesWithBalances(businessId, "CUSTOMER") : Promise.resolve([]),
-    configuration.suppliers.credit ? partiesWithBalances(businessId, "SUPPLIER") : Promise.resolve([]),
-  ]);
+  let debtors: any[], creditors: any[];
+  try {
+    [debtors, creditors] = await Promise.all([
+      configuration.credit.enabled ? partiesWithBalances(businessId, "CUSTOMER", undefined, { requireComplete: true }) : Promise.resolve([]),
+      configuration.suppliers.credit ? partiesWithBalances(businessId, "SUPPLIER", undefined, { requireComplete: true }) : Promise.resolve([]),
+    ]);
+  } catch (error) {
+    if (!(error instanceof ReportLimitError)) throw error;
+    return <div className="jata-card p-6" role="alert"><h2 className="text-lg font-bold">Credit figures unavailable</h2><p>{error.message}</p><Link href={workspace.basePath} className="jata-btn jata-btn-secondary mt-4">Back to the dashboard</Link></div>;
+  }
 
   const owing = (debtors as any[])
     .filter((party) => Number(party.balanceKES ?? 0) > 0)
@@ -75,6 +82,7 @@ export default async function PosCreditPage({ params }: Props) {
 
           <section className="jata-card p-4">
             <p className="jata-kicker">How old is it?</p>
+            <p className="pos-note">Approximate: based on each account&apos;s oldest recorded debit, not allocation of outstanding entries.</p>
             <div className="pos-bars mt-2">
               {byBucket.map((entry) => {
                 const max = Math.max(1, ...byBucket.map((row) => row.amountKES));
