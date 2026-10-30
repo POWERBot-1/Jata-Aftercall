@@ -23,9 +23,9 @@ export default function PhoneVerification() {
   return <div>
     <p>Phone verification requires an approved provider. Verification alone does not activate an agent account.</p>
     <button className="mk-btn" type="button" disabled={busy} onClick={() => void submit("request")}>Request verification code</button>
-    <form onSubmit={(event) => { event.preventDefault(); void submit("confirm"); }}>
-      <label htmlFor="agent-verification-code">Six-digit code</label>{" "}
-      <input id="agent-verification-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} required />{" "}
+    <form className="agent-verification-form" onSubmit={(event) => { event.preventDefault(); void submit("confirm"); }}>
+      <label htmlFor="agent-verification-code">Six-digit code</label>
+      <input id="agent-verification-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} required />
       <button className="mk-btn" type="submit" disabled={busy}>Verify phone</button>
     </form>
     {message && <p role="status">{message}</p>}

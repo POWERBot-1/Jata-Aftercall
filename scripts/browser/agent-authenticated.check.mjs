@@ -72,6 +72,21 @@ try {
     const response = await first.page.goto(new URL("/agents/dashboard", base).href, { waitUntil: "networkidle0" });
     const state = await first.page.evaluate(() => ({ text: document.body.innerText, overflow: document.documentElement.scrollWidth > innerWidth + 1 }));
     if (response?.status() !== 200 || state.overflow || !state.text.includes("Synthetic Browser Applicant") || !state.text.includes("not active")) throw new Error(`Authenticated status failed at ${width}x${height}`);
+    const controls = await first.page.evaluate(() => {
+      const input = document.querySelector("#agent-verification-code");
+      const nav = document.querySelector('nav[aria-label="Main navigation"]');
+      if (!input || !nav) return false;
+      const field = input.getBoundingClientRect();
+      const style = getComputedStyle(input);
+      return style.color === "rgb(20, 17, 15)" && style.backgroundColor === "rgb(255, 255, 255)" &&
+        field.height >= 44 && field.width >= 120 && field.right <= innerWidth &&
+        Array.from(nav.querySelectorAll("a")).every((link) => {
+          const box = link.getBoundingClientRect();
+          return box.left >= 0 && box.right <= innerWidth + 1 && box.height >= 44;
+        });
+    });
+    if (!controls) throw new Error(`Verification or navigation controls failed at ${width}x${height}`);
+    await first.page.type("#agent-verification-code", "123456");
     await first.page.screenshot({ path: path.join(out, `application-status-${width}x${height}.png`), fullPage: true });
     console.log(`PASS authenticated application status ${width}x${height}`);
   }
