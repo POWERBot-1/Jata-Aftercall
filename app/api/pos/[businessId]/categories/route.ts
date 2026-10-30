@@ -27,19 +27,29 @@ export async function POST(request: Request, context: Context) {
       return await prisma.$transaction(async (tx: any) => {
         const existing = action === "create" ? null : await tx.posCategory.findFirst({ where: { businessId, id } });
         if (action !== "create" && !existing) return posFail("That category was not found.", 404, "CATEGORY_NOT_FOUND");
+        // Compare the exact state observed above when writing. PostgreSQL rechecks these
+        // predicates after waiting for a concurrent writer, so a stale request cannot
+        // record an audit entry for a change it did not actually make.
+        if (existing && ((action === "rename" && existing.name === name) ||
+            (action === "deactivate" && !existing.isActive) || (action === "restore" && existing.isActive))) {
+          return posFail("The category is already in that state. Refresh and try again.", 409, "CATEGORY_UNCHANGED");
+        }
+        const observed = existing && { businessId, id, name: existing.name, isActive: existing.isActive };
         if (action === "delete") {
           const [products, image] = await Promise.all([
             tx.posProduct.count({ where: { businessId, category: existing.name } }),
             tx.posCategoryImage.count({ where: { businessId, category: existing.name } }),
           ]);
           if (products || image) return posFail("Move every item, including archived items, and remove the category photo before deleting this category.", 409, "CATEGORY_IN_USE");
-          await tx.posCategory.deleteMany({ where: { businessId, id } });
+          const deleted = await tx.posCategory.deleteMany({ where: observed });
+          if (deleted.count !== 1) return posFail("The category changed. Refresh and try again.", 409, "CATEGORY_CONFLICT");
         } else if (action === "create") {
           const category = await tx.posCategory.create({ data: { businessId, name } });
           await logPosAuditInTransaction(tx, { businessId, actorId: actor.actorId, actorName: actor.actorName, action: "POS_CATEGORY_CREATED", targetType: "CATEGORY", targetId: category.id, after: { name } });
           return posOk({ category }, 201);
         } else {
-          await tx.posCategory.updateMany({ where: { businessId, id }, data: action === "rename" ? { name } : { isActive: action === "restore" } });
+          const updated = await tx.posCategory.updateMany({ where: observed, data: action === "rename" ? { name } : { isActive: action === "restore" } });
+          if (updated.count !== 1) return posFail("The category changed. Refresh and try again.", 409, "CATEGORY_CONFLICT");
         }
         await logPosAuditInTransaction(tx, { businessId, actorId: actor.actorId, actorName: actor.actorName, action: `POS_CATEGORY_${action.toUpperCase()}`, targetType: "CATEGORY", targetId: id,
           before: { name: existing.name, isActive: existing.isActive }, after: action === "rename" ? { name } : action === "delete" ? null : { isActive: action === "restore" } });
