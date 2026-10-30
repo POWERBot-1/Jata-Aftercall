@@ -237,6 +237,46 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     } finally { for (const key of envNames) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; } mock.session = null; }
   });
 
+  it("rejects ineligible existing-account referral evidence without blocking applications", async () => {
+    const names = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS"] as const;
+    const before = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    const owner = await p.user.create({ data: { email: `identity-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(owner.id);
+    const ownerApp = await p.agentApplication.create({ data: { userId: owner.id, fullName: "Owner Fixture", phoneE164: "+254700000071", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+    try {
+      process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600";
+      mock.session = { userId: owner.id, role: "CUSTOMER", email: owner.email };
+      const issue = async () => {
+        const response = await rotateReferral(request("/api/agents/referrals", {}));
+        expect(response.status).toBe(200);
+        return new URL((await response.json()).applicationPath, "https://agent.test").searchParams.get("ref")!;
+      };
+      const revoked = await issue(); const current = await issue();
+      const cases = ["malformed", "unknown", "revoked", "expired", "suspended", "same-phone", "same-email", "disabled", "valid"] as const;
+      for (const [index, name] of cases.entries()) {
+        if (name === "expired") await p.agentReferralLink.updateMany({ where: { referrerApplicationId: ownerApp.id, revokedAt: null }, data: { expiresAt: new Date(0) } });
+        if (name === "suspended") { await p.agentReferralLink.updateMany({ where: { referrerApplicationId: ownerApp.id, revokedAt: null }, data: { expiresAt: new Date(Date.now() + 3600000) } }); await p.agentApplication.update({ where: { id: ownerApp.id }, data: { agentStatus: "SUSPENDED" } }); }
+        if (name === "same-phone") await p.agentApplication.update({ where: { id: ownerApp.id }, data: { agentStatus: "ACTIVE" } });
+        if (name === "disabled") process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "false";
+        if (name === "valid") process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true";
+        const email = name === "same-email" ? owner.email.toUpperCase() : `case-${uid()}@test.invalid`;
+        const user = await p.user.create({ data: { email, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(user.id);
+        // The session and request claim the opposite identity; the database account must be authoritative.
+        mock.session = { userId: user.id, role: "CUSTOMER", email: name === "same-email" ? `different-${uid()}@test.invalid` : owner.email };
+        const code = name === "malformed" ? "bad" : name === "unknown" ? "A".repeat(43) : name === "revoked" ? revoked : current;
+        const response = await POST(request("/api/agents/application", { fullName: "Case Fixture", phone: name === "same-phone" ? "0700000071" : `0700000${100 + index}`, privacyAccepted: true, referralCode: code, referralConsent: true, email: owner.email, userId: owner.id }));
+        expect(response.status, name).toBe(200);
+        const app = await p.agentApplication.findUniqueOrThrow({ where: { userId: user.id } });
+        const evidence = await p.agentReferralAttribution.findUnique({ where: { referredApplicationId: app.id } });
+        if (name === "valid") { expect(evidence?.source).toBe("EXISTING_ACCOUNT"); expect(evidence?.referrerApplicationId).toBe(ownerApp.id); }
+        else expect(evidence, name).toBeNull();
+        expect(await p.auditEvent.count({ where: { targetId: app.id, action: "AGENT_EXISTING_ACCOUNT_ATTRIBUTION_RECORDED" } }), name).toBe(name === "valid" ? 1 : 0);
+      }
+      mock.session = { userId: owner.id, role: "CUSTOMER", email: owner.email };
+      expect((await POST(request("/api/agents/application", { fullName: "Owner Fixture", phone: "0700000071", privacyAccepted: true, referralCode: current, referralConsent: true }))).status).toBe(200);
+      expect(await p.agentReferralAttribution.findUnique({ where: { referredApplicationId: ownerApp.id } })).toBeNull();
+    } finally { for (const name of names) { if (before[name] === undefined) delete process.env[name]; else process.env[name] = before[name]; } mock.session = null; }
+  });
+
   it("serializes competing approval and rejection without contradictory audits", async () => {
     const admin = await p.user.create({ data: { email: `race-admin-${uid()}@test.invalid`, passwordHash: "test-only", role: "ADMIN" } });
     const applicant = await p.user.create({ data: { email: `race-applicant-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
