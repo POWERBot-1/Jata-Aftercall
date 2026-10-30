@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { isSameOriginRequest, validateAgentApplication } from "@/lib/agent-application";
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn(), create: vi.fn(), audit: vi.fn(), transaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), find: vi.fn(), create: vi.fn(), audit: vi.fn(), transaction: vi.fn(), allowed: vi.fn() }));
+vi.mock("@/lib/agent-application-throttle", () => ({ allowAgentApplication: mocks.allowed }));
 vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/db", () => ({ default: { agentApplication: { findUnique: mocks.find }, $transaction: mocks.transaction } }));
 import { GET, POST } from "@/app/api/agents/application/route";
@@ -30,6 +31,7 @@ describe("application route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ userId: "u1" });
+    mocks.allowed.mockResolvedValue(true);
     mocks.find.mockResolvedValue(null);
     mocks.create.mockResolvedValue({ id: "a1" });
     mocks.audit.mockResolvedValue({});
@@ -40,6 +42,13 @@ describe("application route", () => {
     expect((await GET()).status).toBe(401);
     expect((await POST(request(valid))).status).toBe(401);
     expect((await POST(request(valid, "https://evil.test"))).status).toBe(403);
+  });
+  it("fails closed if the shared limiter rejects or is unavailable", async () => {
+    mocks.allowed.mockResolvedValue(false);
+    expect((await POST(request(valid))).status).toBe(429);
+    mocks.allowed.mockRejectedValue(new Error("database unavailable"));
+    expect((await POST(request(valid))).status).toBe(503);
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
   it("atomically saves only the signed-in user's application and audit", async () => {
     expect((await POST(request(valid))).status).toBe(200);

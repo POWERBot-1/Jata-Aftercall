@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isSameOriginRequest, validateAgentApplication } from "@/lib/agent-application";
-import { rateLimit, rateLimitByIdentity } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
+import { allowAgentApplication } from "@/lib/agent-application-throttle";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,9 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Sign in before applying." }, { status: 401 });
   const ipLimit = rateLimit(req, { key: "agent-application-ip", max: 20, windowMs: 60_000 });
   if (!ipLimit.allowed) return ipLimit.response;
-  const accountLimit = rateLimitByIdentity(session.userId, { key: "agent-application-account", max: 5, windowMs: 60_000 });
-  if (!accountLimit.allowed) return accountLimit.response;
+  try {
+    if (!(await allowAgentApplication(session.userId))) return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
+  } catch { return NextResponse.json({ error: "Applications are temporarily unavailable." }, { status: 503 }); }
   // Limit request body independently of headers, which are controlled by the caller.
   const reader = req.body?.getReader();
   if (!reader) return NextResponse.json({ error: "Invalid request." }, { status: 400 });

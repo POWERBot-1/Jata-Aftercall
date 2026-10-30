@@ -1,4 +1,5 @@
 /** Isolated PostgreSQL only; no provider messages, phone verification or production payments. */
+import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PRISMA_TEST_DATABASE_URL, realPrismaConfigured, sharedPrisma } from "../helpers/prisma-client";
 import { uid } from "../helpers/prisma-fixtures";
@@ -7,10 +8,13 @@ const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role:
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session }));
 import { GET, POST } from "@/app/api/agents/application/route";
+import { allowAgentApplication } from "@/lib/agent-application-throttle";
 import { POST as reject } from "@/app/api/admin/agents/applications/[id]/reject/route";
 
 const p = realPrismaConfigured ? sharedPrisma() : null;
 const users: string[] = [];
+const throttleKeys: string[] = [];
+const originalSecret = process.env.AUTH_SECRET;
 const body = { fullName: "Synthetic Applicant", phone: "0712345678", privacyAccepted: true };
 const request = (url: string, data: unknown) => new Request(`https://agent.test${url}`, {
   method: "POST", headers: { host: "agent.test", origin: "https://agent.test", "content-type": "application/json" }, body: JSON.stringify(data),
@@ -18,6 +22,7 @@ const request = (url: string, data: unknown) => new Request(`https://agent.test$
 
 describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and audit", () => {
   beforeAll(() => {
+    if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) process.env.AUTH_SECRET = "agent-integration-test-only";
     const url = new URL(PRISMA_TEST_DATABASE_URL);
     // Opt-in is insufficient: refuse remote databases and names other than disposable JATA CI DBs.
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) {
@@ -25,11 +30,27 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     }
   });
   afterAll(async () => {
-    if (!p || users.length === 0) return;
+    if (!p) return;
+    const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
+    const userKeys = users.map((id) => createHmac("sha256", secret).update(`agent-application-account:v1:${id}`).digest("hex"));
+    if (throttleKeys.length || userKeys.length) await p.agentRegistrationThrottle.deleteMany({ where: { key: { in: [...throttleKeys, ...userKeys] } } });
+    if (originalSecret === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = originalSecret;
     await p.auditEvent.deleteMany({ where: { actorId: { in: users } } });
     await p.agentApplication.deleteMany({ where: { userId: { in: users } } });
     await p.user.deleteMany({ where: { id: { in: users } } });
     await p.$disconnect();
+  });
+
+  it("enforces an atomic shared account limit and resets an expired window", async () => {
+    const identity = `throttle-${uid()}`;
+    const key = createHmac("sha256", process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!).update(`agent-application-account:v1:${identity}`).digest("hex");
+    throttleKeys.push(key);
+    const results = await Promise.all(Array.from({ length: 12 }, () => allowAgentApplication(identity)));
+    expect(results.filter(Boolean)).toHaveLength(5);
+    expect((await p.agentRegistrationThrottle.findUniqueOrThrow({ where: { key } })).count).toBe(5);
+    await p.agentRegistrationThrottle.update({ where: { key }, data: { expiresAt: new Date(0) } });
+    expect(await allowAgentApplication(identity)).toBe(true);
+    expect((await p.agentRegistrationThrottle.findUniqueOrThrow({ where: { key } })).count).toBe(1);
   });
 
   it("deduplicates concurrent submissions and commits only one registration audit", async () => {
