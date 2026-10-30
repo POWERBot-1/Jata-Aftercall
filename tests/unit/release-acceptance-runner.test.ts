@@ -12,7 +12,7 @@ describe("fail-closed release acceptance runner", () => {
     try {
       const bin = join(root, "bin"); mkdirSync(bin);
       writeFileSync(join(bin, "npm"), '#!/bin/sh\nif [ -n "$DATABASE_URL" ] || [ -n "$PASSWORD_RESET_SMTP_URL" ] || [ -n "$R2_SECRET_ACCESS_KEY" ]; then exit 99; fi\necho "1 skipped"\nexit 0\n', { mode: 0o755 });
-      const result = spawnSync(process.execPath, [runner], { cwd: root, encoding: "utf8", env: { PATH: bin, HOME: root, DATABASE_URL: "sensitive", PASSWORD_RESET_SMTP_URL: "sensitive", R2_SECRET_ACCESS_KEY: "sensitive" } });
+      const result = spawnSync(process.execPath, [runner], { cwd: root, encoding: "utf8", env: { NODE_ENV: "test", PATH: bin, HOME: root, DATABASE_URL: "sensitive", PASSWORD_RESET_SMTP_URL: "sensitive", R2_SECRET_ACCESS_KEY: "sensitive" } });
       expect(result.status).toBe(1);
       expect(result.stdout).not.toContain("sensitive");
       const report = JSON.parse(result.stdout);
