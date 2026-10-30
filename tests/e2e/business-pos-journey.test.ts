@@ -46,6 +46,8 @@ import { POST as businessPost } from "@/app/api/business/route";
 import { POST as checkoutPost } from "@/app/api/checkout/route";
 import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { publiclyListedPlans } from "@/lib/pricing";
+import { runReport } from "@/lib/pos/reporting";
+import { paymentsForReport } from "@/lib/pos/store";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
 import { GET as snapshotsGet, POST as snapshotsPost } from "@/app/api/pos/[businessId]/reports/snapshots/route";
@@ -1175,6 +1177,62 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(afterVoid.body.snapshot.payload.saleCohort.sales.find((s: any) => s.id === voidId).status).toBe("VOIDED");
     expect(afterVoid.body.snapshot.payload.saleCohort.refundAndVoidEvents).toEqual(expect.arrayContaining([expect.objectContaining({ action: "POS_SALE_VOIDED", targetId: voidId })]));
     expect((await snapshotGet(beforeVoid.body.snapshot.id)).body.snapshot.payload).toEqual(beforeVoid.body.snapshot.payload);
+  }, 120_000);
+
+  it("21d — real transaction timestamps straddle a short reporting boundary without backdating", async () => {
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+    const dbTime = async (): Promise<Date> => (await prisma.$queryRaw`SELECT clock_timestamp() AS now`)[0].now;
+    const start = await dbTime();
+    const sale = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 2 }],
+      payments: [{ method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 60 }],
+    } });
+    expect(sale.status, sale.text()).toBe(201);
+    const saleId = sale.body.sale.id;
+    const sold = await prisma.posSale.findUnique({ where: { id: saleId }, include: { items: true } });
+    const boundary = await dbTime();
+    expect(sold!.createdAt.getTime()).toBeGreaterThanOrEqual(start.getTime());
+    expect(sold!.createdAt.getTime()).toBeLessThan(boundary.getTime());
+    const earlier = { from: start, to: new Date(boundary.getTime() - 1) };
+    const original = await runReport(businessId, config, "daily_sales", earlier);
+    expect(original.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 100" }]));
+    const priorLedger = await paymentsForReport(businessId, earlier);
+    expect(priorLedger.filter((p: any) => p.direction === "IN").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(100);
+    // Wait past the boundary in real time, not by changing a database timestamp. These are
+    // short arbitrary test periods within one UTC day, not a test of the UTC day-close UI.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const refund = (body: object) => callPos(salePost, businessId, { path: `/sales/${saleId}`, params: { saleId }, method: "POST", body });
+    const partial = await refund({ amountKES: 70, method: "cash" });
+    expect(partial.status, partial.text()).toBe(200);
+    const partialRows = await prisma.posPayment.findMany({ where: { businessId, saleId, direction: "OUT" } });
+    expect(partialRows.every((p: any) => p.createdAt.getTime() > boundary.getTime())).toBe(true);
+    expect(partialRows.map((p: any) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    const revisedCohort = await runReport(businessId, config, "daily_sales", earlier);
+    expect(revisedCohort.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 70" }, { label: "Net retained", value: "KES 30" }, { label: "Collected", value: "KES 30" },
+    ]));
+    expect(revisedCohort.notice).toContain("not a historical as-of snapshot");
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+    const full = await refund({ amountKES: 30, items: [{ saleItemId: sold!.items[0].id, quantity: 2 }] });
+    expect(full.status, full.text()).toBe(200);
+    expect(full.body.returnedToStock).toBe(2);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    const end = await dbTime();
+    const later = { from: boundary, to: end };
+    const laterLedger = await paymentsForReport(businessId, later);
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.direction === "OUT").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(100);
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "cash").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(40);
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "mpesa").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(60);
+    expect((await runReport(businessId, config, "daily_sales", later)).rows).toHaveLength(0);
+    const finalCohort = await runReport(businessId, config, "daily_sales", earlier);
+    expect(finalCohort.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 0" }, { label: "Refunded", value: "KES 100" }]));
+    const count = await prisma.posPayment.count({ where: { businessId, saleId } });
+    expect((await refund({ amountKES: 1 })).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(count);
   }, 120_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {
