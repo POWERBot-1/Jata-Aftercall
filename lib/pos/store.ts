@@ -464,6 +464,15 @@ export async function listCreditEntries(
   return client.posCreditEntry.findMany({ where, orderBy: { createdAt: "desc" }, take: Math.min(asInt(options.take, 100), 500) });
 }
 
+/** Earliest recorded debit for a party; never use a recent-entry page for credit decisions. */
+export async function oldestCreditDebit(businessId: string, partyType: "CUSTOMER" | "SUPPLIER", partyId: string, client: PosClient = db()) {
+  return client.posCreditEntry.findFirst({
+    where: { businessId, partyType, partyId, direction: "DEBIT" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { createdAt: true },
+  });
+}
+
 export async function addCustomerAsset(
   businessId: string,
   customerId: string,

@@ -324,10 +324,10 @@ export async function runReport(
       const result = profitability(toSaleRecords(sales), toExpenseRecords(expenses), range);
       return payload(definition, range, {
         basis: "calculated",
-        partial: result.partial,
+        partial: true,
         notice: result.partial
-          ? "Some items have no cost price, so profit is an estimate. Add cost prices to make it exact."
-          : null,
+          ? "Profit is an estimate: some costs may be missing, or refunds have not been allocated to item costs. Sales are a current sale-cohort view, not period cash flow."
+          : "Sales reflect their current sale-cohort status and expenses their occurrence period; this is not a complete period profit statement.",
         summary: [
           { label: "Net sales", value: formatKES(result.netSalesKES) },
           { label: "Cost of goods", value: formatKES(result.costOfGoodsKES) },

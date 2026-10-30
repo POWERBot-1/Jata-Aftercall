@@ -30,14 +30,14 @@ export default async function PosCustomerDetailPage({ params }: Props) {
 
   const configuration = workspace.configuration;
   const [entries, sales, assets] = await Promise.all([
-    configuration.credit.enabled ? listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 200 }) : Promise.resolve([]),
+    configuration.credit.enabled ? listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 201 }) : Promise.resolve([]),
     // A branch-bound clerk sees what this customer bought at its own location (§16, §75) —
     // the customer record stays business-wide, the receipts behind it follow the branch scope.
     listSales(businessId, { customerId, branchId: workspace.branchId, take: 50 }),
     listCustomerAssets(businessId, customerId),
   ]);
 
-  const statement = buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
+  const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
 
   const lifetimeKES = (sales as any[]).reduce((total, sale) => total + Number(sale.totalKES ?? 0), 0);
 
@@ -55,8 +55,8 @@ export default async function PosCustomerDetailPage({ params }: Props) {
       </div>
 
       <dl className="jata-stat-grid">
-        <div className="jata-stat"><dt>{workspace.terminology.sales}</dt><dd>{(sales as any[]).length}</dd></div>
-        <div className="jata-stat"><dt>Lifetime</dt><dd>{formatKES(lifetimeKES)}</dd></div>
+        <div className="jata-stat"><dt>Recent {workspace.terminology.sales.toLowerCase()} (up to 50)</dt><dd>{(sales as any[]).length}</dd></div>
+        <div className="jata-stat"><dt>Gross of recent sales (up to 50)</dt><dd>{formatKES(lifetimeKES)}</dd></div>
         <div className="jata-stat"><dt>Owes</dt><dd>{formatKES(Number(customer.balanceKES ?? 0))}</dd></div>
         <div className="jata-stat"><dt>Limit</dt><dd>{customer.creditLimitKES ? formatKES(Number(customer.creditLimitKES)) : "—"}</dd></div>
       </dl>
@@ -93,7 +93,8 @@ export default async function PosCustomerDetailPage({ params }: Props) {
         </section>
       ) : null}
 
-      {configuration.credit.statements && statement.lines.length ? (
+      {configuration.credit.statements && !statement ? <p className="pos-note" role="status">Statement unavailable: more than 200 ledger entries; contact support for a complete statement.</p> : null}
+      {configuration.credit.statements && statement && statement.lines.length ? (
         <section className="jata-card p-4">
           <p className="jata-kicker">Statement</p>
           <div className="pos-scroll mt-2">

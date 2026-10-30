@@ -48,7 +48,7 @@ import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { publiclyListedPlans } from "@/lib/pricing";
 import { runReport } from "@/lib/pos/reporting";
 import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
-import { paymentsForReport } from "@/lib/pos/store";
+import { oldestCreditDebit, paymentsForReport } from "@/lib/pos/store";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
 import { GET as categoriesGet, POST as categoriesPost } from "@/app/api/pos/[businessId]/categories/route";
@@ -68,7 +68,7 @@ import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[prod
 import { POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
 import { POST as suppliersPost } from "@/app/api/pos/[businessId]/suppliers/route";
-import { POST as supplierPost } from "@/app/api/pos/[businessId]/suppliers/[supplierId]/route";
+import { GET as supplierGet, POST as supplierPost } from "@/app/api/pos/[businessId]/suppliers/[supplierId]/route";
 import { GET as inventoryGet, POST as inventoryPost } from "@/app/api/pos/[businessId]/inventory/route";
 import { POST as ordersPost } from "@/app/api/pos/[businessId]/orders/route";
 import { POST as orderPost } from "@/app/api/pos/[businessId]/orders/[orderId]/route";
@@ -1330,6 +1330,30 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       expect(result.body.topItemsNotice).toContain("more than 2,000 sales");
     } finally {
       await prisma.posSale.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
+  it("21e-credit-limit — real PostgreSQL refuses incomplete statements and reads the oldest debit beyond 200 entries", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `credit-cap-${runId}`;
+    const old = new Date("2001-01-01T00:00:00.000Z"); // synthetic age fixture, not midnight evidence
+    try {
+      await prisma.posCreditEntry.createMany({ data: ["CUSTOMER", "SUPPLIER"].flatMap((partyType) => {
+        const partyId = partyType === "CUSTOMER" ? ctx.customerId : ctx.supplierId;
+        return Array.from({ length: 201 }, (_, index) => ({ businessId, partyType, partyId, direction: "DEBIT", amountKES: 1, note: marker, ...(index === 0 ? { createdAt: old } : {}) }));
+      }) });
+      const customer = await callPos(customerGet, businessId, { path: `/customers/${ctx.customerId}`, params: { customerId: ctx.customerId } });
+      const supplier = await callPos(supplierGet, businessId, { path: `/suppliers/${ctx.supplierId}`, params: { supplierId: ctx.supplierId } });
+      for (const result of [customer, supplier]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement).toBeNull();
+        expect(result.body.statementNotice).toContain("more than 200 ledger entries");
+      }
+      expect((await oldestCreditDebit(businessId, "CUSTOMER", ctx.customerId))?.createdAt.toISOString()).toBe(old.toISOString());
+      expect((await oldestCreditDebit(businessId, "SUPPLIER", ctx.supplierId))?.createdAt.toISOString()).toBe(old.toISOString());
+      expect(await oldestCreditDebit(ctx.stranger.businessId, "CUSTOMER", ctx.customerId)).toBeNull();
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
     }
   }, 120_000);
 

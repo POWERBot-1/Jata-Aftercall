@@ -27,14 +27,15 @@ export async function GET(_request: Request, context: RouteContext) {
       const customer = await findCustomer(businessId, customerId);
       if (!customer) return { status: 404, data: { error: "That customer was not found." } };
       const [entries, sales] = await Promise.all([
-        listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 200 }),
+        listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 201 }),
         listSales(businessId, { customerId, take: 50 }),
       ]);
-      const statement = buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
+      const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
       return posOk({
         customer,
         assets: customer.assets ?? [],
         statement,
+        statementNotice: statement ? null : "Statement unavailable: more than 200 ledger entries; contact support for a complete statement.",
         recentSales: sales.map((sale: any) => ({
           id: sale.id,
           receiptNumber: sale.receiptNumber,

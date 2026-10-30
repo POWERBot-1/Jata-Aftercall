@@ -24,14 +24,15 @@ export async function GET(_request: Request, context: RouteContext) {
       const supplier = await findSupplier(businessId, supplierId);
       if (!supplier) return { status: 404, data: { error: "That supplier was not found." } };
       const [entries, purchases] = await Promise.all([
-        listCreditEntries(businessId, { partyType: PAYABLE, partyId: supplierId, take: 200 }),
+        listCreditEntries(businessId, { partyType: PAYABLE, partyId: supplierId, take: 201 }),
         // Deliveries from this supplier are read for the actor's own location (§16, §75).
         listPurchases(businessId, { take: 25, branchId: ctx.branchId }),
       ]);
-      const statement = buildStatement(toCreditEntries(entries, PAYABLE), PAYABLE);
+      const statement = entries.length > 200 ? null : buildStatement(toCreditEntries(entries, PAYABLE), PAYABLE);
       return posOk({
         supplier,
         statement,
+        statementNotice: statement ? null : "Statement unavailable: more than 200 ledger entries; contact support for a complete statement.",
         purchases: purchases.filter((purchase: any) => purchase.supplierId === supplierId),
       });
     },

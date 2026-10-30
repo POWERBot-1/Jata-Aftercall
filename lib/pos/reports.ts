@@ -231,7 +231,9 @@ export function profitability(sales: SaleRecord[], expenses: ExpenseRecord[], ra
     if (sale.costKES !== undefined && sale.costKES !== null) return total + num(sale.costKES);
     return total + (sale.items ?? []).reduce((line, item) => line + num(item.costKES) * num(item.quantity), 0);
   }, 0);
-  const hasCostData = scoped.some((sale) => sale.costKES != null || (sale.items ?? []).some((item) => item.costKES != null));
+  // A single costed sale must not make a second uncosted sale appear complete.
+  const hasMissingCost = scoped.some((sale) => sale.costKES == null &&
+    (!(sale.items?.length) || sale.items.some((item) => item.costKES == null)));
   const expensesKES = summarizeExpenses(expenses, range).totalKES;
   const grossProfitKES = summary.netKES - costOfGoodsKES;
   const netProfitKES = grossProfitKES - expensesKES;
@@ -244,7 +246,7 @@ export function profitability(sales: SaleRecord[], expenses: ExpenseRecord[], ra
     marginPercent: summary.netKES ? Math.round((netProfitKES / summary.netKES) * 1000) / 10 : 0,
     basis: "calculated",
     // Refunds are not allocated to line costs in this aggregate; profit is an estimate.
-    partial: !hasCostData || scoped.some((sale) => num(sale.refundedKES) > 0),
+    partial: hasMissingCost || scoped.some((sale) => num(sale.refundedKES) > 0),
   };
 }
 

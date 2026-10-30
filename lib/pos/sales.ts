@@ -445,8 +445,7 @@ export async function createSale(params: {
   // This early pass exists so the till answers in the same order it always has — a declined
   // credit is refused before a stock question, and the refusal is audited either way.
   if (creditKES > 0 && customer) {
-    const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, client);
-    const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
+    const oldestDebit = (await store.oldestCreditDebit(businessId, RECEIVABLE, customer.id, client))?.createdAt ?? null;
     const earlyDecision = decideCredit({
       config: configuration,
       party: {
@@ -578,8 +577,7 @@ export async function createSale(params: {
     if (creditKES > 0 && customer) {
       await store.lockPartyRow(tx, RECEIVABLE, businessId, customer.id);
       const current = await store.findCustomer(businessId, customer.id, tx);
-      const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, tx);
-      const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
+      const oldestDebit = (await store.oldestCreditDebit(businessId, RECEIVABLE, customer.id, tx))?.createdAt ?? null;
       const decision = decideCredit({
         config: configuration,
         party: {
