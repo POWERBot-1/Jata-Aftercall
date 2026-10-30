@@ -26,9 +26,8 @@ export async function POST(request: Request, context: Context) {
       if (typeof body.imageUrl !== "string" || body.imageUrl.length > 2000 || !await ownsProductImage(businessId, body.imageUrl)) {
         return posFail("Choose a photo from this business's media library.", 400, "category_image_not_owned");
       }
-      // Categories are existing product strings, not independent entities.
-      const product = await prisma.posProduct.findFirst({ where: { businessId, category }, select: { id: true } });
-      if (!product) return posFail("Add an item to this category first.", 404, "category_not_found");
+      const categoryRecord = await prisma.posCategory.findFirst({ where: { businessId, name: category }, select: { id: true } });
+      if (!categoryRecord) return posFail("That category was not found.", 404, "category_not_found");
       const image = await prisma.posCategoryImage.upsert({
         where: { businessId_category: { businessId, category } },
         create: { businessId, category, imageUrl: body.imageUrl },

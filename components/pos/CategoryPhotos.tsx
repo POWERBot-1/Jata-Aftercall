@@ -5,7 +5,7 @@ import { FILE_INPUT_ACCEPT } from "@/lib/media/imageFormat";
 import { prepareUpload, uploadPreparedImage } from "@/lib/media/browserImage";
 import { safeImageUrl } from "@/lib/workspaceImagery";
 
-/** Optional photos for categories already used by POS products. Assets stay in the media library. */
+/** Optional photos for independent POS categories. Assets stay in the media library. */
 export function CategoryPhotos({ businessId, categories, initialImages, canEdit }: {
   businessId: string; categories: string[]; initialImages: { category: string; imageUrl: string }[]; canEdit: boolean;
 }) {
@@ -69,7 +69,7 @@ export function CategoryPhotos({ businessId, categories, initialImages, canEdit 
   const image = preview || safeImageUrl(images[selected]);
   return <section className="jata-card p-5 space-y-3" aria-labelledby="pos-category-photos">
     <h2 id="pos-category-photos" className="text-lg font-bold">Category photos</h2>
-    <p className="jata-hint">Categories come from your items. Photos remain in your media library when replaced or removed.</p>
+    <p className="jata-hint">Categories can be empty. Photos remain in your media library when replaced or removed.</p>
     <label className="jata-label" htmlFor="pos-category-select">Category</label>
     <select id="pos-category-select" className="jata-input" disabled={busy} value={selected} onChange={(event) => { resetSelection(); setSelected(event.target.value); }}>
       {categories.map((category) => <option key={category} value={category}>{category}</option>)}

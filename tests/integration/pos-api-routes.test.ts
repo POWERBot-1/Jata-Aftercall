@@ -924,6 +924,7 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
 
   it("isolates category photos and retains media on replacement/removal (in-memory DB)", async () => {
     rows("posProduct").find((p) => p.id === "p_a1")!.category = "Food";
+    rows("posCategory").push({ id: "food_category_a", businessId: "bizA", name: "Food", isActive: true });
     rows("mediaAsset").push(
       { id: "cat-a", businessId: "bizA", url: "https://media.example/a.png" },
       { id: "cat-a2", businessId: "bizA", url: "https://media.example/a2.png" },

@@ -60,7 +60,12 @@ export async function POST(request: Request, context: RouteContext) {
       if (input.imageUrl && !await ownsProductImage(businessId, input.imageUrl)) {
         return posFail("Choose a photo from this business's media library.", 400, "product_image_not_owned");
       }
-      const product = await createProduct(businessId, input);
+      let product;
+      try { product = await createProduct(businessId, input); }
+      catch (error) {
+        if (String(error).includes("POS_CATEGORY_INACTIVE")) return posFail("Restore that category before adding an item to it.", 409, "CATEGORY_INACTIVE");
+        throw error;
+      }
       await logPosAudit({
         businessId,
         actorId: actor.actorId,

@@ -120,6 +120,7 @@ model Business {
   posBranches              PosBranch[]
   posStaff                 PosStaff[]
   posProducts              PosProduct[]
+  posCategories            PosCategory[]
   posCategoryImages        PosCategoryImage[]
   posReportSnapshots       PosReportSnapshot[]
   posInventoryItems        PosInventoryItem[]
@@ -1202,11 +1203,29 @@ model PosBranch {
 
 // Optional imagery for existing free-text POS product categories. Category names remain on
 // products; this table stores only their business-scoped presentation metadata.
+// An independent business-owned category. Product and image names use a tenant-scoped
+// composite foreign key, so renames carry associations and deletion cannot orphan products.
+model PosCategory {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  products   PosProduct[]
+  image      PosCategoryImage?
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+}
+
 model PosCategoryImage {
   id         String   @id @default(cuid())
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category   String
+  categoryRecord PosCategory @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
   imageUrl   String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -1269,6 +1288,7 @@ model PosProduct {
   name              String
   kind              String    @default("PRODUCT")   // PRODUCT | SERVICE
   category          String?
+  categoryRecord    PosCategory? @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
   description       String?   @db.Text
   unitKey           String    @default("piece")
   priceKES          Int       @default(0)

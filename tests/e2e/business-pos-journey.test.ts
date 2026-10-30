@@ -50,6 +50,7 @@ import { runReport } from "@/lib/pos/reporting";
 import { paymentsForReport } from "@/lib/pos/store";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
+import { GET as categoriesGet, POST as categoriesPost } from "@/app/api/pos/[businessId]/categories/route";
 import { GET as snapshotsGet, POST as snapshotsPost } from "@/app/api/pos/[businessId]/reports/snapshots/route";
 import { GET as workspaceGet } from "@/app/api/pos/[businessId]/route";
 import { GET as configGet, POST as configPost } from "@/app/api/pos/[businessId]/configuration/route";
@@ -1233,6 +1234,54 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     const count = await prisma.posPayment.count({ where: { businessId, saleId } });
     expect((await refund({ amountKES: 1 })).status).toBe(400);
     expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(count);
+  }, 120_000);
+
+  it("21e — independent category lifecycle preserves product, photo and tenant boundaries", async () => {
+    const businessId = ctx.owner.businessId;
+    const category = (body: object) => callPos(categoriesPost, businessId, { method: "POST", path: "/categories", body });
+    const create = await category({ action: "create", name: "Empty category" });
+    expect(create.status, create.text()).toBe(201);
+    const id = create.body.category.id;
+    expect((await callPos(categoriesGet, businessId, { path: "/categories" })).body.categories).toEqual(expect.arrayContaining([expect.objectContaining({ id, name: "Empty category", _count: { products: 0 } })]));
+    const duplicate = await category({ action: "create", name: "Empty category" });
+    expect(duplicate.status).toBe(409);
+    const mediaUrl = `https://images.invalid/${runId}/empty-category.png`;
+    await prisma.mediaAsset.create({ data: { businessId, url: mediaUrl } });
+    const photo = await callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Empty category", imageUrl: mediaUrl } });
+    expect(photo.status, photo.text()).toBe(200);
+    const product = await callPos(productsPost, businessId, { method: "POST", body: { name: "Category fixture", category: "Empty category", priceKES: 50 } });
+    expect(product.status, product.text()).toBe(201);
+    const productId = product.body.product.id;
+    const oldSale = await prisma.posSale.findUnique({ where: { id: ctx.saleId } });
+    const oldStock = await stockOf(businessId, ctx.chapatiId);
+    expect((await category({ action: "delete", id })).status).toBe(409);
+    expect((await category({ action: "rename", id, name: "Renamed category" })).status).toBe(200);
+    expect((await prisma.posProduct.findUnique({ where: { id: productId } }))?.category).toBe("Renamed category");
+    expect((await prisma.posCategoryImage.findFirst({ where: { businessId, category: "Renamed category" } }))?.imageUrl).toBe(mediaUrl);
+    expect((await prisma.posSale.findUnique({ where: { id: ctx.saleId } }))?.refundedKES).toBe(oldSale!.refundedKES);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(oldStock);
+    expect((await category({ action: "deactivate", id })).status).toBe(200);
+    const blocked = await callPos(productsPost, businessId, { method: "POST", body: { name: "Blocked category fixture", category: "Renamed category", priceKES: 50 } });
+    expect(blocked.status, blocked.text()).toBe(409);
+    expect(blocked.body.code).toBe("CATEGORY_INACTIVE");
+    expect(await prisma.posProduct.count({ where: { businessId, name: "Blocked category fixture" } })).toBe(0);
+    expect((await category({ action: "restore", id })).status).toBe(200);
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await category({ action: "rename", id, name: "Stolen" })).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect((await prisma.posCategory.findFirst({ where: { businessId, id } }))?.name).toBe("Renamed category");
+    const removePhoto = await callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Renamed category", imageUrl: null } });
+    expect(removePhoto.status).toBe(200);
+    expect(await prisma.mediaAsset.count({ where: { businessId, url: mediaUrl } })).toBe(1);
+    const archive = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${productId}`, params: { productId }, body: { archive: true } });
+    expect(archive.status).toBe(200);
+    expect((await category({ action: "delete", id })).status).toBe(409);
+    const move = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${productId}`, params: { productId }, body: { name: "Category fixture", category: "Moved category", priceKES: 50, isActive: false } });
+    expect(move.status, move.text()).toBe(200);
+    expect((await category({ action: "delete", id })).status).toBe(200);
+    expect(await prisma.posProduct.findUnique({ where: { id: productId } })).toMatchObject({ category: "Moved category", isActive: false });
+    expect(await prisma.posCategory.findFirst({ where: { businessId, id } })).toBeNull();
+    expect(await prisma.posCategory.findFirst({ where: { businessId, name: "Moved category" } })).toBeTruthy();
   }, 120_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {

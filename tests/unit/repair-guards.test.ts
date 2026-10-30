@@ -125,6 +125,7 @@ describe("runtime and schema guards", () => {
       "20261033000000_erp_requisitions",
       "20261101000000_pos_category_images",
       "20261102000000_pos_report_snapshots",
+      "20261103000000_pos_categories",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -174,6 +175,7 @@ describe("runtime and schema guards", () => {
       "20261032000000_erp_procurement",
       "20261101000000_pos_category_images",
       "20261102000000_pos_report_snapshots",
+      "20261103000000_pos_categories",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

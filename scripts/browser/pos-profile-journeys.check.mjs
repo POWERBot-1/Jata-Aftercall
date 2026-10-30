@@ -129,6 +129,26 @@ try {
     await page.waitForSelector("#f-name", { visible:true });
     await new Promise((done) => setTimeout(done, 1200));
     await layout(page, profile.key, "product-create");
+    if (profile.key === "retail") {
+      const categoryUrl = `/api/pos/${id}/categories`;
+      await fill(page, "#pos-category-name", "Empty browser category");
+      let changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Add category");
+      if ((await changed).status() !== 201) throw new Error("Empty category creation failed");
+      await page.waitForFunction(() => document.body.innerText.includes("Empty browser category") && document.body.innerText.includes("0 items"));
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Delete Empty browser category" && !b.disabled));
+      changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Delete Empty browser category");
+      if (!(await changed).ok()) throw new Error("Empty category deletion failed");
+      await page.waitForFunction(() => !document.body.innerText.includes("Empty browser category"));
+      await page.waitForFunction(() => !document.querySelector('#pos-category-name')?.disabled);
+      await fill(page, "#pos-category-name", "Category retail");
+      changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Add category");
+      if ((await changed).status() !== 201) throw new Error("Retail category creation failed");
+      await page.waitForFunction(() => document.body.innerText.includes("Category retail"));
+      console.log("PASS independent empty category create and delete in browser");
+    }
     const kind = await page.$eval("#f-kind", (el) => el.value);
     if (kind !== "PRODUCT") throw new Error(`${profile.key} unexpected default ${kind}`);
     await fill(page,"#f-name",`Fixture ${profile.key}`); await fill(page,"#f-category",`Category ${profile.key}`); await fill(page,"#f-priceKES","100");
@@ -162,6 +182,44 @@ try {
     await page.reload({ waitUntil:"load" });
     await page.waitForFunction((name) => document.body.textContent.includes(name), {}, product.name);
     await new Promise((done) => setTimeout(done, 1200));
+    if (profile.key === "retail") {
+      const categoryUrl = `/api/pos/${id}/categories`;
+      const savedCategory = await prisma.posCategory.findFirst({ where:{ businessId:id, name:"Category retail" } });
+      if (!savedCategory) throw new Error("Independent retail category missing after reload");
+      await clickText(page, "button", "Edit Category retail");
+      await fill(page, `#category-edit-${savedCategory.id}`, "Renamed retail category");
+      let changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Save category");
+      if (!(await changed).ok()) throw new Error("Category rename failed");
+      await page.waitForFunction(() => document.body.innerText.includes("Renamed retail category"));
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Deactivate Renamed retail category" && !b.disabled));
+      if ((await prisma.posProduct.findUnique({ where:{ id:product.id } }))?.category !== "Renamed retail category") throw new Error("Rename failed to retain product association");
+      changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Deactivate Renamed retail category");
+      if (!(await changed).ok()) throw new Error("Category deactivation failed");
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Restore Renamed retail category" && !b.disabled));
+      const blocked = await page.evaluate(async (url) => (await fetch(url, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ name:"Inactive category test", category:"Renamed retail category", priceKES:1 }) })).status, `/api/pos/${id}/products`);
+      if (blocked !== 409) throw new Error(`Inactive category accepted assignment: ${blocked}`);
+      changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Restore Renamed retail category");
+      if (!(await changed).ok()) throw new Error("Category restore failed");
+      await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Delete Renamed retail category" && !b.disabled));
+      changed = page.waitForResponse((r) => r.url().endsWith(categoryUrl) && r.request().method() === "POST");
+      await clickText(page, "button", "Delete Renamed retail category");
+      if ((await changed).status() !== 409) throw new Error("Category with item was deleted");
+      await page.waitForFunction(() => document.querySelector('[aria-labelledby="pos-categories-heading"] [role="alert"]')?.textContent.includes("Move every item"));
+      await page.reload({ waitUntil:"load" });
+      await page.waitForFunction(() => document.body.innerText.includes("Renamed retail category"));
+      product = await prisma.posProduct.findUnique({ where:{ id:product.id } });
+      await new Promise((done) => setTimeout(done, 1200));
+      for (const [width,height] of sizes) {
+        await page.setViewport({ width,height });
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+        if (overflow) throw new Error(`Category screen overflows ${width}x${height}`);
+        await page.screenshot({ path:`${shotDir}/category-lifecycle-${width}x${height}.jpg`, type:"jpeg", quality:70, fullPage:true });
+      }
+      console.log("PASS browser category rename, assignment, deactivate/restore, deletion refusal and reload");
+    }
     await clickText(page, ".pos-row-actions button", "Edit");
     await page.waitForFunction((category) => document.querySelector("#f-category")?.value === category && document.querySelector('form.pos-form button[type="submit"]')?.textContent.trim() === "Save changes", {}, product.category);
     await fill(page,"#f-category",`Updated ${profile.key}`);
@@ -490,6 +548,7 @@ try {
     const beforeProducts = await prisma.posProduct.count({ where:{ businessId:id } });
     for (const [path,payload] of [
       [`/api/pos/${id}/products`, { name:"Forbidden item", kind:"PRODUCT", priceKES:1 }],
+      [`/api/pos/${id}/categories`, { action:"create", name:"Forbidden category" }],
       [`/api/pos/${id}/configuration`, { answers:{ business_type:"retail" } }],
       [`/api/pos/${id}/configuration/publish`, {}],
       [`/api/pos/${id}/inventory`, { productId:"not-owned", quantity:10, reason:"OPENING" }],

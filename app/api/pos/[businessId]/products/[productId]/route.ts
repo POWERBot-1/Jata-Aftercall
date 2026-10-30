@@ -53,7 +53,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (input.imageUrl && input.imageUrl !== existing.imageUrl && !await ownsProductImage(businessId, input.imageUrl)) {
         return posFail("Choose a photo from this business's media library.", 400, "product_image_not_owned");
       }
-      await updateProduct(businessId, productId, input);
+      try { await updateProduct(businessId, productId, input); }
+      catch (error) {
+        if (String(error).includes("POS_CATEGORY_INACTIVE")) return posFail("Restore that category before moving an item to it.", 409, "CATEGORY_INACTIVE");
+        throw error;
+      }
       await logPosAudit({
         businessId,
         actorId: actor.actorId,
