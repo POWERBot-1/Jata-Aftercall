@@ -507,10 +507,14 @@ try {
   if (![403,404].includes(deniedRead) || ![403,404].includes(deniedWrite)) throw new Error(`Cross-tenant snapshot access allowed: ${deniedRead}/${deniedWrite}`);
   // Inventory staff may read reports but do not have CLOSE_DAY. Authenticate as an actual
   // member in a separate browser context and check both the rendered controls and server refusal.
+  const retailConfig = await prisma.posConfiguration.findUnique({ where:{ businessId:retailId } });
+  const published = JSON.parse(retailConfig.publishedJson);
+  published.staff = { ...published.staff, enabled:true, roles:["INVENTORY"] };
+  await prisma.posConfiguration.update({ where:{ businessId:retailId }, data:{ publishedJson:JSON.stringify(published) } });
   await prisma.businessMember.create({ data:{ businessId:retailId, userId:stranger.id, role:"STAFF" } });
   await prisma.posStaff.create({ data:{ businessId:retailId, userId:stranger.id, name:"Inventory fixture", roleKey:"INVENTORY" } });
   await outsider.goto(new URL(`/dashboard/pos/${retailId}/reports`,base).href, { waitUntil:"load" });
-  await outsider.waitForSelector('[aria-labelledby="capture-heading"]', { visible:true });
+  await outsider.waitForSelector('[aria-labelledby="capture-heading"]', { visible:true }).catch(async () => { throw new Error(`Report-only staff could not open reports: ${JSON.stringify(await outsider.evaluate(() => ({ url:location.pathname, body:document.body.innerText.slice(-1500) })))}`); });
   await new Promise((done) => setTimeout(done, 1200));
   const controls = await outsider.evaluate(() => [...document.querySelectorAll('[aria-labelledby="capture-heading"] button')].map((button) => button.textContent.trim()));
   if (controls.includes("Finalize selected dates") || controls.includes("Create replacement revision")) throw new Error("Report-only staff saw finalization controls");
