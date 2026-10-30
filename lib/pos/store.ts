@@ -1247,6 +1247,16 @@ export async function paymentsForReport(businessId: string, range: DateRange = {
   });
 }
 
+/** Refund payouts are filtered before applying the row limit, so unrelated receipts cannot hide them. */
+export async function refundPayoutsForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
+  return client.posPayment.findMany({
+    where: { businessId, status: "SETTLED", direction: "OUT", purpose: "REFUND", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: REPORT_ROW_LIMIT + 1,
+    select: { id: true, saleId: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
+  });
+}
+
 export async function movementsForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
   return client.posInventoryMovement.findMany({
     where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
