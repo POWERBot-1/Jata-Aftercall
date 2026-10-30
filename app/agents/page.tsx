@@ -13,9 +13,10 @@ export default function AgentsPage() {
     >
       <MarketingSection title="Programme availability" id="availability">
         <div className="mk-prose">
-          <p>Agent registration is not yet available. There is currently no agent application, referral link, or agent dashboard on this page.</p>
-          <p>Creating a business account does not register you as an agent. Please check back when the programme is available.</p>
+          <p>Applications can be submitted using an existing account, but phone verification, agent activation, referral links and the agent dashboard are not yet available.</p>
+          <p>Submitting an application does not activate you as an agent. Programme terms and verification must be available before activation.</p>
         </div>
+        <div className="mk-btn-row"><Link href="/agents/apply" className="mk-btn">Apply using an existing account</Link></div>
       </MarketingSection>
       <MarketingSection title="How the programme is intended to work" id="how-it-works" tone="cream">
         <div className="mk-prose">

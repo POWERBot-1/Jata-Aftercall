@@ -15,6 +15,7 @@ import { BadgeCheck, Building2, CreditCard, LayoutGrid, ListChecks, ShieldCheck,
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
   { href: "/admin/customers", label: "Customers", icon: Users },
+  { href: "/admin/agents", label: "Agents", icon: Users },
   { href: "/admin/businesses", label: "Businesses", icon: Building2 },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/payments/wallet", label: "Wallet", icon: Wallet },

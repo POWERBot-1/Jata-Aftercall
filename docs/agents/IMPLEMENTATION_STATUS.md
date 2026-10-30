@@ -1,6 +1,13 @@
 # Agent programme — partial implementation and release blockers
 
-This branch is **not** a complete agent network and is not ready for release. The public page intentionally says registration is unavailable; it must not be mistaken for an application flow. No financial policy, provider, payout, production setting or data has been activated or changed.
+This branch is **not** a complete agent network and is not ready for release. Existing account holders can submit one application; this is not agent activation or a complete registration flow. The phone is unverified and referral tools remain unavailable. No financial policy, provider, payout, production setting or data has been activated or changed.
+
+## Implemented slice
+
+- Existing-account application captures a name, unverified Kenyan mobile number and privacy acknowledgement. One row per user and an audit event are written transactionally. Retries return the existing application, without updating it. Phone uniqueness must be enforced only after trusted verification, not against unverified claims.
+- `GET` and `POST /api/agents/application` require a session; POST checks origin, validates input and uses the existing process-local limiter. The authenticated admin page lists masked phones and checks the current database role. It is read-only: it cannot approve, verify or activate anyone.
+- An additive migration is included but has not been applied or tested against PostgreSQL. Rollback (only after assessing data loss and dependencies): drop the `AgentApplication` table, then reconcile Prisma's migration history through the established operational process. Deleting the table deletes applications. **Never run this rollback in production without explicit authorization.**
+- Applications have no self-service deletion or correction; a retention schedule and operational privacy response path must be established before production use. This slice is not release-ready.
 
 ## Discovery
 

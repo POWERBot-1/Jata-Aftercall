@@ -221,7 +221,7 @@ export default async function HomePage() {
           <div className="lp-wrap">
             <p className="lp-kicker"><UsersRound aria-hidden="true" size={20} /> Agent network</p>
             <h2 id="agents-title" className="lp-h2">Become a JATA AFTERCALL Agent</h2>
-            <p className="lp-lede">Help businesses discover JATA AFTERCALL. Agent registration and reward terms are not yet available.</p>
+            <p className="lp-lede">Help businesses discover JATA AFTERCALL. Applications are open to existing account holders; activation and reward terms are not yet available.</p>
             <Link href="/agents" className="lp-btn lp-btn--amber">Learn about the agent programme <span aria-hidden="true">→</span></Link>
           </div>
         </section>

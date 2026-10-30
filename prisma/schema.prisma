@@ -32,8 +32,24 @@ model User {
   payments     Payment[]
   subscriptions Subscription[]
   auditEvents  AuditEvent[]
+  agentApplication AgentApplication?
 
   @@index([email])
+}
+
+// An application is not an agent entitlement. No activation is possible until a trusted,
+// self-service phone verification mechanism and programme rules have been implemented.
+model AgentApplication {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  fullName              String
+  phoneE164             String
+  privacyAcknowledgedAt DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 enum Role {

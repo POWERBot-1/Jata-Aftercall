@@ -15,6 +15,8 @@ export default function PrivacyPage() {
         <div className="mk-prose">
           <h3>Account data</h3>
           <p>Email address, optional name and phone number, a bcrypt password hash, role, session version and password-recovery metadata. Recovery tokens are stored only as SHA-256 digests and expire.</p>
+          <h3>Agent applications</h3>
+          <p>If you submit an agent application, we store your account association, name, unverified mobile number, privacy acknowledgement and submission time. The application is visible to platform administrators. It does not verify your number or activate you as an agent. A specific retention period and self-service deletion process for these applications have not yet been established.</p>
           <h3>Business data</h3>
           <p>Business name, category, description, nominated phone and WhatsApp numbers, location or coordinates, opening hours, services, prices, offers, themes, media references and website content. You choose what is published on the public /b/&lt;slug&gt; page.</p>
           <h3>Payment data</h3>

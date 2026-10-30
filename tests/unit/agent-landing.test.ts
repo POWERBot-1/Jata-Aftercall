@@ -13,8 +13,9 @@ describe("agent programme public entry", () => {
 
   it("does not claim applications or commissions are available", () => {
     const html = renderToStaticMarkup(createElement(AgentsPage));
-    expect(html).toContain("Agent registration is not yet available");
+    expect(html).toContain("Applications can be submitted using an existing account");
     expect(html).toContain("Registration alone will not guarantee a commission");
+    expect(html).toContain('href="/agents/apply"');
     expect(html).toContain('href="/privacy"');
     expect(html).toContain('href="/contact"');
   });
