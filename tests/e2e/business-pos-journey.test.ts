@@ -525,19 +525,48 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(detail.status, detail.text()).toBe(200);
     const itemId = detail.body.sale.items[0].id;
 
+    const partial = await callPos(salePost, businessId, {
+      path: `/sales/${ctx.saleId}`,
+      params: { saleId: ctx.saleId },
+      method: "POST",
+      body: { amountKES: 40, method: "cash", reason: "Partial refund" },
+    });
+    expect(partial.status, partial.text()).toBe(200);
+    expect(partial.body.refundedKES).toBe(40);
+    const partialReport = await callPos(reportsGet, businessId, { query: { report: "daily_sales" } });
+    expect(partialReport.status, partialReport.text()).toBe(200);
+    expect(partialReport.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 40" },
+      { label: "Net retained", value: "KES 60" },
+      { label: "Collected", value: "KES 60" },
+    ]));
+    const breakdown = await callPos(reportsGet, businessId, { query: { report: "payment_breakdown" } });
+    expect(breakdown.status, breakdown.text()).toBe(200);
+    expect(breakdown.body.report.rows).toEqual(expect.arrayContaining([expect.objectContaining({ method: "cash", amount: "KES 60" })]));
+
     const refunded = await callPos(salePost, businessId, {
       path: `/sales/${ctx.saleId}`,
       params: { saleId: ctx.saleId },
       method: "POST",
-      body: { amountKES: 100, method: "cash", reason: "Wrong order", items: [{ saleItemId: itemId, quantity: 2 }] },
+      body: { amountKES: 60, method: "cash", reason: "Wrong order", items: [{ saleItemId: itemId, quantity: 2 }] },
     });
     expect(refunded.status, refunded.text()).toBe(200);
-    expect(refunded.body.refundedKES).toBe(100);
+    expect(refunded.body.refundedKES).toBe(60);
     expect(refunded.body.returnedToStock).toBe(2);
     expect(await stockOf(businessId, ctx.chapatiId)).toBe(40);
 
     const sale = await prisma.posSale.findUnique({ where: { id: ctx.saleId } });
     expect(sale).toMatchObject({ totalKES: 100, refundedKES: 100, status: "REFUNDED" });
+    const fullReport = await callPos(reportsGet, businessId, { query: { report: "daily_sales" } });
+    expect(fullReport.status, fullReport.text()).toBe(200);
+    expect(fullReport.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 100" },
+      { label: "Net retained", value: "KES 0" },
+      { label: "Collected", value: "KES 0" },
+    ]));
+    const payments = await prisma.posPayment.findMany({ where: { businessId, saleId: ctx.saleId, status:"SETTLED" } });
+    expect(payments.filter((p) => p.direction === "IN").reduce((n,p) => n+p.amountKES, 0)).toBe(100);
+    expect(payments.filter((p) => p.direction === "OUT").reduce((n,p) => n+p.amountKES, 0)).toBe(100);
     expect(await prisma.posInventoryMovement.count({ where: { businessId, productId: ctx.chapatiId, reason: "RETURN", delta: 2 } })).toBe(1);
 
     // Refunding more than was paid is refused and changes nothing (§54).

@@ -144,6 +144,7 @@ export function ReportsClient({
           <div>
             <p className="jata-kicker">Close the day · {closing.date}</p>
             <h3 className="text-base font-semibold">Count this against the drawer</h3>
+            <p className="pos-note">Sales and payment methods reflect the current status of sales created today. The drawer amount reflects today’s settled cash movements, including refunds for earlier sales.</p>
           </div>
           <dl className="jata-stat-grid">
             {closing.summary.map((entry: { label: string; value: string }) => (
@@ -162,7 +163,7 @@ export function ReportsClient({
                     <tr key={row.method}>
                       <td>{row.method}</td>
                       <td>{row.transactions}</td>
-                      <td>{formatKES(Number(row.amount))}</td>
+                      <td>{row.amount}</td>
                     </tr>
                   ))}
                 </tbody>

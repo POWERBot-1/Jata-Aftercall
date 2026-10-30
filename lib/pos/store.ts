@@ -1217,7 +1217,7 @@ export async function salesForReport(businessId: string, range: DateRange = {}, 
     where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
-    include: { items: { select: { name: true, quantity: true, totalKES: true, costKES: true } }, payments: { select: { method: true, amountKES: true, direction: true } } },
+    include: { items: { select: { name: true, quantity: true, totalKES: true, costKES: true } }, payments: { select: { method: true, amountKES: true, direction: true, status: true } } },
   });
 }
 

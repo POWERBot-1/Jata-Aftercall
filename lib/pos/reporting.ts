@@ -74,10 +74,11 @@ function toSaleRecords(rows: any[]): SaleRecord[] {
     paidKES: Number(row.paidKES ?? 0),
     balanceKES: Number(row.balanceKES ?? 0),
     refundedKES: Number(row.refundedKES ?? 0),
+    creditRefundedKES: Number(row.creditRefundedKES ?? 0),
     costKES: row.costKES == null ? undefined : Number(row.costKES),
     payments: (row.payments ?? [])
-      .filter((payment: any) => payment.direction !== "OUT")
-      .map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0) })),
+      .filter((payment: any) => !payment.status || payment.status === "SETTLED")
+      .map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0), direction: payment.direction })),
     items: (row.items ?? []).map((item: any) => ({
       name: item.name,
       quantity: Number(item.quantity ?? 0),
@@ -179,13 +180,14 @@ export async function runReport(
           { label: terminology.sales, value: String(summary.count) },
           { label: "Gross", value: formatKES(summary.grossKES) },
           { label: "Discounts", value: formatKES(summary.discountKES) },
-          { label: "Net", value: formatKES(summary.netKES) },
+          { label: "Refunded", value: formatKES(summary.refundedKES) },
+          { label: "Net retained", value: formatKES(summary.netKES) },
           { label: "Collected", value: formatKES(summary.paidKES) },
           { label: "Still owed", value: formatKES(summary.outstandingKES) },
           { label: "Average sale", value: formatKES(summary.averageKES) },
         ],
         rows: sales
-          .filter((sale) => sale.status !== "VOIDED")
+          .filter((sale) => sale.status !== "VOIDED" && sale.status !== "CANCELLED")
           .slice(-200)
           .reverse()
           .map((sale) => ({
@@ -194,10 +196,12 @@ export async function runReport(
             customer: sale.customerName ?? "—",
             staff: sale.staffName ?? "—",
             total: formatKES(sale.totalKES),
-            balance: sale.balanceKES > 0 ? formatKES(sale.balanceKES) : "—",
+            refunded: formatKES(sale.refundedKES),
+            retained: formatKES(sale.totalKES - (sale.refundedKES ?? 0)),
+            balance: sale.balanceKES - (sale.creditRefundedKES ?? 0) > 0 ? formatKES(sale.balanceKES - (sale.creditRefundedKES ?? 0)) : "—",
           })),
         series: series.map((point) => ({ label: point.date, value: point.netKES })),
-        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : null,
+        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : "Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period.",
       });
     }
 
@@ -217,7 +221,7 @@ export async function runReport(
           sold: formatKES(sale.totalKES),
           refunded: formatKES(Number(sale.refundedKES ?? 0)),
         })),
-        notice: refunded.length === 0 ? "No refunds or returns in this period." : null,
+        notice: refunded.length === 0 ? "No refunded sales created in this period." : "Sales created in this period, shown at their current refund status; refunds can have occurred later.",
       });
     }
 
@@ -234,7 +238,7 @@ export async function runReport(
           share: total ? `${Math.round((method.amountKES / total) * 100)}%` : "—",
         })),
         series: methods.map((method) => ({ label: method.method, value: method.amountKES })),
-        notice: methods.length === 0 ? "No payments recorded in this period." : null,
+        notice: methods.length === 0 ? "No payments for sales created in this period." : "Payments and refunds for sales created in this period, shown at their current status; this is not a period cash-flow ledger.",
       });
     }
 

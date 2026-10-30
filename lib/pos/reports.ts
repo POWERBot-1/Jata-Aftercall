@@ -28,8 +28,10 @@ export type SaleRecord = {
   paidKES: number;
   balanceKES: number;
   refundedKES?: number;
+  /** Portion of refunds applied to the receivable rather than paid out in cash. */
+  creditRefundedKES?: number;
   costKES?: number;
-  payments?: { method: string; amountKES: number }[];
+  payments?: { method: string; amountKES: number; direction?: string }[];
   items?: { name: string; quantity: number; totalKES: number; costKES?: number | null }[];
 };
 
@@ -96,10 +98,12 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
   const grossKES = scoped.reduce((total, sale) => total + num(sale.subtotalKES), 0);
   const discountKES = scoped.reduce((total, sale) => total + num(sale.discountKES), 0);
   const taxKES = scoped.reduce((total, sale) => total + num(sale.taxKES), 0);
-  const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES), 0);
-  const paidKES = scoped.reduce((total, sale) => total + num(sale.paidKES), 0);
-  const outstandingKES = scoped.reduce((total, sale) => total + num(sale.balanceKES), 0);
+  // Sale-cohort current snapshot: refund once against revenue; cash refunds reduce
+  // collected money, while credit refunds reduce the receivable, never the drawer.
   const refundedKES = scoped.reduce((total, sale) => total + num(sale.refundedKES), 0);
+  const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES) - num(sale.refundedKES), 0);
+  const paidKES = scoped.reduce((total, sale) => total + num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES)), 0);
+  const outstandingKES = scoped.reduce((total, sale) => total + Math.max(0, num(sale.balanceKES) - num(sale.creditRefundedKES)), 0);
   return {
     count: scoped.length,
     grossKES,
@@ -124,7 +128,7 @@ export function paymentBreakdown(sales: SaleRecord[], range?: DateRange): Method
     for (const payment of payments) {
       const key = (payment.method || "unspecified").toLowerCase();
       const entry = totals.get(key) ?? { amountKES: 0, count: 0 };
-      entry.amountKES += num(payment.amountKES);
+      entry.amountKES += (payment.direction === "OUT" ? -1 : 1) * num(payment.amountKES);
       entry.count += 1;
       totals.set(key, entry);
     }
@@ -239,7 +243,8 @@ export function profitability(sales: SaleRecord[], expenses: ExpenseRecord[], ra
     netProfitKES,
     marginPercent: summary.netKES ? Math.round((netProfitKES / summary.netKES) * 1000) / 10 : 0,
     basis: "calculated",
-    partial: !hasCostData,
+    // Refunds are not allocated to line costs in this aggregate; profit is an estimate.
+    partial: !hasCostData || scoped.some((sale) => num(sale.refundedKES) > 0),
   };
 }
 
