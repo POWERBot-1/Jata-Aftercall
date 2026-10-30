@@ -620,10 +620,16 @@ export async function paySupplier(params: {
   const supplier = await store.findSupplier(businessId, text(params.supplierId, 64) ?? "", client);
   if (!supplier) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
 
-  const check = validateRepayment(Number(supplier.balanceKES ?? 0), sanitizeAmountKES(params.amountKES));
-  if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
+  const amountKES = sanitizeAmountKES(params.amountKES);
+  const result = await inTransaction(params.client, async (tx: PosClient) => {
+    // Serialize the decision with all other supplier balance updates. The initial lookup is
+    // tenant-scoped but may be stale by the time this transaction obtains the row lock.
+    await store.lockPartyRow(tx, PAYABLE, businessId, supplier.id);
+    const current = await store.findSupplier(businessId, supplier.id, tx);
+    if (!current) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
+    const check = validateRepayment(Number(current.balanceKES ?? 0), amountKES);
+    if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
 
-  await inTransaction(params.client, async (tx: PosClient) => {
     const payment = await tx.posPayment.create({
       data: {
         businessId,
@@ -652,13 +658,14 @@ export async function paySupplier(params: {
       action: "POS_SUPPLIER_PAYMENT_RECORDED",
       targetType: "SUPPLIER",
       targetId: supplier.id,
-      before: { balanceKES: Number(supplier.balanceKES ?? 0) },
+      before: { balanceKES: Number(current.balanceKES ?? 0) },
       after: { balanceKES: check.newBalanceKES },
       metadata: { amountKES: check.amountKES, method: payment.method },
     });
+    return { ok: true, warnings, amountKES: check.amountKES, balanceKES: check.newBalanceKES };
   });
 
-  return { ok: true, warnings, amountKES: check.amountKES, balanceKES: check.newBalanceKES };
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
