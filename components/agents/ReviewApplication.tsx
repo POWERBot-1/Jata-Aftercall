@@ -2,13 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ReviewApplication({ id, action }: { id: string; action: "approve" | "suspend" }) {
+export default function ReviewApplication({ id, action }: { id: string; action: "approve" | "suspend" | "reinstate" }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !window.confirm(action === "approve" ? "Confirm manual eligibility review and activate this agent? This does not enable commissions." : "Suspend this agent? This does not suspend their account.")) return;
+    if (busy || !window.confirm(action === "approve" ? "Confirm manual eligibility review and activate this agent? This does not enable commissions." : action === "reinstate" ? "Confirm manual reinstatement review? Existing referral links will be revoked. This does not enable commissions." : "Suspend this agent? This does not suspend their account.")) return;
     const reason = new FormData(event.currentTarget).get("reason");
     setBusy(true); setError("");
     try {
@@ -19,12 +19,12 @@ export default function ReviewApplication({ id, action }: { id: string; action: 
     finally { setBusy(false); }
   }
   return <form onSubmit={submit}>
-    <label htmlFor={`${action}-reason-${id}`}>{action === "approve" ? "Eligibility review" : "Reason for suspension"}</label>{" "}
+    <label htmlFor={`${action}-reason-${id}`}>{action === "approve" ? "Eligibility review" : action === "reinstate" ? "Reinstatement review" : "Reason for suspension"}</label>{" "}
     <select id={`${action}-reason-${id}`} name="reason" required defaultValue="">
       <option value="" disabled>Select reason</option>
-      {action === "approve" ? <option value="MANUAL_ELIGIBILITY_REVIEW">Manual eligibility review completed</option> : <><option value="COMPLIANCE_REVIEW">Compliance review</option><option value="APPLICANT_REQUEST">Applicant request</option></>}
+      {action === "approve" ? <option value="MANUAL_ELIGIBILITY_REVIEW">Manual eligibility review completed</option> : action === "reinstate" ? <option value="MANUAL_REINSTATEMENT_REVIEW">Manual reinstatement review completed</option> : <><option value="COMPLIANCE_REVIEW">Compliance review</option><option value="APPLICANT_REQUEST">Applicant request</option></>}
     </select>{" "}
-    <button type="submit" disabled={busy} className="jata-btn jata-btn-secondary jata-btn-sm">{busy ? "Saving…" : action === "approve" ? "Approve and activate" : "Suspend agent"}</button>
+    <button type="submit" disabled={busy} className="jata-btn jata-btn-secondary jata-btn-sm">{busy ? "Saving…" : action === "approve" ? "Approve and activate" : action === "reinstate" ? "Reinstate agent" : "Suspend agent"}</button>
     {error && <p role="alert">{error}</p>}
   </form>;
 }

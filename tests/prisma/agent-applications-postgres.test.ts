@@ -149,6 +149,44 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     } finally { if (old === undefined) delete process.env.AGENT_ACTIVATION_ENABLED; else process.env.AGENT_ACTIVATION_ENABLED = old; mock.session = null; }
   });
 
+  it("gates and audits reinstatement once, rechecks eligibility and revokes old links", async () => {
+    const admin = await p.user.create({ data: { email: `reinstate-admin-${uid()}@test.invalid`, passwordHash: "test-only", role: "ADMIN" } });
+    const applicant = await p.user.create({ data: { email: `reinstate-applicant-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(admin.id, applicant.id);
+    const app = await p.agentApplication.create({ data: { userId: applicant.id, fullName: "Reinstatement Fixture", phoneE164: "+254700000061", privacyAcknowledgedAt: new Date(), agentStatus: "SUSPENDED" } });
+    const link = await p.agentReferralLink.create({ data: { referrerApplicationId: app.id, tokenHash: `test-${uid()}`, expiresAt: new Date(Date.now() + 3600000) } });
+    const params = Promise.resolve({ id: app.id });
+    const reinstate = () => request(`/api/admin/agents/applications/${app.id}/decision`, { action: "reinstate", reason: "MANUAL_REINSTATEMENT_REVIEW" });
+    const old = process.env.AGENT_REINSTATEMENT_ENABLED;
+    try {
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      delete process.env.AGENT_REINSTATEMENT_ENABLED;
+      expect((await decide(reinstate(), { params })).status).toBe(503);
+      process.env.AGENT_REINSTATEMENT_ENABLED = "true";
+      expect((await decide(reinstate(), { params })).status).toBe(409);
+      expect((await p.agentReferralLink.findUniqueOrThrow({ where: { id: link.id } })).revokedAt).toBeNull();
+      await p.agentApplication.update({ where: { id: app.id }, data: { phoneVerifiedAt: new Date(), verifiedPhoneE164: app.phoneE164 } });
+      mock.session = { userId: applicant.id, role: "ADMIN", email: applicant.email };
+      expect((await decide(reinstate(), { params })).status).toBe(403);
+      const self = await p.agentApplication.create({ data: { userId: admin.id, fullName: "Self Review", phoneE164: "+254700000062", verifiedPhoneE164: "+254700000062", phoneVerifiedAt: new Date(), privacyAcknowledgedAt: new Date(), agentStatus: "SUSPENDED" } });
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      expect((await decide(reinstate(), { params: Promise.resolve({ id: self.id }) })).status).toBe(403);
+      await p.agentApplication.update({ where: { id: app.id }, data: { agentStatus: "INACTIVE" } });
+      expect((await decide(reinstate(), { params })).status).toBe(409);
+      await p.agentApplication.update({ where: { id: app.id }, data: { agentStatus: "SUSPENDED", status: "REJECTED" } });
+      expect((await decide(reinstate(), { params })).status).toBe(409);
+      await p.agentApplication.update({ where: { id: app.id }, data: { status: "PENDING" } });
+      expect((await p.agentReferralLink.findUniqueOrThrow({ where: { id: link.id } })).revokedAt).toBeNull();
+      const results = await Promise.all([decide(reinstate(), { params }), decide(reinstate(), { params })]);
+      expect(results.map((result) => result.status)).toEqual([200, 200]);
+      expect((await p.agentApplication.findUniqueOrThrow({ where: { id: app.id } })).agentStatus).toBe("ACTIVE");
+      expect((await p.agentReferralLink.findUniqueOrThrow({ where: { id: link.id } })).revokedAt).not.toBeNull();
+      const audits = await p.auditEvent.findMany({ where: { actorId: admin.id, action: "AGENT_APPLICATION_REINSTATED", targetId: app.id } });
+      expect(audits).toHaveLength(1);
+      expect(JSON.parse(audits[0].metadata!)).toEqual({ reason: "MANUAL_REINSTATEMENT_REVIEW", previousStatus: "SUSPENDED", newStatus: "ACTIVE" });
+      expect((await p.user.findUniqueOrThrow({ where: { id: applicant.id } })).role).toBe("CUSTOMER");
+    } finally { if (old === undefined) delete process.env.AGENT_REINSTATEMENT_ENABLED; else process.env.AGENT_REINSTATEMENT_ENABLED = old; mock.session = null; }
+  });
+
   it("rotates active-agent links and records only explicitly consented registration evidence", async () => {
     const envNames = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS", "AGENT_SELF_SERVICE_REGISTRATION_ENABLED"] as const;
     const before = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));

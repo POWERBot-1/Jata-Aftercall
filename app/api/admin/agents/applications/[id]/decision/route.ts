@@ -23,11 +23,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const action = body && typeof body === "object" && "action" in body ? body.action : null;
   const reason = body && typeof body === "object" && "reason" in body ? body.reason : null;
   if (!((action === "approve" && reason === "MANUAL_ELIGIBILITY_REVIEW") ||
-        (action === "suspend" && ["COMPLIANCE_REVIEW", "APPLICANT_REQUEST"].includes(String(reason))))) {
+        (action === "suspend" && ["COMPLIANCE_REVIEW", "APPLICANT_REQUEST"].includes(String(reason))) ||
+        (action === "reinstate" && reason === "MANUAL_REINSTATEMENT_REVIEW"))) {
     return NextResponse.json({ error: "Choose a valid decision and reason." }, { status: 400 });
   }
   // Suspending an existing agent remains possible during an activation freeze.
   if (action === "approve" && process.env.AGENT_ACTIVATION_ENABLED !== "true") return NextResponse.json({ error: "Activation is unavailable." }, { status: 503 });
+  if (action === "reinstate" && process.env.AGENT_REINSTATEMENT_ENABLED !== "true") return NextResponse.json({ error: "Reinstatement is unavailable." }, { status: 503 });
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       // Lock role row so an authoritative concurrent revocation cannot commit midway through review.
@@ -39,21 +41,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const application = apps[0];
       if (!application) return "not_found";
       if (application.userId === session.userId) return "forbidden";
-      const target = action === "approve" ? "ACTIVE" : "SUSPENDED";
+      const target = action === "suspend" ? "SUSPENDED" : "ACTIVE";
       if (application.status !== "PENDING") return "conflict";
       if (application.agentStatus === target) return "already";
-      const from = action === "approve" ? "INACTIVE" : "ACTIVE";
+      const from = action === "approve" ? "INACTIVE" : action === "reinstate" ? "SUSPENDED" : "ACTIVE";
       if (application.agentStatus !== from) return "conflict";
-      if (action === "approve" && (!application.privacyAcknowledgedAt || !application.phoneVerifiedAt || application.verifiedPhoneE164 !== application.phoneE164)) return "ineligible";
+      if (action !== "suspend" && (!application.privacyAcknowledgedAt || !application.phoneVerifiedAt || application.verifiedPhoneE164 !== application.phoneE164)) return "ineligible";
       const changed = await tx.agentApplication.updateMany({ where: { id, status: "PENDING", agentStatus: from }, data: { agentStatus: target } });
       if (changed.count !== 1) return "conflict";
-      await tx.auditEvent.create({ data: { actorId: session.userId, action: action === "approve" ? "AGENT_APPLICATION_APPROVED" : "AGENT_APPLICATION_SUSPENDED", targetType: "AGENT_APPLICATION", targetId: id, metadata: JSON.stringify({ reason, previousStatus: from, newStatus: target }) } });
+      // Previously issued links must not become usable again merely because access was restored.
+      if (action === "reinstate") await tx.agentReferralLink.updateMany({ where: { referrerApplicationId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: session.userId, action: action === "approve" ? "AGENT_APPLICATION_APPROVED" : action === "reinstate" ? "AGENT_APPLICATION_REINSTATED" : "AGENT_APPLICATION_SUSPENDED", targetType: "AGENT_APPLICATION", targetId: id, metadata: JSON.stringify({ reason, previousStatus: from, newStatus: target }) } });
       return "updated";
     });
     if (result === "forbidden") return NextResponse.json({ error: "Access denied." }, { status: 403 });
     if (result === "not_found") return NextResponse.json({ error: "Application not found." }, { status: 404 });
     if (result === "ineligible") return NextResponse.json({ error: "A verified matching phone and privacy acknowledgement are required." }, { status: 409 });
     if (result === "conflict") return NextResponse.json({ error: "Application changed or transition is not allowed." }, { status: 409 });
-    return NextResponse.json({ ok: true, status: action === "approve" ? "ACTIVE" : "SUSPENDED" });
+    return NextResponse.json({ ok: true, status: action === "suspend" ? "SUSPENDED" : "ACTIVE" });
   } catch { return NextResponse.json({ error: "Decision could not be saved. Please try again." }, { status: 503 }); }
 }
