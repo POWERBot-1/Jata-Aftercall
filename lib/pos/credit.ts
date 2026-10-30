@@ -234,13 +234,13 @@ export function validateRepayment(balanceKES: number, amountKES: number): Repaym
 
 /** Supplier side: the same arithmetic, a different ledger and different words (§30). */
 export function supplierSummary(config: PosConfiguration, parties: Pick<CreditParty, "balanceKES" | "name">[]): {
-  totalOwedKES: number; count: number; oldest: { name: string; balanceKES: number } | null;
+  totalOwedKES: number; count: number; largest: { name: string; balanceKES: number } | null;
 } {
-  if (!config.suppliers.enabled || !config.suppliers.credit) return { totalOwedKES: 0, count: 0, oldest: null };
+  if (!config.suppliers.enabled || !config.suppliers.credit) return { totalOwedKES: 0, count: 0, largest: null };
   const owing = parties.filter((party) => outstandingKES(party) > 0);
   const total = owing.reduce((sum, party) => sum + outstandingKES(party), 0);
-  const oldest = owing.length ? owing.reduce((worst, party) => (party.balanceKES > worst.balanceKES ? party : worst), owing[0]) : null;
-  return { totalOwedKES: total, count: owing.length, oldest: oldest ? { name: oldest.name, balanceKES: outstandingKES(oldest) } : null };
+  const largest = owing.length ? owing.reduce((worst, party) => (party.balanceKES > worst.balanceKES ? party : worst), owing[0]) : null;
+  return { totalOwedKES: total, count: owing.length, largest: largest ? { name: largest.name, balanceKES: outstandingKES(largest) } : null };
 }
 
 export function creditExposure(parties: Pick<CreditParty, "balanceKES" | "limitKES">[]): {

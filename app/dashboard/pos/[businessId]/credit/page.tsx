@@ -149,7 +149,7 @@ export default async function PosCreditPage({ params }: Props) {
             <h3 className="text-base font-semibold">What you owe your {workspace.terminology.suppliers.toLowerCase()}</h3>
             <p className="pos-note">
               {payables.count} {payables.count === 1 ? "account" : "accounts"} · {formatKES(payables.totalOwedKES)} outstanding
-              {payables.oldest ? ` · oldest ${payables.oldest.name} at ${formatKES(payables.oldest.balanceKES)}` : ""}
+              {payables.largest ? ` · largest balance ${payables.largest.name} at ${formatKES(payables.largest.balanceKES)}` : ""}
             </p>
           </div>
           <Link href={`${workspace.basePath}/suppliers`} className="jata-btn jata-btn-secondary mt-3">Open {workspace.terminology.suppliers.toLowerCase()}</Link>
