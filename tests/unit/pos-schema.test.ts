@@ -233,7 +233,7 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
       }
       const uniques = [...model.body.matchAll(/@@unique\(\[([^\]]+)\]\)/g)].map((match) => match[1].split(",").map((part) => part.trim()));
       for (const columns of uniques) {
-        const name = `${model.name}_${columns.join("_")}_key`;
+        const name = `${model.name}_${columns.join("_")}`.slice(0, 59) + "_key";
         // One guarantee, two legal spellings: a unique constraint
         // (`... ADD CONSTRAINT "name" UNIQUE (...)`) or a unique index
         // (`CREATE UNIQUE INDEX [IF NOT EXISTS] "name" ON "Model"(...)`). They are enforced

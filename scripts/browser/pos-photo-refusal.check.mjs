@@ -52,6 +52,15 @@ try {
     await page.screenshot({ path: `${screenshots}/pos-photo-${width}x${height}.jpg`, type: "jpeg", quality: 70, fullPage: true });
     console.log(`PASS POS product and category controls render at ${width}x${height} without horizontal overflow`);
   }
+  // The final navigation can expose server-rendered file inputs before React attaches its
+  // change handler. Uploading during that window loses the change event and makes the request
+  // wait time out. Require the real hydrated handler, not just the element's presence.
+  await page.waitForFunction(() => {
+    const input = document.querySelector("#pos-product-photo");
+    if (!input) return false;
+    const key = Object.keys(input).find((name) => name.startsWith("__reactProps$"));
+    return Boolean(key && typeof input[key]?.onChange === "function");
+  }, { timeout: 15000 });
   const file = await page.$("#pos-product-photo");
   const responsePromise = page.waitForResponse((response) => response.url().endsWith("/api/media") && response.request().method() === "POST", { timeout: 30000 });
   await file.uploadFile(image);
