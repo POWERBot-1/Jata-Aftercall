@@ -115,6 +115,7 @@ const UNIQUE_INDEXES: Record<string, string[][]> = {
   // The till's replay guard: one unspent key per business, actor and action. A duplicate
   // submission must fail the insert, and with it the sale transaction that owns it.
   posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],
+  posRepaymentRequest: [["businessId", "key"], ["paymentId"]],
   // POS / ERP - PRO guards. Each mirrors a real unique index in the migration, so the in-memory
   // suite fails the same way PostgreSQL would when a replay slips past the application check.
   erpIdempotencyRecord: [["businessId", "scope", "key"]],

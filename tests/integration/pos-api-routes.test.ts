@@ -877,11 +877,25 @@ describe("/sales — selling over HTTP (§27, §31, §32, §33, §54, §62)", ()
     expect(customer.statement.lines.length).toBeGreaterThan(0);
 
     const repayment = await call(await customerPost(
-      post("bizA", "/customers/c_a1", { amountKES: 200, method: "mpesa", reference: "MPESA1" }),
+      new Request(url("bizA", "/customers/c_a1"), { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": "journey-key" }, body: JSON.stringify({ amountKES: 200, method: "mpesa", reference: "MPESA1" }) }),
       context("bizA", { customerId: "c_a1" }),
     ));
     expect(repayment.status).toBe(200);
     expect(repayment.body.balanceKES).toBe(300);
+    expect(rows("posCustomer").find((row) => row.id === "c_a1")?.balanceKES).toBe(300);
+    const retry = (amountKES: number, key: string | null) => customerPost(new Request(url("bizA", "/customers/c_a1"), {
+      method: "POST", headers: { "content-type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) },
+      body: JSON.stringify({ amountKES, method: "mpesa", reference: "MPESA1" }),
+    }), context("bizA", { customerId: "c_a1" }));
+    asCashier();
+    expect((await call(await retry(200, "journey-key"))).status).toBe(403);
+    asOwner();
+    const replay = await call(await retry(200, "journey-key"));
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ replayed: true, amountKES: 200, balanceKES: 300 });
+    expect((await call(await retry(100, "journey-key"))).body.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect((await call(await retry(100, null))).body.code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+    expect(rows("posPayment").filter((row) => row.purpose === "CREDIT_REPAYMENT")).toHaveLength(1);
     expect(rows("posCustomer").find((row) => row.id === "c_a1")?.balanceKES).toBe(300);
   });
 

@@ -98,7 +98,7 @@ export async function POST(request: Request, context: RouteContext) {
     request,
     options: {},
     fallback: "We couldn't save that.",
-    handler: async ({ ctx, body }) => {
+    handler: async ({ ctx, body, headers }) => {
       // This shared endpoint accepts two distinct mutations; authorize the actual action,
       // including active staff, before revealing whether a customer exists.
       const isAsset = Boolean(bool(body, "asset") || body.asset);
@@ -127,8 +127,9 @@ export async function POST(request: Request, context: RouteContext) {
         method: repayment.method,
         reference: repayment.reference,
         note: repayment.note,
+        idempotencyKey: headers?.get("Idempotency-Key") ?? "",
       });
-      return fromOutcome(outcome, { balanceKES: outcome.balanceKES ?? 0, amountKES: outcome.amountKES ?? 0 });
+      return fromOutcome(outcome, { balanceKES: outcome.balanceKES ?? 0, balanceAfterKES: outcome.balanceAfterKES ?? 0, amountKES: outcome.amountKES ?? 0, replayed: outcome.replayed ?? false });
     },
   });
 }

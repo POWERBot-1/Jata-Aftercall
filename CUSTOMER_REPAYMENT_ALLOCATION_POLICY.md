@@ -16,6 +16,12 @@ The owner selected **oldest eligible sale first (FIFO)** for future customer rep
 
 These are design requirements, not a release approval. Until implemented and validated in real PostgreSQL with the full accounting matrix, sale-level current balances remain unsupported.
 
+## Prospective repayment request replay guard
+
+New repayment requests require an `Idempotency-Key` (1–128 characters). The key is scoped to the business, not the cashier; customer identity is checked and the normalized amount, method, reference and note are hashed. A matching retry returns the original amount and separately labelled post-transaction balance, plus the current account balance; changing the request under the same key is refused. The immutable request record, payment, balance movement, ledger entry and audit record commit together under the customer lock. The request record is linked by tenant/customer-constrained foreign keys. The migration does not attach keys to historical payments or allocate them to sales.
+
+The browser stores a pending request in session storage before submission and retries its same key and body after an uncertain result. It does not coordinate separate tabs or recover a request if the browser discards that storage; a fresh key cannot identify a prior payment. Existing clients without the required header are refused rather than silently bypassing replay protection. This safeguard is independent of and **does not implement** FIFO allocation or repayment reversal. Sale-level credit refunds remain guarded.
+
 ## Temporary safety boundary
 
 A credit refund or void is refused when a settled, sale-unlinked customer repayment exists, because the current account balance cannot prove which sale remains unpaid. This is deliberately conservative: it can also refuse a legitimate credit refund after a fully settled earlier account. Cash-only refunds remain available. The guard is not a replacement for persistent FIFO allocations or reconciliation, and it does not establish historical balances. Credit refunds and repayments serialize on the customer row. Caller-owned transactions must propagate refund aborts so claimed return items roll back.

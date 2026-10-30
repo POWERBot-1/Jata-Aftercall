@@ -10,6 +10,7 @@
  * running totals forward (§54).
  */
 
+import { createHash } from "node:crypto";
 import prisma from "@/lib/db";
 import { baselineConfiguration, normalizeConfiguration } from "./configuration";
 import { hasCapability } from "./capabilities";
@@ -1498,7 +1499,10 @@ export type RepaymentOutcome = {
   message?: string;
   warnings: string[];
   balanceKES?: number;
+  /** Balance immediately after the original posting; distinct from a replay's current balance. */
+  balanceAfterKES?: number;
   amountKES?: number;
+  replayed?: boolean;
 };
 
 /** A customer pays down their balance: money in, ledger entry, balance moves (§30, §31). */
@@ -1511,6 +1515,7 @@ export async function recordRepayment(params: {
   method?: string | null;
   reference?: string | null;
   note?: string | null;
+  idempotencyKey: string;
   client?: PosClient;
 }): Promise<RepaymentOutcome> {
   const { businessId, configuration, actor } = params;
@@ -1530,12 +1535,27 @@ export async function recordRepayment(params: {
   const customer = await store.findCustomer(businessId, customerId, client);
   if (!customer) return { ok: false, code: "CUSTOMER_NOT_FOUND", message: "That record was not found.", warnings };
 
+  const key = store.normalizeIdempotencyKey(params.idempotencyKey);
+  if (!key) return { ok: false, code: "IDEMPOTENCY_KEY_REQUIRED", message: "A repayment request key is required.", warnings };
   const amountKES = sanitizeAmountKES(params.amountKES);
+  const method = clampNote(params.method, 32) ?? "cash";
+  const reference = clampNote(params.reference, 80);
+  const note = clampNote(params.note);
+  // Hash the exact normalized financial request, not the current balance or actor. A retry
+  // from another authorized cashier must not post the same repayment a second time.
+  const requestHash = createHash("sha256").update(JSON.stringify([amountKES, method, reference, note])).digest("hex");
   const result = await inTransaction(params.client, async (tx: PosClient) => {
     // Re-validate against the balance under the customer's row lock: a concurrent refund or
     // sale that changes the balance commits before this lock is taken, so an over-repayment
     // that looked fine a moment ago is still refused here (§30).
     await store.lockPartyRow(tx, RECEIVABLE, businessId, customerId);
+    const existing = await tx.posRepaymentRequest.findFirst({ where: { businessId, key } });
+    if (existing) {
+      if (existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
+      const currentCustomer = await store.findCustomer(businessId, customerId, tx);
+      if (!currentCustomer) throw new Error("REPAYMENT_CUSTOMER_MISSING");
+      return { amountKES: existing.amountKES, balanceKES: Number(currentCustomer.balanceKES), balanceAfterKES: existing.balanceAfterKES, replayed: true };
+    }
     const current = await store.findCustomer(businessId, customerId, tx);
     const check = validateRepayment(Number(current?.balanceKES ?? 0), amountKES);
     if (!check.ok) throw new RepaymentAborted(check.message ?? "That repayment could not be recorded.");
@@ -1546,11 +1566,11 @@ export async function recordRepayment(params: {
         branchId: actor.branchId,
         direction: "IN",
         purpose: "CREDIT_REPAYMENT",
-        method: clampNote(params.method, 32) ?? "cash",
+        method,
         amountKES: check.amountKES,
-        reference: clampNote(params.reference, 80),
+        reference,
         status: "SETTLED",
-        notes: clampNote(params.note),
+        notes: note,
         createdById: actor.actorId,
       },
     });
@@ -1560,7 +1580,14 @@ export async function recordRepayment(params: {
       { deltaKES: -check.amountKES, direction: "CREDIT", paymentId: payment.id, note: clampNote(params.note) ?? "Repayment" },
       tx,
     );
-    const balanceAfterKES = applied?.balanceKES ?? Number(current?.balanceKES ?? 0) - check.amountKES;
+    if (!applied || applied.balanceKES !== Number(current?.balanceKES) - check.amountKES) {
+      // A missing or inconsistent ledger movement must abort the entire caller-owned transaction.
+      throw new Error("REPAYMENT_LEDGER_MISMATCH");
+    }
+    const balanceAfterKES = applied.balanceKES;
+    await tx.posRepaymentRequest.create({
+      data: { businessId, customerId, key, requestHash, paymentId: payment.id, amountKES: check.amountKES, balanceAfterKES },
+    });
     await logPosAuditInTransaction(tx, {
       businessId,
       actorId: actor.actorId,
@@ -1572,17 +1599,32 @@ export async function recordRepayment(params: {
       after: { balanceKES: balanceAfterKES },
       metadata: { amountKES: check.amountKES, method: payment.method, paymentId: payment.id },
     });
-    return { amountKES: check.amountKES, balanceKES: balanceAfterKES };
-  }).catch((error: unknown) => {
+    return { amountKES: check.amountKES, balanceKES: balanceAfterKES, balanceAfterKES };
+  }).catch(async (error: unknown) => {
     if (error instanceof RepaymentAborted) return { invalid: error.message };
+    // Different customer rows do not serialize on the party lock. If they race for the same
+    // business-wide key, the unique index rolls the loser back; resolve it only after an owned
+    // transaction has ended. A caller-owned transaction must receive the error and roll back.
+    if ((!params.client || params.client === prisma) && isUniqueConstraintError(error)) {
+      const existing = await prisma.posRepaymentRequest.findFirst({ where: { businessId, key } });
+      if (existing) {
+        if (existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
+        const currentCustomer = await store.findCustomer(businessId, customerId, prisma);
+        if (!currentCustomer) throw new Error("REPAYMENT_CUSTOMER_MISSING");
+        return { amountKES: existing.amountKES, balanceKES: Number(currentCustomer.balanceKES), balanceAfterKES: existing.balanceAfterKES, replayed: true };
+      }
+    }
     throw error;
   });
 
   if (result && "invalid" in result) {
     return { ok: false, code: "REPAYMENT_INVALID", message: result.invalid, warnings };
   }
-  const done = result as { amountKES: number; balanceKES: number } | undefined;
-  return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined };
+  if (result && "conflict" in result) {
+    return { ok: false, code: "IDEMPOTENCY_CONFLICT", message: "This repayment key was already used for a different request.", warnings };
+  }
+  const done = result as { amountKES: number; balanceKES: number; balanceAfterKES: number; replayed?: boolean } | undefined;
+  return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined, balanceAfterKES: done?.balanceAfterKES, replayed: done?.replayed ?? false };
 }
 
 /** Raised inside the repayment transaction when the re-validated balance no longer fits (§30). */

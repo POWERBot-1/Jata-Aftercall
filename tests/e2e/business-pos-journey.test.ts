@@ -89,9 +89,9 @@ const ctx: Record<string, any> = {
 const created: { userId: string; businessId: string }[] = [];
 
 let ipCounter = 0;
-function request(url: string, init: { method?: string; body?: unknown } = {}) {
+function request(url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   ipCounter += 1;
-  const headers: Record<string, string> = { "x-forwarded-for": `10.30.0.${ipCounter}` };
+  const headers: Record<string, string> = { "x-forwarded-for": `10.30.0.${ipCounter}`, ...init.headers };
   if (init.body !== undefined) headers["content-type"] = "application/json";
   return new Request(url, {
     method: init.method || "GET",
@@ -106,13 +106,13 @@ type PosHandler = (request: Request, context: { params: Promise<Record<string, s
 async function callPos(
   handler: PosHandler,
   businessId: string,
-  options: { path?: string; query?: Record<string, string | number | undefined>; method?: string; body?: unknown; params?: Record<string, string> } = {},
+  options: { path?: string; query?: Record<string, string | number | undefined>; method?: string; body?: unknown; params?: Record<string, string>; headers?: Record<string, string> } = {},
 ) {
   const url = new URL(`https://jata.test/api/pos/${businessId}${options.path || ""}`);
   for (const [key, value] of Object.entries(options.query || {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
-  const response = await handler(request(url.toString(), { method: options.method || "GET", body: options.body }), {
+  const response = await handler(request(url.toString(), { method: options.method || "GET", body: options.body, headers: options.headers }), {
     params: Promise.resolve({ businessId, ...(options.params || {}) }),
   });
   const body = await response.json().catch(() => null);
@@ -653,6 +653,7 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       params: { customerId: ctx.customerId },
       method: "POST",
       body: { amountKES: 40, method: "mpesa", reference: "MPESA1" },
+      headers: { "Idempotency-Key": "journey-repayment" },
     });
     expect(repayment.status, repayment.text()).toBe(200);
     expect(repayment.body.balanceKES).toBe(60);
