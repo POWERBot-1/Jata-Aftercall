@@ -335,11 +335,11 @@ try {
   console.log("PASS service-only salon cash sale recorded without inventory movement (cash ledger, synthetic entitlement)");
   await page.goto(new URL(`${serviceRoot}/sales/${serviceSale.id}`,base).href, { waitUntil:"load" });
   await new Promise((done) => setTimeout(done, 1200));
-  response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/sales/${serviceSale.id}`) && r.request().method() === "POST");
+  response = page.waitForResponse((r) => r.url().endsWith(`/api/pos/${sid}/sales/${serviceSale.id}`) && r.request().method() === "POST").catch(() => null);
   const voidNavigation = page.waitForNavigation({ waitUntil:"load" }).catch(() => null);
-  await clickText(page, "button", "Void the whole sale");
+  await clickText(page, "button", "Void the whole sale").catch(async (error) => { throw new Error(`Void button unavailable: ${error.message}; ${JSON.stringify(await page.evaluate(() => ({ url:location.pathname, body:document.body.innerText.slice(-1800) })))}`); });
   const voidResponse = await response;
-  if (!voidResponse.ok()) throw new Error(`Service void failed: ${voidResponse.status()} ${(await voidResponse.text()).slice(0,300)}`);
+  if (!voidResponse?.ok()) throw new Error(`Service void failed: ${voidResponse?.status()} ${voidResponse ? (await voidResponse.text()).slice(0,300) : "no response"}`);
   await voidNavigation;
   const voided = await prisma.posSale.findUnique({ where:{ id:serviceSale.id }, include:{ payments:true } });
   if (voided.status !== "VOIDED" || voided.refundedKES !== 250 || !voided.payments.some((p) => p.direction === "OUT" && p.method.toLowerCase() === "cash" && p.amountKES === 250)) throw new Error("Service void ledger incorrect");
