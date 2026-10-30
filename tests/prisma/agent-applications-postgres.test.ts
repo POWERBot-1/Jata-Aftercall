@@ -6,12 +6,14 @@ import { uid } from "../helpers/prisma-fixtures";
 
 const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role: string; email: string } }));
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
-vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session }));
+vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session, hashPassword: async () => "synthetic-hash" }));
 import { GET, POST } from "@/app/api/agents/application/route";
 import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
 import { MockMessagingProvider } from "@/lib/messaging/providers";
 import { issuePhoneChallenge, confirmPhoneChallenge } from "@/lib/agents/phone-verification";
 import { allowAgentApplication } from "@/lib/agent-application-throttle";
+import { POST as registerAgent } from "@/app/api/agents/register/route";
+import { POST as rotateReferral } from "@/app/api/agents/referrals/route";
 import { POST as decide } from "@/app/api/admin/agents/applications/[id]/decision/route";
 import { POST as reject } from "@/app/api/admin/agents/applications/[id]/reject/route";
 
@@ -40,6 +42,8 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     if (throttleKeys.length || userKeys.length) await p.agentRegistrationThrottle.deleteMany({ where: { key: { in: [...throttleKeys, ...userKeys] } } });
     if (originalSecret === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = originalSecret;
     await p.auditEvent.deleteMany({ where: { actorId: { in: users } } });
+    await p.agentReferralAttribution.deleteMany({ where: { OR: [{ referrer: { userId: { in: users } } }, { referred: { userId: { in: users } } }] } });
+    await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
     await p.agentApplication.deleteMany({ where: { userId: { in: users } } });
@@ -142,6 +146,49 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       const selfApp = await p.agentApplication.create({ data: { userId: admin.id, fullName: "Admin Fixture", phoneE164: "+254700000098", verifiedPhoneE164: "+254700000098", phoneVerifiedAt: new Date(), privacyAcknowledgedAt: new Date() } });
       expect((await decide(request(`/api/admin/agents/applications/${selfApp.id}/decision`, { action: "approve", reason: "MANUAL_ELIGIBILITY_REVIEW" }), { params: Promise.resolve({ id: selfApp.id }) })).status).toBe(403);
     } finally { if (old === undefined) delete process.env.AGENT_ACTIVATION_ENABLED; else process.env.AGENT_ACTIVATION_ENABLED = old; mock.session = null; }
+  });
+
+  it("rotates active-agent links and records only explicitly consented registration evidence", async () => {
+    const envNames = ["AGENT_REGISTRATION_REFERRALS_ENABLED", "AGENT_REFERRAL_LINK_LIFETIME_SECONDS", "AGENT_SELF_SERVICE_REGISTRATION_ENABLED"] as const;
+    const before = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));
+    const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
+    throttleKeys.push(createHmac("sha256", secret).update("agent-registration:v1:untrusted-proxy").digest("hex"));
+    const agent = await p.user.create({ data: { email: `referrer-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(agent.id);
+    const app = await p.agentApplication.create({ data: { userId: agent.id, fullName: "Synthetic Referrer", phoneE164: "+254700000096", verifiedPhoneE164: "+254700000096", phoneVerifiedAt: new Date(), privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+    try {
+      process.env.AGENT_REGISTRATION_REFERRALS_ENABLED = "true"; process.env.AGENT_REFERRAL_LINK_LIFETIME_SECONDS = "3600"; process.env.AGENT_SELF_SERVICE_REGISTRATION_ENABLED = "true";
+      mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
+      const first = await rotateReferral(request("/api/agents/referrals", {})); expect(first.status).toBe(200);
+      const oldCode = new URL((await first.json()).path, "https://agent.test").searchParams.get("ref");
+      const second = await rotateReferral(request("/api/agents/referrals", {})); expect(second.status).toBe(200);
+      const code = new URL((await second.json()).path, "https://agent.test").searchParams.get("ref");
+      expect(code).not.toBe(oldCode);
+      const links = await p.agentReferralLink.findMany({ where: { referrerApplicationId: app.id } });
+      expect(links).toHaveLength(2); expect(links.filter((l: { revokedAt: Date | null }) => !l.revokedAt)).toHaveLength(1);
+      expect(links.every((l: { tokenHash: string }) => l.tokenHash !== code && l.tokenHash !== oldCode)).toBe(true);
+      mock.session = null;
+      for (const [index, token, consent] of [[0, code, true], [1, oldCode, true], [2, code, false], [3, code, true], [4, code, true]] as const) {
+        if (index === 4) await p.agentReferralLink.updateMany({ where: { referrerApplicationId: app.id, revokedAt: null }, data: { expiresAt: new Date(0) } });
+        const email = `referred-${uid()}@test.invalid`;
+        const response = await registerAgent(request("/api/agents/register", { fullName: "Synthetic Applicant", email, phone: index === 3 ? "0700000096" : `07000000${80 + index}`, password: "synthetic-pass-123", privacyAccepted: true, termsAccepted: true, referralCode: token, referralConsent: consent }));
+        expect(response.status).toBe(200);
+        const user = await p.user.findUniqueOrThrow({ where: { email } }); users.push(user.id);
+        const referred = await p.agentApplication.findUniqueOrThrow({ where: { userId: user.id } });
+        const evidence = await p.agentReferralAttribution.findUnique({ where: { referredApplicationId: referred.id } });
+        if (index === 0) expect(evidence?.referrerApplicationId).toBe(app.id); else expect(evidence).toBeNull();
+      }
+      expect(await p.agentReferralAttribution.count({ where: { referrerApplicationId: app.id } })).toBe(1);
+      const existing = await p.agentReferralAttribution.findFirstOrThrow({ where: { referrerApplicationId: app.id } });
+      await expect(p.agentReferralAttribution.create({ data: { referrerApplicationId: app.id, referredApplicationId: existing.referredApplicationId, linkId: existing.linkId, consentedAt: new Date() } })).rejects.toMatchObject({ code: "P2002" });
+      mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
+      const concurrent = await Promise.all([rotateReferral(request("/api/agents/referrals", {})), rotateReferral(request("/api/agents/referrals", {}))]);
+      expect(concurrent.map((response) => response.status)).toEqual([200, 200]);
+      expect(await p.agentReferralLink.count({ where: { referrerApplicationId: app.id, revokedAt: null } })).toBe(1);
+      expect(await p.auditEvent.count({ where: { action: "AGENT_REGISTRATION_ATTRIBUTION_RECORDED", actorId: { in: users } } })).toBe(1);
+      await p.agentApplication.update({ where: { id: app.id }, data: { agentStatus: "SUSPENDED" } });
+      mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
+      expect((await rotateReferral(request("/api/agents/referrals", {}))).status).toBe(403);
+    } finally { for (const key of envNames) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key]; } mock.session = null; }
   });
 
   it("serializes competing approval and rejection without contradictory audits", async () => {

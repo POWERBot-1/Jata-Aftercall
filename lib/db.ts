@@ -573,6 +573,8 @@ function createFallbackPrisma(): any {
     passwordResetToken: emptyModel(),
     // Offline reads remain empty and every write refuses; this is not an agent database.
     agentApplication: emptyModel(),
+    agentReferralLink: emptyModel(),
+    agentReferralAttribution: emptyModel(),
     agentRegistrationThrottle: emptyModel(),
     agentPhoneChallenge: emptyModel(),
     agentWhatsAppWebhookEvent: emptyModel(),

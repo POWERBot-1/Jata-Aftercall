@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
+import RegistrationReferralLink from "@/components/agents/RegistrationReferralLink";
+import { referralLifetimeSeconds } from "@/lib/agents/referral-registration";
 import PhoneVerification from "@/components/agents/PhoneVerification";
 import { formatDateTime } from "@/lib/dateFormat";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
@@ -42,7 +44,7 @@ export default async function AgentDashboardPage() {
       </div>
     </MarketingSection>
     <MarketingSection title="Referrals and commissions" id="programme-status" tone="cream">
-      <div className="mk-prose"><p>Referral links, performance reporting and commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
+      <div className="mk-prose">{application?.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <RegistrationReferralLink />}<p>Sales performance reporting and commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
     </MarketingSection>
   </MarketingLayout>;
 }

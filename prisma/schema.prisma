@@ -48,6 +48,9 @@ model AgentApplication {
   verifiedPhoneE164     String?  @unique
   phoneVerifiedAt       DateTime?
   phoneChallenge        AgentPhoneChallenge?
+  referralLinks         AgentReferralLink[]
+  referrals             AgentReferralAttribution[] @relation("AgentReferrer")
+  referredBy            AgentReferralAttribution? @relation("AgentReferred")
   status                String   @default("PENDING")
   agentStatus           String   @default("INACTIVE")
   privacyAcknowledgedAt DateTime
@@ -56,6 +59,35 @@ model AgentApplication {
 
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+// Registration attribution is consented evidence only, not commission eligibility.
+model AgentReferralLink {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation(fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  attributions AgentReferralAttribution[]
+
+  @@index([referrerApplicationId])
+  @@unique([id, referrerApplicationId])
+}
+
+model AgentReferralAttribution {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation("AgentReferrer", fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  referredApplicationId String @unique
+  referred AgentApplication @relation("AgentReferred", fields: [referredApplicationId], references: [id], onDelete: Restrict)
+  linkId String
+  link AgentReferralLink @relation(fields: [linkId, referrerApplicationId], references: [id, referrerApplicationId], onDelete: Restrict)
+  consentedAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([referrerApplicationId])
 }
 
 // A challenge is not an agent entitlement and never stores the OTP itself.
