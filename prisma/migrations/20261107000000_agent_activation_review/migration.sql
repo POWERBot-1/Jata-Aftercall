@@ -1,6 +1,4 @@
--- Review decisions grant no administrator role or financial entitlement.
-BEGIN;
-ALTER TABLE "AgentApplication" DROP CONSTRAINT "AgentApplication_status_check";
-ALTER TABLE "AgentApplication" ADD CONSTRAINT "AgentApplication_status_check"
-  CHECK ("status" IN ('PENDING', 'REJECTED', 'ACTIVE', 'SUSPENDED'));
-COMMIT;
+-- Agent access is distinct from the existing application review state and financial entitlement.
+ALTER TABLE "AgentApplication" ADD COLUMN "agentStatus" TEXT NOT NULL DEFAULT 'INACTIVE';
+ALTER TABLE "AgentApplication" ADD CONSTRAINT "AgentApplication_agentStatus_check"
+  CHECK ("agentStatus" IN ('INACTIVE', 'ACTIVE', 'SUSPENDED'));

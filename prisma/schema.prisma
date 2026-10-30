@@ -49,6 +49,7 @@ model AgentApplication {
   phoneVerifiedAt       DateTime?
   phoneChallenge        AgentPhoneChallenge?
   status                String   @default("PENDING")
+  agentStatus           String   @default("INACTIVE")
   privacyAcknowledgedAt DateTime
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

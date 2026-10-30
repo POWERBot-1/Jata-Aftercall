@@ -10,7 +10,7 @@ import { WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 25;
 
-type ApplicationRow = { id: string; fullName: string; phoneE164: string; status: string; createdAt: Date };
+type ApplicationRow = { id: string; fullName: string; phoneE164: string; status: string; agentStatus: string; createdAt: Date };
 
 export default async function AgentApplications({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const session = await requireAdminPage();
@@ -24,7 +24,7 @@ export default async function AgentApplications({ searchParams }: { searchParams
   let rows: ApplicationRow[];
   try {
     rows = await prisma.agentApplication.findMany({
-      select: { id: true, fullName: true, phoneE164: true, status: true, createdAt: true },
+      select: { id: true, fullName: true, phoneE164: true, status: true, agentStatus: true, createdAt: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE + 1,
     });
   } catch {
@@ -35,9 +35,9 @@ export default async function AgentApplications({ searchParams }: { searchParams
     <WorkspacePanel title="Applications" meta="Phone numbers are masked. Manual review requires a verified phone and privacy acknowledgement. Approval is disabled unless separately enabled.">
       {rows.length === 0 ? <p>No applications on this page.</p> : <ul>
         {rows.slice(0, PAGE_SIZE).map((row) => <li key={row.id}>
-          <strong>{row.fullName}</strong> · {row.phoneE164.slice(0, 4)}•••••{row.phoneE164.slice(-3)} · {new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }).format(row.createdAt)} · {row.status === "REJECTED" ? "Rejected" : row.status === "ACTIVE" ? "Active" : row.status === "SUSPENDED" ? "Suspended" : "Pending review"}
-          {row.status === "PENDING" && <><RejectApplication id={row.id} />{process.env.AGENT_ACTIVATION_ENABLED === "true" && <ReviewApplication id={row.id} action="approve" />}</>}
-          {row.status === "ACTIVE" && <ReviewApplication id={row.id} action="suspend" />}
+          <strong>{row.fullName}</strong> · {row.phoneE164.slice(0, 4)}•••••{row.phoneE164.slice(-3)} · {new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }).format(row.createdAt)} · {row.status === "REJECTED" ? "Rejected" : row.agentStatus === "ACTIVE" ? "Active" : row.agentStatus === "SUSPENDED" ? "Suspended" : "Pending review"}
+          {row.status === "PENDING" && row.agentStatus === "INACTIVE" && <><RejectApplication id={row.id} />{process.env.AGENT_ACTIVATION_ENABLED === "true" && <ReviewApplication id={row.id} action="approve" />}</>}
+          {row.agentStatus === "ACTIVE" && <ReviewApplication id={row.id} action="suspend" />}
         </li>)}
       </ul>}
       <nav aria-label="Application pages">

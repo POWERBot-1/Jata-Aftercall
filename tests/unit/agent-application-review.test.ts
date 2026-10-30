@@ -14,7 +14,7 @@ describe("agent application rejection", () => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ userId: "admin-1", role: "ADMIN" });
     mocks.actor.mockResolvedValue({ role: "ADMIN" });
-    mocks.application.mockResolvedValue({ userId: "applicant-1", status: "PENDING" });
+    mocks.application.mockResolvedValue({ userId: "applicant-1", status: "PENDING", agentStatus: "INACTIVE" });
     mocks.update.mockResolvedValue({ count: 1 });
     mocks.audit.mockResolvedValue({});
     mocks.transaction.mockImplementation(async (fn) => fn({ user: { findUnique: mocks.actor }, agentApplication: { findUnique: mocks.application, updateMany: mocks.update }, auditEvent: { create: mocks.audit } }));
@@ -31,17 +31,17 @@ describe("agent application rejection", () => {
     mocks.actor.mockResolvedValue({ role: "CUSTOMER" });
     expect((await POST(request(), params)).status).toBe(403);
     mocks.actor.mockResolvedValue({ role: "ADMIN" });
-    mocks.application.mockResolvedValue({ userId: "admin-1", status: "PENDING" });
+    mocks.application.mockResolvedValue({ userId: "admin-1", status: "PENDING", agentStatus: "INACTIVE" });
     expect((await POST(request(), params)).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
   });
   it("records a conditional transition and audit together", async () => {
     expect((await POST(request(), params)).status).toBe(200);
-    expect(mocks.update).toHaveBeenCalledWith({ where: { id: "a1", status: "PENDING" }, data: { status: "REJECTED" } });
+    expect(mocks.update).toHaveBeenCalledWith({ where: { id: "a1", status: "PENDING", agentStatus: "INACTIVE" }, data: { status: "REJECTED" } });
     expect(mocks.audit).toHaveBeenCalledOnce();
   });
   it("is idempotent and does not duplicate audits on retries", async () => {
-    mocks.application.mockResolvedValue({ userId: "applicant-1", status: "REJECTED" });
+    mocks.application.mockResolvedValue({ userId: "applicant-1", status: "REJECTED", agentStatus: "INACTIVE" });
     expect((await POST(request(), params)).status).toBe(200);
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.audit).not.toHaveBeenCalled();

@@ -16,10 +16,16 @@ describe("personal agent application status", () => {
   it("reads only the signed-in account and does not present invented sales data", async () => {
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", createdAt: new Date("2026-10-29T10:00:00Z") });
     const html = renderToStaticMarkup(await AgentDashboardPage());
-    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "account-a" }, select: { fullName: true, status: true, createdAt: true, phoneVerifiedAt: true } });
+    expect(mocks.find).toHaveBeenCalledWith({ where: { userId: "account-a" }, select: { fullName: true, status: true, agentStatus: true, createdAt: true, phoneVerifiedAt: true } });
     expect(html).toContain("Awaiting verification");
     expect(html).toContain("not available yet");
     expect(html).not.toContain("Active agent");
+  });
+  it("renders reviewed states without exposing other accounts or claiming commissions", async () => {
+    mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
+    expect(renderToStaticMarkup(await AgentDashboardPage())).toContain("Active after administrator review");
+    mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "SUSPENDED", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() });
+    expect(renderToStaticMarkup(await AgentDashboardPage())).toContain("Agent access suspended");
   });
   it("distinguishes rejected and missing applications, and fails safely on storage errors", async () => {
     mocks.find.mockResolvedValue({ fullName: "A Person", status: "REJECTED", createdAt: new Date("2026-10-29T10:00:00Z") });

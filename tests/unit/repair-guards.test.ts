@@ -186,12 +186,7 @@ describe("runtime and schema guards", () => {
       "20261107000000_agent_activation_review",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
-      if (migration === "20261107000000_agent_activation_review") {
-        const previousConstraint = 'ALTER TABLE "AgentApplication" DROP CONSTRAINT "AgentApplication_status_check";';
-        expect(sql).toContain(previousConstraint);
-        expect(sql).toContain('CHECK ("status" IN (\'PENDING\', \'REJECTED\', \'ACTIVE\', \'SUSPENDED\'))');
-        sql = sql.replace(previousConstraint, "");
-      } else if (migration === "20260930000000_commerce_baseline") {
+      if (migration === "20260930000000_commerce_baseline") {
         for (const line of authorizedBackfill) {
           expect(sql).toContain(line);
           sql = sql.replace(line, "");
@@ -213,6 +208,9 @@ describe("runtime and schema guards", () => {
       expect(sql).not.toContain("DELETE FROM");
       expect(sql).not.toContain("UPDATE \"");
     }
+    const activationReview = readFileSync(path.join(root, "prisma/migrations/20261107000000_agent_activation_review/migration.sql"), "utf8");
+    expect(activationReview).toContain(`CHECK ("agentStatus" IN ('INACTIVE', 'ACTIVE', 'SUSPENDED'))`);
+    expect(activationReview).toContain(`ADD COLUMN "agentStatus" TEXT NOT NULL DEFAULT 'INACTIVE'`);
     // Agent additions must preserve the one-application-per-user constraint and may not
     // reserve a phone before ownership is verified. Review states are explicitly bounded.
     const agentApplication = readFileSync(path.join(root, "prisma/migrations/20261101000000_agent_applications/migration.sql"), "utf8");

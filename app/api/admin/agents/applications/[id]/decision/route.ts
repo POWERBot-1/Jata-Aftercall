@@ -33,18 +33,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // Lock role row so an authoritative concurrent revocation cannot commit midway through review.
       const actors: Array<{ role: string }> = await tx.$queryRaw`SELECT "role" FROM "User" WHERE "id" = ${session.userId} FOR UPDATE`;
       if (actors.length !== 1 || actors[0].role !== "ADMIN") return "forbidden";
-      const apps: Array<{ userId: string; status: string; phoneE164: string; verifiedPhoneE164: string | null; phoneVerifiedAt: Date | null; privacyAcknowledgedAt: Date | null }> = await tx.$queryRaw`
-        SELECT "userId", "status", "phoneE164", "verifiedPhoneE164", "phoneVerifiedAt", "privacyAcknowledgedAt"
+      const apps: Array<{ userId: string; status: string; agentStatus: string; phoneE164: string; verifiedPhoneE164: string | null; phoneVerifiedAt: Date | null; privacyAcknowledgedAt: Date | null }> = await tx.$queryRaw`
+        SELECT "userId", "status", "agentStatus", "phoneE164", "verifiedPhoneE164", "phoneVerifiedAt", "privacyAcknowledgedAt"
         FROM "AgentApplication" WHERE "id" = ${id} FOR UPDATE`;
       const application = apps[0];
       if (!application) return "not_found";
       if (application.userId === session.userId) return "forbidden";
       const target = action === "approve" ? "ACTIVE" : "SUSPENDED";
-      if (application.status === target) return "already";
-      const from = action === "approve" ? "PENDING" : "ACTIVE";
-      if (application.status !== from) return "conflict";
+      if (application.status !== "PENDING") return "conflict";
+      if (application.agentStatus === target) return "already";
+      const from = action === "approve" ? "INACTIVE" : "ACTIVE";
+      if (application.agentStatus !== from) return "conflict";
       if (action === "approve" && (!application.privacyAcknowledgedAt || !application.phoneVerifiedAt || application.verifiedPhoneE164 !== application.phoneE164)) return "ineligible";
-      const changed = await tx.agentApplication.updateMany({ where: { id, status: from }, data: { status: target } });
+      const changed = await tx.agentApplication.updateMany({ where: { id, status: "PENDING", agentStatus: from }, data: { agentStatus: target } });
       if (changed.count !== 1) return "conflict";
       await tx.auditEvent.create({ data: { actorId: session.userId, action: action === "approve" ? "AGENT_APPLICATION_APPROVED" : "AGENT_APPLICATION_SUSPENDED", targetType: "AGENT_APPLICATION", targetId: id, metadata: JSON.stringify({ reason, previousStatus: from, newStatus: target }) } });
       return "updated";

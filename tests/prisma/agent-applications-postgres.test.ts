@@ -132,6 +132,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       expect(decisions.map((r) => r.status)).toEqual([200, 200]);
       expect(await p.auditEvent.count({ where: { actorId: admin.id, action: "AGENT_APPLICATION_APPROVED", targetId: app.id } })).toBe(1);
       expect((await p.user.findUniqueOrThrow({ where: { id: applicant.id } })).role).toBe("CUSTOMER");
+      expect((await reject(request(`/api/admin/agents/applications/${app.id}/reject`, { reason: "APPLICANT_REQUEST" }), { params })).status).toBe(409);
       delete process.env.AGENT_ACTIVATION_ENABLED;
       expect((await decide(suspend(), { params })).status).toBe(200);
       expect((await decide(suspend(), { params })).status).toBe(200);

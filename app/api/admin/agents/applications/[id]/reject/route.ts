@@ -26,11 +26,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // Authoritative role is checked within the write transaction, not only in the session.
       const actor = await tx.user.findUnique({ where: { id: session.userId }, select: { role: true } });
       if (actor?.role !== "ADMIN") return "forbidden";
-      const application = await tx.agentApplication.findUnique({ where: { id }, select: { userId: true, status: true } });
+      const application = await tx.agentApplication.findUnique({ where: { id }, select: { userId: true, status: true, agentStatus: true } });
       if (!application) return "not_found";
       if (application.userId === session.userId) return "forbidden";
       if (application.status === "REJECTED") return "already_rejected";
-      const changed = await tx.agentApplication.updateMany({ where: { id, status: "PENDING" }, data: { status: "REJECTED" } });
+      if (application.agentStatus !== "INACTIVE") return "conflict";
+      const changed = await tx.agentApplication.updateMany({ where: { id, status: "PENDING", agentStatus: "INACTIVE" }, data: { status: "REJECTED" } });
       if (changed.count !== 1) return "conflict";
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_APPLICATION_REJECTED", targetType: "AGENT_APPLICATION", targetId: id, metadata: JSON.stringify({ reason, previousStatus: "PENDING", newStatus: "REJECTED" }) } });
       return "updated";
