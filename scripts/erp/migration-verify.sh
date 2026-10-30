@@ -141,8 +141,8 @@ INSERT INTO "User" (id, email, "passwordHash", "updatedAt")
 VALUES ('u_upgrade', 'upgrade-path@example.test', 'not-a-real-login', now());
 INSERT INTO "Business" (id, "ownerId", slug, name, category, "updatedAt")
 VALUES ('b_upgrade', 'u_upgrade', 'upgrade-path-biz', 'Upgrade Path Biz', 'retail', now());
-INSERT INTO "PosProduct" (id, "businessId", name, "updatedAt")
-VALUES ('p_upgrade', 'b_upgrade', 'Unga 2kg', now());
+INSERT INTO "PosProduct" (id, "businessId", name, category, "updatedAt")
+VALUES ('p_upgrade', 'b_upgrade', 'Unga 2kg', 'Existing legacy category', now());
 SQL
 }
 
@@ -214,6 +214,18 @@ upgrade_path() {
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business survived the upgrade" || fail "existing business was lost"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "existing POS product survived the upgrade" || fail "existing POS product was lost"
   [ "$(scalar 'select count(*) from "User"')" = "1" ] && pass "no rows were created or duplicated by the migration" || fail "row counts changed during the migration"
+  # Apply later POS migrations over a genuinely pre-existing product and photo reference.
+  psql_run -f "$MIGRATIONS_DIR/20261101000000_pos_category_images/migration.sql" >/dev/null || { fail "category image migration failed during upgrade"; return; }
+  psql_run <<'SQL' || { fail "could not seed legacy category photo"; return; }
+INSERT INTO "PosCategoryImage" (id, "businessId", category, "imageUrl", "updatedAt")
+VALUES ('photo_upgrade', 'b_upgrade', 'Existing legacy category', 'https://example.invalid/legacy.png', now());
+SQL
+  psql_run -f "$MIGRATIONS_DIR/20261102000000_pos_report_snapshots/migration.sql" >/dev/null || { fail "report snapshot migration failed during upgrade"; return; }
+  psql_run -f "$MIGRATIONS_DIR/20261103000000_pos_categories/migration.sql" >/dev/null || { fail "independent category migration failed during upgrade"; return; }
+  [ "$(scalar "select count(*) from \"PosCategory\" where \"businessId\" = 'b_upgrade' and name = 'Existing legacy category'")" = "1" ] && pass "legacy product and image backfilled to one category" || fail "legacy category was not backfilled"
+  [ "$(scalar "select count(*) from \"PosProduct\" where id = 'p_upgrade' and category = 'Existing legacy category'")" = "1" ] && pass "legacy product category preserved" || fail "legacy product category changed"
+  [ "$(scalar "select count(*) from \"PosCategoryImage\" where id = 'photo_upgrade' and category = 'Existing legacy category'")" = "1" ] && pass "legacy category image preserved" || fail "legacy category image changed"
+
 }
 
 # ── Scenario 3: rollback and recovery ────────────────────────────────────────────────────────────
