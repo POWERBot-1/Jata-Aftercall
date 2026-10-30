@@ -262,7 +262,7 @@ try {
       for (const [label,value] of [["Refunded","KES 40"],["Net retained","KES 60"],["Collected","KES 60"]]) {
         if (!partialReport.summary.some((row) => row.label === label && row.value === value)) throw new Error(`Partial report missing ${label} ${value}: ${JSON.stringify(partialReport.summary)}`);
       }
-      await page.waitForFunction(() => document.body.innerText.includes("Net retained") && document.body.innerText.includes("KES 60"));
+      await page.waitForFunction(() => [...document.querySelectorAll(".jata-stat")].some((el) => el.querySelector("dt")?.textContent.trim() === "Net retained" && el.querySelector("dd")?.textContent.trim() === "KES 60"), { timeout:10000 }).catch(async () => { throw new Error(`Partial report UI missing: ${JSON.stringify(await page.evaluate(() => document.body.innerText.slice(-2500)))}`); });
       await page.goto(new URL(`${root}/sales/${saleRow.id}`,base).href, { waitUntil:"load" });
       await page.waitForSelector("#refund-amount", { visible:true });
       await new Promise((done) => setTimeout(done, 1200));
