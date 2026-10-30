@@ -224,6 +224,8 @@ rollback_and_recovery() {
   seed_baseline_rows || { fail "could not seed baseline rows"; return; }
   seed_erp_rows || { fail "could not seed ERP rows"; return; }
   psql_run <<'SQL' || { fail "could not seed POS category image"; return; }
+INSERT INTO "PosCategory" (id, "businessId", name, "updatedAt")
+VALUES ('category_rollback', 'b_upgrade', 'Produce', now());
 INSERT INTO "PosCategoryImage" (id, "businessId", category, "imageUrl", "updatedAt")
 VALUES ('photo_rollback', 'b_upgrade', 'Produce', 'https://example.invalid/photo.png', now());
 SQL
@@ -280,6 +282,7 @@ SQL
   [ "$(base_table_count)" = "$want_base" ] && pass "all $want_base pre-existing tables survived the rollback" || fail "pre-existing tables were lost during rollback"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "POS rows survived the rollback" || fail "POS rows were lost during rollback"
   [ "$(scalar 'select count(*) from "PosCategoryImage" where id = '\''photo_rollback'\''')" = "1" ] && pass "POS category image survived ERP rollback" || fail "POS category image was lost during ERP rollback"
+  [ "$(scalar 'select count(*) from "PosCategory" where id = '\''category_rollback'\''')" = "1" ] && pass "POS category survived ERP rollback" || fail "POS category was lost during ERP rollback"
 
   # Recovery: re-apply the ERP migration on the rolled-back database.
   local recovered=1
