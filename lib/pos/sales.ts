@@ -1060,12 +1060,9 @@ export async function refundSale(params: {
           : returnedValueKES;
     const totalRefundableKES = cashRefundableKES + creditRefundableKES;
     if (action !== "POS_SALE_VOIDED" && requestedAmount > totalRefundableKES) {
-      return {
-        returnedToStock: 0,
-        code: "REFUND_INVALID" as string | undefined,
-        message: `Only KES ${totalRefundableKES.toLocaleString("en-KE")} of that sale is left to refund.`,
-        refundKES: 0,
-      };
+      // Line quantities may already have been claimed above. Throw so the transaction rolls
+      // those claims back as well; returning an error here would commit them without a return.
+      throw new RefundAborted("REFUND_INVALID", `Only KES ${totalRefundableKES.toLocaleString("en-KE")} of that sale is left to refund.`);
     }
     // Money is the only part that may leave through a tender; the credit part goes back to the
     // customer's account. Money is taken first, so a sale with both never pays out more than was
@@ -1195,6 +1192,9 @@ export async function refundSale(params: {
     return { returnedToStock, code: undefined, message: undefined, refundKES };
   }).catch(async (error: unknown) => {
     if (error instanceof RefundAborted) {
+      if (error.message === "REFUND_INVALID") {
+        return { returnedToStock: 0, code: "REFUND_INVALID" as string | undefined, message: error.publicMessage, refundKES: 0 };
+      }
       if (error.message === "CREDIT_PARTY_MISSING") {
         return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That refund could not be recorded — try again.", refundKES: 0 };
       }
@@ -1431,7 +1431,7 @@ function isWriteConflictError(error: unknown): boolean {
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */
 class RefundAborted extends Error {
-  constructor(message: string) {
+  constructor(message: string, public readonly publicMessage?: string) {
     super(message);
     this.name = "RefundAborted";
   }

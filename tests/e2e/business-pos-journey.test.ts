@@ -544,6 +544,22 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(breakdown.status, breakdown.text()).toBe(200);
     expect(breakdown.body.report.rows).toEqual(expect.arrayContaining([expect.objectContaining({ method: "cash", amount: "KES 60" })]));
 
+    // An excessive request can include a line return. Its tentative line claim must roll
+    // back along with the refused refund, so the subsequent legitimate return still works.
+    const beforeInvalidPayments = await prisma.posPayment.count({ where: { businessId, saleId: ctx.saleId } });
+    const invalidWithReturn = await callPos(salePost, businessId, {
+      path: `/sales/${ctx.saleId}`,
+      params: { saleId: ctx.saleId },
+      method: "POST",
+      body: { amountKES: 61, items: [{ saleItemId: itemId, quantity: 2 }] },
+    });
+    expect(invalidWithReturn.status, invalidWithReturn.text()).toBe(400);
+    expect(invalidWithReturn.body.code).toBe("REFUND_INVALID");
+    expect((await prisma.posSaleItem.findUnique({ where: { id: itemId } }))?.returnedQty).toBe(0);
+    expect((await prisma.posSale.findUnique({ where: { id: ctx.saleId } }))?.refundedKES).toBe(40);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId: ctx.saleId } })).toBe(beforeInvalidPayments);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(38);
+
     const refunded = await callPos(salePost, businessId, {
       path: `/sales/${ctx.saleId}`,
       params: { saleId: ctx.saleId },
@@ -1037,6 +1053,87 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(removed.status, removed.text()).toBe(200);
     expect((await prisma.posProduct.findUnique({ where: { id } }))?.imageUrl).toBeNull();
     expect(await prisma.mediaAsset.count({ where: { businessId, url: ownUrl } })).toBe(1);
+  }, 120_000);
+
+  it("21c — mixed-tender refunds across periods reconcile the sale, methods, drawer and stock", async () => {
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const create = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 2 }],
+      payments: [{ method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 60 }],
+    } });
+    expect(create.status, create.text()).toBe(201);
+    const saleId = create.body.sale.id;
+    const detail = await callPos(saleGet, businessId, { path: `/sales/${saleId}`, params: { saleId } });
+    const itemId = detail.body.sale.items[0].id;
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+
+    // Fixture-only timestamp adjustment: the sale and its incoming tenders belong to the
+    // previous day; actual refund rows are created by the real route in the current period.
+    const prior = new Date(); prior.setDate(prior.getDate() - 1); prior.setHours(12, 0, 0, 0);
+    await prisma.posSale.update({ where: { id: saleId }, data: { createdAt: prior } });
+    await prisma.posPayment.updateMany({ where: { businessId, saleId, direction: "IN" }, data: { createdAt: prior } });
+    const historical = () => callPos(reportsGet, businessId, { query: { report: "daily_sales", from: prior.toISOString(), to: prior.toISOString() } });
+    const initial = await historical();
+    expect(initial.status, initial.text()).toBe(200);
+    expect(initial.body.report.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 100" }]));
+    const closingBefore = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingBefore.status, closingBefore.text()).toBe(200);
+
+    const refund = (body: object) => callPos(salePost, businessId, { path: `/sales/${saleId}`, params: { saleId }, method: "POST", body });
+    const partial = await refund({ amountKES: 70, method: "cash" });
+    expect(partial.status, partial.text()).toBe(200);
+    expect(partial.body.refundedKES).toBe(70);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+    const outAfterPartial = await prisma.posPayment.findMany({ where: { businessId, saleId, direction: "OUT", status: "SETTLED" } });
+    expect(outAfterPartial.map((p) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    expect(outAfterPartial).toHaveLength(2);
+    const partialHistory = await historical();
+    expect(partialHistory.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 70" }, { label: "Net retained", value: "KES 30" }, { label: "Collected", value: "KES 30" },
+    ]));
+    expect(partialHistory.body.report.notice).toContain("not a historical as-of snapshot");
+    const closingAfter = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES).toBe(40);
+    expect(closingAfter.body.closing.expectedCashKES - closingBefore.body.closing.expectedCashKES).toBe(-40);
+
+    const full = await refund({ amountKES: 30, method: "cash", items: [{ saleItemId: itemId, quantity: 2 }] });
+    expect(full.status, full.text()).toBe(200);
+    expect(full.body.returnedToStock).toBe(2);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    expect(await prisma.posSale.findUnique({ where: { id: saleId } })).toMatchObject({ totalKES: 100, refundedKES: 100, status: "REFUNDED" });
+    const payments = await prisma.posPayment.findMany({ where: { businessId, saleId, status: "SETTLED" } });
+    for (const [method, amount] of [["cash", 40], ["mpesa", 60]] as const) {
+      expect(payments.filter((p) => p.method === method && p.direction === "IN").reduce((n, p) => n + p.amountKES, 0)).toBe(amount);
+      expect(payments.filter((p) => p.method === method && p.direction === "OUT").reduce((n, p) => n + p.amountKES, 0)).toBe(amount);
+    }
+    expect(payments.filter((p) => p.direction === "OUT").every((p) => p.createdAt > prior && p.purpose === "REFUND")).toBe(true);
+    expect((await refund({ amountKES: 1 })).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(payments.length);
+    expect((await historical()).body.report.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 0" }]));
+
+    // A separate mixed-tender void returns both tenders and stock once.
+    const voidSale = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 1 }],
+      payments: [{ method: "cash", amountKES: 20 }, { method: "mpesa", amountKES: 30 }],
+    } });
+    expect(voidSale.status, voidSale.text()).toBe(201);
+    const voidId = voidSale.body.sale.id;
+    const voidCall = () => callPos(salePost, businessId, { path: `/sales/${voidId}`, params: { saleId: voidId }, method: "POST", body: { void: true } });
+    const voided = await voidCall();
+    expect(voided.status, voided.text()).toBe(200);
+    expect(voided.body.returnedToStock).toBe(1);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    expect(await prisma.posSale.findUnique({ where: { id: voidId } })).toMatchObject({ status: "VOIDED", refundedKES: 50 });
+    const voidPayments = await prisma.posPayment.findMany({ where: { businessId, saleId: voidId, direction: "OUT" } });
+    expect(voidPayments.map((p) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 20 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    expect(voidPayments).toHaveLength(2);
+    expect((await voidCall()).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId: voidId, direction: "OUT" } })).toBe(2);
   }, 120_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {
