@@ -135,7 +135,14 @@ jobs:
         run: |
           set -o pipefail
           status=0
-          DATABASE_URL="$VERIFY_DATABASE_URL" bash scripts/erp/migration-verify.sh all 2>&1 | tee ci-logs/migration-verify.log || status=$?
+          # Match the service major version. Newer pg_dump emits settings (e.g.
+          # transaction_timeout) that a PostgreSQL 16 restore does not understand.
+          # Run the unchanged verifier inside the same image as the disposable service;
+          # its workspace is read-only and its /tmp is an isolated runner directory.
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" -v "$RUNNER_TEMP:/tmp" \
+            -w "$GITHUB_WORKSPACE" -e DATABASE_URL="$VERIFY_DATABASE_URL" -e PGPASSWORD \
+            postgres:16 bash scripts/erp/migration-verify.sh all 2>&1 | tee ci-logs/migration-verify.log || status=$?
           plain=$(sed -e 's/\x1b\[[0-9;]*m//g' ci-logs/migration-verify.log)
           # Surface the verifier's own failure summaries in check annotations even when
           # external artifact/log storage is unavailable. Do not emit raw connection details.
