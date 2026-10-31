@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PRISMA_TEST_DATABASE_URL, realPrismaConfigured } from "../helpers/prisma-client";
 import { processReferralReportBatch, reportScheduleStart } from "@/lib/agents/referral-report-scheduler";
-import { runReferralReportBatch } from "@/lib/agents/referral-report-scheduler-run";
+import { recoverStaleReferralReportRuns, runReferralReportBatch } from "@/lib/agents/referral-report-scheduler-run";
 
 const schema = `report_schedule_${randomUUID().replace(/-/g, "")}`;
 let pool: Pool;
@@ -103,6 +103,50 @@ describe.skipIf(!realPrismaConfigured)("durable report scheduler cursor on dispo
     expect(after).toEqual(before);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportScheduleRun" WHERE "status"=$1 AND "failureCode"=$2', ["FAILED", "BATCH_FAILED"])).rows[0].n).toBeGreaterThanOrEqual(1);
   }, 30000);
+  it("recovers abandoned runs in bounded pages while skipping active row locks", async () => {
+    await pool.query(`INSERT INTO "AgentReferralReportScheduleRun" ("id", "periodType", "status", "startedAt") SELECT 'stale-' || i, 'DAILY', 'RUNNING', clock_timestamp() - interval '3 minutes' FROM generate_series(1, 52) i`);
+    const lock = await pool.connect();
+    try {
+      await lock.query("BEGIN");
+      await lock.query(`SELECT "id" FROM "AgentReferralReportScheduleRun" WHERE "id" = 'stale-1' FOR UPDATE`);
+      const counts = await Promise.all([recoverStaleReferralReportRuns(prisma), recoverStaleReferralReportRuns(prisma)]);
+      expect(counts.reduce((a, b) => a + b, 0)).toBe(51);
+      expect((await pool.query(`SELECT "status" FROM "AgentReferralReportScheduleRun" WHERE "id" = 'stale-1'`)).rows[0].status).toBe("RUNNING");
+    } finally { await lock.query("ROLLBACK"); lock.release(); }
+    expect(await recoverStaleReferralReportRuns(prisma)).toBe(1);
+    expect(await recoverStaleReferralReportRuns(prisma)).toBe(0);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM "AgentReferralReportScheduleRun" WHERE "id" LIKE 'stale-%' AND "status" = 'FAILED' AND "failureCode" = 'BATCH_FAILED'`)).rows[0].n).toBe(52);
+    expect((await runReferralReportBatch(prisma, "DAILY", start, new Date("2026-01-05T21:30:00Z"))).status).toBe("BATCH");
+  });
+  it("recovers a run after its database worker connection is terminated and rolls back the cursor", async () => {
+    const before = (await pool.query(`SELECT "periodStart", "lastApplicationId" FROM "AgentReferralReportSchedule" WHERE "periodType" = 'DAILY'`)).rows[0];
+    await pool.query(`INSERT INTO "AgentReferralReportScheduleRun" ("id", "periodType", "status", "startedAt") VALUES ('crashed-worker', 'DAILY', 'RUNNING', clock_timestamp() - interval '3 minutes')`);
+    const worker = await pool.connect();
+    try {
+      const pid = (await worker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      await worker.query('BEGIN');
+      await worker.query(`SELECT "id" FROM "AgentReferralReportScheduleRun" WHERE "id" = 'crashed-worker' FOR UPDATE`);
+      await worker.query(`UPDATE "AgentReferralReportSchedule" SET "lastApplicationId" = 'uncommitted-marker' WHERE "periodType" = 'DAILY'`);
+      expect((await pool.query('SELECT pg_terminate_backend($1) AS stopped', [pid])).rows[0].stopped).toBe(true);
+      await expect(worker.query('SELECT 1')).rejects.toThrow();
+    } finally { worker.release(true); }
+    expect(await recoverStaleReferralReportRuns(prisma)).toBe(1);
+    expect((await pool.query(`SELECT "periodStart", "lastApplicationId" FROM "AgentReferralReportSchedule" WHERE "periodType" = 'DAILY'`)).rows[0]).toEqual(before);
+    expect((await pool.query(`SELECT "status", "failureCode" FROM "AgentReferralReportScheduleRun" WHERE "id" = 'crashed-worker'`)).rows[0]).toEqual({ status: 'FAILED', failureCode: 'BATCH_FAILED' });
+  });
+  it("fences a delayed worker if recovery wins before its transaction starts", async () => {
+    const before = (await pool.query(`SELECT "periodStart", "lastApplicationId" FROM "AgentReferralReportSchedule" WHERE "periodType" = 'DAILY'`)).rows[0];
+    const delayed = {
+      $executeRaw: prisma.$executeRaw.bind(prisma),
+      $transaction: async (fn: unknown, options: unknown) => {
+        await pool.query(`UPDATE "AgentReferralReportScheduleRun" SET "startedAt" = clock_timestamp() - interval '3 minutes' WHERE "status" = 'RUNNING'`);
+        expect(await recoverStaleReferralReportRuns(prisma)).toBe(1);
+        return prisma.$transaction(fn, options);
+      },
+    };
+    await expect(runReferralReportBatch(delayed as typeof prisma, "DAILY", start, new Date("2026-01-06T21:30:00Z"))).rejects.toThrow("SCHEDULE_RUN_CHANGED");
+    expect((await pool.query(`SELECT "periodStart", "lastApplicationId" FROM "AgentReferralReportSchedule" WHERE "periodType" = 'DAILY'`)).rows[0]).toEqual(before);
+  });
   it("catches up complete Nairobi months without duplicating daily snapshots", async () => {
     const later = new Date("2026-03-01T22:00:00Z");
     const run = () => prisma.$transaction((tx: typeof prisma) => processReferralReportBatch(tx, "MONTHLY", start, later));
