@@ -10,23 +10,23 @@
 
 This checkout contains a broad Next.js/Prisma/PostgreSQL product surface: **123 page routes**, **141 API route handlers**, and **371 test files**. Static search matched 196 app/component files with interactive patterns. Those are repository scale indicators, not passed control-by-control functional tests.
 
-Four reproducible issues were corrected safely: three stale public-domain references (QR fallback, PWA install instruction and `.env.example` guidance) plus a mobile marketing-navigation label visibly clipped in the existing 320×568 screenshot. The CSS now prevents nav labels shrinking and the marketing test suite pins the wrapping contract. A dedicated QR origin test was added. The pre-fix screenshot is real repository evidence; a post-fix browser screenshot was not captured. The supported Vercel/Neon/Paystack architecture was preserved. No production DB, DNS, mail, environment, payment, storage, deploy or PR merge action was taken.
+Four reproducible issues were corrected safely: three stale public-domain references (QR fallback, PWA install instruction and `.env.example` guidance) plus a mobile marketing-navigation label visibly clipped in the existing 320×568 screenshot. The CSS now prevents nav labels shrinking and the marketing test suite pins the wrapping contract. A dedicated QR origin test was added. The fix has a passing real-Chrome six-viewport capture workflow on candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1`; the artifact was generated but could not be downloaded for pixel review. The supported Vercel/Neon/Paystack architecture was preserved. No production DB, DNS, mail, environment, payment, storage or production deployment action was taken; Vercel automatically canceled the preview build under the existing ignored-build-step setting.
 
-**Release remains blocked** because the full financial/security/customer journey was not executed on this candidate, durable customer upload runtime is unverified, live official-domain state has conflicting DNS control-plane evidence, and PR #77's `programme-completeness` check failed. Do not infer readiness from merge status, Vercel `READY`, or historical test results.
+**Release remains blocked** because comprehensive financial/security/product acceptance is still incomplete, durable customer upload runtime is unverified, live official-domain state has conflicting DNS control-plane evidence, and PR #78 plus PR #77 have a failed `programme-completeness` check. Do not infer readiness from merge status, Vercel `READY`, or a partial set of passing candidate workflows.
 
 ## Workstream verdicts
 
 | Workstream | Status | Evidence / open item |
 |---|---|---|
 | A — Frontend/clickable controls | NOT TESTED | Static register covers main families; not every rendered control was clicked. |
-| B — Backend/database | NOT TESTED | Route/service family inventory; no native DB tests/migration in this turn. |
+| B — Backend/database | PARTIAL PASS / NOT FULL ACCEPTANCE | Disposable PostgreSQL migration/schema and candidate database journey workflows pass on code SHA `0cd537d`; production data, broad tenant/API/security acceptance and provider state are untouched/unproven. |
 | C — Fintech/payments | NOT TESTED | Source and targeted test coverage exist; no provider/ledger end-to-end run. |
 | D — Auth/security | NOT TESTED | Security suites exist; no live two-tenant direct API/session test this turn. |
 | E — Website Studio/media | BLOCKED | Adapter/tests exist; durable storage config, upload persistence and publish runtime not proven. |
 | F — POS | NOT TESTED | Significant test surface; no browser offline/reconnect/ledger reconciliation run. |
-| G — UX/responsive/motion | NOT TESTED | Historical PR artifacts/workflows exist; no fresh screenshots, recording, viewport or A11y test in this run. |
+| G — UX/responsive/motion | PARTIAL PASS / NOT FULL ACCEPTANCE | Candidate real-Chrome six-viewport capture and motion capture workflows pass on code SHA `0cd537d`; artifact pixels were not downloadable for review, and full keyboard/reduced-motion/A11y/control coverage remains open. |
 | H — Domain/Gmail | FAIL / BLOCKED | Gmail records and Vercel project metadata reviewed; apex DNS/name-server values conflict and email record repair unconfirmed. |
-| I — Integration/independent QA | BLOCKED | No complete current-SHA connected E2E evidence; PR #77 completeness check failed. |
+| I — Integration/independent QA | BLOCKED | Current candidate has passing full-suite, disposable DB, migration/build, journey, capture and static workflows on code SHA `0cd537d`; completeness gate still fails and this is not comprehensive connected customer acceptance. |
 
 ## Issue totals (bounded findings only)
 
@@ -44,7 +44,7 @@ Four reproducible issues were corrected safely: three stale public-domain refere
 
 ## GitHub / PR evidence
 
-PRs #58, #59, #63, #64, #65, #68, #69, #76 and #77 are `MERGED` per current GitHub metadata. PR #77 merge commit `847459b50726f4202496283cbbb9fb1b620d10b8` is described as partial/not release-ready; its `programme-completeness` check failed. PR #76 merge commit is current local source SHA. Vercel read-only production list reports #76 source as READY/PROMOTED. None of those statuses establishes the full launch criteria. No PR was merged/modified in this assessment.
+PRs #58, #59, #63, #64, #65, #68, #69, #76 and #77 are `MERGED` per current GitHub metadata. PR #77 merge commit `847459b50726f4202496283cbbb9fb1b620d10b8` is described as partial/not release-ready; its `programme-completeness` check failed. PR #76 merge commit is the audit source baseline; read-only Vercel production listing reports it READY/PROMOTED. This work is on open PR [#78](https://github.com/POWERBot-1/Jata-Aftercall/pull/78). Its candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1` passes full-suite, static/typecheck, disposable PostgreSQL, migrations/schema, journey, real-Chrome capture and build checks; `programme-completeness` remains failed. Vercel skipped/canceled the preview build via the pre-existing ignored-build-step rule. PR #78 remains open and unmerged. None of these statuses establishes full launch criteria.
 
 ## Exact code changes in this branch
 
@@ -62,12 +62,13 @@ PRs #58, #59, #63, #64, #65, #68, #69, #76 and #77 are `MERGED` per current GitH
 - `npx eslint app/install/page.tsx lib/qr.ts tests/unit/qr-domain.test.ts tests/unit/pwa-marketing.test.ts`: PASS, no diagnostics.
 - `npm run lint`: PASS, 0 errors / 49 warnings in unrelated existing files.
 - `git diff --check`: PASS.
-- `npm run typecheck`: BLOCKED/FAIL because generated Prisma Client was absent (`PrismaClient`/`Prisma` exports missing). `npx prisma generate` attempted the official Prisma engine distribution and could not establish TLS from the sandbox; no generated client was available. This is not evidence of a type error in the changed files.
-- `npm test`: BLOCKED at the repository's fail-closed `pretest` because generated Prisma client metadata was unavailable. Full suite therefore not run on this worktree.
-- Existing GitHub checks on PR #76 **head** SHA `b76428b83fe896376f39850f5ac9fa42ad4c8b69` passed for disposable PostgreSQL, full suite, interactive journey, six-viewport screenshot capture, static/build and POS/ERP; see [run 41243203509](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203509), [run 41243203517](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203517), [run 41243203527](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203527), [run 41243203576](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203576) and [run 41243203598](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203598). These are **not** results for local changes or the merge SHA. The `programme-completeness` check failed on PR #76 head (run [41243203445](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203445)).
-- Local pre-fix screenshot evidence at `docs/agents/evidence/landing-320x568.png` and desktop counterpart was visually inspected. Download of the PR screenshot artifact was blocked by the sandbox egress restriction on GitHub’s artifact-storage host; no after-fix browser screenshot/recording was generated.
+- Local `npm run typecheck` and `npm test` were blocked because `npm ci --ignore-scripts` left Prisma Client ungenerated; the Prisma engine download could not establish TLS from the sandbox. This is distinct from CI: the candidate's generated-client typecheck and full suite passed remotely.
+- First PR candidate SHA `34a18a2bf7541688cab7d3941b4e5daf00be201f` exposed an ES2017-incompatible dotAll regex in the new marketing contract test. The test was corrected in candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1`; the subsequent exact-SHA workflows pass apart from the completeness gate.
+- On candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1`, GitHub reports passing [static/typecheck](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941247), [full suite](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941345), [schema/types/unit/build](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941253), [disposable PostgreSQL migration](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941245), [DB journey and migration guard](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941278), [six-viewport real-Chrome capture](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941290), [motion capture](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941314), [schema reconciliation/build/failure-control](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941247), and [D2 build/audit](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941245). The candidate's `programme-completeness` still fails ([run 41246941250](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41246941250)); no gate was weakened.
+- Vercel's preview check passed as a provider integration status, but the build was canceled by the existing ignored-build-step command for non-production branches. No preview site was built, no production deployment occurred. The successful Chrome screenshot artifact could not be downloaded from GitHub artifact storage because that host is outside the sandbox's allowed egress; therefore generated artifacts exist according to CI, but their pixels were not visually reviewed.
+- The older PR #76 head SHA `b76428b83fe896376f39850f5ac9fa42ad4c8b69` checks remain historical only, not evidence for this candidate.
 
-No commit SHA for these changes exists until committed.
+The exact tested application code is identified by SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1`. Subsequent audit-document-only changes do not change runtime code.
 
 ## Required before any READY decision
 
@@ -76,7 +77,7 @@ No commit SHA for these changes exists until committed.
 3. Establish auth/session/direct API and two-tenant isolation, verified-payment activation and webhook idempotency, financial reconciliation, POS offline sync/refund reports, and subscription expiration gating.
 4. Prove durable Studio media upload, persistence, access policy and publication with approved non-production storage.
 5. Capture and inspect real browser screenshots/recordings at all six required sizes, reduced motion and accessibility states; crawl all critical controls and verify errors/retries.
-6. Resolve PR #77 completeness failure or superseding gate on new exact candidate. No gate may be weakened.
+6. Resolve the `programme-completeness` failures on PR #77 and current PR #78, or provide a superseding verified gate on a new exact candidate. No gate may be weakened.
 7. Obtain separate owner approval for any production DNS/email/provider/environment/migration/deployment/storage change; none is authorized by this work.
 
 The official domain is intended, not fully accepted. The existing Vercel reference remains valid operational context. JATA AFTERCALL remains separate from JATA Qi and TANYA-AI.

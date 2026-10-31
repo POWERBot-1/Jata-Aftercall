@@ -1,7 +1,7 @@
 # Frontend–backend reconciliation
 
 **Assessment baseline:** `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3`.
-**Method:** source route/component/service inventory and repository test-name discovery; no authenticated browser session, live user data, real provider, or production API call.
+**Method:** source route/component/service inventory, repository test discovery and candidate CI on code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1` (disposable PostgreSQL and real-Chrome capture workflows passed). No live user data, real payment/provider, or production API call.
 
 ## Feature-path map
 
@@ -26,6 +26,6 @@
 
 ## Release gaps
 
-The complete sequence `action → handler → endpoint → service → guard → DB/provider → response → displayed state` has not been proven for each control. The browser test infrastructure has many targeted scripts and test files, but current-turn egress/runtime lacked a configured test account/database/browser. There is no claim here that dead controls, swallowed exceptions, duplicate submissions, stale state, retry behavior, status semantics, tenant checks or entitlement checks were exhaustively ruled out.
+The complete sequence `action → handler → endpoint → service → guard → DB/provider → response → displayed state` has not been proven for each control. Candidate CI covers selected disposable-DB journeys and browser captures, but does not cover every control or connected product/payment flow. There is no claim here that dead controls, swallowed exceptions, duplicate submissions, stale state, retry behavior, status semantics, tenant checks or entitlement checks were exhaustively ruled out.
 
 Re-run connected E2E with synthetic tenants, a disposable PostgreSQL instance, provider mocks/test mode only and browser traces on the exact final commit. Compare request payloads and status/error schemas, then exercise success, timeout, invalid input, unauthenticated, wrong tenant, expired entitlement, duplicate submit and retry. Never use production data or real payment/customer messaging.

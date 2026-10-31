@@ -1,6 +1,6 @@
 # Customer journey acceptance
 
-**Verdict: NOT TESTED end-to-end.** Source routes and focused test suites exist, but this audit had no isolated registered test tenant, native disposable Neon-compatible database, mail sink, Paystack test credentials, or browser session. No real customer data, money, email or notification was used. A passing check in an earlier PR is not current-candidate browser evidence.
+**Verdict: NOT FULLY TESTED end-to-end.** Candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1` has passing GitHub workflows for a disposable-PostgreSQL journey, migrations, full suite and real-Chrome captures. These are meaningful current-candidate evidence but do not represent every plan/product journey below or complete production integrations. No real customer data, money, email or notification was used; production/provider state was not changed.
 
 ## Journey matrix
 
@@ -12,7 +12,7 @@
 | Website Studio | Discover → buy KES 999/month → create → choose template/category → durable upload → draft → preview → publish → public mobile page → unpublish | Studio pages, APIs and media tests exist; durable runtime provider configuration not verified. | NOT TESTED; launch gate until durable storage/publish run succeeds without public leakage. |
 | Business POS | Discover → KES 499/month → configure catalogue → sale → receipt/payment state → stock decrement → report → refund/return | POS pages/APIs and targeted tests exist, including offline queue and tenant isolation. | NOT TESTED; disposable DB end-to-end and ledger/report reconciliation required. |
 | JATA Autopilot | View Standard/Pro/Enterprise pricing → subscribe → configure/consent → Preview Mode → propose → merchant approval → action/audit/kill switch | Pricing/configuration and policy tests exist; PR #77 completeness failure is unrelated but overall release gate failed. | NOT TESTED; verify all sensitive actions require approval and expiry denies access. |
-| Failure paths | Declined, pending, wrong amount, invalid signature, duplicate webhook, expired plan, provider timeout, mail unavailable, storage failure | Security and failure-path test families exist. | NOT TESTED on this exact SHA in this turn. |
+| Failure paths | Declined, pending, wrong amount, invalid signature, duplicate webhook, expired plan, provider timeout, mail unavailable, storage failure | The candidate's failure-control workflow passes; individual business/payment/storage outcomes are not all exercised here. | PARTIAL; complete matrix remains untested on live provider settings. |
 
 ## Acceptance steps still needed
 

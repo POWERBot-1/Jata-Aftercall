@@ -12,7 +12,7 @@
 - Read-only GitHub queries confirmed current statuses and merge SHAs for required PRs #58, #59, #63, #64, #65, #68, #69, #76 and #77.
 - Read-only Vercel project/deployment/domain queries were performed without reading/decrypting environment variable values or changing any setting.
 - Connected Gmail search/read covered domain registration and HOSTAFRICA ticket correspondence. Credentials were neither copied nor reported.
-- Code/UI corrections: corrected three stale public URL references and fixed a visually evidenced 320px marketing-navigation clipping defect. Targeted QR, marketing, URL and homepage-plan tests pass (47 tests). No database, provider, customer or production operation was performed.
+- Code/UI corrections: corrected three stale public URL references and fixed a visually evidenced 320px marketing-navigation clipping defect. Targeted QR, marketing, URL and homepage-plan tests pass (47 tests). No production database, provider transaction, customer data, or production operation was performed. Disposable PostgreSQL and synthetic browser CI on candidate code SHA `0cd537d5f273048ec8da8c6560be2342b9786eb1` pass; the `programme-completeness` gate remains failed. PR #78 is open at https://github.com/POWERBot-1/Jata-Aftercall/pull/78; see `FINAL_RELEASE_READINESS.md` for the exact pass/fail workflow map.
 
 ## Findings
 
@@ -23,10 +23,10 @@ No new P0 defect was reproduced in this bounded source-and-control-plane pass. *
 ### P1 — release blockers
 
 1. Official-domain DNS evidence conflicts: HOSTAFRICA correspondence says its nameservers and configured website records are in use, while Vercel config reports different apex nameservers/A values and `ipStatus=required-change`. Mail repair was requested by the owner, but final MX/SPF/DKIM/DMARC values and mail delivery were not confirmed.
-2. Authenticated registration-to-subscription-to-product customer journeys were not executed in a test browser/database on this SHA.
+2. Full authenticated registration-to-subscription-to-each-product journeys were not executed; a candidate disposable-DB journey workflow passes but does not cover the complete product/payment matrix.
 3. Durable customer image upload → persistence → publication was not proven against an approved durable storage service.
 4. PR #77 is merged but explicitly partial; GitHub reports `programme-completeness` failed. No release gate was altered.
-5. Core POS offline sync/refund/report reconciliation and full direct API authorization were not run in current-turn browser/DB tests.
+5. Candidate disposable-DB journey and build workflows pass, but core POS offline sync/refund/report reconciliation and full route-by-route direct API authorization were not established by those smoke/acceptance workflows.
 
 ### P2 — corrected source issues and remaining QA
 
