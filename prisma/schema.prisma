@@ -47,6 +47,7 @@ model AgentApplication {
   phoneE164             String
   verifiedPhoneE164     String?  @unique
   phoneVerifiedAt       DateTime?
+  commissionEntries AgentCommissionLedgerEntry[]
   adminNotificationEvent AgentAdminNotificationEvent?
   phoneChallenge        AgentPhoneChallenge?
   referralLinks         AgentReferralLink[]
@@ -68,6 +69,29 @@ model AgentAdminNotificationEvent {
   application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
   eventType String
   createdAt DateTime @default(now())
+}
+
+// Immutable storage only. No application path creates accruals or authorizes payouts.
+model AgentCommissionLedgerEntry {
+  id String @id
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  agentApplicationId String
+  agentApplication AgentApplication @relation(fields: [agentApplicationId], references: [id], onDelete: Restrict)
+  entryType String
+  currency String
+  amountMinor BigInt
+  sourceEventId String @unique
+  originalEntryId String?
+  original AgentCommissionLedgerEntry? @relation("CommissionReversals", fields: [originalEntryId, paymentId, agentApplicationId, currency], references: [id, paymentId, agentApplicationId, currency], onDelete: Restrict, map: "AgentCommissionLedgerEntry_original_fkey")
+  reversals AgentCommissionLedgerEntry[] @relation("CommissionReversals")
+  policyVersion String
+  policySnapshot Json
+  createdAt DateTime @default(now())
+
+  @@unique([id, paymentId, agentApplicationId, currency], map: "AgentCommissionLedgerEntry_identity_key")
+  @@index([paymentId])
+  @@index([agentApplicationId, createdAt])
 }
 
 // Registration attribution is consented evidence only, not commission eligibility.
@@ -513,6 +537,7 @@ model Payment {
   bookingId    String?
   customerEmail String?    // Guest checkout payer — never a secret (§47)
   posPublicationResolution PosPublicationResolution?
+  agentCommissionEntries AgentCommissionLedgerEntry[]
 
   @@index([userId])
   @@index([businessId])
