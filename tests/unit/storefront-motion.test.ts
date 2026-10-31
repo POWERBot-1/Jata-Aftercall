@@ -23,7 +23,7 @@ function environment() {
   const media = Object.assign(new EventTarget(), { matches: false });
   const connection = Object.assign(new EventTarget(), { saveData: false, effectiveType: "4g" });
   const doc = Object.assign(new EventTarget(), { visibilityState: "visible", activeElement: null as unknown, defaultView: null as unknown });
-  const scope: any = { dataset: {}, isConnected: true, ownerDocument: doc };
+  const scope: any = Object.assign(new EventTarget(), { dataset: {}, isConnected: true, ownerDocument: doc });
   const target: any = { dataset: { motionRecipe: "slide" }, style: new Style(), isConnected: true, ownerDocument: doc, animate: () => {}, getAnimations: () => [], contains: (element: unknown) => element === target, closest: () => scope };
   const foreign: any = { dataset: { motionRecipe: "slide" }, style: new Style(), isConnected: true, closest: () => foreign };
   scope.querySelectorAll = () => [target, foreign];
@@ -136,6 +136,21 @@ describe("scoped lazy controller (unit doubles, not browser evidence)", () => {
     expect(reduced.observers).toHaveLength(0);
     expect(lite.loader).not.toHaveBeenCalled();
     expect(reduced.loader).not.toHaveBeenCalled();
+  });
+  it("cancels an active reveal immediately when focus enters its content", async () => {
+    const env = environment(); mount(env); env.observers[0].enter(); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(1);
+    env.target.contains = (node: unknown) => node === env.scope;
+    env.scope.dispatchEvent(new Event("focusin"));
+    expect(env.cancel).toHaveBeenCalledTimes(1);
+    expect(env.target.style.getPropertyValue("transform")).toBe("");
+    expect(env.target.style.getPropertyValue("opacity")).toBe("");
+  });
+  it("fails closed when focus tracking cannot be installed", () => {
+    const env = environment(); env.scope.addEventListener = () => { throw new Error("blocked"); };
+    mount(env);
+    expect(env.scope.dataset.motionReason).toBe("preferences-unavailable");
+    expect(env.loader).not.toHaveBeenCalled();
   });
   it("cancels immediately on a live reduced-motion change", async () => {
     const env = environment(); mount(env); env.observers[0].enter(); await flush();

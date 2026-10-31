@@ -201,8 +201,26 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
       return true;
     } catch { return false; }
   };
+  // If a user tabs into a section while its reveal is running, immediately restore that
+  // section instead of moving an active control under the keyboard or assistive technology.
+  // This applies to both the mini engine and the CSS fallback; pending imports already
+  // re-check document.activeElement before starting.
+  const stopFocusedReveal = (event: Event) => {
+    const focused = event.target;
+    if (!focused) return;
+    for (const [element, cancel] of [...active]) {
+      if (element.contains(focused as Node)) cancel();
+    }
+  };
+  try {
+    scope.addEventListener("focusin", stopFocusedReveal);
+    listeners.push(() => scope.removeEventListener("focusin", stopFocusedReveal));
+  } catch {
+    // If focus changes cannot be observed, do not animate interactive storefront content.
+    subscriptionsAvailable = false;
+  }
   if (media) {
-    if (typeof media.addEventListener === "function") subscriptionsAvailable = listen(media, "change");
+    if (typeof media.addEventListener === "function") subscriptionsAvailable = listen(media, "change") && subscriptionsAvailable;
     else if (typeof media.addListener === "function") {
       try { media.addListener(update); listeners.push(() => media?.removeListener(update)); } catch { media = null; }
     } else media = null; // cannot honor live preferences: stay Lite

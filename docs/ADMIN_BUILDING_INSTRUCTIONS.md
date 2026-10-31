@@ -253,3 +253,85 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** no production operations or credentials; path checks cannot independently authenticate acceptance, owner statements or evidence quality; manual verification remains necessary.
 - **Affected:** `scripts/admin/check-programme-readiness.mjs`, `scripts/admin/tests/programme-readiness.test.mjs`, `docs/agents/PROGRAMME_READINESS.json`, `.github/workflows/admin-instructions.yml`.
 - **Acceptance:** gate fails for missing IDs, blocked/untested status, missing acceptance or absent evidence; tests demonstrate failures and CI reports NOT READY until genuine evidence exists. **Dependencies/conflicts:** the register is append-only; readiness manifest must be kept current whenever instructions change and independently reviewed. **Evidence:** gate fixture tests pass locally; programme is currently NOT READY; exact-head CI pending. **Implementation commit:** locate via `git log --follow -- scripts/admin/check-programme-readiness.mjs`.
+
+### 031 — MOTION-007: complete advanced fintech motion engine
+- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Owner instruction:** The following is the complete owner authorization visible in this session, preserved verbatim. It refers to a “detailed specification immediately above”; the preceding visible owner directive is recorded by MOTION-006 and the conversation, but a separate, fuller advanced-engine specification cannot be independently identified from the available text and must not be invented.
+
+> OWNER AUTHORIZATION — IMPLEMENT THE COMPLETE ADVANCED FINTECH MOTION ENGINE
+>
+> The detailed specification immediately above is the authoritative owner instruction for FINTECH MOTION UI.
+>
+> Do not summarize it into a smaller task or replace it with the previous general motion implementation.
+>
+> 1. Register the specification
+>
+> - Append the complete specification to "docs/ADMIN_BUILDING_INSTRUCTIONS.md".
+> - Preserve every existing requirement and its history.
+> - Assign the next available sequential requirement ID after inspecting the current register.
+> - Record the specification's full acceptance criteria.
+> - Link the implementation and evidence to that requirement.
+>
+> 2. Implement the actual product capability
+>
+> Continue from the latest verified PR #77 head.
+>
+> Implement the shared motion engine and integrate it into the real application components.
+>
+> Prioritize:
+>
+> - Shared reusable motion primitives.
+> - Dashboard and financial interfaces.
+> - Transaction feedback and workflow states.
+> - POS, AI and publishing interactions where supported.
+> - Website Studio's actual generation and rendering pipeline.
+> - Automatic inheritance by all supported generated website templates.
+> - Reduced-motion accessibility and performance.
+>
+> Critical: Do not merely animate the dashboard and call this universal motion.
+>
+> 3. Preserve visual identity
+>
+> The existing JATA AFTERCALL application must retain its current colours, typography, layout, spacing, dimensions, branding and component appearance.
+>
+> Motion must be inactive without changing the original static appearance.
+>
+> Website Studio-generated websites must retain their own branding and visual identities.
+>
+> 4. Execute independent workstreams
+>
+> Continue the broader PR #77 programme alongside motion implementation.
+>
+> Where independent workers are available, run concurrent workstreams for:
+>
+> - FINTECH MOTION UI.
+> - Super Admin Console and authorization.
+> - Agent financial lifecycle.
+> - Notifications and scheduler recovery.
+> - Database migration and release safety.
+> - Security and integration.
+>
+> Report actual concurrency. Do not claim parallel execution when implementation was sequential.
+>
+> 5. Mandatory proof
+>
+> Provide actual browser-rendered before-and-after evidence, interaction recordings, reduced-motion results and six-viewport verification.
+>
+> Test each supported Website Studio template family through the real generation pipeline.
+>
+> Do not mark universal inheritance VERIFIED until every supported template family has evidence.
+>
+> 6. Governance
+>
+> Keep PR #77 open and draft.
+>
+> No merge, deployment, production changes, customer-site republishing, production migrations or expenditure without separate explicit authorization.
+>
+> Continue implementing autonomously. Do not return another documentation-only or audit-only result.
+>
+> Definition of done: A working shared motion engine across the application, automatic inheritance through Website Studio, preserved visual identity, passing acceptance tests and independently inspectable evidence.
+
+- **Purpose / function:** extend shared motion across real app and Studio generation without changing static appearance or inventing transaction outcomes.
+- **Security/privacy / UX:** reduced-motion, keyboard/touch and performance safeguards; no customer-site republishing or production changes.
+- **Affected:** `lib/experience/motionRuntime.ts`, `tests/unit/storefront-motion.test.ts`, existing shared application motion and Studio pipelines.
+- **Acceptance:** every item in the quoted instruction, including actual before/after browser recording, six viewports and each template family; no universal claim before all evidence. **Dependencies/conflicts:** the referenced separate detailed specification is not independently recoverable from visible conversation; no independent coding worker is available here. **Evidence:** focus-entry cancellation and fail-closed listener tests plus 81 focused unit/SSR tests pass; real browser coverage, full engine, policy and remaining programme work NOT TESTED or incomplete. **Implementation commit:** find via `git log --follow -- lib/experience/motionRuntime.ts`.
