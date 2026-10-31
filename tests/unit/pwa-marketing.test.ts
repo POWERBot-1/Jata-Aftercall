@@ -151,7 +151,7 @@ describe("public marketing pages", () => {
     const navLink = css.match(/\.mk-nav a\s*\{([^}]*)\}/);
     expect(navLink, "marketing navigation link rule").toBeTruthy();
     expect(navLink![1]).toMatch(/flex:\s*0 0 auto/);
-    expect(css).toMatch(/@media \(max-width: 700px\)[^{]*\{[^}]*\.mk-nav[^}]*flex-wrap:\s*wrap/s);
+    expect(css).toMatch(/@media \(max-width: 700px\)[^{]*\{[^}]*\.mk-nav[^}]*flex-wrap:\s*wrap/);
   });
 
   it("sitemap lists every new static page", async () => {
