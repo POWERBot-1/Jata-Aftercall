@@ -35,7 +35,7 @@ try {
  if(created.status!==201) throw Error(`create failed ${created.status}: ${JSON.stringify(created.body).slice(0,400)}`);
  for(const family of families){
   try {
-   const generated=await api('/api/experience/variant','POST',{businessId:fixture.id,family,seed:`motion014-${family}`});
+   const generated=await api('/api/experience/variant','POST',{businessId:fixture.id,family,seed:`motion014-${family}`,...(family==='service-journey'?{brief:{goal:'browse'}}:{})});
    steps.push({family,stage:'generate',status:generated.status,accepted:generated.body?.accepted,actualFamily:generated.body?.candidate?.artDirection?.family});
    if(generated.status!==200 || generated.body?.candidate?.artDirection?.family!==family) throw Error(`generate ${family}: ${generated.status} ${JSON.stringify(generated.body).slice(0,250)}`);
    const applied=await api('/api/experience','PATCH',{businessId:fixture.id,expectedDraftVersion:generated.body.baseDraftVersion,document:generated.body.candidate});
