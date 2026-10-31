@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Read-only, actual browser capture of seeded classic and AI preview pages. NOT universal acceptance.
 import puppeteer from 'puppeteer-core';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -62,11 +62,13 @@ try {
     },target.selector);
     await page.screenshot({path:path.join(out,`${name}.png`),fullPage:true}); row.screenshot=`${name}.png`;
     if(recorder) await recorder.stop();
-    row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector))?'OBSERVED':'FAIL';
+    row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector) && row.video && existsSync(path.join(out,row.video)) && statSync(path.join(out,row.video)).size > 0)?'OBSERVED':'FAIL';
   } catch(error) { row.result='ERROR'; row.error=String(error?.stack||error).slice(0,800); }
   results.push(row); writeFileSync(path.join(out,'observations.json'),JSON.stringify({commit:sha,browser:browserVersion,results},null,2));
   console.log(`${row.result} ${target.name} ${row.viewport} reduced=${reduced} status=${row.status}`);
   await context.close();
  }
 } finally {await browser.close();}
+const summary={commit:sha,browser:browserVersion,rows:results.length,observed:results.filter(x=>x.result==='OBSERVED').length,failed:results.filter(x=>x.result!=='OBSERVED').length,recordings:results.filter(x=>x.video && existsSync(path.join(out,x.video)) && statSync(path.join(out,x.video)).size>0).length,targets: [...new Set(results.map(x=>`${x.publishingMode}: ${x.observation?.renderMode || 'no-scope'} / ${x.observation?.reason || 'no-reason'}`))]};
+console.log(`::notice title=Motion evidence summary::${JSON.stringify(summary)}`);
 if (results.some(x=>x.result!=='OBSERVED')) process.exitCode=1;
