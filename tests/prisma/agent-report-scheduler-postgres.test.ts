@@ -127,8 +127,9 @@ describe.skipIf(!realPrismaConfigured)("durable report scheduler cursor on dispo
       await worker.query('BEGIN');
       await worker.query(`SELECT "id" FROM "AgentReferralReportScheduleRun" WHERE "id" = 'crashed-worker' FOR UPDATE`);
       await worker.query(`UPDATE "AgentReferralReportSchedule" SET "lastApplicationId" = 'uncommitted-marker' WHERE "periodType" = 'DAILY'`);
+      const terminated = new Promise<Error>((resolve) => worker.once('error', resolve));
       expect((await pool.query('SELECT pg_terminate_backend($1) AS stopped', [pid])).rows[0].stopped).toBe(true);
-      await expect(worker.query('SELECT 1')).rejects.toThrow();
+      expect(await terminated).toMatchObject({ code: '57P01' });
     } finally { worker.release(true); }
     expect(await recoverStaleReferralReportRuns(prisma)).toBe(1);
     expect((await pool.query(`SELECT "periodStart", "lastApplicationId" FROM "AgentReferralReportSchedule" WHERE "periodType" = 'DAILY'`)).rows[0]).toEqual(before);
