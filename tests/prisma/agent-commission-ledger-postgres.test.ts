@@ -18,10 +18,35 @@ describe.skipIf(!realPrismaConfigured)("commission ledger constraints on isolate
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query('CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY);');
     await pool.query(readFileSync("prisma/migrations/20261111000000_agent_commission_ledger/migration.sql", "utf8"));
-    await pool.query(`INSERT INTO "Payment" VALUES ('payment-1'), ('payment-2'); INSERT INTO "AgentApplication" VALUES ('agent-1'), ('agent-2');`);
+    await pool.query(`INSERT INTO "Payment" VALUES ('payment-1'), ('payment-2'), ('payment-3'), ('payment-4'); INSERT INTO "AgentApplication" VALUES ('agent-1'), ('agent-2');`);
   });
   afterAll(async () => { if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); } });
 
+  it("rolls back a failed migration transaction and reapplies in a disposable schema", async () => {
+    const scratch = `${schema}_ddl`;
+    const client = await pool.connect();
+    const migration = readFileSync("prisma/migrations/20261111000000_agent_commission_ledger/migration.sql", "utf8");
+    try {
+      await client.query("BEGIN");
+      await client.query(`CREATE SCHEMA "${scratch}"`);
+      await client.query(`SET LOCAL search_path TO "${scratch}"`);
+      await client.query('CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY)');
+      await client.query(migration);
+      await client.query("ROLLBACK");
+      expect((await client.query("SELECT to_regnamespace($1) AS namespace", [scratch])).rows[0].namespace).toBeNull();
+      await client.query("BEGIN");
+      await client.query(`CREATE SCHEMA "${scratch}"`);
+      await client.query(`SET LOCAL search_path TO "${scratch}"`);
+      await client.query('CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY)');
+      await client.query(migration);
+      await client.query("COMMIT");
+      expect((await client.query("SELECT to_regclass($1) IS NOT NULL AS present", [`${scratch}.\"AgentCommissionLedgerEntry\"`])).rows[0].present).toBe(true);
+    } finally {
+      await client.query("ROLLBACK");
+      await client.query(`DROP SCHEMA IF EXISTS "${scratch}" CASCADE`);
+      client.release();
+    }
+  });
   it("enforces idempotent sources, accrual uniqueness and immutable history", async () => {
     await pool.query(insert, entry("a1", "ACCRUAL", "100", null));
     await expect(pool.query(insert, entry("a2", "ACCRUAL", "100", null))).rejects.toMatchObject({ code: "23505" });
@@ -47,6 +72,40 @@ describe.skipIf(!realPrismaConfigured)("commission ledger constraints on isolate
         await expect(client.query(insert, entry(`fixed-${isolation}`, "REVERSAL", "-1", "a1"))).rejects.toThrow(/requires READ COMMITTED/);
         await client.query("ROLLBACK");
       } finally { client.release(); }
+    }
+  });
+  it.each(["COMMIT", "ROLLBACK"] as const)("waits for an in-flight reversal and handles its %s", async (finish) => {
+    const payment = finish === "COMMIT" ? "payment-3" : "payment-4";
+    const original = `held-${finish}`;
+    await pool.query(insert, entry(original, "ACCRUAL", "100", null, { payment }));
+    const first = await pool.connect();
+    const second = await pool.connect();
+    let pending: Promise<{ ok: boolean; error?: unknown }> | undefined;
+    try {
+      await first.query("BEGIN");
+      await first.query(insert, entry(`first-${finish}`, "REVERSAL", "-60", original, { payment }));
+      const pid = (await second.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+      pending = second.query(insert, entry(`second-${finish}`, "REVERSAL", "-60", original, { payment }))
+        .then(() => ({ ok: true }), (error: unknown) => ({ ok: false, error }));
+      // Verify the second statement actually waited before resolving the first transaction.
+      let waiting = false;
+      for (let i = 0; i < 100 && !waiting; i++) {
+        const state = await pool.query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1", [pid]);
+        waiting = state.rows[0]?.wait_event_type === "Lock";
+        if (!waiting) await pool.query("SELECT pg_sleep(0.02)");
+      }
+      expect(waiting).toBe(true);
+      await first.query(finish);
+      const outcome = await pending;
+      expect(outcome.ok).toBe(finish === "ROLLBACK");
+      if (finish === "COMMIT") expect(String(outcome.error)).toContain("exceeds");
+      const total = await pool.query('SELECT SUM("amountMinor") AS total FROM "AgentCommissionLedgerEntry" WHERE "originalEntryId" = $1', [original]);
+      expect(total.rows[0].total).toBe("-60");
+    } finally {
+      await first.query("ROLLBACK");
+      if (pending) await pending;
+      first.release();
+      second.release();
     }
   });
   it("serializes concurrent partial reversals so their sum cannot exceed the accrual", async () => {
