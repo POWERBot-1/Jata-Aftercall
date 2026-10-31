@@ -39,7 +39,7 @@ export default async function StorefrontCheckoutPage({ params }: Props) {
 
   return (
     <StorefrontShell data={data}>
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container">
           <h1 className="eb-h2" style={{ marginBottom: "1.75rem" }}>Checkout</h1>
           <CheckoutClient

@@ -31,7 +31,7 @@ export default async function EnquiryPage({ params, searchParams }: Props) {
   // Never silently substitute this business's first service for a foreign/stale query parameter.
   if (service && !services.some((entry) => entry.id === service)) notFound();
   return <StorefrontShell data={data} previewNotice={data.isPreview ? "Draft preview — only you can see these unpublished changes." : null}>
-    <section className="eb-section"><div className="eb-container">
+    <section className="eb-section" data-motion-recipe="fade"><div className="eb-container">
       <header className="eb-section-head"><h1 className="eb-h2">Request a quote or ask about a service</h1></header>
       <EnquiryClient slug={data.business.slug} preselectedId={service} preview={data.isPreview} services={services.map((entry) => ({ id: entry.id,
         name: entry.name, description: entry.description, kind: "service", price: entry.price, pricingType: entry.pricingType, bookingEnabled: entry.bookingEnabled }))} />

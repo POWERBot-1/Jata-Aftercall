@@ -52,7 +52,7 @@ export default async function BookPage({ params, searchParams }: Props) {
 
   return (
     <StorefrontShell data={data} previewNotice={data.isPreview ? "Draft preview — only you can see these unpublished changes." : null}>
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container">
           <header style={{ marginBottom: "1.75rem" }}>
             <h1 className="eb-h2">{bookingEnabled ? "Book" : data.profile.cta.enquire}</h1>

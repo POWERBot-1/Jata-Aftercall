@@ -194,3 +194,32 @@ describe("reduced motion is complete, not decorative", () => {
     expect(tail).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
   });
 });
+
+
+describe("shared workspace motion feedback", () => {
+  it("uses shared timing for navigation and status without animating meaning", () => {
+    const start = css.indexOf("/* Shared workspace feedback:");
+    const end = css.indexOf("@media (prefers-reduced-motion: reduce)", start);
+    const rules = css.slice(start, end);
+    expect(rules).toContain(".ws-rail a");
+    expect(rules).toContain(".ws-status");
+    expect(rules).toContain("var(--jata-dur-fast)");
+    expect(rules).toContain("var(--jata-dur-state)");
+    expect(rules).not.toMatch(/opacity|transform|content:/);
+    const reduced = css.slice(end, css.indexOf("}", end) + 1);
+    expect(reduced).toContain(".ws-rail a, .ws-status { transition: none;");
+  });
+});
+
+describe("actual workspace and agent entrance motion", () => {
+  it("attaches opt-in motion to real routes and honours reduced motion", () => {
+    const dashboard = readFileSync("components/DashboardClient.tsx", "utf8");
+    const agent = readFileSync("app/agents/dashboard/page.tsx", "utf8");
+    const chart = readFileSync("components/ui/AnalyticsChart.tsx", "utf8");
+    expect(dashboard).toContain("ws-stack jata-motion-entry");
+    expect(agent).toContain("mk-prose jata-motion-section");
+    expect(chart).toContain("isAnimationActive={reducedMotion === false}");
+    expect(css).toContain(".jata-motion-entry .ws-stat");
+    expect(reducedMotionBlocks(css).join("\n")).toContain(".jata-motion-entry, .jata-motion-section, .jata-motion-entry .ws-stat");
+  });
+});

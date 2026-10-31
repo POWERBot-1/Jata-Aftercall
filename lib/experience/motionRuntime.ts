@@ -38,10 +38,12 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
   let subscriptionsAvailable = true;
   const seen = new WeakSet<HTMLElement>();
   const pending = new Set<HTMLElement>();
+  // Bounded by targets (40); entries are removed if they leave the viewport.
+  const queued = new Set<HTMLElement>();
   const active = new Map<HTMLElement, () => void>();
   const listeners: Array<() => void> = [];
   const targets = Array.from(scope.querySelectorAll<HTMLElement>("[data-motion-recipe]"))
-    .filter((element) => element.closest(".eb-scope") === scope && isMotionRecipe(element.dataset.motionRecipe)).slice(0, 40);
+    .filter((element) => element.closest(".eb-scope, .jata-public, .jata-ai-motion") === scope && isMotionRecipe(element.dataset.motionRecipe)).slice(0, 40);
 
   try { media = win.matchMedia("(prefers-reduced-motion: reduce)"); } catch { /* static when preference cannot be read */ }
   try { connection = (win.navigator as Navigator & { connection?: MotionConnection }).connection || null; } catch { /* unknown network */ }
@@ -66,6 +68,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
   const reset = (reason: string) => {
     epoch += 1;
     eligible = false;
+    queued.clear();
     // Guard only owned targets: independently controlled nested storefronts are not ours.
     for (const element of targets) element.dataset.motionStatic = "true";
     observer?.disconnect();
@@ -94,7 +97,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
     element.dataset.motionPlayed = "css";
     scope.dataset.motionEngine = "css";
     const timer = win.setTimeout(() => finish(), duration * 1000 + 100);
-    const finish = () => { win.clearTimeout(timer); delete element.dataset.motionCss; active.delete(element); };
+    const finish = () => { win.clearTimeout(timer); delete element.dataset.motionCss; active.delete(element); drainQueue(); };
     active.set(element, finish);
   };
 
@@ -105,7 +108,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
     const key = element.dataset.motionRecipe;
     if (!isMotionRecipe(key)) { pending.delete(element); return; }
     const recipe = MOTION_RECIPES[key];
-    const stillEligible = () => generation === epoch && allowedNow() && element.isConnected && element.closest(".eb-scope") === scope && !element.contains(doc.activeElement);
+    const stillEligible = () => generation === epoch && allowedNow() && element.isConnected && element.closest(".eb-scope, .jata-public, .jata-ai-motion") === scope && !element.contains(doc.activeElement);
     const animationsOnTarget = (): Animation[] | null => {
       try {
         if (typeof element.getAnimations !== "function") return null;
@@ -142,6 +145,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
           else element.style.removeProperty(property);
         }
         active.delete(element);
+        drainQueue();
       };
       try {
         // Element references only — no global selector, generated code, arbitrary timeline or price edits.
@@ -161,8 +165,20 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
         libraryFailed = true;
         if (stillEligible()) cssReveal(element, recipe.duration);
       }
-    } finally { pending.delete(element); }
+    } finally { pending.delete(element); drainQueue(); }
   };
+
+  function drainQueue() {
+    if (!eligible || !allowedNow()) return;
+    while (queued.size && pending.size + active.size < MAX_ACTIVE_REVEALS) {
+      const element = queued.values().next().value as HTMLElement;
+      queued.delete(element);
+      if (seen.has(element) || !element.isConnected || element.closest(".eb-scope, .jata-public, .jata-ai-motion") !== scope) continue;
+      seen.add(element);
+      observer?.unobserve(element);
+      void reveal(element);
+    }
+  }
 
   const update = () => {
     if (disposed) return;
@@ -176,12 +192,16 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
         if (!eligible || !allowedNow()) return;
         for (const entry of entries) {
           const element = entry.target as HTMLElement;
-          if (seen.has(element) || (!entry.isIntersecting && entry.boundingClientRect.bottom >= 0)) continue;
-          seen.add(element);
-          observer?.unobserve(element);
-          // Already scrolled past content needs no decoration and is never hidden.
-          if (entry.isIntersecting) void reveal(element);
+          if (seen.has(element)) continue;
+          if (entry.isIntersecting) {
+            queued.add(element);
+          } else {
+            queued.delete(element);
+            // Already scrolled past content needs no decoration and is never hidden.
+            if (entry.boundingClientRect.bottom < 0) { seen.add(element); observer?.unobserve(element); }
+          }
         }
+        drainQueue();
       }, { threshold: 0.08, rootMargin: "0px 0px -4% 0px" });
       eligible = true;
       for (const element of targets) delete element.dataset.motionStatic;
@@ -201,8 +221,26 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
       return true;
     } catch { return false; }
   };
+  // If a user tabs into a section while its reveal is running, immediately restore that
+  // section instead of moving an active control under the keyboard or assistive technology.
+  // This applies to both the mini engine and the CSS fallback; pending imports already
+  // re-check document.activeElement before starting.
+  const stopFocusedReveal = (event: Event) => {
+    const focused = event.target;
+    if (!focused) return;
+    for (const [element, cancel] of [...active]) {
+      if (element.contains(focused as Node)) cancel();
+    }
+  };
+  try {
+    scope.addEventListener("focusin", stopFocusedReveal);
+    listeners.push(() => scope.removeEventListener("focusin", stopFocusedReveal));
+  } catch {
+    // If focus changes cannot be observed, do not animate interactive storefront content.
+    subscriptionsAvailable = false;
+  }
   if (media) {
-    if (typeof media.addEventListener === "function") subscriptionsAvailable = listen(media, "change");
+    if (typeof media.addEventListener === "function") subscriptionsAvailable = listen(media, "change") && subscriptionsAvailable;
     else if (typeof media.addListener === "function") {
       try { media.addListener(update); listeners.push(() => media?.removeListener(update)); } catch { media = null; }
     } else media = null; // cannot honor live preferences: stay Lite

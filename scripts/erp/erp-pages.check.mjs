@@ -96,11 +96,11 @@ async function freePort() {
   });
 }
 
-async function cookieFor(user, role = "OWNER") {
+async function cookieFor(user) {
   const token = await new SignJWT({
     userId: user.id,
     email: user.email,
-    role,
+    role: user.role,
     name: user.name,
     sessionVersion: user.sessionVersion ?? 0,
   })

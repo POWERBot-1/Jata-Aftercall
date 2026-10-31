@@ -108,7 +108,7 @@ async function freePort() {
 }
 
 async function cookieFor(user) {
-  const token = await new SignJWT({ userId: user.id, email: user.email, role: "OWNER", name: user.name, sessionVersion: user.sessionVersion ?? 0 })
+  const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role, name: user.name, sessionVersion: user.sessionVersion ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("1h")

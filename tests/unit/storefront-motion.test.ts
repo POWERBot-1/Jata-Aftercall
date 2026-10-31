@@ -23,7 +23,7 @@ function environment() {
   const media = Object.assign(new EventTarget(), { matches: false });
   const connection = Object.assign(new EventTarget(), { saveData: false, effectiveType: "4g" });
   const doc = Object.assign(new EventTarget(), { visibilityState: "visible", activeElement: null as unknown, defaultView: null as unknown });
-  const scope: any = { dataset: {}, isConnected: true, ownerDocument: doc };
+  const scope: any = Object.assign(new EventTarget(), { dataset: {}, isConnected: true, ownerDocument: doc });
   const target: any = { dataset: { motionRecipe: "slide" }, style: new Style(), isConnected: true, ownerDocument: doc, animate: () => {}, getAnimations: () => [], contains: (element: unknown) => element === target, closest: () => scope };
   const foreign: any = { dataset: { motionRecipe: "slide" }, style: new Style(), isConnected: true, closest: () => foreign };
   scope.querySelectorAll = () => [target, foreign];
@@ -137,6 +137,21 @@ describe("scoped lazy controller (unit doubles, not browser evidence)", () => {
     expect(lite.loader).not.toHaveBeenCalled();
     expect(reduced.loader).not.toHaveBeenCalled();
   });
+  it("cancels an active reveal immediately when focus enters its content", async () => {
+    const env = environment(); mount(env); env.observers[0].enter(); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(1);
+    env.target.contains = (node: unknown) => node === env.scope;
+    env.scope.dispatchEvent(new Event("focusin"));
+    expect(env.cancel).toHaveBeenCalledTimes(1);
+    expect(env.target.style.getPropertyValue("transform")).toBe("");
+    expect(env.target.style.getPropertyValue("opacity")).toBe("");
+  });
+  it("fails closed when focus tracking cannot be installed", () => {
+    const env = environment(); env.scope.addEventListener = () => { throw new Error("blocked"); };
+    mount(env);
+    expect(env.scope.dataset.motionReason).toBe("preferences-unavailable");
+    expect(env.loader).not.toHaveBeenCalled();
+  });
   it("cancels immediately on a live reduced-motion change", async () => {
     const env = environment(); mount(env); env.observers[0].enter(); await flush();
     env.media.matches = true; env.media.dispatchEvent(new Event("change"));
@@ -220,6 +235,58 @@ describe("scoped lazy controller (unit doubles, not browser evidence)", () => {
     mount(env); for (const target of many) env.observers[0].enter(target); await flush();
     expect(env.loader).toHaveBeenCalledTimes(1);
     expect(env.animate).toHaveBeenCalledTimes(8);
+  });
+  it("drains visible queued sections without exceeding the active cap", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 12 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(12);
+    expect(env.loader).toHaveBeenCalledTimes(1);
+  });
+  it("does not play queued sections that leave view or when motion becomes reduced", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 10 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    env.observers[0].enter(many[8], false, 10);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(9);
+    expect(env.animate.mock.calls.some((call) => call[0] === many[8])).toBe(false);
+    env.media.matches = true; env.media.dispatchEvent(new Event("change"));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.scope.dataset.motionReason).toBe("reduced-motion");
+  });
+  it("re-observes an unplayed section that leaves and later re-enters", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 9 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    env.observers[0].enter(many[8], false, 10);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(8);
+    env.observers[0].enter(many[8], true); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(9);
+  });
+  it("does not observe or load any queued work when motion is disabled", () => {
+    const env = environment(); mount(env, { enabled: false });
+    expect(env.scope.dataset.motionReason).toBe("owner-lite");
+    expect(env.observers).toHaveLength(0);
+    expect(env.loader).not.toHaveBeenCalled();
+  });
+  it("clears queued work before pending imports resolve on unmount", async () => {
+    const env = environment(); let release: (value: MiniAnimate) => void;
+    env.loader.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+    const many = Array.from({ length: 12 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    const cleanup = mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    cleanup(); release!(env.animate as MiniAnimate); await flush();
+    expect(env.animate).not.toHaveBeenCalled();
   });
   it("ignores unknown/prototype recipe names instead of accepting executable animation config", () => {
     const env = environment(); env.target.dataset.motionRecipe = "__proto__"; mount(env);

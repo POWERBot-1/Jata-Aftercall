@@ -184,6 +184,11 @@ jobs:
             echo "::error title=Onboarding browser failure::$detail"
           fi
           exit "$result"
+      - name: Authenticated agent application at six viewports (no activation)
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          AGENT_BROWSER_ISOLATED=1 AGENT_TEST_BASE_URL=http://localhost:4100 \
+            node scripts/browser/agent-authenticated.check.mjs
 
       # E4 for the ERP screens: the storefront capture above proves the public shop; this proves the
       # signed-in ERP workspace at the same six owner-mandated viewports. The check starts its OWN

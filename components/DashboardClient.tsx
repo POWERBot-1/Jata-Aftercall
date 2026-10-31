@@ -181,7 +181,7 @@ export default function DashboardClient({
 
   if (businesses.length === 0) {
     return (
-      <div className="ws-stack">
+      <div className="ws-stack jata-motion-entry">
         <WorkspaceHero
           kicker="Your workspace"
           title={
@@ -226,7 +226,7 @@ export default function DashboardClient({
   const firstName = businesses[0]?.name || "your business";
 
   return (
-    <div className="ws-stack">
+    <div className="ws-stack jata-motion-entry">
       <WorkspaceHero
         kicker="Your workspace"
         title={
