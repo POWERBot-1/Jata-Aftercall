@@ -23,8 +23,10 @@ try {
  await prisma.subscription.update({where:{businessId:fixture.id},data:{planId:plan.id,status:'ACTIVE',expiresAt:new Date(Date.now()+86400000*30),graceUntil:new Date(Date.now()+86400000*33)}});
  await prisma.business.update({where:{id:fixture.id},data:{logoUrl:'/workspace/hero-workspace.jpg'}});
  const owner=await browser.newPage(); await owner.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
- await owner.type('#login-email','demo@jata.link'); await owner.type('#login-password','Demo1234!');
- await Promise.all([owner.waitForFunction(()=>location.pathname!=='/login',{timeout:20000}),owner.click('button[type="submit"]')]);
+ // Authenticate through the real server endpoint from the browser. Avoid typing into a
+ // controlled React form before hydration; do not log the response body or session cookie.
+ const login=await owner.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password:'Demo1234!'})});return r.status;});
+ steps.push({stage:'login',status:login}); if(login!==200) throw Error(`fixture login failed HTTP ${login}`);
  const api=(url,method='GET',payload)=>owner.evaluate(async(url,method,payload)=>{const r=await fetch(url,{method,headers:payload?{'content-type':'application/json'}:{},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,payload);
  const created=await api('/api/experience','POST',{businessId:fixture.id,categoryKey:'beauty'}); steps.push({stage:'create',status:created.status});
  if(created.status!==201) throw Error(`create failed ${created.status}: ${JSON.stringify(created.body).slice(0,400)}`);
