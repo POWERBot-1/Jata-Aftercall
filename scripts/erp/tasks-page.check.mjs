@@ -71,7 +71,7 @@ async function cookieFor(user) {
   const token = await new SignJWT({
     userId: user.id,
     email: user.email,
-    role: "OWNER",
+    role: user.role,
     name: user.name,
     sessionVersion: user.sessionVersion ?? 0,
   })

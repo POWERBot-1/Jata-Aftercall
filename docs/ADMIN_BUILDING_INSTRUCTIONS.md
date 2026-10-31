@@ -189,3 +189,11 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** fail closed for database errors and role mismatches; require sign-in after a role change; do not introduce administrative write operations or new privileges.
 - **Affected:** `lib/auth.ts`, `tests/security/auth-session-revocation.test.ts`.
 - **Acceptance:** security tests verify demotion and promotion, existing reset and failure behavior. **Dependencies/conflicts:** this check does not permanently revoke a token if a role is changed away and later restored; role-change provisioning must atomically increment sessionVersion for durable revocation. Six-role control authorization, MFA and audit remain incomplete. **Evidence:** focused security suites passed 10 tests locally; native Prisma generation/typecheck blocked locally by binary download TLS; exact-head CI must be checked. **Implementation commit:** find via `git log --follow -- lib/auth.ts`.
+
+## 023 — ADMIN-019: realistic ERP session fixtures
+- **Date / approval / status:** 2026-10-31; engineering correction for owner-directed authorization hardening; IN PROGRESS.
+- **Owner instruction:** preserve working application functionality and test real server-side authorization without weakening security controls.
+- **Purpose / function:** ERP HTTP and visual test fixtures sign the seeded account's actual database role rather than conflating account role with business ownership or ERP permissions.
+- **Security/privacy / UX:** test-only synthetic accounts; tenant and ERP roles remain resolved by existing server-side checks.
+- **Affected:** `scripts/erp/erp-pages.check.mjs`, `scripts/erp/tasks-page.check.mjs`, `scripts/erp/erp-visual.check.mjs`.
+- **Acceptance:** real HTTP ERP checks and exact-head CI pass with current-role enforcement. **Dependencies/conflicts:** ADMIN-018 remains in force; no production operations. **Evidence:** intermediate interactive run 41209567044 passed typecheck and suites but failed ERP HTTP because the fixture used OWNER for CUSTOMER accounts; final-head run pending. **Implementation commit:** find via `git log --follow -- scripts/erp/erp-pages.check.mjs`.
