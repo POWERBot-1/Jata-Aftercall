@@ -9,6 +9,7 @@
     "start": "next start -H 0.0.0.0",
     "lint": "eslint app components lib",
     "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/test/check-prisma-client.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
