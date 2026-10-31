@@ -65,3 +65,18 @@ describe("personal agent application status", () => {
     expect(html).not.toContain("private database details");
   });
 });
+
+describe("ledger storage display gate", () => {
+  afterEach(() => { process.env = { ...originalEnv }; });
+  beforeEach(() => { vi.clearAllMocks(); mocks.session.mockResolvedValue({ userId: "account-a" }); mocks.find.mockResolvedValue({ fullName: "A Person", status: "PENDING", agentStatus: "ACTIVE", createdAt: new Date("2026-10-29T10:00:00Z"), phoneVerifiedAt: new Date() }); });
+  it("shows unverified storage labels only for an active application when the feature is enabled", async () => {
+    delete process.env.AGENT_COMMISSION_SUMMARY_ENABLED;
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Unverified commission ledger records");
+    process.env.AGENT_COMMISSION_SUMMARY_ENABLED = "true";
+    const html = renderToStaticMarkup(await AgentDashboardPage());
+    expect(html).toContain("Unverified commission ledger records");
+    expect(html).toContain("not earnings or a payable balance");
+    mocks.find.mockResolvedValueOnce({ fullName: "A Person", status: "PENDING", agentStatus: "SUSPENDED", createdAt: new Date(), phoneVerifiedAt: new Date() });
+    expect(renderToStaticMarkup(await AgentDashboardPage())).not.toContain("Unverified commission ledger records");
+  });
+});

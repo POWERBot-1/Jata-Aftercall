@@ -23,7 +23,7 @@ describe("own commission ledger storage summary", () => {
     expect(sql.join("?")).toContain('a."agentStatus" = \'ACTIVE\'');
   });
   it("fails closed on malformed or inconsistent aggregates and hides internal errors", async () => {
-    for (const row of [ { entryCount: "1", accrualMinor: "3.0", reversalMinor: "0", netMinor: "3" }, { entryCount: "2", accrualMinor: "3", reversalMinor: "-4", netMinor: "-1" }, { entryCount: "2", accrualMinor: "3", reversalMinor: "-1", netMinor: "3" } ]) {
+    for (const row of [ { entryCount: "1", accrualMinor: "3.0", reversalMinor: "0", netMinor: "3" }, { entryCount: "2", accrualMinor: "3", reversalMinor: "-4", netMinor: "-1" }, { entryCount: "2", accrualMinor: "3", reversalMinor: "-1", netMinor: "3" }, { entryCount: "0", accrualMinor: "3", reversalMinor: "-1", netMinor: "2" } ]) {
       mocks.query.mockResolvedValueOnce([row]); expect((await GET()).status).toBe(503);
     }
     mocks.query.mockRejectedValueOnce(new Error("secret connection detail")); const response = await GET(); expect(response.status).toBe(503); expect(await response.text()).not.toContain("secret");

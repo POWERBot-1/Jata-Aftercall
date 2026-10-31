@@ -33,7 +33,7 @@ export async function GET() {
     if (rows.length === 0) return message("An active agent account is required.", 403);
     if (rows.length !== 1) throw new Error("Invalid commission summary");
     const { entryCount, accrualMinor, reversalMinor, netMinor } = rows[0];
-    if (!isUnsignedInteger(entryCount) || !isUnsignedInteger(accrualMinor) || !isNonPositiveInteger(reversalMinor) || !isUnsignedInteger(netMinor) || BigInt(accrualMinor) + BigInt(reversalMinor) !== BigInt(netMinor)) throw new Error("Invalid commission summary");
+    if (!isUnsignedInteger(entryCount) || !isUnsignedInteger(accrualMinor) || !isNonPositiveInteger(reversalMinor) || !isUnsignedInteger(netMinor) || BigInt(accrualMinor) + BigInt(reversalMinor) !== BigInt(netMinor) || (entryCount === "0" && (accrualMinor !== "0" || reversalMinor !== "0" || netMinor !== "0"))) throw new Error("Invalid commission summary");
     return NextResponse.json({ scope: "OWN_LEDGER_STORAGE_ONLY", currency: "KES", entryCount, accrualMinor, reversalMinor, netMinor, verification: "NOT_CHECKED", entitlement: "NOT_DETERMINED", payout: "NOT_AVAILABLE" }, { headers });
   } catch { return message("Commission records are temporarily unavailable.", 503); }
 }
