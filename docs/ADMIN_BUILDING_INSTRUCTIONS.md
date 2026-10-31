@@ -205,3 +205,11 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** role changes invalidate earlier sessions and require sign-in; integer overflow rejects the role change rather than reusing an old version. The change does not implement the six console roles, MFA, audit or provisioning.
 - **Affected:** `prisma/migrations/20261124000000_user_role_session_revocation/migration.sql`, `tests/prisma/user-role-revocation-postgres.test.ts`, existing `lib/auth.ts` verification.
 - **Acceptance:** PostgreSQL tests cover demotion, restoration, explicit increments, ordinary updates, rollback, saturation and rejection of version decreases; native migration and final-head CI must pass. **Dependencies/conflicts:** trigger cannot prevent a database superuser from bypassing it; controlled deployment and migration recovery remain required. Never run this migration against production under this directive. **Evidence:** shared-session unit tests passed locally; PostgreSQL tests skipped locally without a disposable database; CI pending. **Implementation commit:** find via `git log --follow -- prisma/migrations/20261124000000_user_role_session_revocation/migration.sql`.
+
+## 025 — ADMIN-021: allowlist the role-revocation migration
+- **Date / approval / status:** 2026-10-31; engineering correction to owner-directed security hardening; IN PROGRESS.
+- **Owner instruction:** preserve existing migration and security controls while adding the authorized role-change revocation migration.
+- **Purpose / function:** include the exact new migration in both the explicit migration inventory and destructive-SQL scan, without relaxing either guard.
+- **Security/privacy / UX:** no production operations or removal of destructive-statement checks.
+- **Affected:** `tests/unit/repair-guards.test.ts`.
+- **Acceptance:** explicit allowlist and destructive scans pass, with final-head native migration and security tests. **Dependencies/conflicts:** ADMIN-020 remains in force. **Evidence:** intermediate candidate run 41211457742 deployed the migration but failed the explicit inventory; updated guard and session tests passed locally (22 tests). Exact-head CI pending. **Implementation commit:** locate via `git log --follow -- tests/unit/repair-guards.test.ts`.
