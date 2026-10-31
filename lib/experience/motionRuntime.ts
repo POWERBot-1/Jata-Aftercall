@@ -38,6 +38,8 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
   let subscriptionsAvailable = true;
   const seen = new WeakSet<HTMLElement>();
   const pending = new Set<HTMLElement>();
+  // Bounded by targets (40); entries are removed if they leave the viewport.
+  const queued = new Set<HTMLElement>();
   const active = new Map<HTMLElement, () => void>();
   const listeners: Array<() => void> = [];
   const targets = Array.from(scope.querySelectorAll<HTMLElement>("[data-motion-recipe]"))
@@ -66,6 +68,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
   const reset = (reason: string) => {
     epoch += 1;
     eligible = false;
+    queued.clear();
     // Guard only owned targets: independently controlled nested storefronts are not ours.
     for (const element of targets) element.dataset.motionStatic = "true";
     observer?.disconnect();
@@ -94,7 +97,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
     element.dataset.motionPlayed = "css";
     scope.dataset.motionEngine = "css";
     const timer = win.setTimeout(() => finish(), duration * 1000 + 100);
-    const finish = () => { win.clearTimeout(timer); delete element.dataset.motionCss; active.delete(element); };
+    const finish = () => { win.clearTimeout(timer); delete element.dataset.motionCss; active.delete(element); drainQueue(); };
     active.set(element, finish);
   };
 
@@ -142,6 +145,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
           else element.style.removeProperty(property);
         }
         active.delete(element);
+        drainQueue();
       };
       try {
         // Element references only — no global selector, generated code, arbitrary timeline or price edits.
@@ -161,8 +165,20 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
         libraryFailed = true;
         if (stillEligible()) cssReveal(element, recipe.duration);
       }
-    } finally { pending.delete(element); }
+    } finally { pending.delete(element); drainQueue(); }
   };
+
+  function drainQueue() {
+    if (!eligible || !allowedNow()) return;
+    while (queued.size && pending.size + active.size < MAX_ACTIVE_REVEALS) {
+      const element = queued.values().next().value as HTMLElement;
+      queued.delete(element);
+      if (seen.has(element) || !element.isConnected || element.closest(".eb-scope") !== scope) continue;
+      seen.add(element);
+      observer?.unobserve(element);
+      void reveal(element);
+    }
+  }
 
   const update = () => {
     if (disposed) return;
@@ -176,12 +192,16 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
         if (!eligible || !allowedNow()) return;
         for (const entry of entries) {
           const element = entry.target as HTMLElement;
-          if (seen.has(element) || (!entry.isIntersecting && entry.boundingClientRect.bottom >= 0)) continue;
-          seen.add(element);
-          observer?.unobserve(element);
-          // Already scrolled past content needs no decoration and is never hidden.
-          if (entry.isIntersecting) void reveal(element);
+          if (seen.has(element)) continue;
+          if (entry.isIntersecting) {
+            queued.add(element);
+          } else {
+            queued.delete(element);
+            // Already scrolled past content needs no decoration and is never hidden.
+            if (entry.boundingClientRect.bottom < 0) { seen.add(element); observer?.unobserve(element); }
+          }
         }
+        drainQueue();
       }, { threshold: 0.08, rootMargin: "0px 0px -4% 0px" });
       eligible = true;
       for (const element of targets) delete element.dataset.motionStatic;

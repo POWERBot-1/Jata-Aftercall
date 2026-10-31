@@ -236,6 +236,40 @@ describe("scoped lazy controller (unit doubles, not browser evidence)", () => {
     expect(env.loader).toHaveBeenCalledTimes(1);
     expect(env.animate).toHaveBeenCalledTimes(8);
   });
+  it("drains visible queued sections without exceeding the active cap", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 12 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(12);
+    expect(env.loader).toHaveBeenCalledTimes(1);
+  });
+  it("does not play queued sections that leave view or when motion becomes reduced", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 10 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    env.observers[0].enter(many[8], false, 10);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(9);
+    expect(env.animate.mock.calls.some((call) => call[0] === many[8])).toBe(false);
+    env.media.matches = true; env.media.dispatchEvent(new Event("change"));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.scope.dataset.motionReason).toBe("reduced-motion");
+  });
+  it("clears queued work before pending imports resolve on unmount", async () => {
+    const env = environment(); let release: (value: MiniAnimate) => void;
+    env.loader.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+    const many = Array.from({ length: 12 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    const cleanup = mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    cleanup(); release!(env.animate as MiniAnimate); await flush();
+    expect(env.animate).not.toHaveBeenCalled();
+  });
   it("ignores unknown/prototype recipe names instead of accepting executable animation config", () => {
     const env = environment(); env.target.dataset.motionRecipe = "__proto__"; mount(env);
     expect(env.observers[0].observed.size).toBe(0);
