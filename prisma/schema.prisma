@@ -32,8 +32,324 @@ model User {
   payments     Payment[]
   subscriptions Subscription[]
   auditEvents  AuditEvent[]
+  agentApplication AgentApplication?
 
   @@index([email])
+  agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
+  agentNotificationReplays AgentAdminNotificationReplay[] @relation("AgentNotificationReplayActor")
+  referralReportRevisions AgentReferralReportRevision[] @relation("ReferralReportRevisionActor")
+}
+
+// An application is not an agent entitlement. No activation is possible until a trusted,
+// self-service phone verification mechanism and programme rules have been implemented.
+model AgentApplication {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  fullName              String
+  phoneE164             String
+  verifiedPhoneE164     String?  @unique
+  phoneVerifiedAt       DateTime?
+  referralReports AgentReferralReportSnapshot[]
+  commissionEntries AgentCommissionLedgerEntry[]
+  adminNotificationEvent AgentAdminNotificationEvent?
+  phoneChallenge        AgentPhoneChallenge?
+  referralLinks         AgentReferralLink[]
+  referrals             AgentReferralAttribution[] @relation("AgentReferrer")
+  referredBy            AgentReferralAttribution? @relation("AgentReferred")
+  status                String   @default("PENDING")
+  agentStatus           String   @default("INACTIVE")
+  privacyAcknowledgedAt DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+}
+
+// Durable application event only. Delivery and recipient selection are intentionally not implemented.
+model AgentAdminNotificationEvent {
+  applicationId String @id
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  eventType String
+  createdAt DateTime @default(now())
+  plan AgentAdminNotificationPlan?
+}
+
+// Recipient identities are keyed hashes, never destinations. No sender or worker exists.
+model AgentAdminNotificationPlan {
+  applicationId String @id
+  event AgentAdminNotificationEvent @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationPlan_event_fkey")
+  recipientKeyVersion String
+  createdAt DateTime @default(now())
+  deliveries AgentAdminNotificationDelivery[]
+}
+
+model AgentAdminNotificationDelivery {
+  applicationId String
+  recipientKey String
+  plan AgentAdminNotificationPlan @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationDelivery_plan_fkey")
+  state String @default("QUEUED")
+  createdAt DateTime @default(now())
+  claimState AgentAdminNotificationClaimState?
+  attemptsHistory AgentAdminNotificationAttempt[]
+  @@id([applicationId, recipientKey])
+  @@index([state, createdAt])
+}
+
+// Durable provider attempt and callback history; acceptance is not proof of delivery.
+model AgentAdminNotificationAttempt {
+  applicationId String
+  recipientKey String
+  attempt Int
+  outcome String
+  providerKey String
+  messageId String? @unique
+  createdAt DateTime @default(now())
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationAttempt_delivery_fkey")
+  callbacks AgentAdminNotificationCallback[]
+  @@id([applicationId, recipientKey, attempt])
+}
+
+model AgentAdminNotificationCallback {
+  eventId String @id
+  messageId String
+  status String
+  createdAt DateTime @default(now())
+  attempt AgentAdminNotificationAttempt @relation(fields: [messageId], references: [messageId], onDelete: Restrict, map: "AgentAdminNotificationCallback_message_fkey")
+}
+
+// Internal claim state; a claim is not proof of delivery.
+model AgentAdminNotificationClaimState {
+  applicationId String
+  recipientKey String
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationClaimState_delivery_fkey")
+  state String
+  attempts Int @default(1)
+  claimToken String?
+  leaseUntil DateTime?
+  nextAttemptAt DateTime?
+  updatedAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+  review AgentAdminNotificationReview?
+  recoveries AgentAdminNotificationRecovery[]
+  replays AgentAdminNotificationReplay[]
+  @@index([state, leaseUntil])
+  @@index([state, nextAttemptAt])
+}
+
+// Automated conservative recovery evidence; it never authorizes replay.
+model AgentAdminNotificationRecovery {
+  applicationId String
+  recipientKey String
+  attempt Int
+  reason String
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationRecovery_claim_fkey")
+  @@id([applicationId, recipientKey, attempt])
+}
+
+// A bounded operator authorization, not proof of delivery.
+model AgentAdminNotificationReplay {
+  requestId String @id
+  applicationId String
+  recipientKey String
+  actorId String
+  previousAttempt Int
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReplay_claim_fkey")
+  actor User @relation("AgentNotificationReplayActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReplay_actor_fkey")
+  @@unique([applicationId, recipientKey, previousAttempt], map: "AgentAdminNotificationReplay_attempt_key")
+}
+
+// Acknowledgement is not proof of delivery and cannot authorize a retry.
+model AgentAdminNotificationReview {
+  applicationId String
+  recipientKey String
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReview_claim_fkey")
+  reviewedState String
+  reviewedBy String
+  reviewer User @relation("AgentNotificationReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReview_user_fkey")
+  createdAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+}
+
+// Persisted counts of referral evidence only; not financial or delivery records.
+model AgentReferralReportSnapshot {
+  applicationId String
+  periodKey String
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict, map: "AgentReferralReportSnapshot_application_fkey")
+  periodType String
+  startInclusive DateTime
+  endExclusive DateTime
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  createdAt DateTime @default(now())
+  revisions AgentReferralReportRevision[]
+  @@id([applicationId, periodKey])
+  @@index([applicationId, createdAt])
+}
+
+// Historical evidence is retained by value, including if an attribution is later corrected.
+model AgentReferralReportRevision {
+  applicationId String
+  periodKey String
+  revision Int
+  snapshot AgentReferralReportSnapshot @relation(fields: [applicationId, periodKey], references: [applicationId, periodKey], onDelete: Restrict, map: "AgentReferralReportRevision_snapshot_fkey")
+  kind String
+  actorId String?
+  actor User? @relation("ReferralReportRevisionActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentReferralReportRevision_actor_fkey")
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  addedCount Int @default(0)
+  removedCount Int @default(0)
+  changedCount Int @default(0)
+  createdAt DateTime @default(now())
+  members AgentReferralReportMember[]
+  writeFence AgentReferralReportRevisionWriteFence?
+  @@id([applicationId, periodKey, revision])
+}
+
+// Internal transaction fence; absent for revisions created before the fence migration.
+model AgentReferralReportRevisionWriteFence {
+  applicationId String
+  periodKey String
+  revision Int
+  transactionId String
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Cascade, map: "AgentReferralReportRevisionWriteFence_revision_fkey")
+  @@id([applicationId, periodKey, revision])
+}
+
+model AgentReferralReportMember {
+  applicationId String
+  periodKey String
+  revision Int
+  eventId String
+  source String
+  eventCreatedAt DateTime
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Restrict, map: "AgentReferralReportMember_revision_fkey")
+  @@id([applicationId, periodKey, revision, eventId])
+}
+
+// Bounded scheduler cursor; no external scheduling or delivery is enabled by this model.
+model AgentReferralReportSchedule {
+  periodType String @id
+  configuredStart DateTime
+  periodStart DateTime
+  lastApplicationId String?
+  updatedAt DateTime @default(now())
+}
+
+// Operational run evidence; RUNNING after a crash is not proof of completion.
+model AgentReferralReportScheduleRun {
+  id String @id
+  periodType String
+  status String
+  periodKey String?
+  result String?
+  processed Int?
+  failureCode String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([startedAt, id])
+}
+
+// Immutable storage only. No application path creates accruals or authorizes payouts.
+model AgentCommissionLedgerEntry {
+  id String @id
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  agentApplicationId String
+  agentApplication AgentApplication @relation(fields: [agentApplicationId], references: [id], onDelete: Restrict)
+  entryType String
+  currency String
+  amountMinor BigInt
+  sourceEventId String @unique
+  originalEntryId String?
+  original AgentCommissionLedgerEntry? @relation("CommissionReversals", fields: [originalEntryId, paymentId, agentApplicationId, currency], references: [id, paymentId, agentApplicationId, currency], onDelete: Restrict, map: "AgentCommissionLedgerEntry_original_fkey")
+  reversals AgentCommissionLedgerEntry[] @relation("CommissionReversals")
+  policyVersion String
+  policySnapshot Json
+  createdAt DateTime @default(now())
+
+  @@unique([id, paymentId, agentApplicationId, currency], map: "AgentCommissionLedgerEntry_identity_key")
+  @@index([paymentId])
+  @@index([agentApplicationId, createdAt])
+}
+
+// Registration attribution is consented evidence only, not commission eligibility.
+model AgentReferralLink {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation(fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  attributions AgentReferralAttribution[]
+
+  @@index([referrerApplicationId])
+  @@unique([id, referrerApplicationId])
+}
+
+model AgentReferralAttribution {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation("AgentReferrer", fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  referredApplicationId String @unique
+  referred AgentApplication @relation("AgentReferred", fields: [referredApplicationId], references: [id], onDelete: Restrict)
+  linkId String
+  link AgentReferralLink @relation(fields: [linkId, referrerApplicationId], references: [id, referrerApplicationId], onDelete: Restrict)
+  consentedAt DateTime
+  source String @default("REGISTRATION")
+  createdAt DateTime @default(now())
+
+  @@index([referrerApplicationId])
+}
+
+// A challenge is not an agent entitlement and never stores the OTP itself.
+model AgentPhoneChallenge {
+  id            String   @id @default(cuid())
+  applicationId String   @unique
+  application   AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  phoneE164     String
+  nonce         String
+  codeDigest    String
+  deliveryChannel String?
+  deliveryState String @default("UNKNOWN")
+  providerMessageId String?
+  providerStatus String?
+  providerStatusAt DateTime?
+  webhookEvents AgentWhatsAppWebhookEvent[]
+  expiresAt     DateTime
+  sentAt        DateTime?
+  consumedAt    DateTime?
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([providerMessageId])
+}
+
+model AgentWhatsAppWebhookEvent {
+  id String @id
+  challengeId String
+  challenge AgentPhoneChallenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  providerMessageId String
+  status String
+  eventAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([challengeId])
+}
+
+// A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.
+model AgentRegistrationThrottle {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 enum Role {
@@ -404,6 +720,7 @@ model Payment {
   bookingId    String?
   customerEmail String?    // Guest checkout payer — never a secret (§47)
   posPublicationResolution PosPublicationResolution?
+  agentCommissionEntries AgentCommissionLedgerEntry[]
 
   @@index([userId])
   @@index([businessId])

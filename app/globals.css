@@ -1833,6 +1833,11 @@ button:focus-visible {
 .eb-scope[data-render-mode="motion"] [data-motion-css="slide"] { animation: eb-motion-slide 0.42s ease-out; }
 .eb-scope[data-render-mode="motion"] [data-motion-css="scale"] { animation: eb-motion-scale 0.42s ease-out; }
 .eb-scope[data-render-mode="motion"] [data-motion-css="reveal"] { animation: eb-motion-reveal 0.56s ease-out; }
+:is(.jata-public, .jata-ai-motion)[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
+:is(.jata-public, .jata-ai-motion) [data-motion-static="true"] { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.jata-public, .jata-ai-motion) [data-motion-recipe] { animation: none !important; }
+}
 @keyframes eb-motion-fade { from { opacity: 0.94; } to { opacity: 1; } }
 @keyframes eb-motion-slide { from { opacity: 0.94; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes eb-motion-scale { from { opacity: 0.94; transform: scale(0.99); } to { opacity: 1; transform: none; } }
@@ -5514,7 +5519,9 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 .mk-footer nav a:hover { color: rgb(240 160 60); text-decoration: underline; }
 .mk-footer__base { border-top: 1px solid rgb(247 242 232 / 0.14); margin-top: 2rem; padding-top: 1rem; font-size: 0.76rem; line-height: 1.6; color: rgb(247 242 232 / 0.6); }
 .mk-page :focus-visible { outline: 3px solid rgb(240 160 60); outline-offset: 3px; }
-@media (max-width: 700px) { .mk-nav { order: 3; flex-basis: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.2rem; } .mk-nav a { white-space: nowrap; } }
+@media (max-width: 700px) { .mk-nav { order: 3; flex-basis: 100%; flex-wrap: wrap; padding-bottom: 0.2rem; } .mk-nav a { white-space: nowrap; } }
+.agent-verification-form { display: grid; gap: 0.5rem; justify-items: start; max-width: 22rem; margin-top: 1rem; }
+.product-theme-root .agent-verification-form input#agent-verification-code { width: min(100%, 15rem); min-height: 2.9rem; padding: 0.65rem 0.8rem; border: 1px solid rgb(23 19 16 / 0.5); border-radius: 0.5rem; background: rgb(255 255 255); color: rgb(20 17 15); font-size: 1rem; }
 /* Five footer columns (product, demos, account, support) wrap cleanly at tablet/desktop. */
 @media (min-width: 760px) { .lp-footer__grid { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); } }
 
@@ -5530,6 +5537,38 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
  * duration jumps straight to the painted end state. Content appears immediately and completely —
  * nothing is hidden, nothing waits.
  * ------------------------------------------------------------------------ */
+
+/* Entry is opt-in on real application surfaces. Text and authoritative numbers are never
+   interpolated or replaced, so they remain readable and accurate throughout the animation. */
+@keyframes jata-surface-enter {
+  from { opacity: 0.92; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.jata-motion-entry, .jata-motion-section {
+  animation: jata-surface-enter var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+.jata-motion-entry .ws-stat {
+  animation: jata-surface-enter var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-motion-entry, .jata-motion-section, .jata-motion-entry .ws-stat {
+    animation: none; opacity: 1; transform: none;
+  }
+}
+
+/* Shared workspace feedback: presentation only, never a source of financial state.
+   Navigation retains its focus ring and hit area; status text remains immediately readable. */
+.ws-rail a {
+  transition: background-color var(--jata-dur-fast) var(--jata-ease-out),
+    color var(--jata-dur-fast) var(--jata-ease-out), border-color var(--jata-dur-fast) var(--jata-ease-out);
+}
+.ws-status {
+  transition: background-color var(--jata-dur-state) var(--jata-ease-in-out),
+    border-color var(--jata-dur-state) var(--jata-ease-in-out), color var(--jata-dur-state) var(--jata-ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-rail a, .ws-status { transition: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,

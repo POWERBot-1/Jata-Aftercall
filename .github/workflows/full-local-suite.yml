@@ -1,0 +1,45 @@
+name: Full no-database test suite
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - run: npm ci
+      # Generate uses the URL only for schema validation; no server is contacted.
+      # Do not export it to the suite: database-enabled tests need a disposable DB.
+      - name: Generate native Prisma client
+        run: DATABASE_URL='postgresql://validation_only:validation_only@127.0.0.1:5432/validation_only?schema=public' bash scripts/lib/prisma-generate.sh
+      - name: Run full no-database suite
+        run: |
+          mkdir -p ci-logs
+          npm test -- --reporter=default --reporter=json --outputFile.json=ci-logs/full-suite.json
+      - name: Publish test summary
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          if (!fs.existsSync('ci-logs/full-suite.json')) { console.log('::warning title=Full suite::No JSON report was produced; see the run steps.'); process.exit(0); }
+          const r=JSON.parse(fs.readFileSync('ci-logs/full-suite.json'));
+          console.log('::notice title=Full suite totals::'+JSON.stringify({numTotalTestSuites:r.numTotalTestSuites,numPassedTestSuites:r.numPassedTestSuites,numFailedTestSuites:r.numFailedTestSuites,numPendingTestSuites:r.numPendingTestSuites,numTotalTests:r.numTotalTests,numPassedTests:r.numPassedTests,numFailedTests:r.numFailedTests,numPendingTests:r.numPendingTests}));
+          for(const s of r.testResults||[]) if(s.status==='failed') console.log('::warning title=Failed suite::'+JSON.stringify({name:s.name,message:(s.message||'').slice(0,1000)}));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-suite-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-logs/full-suite.json
+          retention-days: 30
+          if-no-files-found: warn

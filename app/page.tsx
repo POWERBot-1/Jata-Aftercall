@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UsersRound } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/landing/Hero";
 import { BenefitsSection, StorySection } from "@/components/landing/Sections";
@@ -213,6 +214,15 @@ export default async function HomePage() {
               Then put <code className="lp-code">/b/your-business</code> on WhatsApp, Facebook, Instagram, TikTok, Google
               Business, posters and receipts — anywhere customers find you.
             </p>
+          </div>
+        </section>
+
+        <section className="lp-section lp-section--cream" aria-labelledby="agents-title">
+          <div className="lp-wrap">
+            <p className="lp-kicker"><UsersRound aria-hidden="true" size={20} /> Agent network</p>
+            <h2 id="agents-title" className="lp-h2">Become a JATA AFTERCALL Agent</h2>
+            <p className="lp-lede">Help businesses discover JATA AFTERCALL. Applications are open to existing account holders; activation and reward terms are not yet available.</p>
+            <Link href="/agents" className="lp-btn lp-btn--amber">Learn about the agent programme <span aria-hidden="true">→</span></Link>
           </div>
         </section>
 

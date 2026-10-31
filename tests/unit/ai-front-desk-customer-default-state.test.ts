@@ -62,6 +62,25 @@ function render(publicationState?: Props["publicationState"]) {
   );
 }
 
+describe("motion inheritance SSR contract", () => {
+  it.each(["DRAFT", "PREVIEW", "LIVE"] as const)("keeps one controller and truthful content for %s", (state) => {
+    const html = render(state);
+    expect((html.match(/data-motion-probe=""/g) || [])).toHaveLength(1);
+    expect(html).toContain("jata-ai-motion");
+    expect(html).toContain('data-motion-recipe="fade"');
+    expect(html).toContain("Savanna Bakery");
+    expect(html).toContain("Black Forest Cake");
+  });
+  it("fails closed without storefront settings and does not alter publication decisions", () => {
+    const source = readFileSync(path.join(root, "app/b/[slug]/ai/page.tsx"), "utf8");
+    expect(source).toContain('!storefront ? "lite"');
+    expect(source).toContain('storefront.theme.treatment.motion !== "none"');
+    expect(source).toContain('loadStorefront(slug, { allowDraft: true, preferDraft: true })');
+    expect(source).toContain('loadStorefront(slug).catch(() => null)');
+    expect(source.indexOf('if (data.blocked === "forbidden")')).toBeLessThan(source.indexOf('const storefront ='));
+  });
+});
+
 describe("publication state defaults", () => {
   it("renders the desk as a draft when no publication state is supplied", () => {
     const html = render();

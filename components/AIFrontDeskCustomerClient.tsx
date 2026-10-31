@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { formatOpeningHours } from "@/lib/openingHours";
+import { RenderModeProbe } from "@/components/storefront/RenderModeProbe";
+import type { RenderPreference } from "@/lib/experience/renderMode";
 import { aiFrontDeskStatusLabel } from "@/lib/statusLabels";
 
 type ProductSummary = {
@@ -85,6 +87,8 @@ export default function AIFrontDeskCustomerClient({
   qrSvg,
   shareUrl,
   previewMode = false,
+  motionPreference = "lite",
+  motionEnabled = false,
 }: {
   business: {
     id: string;
@@ -109,6 +113,8 @@ export default function AIFrontDeskCustomerClient({
   qrSvg: string;
   shareUrl: string;
   previewMode?: boolean;
+  motionPreference?: RenderPreference;
+  motionEnabled?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -238,7 +244,8 @@ export default function AIFrontDeskCustomerClient({
     : null;
 
   return (
-    <main id="main" className="jata-page min-h-screen">
+    <main id="main" className="jata-page jata-ai-motion min-h-screen">
+      <RenderModeProbe preference={motionPreference} enabled={motionEnabled} />
       {previewMode && (
         <div className="border-b border-[color:var(--jata-accent)]/30 bg-[color:var(--jata-accent)]/10 px-4 py-2 text-center text-xs font-semibold text-[color:var(--jata-accent)]">
           Private preview — only you can see this. Nothing is charged, no live order is placed, and
@@ -248,7 +255,7 @@ export default function AIFrontDeskCustomerClient({
 
       <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-5 sm:px-6">
         {/* Identity + honest status */}
-        <header className="overflow-hidden rounded-[1.6rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] shadow-[var(--jata-shadow)]">
+        <header data-motion-recipe="fade" className="overflow-hidden rounded-[1.6rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] shadow-[var(--jata-shadow)]">
           <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

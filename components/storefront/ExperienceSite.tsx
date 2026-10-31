@@ -10,12 +10,10 @@ import type { StorefrontData } from "@/lib/experience/storefront";
 import { structuredDataFor } from "@/lib/experience/structuredData";
 import { StorefrontShell } from "./StorefrontShell";
 import { SectionRenderer } from "./Sections";
-import { RenderModeProbe } from "./RenderModeProbe";
 import { FamilyComposition } from "./FamilyComposition";
 import { themeOf } from "@/lib/experience/document";
 import { templateForDocument } from "@/lib/experience/templateFamilies";
 import { ItemCard } from "./ItemCard";
-import { isRenderPreference } from "@/lib/experience/renderMode";
 
 export function ExperienceSite({ data: incoming, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
   const data = incoming.document.version === 2 ? { ...incoming, theme: themeOf(incoming.document) } : incoming;
@@ -83,8 +81,6 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
           </div>
         </section>
       ) : null}
-
-      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} enabled={theme.treatment.motion !== "none"} />
 
       {family?.heroTreatment === "stage" && data.items.length > 0 ? <section className="eb-product-stage eb-container" aria-label="Product highlights">
         {data.items.slice(0, 3).map((item) => <ItemCard key={item.id} item={item} data={data} />)}

@@ -165,6 +165,11 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
   });
 
   // Recovery tests use real time, because payment and order timestamps are written by the database clock.
+  // Keep their sale window relative to real time rather than relying on a calendar date in 2026.
+  async function keepSaleCurrent() {
+    const now = Date.now();
+    await p.product.update({ where: { id: product.id }, data: { salePriceStartsAt: new Date(now - 86400000), salePriceEndsAt: new Date(now + 86400000) } });
+  }
   async function orderIdOf(orderReference: string) {
     return (await p.order.findFirst({ where: { orderReference }, select: { id: true } })).id as string;
   }
@@ -180,6 +185,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("a repeat of an unpaid basket within the cooldown returns PROCESSING and creates no second order or payment", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666001";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `a-${uid()}` }));
@@ -195,6 +201,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("a repeat after the earlier attempt was abandoned at Paystack starts a new attempt on the SAME order", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666002";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `f-${uid()}` }))).json();
@@ -212,6 +219,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("a repeat while Paystack still reports the recent attempt in progress starts nothing", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666003";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `h-${uid()}` }))).json();
@@ -225,6 +233,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("an attempt older than 30 minutes that Paystack still reports open is replaced on the same order", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666004";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `j-${uid()}` }))).json();
@@ -237,6 +246,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("when Paystack gives no usable answer, a repeat is NOT treated as a failure and starts nothing", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666005";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const first = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `l-${uid()}` }))).json();
@@ -249,6 +259,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("the resume endpoint is tenant scoped and refuses orders that are paid or cancelled", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const { ...unused } = {};
     void unused;
     const phone = "0722666006";
@@ -272,6 +283,7 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: storefront quote and checko
 
   it("the resume endpoint returns a fresh payment for an order whose last attempt was abandoned", async () => {
     vi.useRealTimers();
+    await keepSaleCurrent();
     const phone = "0722666008";
     const payload = { ...pickup(slug, [item(1, product.id)]), expectedTotalKES: 800, customer: customer(phone) };
     const made = await (await checkout(req("/api/storefront/checkout", payload, { "idempotency-key": `p-${uid()}` }))).json();

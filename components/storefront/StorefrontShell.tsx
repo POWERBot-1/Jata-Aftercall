@@ -16,6 +16,8 @@ import { CartProvider } from "./CartProvider";
 import { ActionBar } from "./ActionBar";
 import { ContactActions } from "./ContactActions";
 import { PageViewTracker } from "./Track";
+import { RenderModeProbe } from "./RenderModeProbe";
+import { isRenderPreference } from "@/lib/experience/renderMode";
 
 export function StorefrontShell({
   data,
@@ -37,6 +39,7 @@ export function StorefrontShell({
   return (
     <div className={themeRootClassName(theme, family ? `eb-family-${family.key} eb-density-${document.artDirection!.density}` : "")} data-template-family={family?.key} style={themeStyleVars(theme, document.brand)}>
       <PageViewTracker businessId={business.id} />
+      <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} enabled={theme.treatment.motion !== "none"} />
       {structuredData ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
       ) : null}

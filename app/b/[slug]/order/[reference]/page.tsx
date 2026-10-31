@@ -43,7 +43,7 @@ export default async function OrderConfirmationPage({ params, searchParams }: Pr
 
   return (
     <StorefrontShell data={data}>
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container" style={{ maxWidth: "44rem" }}>
           <OrderStatusPanel
             slug={slug}
