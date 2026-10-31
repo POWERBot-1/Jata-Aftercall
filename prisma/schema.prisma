@@ -87,8 +87,25 @@ model AgentAdminNotificationDelivery {
   plan AgentAdminNotificationPlan @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationDelivery_plan_fkey")
   state String @default("QUEUED")
   createdAt DateTime @default(now())
+  claimState AgentAdminNotificationClaimState?
   @@id([applicationId, recipientKey])
   @@index([state, createdAt])
+}
+
+// Internal claim state only; there is no delivery worker or provider integration.
+model AgentAdminNotificationClaimState {
+  applicationId String
+  recipientKey String
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationClaimState_delivery_fkey")
+  state String
+  attempts Int @default(1)
+  claimToken String?
+  leaseUntil DateTime?
+  nextAttemptAt DateTime?
+  updatedAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+  @@index([state, leaseUntil])
+  @@index([state, nextAttemptAt])
 }
 
 // Immutable storage only. No application path creates accruals or authorizes payouts.

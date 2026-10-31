@@ -48,6 +48,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
+    await p.agentAdminNotificationClaimState.deleteMany({ where: { delivery: { plan: { event: { application: { userId: { in: users } } } } } } });
     await p.agentAdminNotificationDelivery.deleteMany({ where: { plan: { event: { application: { userId: { in: users } } } } } });
     await p.agentAdminNotificationPlan.deleteMany({ where: { event: { application: { userId: { in: users } } } } });
     await p.agentAdminNotificationEvent.deleteMany({ where: { application: { userId: { in: users } } } });
