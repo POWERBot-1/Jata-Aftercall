@@ -48,10 +48,45 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
+    await p.agentAdminNotificationDelivery.deleteMany({ where: { plan: { event: { application: { userId: { in: users } } } } } });
+    await p.agentAdminNotificationPlan.deleteMany({ where: { event: { application: { userId: { in: users } } } } });
     await p.agentAdminNotificationEvent.deleteMany({ where: { application: { userId: { in: users } } } });
     await p.agentApplication.deleteMany({ where: { userId: { in: users } } });
     await p.user.deleteMany({ where: { id: { in: users } } });
     await p.$disconnect();
+  });
+
+  it("plans recipients atomically, idempotently and without storing destinations", async () => {
+    const names = ["AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED", "AGENT_ADMIN_NOTIFICATION_OUTBOX_PLAN_ENABLED", "AGENT_ADMIN_NOTIFICATION_RECIPIENTS", "AGENT_ADMIN_NOTIFICATION_RECIPIENT_KEY", "AGENT_ADMIN_NOTIFICATION_RECIPIENT_KEY_VERSION"] as const;
+    const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    try {
+      process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED = "true";
+      process.env.AGENT_ADMIN_NOTIFICATION_OUTBOX_PLAN_ENABLED = "true";
+      process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
+      process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENT_KEY = "synthetic-key-only-012345678901234567890123456789";
+      process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENT_KEY_VERSION = "fixture-v1";
+      const user = await p.user.create({ data: { email: `plan-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(user.id);
+      const application = await p.agentApplication.create({ data: { userId: user.id, fullName: "Synthetic User", phoneE164: "+254700000003", privacyAcknowledgedAt: new Date() } });
+      await expect(p.$transaction(async (tx) => { await enqueueApplicationSubmitted(tx, application.id); throw new Error("synthetic rollback"); })).rejects.toThrow("synthetic rollback");
+      expect(await p.agentAdminNotificationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+      expect(await p.agentAdminNotificationPlan.count({ where: { applicationId: application.id } })).toBe(0);
+      expect(await p.agentAdminNotificationDelivery.count({ where: { applicationId: application.id } })).toBe(0);
+      await Promise.all(Array.from({ length: 4 }, () => p.$transaction((tx) => enqueueApplicationSubmitted(tx, application.id))));
+      const plan = await p.agentAdminNotificationPlan.findUniqueOrThrow({ where: { applicationId: application.id }, include: { deliveries: true } });
+      expect(plan.recipientKeyVersion).toBe("fixture-v1");
+      expect(plan.deliveries).toHaveLength(2);
+      expect(new Set(plan.deliveries.map((item) => item.recipientKey)).size).toBe(2);
+      expect(plan.deliveries.every((item) => /^[a-f0-9]{64}$/.test(item.recipientKey) && item.state === "QUEUED")).toBe(true);
+      expect(JSON.stringify(plan)).not.toContain("0700000001");
+      process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000003";
+      process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENT_KEY_VERSION = "fixture-v2";
+      await p.$transaction((tx) => enqueueApplicationSubmitted(tx, application.id));
+      expect(await p.agentAdminNotificationDelivery.count({ where: { applicationId: application.id } })).toBe(2);
+      expect((await p.agentAdminNotificationPlan.findUniqueOrThrow({ where: { applicationId: application.id } })).recipientKeyVersion).toBe("fixture-v1");
+    } finally {
+      for (const name of names) { if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name]; }
+    }
   });
 
   it("enforces an atomic shared account limit and resets an expired window", async () => {

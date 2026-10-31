@@ -69,6 +69,26 @@ model AgentAdminNotificationEvent {
   application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
   eventType String
   createdAt DateTime @default(now())
+  plan AgentAdminNotificationPlan?
+}
+
+// Recipient identities are keyed hashes, never destinations. No sender or worker exists.
+model AgentAdminNotificationPlan {
+  applicationId String @id
+  event AgentAdminNotificationEvent @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationPlan_event_fkey")
+  recipientKeyVersion String
+  createdAt DateTime @default(now())
+  deliveries AgentAdminNotificationDelivery[]
+}
+
+model AgentAdminNotificationDelivery {
+  applicationId String
+  recipientKey String
+  plan AgentAdminNotificationPlan @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationDelivery_plan_fkey")
+  state String @default("QUEUED")
+  createdAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+  @@index([state, createdAt])
 }
 
 // Immutable storage only. No application path creates accruals or authorizes payouts.

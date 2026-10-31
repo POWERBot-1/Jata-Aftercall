@@ -134,6 +134,7 @@ describe("runtime and schema guards", () => {
       "20261109000000_agent_referral_source",
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
+      "20261112000000_agent_notification_outbox_plan",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -192,6 +193,7 @@ describe("runtime and schema guards", () => {
       "20261109000000_agent_referral_source",
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
+      "20261112000000_agent_notification_outbox_plan",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
