@@ -65,7 +65,10 @@ try {
     // so they can be retrieved without the external artifact blob host. No customer data.
     if(target.name==='classic' && !reduced && row.status===200) {
       const thumbnail=await page.screenshot({type:'jpeg',quality:20,fullPage:false});
-      if(thumbnail.length<=35000) console.log(`::notice title=MOTION_VISUAL_${width}x${height}::${Buffer.from(thumbnail).toString('base64')}`);
+      const encoded=Buffer.from(thumbnail).toString('base64');
+      // GitHub check annotation messages are capped at 4096 bytes; keep every numbered part below it.
+      const chunks=encoded.match(/.{1,3000}/g) || [];
+      if(chunks.length<=20) for(let i=0;i<chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${chunks.length}::${chunks[i]}`);
     }
     if(recorder) await recorder.stop();
     row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector) && row.video && existsSync(path.join(out,row.video)) && statSync(path.join(out,row.video)).size > 0)?'OBSERVED':'FAIL';
