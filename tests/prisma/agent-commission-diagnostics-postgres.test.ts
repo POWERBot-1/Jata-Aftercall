@@ -1,0 +1,70 @@
+/** Synthetic, randomly named schema; all fixtures are dropped together after the test. */
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { Pool } from "pg";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { PRISMA_TEST_DATABASE_URL, realPrismaConfigured } from "../helpers/prisma-client";
+
+const mocks = vi.hoisted(() => ({ session: vi.fn(), client: null as any }));
+vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
+vi.mock("@/lib/db", () => ({ default: { $transaction: (...args: unknown[]) => mocks.client.$transaction(...args) } }));
+import { GET } from "@/app/api/admin/agents/commission-diagnostics/[paymentId]/route";
+
+const schema = `diagnostic_test_${randomUUID().replace(/-/g, "")}`;
+const oldSetting = process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED;
+let pool: Pool;
+const require = createRequire(import.meta.url);
+const request = (id: string) => GET(new Request("https://example.test"), { params: Promise.resolve({ paymentId: id }) });
+
+describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated PostgreSQL and Prisma", () => {
+  beforeAll(async () => {
+    const url = new URL(PRISMA_TEST_DATABASE_URL);
+    if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) throw new Error("Disposable loopback JATA database required");
+    pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
+    await pool.query(`CREATE SCHEMA "${schema}"`);
+    await pool.query(`CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PAID', 'FAILED', 'REFUNDED', 'EXPIRED', 'CANCELLED');
+      CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL);
+      CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY, "reference" TEXT NOT NULL, "status" "PaymentStatus" NOT NULL, "currency" TEXT NOT NULL, "amount" INTEGER NOT NULL);
+      CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY);`);
+    await pool.query(readFileSync("prisma/migrations/20261111000000_agent_commission_ledger/migration.sql", "utf8"));
+    await pool.query(`INSERT INTO "User" VALUES ('admin-1', 'ADMIN'), ('former-admin', 'CUSTOMER');
+      INSERT INTO "Payment" VALUES ('payment-1', 'private-reference', 'REFUNDED', 'KES', 10000), ('payment-2', 'other-reference', 'PAID', 'KES', 20000);
+      INSERT INTO "AgentApplication" VALUES ('agent-1');
+      INSERT INTO "AgentCommissionLedgerEntry" ("id", "paymentId", "agentApplicationId", "entryType", "currency", "amountMinor", "sourceEventId", "policyVersion", "policySnapshot")
+      VALUES ('entry-1', 'payment-1', 'agent-1', 'ACCRUAL', 'KES', 1000, 'fixture-event', 'fixture-v1', '{"fixture":true}');`);
+    const harness = process.env.PRISMA_WASM_HARNESS_DIR;
+    if (harness) {
+      const { PrismaClient } = require(path.join(harness, "generated", "wasm.js"));
+      const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg"));
+      const { Pool: HarnessPool } = require(path.join(harness, "node_modules", "pg"));
+      mocks.client = new PrismaClient({ adapter: new PrismaPg(new HarnessPool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` }), { schema }) });
+    } else {
+      const { PrismaClient } = require("@prisma/client");
+      url.searchParams.set("schema", schema);
+      mocks.client = new PrismaClient({ datasourceUrl: url.toString() });
+    }
+    process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED = "true";
+    mocks.session.mockResolvedValue({ userId: "admin-1", role: "ADMIN" });
+  });
+  afterAll(async () => {
+    if (oldSetting === undefined) delete process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED; else process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED = oldSetting;
+    if (mocks.client) await mocks.client.$disconnect();
+    if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); }
+  });
+  it("reads one payment and ledger in a real repeatable-read transaction, without provider proof", async () => {
+    const response = await request("payment-1");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ scope: "LOCAL_SINGLE_PAYMENT_ONLY", providerVerification: "NOT_CHECKED", refundVerification: "NOT_CHECKED", eligibility: "NOT_CHECKED", entryCount: 1 });
+    expect(body.issueCounts).toMatchObject({ PROVIDER_REFUND_VERIFICATION_REQUIRED: 1, PROVIDER_VERIFICATION_UNAVAILABLE: 1, REFUND_REVERSAL_REVIEW: 1 });
+    expect(JSON.stringify(body)).not.toContain("private-reference");
+    const other = await request("payment-2");
+    expect((await other.json()).entryCount).toBe(0);
+  });
+  it("denies a stale administrator session using the actual database role", async () => {
+    mocks.session.mockResolvedValueOnce({ userId: "former-admin", role: "ADMIN" });
+    expect((await request("payment-1")).status).toBe(403);
+  });
+});
