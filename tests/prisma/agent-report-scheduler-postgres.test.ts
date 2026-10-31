@@ -19,10 +19,10 @@ describe.skipIf(!realPrismaConfigured)("durable report scheduler cursor on dispo
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) throw new Error("Disposable loopback JATA database required");
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
-    await pool.query(`CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY, "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT '2025-12-01'); CREATE TABLE "AgentReferralAttribution" ("referrerApplicationId" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL)`);
-    for (const name of ["20261115000000_agent_referral_report_snapshot", "20261116000000_agent_referral_report_schedule"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
+    await pool.query(`CREATE TABLE "User" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY, "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT '2025-12-01'); CREATE TABLE "AgentReferralAttribution" ("id" TEXT PRIMARY KEY, "referrerApplicationId" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL)`);
+    for (const name of ["20261115000000_agent_referral_report_snapshot", "20261116000000_agent_referral_report_schedule", "20261117000000_agent_referral_report_versions"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
     await pool.query(`INSERT INTO "AgentApplication" ("id", "status", "agentStatus") SELECT 'agent-' || lpad(i::text, 3, '0'), 'PENDING', 'ACTIVE' FROM generate_series(1,25) i; INSERT INTO "AgentApplication" ("id", "status", "agentStatus") VALUES ('suspended', 'PENDING', 'SUSPENDED'); INSERT INTO "AgentApplication" VALUES ('future-agent', 'PENDING', 'ACTIVE', '2026-12-01');`);
-    await pool.query('INSERT INTO "AgentReferralAttribution" VALUES ($1, $2, $3)', ["agent-001", "REGISTRATION", new Date("2026-01-01T12:00:00Z")]);
+    await pool.query('INSERT INTO "AgentReferralAttribution" VALUES ($1, $2, $3, $4)', ["event-1", "agent-001", "REGISTRATION", new Date("2026-01-01T12:00:00Z")]);
     const require = createRequire(import.meta.url); const harness = process.env.PRISMA_WASM_HARNESS_DIR;
     if (harness) {
       const { PrismaClient } = require(path.join(harness, "generated", "wasm.js")); const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg")); const { Pool: AdapterPool } = require(path.join(harness, "node_modules", "pg"));
@@ -37,6 +37,7 @@ describe.skipIf(!realPrismaConfigured)("durable report scheduler cursor on dispo
     const result = await Promise.all([run(), run()]);
     expect(result.map((x: { status: string }) => x.status).sort()).toEqual(["BATCH", "PERIOD_COMPLETE"]);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-01"])).rows[0].n).toBe(25);
+    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportRevision" WHERE "periodKey"=$1 AND "kind"=$2', ["daily:2026-01-01", "BASELINE"])).rows[0].n).toBe(25);
     expect((await pool.query('SELECT "registrationCount" FROM "AgentReferralReportSnapshot" WHERE "applicationId"=$1 AND "periodKey"=$2', ["agent-001", "daily:2026-01-01"])).rows[0].registrationCount).toBe("1");
     await expect(prisma.$transaction(async (tx: typeof prisma) => { await processReferralReportBatch(tx, "DAILY", start, now); throw new Error("synthetic rollback"); })).rejects.toThrow("synthetic rollback");
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-02"])).rows[0].n).toBe(0);

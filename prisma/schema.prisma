@@ -36,6 +36,7 @@ model User {
 
   @@index([email])
   agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
+  referralReportRevisions AgentReferralReportRevision[] @relation("ReferralReportRevisionActor")
 }
 
 // An application is not an agent entitlement. No activation is possible until a trusted,
@@ -134,8 +135,39 @@ model AgentReferralReportSnapshot {
   registrationCount BigInt
   existingApplicationCount BigInt
   createdAt DateTime @default(now())
+  revisions AgentReferralReportRevision[]
   @@id([applicationId, periodKey])
   @@index([applicationId, createdAt])
+}
+
+// Historical evidence is retained by value, including if an attribution is later corrected.
+model AgentReferralReportRevision {
+  applicationId String
+  periodKey String
+  revision Int
+  snapshot AgentReferralReportSnapshot @relation(fields: [applicationId, periodKey], references: [applicationId, periodKey], onDelete: Restrict, map: "AgentReferralReportRevision_snapshot_fkey")
+  kind String
+  actorId String?
+  actor User? @relation("ReferralReportRevisionActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentReferralReportRevision_actor_fkey")
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  addedCount Int @default(0)
+  removedCount Int @default(0)
+  changedCount Int @default(0)
+  createdAt DateTime @default(now())
+  members AgentReferralReportMember[]
+  @@id([applicationId, periodKey, revision])
+}
+
+model AgentReferralReportMember {
+  applicationId String
+  periodKey String
+  revision Int
+  eventId String
+  source String
+  eventCreatedAt DateTime
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Restrict, map: "AgentReferralReportMember_revision_fkey")
+  @@id([applicationId, periodKey, revision, eventId])
 }
 
 // Bounded scheduler cursor; no external scheduling or delivery is enabled by this model.
