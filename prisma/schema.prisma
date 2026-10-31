@@ -91,8 +91,31 @@ model AgentAdminNotificationDelivery {
   state String @default("QUEUED")
   createdAt DateTime @default(now())
   claimState AgentAdminNotificationClaimState?
+  attemptsHistory AgentAdminNotificationAttempt[]
   @@id([applicationId, recipientKey])
   @@index([state, createdAt])
+}
+
+// Durable provider attempt and callback history; acceptance is not proof of delivery.
+model AgentAdminNotificationAttempt {
+  applicationId String
+  recipientKey String
+  attempt Int
+  outcome String
+  providerKey String
+  messageId String? @unique
+  createdAt DateTime @default(now())
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationAttempt_delivery_fkey")
+  callbacks AgentAdminNotificationCallback[]
+  @@id([applicationId, recipientKey, attempt])
+}
+
+model AgentAdminNotificationCallback {
+  eventId String @id
+  messageId String
+  status String
+  createdAt DateTime @default(now())
+  attempt AgentAdminNotificationAttempt @relation(fields: [messageId], references: [messageId], onDelete: Restrict, map: "AgentAdminNotificationCallback_message_fkey")
 }
 
 // Internal claim state only; there is no delivery worker or provider integration.
