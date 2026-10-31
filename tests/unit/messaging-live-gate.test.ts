@@ -19,6 +19,7 @@ import {
   registerProvider,
   resetProviderRegistry,
   verifyHmacSignature,
+  signCallback,
   type MessagingProviderAdapter,
   type SendRequest,
 } from "@/lib/messaging/providers";
@@ -96,6 +97,24 @@ describe("live messaging gate", () => {
     expect(sandbox instanceof MockMessagingProvider).toBe(true);
     // The registry hands back the same key it was asked for, and the sandbox is registered as such.
     expect(getMessagingProvider("mock").key).toBe("mock");
+  });
+
+  it("accepts only a complete SHA-256 HMAC, rejecting malformed hex and replay over changed bytes", () => {
+    const secret = "fixture-secret-not-a-production-credential";
+    const body = '{"events":[{"id":"fixture"}]}';
+    const signature = signCallback(body, secret);
+    for (const valid of [signature, signature.toUpperCase(), `sha256=${signature}`]) {
+      expect(verifyHmacSignature(body, { "x-signature": valid }, secret).ok).toBe(true);
+    }
+    for (const invalid of [signature + "zz", signature + "0", signature + "00", signature.slice(0, -1), "0" + signature.slice(1), `sha256=${signature}garbage`, ` ${signature}`, `${signature}\n`]) {
+      expect(verifyHmacSignature(body, { "x-signature": invalid }, secret).ok).toBe(false);
+    }
+    expect(verifyHmacSignature(body, { "x-jata-signature": signature }, secret).ok).toBe(true);
+    expect(verifyHmacSignature(body, { "x-hub-signature-256": `sha256=${signature}` }, secret).ok).toBe(true);
+    expect(verifyHmacSignature(body, { "x-jata-signature": signature + "zz" }, secret).ok).toBe(false);
+    expect(verifyHmacSignature(body, { "x-hub-signature-256": `sha256=${signature}0` }, secret).ok).toBe(false);
+    expect(verifyHmacSignature(body + " ", { "x-signature": signature }, secret).ok).toBe(false);
+    expect(verifyHmacSignature(body, { "x-signature": signature }, "different-key").ok).toBe(false);
   });
 
   it("a callback with no secret is rejected even when a live adapter claims to verify it", () => {

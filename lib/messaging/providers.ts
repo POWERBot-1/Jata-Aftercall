@@ -214,9 +214,11 @@ export function verifyHmacSignature(
   const provided = headers["x-signature"] ?? headers["x-jata-signature"] ?? headers["x-hub-signature-256"];
   if (!provided) return { ok: false, reason: "The callback has no signature." };
   const value = provided.startsWith("sha256=") ? provided.slice(7) : provided;
-  const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
+  // Buffer.from(value, "hex") silently truncates at invalid characters and ignores odd nibbles.
+  // Validate the complete wire value before decoding; never accept a valid prefix plus junk.
+  if (value.length !== 64 || !/^[0-9a-f]{64}$/i.test(value)) return { ok: false, reason: "The callback signature is malformed." };
   const a = Buffer.from(value, "hex");
-  const b = Buffer.from(expected, "hex");
+  const b = createHmac("sha256", secret).update(rawBody, "utf8").digest();
   if (a.length !== b.length) return { ok: false, reason: "The callback signature does not match." };
   return timingSafeEqual(a, b) ? { ok: true, reason: "Verified." } : { ok: false, reason: "The callback signature does not match." };
 }
