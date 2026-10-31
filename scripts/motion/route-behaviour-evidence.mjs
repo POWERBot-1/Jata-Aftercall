@@ -16,7 +16,7 @@ let browserVersion='unavailable';
 try {
  const business=await db.business.findUniqueOrThrow({where:{slug:'marys-beauty-studio'},select:{id:true,slug:true}});
  const product=await db.product.findFirstOrThrow({where:{businessId:business.id,isActive:true},select:{id:true}});
- browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});browserVersion=await browser.version();
+ browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,protocolTimeout:120000,args:['--no-sandbox','--disable-dev-shm-usage']});browserVersion=await browser.version();
  const owner=await browser.newPage();await owner.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
  const login=await owner.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password:'Demo1234!'})});return r.status;});if(login!==200) throw Error(`fixture login ${login}`);
  const api=(url,method='GET',data)=>owner.evaluate(async(url,method,data)=>{const r=await fetch(url,{method,headers:data?{'content-type':'application/json'}:{},body:data?JSON.stringify(data):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,data);
@@ -33,7 +33,7 @@ try {
  for(const target of [{name:'storefront',route:routeBase},{name:'shop',route:`${routeBase}/shop`},{name:'item',route:`${routeBase}/item/${product.id}`},{name:'checkout',route:`${routeBase}/checkout`},{name:'ai-preview',route:`${routeBase}/ai?preview=true`,auth:true}]){
   for(const [width,height] of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
    const p=target.auth?owner:page;
-   await p.setViewport({width,height,deviceScaleFactor:1});await p.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+   await p.bringToFront();await p.setViewport({width,height,deviceScaleFactor:1});await p.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
    const response=await p.goto(new URL(target.route,base).href,{waitUntil:'domcontentloaded',timeout:45000});
    const selector=target.auth?'.jata-ai-motion':'.eb-scope';await p.waitForFunction(s=>document.querySelector(s)?.dataset.renderMode,{timeout:10000},selector).catch(()=>{});
    await p.evaluate(async()=>{for(const e of document.querySelectorAll('[data-motion-recipe]')){e.scrollIntoView({block:'center',behavior:'instant'});await new Promise(r=>setTimeout(r,120));}await new Promise(r=>setTimeout(r,650));});
@@ -44,7 +44,7 @@ try {
  }
  // Actual owner preference and OS preference are applied independently through the real draft API.
  for(const widthHeight of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
-  const [width,height]=widthHeight;await owner.setViewport({width,height,deviceScaleFactor:1});
+  const [width,height]=widthHeight;await owner.bringToFront();await owner.setViewport({width,height,deviceScaleFactor:1});
   for(const setting of [{name:'owner-lite',preference:'lite',reduced:false},{name:'os-reduced',preference:'motion',reduced:true}]){
    await setPreference(setting.preference);await owner.emulateMediaFeatures([{name:'prefers-reduced-motion',value:setting.reduced?'reduce':'no-preference'}]);
    const route=`${routeBase}?preview=draft`;const response=await owner.goto(new URL(route,base).href,{waitUntil:'domcontentloaded'});
