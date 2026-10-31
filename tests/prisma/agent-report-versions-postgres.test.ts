@@ -12,14 +12,22 @@ describe.skipIf(!realPrismaConfigured)("referral report version migration on dis
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) throw new Error("Disposable loopback JATA database required");
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
-    await pool.query('CREATE TABLE "User" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentReferralAttribution" ("id" TEXT PRIMARY KEY, "referrerApplicationId" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL)');
+    await pool.query('CREATE TABLE "User" ("id" TEXT PRIMARY KEY); CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY, "agentStatus" TEXT NOT NULL DEFAULT \'INACTIVE\'); CREATE TABLE "AgentReferralAttribution" ("id" TEXT PRIMARY KEY, "referrerApplicationId" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL)');
     await pool.query(readFileSync("prisma/migrations/20261115000000_agent_referral_report_snapshot/migration.sql", "utf8"));
-    await pool.query(`INSERT INTO "AgentApplication" VALUES ('agent'); INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-01', 'DAILY', '2025-12-31 21:00:00', '2026-01-01 21:00:00', 3, 0)`);
+    await pool.query(`INSERT INTO "AgentApplication" ("id", "agentStatus") VALUES ('agent', 'ACTIVE'), ('suspended-agent', 'SUSPENDED'); INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-01', 'DAILY', '2025-12-31 21:00:00', '2026-01-01 21:00:00', 3, 0)`);
     await pool.query(readFileSync("prisma/migrations/20261117000000_agent_referral_report_versions/migration.sql", "utf8"));
+    const migration = readFileSync("prisma/migrations/20261119000000_agent_referral_evidence_immutability/migration.sql", "utf8");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN"); await client.query(migration); await client.query("ROLLBACK");
+      expect((await client.query(`SELECT count(*)::int AS n FROM pg_trigger WHERE tgname = 'AgentReferralReportSnapshot_immutable' AND tgrelid = '"AgentReferralReportSnapshot"'::regclass`)).rows[0].n).toBe(0);
+      await client.query("BEGIN"); await client.query(migration); await client.query("COMMIT");
+    } finally { client.release(); }
   });
   afterAll(async () => { if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); } });
   it("does not invent a baseline for pre-migration count-only reports", async () => {
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportRevision"')).rows[0].n).toBe(0);
+    expect((await pool.query('SELECT "agentStatus" FROM "AgentApplication" ORDER BY "id"')).rows).toEqual([{ agentStatus: "ACTIVE" }, { agentStatus: "SUSPENDED" }]);
     expect((await pool.query('SELECT "registrationCount" FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-01"])).rows[0].registrationCount).toBe("3");
   });
   it("captures baseline members atomically and rejects mismatched totals", async () => {
@@ -29,5 +37,19 @@ describe.skipIf(!realPrismaConfigured)("referral report version migration on dis
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-03', 'DAILY', '2026-01-02 21:00:00', '2026-01-03 21:00:00', 1, 0)`)).rejects.toThrow(/baseline membership mismatch/);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-03"])).rows[0].n).toBe(0);
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-04', 'DAILY', '2026-01-03 21:00:00', '2026-01-04 21:00:00', 5001, 0)`)).rejects.toThrow(/exceeds membership limit/);
+  });
+  it("prevents ordinary revision, member and snapshot edits while allowing append-only revisions", async () => {
+    const mutations = [
+      `UPDATE "AgentReferralReportSnapshot" SET "registrationCount" = 999 WHERE "periodKey" = 'daily:2026-01-02'`,
+      `DELETE FROM "AgentReferralReportSnapshot" WHERE "periodKey" = 'daily:2026-01-01'`,
+      `UPDATE "AgentReferralReportRevision" SET "registrationCount" = 999 WHERE "periodKey" = 'daily:2026-01-02'`,
+      `DELETE FROM "AgentReferralReportRevision" WHERE "periodKey" = 'daily:2026-01-02'`,
+      `UPDATE "AgentReferralReportMember" SET "source" = 'EXISTING_ACCOUNT' WHERE "periodKey" = 'daily:2026-01-02'`,
+      `DELETE FROM "AgentReferralReportMember" WHERE "periodKey" = 'daily:2026-01-02'`,
+    ];
+    for (const sql of mutations) await expect(pool.query(sql)).rejects.toThrow(/Referral report evidence is immutable/);
+    await pool.query(`INSERT INTO "User" VALUES ('actor'); INSERT INTO "AgentReferralReportRevision" ("applicationId", "periodKey", "revision", "kind", "actorId", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-02', 2, 'RECONCILED', 'actor', 1, 0); INSERT INTO "AgentReferralReportMember" ("applicationId", "periodKey", "revision", "eventId", "source", "eventCreatedAt") VALUES ('agent', 'daily:2026-01-02', 2, 'e1', 'REGISTRATION', '2026-01-02 12:00:00')`);
+    expect((await pool.query(`SELECT "revision" FROM "AgentReferralReportRevision" WHERE "periodKey" = 'daily:2026-01-02' ORDER BY "revision"`)).rows).toEqual([{ revision: 1 }, { revision: 2 }]);
+    expect((await pool.query(`SELECT "registrationCount" FROM "AgentReferralReportSnapshot" WHERE "periodKey" = 'daily:2026-01-01'`)).rows[0].registrationCount).toBe('3');
   });
 });

@@ -27,6 +27,7 @@ const p = realPrismaConfigured ? sharedPrisma() : null;
 const users: string[] = [];
 const throttleKeys: string[] = [];
 const originalSecret = process.env.AUTH_SECRET;
+let disposableDatabaseVerified = false;
 const body = { fullName: "Synthetic Applicant", phone: "0712345678", privacyAccepted: true };
 const request = (url: string, data: unknown) => new Request(`https://agent.test${url}`, {
   method: "POST", headers: { host: "agent.test", origin: "https://agent.test", "content-type": "application/json" }, body: JSON.stringify(data),
@@ -40,17 +41,28 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) {
       throw new Error("Agent integration tests require a loopback disposable JATA test database.");
     }
+    disposableDatabaseVerified = true;
   });
   afterAll(async () => {
-    if (!p) return;
+    if (!p || !disposableDatabaseVerified) return;
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
     const userKeys = users.map((id) => createHmac("sha256", secret).update(`agent-application-account:v1:${id}`).digest("hex"));
     if (throttleKeys.length || userKeys.length) await p.agentRegistrationThrottle.deleteMany({ where: { key: { in: [...throttleKeys, ...userKeys] } } });
     if (originalSecret === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = originalSecret;
     await p.auditEvent.deleteMany({ where: { actorId: { in: users } } });
-    await p.agentReferralReportMember.deleteMany({ where: { reportRevision: { snapshot: { application: { userId: { in: users } } } } } });
-    await p.agentReferralReportRevision.deleteMany({ where: { snapshot: { application: { userId: { in: users } } } } });
-    await p.agentReferralReportSnapshot.deleteMany({ where: { application: { userId: { in: users } } } });
+    // Only disposable loopback fixtures. Transactional DDL takes table locks, and rollback on
+    // error or process loss restores the guards. Never disable these triggers in production.
+    await p.$transaction(async (tx: typeof p) => {
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportMember" DISABLE TRIGGER "AgentReferralReportMember_immutable"`;
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportRevision" DISABLE TRIGGER "AgentReferralReportRevision_immutable"`;
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportSnapshot" DISABLE TRIGGER "AgentReferralReportSnapshot_immutable"`;
+      await tx.agentReferralReportMember.deleteMany({ where: { reportRevision: { snapshot: { application: { userId: { in: users } } } } } });
+      await tx.agentReferralReportRevision.deleteMany({ where: { snapshot: { application: { userId: { in: users } } } } });
+      await tx.agentReferralReportSnapshot.deleteMany({ where: { application: { userId: { in: users } } } });
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportSnapshot" ENABLE TRIGGER "AgentReferralReportSnapshot_immutable"`;
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportRevision" ENABLE TRIGGER "AgentReferralReportRevision_immutable"`;
+      await tx.$executeRaw`ALTER TABLE "AgentReferralReportMember" ENABLE TRIGGER "AgentReferralReportMember_immutable"`;
+    });
     await p.agentReferralAttribution.deleteMany({ where: { OR: [{ referrer: { userId: { in: users } } }, { referred: { userId: { in: users } } }] } });
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
