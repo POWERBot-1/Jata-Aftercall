@@ -16,27 +16,65 @@ describe.skipIf(!realPrismaConfigured)("referral report version migration on dis
     await pool.query(readFileSync("prisma/migrations/20261115000000_agent_referral_report_snapshot/migration.sql", "utf8"));
     await pool.query(`INSERT INTO "AgentApplication" ("id", "agentStatus") VALUES ('agent', 'ACTIVE'), ('suspended-agent', 'SUSPENDED'); INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-01', 'DAILY', '2025-12-31 21:00:00', '2026-01-01 21:00:00', 3, 0)`);
     await pool.query(readFileSync("prisma/migrations/20261117000000_agent_referral_report_versions/migration.sql", "utf8"));
+    // Existing member-bearing revisions are frozen, without new members or reconstructed history.
+    await pool.query(`INSERT INTO "AgentReferralAttribution" VALUES ('old-evidence', 'agent', 'REGISTRATION', '2026-01-01 12:00:00'); INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-05', 'DAILY', '2025-12-31 21:00:00', '2026-01-01 21:00:00', 1, 0)`);
     const migration = readFileSync("prisma/migrations/20261119000000_agent_referral_evidence_immutability/migration.sql", "utf8");
     const client = await pool.connect();
     try {
       await client.query("BEGIN"); await client.query(migration); await client.query("ROLLBACK");
       expect((await client.query(`SELECT count(*)::int AS n FROM pg_trigger WHERE tgname = 'AgentReferralReportSnapshot_immutable' AND tgrelid = '"AgentReferralReportSnapshot"'::regclass`)).rows[0].n).toBe(0);
       await client.query("BEGIN"); await client.query(migration); await client.query("COMMIT");
+      await client.query(readFileSync("prisma/migrations/20261120000000_agent_referral_revision_write_fence/migration.sql", "utf8"));
     } finally { client.release(); }
   });
   afterAll(async () => { if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); } });
   it("does not invent a baseline for pre-migration count-only reports", async () => {
-    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportRevision"')).rows[0].n).toBe(0);
+    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportRevision" WHERE "periodKey"=$1', ['daily:2026-01-01'])).rows[0].n).toBe(0);
     expect((await pool.query('SELECT "agentStatus" FROM "AgentApplication" ORDER BY "id"')).rows).toEqual([{ agentStatus: "ACTIVE" }, { agentStatus: "SUSPENDED" }]);
     expect((await pool.query('SELECT "registrationCount" FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-01"])).rows[0].registrationCount).toBe("3");
+  });
+  it("seals pre-existing and newly committed membership without backfilling", async () => {
+    const insert = `INSERT INTO "AgentReferralReportMember" ("applicationId", "periodKey", "revision", "eventId", "source", "eventCreatedAt") VALUES ('agent', $1, 1, 'added-later', 'REGISTRATION', now())`;
+    await expect(pool.query(insert, ['daily:2026-01-05'])).rejects.toThrow(/membership is sealed/);
+    expect((await pool.query(`SELECT "eventId" FROM "AgentReferralReportMember" WHERE "periodKey" = 'daily:2026-01-05'`)).rows).toEqual([{ eventId: 'old-evidence' }]);
+    await expect(pool.query(`INSERT INTO "AgentReferralReportRevisionWriteFence" VALUES ('agent', 'daily:2026-01-05', 1, pg_current_xact_id()::text)`)).rejects.toThrow(/cannot be inserted directly/);
   });
   it("captures baseline members atomically and rejects mismatched totals", async () => {
     await pool.query(`INSERT INTO "AgentReferralAttribution" VALUES ('e1', 'agent', 'REGISTRATION', '2026-01-02 12:00:00')`);
     await pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-02', 'DAILY', '2026-01-01 21:00:00', '2026-01-02 21:00:00', 1, 0)`);
     expect((await pool.query('SELECT "eventId", "source" FROM "AgentReferralReportMember" WHERE "periodKey"=$1', ["daily:2026-01-02"])).rows).toEqual([{ eventId: "e1", source: "REGISTRATION" }]);
+    await expect(pool.query(`INSERT INTO "AgentReferralReportMember" VALUES ('agent', 'daily:2026-01-02', 1, 'late', 'REGISTRATION', now())`)).rejects.toThrow(/membership is sealed/);
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-03', 'DAILY', '2026-01-02 21:00:00', '2026-01-03 21:00:00', 1, 0)`)).rejects.toThrow(/baseline membership mismatch/);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-03"])).rows[0].n).toBe(0);
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-04', 'DAILY', '2026-01-03 21:00:00', '2026-01-04 21:00:00', 5001, 0)`)).rejects.toThrow(/exceeds membership limit/);
+  });
+  it("allows membership only inside the revision creation transaction, including savepoints", async () => {
+    const writer = await pool.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query(`INSERT INTO "User" VALUES ('savepoint-actor')`);
+      await writer.query(`INSERT INTO "AgentReferralReportRevision" ("applicationId", "periodKey", "revision", "kind", "actorId", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-05', 2, 'RECONCILED', 'savepoint-actor', 1, 0)`);
+      await writer.query('SAVEPOINT nested');
+      await writer.query(`INSERT INTO "AgentReferralReportMember" VALUES ('agent', 'daily:2026-01-05', 2, 'new-evidence', 'REGISTRATION', now())`);
+      await writer.query('RELEASE SAVEPOINT nested');
+      await writer.query('COMMIT');
+    } finally { writer.release(); }
+    await expect(pool.query(`INSERT INTO "AgentReferralReportMember" VALUES ('agent', 'daily:2026-01-05', 2, 'after-commit', 'REGISTRATION', now())`)).rejects.toThrow(/membership is sealed/);
+    await expect(pool.query(`UPDATE "AgentReferralReportRevisionWriteFence" SET "transactionId" = pg_current_xact_id()::text WHERE "periodKey" = 'daily:2026-01-05' AND "revision" = 2`)).rejects.toThrow(/evidence is immutable/);
+  });
+  it("refuses a competing transaction trying to append to an uncommitted revision", async () => {
+    const writer = await pool.connect(); const competitor = await pool.connect();
+    try {
+      await writer.query('BEGIN'); await writer.query(`INSERT INTO "User" VALUES ('concurrent-actor')`);
+      await writer.query(`INSERT INTO "AgentReferralReportRevision" ("applicationId", "periodKey", "revision", "kind", "actorId", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-05', 3, 'RECONCILED', 'concurrent-actor', 1, 0)`);
+      await writer.query(`INSERT INTO "AgentReferralReportMember" VALUES ('agent', 'daily:2026-01-05', 3, 'owned', 'REGISTRATION', now())`);
+      const competingInsert = competitor.query(`INSERT INTO "AgentReferralReportMember" VALUES ('agent', 'daily:2026-01-05', 3, 'foreign', 'REGISTRATION', now())`);
+      // Attach a handler immediately in case PostgreSQL rejects the invisible parent before commit.
+      const outcome = competingInsert.then(() => 'unexpected success', (error: Error) => error.message);
+      await writer.query('COMMIT');
+      expect(await outcome).toMatch(/unavailable|sealed/);
+      expect((await pool.query(`SELECT "eventId" FROM "AgentReferralReportMember" WHERE "periodKey" = 'daily:2026-01-05' AND "revision" = 3`)).rows).toEqual([{ eventId: 'owned' }]);
+    } finally { writer.release(); competitor.release(); }
   });
   it("prevents ordinary revision, member and snapshot edits while allowing append-only revisions", async () => {
     const mutations = [

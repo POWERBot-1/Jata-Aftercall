@@ -156,6 +156,17 @@ model AgentReferralReportRevision {
   changedCount Int @default(0)
   createdAt DateTime @default(now())
   members AgentReferralReportMember[]
+  writeFence AgentReferralReportRevisionWriteFence?
+  @@id([applicationId, periodKey, revision])
+}
+
+// Internal transaction fence; absent for revisions created before the fence migration.
+model AgentReferralReportRevisionWriteFence {
+  applicationId String
+  periodKey String
+  revision Int
+  transactionId String
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Cascade, map: "AgentReferralReportRevisionWriteFence_revision_fkey")
   @@id([applicationId, periodKey, revision])
 }
 
