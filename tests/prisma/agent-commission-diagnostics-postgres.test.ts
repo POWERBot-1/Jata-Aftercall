@@ -7,13 +7,17 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PRISMA_TEST_DATABASE_URL, realPrismaConfigured } from "../helpers/prisma-client";
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), client: null as any }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), provider: vi.fn(), client: null as any }));
+vi.mock("@/lib/agents/paystack-sandbox-diagnostics", () => ({ readSandboxTransaction: mocks.provider }));
 vi.mock("@/lib/auth", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/db", () => ({ default: { $transaction: (...args: unknown[]) => mocks.client.$transaction(...args) } }));
 import { GET } from "@/app/api/admin/agents/commission-diagnostics/[paymentId]/route";
+import { POST as sandboxDiagnostic } from "@/app/api/admin/agents/commission-diagnostics/[paymentId]/sandbox/route";
 
 const schema = `diagnostic_test_${randomUUID().replace(/-/g, "")}`;
 const oldSetting = process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED;
+const oldSandboxSetting = process.env.AGENT_COMMISSION_SANDBOX_DIAGNOSTICS_ENABLED;
+const oldSandboxSecret = process.env.AGENT_COMMISSION_PAYSTACK_TEST_SECRET;
 let pool: Pool;
 const require = createRequire(import.meta.url);
 const request = (id: string) => GET(new Request("https://example.test"), { params: Promise.resolve({ paymentId: id }) });
@@ -46,10 +50,15 @@ describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated Pos
       mocks.client = new PrismaClient({ datasourceUrl: url.toString() });
     }
     process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED = "true";
+    process.env.AGENT_COMMISSION_SANDBOX_DIAGNOSTICS_ENABLED = "true";
+    process.env.AGENT_COMMISSION_PAYSTACK_TEST_SECRET = "sk_test_fixture";
+    mocks.provider.mockResolvedValue({ transactionId: "123", reference: "private-reference", status: "success", currency: "KES", amountMinor: BigInt(10000) });
     mocks.session.mockResolvedValue({ userId: "admin-1", role: "ADMIN" });
   });
   afterAll(async () => {
     if (oldSetting === undefined) delete process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED; else process.env.AGENT_COMMISSION_DIAGNOSTICS_ENABLED = oldSetting;
+    if (oldSandboxSetting === undefined) delete process.env.AGENT_COMMISSION_SANDBOX_DIAGNOSTICS_ENABLED; else process.env.AGENT_COMMISSION_SANDBOX_DIAGNOSTICS_ENABLED = oldSandboxSetting;
+    if (oldSandboxSecret === undefined) delete process.env.AGENT_COMMISSION_PAYSTACK_TEST_SECRET; else process.env.AGENT_COMMISSION_PAYSTACK_TEST_SECRET = oldSandboxSecret;
     if (mocks.client) await mocks.client.$disconnect();
     if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); }
   });
@@ -62,6 +71,15 @@ describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated Pos
     expect(JSON.stringify(body)).not.toContain("private-reference");
     const other = await request("payment-2");
     expect((await other.json()).entryCount).toBe(0);
+  });
+  it("compares a synthetic provider fixture with a real local ledger without calling Paystack", async () => {
+    const request = new Request("https://example.test", { method: "POST", headers: { origin: "https://example.test", host: "example.test" } });
+    const response = await sandboxDiagnostic(request, { params: Promise.resolve({ paymentId: "payment-1" }) });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ scope: "SANDBOX_SINGLE_PAYMENT_ONLY", providerVerification: "SANDBOX_RESPONSE_RECEIVED", refundVerification: "NOT_CHECKED", eligibility: "NOT_CHECKED", entryCount: 1 });
+    expect(body.issueCounts).toMatchObject({ PROVIDER_REFUND_VERIFICATION_REQUIRED: 1, REFUND_REVERSAL_REVIEW: 1 });
+    expect(mocks.provider).toHaveBeenCalledWith("private-reference");
   });
   it("denies a stale administrator session using the actual database role", async () => {
     mocks.session.mockResolvedValueOnce({ userId: "former-admin", role: "ADMIN" });
