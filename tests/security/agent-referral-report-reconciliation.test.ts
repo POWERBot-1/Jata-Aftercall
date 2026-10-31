@@ -37,6 +37,23 @@ describe("own-agent referral report reconciliation", () => {
     expect(m.one.mock.calls[0][0].where.applicationId_periodKey_revision.applicationId).toBe("own-app");
     expect(m.execute).toHaveBeenCalledOnce();
   });
+  it("paginates large retained revisions only within the authenticated agent", async () => {
+    m.query.mockReset(); m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ status: "MATCHED" }]);
+    const members = Array.from({ length: 5001 }, (_, i) => ({ eventId: `event-${String(i).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: date }));
+    m.one.mockResolvedValueOnce({ ...prior, members, kind: "BASELINE", createdAt: date, addedCount: 0, removedCount: 0, changedCount: 0 });
+    const response = await GET(new Request("https://agent.test/api/agents/reports/referrals/reconcile?periodKey=daily%3A2026-01-01&revision=1&after=event-00000"));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.members).toHaveLength(5000);
+    expect(body.nextCursor).toBe("event-04999");
+    expect(body.sales).toBe("NOT_CHECKED");
+    expect(m.one.mock.calls[0][0]).toMatchObject({ where: { applicationId_periodKey_revision: { applicationId: "own-app" } }, include: { members: { where: { eventId: { gt: "event-00000" } }, take: 5001 } } });
+  });
+  it("rejects duplicate, malformed or cross-tenant pagination parameters", async () => {
+    const base = "https://agent.test/api/agents/reports/referrals/reconcile?periodKey=daily%3A2026-01-01&revision=1";
+    for (const extra of ["&after=", "&after=../bad", "&after=x&after=y", "&applicationId=other"]) expect((await GET(new Request(base + extra))).status).toBe(400);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
   it("fails closed for legacy snapshots or unbounded membership", async () => {
     m.prior.mockResolvedValueOnce(null); expect((await POST(request())).status).toBe(409); expect(m.current).not.toHaveBeenCalled();
     m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ startInclusive: date, endExclusive: new Date("2026-01-02T12:00:00Z") }]);

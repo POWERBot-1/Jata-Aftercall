@@ -72,15 +72,19 @@ export async function GET(req: Request) {
   if (!rateLimitByIdentity(session.userId, { key: "agent-referral-report-revision-read", max: 30, windowMs: 60_000 }).allowed) return message("Rate limit exceeded.", 429);
   const query = new URL(req.url).searchParams;
   const periodKey = query.get("periodKey"); const revisionText = query.get("revision");
-  if ([...query.keys()].length !== 2 || !periodKey || !/^(?:daily:\d{4}-\d{2}-\d{2}|monthly:\d{4}-\d{2})$/.test(periodKey) || !revisionText || !/^[1-9]\d{0,8}$/.test(revisionText)) return message("Invalid request.", 400);
+  const after = query.get("after");
+  // A cursor is an opaque retained event id, never an application or tenant selector.
+  if ([...query.keys()].some((key) => !["periodKey", "revision", "after"].includes(key)) ||
+      query.getAll("periodKey").length !== 1 || query.getAll("revision").length !== 1 || query.getAll("after").length > 1 ||
+      (after !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(after)) ||
+      !periodKey || !/^(?:daily:\d{4}-\d{2}-\d{2}|monthly:\d{4}-\d{2})$/.test(periodKey) || !revisionText || !/^[1-9]\d{0,8}$/.test(revisionText)) return message("Invalid request.", 400);
   const revision = Number(revisionText);
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const applications: Array<{ id: string }> = await tx.$queryRaw`SELECT "id" FROM "AgentApplication" WHERE "userId" = ${session.userId} AND "status" = 'PENDING' AND "agentStatus" = 'ACTIVE' FOR SHARE`;
       if (applications.length !== 1) return { kind: "forbidden" as const };
-      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
+      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { ...(after ? { where: { eventId: { gt: after } } } : {}), orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
       if (!report) return { kind: "missing" as const };
-      if (report.members.length > MAX_MEMBERS) return { kind: "too_large" as const };
       // A historical revision can differ from current evidence even when its own data is intact.
       // Inspection is bounded by database timeouts and never silently changes the revision.
       await tx.$executeRaw`SET LOCAL statement_timeout = '5s'`;
@@ -89,8 +93,9 @@ export async function GET(req: Request) {
     });
     if (result.kind === "forbidden") return message("An active agent account is required.", 403);
     if (result.kind === "missing") return message("Report revision not found.", 404);
-    if (result.kind === "too_large") return message("Report exceeds the inspection limit; manual review is required.", 409);
     const row = result.report;
-    return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, evidenceStatus: result.evidenceStatus, members: row.members.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
+    const page = row.members.slice(0, MAX_MEMBERS);
+    const nextCursor = row.members.length > MAX_MEMBERS ? page[page.length - 1].eventId : null;
+    return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, evidenceStatus: result.evidenceStatus, nextCursor, members: page.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
   } catch { return unavailable(); }
 }
