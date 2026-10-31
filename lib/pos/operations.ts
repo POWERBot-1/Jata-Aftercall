@@ -477,39 +477,63 @@ export async function receivePurchase(params: {
   if (!configuration.suppliers.enabled) return failure("SUPPLIERS_OFF", "Purchases are switched off for this business.");
   if (!actorCan(actor, "CREATE_PURCHASE")) return failure("NOT_ALLOWED", "You don't have permission to receive stock.");
 
-  const purchase = await store.findPurchase(businessId, text(params.purchaseId, 64) ?? "", client);
-  if (!purchase) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
-  if (purchase.status === "CANCELLED") return failure("CANCELLED", "That purchase order was cancelled.", warnings);
-
-  // Receiving moves stock; stock moves only where the actor's scope allows it (§16, §75).
-  // An order placed at a different location than a branch-bound actor's is refused rather than
-  // silently received into someone else's stock room.
-  if (actor.branchId && purchase.branchId && purchase.branchId !== actor.branchId) {
-    return failure("BRANCH_OUT_OF_SCOPE", "That order belongs to a different location than the one you are assigned to.", warnings);
-  }
+  const initial = await store.findPurchase(businessId, text(params.purchaseId, 64) ?? "", client);
+  if (!initial) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
 
   const requested = new Map<string, number>(
     (params.items ?? []).filter((item) => item && typeof item === "object").map((item) => [String(item.purchaseItemId), quantity(item.quantity)] as [string, number]),
   );
-
-  const lines: { item: any; amount: number }[] = [];
-  for (const item of purchase.items ?? []) {
-    const outstanding = Math.max(0, Number(item.quantity ?? 0) - Number(item.receivedQty ?? 0));
-    if (outstanding <= 0) continue;
-    const asked = requested.size ? requested.get(item.id) ?? 0 : outstanding;
-    const amount = configuration.suppliers.partialReceiving ? Math.min(asked, outstanding) : asked >= outstanding ? outstanding : 0;
-    if (amount <= 0) continue;
-    lines.push({ item, amount });
-  }
-  if (!lines.length) return failure("NOTHING_TO_RECEIVE", "Everything on that order has already been received.", warnings);
-  if (requested.size && !configuration.suppliers.partialReceiving) {
-    warnings.push("Partial receiving is switched off, so the full outstanding quantity was received.");
-  }
-
-  const receivedValue = lines.reduce((total, line) => total + Math.round(Number(line.item.unitCostKES ?? 0) * line.amount), 0);
   const paymentAmount = params.payment ? sanitizeAmountKES(params.payment.amountKES) : 0;
+  if (paymentAmount > 0 && !actorCan(actor, "RECORD_SUPPLIER_PAYMENT")) {
+    return failure("NOT_ALLOWED", "You don't have permission to pay a supplier.", warnings);
+  }
 
-  const updated = await inTransaction(params.client, async (tx: PosClient) => {
+  return inTransaction(params.client, async (tx: PosClient) => {
+    // Receipt decisions and item updates must share the same locked, current purchase. A
+    // stale snapshot here can create duplicate stock movements and payments under concurrency.
+    if (tx.$queryRaw) {
+      await tx.$queryRaw`SELECT 1 FROM "PosPurchase" WHERE "id" = ${initial.id} AND "businessId" = ${businessId} FOR UPDATE`;
+    }
+    const purchase = await store.findPurchase(businessId, initial.id, tx);
+    if (!purchase) return failure("PURCHASE_NOT_FOUND", "That purchase order was not found.", warnings);
+    if (purchase.status === "CANCELLED") return failure("CANCELLED", "That purchase order was cancelled.", warnings);
+    if (actor.branchId && purchase.branchId && purchase.branchId !== actor.branchId) {
+      return failure("BRANCH_OUT_OF_SCOPE", "That order belongs to a different location than the one you are assigned to.", warnings);
+    }
+
+    const lines: { item: any; amount: number }[] = [];
+    for (const item of purchase.items ?? []) {
+      const outstanding = Math.max(0, Number(item.quantity ?? 0) - Number(item.receivedQty ?? 0));
+      if (outstanding <= 0) continue;
+      const asked = requested.size ? requested.get(item.id) ?? 0 : outstanding;
+      const amount = configuration.suppliers.partialReceiving ? Math.min(asked, outstanding) : asked >= outstanding ? outstanding : 0;
+      if (amount > 0) lines.push({ item, amount });
+    }
+    if (!lines.length) return failure("NOTHING_TO_RECEIVE", "Everything on that order has already been received.", warnings);
+    if (requested.size && !configuration.suppliers.partialReceiving) {
+      warnings.push("Partial receiving is switched off, so the full outstanding quantity was received.");
+    }
+    const receivedValue = lines.reduce((total, line) => total + Math.round(Number(line.item.unitCostKES ?? 0) * line.amount), 0);
+    let supplier: any = null;
+    if (paymentAmount > 0) {
+      if (!purchase.supplierId) return failure("SUPPLIER_REQUIRED", "Choose a supplier before recording a payment.", warnings);
+      if (paymentAmount > Math.max(0, Number(purchase.totalKES ?? 0) - Number(purchase.paidKES ?? 0))) {
+        return failure("PAYMENT_INVALID", "The payment cannot exceed the unpaid purchase amount.", warnings);
+      }
+      // Both the receipt and the direct supplier-payment path lock the same row. Revalidate
+      // before touching stock or recording money, so a simultaneous payment cannot overpay it.
+      await store.lockPartyRow(tx, PAYABLE, businessId, purchase.supplierId);
+      supplier = await store.findSupplier(businessId, purchase.supplierId, tx);
+      if (!supplier) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
+      if (configuration.suppliers.credit) {
+        const check = validateRepayment(Number(supplier.balanceKES ?? 0), paymentAmount);
+        if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
+      } else if (Number(supplier.balanceKES ?? 0) !== 0) {
+        // The old purchase schema does not identify which purchase created a payable. Once
+        // credit is switched off, a non-zero legacy balance cannot safely be attributed here.
+        return failure("PAYMENT_INVALID", "Supplier credit is off but this supplier has a balance; reconcile it before recording this payment.", warnings);
+      }
+    }
     let received = 0;
     for (const line of lines) {
       await tx.posPurchaseItem.updateMany({
@@ -552,8 +576,7 @@ export async function receivePurchase(params: {
     });
 
     if (paymentAmount > 0 && purchase.supplierId) {
-      const supplier = await store.findSupplier(businessId, purchase.supplierId, tx);
-      await tx.posPayment.create({
+      const payment = await tx.posPayment.create({
         data: {
           businessId,
           supplierId: purchase.supplierId,
@@ -568,11 +591,11 @@ export async function receivePurchase(params: {
           createdById: actor.actorId,
         },
       });
-      if (supplier) {
+      if (supplier && configuration.suppliers.credit) {
         await store.applyBalanceChange(
           businessId,
           { partyType: PAYABLE, partyId: supplier.id, partyName: supplier.name },
-          { deltaKES: -paymentAmount, direction: "CREDIT", note: `Payment for ${purchase.reference}` },
+          { deltaKES: -paymentAmount, direction: "CREDIT", paymentId: payment.id, note: `Payment for ${purchase.reference}` },
           tx,
         );
       }
@@ -590,10 +613,8 @@ export async function receivePurchase(params: {
       metadata: { reference: purchase.reference, received, receivedValueKES: receivedValue, paymentKES: paymentAmount },
     });
 
-    return { received, status };
+    return { ok: true, warnings, received, purchase: await store.findPurchase(businessId, purchase.id, tx) };
   });
-
-  return { ok: true, warnings, received: updated.received, purchase: await store.findPurchase(businessId, purchase.id, client) };
 }
 
 /** Pays a supplier down — the payables side of the credit engine (§30, §31). */
@@ -620,10 +641,16 @@ export async function paySupplier(params: {
   const supplier = await store.findSupplier(businessId, text(params.supplierId, 64) ?? "", client);
   if (!supplier) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
 
-  const check = validateRepayment(Number(supplier.balanceKES ?? 0), sanitizeAmountKES(params.amountKES));
-  if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
+  const amountKES = sanitizeAmountKES(params.amountKES);
+  const result = await inTransaction(params.client, async (tx: PosClient) => {
+    // Serialize the decision with all other supplier balance updates. The initial lookup is
+    // tenant-scoped but may be stale by the time this transaction obtains the row lock.
+    await store.lockPartyRow(tx, PAYABLE, businessId, supplier.id);
+    const current = await store.findSupplier(businessId, supplier.id, tx);
+    if (!current) return failure("SUPPLIER_NOT_FOUND", "That supplier was not found.", warnings);
+    const check = validateRepayment(Number(current.balanceKES ?? 0), amountKES);
+    if (!check.ok) return failure("PAYMENT_INVALID", check.message ?? "That payment could not be recorded.", warnings);
 
-  await inTransaction(params.client, async (tx: PosClient) => {
     const payment = await tx.posPayment.create({
       data: {
         businessId,
@@ -652,13 +679,14 @@ export async function paySupplier(params: {
       action: "POS_SUPPLIER_PAYMENT_RECORDED",
       targetType: "SUPPLIER",
       targetId: supplier.id,
-      before: { balanceKES: Number(supplier.balanceKES ?? 0) },
+      before: { balanceKES: Number(current.balanceKES ?? 0) },
       after: { balanceKES: check.newBalanceKES },
       metadata: { amountKES: check.amountKES, method: payment.method },
     });
+    return { ok: true, warnings, amountKES: check.amountKES, balanceKES: check.newBalanceKES };
   });
 
-  return { ok: true, warnings, amountKES: check.amountKES, balanceKES: check.newBalanceKES };
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

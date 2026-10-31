@@ -55,6 +55,37 @@ export function ReportsClient({
   const [closing, setClosing] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captures, setCaptures] = useState<any[]>([]);
+  const [capturesLoaded, setCapturesLoaded] = useState(false);
+  const [capture, setCapture] = useState<any | null>(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+
+  async function loadCaptures(id?: string) {
+    setBusy(true); setError(null);
+    try {
+      const url = `/api/pos/${encodeURIComponent(businessId)}/reports/snapshots${id ? `?id=${encodeURIComponent(id)}` : ""}`;
+      const response = await fetch(url); const data = await response.json();
+      if (!response.ok) throw new Error(data?.error ?? "Couldn't load finalized captures.");
+      if (id) setCapture(data.snapshot); else { setCaptures(data.snapshots); setCapturesLoaded(true); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Couldn't load finalized captures."); }
+    finally { setBusy(false); }
+  }
+
+  async function finalizeCapture(supersedesId?: string) {
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`/api/pos/${encodeURIComponent(businessId)}/reports/snapshots`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ from, to, supersedesId, reason: correctionReason }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error ?? "Couldn't finalize the capture.");
+      setCapture(data.snapshot); setCorrectionReason("");
+      const list = await fetch(`/api/pos/${encodeURIComponent(businessId)}/reports/snapshots`);
+      if (list.ok) { setCaptures((await list.json()).snapshots); setCapturesLoaded(true); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Couldn't finalize the capture."); }
+    finally { setBusy(false); }
+  }
 
   async function load(nextKey: string, nextFrom = from, nextTo = to) {
     setKey(nextKey);
@@ -137,13 +168,48 @@ export function ReportsClient({
         ) : null}
       </div>
 
+      <section className="jata-card p-4 space-y-3" aria-labelledby="capture-heading">
+        <h3 id="capture-heading" className="text-base font-semibold">Finalized financial captures</h3>
+        <p className="pos-note">Choose completed UTC dates above. A capture is made manually for the whole business; it freezes the sale cohort’s current status and the period ledger during finalization, not at the end of the period. The range starts at 00:00 UTC on the first date and ends at 00:00 UTC after the last date (exclusive). Corrections replace earlier revisions; do not add revisions or overlapping periods together.</p>
+        <div className="pos-toolbar">
+          <button type="button" className="jata-btn jata-btn-secondary" disabled={busy} onClick={() => void loadCaptures()}>Load finalized captures</button>
+          {canCloseDay ? <button type="button" className="jata-btn jata-btn-secondary" disabled={busy || !from || !to} onClick={() => void finalizeCapture()}>Finalize selected dates</button> : null}
+        </div>
+        {captures.length ? <ul className="space-y-2">{captures.map((item) => (
+          <li key={item.id}><button type="button" className="pos-option" disabled={busy} onClick={() => void loadCaptures(item.id)}>
+            <strong>{item.periodStart.slice(0, 10)} to {item.lastDay} UTC · revision {item.revision}</strong>
+            <small>Finalization started {item.finalizedAt}{item.reason ? ` · ${item.reason}` : ""}</small>
+          </button></li>
+        ))}</ul> : <p className="pos-note">{capturesLoaded ? "No finalized captures yet." : "Load captures to see up to the 100 most recent revisions."}</p>}
+        {capture ? <div className="space-y-2">
+          <h4 className="font-semibold">Finalized revision {capture.revision}</h4>
+          <p className="pos-note">Business-wide period: {capture.periodStart} inclusive to {capture.periodEnd} exclusive (UTC). Finalization transaction started: {capture.finalizedAt}. Capture read time, approximate: {capture.payload.capturedAt}. Finalized by: {capture.finalizedById}.</p>
+          {capture.reason ? <p className="pos-note">Correction reason: {capture.reason}. Replaces capture {capture.supersedesId}.</p> : null}
+          <p className="pos-note">{capture.payload.note}</p>
+          <dl className="jata-stat-grid">
+            <div className="jata-stat"><dt>Cohort retained</dt><dd>{formatKES(capture.payload.saleCohort.totals.netKES)}</dd></div>
+            <div className="jata-stat"><dt>Cohort refunded</dt><dd>{formatKES(capture.payload.saleCohort.totals.refundedKES)}</dd></div>
+            <div className="jata-stat"><dt>Period cash in</dt><dd>{formatKES(capture.payload.periodLedger.cashInKES)}</dd></div>
+            <div className="jata-stat"><dt>Period cash out</dt><dd>{formatKES(capture.payload.periodLedger.cashOutKES)}</dd></div>
+          </dl>
+          <details><summary>View captured reconciliation and transaction references</summary><pre className="pos-scroll text-xs">{JSON.stringify(capture.payload, null, 2)}</pre></details>
+          {canCloseDay ? <div className="space-y-2">
+            <label className="jata-label" htmlFor="capture-reason">Reason for correction</label>
+            <input id="capture-reason" className="jata-input" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} />
+            <button type="button" className="jata-btn jata-btn-secondary" disabled={busy || !correctionReason.trim() || from !== capture.periodStart.slice(0, 10) || to !== capture.lastDay} onClick={() => void finalizeCapture(capture.id)}>Create replacement revision</button>
+            <p className="pos-note">Select the capture dates above and explain the correction. Only the latest revision can be replaced.</p>
+          </div> : null}
+        </div> : null}
+      </section>
+
       {busy ? <p className="pos-note">Building the report…</p> : null}
 
       {closing ? (
         <section className="jata-card p-4 space-y-3">
           <div>
             <p className="jata-kicker">Close the day · {closing.date}</p>
-            <h3 className="text-base font-semibold">Count this against the drawer</h3>
+            <h3 className="text-base font-semibold">Review today’s cash movements</h3>
+            <p className="pos-note">Sales and payment methods reflect the current status of sales created today. Net cash movement reflects today’s settled cash payments, including refunds for earlier sales. It excludes any opening cash balance and is not an expected drawer balance or physical count.</p>
           </div>
           <dl className="jata-stat-grid">
             {closing.summary.map((entry: { label: string; value: string }) => (
@@ -162,7 +228,7 @@ export function ReportsClient({
                     <tr key={row.method}>
                       <td>{row.method}</td>
                       <td>{row.transactions}</td>
-                      <td>{formatKES(Number(row.amount))}</td>
+                      <td>{row.amount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -183,7 +249,7 @@ export function ReportsClient({
               </p>
             </div>
             <span className="pos-pill" data-tone={report.basis === "recorded" ? "success" : report.partial ? "warn" : "info"}>
-              {report.partial ? "Estimate — something is missing" : BASIS_LABELS[report.basis] ?? report.basis}
+              {report.partial ? "Partial — some information is missing" : BASIS_LABELS[report.basis] ?? report.basis}
             </span>
           </div>
 

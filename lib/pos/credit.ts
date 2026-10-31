@@ -209,6 +209,21 @@ export function buildStatement(entries: CreditEntry[], partyType: CreditPartyTyp
   return { lines, closingBalanceKES: running };
 }
 
+/** Refuse a statement when the complete bounded ledger cannot explain the stored balance. */
+export function verifiedStatement(rows: any[], partyType: CreditPartyType, balanceKES: number) {
+  if (rows.length > 200) return { statement: null, notice: "Statement unavailable: more than 200 ledger entries; contact support for a complete statement." };
+  const unavailable = { statement: null, notice: "Statement unavailable: credit history does not reconcile with the account balance; contact support." };
+  if (!Number.isSafeInteger(balanceKES) || balanceKES < 0) return unavailable;
+  let total = 0;
+  for (const row of rows) {
+    if (!row || (row.direction !== "DEBIT" && row.direction !== "CREDIT") || !Number.isSafeInteger(row.amountKES) || row.amountKES < 0 || !row.createdAt || !Number.isFinite(new Date(row.createdAt).getTime())) return unavailable;
+    total += row.direction === "DEBIT" ? row.amountKES : -row.amountKES;
+    if (!Number.isSafeInteger(total)) return unavailable;
+  }
+  if (total !== balanceKES) return unavailable;
+  return { statement: buildStatement(toCreditEntries(rows, partyType), partyType), notice: null };
+}
+
 export type RepaymentValidation = { ok: boolean; amountKES: number; newBalanceKES: number; message?: string };
 
 /**
@@ -234,13 +249,13 @@ export function validateRepayment(balanceKES: number, amountKES: number): Repaym
 
 /** Supplier side: the same arithmetic, a different ledger and different words (§30). */
 export function supplierSummary(config: PosConfiguration, parties: Pick<CreditParty, "balanceKES" | "name">[]): {
-  totalOwedKES: number; count: number; oldest: { name: string; balanceKES: number } | null;
+  totalOwedKES: number; count: number; largest: { name: string; balanceKES: number } | null;
 } {
-  if (!config.suppliers.enabled || !config.suppliers.credit) return { totalOwedKES: 0, count: 0, oldest: null };
+  if (!config.suppliers.enabled || !config.suppliers.credit) return { totalOwedKES: 0, count: 0, largest: null };
   const owing = parties.filter((party) => outstandingKES(party) > 0);
   const total = owing.reduce((sum, party) => sum + outstandingKES(party), 0);
-  const oldest = owing.length ? owing.reduce((worst, party) => (party.balanceKES > worst.balanceKES ? party : worst), owing[0]) : null;
-  return { totalOwedKES: total, count: owing.length, oldest: oldest ? { name: oldest.name, balanceKES: outstandingKES(oldest) } : null };
+  const largest = owing.length ? owing.reduce((worst, party) => (party.balanceKES > worst.balanceKES ? party : worst), owing[0]) : null;
+  return { totalOwedKES: total, count: owing.length, largest: largest ? { name: largest.name, balanceKES: outstandingKES(largest) } : null };
 }
 
 export function creditExposure(parties: Pick<CreditParty, "balanceKES" | "limitKES">[]): {

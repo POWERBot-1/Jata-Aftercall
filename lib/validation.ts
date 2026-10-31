@@ -24,7 +24,7 @@ export function validatePhone(phone: string): boolean {
 /**
  * Business categories (§5)
  *
- * Sixteen categories, each backed by an Experience Profile in `lib/experience/categories`.
+ * Business categories, each backed by an Experience Profile in `lib/experience/categories`.
  * The legacy labels are kept as aliases so businesses created before Interactive Business
  * keep working unchanged (§39).
  */
@@ -34,6 +34,7 @@ export const CATEGORIES = [
   "Salon & Barber",
   "Fashion & Clothing",
   "Retail & General Shop",
+  "Farm & Produce",
   "Electronics",
   "Automotive",
   "Real Estate",
@@ -70,6 +71,11 @@ const CATEGORY_ALIASES: Record<string, string> = {
   property: "Real Estate",
   "professional services": "Professional Services",
   consultant: "Professional Services",
+  farm: "Farm & Produce",
+  farming: "Farm & Produce",
+  produce: "Farm & Produce",
+  agriculture: "Farm & Produce",
+  agribusiness: "Farm & Produce",
   retail: "Retail & General Shop",
   shop: "Retail & General Shop",
   "general shop": "Retail & General Shop",
@@ -80,7 +86,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   other: "Other",
 };
 
-/** Resolves legacy free-text categories to one of the sixteen (§39). */
+/** Resolves legacy free-text categories to one of the listed categories (§39). */
 export function normalizeCategory(cat: string): string {
   const trimmed = String(cat || "").trim();
   if (!trimmed) return "Other";

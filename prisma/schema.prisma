@@ -436,6 +436,9 @@ model Business {
   posBranches              PosBranch[]
   posStaff                 PosStaff[]
   posProducts              PosProduct[]
+  posCategories            PosCategory[]
+  posCategoryImages        PosCategoryImage[]
+  posReportSnapshots       PosReportSnapshot[]
   posInventoryItems        PosInventoryItem[]
   posInventoryMovements    PosInventoryMovement[]
   posCustomers             PosCustomer[]
@@ -444,6 +447,7 @@ model Business {
   posSales                 PosSale[]
   posSaleItems             PosSaleItem[]
   posPayments              PosPayment[]
+  posRepaymentRequests     PosRepaymentRequest[]
   posCreditEntries         PosCreditEntry[]
   posExpenses              PosExpense[]
   posPurchases             PosPurchase[]
@@ -1515,11 +1519,64 @@ model PosBranch {
   @@index([businessId])
 }
 
+// Optional imagery for existing free-text POS product categories. Category names remain on
+// products; this table stores only their business-scoped presentation metadata.
+// An independent business-owned category. Product and image names use a tenant-scoped
+// composite foreign key, so renames carry associations and deletion cannot orphan products.
+model PosCategory {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  products   PosProduct[]
+  image      PosCategoryImage?
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+}
+
+model PosCategoryImage {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category   String
+  categoryRecord PosCategory @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
+  imageUrl   String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, category])
+  @@index([businessId])
+}
+
 //
 // People who operate the POS (§15, §36). A staff record may exist before it has a platform
 // login, so `userId` is nullable and intentionally not a foreign key: staff are business
 // records first, platform users only once invited.
 //
+// Finalized, append-only sale-cohort and period-ledger captures. Revisions supersede rather
+// than alter an earlier capture; they are alternatives, never additive entries.
+model PosReportSnapshot {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scopeKey     String   @default("")
+  periodStart  DateTime
+  periodEnd    DateTime
+  revision     Int
+  supersedesId String?
+  reason       String?  @db.Text
+  finalizedById String
+  finalizedAt  DateTime @default(now())
+  payload      Json
+
+  @@unique([businessId, scopeKey, periodStart, periodEnd, revision])
+  @@index([businessId, scopeKey, periodStart, periodEnd])
+}
+
 model PosStaff {
   id                String    @id @default(cuid())
   businessId        String
@@ -1549,6 +1606,7 @@ model PosProduct {
   name              String
   kind              String    @default("PRODUCT")   // PRODUCT | SERVICE
   category          String?
+  categoryRecord    PosCategory? @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
   description       String?   @db.Text
   unitKey           String    @default("piece")
   priceKES          Int       @default(0)
@@ -1645,7 +1703,9 @@ model PosCustomer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   assets         PosCustomerAsset[]
+  repaymentRequests PosRepaymentRequest[]
 
+  @@unique([businessId, id])
   @@index([businessId, name])
   @@index([businessId, phone])
   @@index([businessId, creditEnabled])
@@ -1873,12 +1933,35 @@ model PosPayment {
   notes       String?   @db.Text
   createdById String?
   createdAt   DateTime  @default(now())
+  repaymentRequest PosRepaymentRequest?
 
+  @@unique([businessId, customerId, id])
   @@index([businessId, createdAt])
   @@index([businessId, purpose])
   @@index([saleId])
   @@index([businessId, customerId])
   @@index([businessId, supplierId])
+}
+
+// Committed repayment requests only. Customer-row locking serializes requests for a customer;
+// business-wide uniqueness also prevents the same key being spent on different customers.
+model PosRepaymentRequest {
+  id              String      @id @default(cuid())
+  businessId      String
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        PosCustomer @relation(fields: [businessId, customerId], references: [businessId, id], onDelete: NoAction)
+  key             String
+  requestHash     String
+  paymentId       String      @unique
+  payment         PosPayment  @relation(fields: [businessId, customerId, paymentId], references: [businessId, customerId, id], onDelete: NoAction)
+  amountKES       Int
+  balanceAfterKES Int
+  createdAt       DateTime    @default(now())
+
+  @@unique([businessId, key])
+  @@unique([businessId, customerId, paymentId])
+  @@index([businessId, createdAt])
 }
 
 // Credit ledger (§30). `partyType` keeps receivables and payables permanently separate.

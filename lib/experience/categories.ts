@@ -200,6 +200,23 @@ export const RetailExperienceProfile: ExperienceProfile = {
   analyticsEvents: ["PAGE_VIEW", "PRODUCT_VIEW", "SEARCH", "ADD_TO_CART", "CHECKOUT_STARTED", "PAYMENT_SUCCESS", "ORDER_CREATED", "CALL_CLICK", "WHATSAPP_CLICK", "DIRECTIONS_CLICK"],
 };
 
+/** Farm produce uses existing products, prices and pickup/delivery flows — no invented harvest data. */
+export const FarmExperienceProfile: ExperienceProfile = {
+  ...RetailExperienceProfile,
+  key: "farm",
+  label: "Farm & Produce",
+  blurb: "Present produce, availability and your farm story.",
+  mood: "Natural, grounded, local",
+  aliases: ["Farm", "Farming", "Produce", "Farm Produce", "Agriculture", "Agribusiness"],
+  itemNoun: "Produce", itemNounPlural: "Produce", catalogueLabel: "Produce",
+  cta: { primary: "Browse produce", secondary: "About the farm", add: "Add to basket", cart: "Your basket", enquire: "Ask about availability", confirmation: "Order confirmed" },
+  nav: ["Produce", "Our farm", "Gallery", "Contact"],
+  defaultSections: ["navigation", "hero", "featured", "about", "gallery", "hours", "location", "contact"],
+  recommendedSections: ["categories", "faq", "offers"],
+  themeKeys: ["farm-harvest", "farm-field"], defaultThemeKey: "farm-harvest",
+  searchPlaceholder: "Search produce",
+};
+
 /** ── 6. Electronics ─────────────────────────────────────────────────────── */
 export const ElectronicsExperienceProfile: ExperienceProfile = {
   key: "electronics",
@@ -585,6 +602,7 @@ export const EXPERIENCE_PROFILES: ExperienceProfile[] = [
   SalonExperienceProfile,
   FashionExperienceProfile,
   RetailExperienceProfile,
+  FarmExperienceProfile,
   ElectronicsExperienceProfile,
   AutomotiveExperienceProfile,
   RealEstateExperienceProfile,

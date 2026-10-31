@@ -46,6 +46,7 @@ export default async function PosExpensesPage({ params, searchParams }: Props) {
         <span className="jata-status">{formatKES(totals.amountKES)} recorded</span>
       </div>
 
+      {expenses.length >= 200 ? <p className="pos-note" role="status">Showing up to the latest 200 expenses; older records are not listed here. The recorded total includes all expenses in your scope.</p> : null}
       <RecordBoard
         businessId={businessId}
         basePath={workspace.basePath}

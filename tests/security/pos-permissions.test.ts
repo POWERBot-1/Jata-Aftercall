@@ -249,11 +249,11 @@ describe("credit is approved by the configuration and the role (§30, §36, §75
       request: { items: [{ productId: "p_a2", quantity: 2 }], payments: [{ method: "credit", amountKES: 500 }], customerId: "c_a1" },
     });
 
-    const over = await recordRepayment({ businessId: "bizA", configuration: config, actor: owner, customerId: "c_a1", amountKES: 900 });
+    const over = await recordRepayment({ idempotencyKey: "test-repayment", businessId: "bizA", configuration: config, actor: owner, customerId: "c_a1", amountKES: 900 });
     expect(over.ok).toBe(false);
     expect(fake().rows("posPayment")).toHaveLength(0);
 
-    const part = await recordRepayment({ businessId: "bizA", configuration: config, actor: owner, customerId: "c_a1", amountKES: 200, method: "mpesa" });
+    const part = await recordRepayment({ idempotencyKey: "test-repayment", businessId: "bizA", configuration: config, actor: owner, customerId: "c_a1", amountKES: 200, method: "mpesa" });
     expect(part.ok).toBe(true);
     expect(part.balanceKES).toBe(300);
     expect(fake().rows("posPayment")[0]).toMatchObject({ direction: "IN", purpose: "CREDIT_REPAYMENT", amountKES: 200 });
@@ -264,7 +264,7 @@ describe("credit is approved by the configuration and the role (§30, §36, §75
     const config = restaurantConfig();
     const waiter = actorFor(config, "WAITER");
     expect(waiter.permissions).not.toContain("RECORD_REPAYMENT");
-    const outcome = await recordRepayment({ businessId: "bizA", configuration: config, actor: waiter, customerId: "c_a1", amountKES: 100 });
+    const outcome = await recordRepayment({ idempotencyKey: "test-repayment", businessId: "bizA", configuration: config, actor: waiter, customerId: "c_a1", amountKES: 100 });
     expect(outcome.ok).toBe(false);
     expect(outcome.code).toBe("NOT_ALLOWED");
   });

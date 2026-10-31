@@ -423,6 +423,12 @@ describe("receipts are configured, not hardcoded (§32)", () => {
     expect(text).toContain("QGH7X1");
   });
 
+  it("qualifies unpaid amounts on receipt reprints", () => {
+    const receipt = buildReceipt({ config: creditShop, business: { name: "Test" }, sale: { ...sale, balanceKES: 100 } });
+    expect(receiptToText(receipt)).toContain("Unpaid at sale KES 100 (later repayments not allocated)");
+    expect(receiptToText(receipt)).not.toContain("Balance due KES 100");
+  });
+
   it("hides what the configuration says to hide", () => {
     const noCashier = buildReceipt({
       config: { ...creditShop, receipt: { ...creditShop.receipt, showCashier: false, showContact: false } },

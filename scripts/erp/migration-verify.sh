@@ -95,10 +95,9 @@ base_table_count() {
 }
 scalar() { "$PSQL" "$DB_URL" -tAc "$1"; }
 
-# Non-ERP tables can be introduced both before and after the ERP migrations. Measure the full
-# committed chain on an independent throwaway database: stopping at ERP would omit later additive
-# tables (such as AgentApplication). The rollback checks still compare against this independent
-# baseline, so they must preserve every non-ERP table, not just the old pre-ERP subset.
+# Measure non-ERP tables from the entire migration chain in an independent scratch database.
+# Applying ERP migrations too permits later non-ERP migrations to depend on them, while the
+# filtered count still requires rollback to preserve every POS and agent-owned table.
 BASELINE_BASE_TABLES=""
 measure_base_tables() {
   local stamp_db="erp_pro_baseline_scratch" url dir count
@@ -106,6 +105,7 @@ measure_base_tables() {
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null || return 1
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE \"$stamp_db\";" >/dev/null || return 1
   for dir in $(ls -1 "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_' | sort); do
+
     if ! "$PSQL" "$url" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$dir/migration.sql" >/dev/null 2>&1; then
       echo "      baseline measurement failed at $dir" >&2
       "$PSQL" "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null 2>&1
@@ -135,8 +135,8 @@ INSERT INTO "User" (id, email, "passwordHash", "updatedAt")
 VALUES ('u_upgrade', 'upgrade-path@example.test', 'not-a-real-login', now());
 INSERT INTO "Business" (id, "ownerId", slug, name, category, "updatedAt")
 VALUES ('b_upgrade', 'u_upgrade', 'upgrade-path-biz', 'Upgrade Path Biz', 'retail', now());
-INSERT INTO "PosProduct" (id, "businessId", name, "updatedAt")
-VALUES ('p_upgrade', 'b_upgrade', 'Unga 2kg', now());
+INSERT INTO "PosProduct" (id, "businessId", name, category, "updatedAt")
+VALUES ('p_upgrade', 'b_upgrade', 'Unga 2kg', 'Existing legacy category', now());
 SQL
 }
 
@@ -208,6 +208,18 @@ upgrade_path() {
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business survived the upgrade" || fail "existing business was lost"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "existing POS product survived the upgrade" || fail "existing POS product was lost"
   [ "$(scalar 'select count(*) from "User"')" = "1" ] && pass "no rows were created or duplicated by the migration" || fail "row counts changed during the migration"
+  # Apply later POS migrations over a genuinely pre-existing product and photo reference.
+  psql_run -f "$MIGRATIONS_DIR/20261101000000_pos_category_images/migration.sql" >/dev/null || { fail "category image migration failed during upgrade"; return; }
+  psql_run <<'SQL' || { fail "could not seed legacy category photo"; return; }
+INSERT INTO "PosCategoryImage" (id, "businessId", category, "imageUrl", "updatedAt")
+VALUES ('photo_upgrade', 'b_upgrade', 'Existing legacy category', 'https://example.invalid/legacy.png', now());
+SQL
+  psql_run -f "$MIGRATIONS_DIR/20261102000000_pos_report_snapshots/migration.sql" >/dev/null || { fail "report snapshot migration failed during upgrade"; return; }
+  psql_run -f "$MIGRATIONS_DIR/20261103000000_pos_categories/migration.sql" >/dev/null || { fail "independent category migration failed during upgrade"; return; }
+  [ "$(scalar "select count(*) from \"PosCategory\" where \"businessId\" = 'b_upgrade' and name = 'Existing legacy category'")" = "1" ] && pass "legacy product and image backfilled to one category" || fail "legacy category was not backfilled"
+  [ "$(scalar "select count(*) from \"PosProduct\" where id = 'p_upgrade' and category = 'Existing legacy category'")" = "1" ] && pass "legacy product category preserved" || fail "legacy product category changed"
+  [ "$(scalar "select count(*) from \"PosCategoryImage\" where id = 'photo_upgrade' and category = 'Existing legacy category'")" = "1" ] && pass "legacy category image preserved" || fail "legacy category image changed"
+
 }
 
 # ── Scenario 3: rollback and recovery ────────────────────────────────────────────────────────────
@@ -217,6 +229,12 @@ rollback_and_recovery() {
   if apply_until; then pass "database migrated for the rollback rehearsal"; else fail "migration failed before rollback rehearsal"; return; fi
   seed_baseline_rows || { fail "could not seed baseline rows"; return; }
   seed_erp_rows || { fail "could not seed ERP rows"; return; }
+  psql_run <<'SQL' || { fail "could not seed POS category image"; return; }
+INSERT INTO "PosCategory" (id, "businessId", name, "updatedAt")
+VALUES ('category_rollback', 'b_upgrade', 'Produce', now());
+INSERT INTO "PosCategoryImage" (id, "businessId", category, "imageUrl", "updatedAt")
+VALUES ('photo_rollback', 'b_upgrade', 'Produce', 'https://example.invalid/photo.png', now());
+SQL
 
   local dump="${TMPDIR:-/tmp}/erp-rollback-export.dump"
   rm -f "$dump"
@@ -269,6 +287,8 @@ rollback_and_recovery() {
   want_base=$(baseline_base_tables)
   [ "$(base_table_count)" = "$want_base" ] && pass "all $want_base non-ERP tables survived the rollback" || fail "non-ERP tables were lost during rollback"
   [ "$(scalar 'select count(*) from "PosProduct" where id = '\''p_upgrade'\''')" = "1" ] && pass "POS rows survived the rollback" || fail "POS rows were lost during rollback"
+  [ "$(scalar 'select count(*) from "PosCategoryImage" where id = '\''photo_rollback'\''')" = "1" ] && pass "POS category image survived ERP rollback" || fail "POS category image was lost during ERP rollback"
+  [ "$(scalar 'select count(*) from "PosCategory" where id = '\''category_rollback'\''')" = "1" ] && pass "POS category survived ERP rollback" || fail "POS category was lost during ERP rollback"
 
   # Recovery: re-apply the ERP migration on the rolled-back database.
   local recovered=1

@@ -112,6 +112,7 @@ const CATEGORY_ART_DIRECTION: Record<CategoryKey, { subject: string; mood: strin
   beauty: { subject: "the product in its real packaging", mood: "clean, tactile, premium", avoid: "skin close-ups that imply medical results" },
   salon: { subject: "the finished styling result on a real client", mood: "confident, stylish, personal", avoid: "unrealistic hair regrowth claims" },
   fashion: { subject: "the garment worn or neatly presented on a hanger", mood: "considered, current, wearable", avoid: "designer logos that are not the business's own" },
+  farm: { subject: "the actual produce the owner supplies", mood: "natural, local, honest", avoid: "invented crops, certifications or harvest claims" },
   retail: { subject: "the actual product on a plain surface", mood: "honest, useful, everyday", avoid: "branded packaging the shop does not sell" },
   electronics: { subject: "the device, powered on where appropriate, with its real accessories", mood: "technical, trustworthy", avoid: "spec text or logos the owner did not supply" },
   automotive: { subject: "the vehicle or part being worked on, in a clean workshop", mood: "competent, dependable", avoid: "brand badges that are not on the customer's car" },

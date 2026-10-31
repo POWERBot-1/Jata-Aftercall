@@ -28,8 +28,10 @@ export type SaleRecord = {
   paidKES: number;
   balanceKES: number;
   refundedKES?: number;
+  /** Portion of refunds applied to the receivable rather than paid out in cash. */
+  creditRefundedKES?: number;
   costKES?: number;
-  payments?: { method: string; amountKES: number }[];
+  payments?: { method: string; amountKES: number; direction?: string }[];
   items?: { name: string; quantity: number; totalKES: number; costKES?: number | null }[];
 };
 
@@ -85,7 +87,9 @@ export type SalesSummary = {
   taxKES: number;
   netKES: number;
   paidKES: number;
+  /** Original unpaid amounts less credit refunds; account-level repayments are not allocated. */
   outstandingKES: number;
+  outstandingNotice: string;
   refundedKES: number;
   averageKES: number;
   basis: "recorded";
@@ -96,10 +100,22 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
   const grossKES = scoped.reduce((total, sale) => total + num(sale.subtotalKES), 0);
   const discountKES = scoped.reduce((total, sale) => total + num(sale.discountKES), 0);
   const taxKES = scoped.reduce((total, sale) => total + num(sale.taxKES), 0);
-  const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES), 0);
-  const paidKES = scoped.reduce((total, sale) => total + num(sale.paidKES), 0);
-  const outstandingKES = scoped.reduce((total, sale) => total + num(sale.balanceKES), 0);
+  // Sale-cohort current snapshot: refund once against revenue; cash refunds reduce
+  // collected money, while credit refunds reduce the receivable, never the drawer.
   const refundedKES = scoped.reduce((total, sale) => total + num(sale.refundedKES), 0);
+  const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES) - num(sale.refundedKES), 0);
+  const paidKES = scoped.reduce((total, sale) => {
+    // A loaded ledger, including an empty one, is the source for recorded settlements.
+    // Never fall back to paidKES merely because no settled rows survived filtering:
+    // pending payments or missing legacy rows do not establish a collection. Provider
+    // reversals can create an OUT without changing the sale's refundedKES field.
+    if (sale.payments !== undefined) {
+      return total + sale.payments.reduce((sum, payment) => sum + (payment.direction === "OUT" ? -1 : 1) * num(payment.amountKES), 0);
+    }
+    // Older callers can lack payment rows; preserve the legacy calculation for those callers.
+    return total + num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES));
+  }, 0);
+  const outstandingKES = scoped.reduce((total, sale) => total + Math.max(0, num(sale.balanceKES) - num(sale.creditRefundedKES)), 0);
   return {
     count: scoped.length,
     grossKES,
@@ -108,6 +124,7 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
     netKES,
     paidKES,
     outstandingKES,
+    outstandingNotice: "Original unpaid at sale less credit refunds; account-level repayments are not allocated. This is not the current amount owed.",
     refundedKES,
     averageKES: scoped.length ? Math.round(netKES / scoped.length) : 0,
     basis: "recorded",
@@ -120,11 +137,11 @@ export function paymentBreakdown(sales: SaleRecord[], range?: DateRange): Method
   const scoped = (range ? sales.filter((sale) => inRange(sale.createdAt, range)) : sales).filter(countsAsRevenue);
   const totals = new Map<string, { amountKES: number; count: number }>();
   for (const sale of scoped) {
-    const payments = sale.payments?.length ? sale.payments : [{ method: "unspecified", amountKES: num(sale.paidKES) }];
+    const payments = sale.payments !== undefined ? sale.payments : [{ method: "unspecified", amountKES: num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES)) }];
     for (const payment of payments) {
       const key = (payment.method || "unspecified").toLowerCase();
       const entry = totals.get(key) ?? { amountKES: 0, count: 0 };
-      entry.amountKES += num(payment.amountKES);
+      entry.amountKES += (payment.direction === "OUT" ? -1 : 1) * num(payment.amountKES);
       entry.count += 1;
       totals.set(key, entry);
     }
@@ -227,7 +244,9 @@ export function profitability(sales: SaleRecord[], expenses: ExpenseRecord[], ra
     if (sale.costKES !== undefined && sale.costKES !== null) return total + num(sale.costKES);
     return total + (sale.items ?? []).reduce((line, item) => line + num(item.costKES) * num(item.quantity), 0);
   }, 0);
-  const hasCostData = scoped.some((sale) => sale.costKES != null || (sale.items ?? []).some((item) => item.costKES != null));
+  // A single costed sale must not make a second uncosted sale appear complete.
+  const hasMissingCost = scoped.some((sale) => sale.costKES == null &&
+    (!(sale.items?.length) || sale.items.some((item) => item.costKES == null)));
   const expensesKES = summarizeExpenses(expenses, range).totalKES;
   const grossProfitKES = summary.netKES - costOfGoodsKES;
   const netProfitKES = grossProfitKES - expensesKES;
@@ -239,7 +258,8 @@ export function profitability(sales: SaleRecord[], expenses: ExpenseRecord[], ra
     netProfitKES,
     marginPercent: summary.netKES ? Math.round((netProfitKES / summary.netKES) * 1000) / 10 : 0,
     basis: "calculated",
-    partial: !hasCostData,
+    // Refunds are not allocated to line costs in this aggregate; profit is an estimate.
+    partial: hasMissingCost || scoped.some((sale) => num(sale.refundedKES) > 0),
   };
 }
 
@@ -250,6 +270,7 @@ export type DailyClosing = {
   methods: MethodBreakdown;
   expensesKES: number;
   /** Cash the ledger says the drawer should hold: every settled cash movement, in and out. */
+  /** Legacy name: net period cash movement, not an expected drawer balance. */
   expectedCashKES: number;
   cashInKES: number;
   cashOutKES: number;
@@ -259,10 +280,10 @@ export type DailyClosing = {
 /**
  * Daily closing (§8 finance, §57).
  *
- * The drawer figure is read from the till's payment ledger — the single record of money
- * physically in and out — not from a category label:
+ * The net movement is read from the till's payment ledger, not from a category label.
+ * It is not a physical count and excludes opening drawer cash:
  *
- *   expected = Σ settled cash IN  (sales, deposits, credit repayments)
+ *   net movement = Σ settled cash IN  (sales, deposits, credit repayments)
  *            − Σ settled cash OUT (refunds, supplier payments, expenses)
  *
  * A sale paid by M-Pesa never touches the drawer, a cash refund empties it, and an expense

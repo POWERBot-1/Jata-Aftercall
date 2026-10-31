@@ -63,6 +63,7 @@ export function productFields(config: PosConfiguration): FieldSpec[] {
         ...(config.sales.services ? [{ id: "SERVICE", label: words.service }] : []),
       ],
     },
+    { key: "category", label: "Category", kind: "text", placeholder: "e.g. Drinks or Hair care", hint: "Use the same category name to group similar items." },
     { key: "priceKES", label: "Price (KES)", kind: "money", required: true, defaultValue: 0, column: true, group: "Pricing" },
   ];
 

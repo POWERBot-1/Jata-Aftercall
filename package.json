@@ -27,7 +27,7 @@
     "test:erp:visual:gallery": "node scripts/erp/erp-visual-gallery.mjs",
     "test:erp:layout-fixture": "node scripts/erp/erp-layout-fixture.check.mjs",
     "test:erp:tasks-page": "node scripts/erp/tasks-page.check.mjs",
-    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts tests/integration/erp-procurement-postgres.test.ts tests/integration/erp-requisitions-postgres.test.ts",
+    "test:db:erp": "vitest run tests/integration/erp-pro-postgres.test.ts tests/integration/erp-tasks-postgres.test.ts tests/integration/erp-notifications-postgres.test.ts tests/integration/erp-approvals-postgres.test.ts tests/integration/erp-procurement-postgres.test.ts tests/integration/erp-requisitions-postgres.test.ts tests/integration/pos-supplier-concurrency-postgres.test.ts tests/integration/pos-snapshot-exclusion-postgres.test.ts tests/integration/pos-provider-reversal-postgres.test.ts tests/integration/pos-repayment-refund-race-postgres.test.ts tests/integration/pos-category-concurrency-postgres.test.ts",
     "test:browser:motion": "node scripts/browser/storefront-motion.check.mjs",
     "test:browser:layout": "node scripts/browser/fixture-layout.check.mjs",
     "test:browser:families": "node scripts/browser/storefront-families.check.mjs",
@@ -48,6 +48,7 @@
     "test:browser:pricing": "node scripts/browser/pricing-grid.check.mjs",
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
+    "release:acceptance": "node scripts/verification/release-acceptance.mjs",
     "test:browser:agents": "node scripts/browser/agent-status.check.mjs"
   },
   "dependencies": {
@@ -76,6 +77,7 @@
     "@types/three": "^0.186.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
+    "jsdom": "^26.1.0",
     "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",

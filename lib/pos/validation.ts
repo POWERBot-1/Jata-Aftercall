@@ -142,9 +142,14 @@ export function sanitizeRefundRequest(body: JsonBody): RefundRequest {
 }
 
 export function sanitizeRepayment(body: JsonBody) {
+  // Unlike display-oriented number parsing, repayments must not strip characters or round:
+  // an invalid amount has to be refused, never converted into a different payment.
+  const rawAmount = body.amountKES;
+  const amountKES = typeof rawAmount === "number" ? rawAmount
+    : typeof rawAmount === "string" && /^\d+$/.test(rawAmount.trim()) ? Number(rawAmount.trim()) : Number.NaN;
   return {
     customerId: text(body, "customerId", 64),
-    amountKES: positiveNumber(body, "amountKES"),
+    amountKES,
     method: optionalText(body, "method", 32),
     reference: optionalText(body, "reference", 80),
     note: optionalText(body, "note", 500),

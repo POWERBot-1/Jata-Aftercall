@@ -48,6 +48,7 @@ import { GET as planGet, POST as planPost } from "@/app/api/pos/[businessId]/pla
 import { GET as salesGet, POST as salesPost } from "@/app/api/pos/[businessId]/sales/route";
 import { GET as saleGet, POST as salePost } from "@/app/api/pos/[businessId]/sales/[saleId]/route";
 import { GET as productsGet, POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as categoryImagesGet, POST as categoryImagesPost } from "@/app/api/pos/[businessId]/category-images/route";
 import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[productId]/route";
 import { GET as customersGet, POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
@@ -60,6 +61,7 @@ import { GET as expensesGet, POST as expensesPost } from "@/app/api/pos/[busines
 import { GET as purchasesGet, POST as purchasesPost } from "@/app/api/pos/[businessId]/purchases/route";
 import { POST as purchaseReceivePost } from "@/app/api/pos/[businessId]/purchases/[purchaseId]/receive/route";
 import { GET as reportsGet } from "@/app/api/pos/[businessId]/reports/route";
+import * as reportStore from "@/lib/pos/store";
 import { GET as auditGet } from "@/app/api/pos/[businessId]/audit/route";
 import { GET as staffGet, POST as staffPost } from "@/app/api/pos/[businessId]/staff/route";
 import { GET as branchesGet, POST as branchesPost } from "@/app/api/pos/[businessId]/branches/route";
@@ -783,6 +785,16 @@ describe("/sales — selling over HTTP (§27, §31, §32, §33, §54, §62)", ()
     expect(list.topItems.length).toBeGreaterThan(0);
   });
 
+  it("does not present a truncated top-items ranking as complete", async () => {
+    const capped = vi.spyOn(reportStore, "topItems").mockResolvedValue(null);
+    try {
+      const result = await call(await salesGet(get("bizA"), context("bizA")));
+      expect(result.status).toBe(200);
+      expect(result.body.topItems).toBeNull();
+      expect(result.body.topItemsNotice).toContain("more than 2,000 sales");
+    } finally { capped.mockRestore(); }
+  });
+
   it("returns one sale with its receipt, and the same answer for a foreign and a missing id (§75)", async () => {
     const created = await body(await salesPost(saleOf([{ productId: "p_a1", quantity: 1 }], [{ method: "cash", amountKES: 50 }]), context("bizA")));
     const saleId = created.sale.id;
@@ -865,11 +877,31 @@ describe("/sales — selling over HTTP (§27, §31, §32, §33, §54, §62)", ()
     expect(customer.statement.lines.length).toBeGreaterThan(0);
 
     const repayment = await call(await customerPost(
-      post("bizA", "/customers/c_a1", { amountKES: 200, method: "mpesa", reference: "MPESA1" }),
+      new Request(url("bizA", "/customers/c_a1"), { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": "journey-key" }, body: JSON.stringify({ amountKES: 200, method: "mpesa", reference: "MPESA1" }) }),
       context("bizA", { customerId: "c_a1" }),
     ));
     expect(repayment.status).toBe(200);
     expect(repayment.body.balanceKES).toBe(300);
+    expect(rows("posCustomer").find((row) => row.id === "c_a1")?.balanceKES).toBe(300);
+    const retry = (amountKES: number, key: string | null) => customerPost(new Request(url("bizA", "/customers/c_a1"), {
+      method: "POST", headers: { "content-type": "application/json", ...(key ? { "Idempotency-Key": key } : {}) },
+      body: JSON.stringify({ amountKES, method: "mpesa", reference: "MPESA1" }),
+    }), context("bizA", { customerId: "c_a1" }));
+    asCashier();
+    expect((await call(await retry(200, "journey-key"))).status).toBe(403);
+    asOwner();
+    const replay = await call(await retry(200, "journey-key"));
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ replayed: true, amountKES: 200, balanceKES: 300 });
+    expect((await call(await retry(100, "journey-key"))).body.code).toBe("IDEMPOTENCY_CONFLICT");
+    expect((await call(await retry(100, null))).body.code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+    expect((await call(await retry(200.4, "journey-key"))).body.code).toBe("IDEMPOTENCY_CONFLICT");
+    const malformed = await call(await customerPost(new Request(url("bizA", "/customers/c_a1"), {
+      method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": "invalid-amount" },
+      body: JSON.stringify({ amountKES: "1e2", method: "cash" }),
+    }), context("bizA", { customerId: "c_a1" })));
+    expect(malformed.body.code).toBe("REPAYMENT_INVALID");
+    expect(rows("posPayment").filter((row) => row.purpose === "CREDIT_REPAYMENT")).toHaveLength(1);
     expect(rows("posCustomer").find((row) => row.id === "c_a1")?.balanceKES).toBe(300);
   });
 
@@ -919,6 +951,52 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.canEdit).toBe(true);
     // Another tenant's catalogue is invisible here (§5).
     expect(list.products.some((row: any) => row.id === "p_b1")).toBe(false);
+  });
+
+  it("isolates category photos and retains media on replacement/removal (in-memory DB)", async () => {
+    rows("posProduct").find((p) => p.id === "p_a1")!.category = "Food";
+    rows("posCategory").push({ id: "food_category_a", businessId: "bizA", name: "Food", isActive: true });
+    rows("mediaAsset").push(
+      { id: "cat-a", businessId: "bizA", url: "https://media.example/a.png" },
+      { id: "cat-a2", businessId: "bizA", url: "https://media.example/a2.png" },
+      { id: "cat-b", businessId: "bizB", url: "https://media.example/b.png" },
+    );
+    const set = async (category: string, imageUrl: string | null) => call(await categoryImagesPost(post("bizA", "/category-images", { category, imageUrl }), context("bizA")));
+    expect((await set("Food", "https://media.example/b.png")).body.code).toBe("category_image_not_owned");
+    expect((await set("Missing", "https://media.example/a.png")).status).toBe(404);
+    expect((await set("Food", INLINE_IMAGE_URL)).status).toBe(503);
+    expect((await set("Food", "https://media.example/a.png")).status).toBe(200);
+    expect((await set("Food", "https://media.example/a2.png")).status).toBe(200);
+    expect(rows("posCategoryImage")).toHaveLength(1);
+    expect((await call(await categoryImagesGet(get("bizA", "/category-images"), context("bizA")))).body.images[0].imageUrl).toBe("https://media.example/a2.png");
+    asStranger();
+    expect((await call(await categoryImagesPost(post("bizA", "/category-images", { category: "Food", imageUrl: null }), context("bizA")))).status).toBe(403);
+    asOwner();
+    expect((await set("Food", null)).status).toBe(200);
+    expect(rows("posCategoryImage")).toHaveLength(0);
+    expect(rows("mediaAsset")).toHaveLength(3);
+  });
+
+  it("attaches, replaces and removes only images owned by this tenant", async () => {
+    rows("mediaAsset").push(
+      { id: "photoA", businessId: "bizA", url: "https://media.example/a.png" },
+      { id: "photoA2", businessId: "bizA", url: "https://media.example/a2.png" },
+      { id: "photoB", businessId: "bizB", url: "https://media.example/b.png" },
+    );
+    const foreign = await call(await productsPost(post("bizA", "", { name: "Item", imageUrl: "https://media.example/b.png" }), context("bizA")));
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.code).toBe("product_image_not_owned");
+    const created = await call(await productsPost(post("bizA", "", { name: "Item", imageUrl: "https://media.example/a.png" }), context("bizA")));
+    expect(created.status).toBe(201);
+    const id = created.body.product.id;
+    const update = async (imageUrl: string | null) => call(await productPatch(patch("bizA", `/products/${id}`, { name: "Item", imageUrl }), context("bizA", { productId: id })));
+    expect((await update("https://media.example/b.png")).status).toBe(400);
+    expect((await update("https://media.example/a2.png")).status).toBe(200);
+    const listing = await call(await productsGet(get("bizA"), context("bizA")));
+    expect(listing.body.products.find((p: any) => p.id === id).imageUrl).toBe("https://media.example/a2.png");
+    expect((await update(null)).status).toBe(200);
+    expect(rows("posProduct").find((p) => p.id === id)?.imageUrl).toBeNull();
+    expect(rows("mediaAsset")).toHaveLength(3); // Shared library assets are not deleted implicitly.
   });
 
   it("refuses inline image URLs with a 503 before creating a POS product", async () => {
@@ -990,6 +1068,41 @@ describe("the operating screens over HTTP (§12–§17, §28, §29, §33)", () =
     expect(list.word).toBe("Guest");
     expect(list.customers.some((row: any) => row.name === "John Kamau")).toBe(true);
     expect(list.customers.some((row: any) => row.id === "c_b1")).toBe(false);
+  });
+
+  it("permits an active cashier with customer-management permission to create a tenant-scoped asset", async () => {
+    asCashier();
+    const before = rows("posCustomerAsset").length;
+    const response = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    expect(response.status).toBe(201);
+    expect(rows("posCustomerAsset")).toHaveLength(before + 1);
+    expect(rows("posCustomerAsset").at(-1)).toMatchObject({ businessId: "bizA", customerId: "c_a1", name: "Vehicle" });
+  });
+
+  it("requires customer-management permission to create customer assets", async () => {
+    rows("posStaff").find((row) => row.id === "st_a1")!.roleKey = "WAITER";
+    asCashier();
+    const before = rows("posCustomerAsset").length;
+    const response = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle", label: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    expect(response.status).toBe(403);
+    const missing = await call(await customerPost(post("bizA", "/customers/missing", { asset: { name: "Vehicle" } }), context("bizA", { customerId: "missing" })));
+    expect(missing.status).toBe(403);
+    expect(rows("posCustomerAsset")).toHaveLength(before);
+  });
+
+  it("refuses repayment and asset writes from inactive staff even when membership grants a privileged role", async () => {
+    rows("posStaff").find((row) => row.id === "st_a1")!.isActive = false;
+    rows("businessMember").find((row) => row.userId === "cashierA")!.role = "MANAGER";
+    rows("posCustomer").find((row) => row.id === "c_a1")!.balanceKES = 100;
+    asCashier();
+    const assets = rows("posCustomerAsset").length;
+    const payments = rows("posPayment").length;
+    const asset = await call(await customerPost(post("bizA", "/customers/c_a1", { asset: { name: "Vehicle" } }), context("bizA", { customerId: "c_a1" })));
+    const repayment = await call(await customerPost(post("bizA", "/customers/c_a1", { amountKES: 20, method: "cash" }), context("bizA", { customerId: "c_a1" })));
+    expect(asset.status).toBe(403);
+    expect(repayment.status).toBe(403);
+    expect(rows("posCustomerAsset")).toHaveLength(assets);
+    expect(rows("posPayment")).toHaveLength(payments);
   });
 
   it("refuses inline image data hidden in POS customer-asset details before creating an asset", async () => {
@@ -1154,6 +1267,17 @@ describe("/reports and /audit (§35, §37)", () => {
     await liveRestaurant();
     await salesPost(saleOf([{ productId: "p_a1", quantity: 2 }], [{ method: "cash", amountKES: 100 }]), context("bizA"));
     await salesPost(saleOf([{ productId: "p_a2", quantity: 1 }], [{ method: "mpesa", amountKES: 250, reference: "MP1" }]), context("bizA"));
+  });
+
+  it("returns an actionable refusal instead of capped sales totals", async () => {
+    const capped = vi.spyOn(reportStore, "salesForReport").mockResolvedValue(Array.from({ length: 5000 }, () => ({})));
+    try {
+      const { status, body } = await call(await reportsGet(get("bizA", "", { report: "daily_sales" }), context("bizA")));
+      expect(status).toBe(422);
+      expect(body.code).toBe("REPORT_LIMIT");
+      expect(body.error).toContain("5,000-record safety limit");
+      expect(body.report).toBeUndefined();
+    } finally { capped.mockRestore(); }
   });
 
   it("offers the catalogue this business is configured for, and only that", async () => {

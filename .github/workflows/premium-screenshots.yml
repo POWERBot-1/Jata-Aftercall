@@ -102,6 +102,25 @@ jobs:
           cat /tmp/next-start.log >&2
           exit 1
 
+      - name: POS profile browser journeys on disposable PostgreSQL
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/pos-profile-journeys.check.mjs 2>&1 | tee /tmp/pos-profiles.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/pos-profiles.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=POS profile browser failure::$detail"
+            server_detail=$(tail -60 /tmp/next-start.log | tr '\n' '|' | cut -c1-5000)
+            echo "::notice title=Disposable server diagnostics::$server_detail"
+          fi
+          exit "$result"
+
       - name: Capture six-viewport screenshots and layout evidence in real Chrome
         run: |
           set -o pipefail
@@ -131,6 +150,40 @@ jobs:
           fi
           exit "$capture_exit"
 
+      - name: POS photo controls and honest storage refusal in real Chrome
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+          SHOT_DIR: ./premium-shots
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/pos-photo-refusal.check.mjs 2>&1 | tee /tmp/pos-photo-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/pos-photo-check.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=POS photo browser failure::$detail"
+          fi
+          exit "$result"
+
+      - name: Onboarding draft journey in real Chrome
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/onboarding-authenticated.check.mjs 2>&1 | tee /tmp/onboarding-browser.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/onboarding-browser.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=Onboarding browser failure::$detail"
+          fi
+          exit "$result"
       - name: Authenticated agent application at six viewports (no activation)
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"

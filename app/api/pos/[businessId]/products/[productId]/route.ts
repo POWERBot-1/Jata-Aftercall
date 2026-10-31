@@ -1,3 +1,4 @@
+import { ownsProductImage } from "@/lib/pos/productImage";
 import { fromOutcome, handlePosRequest, posFail } from "@/lib/pos/http";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logPosAudit } from "@/lib/pos/audit";
@@ -49,7 +50,14 @@ export async function PATCH(request: Request, context: RouteContext) {
         if (typeof body.imageUrl === "string" && body.imageUrl === existing.imageUrl) input.imageUrl = undefined;
         else return posFail(INLINE_MEDIA_PERSISTENCE_MESSAGE, 503, INLINE_MEDIA_PERSISTENCE_CODE);
       }
-      await updateProduct(businessId, productId, input);
+      if (input.imageUrl && input.imageUrl !== existing.imageUrl && !await ownsProductImage(businessId, input.imageUrl)) {
+        return posFail("Choose a photo from this business's media library.", 400, "product_image_not_owned");
+      }
+      try { await updateProduct(businessId, productId, input); }
+      catch (error) {
+        if (String(error).includes("POS_CATEGORY_INACTIVE")) return posFail("Restore that category before moving an item to it.", 409, "CATEGORY_INACTIVE");
+        throw error;
+      }
       await logPosAudit({
         businessId,
         actorId: actor.actorId,

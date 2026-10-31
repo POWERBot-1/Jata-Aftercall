@@ -257,8 +257,8 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
   const statusText = saveState === "saving" ? "Saving…" : saveState === "saved" ? (business ? "All changes saved" : "Saved") : saveState === "saved-device" ? "Draft saved on this device" : saveState === "error" ? "Not saved to your account yet — your answers are kept on this device" : "";
 
   return (
-    <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-      <div className="jata-card p-5">
+    <div className="onboarding-form mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+      <div className="jata-card min-w-0 p-5">
         {restored && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-zinc-50 p-3 text-sm" role="status">
             <span>We restored your unfinished setup{business ? ` for ${business.name}` : ""}.</span>
@@ -431,7 +431,7 @@ export default function OnboardingForm({ plans, draftScope }: { plans: Plan[]; d
         <p role="status" aria-live="polite" className="mt-2 min-h-5 text-sm text-zinc-600">{statusText}</p>
       </div>
 
-      <aside className="lg:sticky lg:top-4">
+      <aside className="min-w-0 lg:sticky lg:top-4">
         <OnboardingPreview form={form} services={services} offer={offer} />
       </aside>
     </div>

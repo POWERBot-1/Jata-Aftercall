@@ -23,6 +23,10 @@ const POS_MIGRATIONS = [
   "20261005040000_pos_sale_idempotency",
   "20261010000100_pos_sale_price_windows",
   "20261023000000_pos_publication_resolution",
+  "20261101000000_pos_category_images",
+  "20261102000000_pos_report_snapshots",
+  "20261103000000_pos_categories",
+  "20261104000000_pos_repayment_idempotency",
 ];
 const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");
@@ -222,6 +226,16 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
     expect(schema).toContain('branchId     String     @default("")');
   });
 
+  it("keeps repayment keys tenant-bound to both their customer and payment", () => {
+    const request = posModels.find((model) => model.name === "PosRepaymentRequest")!;
+    expect(request.body).toContain("@@unique([businessId, key])");
+    expect(request.body).toContain("fields: [businessId, customerId], references: [businessId, id], onDelete: NoAction");
+    expect(request.body).toContain("fields: [businessId, customerId, paymentId], references: [businessId, customerId, id], onDelete: NoAction");
+    expect(migration).toContain('FOREIGN KEY ("businessId", "customerId") REFERENCES "PosCustomer"("businessId", "id") ON DELETE NO ACTION');
+    expect(migration).toContain('FOREIGN KEY ("businessId", "customerId", "paymentId") REFERENCES "PosPayment"("businessId", "customerId", "id") ON DELETE NO ACTION');
+    expect(migration).toContain("pos_repayment_request_immutable_guard");
+  });
+
   it("creates the indexes and foreign keys the schema asks for", () => {
     for (const model of posModels) {
       const indexes = [...model.body.matchAll(/@@index\(\[([^\]]+)\]\)/g)].map((match) => match[1].split(",").map((part) => part.trim()));
@@ -231,7 +245,7 @@ describe("the migration creates exactly what the schema declares (§80)", () => 
       }
       const uniques = [...model.body.matchAll(/@@unique\(\[([^\]]+)\]\)/g)].map((match) => match[1].split(",").map((part) => part.trim()));
       for (const columns of uniques) {
-        const name = `${model.name}_${columns.join("_")}_key`;
+        const name = `${model.name}_${columns.join("_")}`.slice(0, 59) + "_key";
         // One guarantee, two legal spellings: a unique constraint
         // (`... ADD CONSTRAINT "name" UNIQUE (...)`) or a unique index
         // (`CREATE UNIQUE INDEX [IF NOT EXISTS] "name" ON "Model"(...)`). They are enforced

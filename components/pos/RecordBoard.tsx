@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { nairobiCalendarDay } from "@/lib/dateFormat";
 import type { FieldSpec } from "@/lib/pos/forms";
+import { FILE_INPUT_ACCEPT } from "@/lib/media/imageFormat";
+import { prepareUpload, uploadPreparedImage } from "@/lib/media/browserImage";
+import { safeImageUrl } from "@/lib/workspaceImagery";
 import type { EmptyState } from "@/lib/pos/presentation";
 
 /**
@@ -21,6 +24,7 @@ export type ValueColumn = { key: string; label?: string; money?: boolean; suffix
 
 type Props = {
   businessId: string;
+  productPhotos?: boolean;
   apiPath: string;
   word: string;
   plural: string;
@@ -89,14 +93,26 @@ export function RecordBoard(props: Props) {
   const [creating, setCreating] = useState(openNew);
   const [values, setValues] = useState<Record<string, string | number | boolean>>(() => emptyForm(fields));
   const [busy, setBusy] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoDirty, setPhotoDirty] = useState(false);
+  const [photoProgress, setPhotoProgress] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  // Ignore a late upload response when the user closes or switches forms. The server-side
+  // media asset may already exist in the library; it must never attach to the new item.
+  const photoRequest = useRef(0);
+
+  useEffect(() => () => { if (localPreview) URL.revokeObjectURL(localPreview); }, [localPreview]);
+
+  function resetPendingPhoto() {
+    photoRequest.current += 1;
+    setPhotoBusy(false);
+    setPendingPhoto(null);
+    setLocalPreview(null);
+  }
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (openNew) startCreate();
-    // Only on first render: the query flag opens the form once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -108,29 +124,56 @@ export function RecordBoard(props: Props) {
   }, [rows, search, titleKey, subtitleKeys, valueColumns]);
 
   function startCreate() {
+    resetPendingPhoto();
     setEditing(null);
     setCreating(true);
     setValues(emptyForm(fields));
+    setPhoto(null); setPhotoDirty(false); setPhotoProgress("");
     setError(null);
     setSaved(null);
   }
 
   function startEdit(row: RecordRow) {
+    resetPendingPhoto();
     setEditing(row);
     setCreating(true);
     setValues(rowForm(fields, row));
+    setPhoto(safeImageUrl(row.imageUrl)); setPhotoDirty(false); setPhotoProgress("");
     setError(null);
     setSaved(null);
   }
 
   function close() {
+    resetPendingPhoto();
     setCreating(false);
     setEditing(null);
     setError(null);
   }
 
+  async function uploadPhoto(file: File) {
+    const request = ++photoRequest.current;
+    setPendingPhoto(file);
+    setLocalPreview(URL.createObjectURL(file));
+    setPhotoBusy(true); setError(null); setPhotoProgress("Preparing photo…");
+    const current = () => photoRequest.current === request;
+    const progress = (value: { message: string }) => { if (current()) setPhotoProgress(value.message); };
+    try {
+      const prepared = await prepareUpload(file, { onProgress: progress });
+      if (!current()) return;
+      if (prepared.status !== "ok") { setError(prepared.issue.message); setPhotoProgress("Photo not uploaded. Choose another file or retry."); return; }
+      const uploaded = await uploadPreparedImage({ businessId, upload: prepared.upload, kind: "IMAGE", source: "UPLOAD", label: "ACTUAL", onProgress: progress });
+      if (!current()) return;
+      if (uploaded.status !== "ok") { setError(uploaded.error); setPhotoProgress("Photo not uploaded. Retry or discard it."); return; }
+      setPhoto(uploaded.asset.url); setPhotoDirty(true); setPendingPhoto(null); setLocalPreview(null);
+      setPhotoProgress("Photo uploaded. Save the item to use it.");
+    } catch {
+      if (current()) { setError("Could not upload the photo. Please try again."); setPhotoProgress("Photo not uploaded. Retry or discard it."); }
+    } finally { if (current()) setPhotoBusy(false); }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (photoBusy || pendingPhoto) return;
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -143,6 +186,7 @@ export function RecordBoard(props: Props) {
       else payload[field.key] = value;
     }
     if (editing) payload[updateIdKey] = editing.id;
+    if (props.productPhotos && photoDirty) payload.imageUrl = photo;
 
     try {
       const response = await fetch(updateMode === "patch" && editing ? `${apiPath}/${encodeURIComponent(editing.id)}` : apiPath, {
@@ -276,8 +320,19 @@ export function RecordBoard(props: Props) {
             </div>
           ))}
 
+          {props.productPhotos ? (
+            <div className="jata-field">
+              <label className="jata-label" htmlFor="pos-product-photo">Item photo</label>
+              {(localPreview || photo) ? <img src={(localPreview || photo)!} alt="Selected item photo" width={120} height={120} style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 12 }} /> : <p className="jata-hint">No photo selected.</p>}
+              <input id="pos-product-photo" className="pos-file-input" type="file" accept={FILE_INPUT_ACCEPT} disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadPhoto(file); }} />
+              {pendingPhoto && !photoBusy ? <button type="button" className="jata-btn jata-btn-secondary" onClick={() => void uploadPhoto(pendingPhoto)}>Retry upload</button> : null}
+              {pendingPhoto ? <button type="button" className="jata-btn jata-btn-ghost" onClick={() => { resetPendingPhoto(); setError(null); setPhotoProgress("Selection discarded. The saved photo is unchanged."); }}>Discard selection</button> : null}
+              {photo && !pendingPhoto ? <button type="button" className="jata-btn jata-btn-ghost" disabled={photoBusy} onClick={() => { setPhoto(null); setPhotoDirty(true); setPhotoProgress("Photo will be removed when you save."); }}>Remove photo</button> : null}
+              <p className="jata-hint" role="status" aria-live="polite">{photoProgress || "Choose a JPG, PNG or WebP. Photos remain in your media library when replaced or removed."}</p>
+            </div>
+          ) : null}
           <div className="pos-form-actions">
-            <button type="submit" className="jata-btn jata-btn-primary" disabled={busy}>
+            <button type="submit" className="jata-btn jata-btn-primary" disabled={busy || photoBusy || Boolean(pendingPhoto)}>
               {busy ? "Saving…" : editing ? "Save changes" : `Add ${word.toLowerCase()}`}
             </button>
             <button type="button" className="jata-btn jata-btn-ghost" onClick={close}>Cancel</button>
@@ -302,6 +357,7 @@ export function RecordBoard(props: Props) {
         <div className="pos-rows">
           {visible.map((row) => (
             <div className="pos-row" key={row.id}>
+              {props.productPhotos && safeImageUrl(row.imageUrl) ? <img src={safeImageUrl(row.imageUrl)!} alt="" width={56} height={56} loading="lazy" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
               <div className="pos-row-main">
                 {detailPath ? (
                   <Link href={`${basePath}/${detailPath}/${row.id}`}><strong>{String(row[titleKey] ?? "—")}</strong></Link>

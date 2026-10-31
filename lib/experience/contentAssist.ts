@@ -122,6 +122,12 @@ const COPY: Record<CategoryKey, CategoryCopy> = {
     taglines: ["Everything you need, nearby", "Daily essentials, honestly priced", "Your neighbourhood shop"],
     benefit: "reliable",
   },
+  farm: {
+    productIntro: ["Describe this produce using details you have confirmed."],
+    serviceIntro: ["Share the collection and delivery arrangements you offer."],
+    taglines: ["Produce from our farm", "Explore our produce"],
+    benefit: "farm produce",
+  },
   electronics: {
     productIntro: [
       "Built to perform, with the specs to prove it.",

@@ -58,6 +58,7 @@ vi.mock("@/lib/pos/store", async (importOriginal) => {
 
 import { activateSubscriptionForPayment } from "@/lib/paystack";
 import { PosAccessError, requirePosAccess } from "@/lib/pos/guard";
+import { ReportLimitError } from "@/lib/pos/report-limit";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { effectivePermissions } from "@/lib/pos/permissions";
 import { partiesWithBalances, listExpenses, listStaff } from "@/lib/pos/store";
@@ -407,6 +408,18 @@ describe("the page layer and the API layer answer the same way (§11)", () => {
     for (const permission of ["VIEW_CREDIT", "VIEW_EXPENSES", "VIEW_STAFF"] as const) {
       expect(effectivePermissions(context.configuration, "OWNER")).toContain(permission);
     }
+  });
+});
+
+describe("credit page safety limit", () => {
+  it("renders an explicit refusal instead of incomplete ageing and balances", async () => {
+    await liveShop();
+    as(OWNER);
+    vi.mocked(partiesWithBalances).mockRejectedValueOnce(new ReportLimitError());
+    const html = await render(PosCreditPage as unknown as Page);
+    expect(html).toContain("Credit figures unavailable");
+    expect(html).toContain("5,000-record safety limit");
+    expect(html).not.toContain("Owed to you");
   });
 });
 

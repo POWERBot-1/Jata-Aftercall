@@ -372,6 +372,27 @@ function createFallbackPrisma(): any {
       update: async () => { throw new Error("DB not available"); },
       count: async () => 0,
     },
+    posReportSnapshot: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    posCategory: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+      updateMany: async () => { throw new Error("DB not available"); },
+      deleteMany: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
+    posCategoryImage: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      upsert: async () => { throw new Error("DB not available"); },
+      deleteMany: async () => { throw new Error("DB not available"); },
+      count: async () => 0,
+    },
     posProduct: {
       findMany: async () => [],
       findFirst: async () => null,
@@ -435,6 +456,11 @@ function createFallbackPrisma(): any {
     // Till replay guard (§27, §32): without a database nothing can be replayed, so the key is
     // never found and the claim is refused rather than silently swallowed.
     posIdempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => { throw new Error("DB not available"); },
+    },
+    // Replay records must never be faked as successful writes in an offline build.
+    posRepaymentRequest: {
       findFirst: async () => null,
       create: async () => { throw new Error("DB not available"); },
     },

@@ -36,6 +36,7 @@ type CardSources = {
   monthExpenses: number;
   stockValue: number;
   newCustomers: number;
+  capped?: { sales: boolean; orders: boolean; expenses: boolean };
 };
 
 /** Loads only what the configured cards actually need (§34 — no metric for every business). */
@@ -70,8 +71,9 @@ export async function loadCardSources(
   const sum = (rows: any[]) => rows.reduce((total, row) => total + Math.max(0, Number(row.balanceKES ?? 0)), 0);
 
   return {
-    sales: sales as any[],
-    orders: orders as any[],
+    sales: sales.length >= store.REPORT_ROW_LIMIT ? [] : sales as any[],
+    orders: orders.length >= store.REPORT_ROW_LIMIT ? [] : orders as any[],
+    capped: { sales: sales.length >= store.REPORT_ROW_LIMIT, orders: orders.length >= store.REPORT_ROW_LIMIT, expenses: expenses.length >= store.REPORT_ROW_LIMIT },
     customersOwing: sum(customerParties as any[]),
     suppliersOwing: sum(supplierParties as any[]),
     lowStock: (lowStock as any[]).length,
@@ -103,9 +105,11 @@ export function buildDashboardCards(
       paidKES: Number(sale.paidKES ?? 0),
       balanceKES: Number(sale.balanceKES ?? 0),
       refundedKES: Number(sale.refundedKES ?? 0),
+      creditRefundedKES: Number(sale.creditRefundedKES ?? 0),
       channel: sale.channel,
       staffName: sale.staffName,
-      payments: (sale.payments ?? []).map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0) })),
+      payments: (sale.payments ?? []).filter((payment: any) => !payment.status || payment.status === "SETTLED")
+        .map((payment: any) => ({ method: payment.method, amountKES: Number(payment.amountKES ?? 0), direction: payment.direction })),
       items: (sale.items ?? []).map((item: any) => ({ name: item.name, quantity: Number(item.quantity ?? 0), totalKES: Number(item.totalKES ?? 0) })),
     })),
     today,
@@ -116,8 +120,8 @@ export function buildDashboardCards(
       if (!inRange(sale.createdAt, today)) return total;
       if ((sale.status ?? "").toUpperCase() === "VOIDED") return total;
       return total + (sale.payments ?? [])
-        .filter((payment: any) => String(payment.method).toLowerCase() === method && payment.direction !== "OUT")
-        .reduce((sum: number, payment: any) => sum + Number(payment.amountKES ?? 0), 0);
+        .filter((payment: any) => String(payment.method).toLowerCase() === method && (!payment.status || payment.status === "SETTLED"))
+        .reduce((sum: number, payment: any) => sum + (payment.direction === "OUT" ? -1 : 1) * Number(payment.amountKES ?? 0), 0);
     }, 0);
 
   const openOrders = sources.orders.filter((order) => !isTerminal(order.workflowKey, order.stateKey));
@@ -146,7 +150,7 @@ export function buildDashboardCards(
       key: "today_sales",
       label: cardLabel("today_sales"),
       value: formatKES(summary.netKES),
-      hint: `${summary.count} sale${summary.count === 1 ? "" : "s"}${summary.outstandingKES > 0 ? ` · ${formatKES(summary.outstandingKES)} still owed` : ""}`,
+      hint: `${summary.count} sale${summary.count === 1 ? "" : "s"}${summary.outstandingKES > 0 ? ` · ${formatKES(summary.outstandingKES)} unpaid at sale less credit refunds; repayments not allocated` : ""}`,
       href: `${basePath}/sales`,
       tone: "success",
     }),
@@ -162,7 +166,7 @@ export function buildDashboardCards(
       key: "cash",
       label: cardLabel("cash"),
       value: formatKES(methodTotal("cash")),
-      hint: "Count this against the drawer",
+      hint: "Net on today's sales, not the drawer balance",
       href: `${basePath}/reports?report=daily_closing`,
       tone: "neutral",
     }),
@@ -170,7 +174,7 @@ export function buildDashboardCards(
       key: "mpesa",
       label: cardLabel("mpesa"),
       value: formatKES(methodTotal("mpesa")),
-      hint: "Check against your M-Pesa statements",
+      hint: "Net on today's sales, not a settlement statement",
       href: `${basePath}/reports?report=payment_breakdown`,
       tone: "neutral",
     }),
@@ -272,5 +276,13 @@ export function buildDashboardCards(
     }),
   };
 
-  return cards.map((key) => builders[key]?.() ?? null).filter((card): card is DashboardCard => Boolean(card));
+  const salesCards = new Set<DashboardCardKey>(["today_sales", "cash", "mpesa", "staff_performance", "top_products"]);
+  const orderCards = new Set<DashboardCardKey>(["orders", "appointments", "pending_jobs", "pending_deliveries", "kitchen_queue"]);
+  return cards.map((key) => {
+    const card = builders[key]?.() ?? null;
+    if (!card) return null;
+    const capped = (sources.capped?.sales && salesCards.has(key)) ||
+      (sources.capped?.orders && orderCards.has(key)) || (sources.capped?.expenses && key === "expenses");
+    return capped ? { ...card, value: "Unavailable", hint: "5,000-record limit reached; contact support for complete figures", tone: "warn" as const } : card;
+  }).filter((card): card is DashboardCard => Boolean(card));
 }

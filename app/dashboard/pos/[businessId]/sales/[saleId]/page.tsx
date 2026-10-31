@@ -6,6 +6,7 @@ import { buildReceipt, channelLabel, receiptToText } from "@/lib/pos/receipt";
 import { branchRecordInScope, findSale } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RefundPanel } from "@/components/pos/RefundPanel";
+import { PrintReceiptButton } from "@/components/pos/PrintReceiptButton";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 
 /**
@@ -119,8 +120,8 @@ export default async function PosSaleDetailPage({ params }: Props) {
       <dl className="jata-stat-grid">
         <div className="jata-stat"><dt>Items</dt><dd>{formatKES(sale.subtotalKES)}</dd></div>
         <div className="jata-stat"><dt>Discount</dt><dd>{formatKES(sale.discountKES)}</dd></div>
-        <div className="jata-stat"><dt>Paid</dt><dd>{formatKES(sale.paidKES)}</dd></div>
-        <div className="jata-stat"><dt>Balance</dt><dd>{formatKES(sale.balanceKES)}</dd></div>
+        <div className="jata-stat"><dt>Paid at sale</dt><dd>{formatKES(sale.paidKES)}</dd></div>
+        <div className="jata-stat"><dt>Unpaid at sale (repayments not allocated)</dt><dd>{formatKES(sale.balanceKES)}</dd></div>
       </dl>
 
       {(sale.payments ?? []).length ? (
@@ -144,7 +145,7 @@ export default async function PosSaleDetailPage({ params }: Props) {
       <section className="jata-card p-4">
         <div className="pos-toolbar">
           <p className="jata-kicker">Receipt</p>
-          <button className="jata-btn jata-btn-ghost" onClick={() => window.print()} type="button">Print</button>
+          <PrintReceiptButton />
         </div>
         <pre className="pos-receipt mt-2">{receiptToText(receipt)}</pre>
         {receiptLink ? (

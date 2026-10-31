@@ -46,8 +46,14 @@ import { POST as businessPost } from "@/app/api/business/route";
 import { POST as checkoutPost } from "@/app/api/checkout/route";
 import { GET as paymentVerifyGet } from "@/app/api/paystack/verify/route";
 import { publiclyListedPlans } from "@/lib/pricing";
+import { runReport } from "@/lib/pos/reporting";
+import { buildDashboardCards, loadCardSources } from "@/lib/pos/dashboard";
+import { oldestCreditDebit, paymentsForReport } from "@/lib/pos/store";
+import { CreditAgeError, loadOldestUnpaidDebit, unpaidDebitLots } from "@/lib/pos/credit-age";
 import { syncPosEntitlement } from "@/lib/pos/entitlement";
 
+import { GET as categoriesGet, POST as categoriesPost } from "@/app/api/pos/[businessId]/categories/route";
+import { GET as snapshotsGet, POST as snapshotsPost } from "@/app/api/pos/[businessId]/reports/snapshots/route";
 import { GET as workspaceGet } from "@/app/api/pos/[businessId]/route";
 import { GET as configGet, POST as configPost } from "@/app/api/pos/[businessId]/configuration/route";
 import { GET as previewGet, POST as previewPost } from "@/app/api/pos/[businessId]/configuration/preview/route";
@@ -57,11 +63,13 @@ import { GET as cloneGet, POST as clonePost } from "@/app/api/pos/[businessId]/c
 import { GET as planGet, POST as planPost } from "@/app/api/pos/[businessId]/plan/route";
 import { GET as salesGet, POST as salesPost } from "@/app/api/pos/[businessId]/sales/route";
 import { GET as saleGet, POST as salePost } from "@/app/api/pos/[businessId]/sales/[saleId]/route";
-import { POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as productsGet, POST as productsPost } from "@/app/api/pos/[businessId]/products/route";
+import { GET as categoryImagesGet, POST as categoryImagesPost } from "@/app/api/pos/[businessId]/category-images/route";
+import { PATCH as productPatch } from "@/app/api/pos/[businessId]/products/[productId]/route";
 import { POST as customersPost } from "@/app/api/pos/[businessId]/customers/route";
 import { GET as customerGet, POST as customerPost } from "@/app/api/pos/[businessId]/customers/[customerId]/route";
 import { POST as suppliersPost } from "@/app/api/pos/[businessId]/suppliers/route";
-import { POST as supplierPost } from "@/app/api/pos/[businessId]/suppliers/[supplierId]/route";
+import { GET as supplierGet, POST as supplierPost } from "@/app/api/pos/[businessId]/suppliers/[supplierId]/route";
 import { GET as inventoryGet, POST as inventoryPost } from "@/app/api/pos/[businessId]/inventory/route";
 import { POST as ordersPost } from "@/app/api/pos/[businessId]/orders/route";
 import { POST as orderPost } from "@/app/api/pos/[businessId]/orders/[orderId]/route";
@@ -81,9 +89,9 @@ const ctx: Record<string, any> = {
 const created: { userId: string; businessId: string }[] = [];
 
 let ipCounter = 0;
-function request(url: string, init: { method?: string; body?: unknown } = {}) {
+function request(url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   ipCounter += 1;
-  const headers: Record<string, string> = { "x-forwarded-for": `10.30.0.${ipCounter}` };
+  const headers: Record<string, string> = { "x-forwarded-for": `10.30.0.${ipCounter}`, ...init.headers };
   if (init.body !== undefined) headers["content-type"] = "application/json";
   return new Request(url, {
     method: init.method || "GET",
@@ -98,13 +106,13 @@ type PosHandler = (request: Request, context: { params: Promise<Record<string, s
 async function callPos(
   handler: PosHandler,
   businessId: string,
-  options: { path?: string; query?: Record<string, string | number | undefined>; method?: string; body?: unknown; params?: Record<string, string> } = {},
+  options: { path?: string; query?: Record<string, string | number | undefined>; method?: string; body?: unknown; params?: Record<string, string>; headers?: Record<string, string> } = {},
 ) {
   const url = new URL(`https://jata.test/api/pos/${businessId}${options.path || ""}`);
   for (const [key, value] of Object.entries(options.query || {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
-  const response = await handler(request(url.toString(), { method: options.method || "GET", body: options.body }), {
+  const response = await handler(request(url.toString(), { method: options.method || "GET", body: options.body, headers: options.headers }), {
     params: Promise.resolve({ businessId, ...(options.params || {}) }),
   });
   const body = await response.json().catch(() => null);
@@ -523,19 +531,64 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     expect(detail.status, detail.text()).toBe(200);
     const itemId = detail.body.sale.items[0].id;
 
+    const partial = await callPos(salePost, businessId, {
+      path: `/sales/${ctx.saleId}`,
+      params: { saleId: ctx.saleId },
+      method: "POST",
+      body: { amountKES: 40, method: "cash", reason: "Partial refund" },
+    });
+    expect(partial.status, partial.text()).toBe(200);
+    expect(partial.body.refundedKES).toBe(40);
+    const partialReport = await callPos(reportsGet, businessId, { query: { report: "daily_sales" } });
+    expect(partialReport.status, partialReport.text()).toBe(200);
+    expect(partialReport.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 40" },
+      { label: "Net retained", value: "KES 60" },
+      { label: "Collected", value: "KES 60" },
+    ]));
+    const breakdown = await callPos(reportsGet, businessId, { query: { report: "payment_breakdown" } });
+    expect(breakdown.status, breakdown.text()).toBe(200);
+    expect(breakdown.body.report.rows).toEqual(expect.arrayContaining([expect.objectContaining({ method: "cash", amount: "KES 60" })]));
+
+    // An excessive request can include a line return. Its tentative line claim must roll
+    // back along with the refused refund, so the subsequent legitimate return still works.
+    const beforeInvalidPayments = await prisma.posPayment.count({ where: { businessId, saleId: ctx.saleId } });
+    const invalidWithReturn = await callPos(salePost, businessId, {
+      path: `/sales/${ctx.saleId}`,
+      params: { saleId: ctx.saleId },
+      method: "POST",
+      body: { amountKES: 61, items: [{ saleItemId: itemId, quantity: 2 }] },
+    });
+    expect(invalidWithReturn.status, invalidWithReturn.text()).toBe(400);
+    expect(invalidWithReturn.body.code).toBe("REFUND_INVALID");
+    expect((await prisma.posSaleItem.findUnique({ where: { id: itemId } }))?.returnedQty).toBe(0);
+    expect((await prisma.posSale.findUnique({ where: { id: ctx.saleId } }))?.refundedKES).toBe(40);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId: ctx.saleId } })).toBe(beforeInvalidPayments);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(38);
+
     const refunded = await callPos(salePost, businessId, {
       path: `/sales/${ctx.saleId}`,
       params: { saleId: ctx.saleId },
       method: "POST",
-      body: { amountKES: 100, method: "cash", reason: "Wrong order", items: [{ saleItemId: itemId, quantity: 2 }] },
+      body: { amountKES: 60, method: "cash", reason: "Wrong order", items: [{ saleItemId: itemId, quantity: 2 }] },
     });
     expect(refunded.status, refunded.text()).toBe(200);
-    expect(refunded.body.refundedKES).toBe(100);
+    expect(refunded.body.refundedKES).toBe(60);
     expect(refunded.body.returnedToStock).toBe(2);
     expect(await stockOf(businessId, ctx.chapatiId)).toBe(40);
 
     const sale = await prisma.posSale.findUnique({ where: { id: ctx.saleId } });
     expect(sale).toMatchObject({ totalKES: 100, refundedKES: 100, status: "REFUNDED" });
+    const fullReport = await callPos(reportsGet, businessId, { query: { report: "daily_sales" } });
+    expect(fullReport.status, fullReport.text()).toBe(200);
+    expect(fullReport.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 100" },
+      { label: "Net retained", value: "KES 0" },
+      { label: "Collected", value: "KES 0" },
+    ]));
+    const payments = await prisma.posPayment.findMany({ where: { businessId, saleId: ctx.saleId, status:"SETTLED" } });
+    expect(payments.filter((p) => p.direction === "IN").reduce((n,p) => n+p.amountKES, 0)).toBe(100);
+    expect(payments.filter((p) => p.direction === "OUT").reduce((n,p) => n+p.amountKES, 0)).toBe(100);
     expect(await prisma.posInventoryMovement.count({ where: { businessId, productId: ctx.chapatiId, reason: "RETURN", delta: 2 } })).toBe(1);
 
     // Refunding more than was paid is refused and changes nothing (§54).
@@ -600,6 +653,7 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
       params: { customerId: ctx.customerId },
       method: "POST",
       body: { amountKES: 40, method: "mpesa", reference: "MPESA1" },
+      headers: { "Idempotency-Key": "journey-repayment" },
     });
     expect(repayment.status, repayment.text()).toBe(200);
     expect(repayment.body.balanceKES).toBe(60);
@@ -975,6 +1029,541 @@ describe.skipIf(!enabled)("Business POS end-to-end journey (§4, §43, §73, §7
     });
     expect(JSON.parse(attempt!.metadata as string).reason).toBe("TENANT_ID_MISMATCH");
   }, 120_000);
+
+  it("21b — photo reference tenant isolation and lifecycle against PostgreSQL (metadata only)", async () => {
+    const businessId = ctx.owner.businessId;
+    // These are inert reference strings, not uploaded objects or proof of durable media.
+    const ownUrl = `https://images.invalid/${runId}/own.png`;
+    const foreignUrl = `https://images.invalid/${runId}/foreign.png`;
+    await prisma.mediaAsset.create({ data: { businessId, url: ownUrl } });
+    await prisma.mediaAsset.create({ data: { businessId: ctx.stranger.businessId, url: foreignUrl } });
+    const rejected = await callPos(productsPost, businessId, { method: "POST", body: { name: "Photo test", priceKES: 20, imageUrl: foreignUrl } });
+    expect(rejected.status, rejected.text()).toBe(400);
+    expect(rejected.body.code).toBe("product_image_not_owned");
+    const added = await callPos(productsPost, businessId, { method: "POST", body: { name: "Photo test", priceKES: 20, category: "Produce", imageUrl: ownUrl } });
+    expect(added.status, added.text()).toBe(201);
+    const id = added.body.product.id;
+    const listed = await callPos(productsGet, businessId);
+    expect(listed.body.products.find((item: any) => item.id === id)).toMatchObject({ category: "Produce", imageUrl: ownUrl });
+    const setCategory = (imageUrl: string | null) => callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Produce", imageUrl } });
+    expect((await setCategory(foreignUrl)).body.code).toBe("category_image_not_owned");
+    expect((await setCategory(ownUrl)).status).toBe(200);
+    expect((await callPos(categoryImagesGet, businessId, { path: "/category-images" })).body.images).toContainEqual({ category: "Produce", imageUrl: ownUrl });
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await setCategory(null)).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect((await setCategory(null)).status).toBe(200);
+    expect(await prisma.posCategoryImage.count({ where: { businessId, category: "Produce" } })).toBe(0);
+    const blocked = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: foreignUrl } });
+    expect(blocked.status, blocked.text()).toBe(400);
+    const removed = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${id}`, params: { productId: id }, body: { name: "Photo test", priceKES: 20, imageUrl: null } });
+    expect(removed.status, removed.text()).toBe(200);
+    expect((await prisma.posProduct.findUnique({ where: { id } }))?.imageUrl).toBeNull();
+    expect(await prisma.mediaAsset.count({ where: { businessId, url: ownUrl } })).toBe(1);
+  }, 120_000);
+
+  it("21c — mixed-tender refunds across periods reconcile the sale, methods, drawer and stock", async () => {
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const create = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 2 }],
+      payments: [{ method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 60 }],
+    } });
+    expect(create.status, create.text()).toBe(201);
+    const saleId = create.body.sale.id;
+    const detail = await callPos(saleGet, businessId, { path: `/sales/${saleId}`, params: { saleId } });
+    const itemId = detail.body.sale.items[0].id;
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+
+    // Fixture-only timestamp adjustment: the sale and its incoming tenders belong to the
+    // previous day; actual refund rows are created by the real route in the current period.
+    const prior = new Date(); prior.setDate(prior.getDate() - 1); prior.setHours(12, 0, 0, 0);
+    await prisma.posSale.update({ where: { id: saleId }, data: { createdAt: prior } });
+    await prisma.posPayment.updateMany({ where: { businessId, saleId, direction: "IN" }, data: { createdAt: prior } });
+    const day = prior.toISOString().slice(0, 10);
+    const snapshotPost = (body: object) => callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body });
+    const snapshotGet = (id: string) => callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id } });
+    // Synthetic prior-date rows exercise immutable audit linkage, not actual midnight.
+    const marker = `snapshot-credit-${runId}`;
+    const seededPayment = await prisma.posPayment.create({ data: { businessId, customerId: ctx.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", method: "cash", amountKES: 20, createdAt: prior, notes: marker } });
+    const seededCredit = await prisma.posCreditEntry.create({ data: { businessId, partyType: "CUSTOMER", partyId: ctx.customerId, saleId, paymentId: seededPayment.id, direction: "CREDIT", amountKES: 20, balanceAfterKES: 80, createdAt: prior, note: marker } });
+    let finalized: any;
+    try {
+      finalized = await snapshotPost({ from: day, to: day });
+      expect(finalized.status, finalized.text()).toBe(201);
+      expect(finalized.body.snapshot.payload.periodLedger.creditEntries).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: seededCredit.id, partyType: "CUSTOMER", partyId: ctx.customerId, saleId, paymentId: seededPayment.id, direction: "CREDIT", amountKES: 20, balanceAfterKES: 80 }),
+      ]));
+      expect(finalized.body.snapshot.payload.periodLedger.payments).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: seededPayment.id, customerId: ctx.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", amountKES: 20 }),
+      ]));
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+      await prisma.posPayment.deleteMany({ where: { businessId, notes: marker } });
+    }
+    const originalId = finalized.body.snapshot.id;
+    expect(finalized.body.snapshot.payload.saleCohort.totals.netKES).toBe(100);
+    expect(finalized.body.snapshot.payload.saleCohort.sales[0].payments).toHaveLength(2);
+    expect((await snapshotPost({ from: day, to: day })).status).toBe(409);
+    await expect(prisma.posReportSnapshot.update({ where: { id: originalId }, data: { reason: "forged" } })).rejects.toThrow();
+    await expect(prisma.posReportSnapshot.delete({ where: { id: originalId } })).rejects.toThrow();
+    const historical = () => callPos(reportsGet, businessId, { query: { report: "daily_sales", from: prior.toISOString(), to: prior.toISOString() } });
+    const initial = await historical();
+    expect(initial.status, initial.text()).toBe(200);
+    expect(initial.body.report.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 100" }]));
+    const closingBefore = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingBefore.status, closingBefore.text()).toBe(200);
+
+    const refund = (body: object) => callPos(salePost, businessId, { path: `/sales/${saleId}`, params: { saleId }, method: "POST", body });
+    const partial = await refund({ amountKES: 70, method: "cash" });
+    expect(partial.status, partial.text()).toBe(200);
+    expect(partial.body.refundedKES).toBe(70);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+    const outAfterPartial = await prisma.posPayment.findMany({ where: { businessId, saleId, direction: "OUT", status: "SETTLED" } });
+    expect(outAfterPartial.map((p) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    expect(outAfterPartial).toHaveLength(2);
+    const partialHistory = await historical();
+    expect(partialHistory.body.report.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 70" }, { label: "Net retained", value: "KES 30" }, { label: "Collected", value: "KES 30" },
+    ]));
+    expect(partialHistory.body.report.notice).toContain("not a historical as-of snapshot");
+    const closingAfter = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES).toBe(40);
+    expect(closingAfter.body.closing.expectedCashKES - closingBefore.body.closing.expectedCashKES).toBe(-40);
+
+    const full = await refund({ amountKES: 30, method: "cash", items: [{ saleItemId: itemId, quantity: 2 }] });
+    expect(full.status, full.text()).toBe(200);
+    expect(full.body.returnedToStock).toBe(2);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    expect(await prisma.posSale.findUnique({ where: { id: saleId } })).toMatchObject({ totalKES: 100, refundedKES: 100, status: "REFUNDED" });
+    const payments = await prisma.posPayment.findMany({ where: { businessId, saleId, status: "SETTLED" } });
+    for (const [method, amount] of [["cash", 40], ["mpesa", 60]] as const) {
+      expect(payments.filter((p) => p.method === method && p.direction === "IN").reduce((n, p) => n + p.amountKES, 0)).toBe(amount);
+      expect(payments.filter((p) => p.method === method && p.direction === "OUT").reduce((n, p) => n + p.amountKES, 0)).toBe(amount);
+    }
+    expect(payments.filter((p) => p.direction === "OUT").every((p) => p.createdAt > prior && p.purpose === "REFUND")).toBe(true);
+    expect((await refund({ amountKES: 1 })).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(payments.length);
+    expect((await historical()).body.report.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 0" }]));
+    const unchanged = await snapshotGet(originalId);
+    expect(unchanged.status, unchanged.text()).toBe(200);
+    expect(unchanged.body.snapshot.payload).toEqual(finalized.body.snapshot.payload);
+    expect((await snapshotPost({ from: day, to: day, supersedesId: originalId })).body.code).toBe("REASON_REQUIRED");
+    const revised = await snapshotPost({ from: day, to: day, supersedesId: originalId, reason: "Refund recorded after initial finalization" });
+    expect(revised.status, revised.text()).toBe(201);
+    expect(revised.body.snapshot).toMatchObject({ revision: 2, supersedesId: originalId });
+    expect(revised.body.snapshot.payload.saleCohort.totals.netKES).toBe(0);
+    expect(revised.body.snapshot.payload.saleCohort.refundAndVoidEvents).toHaveLength(2);
+    expect((await snapshotGet(originalId)).body.snapshot.payload).toEqual(finalized.body.snapshot.payload);
+    expect((await snapshotPost({ from: day, to: day, supersedesId: originalId, reason: "stale" })).status).toBe(409);
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await snapshotGet(originalId)).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect(await prisma.posAuditEvent.count({ where: { businessId, action: "POS_REPORT_FINALIZED", targetType: "REPORT_SNAPSHOT" } })).toBe(2);
+
+    // A separate mixed-tender void returns both tenders and stock once.
+    const voidSale = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 1 }],
+      payments: [{ method: "cash", amountKES: 20 }, { method: "mpesa", amountKES: 30 }],
+    } });
+    expect(voidSale.status, voidSale.text()).toBe(201);
+    const voidId = voidSale.body.sale.id;
+    // A second historical fixture is captured before a later real void. Revision 3 freezes
+    // the pre-void state; revision 4 is an explicit replacement with the void audit reference.
+    await prisma.posSale.update({ where: { id: voidId }, data: { createdAt: prior } });
+    await prisma.posPayment.updateMany({ where: { businessId, saleId: voidId, direction: "IN" }, data: { createdAt: prior } });
+    const beforeVoid = await snapshotPost({ from: day, to: day, supersedesId: revised.body.snapshot.id, reason: "Capture second sale" });
+    expect(beforeVoid.status, beforeVoid.text()).toBe(201);
+    const beforeVoidSale = beforeVoid.body.snapshot.payload.saleCohort.sales.find((s: any) => s.id === voidId);
+    expect(beforeVoidSale.status).toBe("COMPLETED");
+    const voidCall = () => callPos(salePost, businessId, { path: `/sales/${voidId}`, params: { saleId: voidId }, method: "POST", body: { void: true } });
+    const voided = await voidCall();
+    expect(voided.status, voided.text()).toBe(200);
+    expect(voided.body.returnedToStock).toBe(1);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    expect(await prisma.posSale.findUnique({ where: { id: voidId } })).toMatchObject({ status: "VOIDED", refundedKES: 50 });
+    const voidPayments = await prisma.posPayment.findMany({ where: { businessId, saleId: voidId, direction: "OUT" } });
+    expect(voidPayments.map((p) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 20 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    expect(voidPayments).toHaveLength(2);
+    expect((await voidCall()).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId: voidId, direction: "OUT" } })).toBe(2);
+    expect((await snapshotGet(beforeVoid.body.snapshot.id)).body.snapshot.payload).toEqual(beforeVoid.body.snapshot.payload);
+    const afterVoid = await snapshotPost({ from: day, to: day, supersedesId: beforeVoid.body.snapshot.id, reason: "Void recorded after finalization" });
+    expect(afterVoid.status, afterVoid.text()).toBe(201);
+    expect(afterVoid.body.snapshot.payload.saleCohort.sales.find((s: any) => s.id === voidId).status).toBe("VOIDED");
+    expect(afterVoid.body.snapshot.payload.saleCohort.refundAndVoidEvents).toEqual(expect.arrayContaining([expect.objectContaining({ action: "POS_SALE_VOIDED", targetId: voidId })]));
+    expect((await snapshotGet(beforeVoid.body.snapshot.id)).body.snapshot.payload).toEqual(beforeVoid.body.snapshot.payload);
+  }, 120_000);
+
+  it("21d — real transaction timestamps straddle a short reporting boundary without backdating", async () => {
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+    const dbTime = async (): Promise<Date> => (await prisma.$queryRaw`SELECT clock_timestamp() AS now`)[0].now;
+    const start = await dbTime();
+    const sale = await callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity: 2 }],
+      payments: [{ method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 60 }],
+    } });
+    expect(sale.status, sale.text()).toBe(201);
+    const saleId = sale.body.sale.id;
+    const sold = await prisma.posSale.findUnique({ where: { id: saleId }, include: { items: true } });
+    const boundary = await dbTime();
+    expect(sold!.createdAt.getTime()).toBeGreaterThanOrEqual(start.getTime());
+    expect(sold!.createdAt.getTime()).toBeLessThan(boundary.getTime());
+    const earlier = { from: start, to: new Date(boundary.getTime() - 1) };
+    const original = await runReport(businessId, config, "daily_sales", earlier);
+    expect(original.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 100" }]));
+    const priorLedger = await paymentsForReport(businessId, earlier);
+    expect(priorLedger.filter((p: any) => p.direction === "IN").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(100);
+    // Wait past the boundary in real time, not by changing a database timestamp. These are
+    // short arbitrary test periods within one UTC day, not a test of the UTC day-close UI.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const refund = (body: object) => callPos(salePost, businessId, { path: `/sales/${saleId}`, params: { saleId }, method: "POST", body });
+    const partial = await refund({ amountKES: 70, method: "cash" });
+    expect(partial.status, partial.text()).toBe(200);
+    const partialRows = await prisma.posPayment.findMany({ where: { businessId, saleId, direction: "OUT" } });
+    expect(partialRows.every((p: any) => p.createdAt.getTime() > boundary.getTime())).toBe(true);
+    expect(partialRows.map((p: any) => ({ method: p.method, amountKES: p.amountKES }))).toEqual(expect.arrayContaining([
+      { method: "cash", amountKES: 40 }, { method: "mpesa", amountKES: 30 },
+    ]));
+    const revisedCohort = await runReport(businessId, config, "daily_sales", earlier);
+    expect(revisedCohort.summary).toEqual(expect.arrayContaining([
+      { label: "Refunded", value: "KES 70" }, { label: "Net retained", value: "KES 30" }, { label: "Collected", value: "KES 30" },
+    ]));
+    expect(revisedCohort.notice).toContain("not a historical as-of snapshot");
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 2);
+    const full = await refund({ amountKES: 30, items: [{ saleItemId: sold!.items[0].id, quantity: 2 }] });
+    expect(full.status, full.text()).toBe(200);
+    expect(full.body.returnedToStock).toBe(2);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    const end = await dbTime();
+    const later = { from: boundary, to: end };
+    const laterLedger = await paymentsForReport(businessId, later);
+    const refundsReport = await runReport(businessId, config, "refunds", later);
+    expect(refundsReport.partial).toBe(true);
+    expect(refundsReport.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 100" }]));
+    expect(refundsReport.rows).toHaveLength(3);
+    expect(refundsReport.rows.every((row) => row.sale === saleId)).toBe(true);
+    expect((await runReport(businessId, config, "refunds", earlier)).summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 0" }]));
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.direction === "OUT").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(100);
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "cash").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(40);
+    expect(laterLedger.filter((p: any) => p.purpose === "REFUND" && p.method === "mpesa").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(60);
+    expect((await runReport(businessId, config, "daily_sales", later)).rows).toHaveLength(0);
+    const finalCohort = await runReport(businessId, config, "daily_sales", earlier);
+    expect(finalCohort.summary).toEqual(expect.arrayContaining([{ label: "Net retained", value: "KES 0" }, { label: "Refunded", value: "KES 100" }]));
+    const count = await prisma.posPayment.count({ where: { businessId, saleId } });
+    expect((await refund({ amountKES: 1 })).status).toBe(400);
+    expect(await prisma.posPayment.count({ where: { businessId, saleId } })).toBe(count);
+  }, 120_000);
+
+  it("21e — independent category lifecycle preserves product, photo and tenant boundaries", async () => {
+    const businessId = ctx.owner.businessId;
+    const category = (body: object) => callPos(categoriesPost, businessId, { method: "POST", path: "/categories", body });
+    const create = await category({ action: "create", name: "Empty category" });
+    expect(create.status, create.text()).toBe(201);
+    const id = create.body.category.id;
+    expect((await callPos(categoriesGet, businessId, { path: "/categories" })).body.categories).toEqual(expect.arrayContaining([expect.objectContaining({ id, name: "Empty category", _count: { products: 0 } })]));
+    const duplicate = await category({ action: "create", name: "Empty category" });
+    expect(duplicate.status).toBe(409);
+    const mediaUrl = `https://images.invalid/${runId}/empty-category.png`;
+    await prisma.mediaAsset.create({ data: { businessId, url: mediaUrl } });
+    const photo = await callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Empty category", imageUrl: mediaUrl } });
+    expect(photo.status, photo.text()).toBe(200);
+    const product = await callPos(productsPost, businessId, { method: "POST", body: { name: "Category fixture", category: "Empty category", priceKES: 50 } });
+    expect(product.status, product.text()).toBe(201);
+    const productId = product.body.product.id;
+    const oldSale = await prisma.posSale.findUnique({ where: { id: ctx.saleId } });
+    const oldStock = await stockOf(businessId, ctx.chapatiId);
+    expect((await category({ action: "delete", id })).status).toBe(409);
+    expect((await category({ action: "rename", id, name: "Renamed category" })).status).toBe(200);
+    expect((await prisma.posProduct.findUnique({ where: { id: productId } }))?.category).toBe("Renamed category");
+    expect((await prisma.posCategoryImage.findFirst({ where: { businessId, category: "Renamed category" } }))?.imageUrl).toBe(mediaUrl);
+    expect((await prisma.posSale.findUnique({ where: { id: ctx.saleId } }))?.refundedKES).toBe(oldSale!.refundedKES);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(oldStock);
+    expect((await category({ action: "deactivate", id })).status).toBe(200);
+    const blocked = await callPos(productsPost, businessId, { method: "POST", body: { name: "Blocked category fixture", category: "Renamed category", priceKES: 50 } });
+    expect(blocked.status, blocked.text()).toBe(409);
+    expect(blocked.body.code).toBe("CATEGORY_INACTIVE");
+    expect(await prisma.posProduct.count({ where: { businessId, name: "Blocked category fixture" } })).toBe(0);
+    expect((await category({ action: "restore", id })).status).toBe(200);
+    h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+    expect((await category({ action: "rename", id, name: "Stolen" })).status).toBe(403);
+    h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+    expect((await prisma.posCategory.findFirst({ where: { businessId, id } }))?.name).toBe("Renamed category");
+    const removePhoto = await callPos(categoryImagesPost, businessId, { method: "POST", path: "/category-images", body: { category: "Renamed category", imageUrl: null } });
+    expect(removePhoto.status).toBe(200);
+    expect(await prisma.mediaAsset.count({ where: { businessId, url: mediaUrl } })).toBe(1);
+    const archive = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${productId}`, params: { productId }, body: { archive: true } });
+    expect(archive.status).toBe(200);
+    expect((await category({ action: "delete", id })).status).toBe(409);
+    const move = await callPos(productPatch, businessId, { method: "PATCH", path: `/products/${productId}`, params: { productId }, body: { name: "Category fixture", category: "Moved category", priceKES: 50, isActive: false } });
+    expect(move.status, move.text()).toBe(200);
+    expect((await category({ action: "delete", id })).status).toBe(200);
+    expect(await prisma.posProduct.findUnique({ where: { id: productId } })).toMatchObject({ category: "Moved category", isActive: false });
+    expect(await prisma.posCategory.findFirst({ where: { businessId, id } })).toBeNull();
+    expect(await prisma.posCategory.findFirst({ where: { businessId, name: "Moved category" } })).toBeTruthy();
+  }, 120_000);
+
+  it("21e-limit — real PostgreSQL refuses a capped daily closing and hides the capped expense card", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `cap-${runId}`;
+    try {
+      const before = await callPos(expensesGet, businessId);
+      expect(before.status, before.text()).toBe(200);
+      await prisma.posExpense.createMany({ data: Array.from({ length: 5000 }, () => ({ businessId, categoryKey: "test", amountKES: 1, method: "cash", notes: marker })) });
+      const expenses = await callPos(expensesGet, businessId);
+      expect(expenses.status, expenses.text()).toBe(200);
+      expect(expenses.body.totals.amountKES - before.body.totals.amountKES).toBe(5000);
+      const category = (payload: any) => payload.totals.byCategory.find((row: any) => row.categoryKey === "test")?.amountKES ?? 0;
+      expect(category(expenses.body) - category(before.body)).toBe(5000);
+      expect(expenses.body.rowsMayBeLimited).toBe(true);
+      expect(expenses.body.expenses).toHaveLength(200);
+      const closing = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+      expect(closing.status, closing.text()).toBe(422);
+      expect(closing.body.code).toBe("REPORT_LIMIT");
+      expect(closing.body.closing).toBeUndefined();
+      const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+      const sources = await loadCardSources(businessId, config, ["expenses"]);
+      const [card] = buildDashboardCards(config, `/dashboard/pos/${businessId}`, ["expenses"], sources);
+      expect(card.value).toBe("Unavailable");
+      expect(card.hint).toContain("5,000-record limit");
+    } finally {
+      await prisma.posExpense.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
+  it("21e-top-limit — real PostgreSQL refuses a sampled top-item ranking above 2,000 sales", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `top-cap-${runId}`;
+    try {
+      await prisma.posSale.createMany({ data: Array.from({ length: 2001 }, (_, index) => ({ businessId, receiptNumber: `${marker}-${index}`, notes: marker })) });
+      const result = await callPos(salesGet, businessId);
+      expect(result.status, result.text()).toBe(200);
+      expect(result.body.topItems).toBeNull();
+      expect(result.body.topItemsNotice).toContain("more than 2,000 sales");
+    } finally {
+      await prisma.posSale.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
+  it("21e-credit-limit — real PostgreSQL refuses incomplete statements and reads the oldest debit beyond 200 entries", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `credit-cap-${runId}`;
+    const old = new Date("2001-01-01T00:00:00.000Z"); // synthetic age fixture, not midnight evidence
+    try {
+      await prisma.posCreditEntry.createMany({ data: ["CUSTOMER", "SUPPLIER"].flatMap((partyType) => {
+        const partyId = partyType === "CUSTOMER" ? ctx.customerId : ctx.supplierId;
+        return Array.from({ length: 201 }, (_, index) => ({ businessId, partyType, partyId, direction: "DEBIT", amountKES: 1, note: marker, ...(index === 0 ? { createdAt: old } : {}) }));
+      }) });
+      const customer = await callPos(customerGet, businessId, { path: `/customers/${ctx.customerId}`, params: { customerId: ctx.customerId } });
+      const supplier = await callPos(supplierGet, businessId, { path: `/suppliers/${ctx.supplierId}`, params: { supplierId: ctx.supplierId } });
+      for (const result of [customer, supplier]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement).toBeNull();
+        expect(result.body.statementNotice).toContain("more than 200 ledger entries");
+      }
+      expect((await oldestCreditDebit(businessId, "CUSTOMER", ctx.customerId))?.createdAt.toISOString()).toBe(old.toISOString());
+      expect((await oldestCreditDebit(businessId, "SUPPLIER", ctx.supplierId))?.createdAt.toISOString()).toBe(old.toISOString());
+      expect(await oldestCreditDebit(ctx.stranger.businessId, "CUSTOMER", ctx.customerId)).toBeNull();
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+    }
+  }, 120_000);
+
+  it("21e-statement-reconciliation — PostgreSQL refuses mismatched receivables and payables", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `statement-reconcile-${runId}`;
+    const customer = await prisma.posCustomer.create({ data: { businessId, name: marker, creditEnabled: true, balanceKES: 100 } });
+    const supplier = await prisma.posSupplier.create({ data: { businessId, name: marker, balanceKES: 100 } });
+    try {
+      await prisma.posCreditEntry.createMany({ data: [
+        { businessId, partyType: "CUSTOMER", partyId: customer.id, direction: "DEBIT", amountKES: 100, note: marker },
+        { businessId, partyType: "SUPPLIER", partyId: supplier.id, direction: "DEBIT", amountKES: 100, note: marker },
+      ] });
+      const readCustomer = () => callPos(customerGet, businessId, { path: `/customers/${customer.id}`, params: { customerId: customer.id } });
+      const readSupplier = () => callPos(supplierGet, businessId, { path: `/suppliers/${supplier.id}`, params: { supplierId: supplier.id } });
+      for (const result of [await readCustomer(), await readSupplier()]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement.closingBalanceKES).toBe(100);
+      }
+      await prisma.posCustomer.update({ where: { id: customer.id }, data: { balanceKES: 99 } });
+      await prisma.posSupplier.update({ where: { id: supplier.id }, data: { balanceKES: 99 } });
+      for (const result of [await readCustomer(), await readSupplier()]) {
+        expect(result.status, result.text()).toBe(200);
+        expect(result.body.statement).toBeNull();
+        expect(result.body.statementNotice).toContain("does not reconcile");
+      }
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+      await prisma.posCustomer.delete({ where: { id: customer.id } });
+      await prisma.posSupplier.delete({ where: { id: supplier.id } });
+    }
+  }, 120_000);
+
+  it("21e-refund-cap — PostgreSQL refuses truncated refund totals and isolates tenants", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `refund-cap-${runId}`;
+    const date = new Date("2011-05-01T12:00:00.000Z");
+    const range = { from: new Date("2011-05-01T00:00:00.000Z"), to: new Date("2011-05-01T23:59:59.999Z") };
+    const config = JSON.parse((await prisma.posConfiguration.findUnique({ where: { businessId } }))!.publishedJson!);
+    if (!config.capabilities.includes("refunds")) config.capabilities.push("refunds");
+    try {
+      await prisma.posPayment.createMany({ data: Array.from({ length: 5000 }, () => ({ businessId, direction: "OUT", purpose: "REFUND", status: "SETTLED", method: "cash", amountKES: 1, notes: marker, createdAt: date })) });
+      const report = await runReport(businessId, config, "refunds", range);
+      expect(report.rows).toHaveLength(5000);
+      expect(report.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 5,000" }]));
+      const other = await runReport(ctx.stranger.businessId, config, "refunds", range);
+      expect(other.rows).toHaveLength(0);
+      await prisma.posPayment.create({ data: { businessId, direction: "OUT", purpose: "REFUND", status: "SETTLED", method: "cash", amountKES: 1, notes: marker, createdAt: date } });
+      await expect(runReport(businessId, config, "refunds", range)).rejects.toThrow(/5,000-record safety limit/);
+    } finally {
+      await prisma.posPayment.deleteMany({ where: { businessId, notes: marker } });
+    }
+  }, 120_000);
+
+  it("21e-credit-period — PostgreSQL captures raw period entries without unverified opening or closing balances", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `credit-period-${runId}`;
+    const partyId = `${marker}-party`;
+    const before = new Date("2005-02-01T12:00:00.000Z");
+    const during = new Date("2005-02-02T12:00:00.000Z");
+    // Deliberately synthetic dates establish cross-period arithmetic, not actual midnight.
+    try {
+      await prisma.posCreditEntry.createMany({ data: [
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 100, createdAt: before, note: marker },
+        { businessId, partyType: "SUPPLIER", partyId, direction: "DEBIT", amountKES: 80, createdAt: before, note: marker },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "CREDIT", amountKES: 30, createdAt: during, note: marker },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 40, createdAt: during, note: marker },
+        { businessId, partyType: "SUPPLIER", partyId, direction: "CREDIT", amountKES: 20, createdAt: during, note: marker },
+      ] });
+      const capture = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: "2005-02-02", to: "2005-02-02" } });
+      expect(capture.status, capture.text()).toBe(201);
+      expect(capture.body.snapshot.payload.periodLedger.creditProjection).toBeUndefined();
+      const entries = capture.body.snapshot.payload.periodLedger.creditEntries.filter((a: any) => a.partyId === partyId);
+      expect(entries).toHaveLength(3);
+      expect(entries).toEqual(expect.arrayContaining([
+        expect.objectContaining({ partyType: "CUSTOMER", direction: "CREDIT", amountKES: 30 }),
+        expect.objectContaining({ partyType: "CUSTOMER", direction: "DEBIT", amountKES: 40 }),
+        expect.objectContaining({ partyType: "SUPPLIER", direction: "CREDIT", amountKES: 20 }),
+      ]));
+      await prisma.posCreditEntry.create({ data: { businessId, partyType: "CUSTOMER", partyId, direction: "CREDIT", amountKES: 10, note: marker } });
+      const history = await callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id: capture.body.snapshot.id } });
+      expect(history.status).toBe(200);
+      expect(history.body.snapshot.payload).toEqual(capture.body.snapshot.payload);
+      await prisma.posCreditEntry.createMany({ data: Array.from({ length: 5001 }, () => ({ businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 1, createdAt: before, note: marker })) });
+      const capped = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: "2005-02-03", to: "2005-02-03" } });
+      expect(capped.status, capped.text()).toBe(201);
+      expect(capped.body.snapshot.payload.periodLedger.creditProjection).toBeUndefined();
+      h.session.current = { userId: ctx.stranger.userId, role: "OWNER" };
+      const foreign = await callPos(snapshotsGet, ctx.stranger.businessId, { path: "/reports/snapshots", query: { id: capture.body.snapshot.id } });
+      expect([403, 404]).toContain(foreign.status);
+    } finally {
+      h.session.current = { userId: ctx.owner.userId, role: "OWNER" };
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+    }
+  }, 120_000);
+
+  it("21e-fifo — real PostgreSQL credit ageing excludes a fully paid older debit", async () => {
+    const businessId = ctx.owner.businessId;
+    const marker = `fifo-${runId}`;
+    const partyId = `${marker}-party`;
+    const first = new Date("2020-01-01T00:00:00.000Z");
+    const last = new Date("2021-01-01T00:00:00.000Z");
+    // Synthetic ledger dates exercise FIFO, not the genuine midnight acceptance criterion.
+    try {
+      await prisma.posCreditEntry.createMany({ data: [
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 100, note: marker, createdAt: first },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "CREDIT", amountKES: 100, note: marker, createdAt: new Date("2020-02-01T00:00:00.000Z") },
+        { businessId, partyType: "CUSTOMER", partyId, direction: "DEBIT", amountKES: 50, note: marker, createdAt: last },
+      ] });
+      expect((await loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 50))?.toISOString()).toBe(last.toISOString());
+      await prisma.posCreditEntry.updateMany({ where: { businessId, note: marker, direction: "CREDIT" }, data: { amountKES: 60 } });
+      const persisted = await prisma.posCreditEntry.findMany({ where: { businessId, partyType: "CUSTOMER", partyId }, orderBy: { createdAt: "asc" } });
+      expect(unpaidDebitLots(persisted, 90)).toEqual([
+        { createdAt: first, amountKES: 40 }, { createdAt: last, amountKES: 50 },
+      ]);
+      await expect(loadOldestUnpaidDebit(prisma, businessId, "CUSTOMER", partyId, 49)).rejects.toBeInstanceOf(CreditAgeError);
+      await expect(loadOldestUnpaidDebit(prisma, ctx.stranger.businessId, "CUSTOMER", partyId, 50)).rejects.toBeInstanceOf(CreditAgeError);
+    } finally {
+      await prisma.posCreditEntry.deleteMany({ where: { businessId, note: marker } });
+    }
+  }, 120_000);
+
+  // Register this separate, time-sensitive acceptance scenario only when explicitly opted in.
+  // It is not part of the ordinary journey's no-skips CI guarantee and is not evidence until run.
+  if (process.env.JATA_REAL_MIDNIGHT === "1") it("21f — actual UTC midnight finalization, mixed-tender refund and void (isolated only)", async () => {
+    // Explicit opt-in, a local throwaway database and an actual UTC boundary are mandatory.
+    const database = new URL(DATABASE_URL);
+    if (process.env.JATA_DISPOSABLE_MIDNIGHT_DB !== "1" || !["localhost", "127.0.0.1"].includes(database.hostname) || !/(test|scratch|verify|tmp)/i.test(database.pathname)) {
+      throw new Error("Midnight journey requires an explicitly disposable local test database.");
+    }
+    const dbTime = async (): Promise<Date> => (await prisma.$queryRaw`SELECT clock_timestamp() AS now`)[0].now;
+    const start = await dbTime();
+    const midnight = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 1));
+    const remaining = midnight.getTime() - start.getTime();
+    if (remaining < 10_000 || remaining > 200_000) throw new Error("Start the midnight scenario 10–200 seconds before UTC midnight; no timestamp substitution is permitted.");
+    const businessId = ctx.owner.businessId;
+    const stockBefore = await stockOf(businessId, ctx.chapatiId);
+    const createSale = (quantity: number, cash: number, mpesa: number) => callPos(salesPost, businessId, { method: "POST", body: {
+      items: [{ productId: ctx.chapatiId, quantity }], payments: [{ method: "cash", amountKES: cash }, { method: "mpesa", amountKES: mpesa }],
+    } });
+    const mixed = await createSale(2, 40, 60);
+    const toVoid = await createSale(1, 20, 30);
+    expect(mixed.status, mixed.text()).toBe(201); expect(toVoid.status, toVoid.text()).toBe(201);
+    const saleId = mixed.body.sale.id, voidId = toVoid.body.sale.id;
+    const sold = await prisma.posSale.findUnique({ where: { id: saleId }, include: { items: true, payments: true } });
+    const voidSale = await prisma.posSale.findUnique({ where: { id: voidId }, include: { payments: true } });
+    expect(sold!.createdAt.getTime()).toBeLessThan(midnight.getTime());
+    expect(voidSale!.createdAt.getTime()).toBeLessThan(midnight.getTime());
+    expect([...sold!.payments, ...voidSale!.payments].every((p: any) => p.createdAt.getTime() < midnight.getTime())).toBe(true);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore - 3);
+    // Actual elapsed wall-clock time. No injected clock, database timestamp edits or backdating.
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, midnight.getTime() - Date.now()) + 1200));
+    expect((await dbTime()).getTime()).toBeGreaterThanOrEqual(midnight.getTime());
+    const firstDay = sold!.createdAt.toISOString().slice(0, 10);
+    const secondDay = midnight.toISOString().slice(0, 10);
+    const snap = await callPos(snapshotsPost, businessId, { method: "POST", path: "/reports/snapshots", body: { from: firstDay, to: firstDay } });
+    expect(snap.status, snap.text()).toBe(201);
+    const snapshot = snap.body.snapshot;
+    expect(snapshot.payload.saleCohort.sales).toEqual(expect.arrayContaining([expect.objectContaining({ id: saleId, refundedKES: 0 }), expect.objectContaining({ id: voidId, status: "COMPLETED" })]));
+    const closingBefore = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingBefore.status, closingBefore.text()).toBe(200);
+    const action = (id: string, body: object) => callPos(salePost, businessId, { path: `/sales/${id}`, params: { saleId: id }, method: "POST", body });
+    const partial = await action(saleId, { amountKES: 70, method: "cash" });
+    const full = await action(saleId, { amountKES: 30, items: [{ saleItemId: sold!.items[0].id, quantity: 2 }] });
+    const voided = await action(voidId, { void: true });
+    expect(partial.status, partial.text()).toBe(200); expect(full.status, full.text()).toBe(200); expect(voided.status, voided.text()).toBe(200);
+    expect((await action(saleId, { amountKES: 1 })).status).toBe(400);
+    expect((await action(voidId, { void: true })).status).toBe(400);
+    expect(await stockOf(businessId, ctx.chapatiId)).toBe(stockBefore);
+    const out = await prisma.posPayment.findMany({ where: { businessId, saleId: { in: [saleId, voidId] }, direction: "OUT" }, orderBy: { createdAt: "asc" } });
+    expect(out.every((p: any) => p.createdAt.getTime() >= midnight.getTime())).toBe(true);
+    expect(out.filter((p: any) => p.method === "cash").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(60);
+    expect(out.filter((p: any) => p.method === "mpesa").reduce((n: number, p: any) => n + p.amountKES, 0)).toBe(90);
+    const refunds = await callPos(reportsGet, businessId, { query: { report: "refunds", from: secondDay, to: secondDay } });
+    expect(refunds.body.report.summary).toEqual(expect.arrayContaining([{ label: "Settled refund payouts", value: "KES 150" }]));
+    expect(refunds.body.report.rows).toHaveLength(out.length);
+    const earlierRefunds = await callPos(reportsGet, businessId, { query: { report: "refunds", from: firstDay, to: firstDay } });
+    const earlierIds = earlierRefunds.body.report.rows.map((row: any) => row.payment);
+    expect(out.every((p: any) => !earlierIds.includes(p.id))).toBe(true);
+    const closingAfter = await callPos(reportsGet, businessId, { query: { report: "daily_closing" } });
+    expect(closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES).toBe(60);
+    expect(closingAfter.body.closing.expectedCashKES - closingBefore.body.closing.expectedCashKES).toBe(-60);
+    const historical = await callPos(snapshotsGet, businessId, { path: "/reports/snapshots", query: { id: snapshot.id } });
+    expect(historical.status).toBe(200); expect(historical.body.snapshot.payload).toEqual(snapshot.payload);
+    console.log("MIDNIGHT_EVIDENCE", JSON.stringify({ firstDay, secondDay, boundaryUTC: midnight.toISOString(),
+      finalizedAt: snapshot.finalizedAt, snapshotId: snapshot.id,
+      sales: [{ id: saleId, receipt: sold!.receiptNumber, createdAt: sold!.createdAt, in: sold!.payments.map((p: any) => ({ id: p.id, method: p.method, amountKES: p.amountKES, at: p.createdAt })) },
+        { id: voidId, receipt: voidSale!.receiptNumber, createdAt: voidSale!.createdAt, in: voidSale!.payments.map((p: any) => ({ id: p.id, method: p.method, amountKES: p.amountKES, at: p.createdAt })) }],
+      out: out.map((p: any) => ({ id: p.id, saleId: p.saleId, method: p.method, amountKES: p.amountKES, at: p.createdAt })),
+      expected: { refundsKES: 150, cashOutKES: 60, mpesaOutKES: 90, stockAfter: stockBefore },
+      actual: { refunds: refunds.body.report.summary, cashOutDelta: closingAfter.body.closing.cashOutKES - closingBefore.body.closing.cashOutKES, stockAfter: await stockOf(businessId, ctx.chapatiId) } }));
+  }, 240_000);
 
   it("22 — a lapsed plan keeps history readable and refuses new money (§44)", async () => {
     const businessId = ctx.owner.businessId;

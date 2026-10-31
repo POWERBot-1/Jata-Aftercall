@@ -10,12 +10,15 @@
  * running totals forward (§54).
  */
 
+import { createHash } from "node:crypto";
 import prisma from "@/lib/db";
 import { baselineConfiguration, normalizeConfiguration } from "./configuration";
 import { hasCapability } from "./capabilities";
 import { decideCredit, validateRepayment, RECEIVABLE } from "./credit";
+import { CreditAgeError, loadOldestUnpaidDebit } from "./credit-age";
+import { ReportLimitError } from "./report-limit";
 import { checkAvailability, movementsForReturn, movementsForSale } from "./inventory";
-import { calculateSale, discountFromPercent, isCreditMethod, sanitizeAmountKES, validatePayments, validateRefund } from "./money";
+import { calculateSale, discountFromPercent, isCreditMethod, MAX_AMOUNT_KES, sanitizeAmountKES, validatePayments, validateRefund } from "./money";
 import { logPosAuditInTransaction } from "./audit";
 import { buildReceipt, formatReceiptNumber, receiptPrefixFromBusinessName, receiptToText } from "./receipt";
 import type { ReceiptBusiness } from "./receipt";
@@ -445,8 +448,13 @@ export async function createSale(params: {
   // This early pass exists so the till answers in the same order it always has — a declined
   // credit is refused before a stock question, and the refusal is audited either way.
   if (creditKES > 0 && customer) {
-    const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, client);
-    const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
+    let oldestDebit: Date | null;
+    try {
+      oldestDebit = await loadOldestUnpaidDebit(client, businessId, RECEIVABLE, customer.id, Number(customer.balanceKES ?? 0));
+    } catch (error) {
+      if (error instanceof CreditAgeError || error instanceof ReportLimitError) return problem("CREDIT_HISTORY_UNAVAILABLE", "Credit history cannot be verified; contact support before extending credit.", warnings);
+      throw error;
+    }
     const earlyDecision = decideCredit({
       config: configuration,
       party: {
@@ -578,8 +586,13 @@ export async function createSale(params: {
     if (creditKES > 0 && customer) {
       await store.lockPartyRow(tx, RECEIVABLE, businessId, customer.id);
       const current = await store.findCustomer(businessId, customer.id, tx);
-      const entries = await store.listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customer.id, take: 200 }, tx);
-      const oldestDebit = entries.filter((entry: any) => entry.direction === "DEBIT").map((entry: any) => entry.createdAt).sort()[0] ?? null;
+      let oldestDebit: Date | null;
+      try {
+        oldestDebit = await loadOldestUnpaidDebit(tx, businessId, RECEIVABLE, customer.id, Number(current?.balanceKES ?? customer.balanceKES ?? 0));
+      } catch (error) {
+        if (error instanceof CreditAgeError || error instanceof ReportLimitError) throw new CreditDecisionRefused("CREDIT_HISTORY_UNAVAILABLE", "Credit history cannot be verified; contact support before extending credit.");
+        throw error;
+      }
       const decision = decideCredit({
         config: configuration,
         party: {
@@ -947,6 +960,11 @@ export async function refundSale(params: {
     if (!sale) return { returnedToStock: 0, code: "SALE_NOT_FOUND" as string | undefined, message: "That sale was not found.", refundKES: 0 };
     if (sale.status === "VOIDED") return { returnedToStock: 0, code: "ALREADY_VOIDED" as string | undefined, message: "That sale was already voided.", refundKES: 0 };
 
+    // Credit refunds and customer repayments both reduce the same receivable. Lock the
+    // customer before reading its balance so a repayment cannot commit between the refund's
+    // eligibility check and its balance update. Sale creation also serializes on this row.
+    if (sale.customerId) await store.lockPartyRow(tx, RECEIVABLE, businessId, sale.customerId);
+
     // A sale the payment wallet settled has its own refund flow; refunding it here would open a
     // second ledger for the same money (§112).
     const walletTransaction = await tx.paymentTransaction.findFirst({ where: { businessId, posSaleId: sale.id } });
@@ -1060,18 +1078,25 @@ export async function refundSale(params: {
           : returnedValueKES;
     const totalRefundableKES = cashRefundableKES + creditRefundableKES;
     if (action !== "POS_SALE_VOIDED" && requestedAmount > totalRefundableKES) {
-      return {
-        returnedToStock: 0,
-        code: "REFUND_INVALID" as string | undefined,
-        message: `Only KES ${totalRefundableKES.toLocaleString("en-KE")} of that sale is left to refund.`,
-        refundKES: 0,
-      };
+      // Line quantities may already have been claimed above. Throw so the transaction rolls
+      // those claims back as well; returning an error here would commit them without a return.
+      throw new RefundAborted("REFUND_INVALID", `Only KES ${totalRefundableKES.toLocaleString("en-KE")} of that sale is left to refund.`);
     }
     // Money is the only part that may leave through a tender; the credit part goes back to the
     // customer's account. Money is taken first, so a sale with both never pays out more than was
     // funded, and never through a method the customer did not pay with.
     const cashPart = Math.min(Math.max(0, requestedAmount), fundableKES);
     const creditPart = Math.min(Math.max(0, requestedAmount - cashPart), creditRefundableKES);
+    // Account-level repayments have no sale allocation. The customer's overall balance can
+    // belong to a different sale, so it cannot establish how much credit remains on this one.
+    // Preserve cash-only refunds, but refuse a credit reversal until the ambiguity is resolved.
+    if (creditPart > 0 && sale.customerId) {
+      const repayment = await tx.posPayment.findFirst({
+        where: { businessId, customerId: sale.customerId, purpose: "CREDIT_REPAYMENT", direction: "IN", status: "SETTLED", saleId: null },
+        select: { id: true },
+      });
+      if (repayment) throw new RefundAborted("CREDIT_ALLOCATION_UNVERIFIED", "This credit refund cannot be calculated because customer repayments are not allocated to sales. Review the account before refunding.");
+    }
     const refundKES = cashPart + creditPart;
 
     // The authoritative split: one row per tender, each capped by what that tender funded and
@@ -1194,7 +1219,16 @@ export async function refundSale(params: {
 
     return { returnedToStock, code: undefined, message: undefined, refundKES };
   }).catch(async (error: unknown) => {
+    // An injected transaction belongs to the caller. Do not swallow failures inside it: the
+    // caller must roll back any claimed return lines and other earlier writes before responding.
+    if (params.client && params.client !== prisma) throw error;
     if (error instanceof RefundAborted) {
+      if (error.message === "REFUND_INVALID") {
+        return { returnedToStock: 0, code: "REFUND_INVALID" as string | undefined, message: error.publicMessage, refundKES: 0 };
+      }
+      if (error.message === "CREDIT_ALLOCATION_UNVERIFIED") {
+        return { returnedToStock: 0, code: "CREDIT_ALLOCATION_UNVERIFIED" as string | undefined, message: error.publicMessage, refundKES: 0 };
+      }
       if (error.message === "CREDIT_PARTY_MISSING") {
         return { returnedToStock: 0, code: "REFUND_CONFLICT" as string | undefined, message: "That refund could not be recorded — try again.", refundKES: 0 };
       }
@@ -1431,7 +1465,7 @@ function isWriteConflictError(error: unknown): boolean {
 
 /** Raised to roll a refund back when its preconditions fail after rows were written. */
 class RefundAborted extends Error {
-  constructor(message: string) {
+  constructor(message: string, public readonly publicMessage?: string) {
     super(message);
     this.name = "RefundAborted";
   }
@@ -1465,7 +1499,10 @@ export type RepaymentOutcome = {
   message?: string;
   warnings: string[];
   balanceKES?: number;
+  /** Balance immediately after the original posting; distinct from a replay's current balance. */
+  balanceAfterKES?: number;
   amountKES?: number;
+  replayed?: boolean;
 };
 
 /** A customer pays down their balance: money in, ledger entry, balance moves (§30, §31). */
@@ -1478,31 +1515,58 @@ export async function recordRepayment(params: {
   method?: string | null;
   reference?: string | null;
   note?: string | null;
+  idempotencyKey: string;
   client?: PosClient;
 }): Promise<RepaymentOutcome> {
   const { businessId, configuration, actor } = params;
   const client: PosClient = params.client ?? prisma;
   const warnings: string[] = [];
+  // An injected client may be an interactive transaction with earlier writes. A refusal must
+  // escape that transaction, just like a database error, instead of allowing those writes to commit.
+  const refuse = (code: string, message: string): RepaymentOutcome => {
+    if (params.client && params.client !== prisma) throw new RepaymentRefused(code, message);
+    return { ok: false, code, message, warnings };
+  };
 
   if (!actorCan(actor, "RECORD_REPAYMENT")) {
-    return { ok: false, code: "NOT_ALLOWED", message: "You don't have permission to record a repayment.", warnings };
+    return refuse("NOT_ALLOWED", "You don't have permission to record a repayment.");
   }
   if (!configuration.credit.enabled) {
-    return { ok: false, code: "CREDIT_DISABLED", message: "Credit is not switched on for this business.", warnings };
+    return refuse("CREDIT_DISABLED", "Credit is not switched on for this business.");
   }
 
   const customerId = clampNote(params.customerId, 64);
-  if (!customerId) return { ok: false, code: "CUSTOMER_REQUIRED", message: `Choose the ${customerWord(configuration)}.`, warnings };
+  if (!customerId) return refuse("CUSTOMER_REQUIRED", `Choose the ${customerWord(configuration)}.`);
 
   const customer = await store.findCustomer(businessId, customerId, client);
-  if (!customer) return { ok: false, code: "CUSTOMER_NOT_FOUND", message: "That record was not found.", warnings };
+  if (!customer) return refuse("CUSTOMER_NOT_FOUND", "That record was not found.");
 
-  const amountKES = sanitizeAmountKES(params.amountKES);
+  const key = store.normalizeIdempotencyKey(params.idempotencyKey);
+  if (!key) return refuse("IDEMPOTENCY_KEY_REQUIRED", "A repayment request key is required.");
+  // Do not round or cap a financial posting: the amount collected must be exactly the amount
+  // recorded. Keep the validity check after the replay lookup so an invalid reuse of a spent
+  // key cannot be mistaken for an uncommitted request by a retrying client.
+  const amountKES = params.amountKES;
+  const amountIsExact = Number.isSafeInteger(amountKES) && amountKES > 0 && amountKES <= MAX_AMOUNT_KES;
+  const method = clampNote(params.method, 32) ?? "cash";
+  const reference = clampNote(params.reference, 80);
+  const note = clampNote(params.note);
+  // Hash the exact normalized financial request, not the current balance or actor. A retry
+  // from another authorized cashier must not post the same repayment a second time.
+  const requestHash = createHash("sha256").update(JSON.stringify([amountKES, method, reference, note])).digest("hex");
   const result = await inTransaction(params.client, async (tx: PosClient) => {
     // Re-validate against the balance under the customer's row lock: a concurrent refund or
     // sale that changes the balance commits before this lock is taken, so an over-repayment
     // that looked fine a moment ago is still refused here (§30).
     await store.lockPartyRow(tx, RECEIVABLE, businessId, customerId);
+    const existing = await tx.posRepaymentRequest.findFirst({ where: { businessId, key } });
+    if (existing) {
+      if (!amountIsExact || existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
+      const currentCustomer = await store.findCustomer(businessId, customerId, tx);
+      if (!currentCustomer) throw new Error("REPAYMENT_CUSTOMER_MISSING");
+      return { amountKES: existing.amountKES, balanceKES: Number(currentCustomer.balanceKES), balanceAfterKES: existing.balanceAfterKES, replayed: true };
+    }
+    if (!amountIsExact) throw new RepaymentAborted(`Enter a whole-shilling amount between 1 and ${MAX_AMOUNT_KES.toLocaleString("en-KE")} KES.`);
     const current = await store.findCustomer(businessId, customerId, tx);
     const check = validateRepayment(Number(current?.balanceKES ?? 0), amountKES);
     if (!check.ok) throw new RepaymentAborted(check.message ?? "That repayment could not be recorded.");
@@ -1513,11 +1577,11 @@ export async function recordRepayment(params: {
         branchId: actor.branchId,
         direction: "IN",
         purpose: "CREDIT_REPAYMENT",
-        method: clampNote(params.method, 32) ?? "cash",
+        method,
         amountKES: check.amountKES,
-        reference: clampNote(params.reference, 80),
+        reference,
         status: "SETTLED",
-        notes: clampNote(params.note),
+        notes: note,
         createdById: actor.actorId,
       },
     });
@@ -1527,7 +1591,14 @@ export async function recordRepayment(params: {
       { deltaKES: -check.amountKES, direction: "CREDIT", paymentId: payment.id, note: clampNote(params.note) ?? "Repayment" },
       tx,
     );
-    const balanceAfterKES = applied?.balanceKES ?? Number(current?.balanceKES ?? 0) - check.amountKES;
+    if (!applied || applied.balanceKES !== Number(current?.balanceKES) - check.amountKES) {
+      // A missing or inconsistent ledger movement must abort the entire caller-owned transaction.
+      throw new Error("REPAYMENT_LEDGER_MISMATCH");
+    }
+    const balanceAfterKES = applied.balanceKES;
+    await tx.posRepaymentRequest.create({
+      data: { businessId, customerId, key, requestHash, paymentId: payment.id, amountKES: check.amountKES, balanceAfterKES },
+    });
     await logPosAuditInTransaction(tx, {
       businessId,
       actorId: actor.actorId,
@@ -1539,17 +1610,43 @@ export async function recordRepayment(params: {
       after: { balanceKES: balanceAfterKES },
       metadata: { amountKES: check.amountKES, method: payment.method, paymentId: payment.id },
     });
-    return { amountKES: check.amountKES, balanceKES: balanceAfterKES };
-  }).catch((error: unknown) => {
-    if (error instanceof RepaymentAborted) return { invalid: error.message };
+    return { amountKES: check.amountKES, balanceKES: balanceAfterKES, balanceAfterKES };
+  }).catch(async (error: unknown) => {
+    if (error instanceof RepaymentAborted) {
+      if (params.client && params.client !== prisma) throw new RepaymentRefused("REPAYMENT_INVALID", error.message);
+      return { invalid: error.message };
+    }
+    // Different customer rows do not serialize on the party lock. If they race for the same
+    // business-wide key, the unique index rolls the loser back; resolve it only after an owned
+    // transaction has ended. A caller-owned transaction must receive the error and roll back.
+    if ((!params.client || params.client === prisma) && isUniqueConstraintError(error)) {
+      const existing = await prisma.posRepaymentRequest.findFirst({ where: { businessId, key } });
+      if (existing) {
+        if (existing.customerId !== customerId || existing.requestHash !== requestHash) return { conflict: true as const };
+        const currentCustomer = await store.findCustomer(businessId, customerId, prisma);
+        if (!currentCustomer) throw new Error("REPAYMENT_CUSTOMER_MISSING");
+        return { amountKES: existing.amountKES, balanceKES: Number(currentCustomer.balanceKES), balanceAfterKES: existing.balanceAfterKES, replayed: true };
+      }
+    }
     throw error;
   });
 
   if (result && "invalid" in result) {
     return { ok: false, code: "REPAYMENT_INVALID", message: result.invalid, warnings };
   }
-  const done = result as { amountKES: number; balanceKES: number } | undefined;
-  return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined };
+  if (result && "conflict" in result) {
+    return refuse("IDEMPOTENCY_CONFLICT", "This repayment key was already used for a different request.");
+  }
+  const done = result as { amountKES: number; balanceKES: number; balanceAfterKES: number; replayed?: boolean } | undefined;
+  return { ok: true, warnings, amountKES: done?.amountKES ?? amountKES, balanceKES: done?.balanceKES ?? undefined, balanceAfterKES: done?.balanceAfterKES, replayed: done?.replayed ?? false };
+}
+
+/** A refusal in a caller-owned transaction must propagate so the caller can roll back. */
+export class RepaymentRefused extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "RepaymentRefused";
+  }
 }
 
 /** Raised inside the repayment transaction when the re-validated balance no longer fits (§30). */

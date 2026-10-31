@@ -124,6 +124,7 @@ export const EXPERIENCE_CATEGORY_IMAGE: Record<string, string> = {
   salon: "salon",
   fashion: "fashion",
   retail: "retail",
+  farm: "agriculture",
   electronics: "electronics",
   automotive: "automotive",
   realestate: "realestate",

@@ -55,7 +55,7 @@ export default async function PosSalesPage({ params, searchParams }: Props) {
       <dl className="jata-stat-grid">
         <div className="jata-stat"><dt>{workspace.terminology.sales}</dt><dd>{totals.count}</dd></div>
         <div className="jata-stat"><dt>Taken</dt><dd>{formatKES(totals.totalKES)}</dd></div>
-        <div className="jata-stat"><dt>Still owed</dt><dd>{formatKES(totals.balanceKES)}</dd></div>
+        <div className="jata-stat"><dt>Unpaid at sale (repayments not allocated)</dt><dd>{formatKES(totals.balanceKES)}</dd></div>
         <div className="jata-stat"><dt>Refunded</dt><dd>{formatKES(totals.refundedKES)}</dd></div>
       </dl>
 
@@ -79,7 +79,7 @@ export default async function PosSalesPage({ params, searchParams }: Props) {
               </div>
               <div className="pos-row-values">
                 <span>{formatKES(sale.totalKES)}</span>
-                {sale.balanceKES > 0 ? <span className="pos-pill" data-tone="warn">Owes {formatKES(sale.balanceKES)}</span> : null}
+                {sale.balanceKES > 0 ? <span className="pos-pill" data-tone="warn">Unpaid at sale {formatKES(sale.balanceKES)} (repayments not allocated)</span> : null}
                 {sale.status === "REFUNDED" ? <span className="pos-pill" data-tone="danger">Refunded</span> : null}
                 {sale.status === "VOIDED" ? <span className="pos-pill" data-tone="danger">Voided</span> : null}
               </div>

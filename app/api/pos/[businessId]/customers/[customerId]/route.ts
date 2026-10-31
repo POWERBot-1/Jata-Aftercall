@@ -1,6 +1,7 @@
-import { fromOutcome, handlePosRequest, posOk } from "@/lib/pos/http";
+import { fromOutcome, handlePosRequest, posOk, toActor } from "@/lib/pos/http";
+import { requirePosAccess } from "@/lib/pos/guard";
 import { logPosAudit } from "@/lib/pos/audit";
-import { buildStatement, RECEIVABLE, toCreditEntries } from "@/lib/pos/credit";
+import { verifiedStatement, RECEIVABLE } from "@/lib/pos/credit";
 import { recordRepayment } from "@/lib/pos/sales";
 import { addCustomerAsset, findCustomer, listCreditEntries, listSales, updateCustomer } from "@/lib/pos/store";
 import { bool, sanitizeAssetInput, sanitizeCustomerInput, sanitizeRepayment } from "@/lib/pos/validation";
@@ -27,14 +28,15 @@ export async function GET(_request: Request, context: RouteContext) {
       const customer = await findCustomer(businessId, customerId);
       if (!customer) return { status: 404, data: { error: "That customer was not found." } };
       const [entries, sales] = await Promise.all([
-        listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 200 }),
+        listCreditEntries(businessId, { partyType: RECEIVABLE, partyId: customerId, take: 201 }),
         listSales(businessId, { customerId, take: 50 }),
       ]);
-      const statement = buildStatement(toCreditEntries(entries, RECEIVABLE), RECEIVABLE);
+      const { statement, notice } = verifiedStatement(entries, RECEIVABLE, Number(customer.balanceKES));
       return posOk({
         customer,
         assets: customer.assets ?? [],
         statement,
+        statementNotice: notice,
         recentSales: sales.map((sale: any) => ({
           id: sale.id,
           receiptNumber: sale.receiptNumber,
@@ -96,11 +98,15 @@ export async function POST(request: Request, context: RouteContext) {
     request,
     options: {},
     fallback: "We couldn't save that.",
-    handler: async ({ ctx, actor, body }) => {
+    handler: async ({ ctx, body, headers }) => {
+      // This shared endpoint accepts two distinct mutations; authorize the actual action,
+      // including active staff, before revealing whether a customer exists.
+      const isAsset = Boolean(bool(body, "asset") || body.asset);
+      const authorized = await requirePosAccess(businessId, ctx.session, { permission: isAsset ? "MANAGE_CUSTOMERS" : "RECORD_REPAYMENT" });
       const customer = await findCustomer(businessId, customerId);
       if (!customer) return fromOutcome({ ok: false, message: "That customer was not found.", code: "NOT_FOUND" });
 
-      if (bool(body, "asset") || body.asset) {
+      if (isAsset) {
         const asset = sanitizeAssetInput(body.asset && typeof body.asset === "object" ? (body.asset as Record<string, unknown>) : body);
         if (!asset.name) return fromOutcome({ ok: false, message: "Give it a name." });
         const created = await addCustomerAsset(businessId, customerId, asset);
@@ -108,21 +114,22 @@ export async function POST(request: Request, context: RouteContext) {
       }
 
       // A repayment moves money, so it needs a live subscription (§44).
-      if (!ctx.entitlement.entitled) {
-        return fromOutcome({ ok: false, message: ctx.entitlement.reason, code: "PAYMENT_REQUIRED" });
+      if (!authorized.entitlement.entitled) {
+        return fromOutcome({ ok: false, message: authorized.entitlement.reason, code: "PAYMENT_REQUIRED" });
       }
       const repayment = sanitizeRepayment(body);
       const outcome = await recordRepayment({
         businessId,
-        configuration: ctx.configuration,
-        actor,
+        configuration: authorized.configuration,
+        actor: toActor(authorized),
         customerId,
         amountKES: repayment.amountKES,
         method: repayment.method,
         reference: repayment.reference,
         note: repayment.note,
+        idempotencyKey: headers?.get("Idempotency-Key") ?? "",
       });
-      return fromOutcome(outcome, { balanceKES: outcome.balanceKES ?? 0, amountKES: outcome.amountKES ?? 0 });
+      return fromOutcome(outcome, { balanceKES: outcome.balanceKES ?? 0, balanceAfterKES: outcome.balanceAfterKES ?? 0, amountKES: outcome.amountKES ?? 0, replayed: outcome.replayed ?? false });
     },
   });
 }

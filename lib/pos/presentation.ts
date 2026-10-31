@@ -276,7 +276,7 @@ export const REPORT_CATALOGUE: ReportDefinition[] = [
   { key: "monthly_sales", label: "Monthly sales", blurb: "This month so far.", group: "Sales", capability: "monthly_sales", basis: "recorded" },
   { key: "gross_sales", label: "Gross sales", blurb: "Before discounts and refunds.", group: "Sales", capability: "daily_sales", basis: "calculated" },
   { key: "net_sales", label: "Net sales", blurb: "After discounts, refunds and returns.", group: "Sales", capability: "daily_sales", basis: "calculated" },
-  { key: "refunds", label: "Refunds & returns", blurb: "Money given back and goods returned.", group: "Sales", capability: "refunds", basis: "recorded" },
+  { key: "refunds", label: "Refunds & returns", blurb: "Settled refund payouts by period; excludes credit and wallet refunds.", group: "Sales", capability: "refunds", basis: "recorded" },
   { key: "payment_breakdown", label: "Payment methods", blurb: "Cash, M-Pesa, bank, card and credit.", group: "Money", capability: "payment_breakdown", basis: "recorded" },
   { key: "outstanding_credit", label: "Outstanding credit", blurb: "Who owes you, oldest first.", group: "Money", capability: "outstanding_credit", basis: "recorded" },
   { key: "supplier_debt", label: "Supplier debt", blurb: "Who you owe, oldest first.", group: "Money", capability: "supplier_debt", basis: "recorded" },

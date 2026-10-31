@@ -1,6 +1,7 @@
-import * as prismaClientModule from "@prisma/client";
 import prisma from "@/lib/db";
 import { negativeStockAllowed } from "./inventory";
+import { ReportLimitError } from "./report-limit";
+import { unpaidDebitLots } from "./credit-age";
 import type { InventoryMovementReason } from "./types";
 import type { PosConfiguration } from "./types";
 import { InlineMediaPersistenceError, containsInlineImageDataUrl } from "@/lib/media/persistence-policy";
@@ -408,23 +409,14 @@ export async function applyBalanceChange(
  */
 export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "SUPPLIER", businessId: string, partyId: string): Promise<void> {
   if (!client?.$queryRaw) return;
-  // The table name is a fixed identifier chosen here (never user input), so it is spliced with
-  // Prisma's raw-identifier helper; the ids are bound parameters. When the generated client is
-  // not available (offline build), the helper is absent and the lock is a no-op — the atomic
-  // balance increment still makes the write itself safe.
-  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
-  if (typeof rawIdentifier !== "function") return;
-  // Quoted, and it has to be. Prisma's raw helper splices the string in verbatim, so an unquoted
-  // PosCustomer is folded to lower case by PostgreSQL and matches nothing — the table is created
-  // as "PosCustomer". The unquoted form failed with 42P01 ("relation \"poscustomer\" does not
-  // exist") on every call, which the bare catch below used to hide while leaving the caller's
-  // transaction aborted.
-  const table = partyType === "SUPPLIER" ? '"PosSupplier"' : '"PosCustomer"';
-  // No try/catch: see lockSaleRow. A failed statement aborts the transaction, and swallowing it
-  // here let the credit decision and the balance move run on inside a dead transaction, where
-  // the next statement failed with 25P02. The two capability guards above already cover a client
-  // that genuinely cannot run raw SQL.
-  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier(table)} WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  // Static, quoted table names avoid constructing SQL identifiers from user data or relying on
+  // a Prisma.raw object from a different client runtime. Values remain bound parameters.
+  // Database failures must propagate so the surrounding financial transaction rolls back.
+  if (partyType === "SUPPLIER") {
+    await client.$queryRaw`SELECT 1 FROM "PosSupplier" WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  } else {
+    await client.$queryRaw`SELECT 1 FROM "PosCustomer" WHERE "id" = ${partyId} AND "businessId" = ${businessId} FOR UPDATE`;
+  }
 }
 
 /**
@@ -438,18 +430,8 @@ export async function lockPartyRow(client: PosClient, partyType: "CUSTOMER" | "S
  */
 export async function lockSaleRow(client: PosClient, businessId: string, saleId: string): Promise<void> {
   if (!client?.$queryRaw) return;
-  const rawIdentifier = (prismaClientModule as { Prisma?: { raw?: (value: string) => unknown } }).Prisma?.raw;
-  if (typeof rawIdentifier !== "function") return;
-  // No try/catch here, deliberately.
-  //
-  // A client that cannot run raw SQL is already handled by the two guards above, so the only
-  // thing a catch would still swallow is a real database error — and on PostgreSQL a failed
-  // statement aborts the whole transaction. Swallowing it here used to let the refund carry on
-  // inside a dead transaction, where the very next read failed with 25P02 ("current transaction
-  // is aborted") and surfaced as an opaque engine error instead of the retryable conflict it
-  // actually was. A deadlock or a lock timeout has to reach the caller so the transaction rolls
-  // back cleanly and the caller can say so.
-  await client.$queryRaw`SELECT 1 FROM ${rawIdentifier('"PosSale"')} WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
+  // A database error must reach the caller; swallowing it would leave the transaction aborted.
+  await client.$queryRaw`SELECT 1 FROM "PosSale" WHERE "id" = ${saleId} AND "businessId" = ${businessId} FOR UPDATE`;
 }
 
 export async function listCreditEntries(
@@ -461,6 +443,15 @@ export async function listCreditEntries(
   if (options.partyType) where.partyType = options.partyType;
   if (options.partyId) where.partyId = options.partyId;
   return client.posCreditEntry.findMany({ where, orderBy: { createdAt: "desc" }, take: Math.min(asInt(options.take, 100), 500) });
+}
+
+/** Earliest recorded debit for a party; never use a recent-entry page for credit decisions. */
+export async function oldestCreditDebit(businessId: string, partyType: "CUSTOMER" | "SUPPLIER", partyId: string, client: PosClient = db()) {
+  return client.posCreditEntry.findFirst({
+    where: { businessId, partyType, partyId, direction: "DEBIT" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { createdAt: true },
+  });
 }
 
 export async function addCustomerAsset(
@@ -889,8 +880,10 @@ export async function topItems(businessId: string, range: DateRange = {}, limit 
   const sales = await client.posSale.findMany({
     where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     select: { id: true },
-    take: 2000,
+    take: 2001,
   });
+  // The ranking cannot be calculated honestly from only a prefix of sales.
+  if (sales.length > 2000) return null;
   const saleIds = sales.map((sale: any) => sale.id);
   if (!saleIds.length) return [];
   const items = await client.posSaleItem.findMany({
@@ -949,19 +942,16 @@ export async function expenseTotals(
   client: PosClient = db(),
   options: { branchId?: string | null } = {},
 ) {
-  // The total is the total of the rows this actor is allowed to read — a location's spend is
-  // summed for the people who work that location, not for the whole business (§16, §75).
-  const expenses = await listExpenses(businessId, { range, take: 500, branchId: options.branchId }, client);
-  const byCategory = new Map<string, { categoryKey: string; amountKES: number }>();
-  let amountKES = 0;
-  for (const expense of expenses) {
-    const value = asInt(expense.amountKES);
-    amountKES += value;
-    const row = byCategory.get(expense.categoryKey) ?? { categoryKey: expense.categoryKey, amountKES: 0 };
-    row.amountKES += value;
-    byCategory.set(expense.categoryKey, row);
-  }
-  return { amountKES, byCategory: [...byCategory.values()].sort((a, b) => b.amountKES - a.amountKES) };
+  // Aggregate in PostgreSQL rather than summing a capped list: totals and category subtotals
+  // cover the same tenant, location and occurrence-time range, however many expenses exist.
+  const from = toDate(range.from);
+  const to = toDate(range.to);
+  const where = { businessId, ...(options.branchId != null ? { branchId: options.branchId } : {}),
+    ...((from || to) ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) };
+  const groups = await client.posExpense.groupBy({ by: ["categoryKey"], where, _sum: { amountKES: true } });
+  const byCategory = groups.map((row: any) => ({ categoryKey: row.categoryKey, amountKES: asInt(row._sum.amountKES) }))
+    .sort((a: any, b: any) => b.amountKES - a.amountKES);
+  return { amountKES: byCategory.reduce((total: number, row: any) => total + row.amountKES, 0), byCategory };
 }
 
 export async function createExpense(
@@ -1217,7 +1207,7 @@ export async function salesForReport(businessId: string, range: DateRange = {}, 
     where: { businessId, ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
-    include: { items: { select: { name: true, quantity: true, totalKES: true, costKES: true } }, payments: { select: { method: true, amountKES: true, direction: true } } },
+    include: { items: { select: { name: true, quantity: true, totalKES: true, costKES: true } }, payments: { select: { method: true, amountKES: true, direction: true, status: true } } },
   });
 }
 
@@ -1243,7 +1233,17 @@ export async function paymentsForReport(businessId: string, range: DateRange = {
     where: { businessId, status: "SETTLED", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
     orderBy: { createdAt: "asc" },
     take: REPORT_ROW_LIMIT,
-    select: { id: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
+    select: { id: true, saleId: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
+  });
+}
+
+/** Refund payouts are filtered before applying the row limit, so unrelated receipts cannot hide them. */
+export async function refundPayoutsForReport(businessId: string, range: DateRange = {}, client: PosClient = db(), options: { branchId?: string | null } = {}) {
+  return client.posPayment.findMany({
+    where: { businessId, status: "SETTLED", direction: "OUT", purpose: "REFUND", ...createdBetween(range), ...(options.branchId != null ? { branchId: options.branchId } : {}) },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: REPORT_ROW_LIMIT + 1,
+    select: { id: true, saleId: true, createdAt: true, direction: true, purpose: true, method: true, amountKES: true, branchId: true },
   });
 }
 
@@ -1278,22 +1278,32 @@ export async function partiesWithBalances(
   businessId: string,
   partyType: "CUSTOMER" | "SUPPLIER",
   client: PosClient = db(),
+  options: { requireComplete?: boolean } = {},
 ) {
   const rows = partyType === "SUPPLIER"
     ? await client.posSupplier.findMany({ where: { businessId }, select: { id: true, name: true, balanceKES: true, termsDays: true, phone: true } })
     : await client.posCustomer.findMany({
-        where: { businessId, creditEnabled: true },
+        where: { businessId, OR: [{ creditEnabled: true }, { balanceKES: { gt: 0 } }] },
         select: { id: true, name: true, balanceKES: true, creditLimitKES: true, phone: true },
       });
+  // Dashboard totals only need account balances. Ageing screens need the complete ledger,
+  // not a sample of debits, and must never age a later balance from an already-paid debit.
+  if (!options.requireComplete) return rows.map((row: any) => ({ ...row, oldestEntryAt: null }));
   const entries = await client.posCreditEntry.findMany({
-    where: { businessId, partyType, direction: "DEBIT" },
-    select: { partyId: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-    take: REPORT_ROW_LIMIT,
+    where: { businessId, partyType },
+    select: { partyId: true, direction: true, amountKES: true, createdAt: true, saleId: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: REPORT_ROW_LIMIT + 1,
   });
-  const oldest = new Map<string, Date>();
+  if (entries.length > REPORT_ROW_LIMIT) throw new ReportLimitError();
+  const byParty = new Map<string, any[]>();
   for (const entry of entries) {
-    if (!oldest.has(entry.partyId)) oldest.set(entry.partyId, entry.createdAt);
+    const list = byParty.get(entry.partyId) ?? [];
+    list.push(entry);
+    byParty.set(entry.partyId, list);
   }
-  return rows.map((row: any) => ({ ...row, oldestEntryAt: oldest.get(row.id) ?? null }));
+  return rows.map((row: any) => {
+    const lots = unpaidDebitLots(byParty.get(row.id) ?? [], Number(row.balanceKES ?? 0));
+    return { ...row, oldestEntryAt: lots[0]?.createdAt ?? null, unpaidLots: lots };
+  });
 }

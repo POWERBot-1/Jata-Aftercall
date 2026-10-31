@@ -111,9 +111,11 @@ const RELATIONS: Record<string, { field: string; key: string }[]> = {
  * guard — the whole point of the index — is never exercised.
  */
 const UNIQUE_INDEXES: Record<string, string[][]> = {
+  posCategoryImage: [["businessId", "category"]],
   // The till's replay guard: one unspent key per business, actor and action. A duplicate
   // submission must fail the insert, and with it the sale transaction that owns it.
   posIdempotencyRecord: [["businessId", "actorId", "scope", "key"]],
+  posRepaymentRequest: [["businessId", "key"], ["paymentId"]],
   // POS / ERP - PRO guards. Each mirrors a real unique index in the migration, so the in-memory
   // suite fails the same way PostgreSQL would when a replay slips past the application check.
   erpIdempotencyRecord: [["businessId", "scope", "key"]],
@@ -191,6 +193,19 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         const sum: Row = {};
         for (const key of Object.keys(_sum ?? {})) sum[key] = scoped.reduce((total, row) => total + Number(row[key] ?? 0), 0);
         return { _sum: sum, _count: { _all: scoped.length } };
+      }),
+      groupBy: vi_fn(async ({ where, by, _sum }: any) => {
+        const groups = new Map<string, { values: Row; rows: Row[] }>();
+        for (const row of rows.filter((entry) => rowMatches(entry, where))) {
+          const values = Object.fromEntries((by as string[]).map((field) => [field, row[field]]));
+          const key = JSON.stringify(values);
+          const group = groups.get(key) ?? { values, rows: [] };
+          group.rows.push(row);
+          groups.set(key, group);
+        }
+        return [...groups.values()].map((group) => ({ ...group.values, _sum: Object.fromEntries(
+          Object.keys(_sum ?? {}).map((field) => [field, group.rows.reduce((total, row) => total + Number(row[field] ?? 0), 0)]),
+        ) }));
       }),
       create: vi_fn(async ({ data }: any) => {
         assertUnique(name, data);

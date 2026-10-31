@@ -3,6 +3,9 @@ import { formSpec } from "@/lib/pos/forms";
 import { listProducts, stockLevels } from "@/lib/pos/store";
 import { loadPosPageWorkspace } from "@/lib/pos/workspace";
 import { RecordBoard } from "@/components/pos/RecordBoard";
+import prisma from "@/lib/db";
+import { CategoryManager } from "@/components/pos/CategoryManager";
+import { CategoryPhotos } from "@/components/pos/CategoryPhotos";
 import { PosRefusal } from "@/components/pos/PosRefusal";
 import type { PosModuleKey } from "@/lib/pos/types";
 
@@ -32,9 +35,11 @@ export async function ProductScreen({
   const configuration = workspace.configuration;
   const spec = formSpec(configuration, "product");
 
-  const [products, stock] = await Promise.all([
+  const [products, stock, categoryImages, categories] = await Promise.all([
     listProducts(businessId, { take: 400, kind }),
     configuration.inventory.enabled ? stockLevels(businessId) : Promise.resolve([]),
+    prisma.posCategoryImage.findMany({ where: { businessId }, select: { category: true, imageUrl: true } }),
+    prisma.posCategory.findMany({ where: { businessId }, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true, _count: { select: { products: true } }, image: { select: { imageUrl: true } } } }),
   ]);
 
   const stockByProduct = new Map<string, number>();
@@ -69,6 +74,8 @@ export async function ProductScreen({
         </div>
       </div>
 
+      <CategoryManager businessId={businessId} initialCategories={categories} canEdit={workspace.permissions.includes("EDIT_INVENTORY")} />
+      <CategoryPhotos key={categories.map((category: any) => category.name).join("|")} businessId={businessId} categories={categories.map((category: any) => category.name)} initialImages={categoryImages} canEdit={workspace.permissions.includes("EDIT_INVENTORY")} />
       <RecordBoard
         businessId={businessId}
         basePath={workspace.basePath}
@@ -79,6 +86,7 @@ export async function ProductScreen({
           module === "services" ? field.key !== "trackInventory" || configuration.sales.products : true,
         )}
         rows={rows}
+        productPhotos
         titleKey="name"
         subtitleKeys={["category", "unitKey"]}
         valueColumns={[
