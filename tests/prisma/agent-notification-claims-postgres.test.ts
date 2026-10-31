@@ -29,8 +29,9 @@ describe.skipIf(!realPrismaConfigured)("notification claims on disposable Postgr
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) throw new Error("Disposable loopback JATA database required");
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
+    await pool.query('CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL)');
     await pool.query('CREATE TABLE "AgentAdminNotificationEvent" ("applicationId" TEXT PRIMARY KEY)');
-    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261122000000_agent_notification_recovery_audit"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
+    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261114000000_agent_notification_operator_review", "20261121000000_agent_notification_attempt_history", "20261122000000_agent_notification_recovery_audit", "20261123000000_agent_notification_replay"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
     await pool.query(`INSERT INTO "AgentAdminNotificationEvent" VALUES ('app'); INSERT INTO "AgentAdminNotificationPlan" ("applicationId", "recipientKeyVersion") VALUES ('app', 'fixture');`);
     await pool.query('INSERT INTO "AgentAdminNotificationDelivery" ("applicationId", "recipientKey") VALUES ($1,$2),($1,$3)', ["app", key("a"), key("b")]);
     process.env.AGENT_ADMIN_NOTIFICATION_CLAIMS_ENABLED = "true";

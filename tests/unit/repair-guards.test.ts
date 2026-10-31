@@ -145,6 +145,7 @@ describe("runtime and schema guards", () => {
       "20261120000000_agent_referral_revision_write_fence",
       "20261121000000_agent_notification_attempt_history",
       "20261122000000_agent_notification_recovery_audit",
+      "20261123000000_agent_notification_replay",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -214,6 +215,7 @@ describe("runtime and schema guards", () => {
       "20261120000000_agent_referral_revision_write_fence",
       "20261121000000_agent_notification_attempt_history",
       "20261122000000_agent_notification_recovery_audit",
+      "20261123000000_agent_notification_replay",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -226,6 +228,15 @@ describe("runtime and schema guards", () => {
           expect(sql, statement).toContain(statement);
           sql = sql.replace(statement, "");
         }
+      } else if (migration === "20261123000000_agent_notification_replay") {
+        for (const statement of [
+          'ALTER TABLE "AgentAdminNotificationClaimState" DROP CONSTRAINT "AgentAdminNotificationClaimState_attempts_check";',
+          'ALTER TABLE "AgentAdminNotificationClaimState" DROP CONSTRAINT "AgentAdminNotificationClaimState_retry_check";',
+          'ALTER TABLE "AgentAdminNotificationAttempt" DROP CONSTRAINT "AgentAdminNotificationAttempt_attempt_check";',
+          'ALTER TABLE "AgentAdminNotificationRecovery" DROP CONSTRAINT "AgentAdminNotificationRecovery_attempt_check";',
+        ]) { expect(sql).toContain(statement); sql = sql.replace(statement, ""); }
+        expect(sql).toContain('"attempts" <= "retryCeiling"');
+        expect(sql).toContain('"attempt" BETWEEN 1 AND 15');
       } else {
         // Every other migration leaves existing rows and column definitions completely alone.
         expect(sql).not.toContain("ALTER COLUMN");

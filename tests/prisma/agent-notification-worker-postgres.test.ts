@@ -11,7 +11,10 @@ import { enqueueApplicationSubmitted } from "@/lib/agents/admin-notification-eve
 import { processAdminNotificationBatch } from "@/lib/agents/admin-notification-worker";
 import { applyAdminNotificationCallbacks } from "@/lib/agents/admin-notification-callback";
 import { claimAdminNotification } from "@/lib/agents/admin-notification-claims";
+import { replayAdminNotification } from "@/lib/agents/admin-notification-replay";
 const context = vi.hoisted(() => ({ prisma: null as any }));
+vi.mock("@/lib/auth", () => ({ getSession: async () => ({ userId: "admin", role: "ADMIN" }) }));
+vi.mock("@/lib/rate-limit", () => ({ rateLimitByIdentity: () => ({ allowed: true }) }));
 vi.mock("@/lib/db", () => ({ default: new Proxy({}, { get: (_target, property) => { const value = context.prisma[property]; return typeof value === "function" ? value.bind(context.prisma) : value; } }) }));
 
 const schema = `notification_worker_${randomUUID().replace(/-/g, "")}`;
@@ -25,14 +28,16 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname) || !/^\/jata_(ci|recon|e2e|verify|agent_test|rehearsal_full)$/.test(url.pathname)) throw new Error("Disposable loopback JATA database required");
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
+    await pool.query('CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL)');
     await pool.query('CREATE TABLE "AgentAdminNotificationEvent" ("applicationId" TEXT PRIMARY KEY, "eventType" TEXT NOT NULL)');
-    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261122000000_agent_notification_recovery_audit", "20261121000000_agent_notification_attempt_history"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
+    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261114000000_agent_notification_operator_review", "20261121000000_agent_notification_attempt_history", "20261122000000_agent_notification_recovery_audit", "20261123000000_agent_notification_replay"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
     const require = createRequire(import.meta.url); const harness = process.env.PRISMA_WASM_HARNESS_DIR;
     if (harness) {
       const { PrismaClient } = require(path.join(harness, "generated", "wasm.js")); const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg")); const { Pool: AdapterPool } = require(path.join(harness, "node_modules", "pg"));
       prisma = new PrismaClient({ adapter: new PrismaPg(new AdapterPool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` })) });
     } else { const { PrismaClient } = require("@prisma/client"); url.searchParams.set("schema", schema); prisma = new PrismaClient({ datasourceUrl: url.toString() }); }
     context.prisma = prisma;
+    await pool.query(`INSERT INTO "User" ("id", "role") VALUES ('admin', 'ADMIN'), ('customer', 'CUSTOMER')`);
     process.env.AGENT_ADMIN_NOTIFICATION_QUEUE_ENABLED = "true";
     process.env.AGENT_ADMIN_NOTIFICATION_OUTBOX_PLAN_ENABLED = "true";
     process.env.AGENT_ADMIN_NOTIFICATION_CLAIMS_ENABLED = "true";
@@ -116,6 +121,54 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     const send = () => callback(new Request("https://fixture.test/api/webhooks/agent-admin-notifications", { method: "POST", body, headers: { "x-signature": signCallback(body, callbackSecret) } }));
     expect((await send()).status).toBe(200); expect((await send()).status).toBe(200);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentAdminNotificationCallback" WHERE "messageId"=$1', [attempt.messageId])).rows[0].n).toBe(1);
+    process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
+  });
+  it("replays a safely dead-lettered item through the admin HTTP endpoint and worker", async () => {
+    process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001";
+    process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED = "true";
+    process.env.AGENT_ADMIN_NOTIFICATION_REPLAY_ENABLED = "true";
+    await prisma.$transaction((tx: typeof prisma) => enqueueApplicationSubmitted(tx, "replay-app"));
+    const provider = new MockMessagingProvider();
+    const keys: string[] = [];
+    provider.send = async (request) => { keys.push(request.idempotencyKey); return keys.length === 1
+      ? { outcome: "FAILED", safeToFallback: true, retryable: false }
+      : { outcome: "ACCEPTED", providerMessageId: "replay-test-message" }; };
+    expect((await processAdminNotificationBatch(prisma, provider)).processed).toBe(1);
+    const item = (await pool.query('SELECT "state", "recipientKey" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["replay-app"])).rows[0];
+    expect(item.state).toBe("DEAD");
+    const input = { applicationId: "replay-app", recipientKey: item.recipientKey, actorId: "customer", requestId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+    expect(await replayAdminNotification(prisma, input)).toBe("forbidden");
+    const uncertain = (await pool.query('SELECT "recipientKey" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["crashed-app"])).rows[0];
+    expect(await replayAdminNotification(prisma, { ...input, actorId: "admin", applicationId: "crashed-app", recipientKey: uncertain.recipientKey })).toBe("conflict");
+    const { POST } = await import("@/app/api/admin/agents/notification-replay/route");
+    const body = { applicationId: "replay-app", recipientKey: item.recipientKey, requestId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
+    const request = () => new Request("https://fixture.test/api/admin/agents/notification-replay", { method: "POST", headers: { host: "fixture.test", origin: "https://fixture.test", "content-type": "application/json" }, body: JSON.stringify(body) });
+    const responses = await Promise.all([POST(request()), POST(request())]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    expect((await Promise.all(responses.map((r) => r.json()))).filter((r) => r.alreadyAuthorized)).toHaveLength(1);
+    expect((await pool.query('SELECT "actorId", "previousAttempt", "retryCeiling" FROM "AgentAdminNotificationReplay" WHERE "applicationId"=$1', ["replay-app"])).rows).toEqual([{ actorId: "admin", previousAttempt: 1, retryCeiling: 6 }]);
+    expect((await processAdminNotificationBatch(prisma, provider)).processed).toBe(1);
+    expect(keys[0]).toBe(keys[1]);
+    expect((await pool.query('SELECT "state", "attempts" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["replay-app"])).rows[0]).toEqual({ state: "ACCEPTED", attempts: 2 });
+    expect((await pool.query('SELECT "outcome" FROM "AgentAdminNotificationAttempt" WHERE "applicationId"=$1 ORDER BY "attempt"', ["replay-app"])).rows.map((r) => r.outcome)).toEqual(["SAFE_PERMANENT_REJECTION", "ACCEPTED"]);
+    process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
+  });
+  it("keeps replay retries bounded and records each attempt after the original limit", async () => {
+    process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001";
+    await prisma.$transaction((tx: typeof prisma) => enqueueApplicationSubmitted(tx, "exhausted-app"));
+    const provider = new MockMessagingProvider();
+    provider.send = async () => ({ outcome: "FAILED", safeToFallback: true, retryable: true });
+    for (let i = 0; i < 5; i++) {
+      expect((await processAdminNotificationBatch(prisma, provider, 1)).processed).toBe(1);
+      if (i < 4) await pool.query('UPDATE "AgentAdminNotificationClaimState" SET "nextAttemptAt"=clock_timestamp() - interval \'1 second\' WHERE "applicationId"=$1', ["exhausted-app"]);
+    }
+    const row = (await pool.query('SELECT "state", "recipientKey" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0];
+    expect(row.state).toBe("DEAD");
+    expect(await replayAdminNotification(prisma, { applicationId: "exhausted-app", recipientKey: row.recipientKey, actorId: "admin", requestId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" })).toBe("created");
+    expect((await processAdminNotificationBatch(prisma, provider, 1)).processed).toBe(1);
+    const state = (await pool.query('SELECT "state", "attempts", "retryCeiling", "nextAttemptAt" > clock_timestamp() AS future FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0];
+    expect(state).toEqual({ state: "RETRY", attempts: 6, retryCeiling: 10, future: true });
+    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentAdminNotificationAttempt" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0].n).toBe(6);
     process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
   });
   it("never automatically retries a timeout or a changed recipient configuration", async () => {

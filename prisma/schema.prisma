@@ -36,6 +36,7 @@ model User {
 
   @@index([email])
   agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
+  agentNotificationReplays AgentAdminNotificationReplay[] @relation("AgentNotificationReplayActor")
   referralReportRevisions AgentReferralReportRevision[] @relation("ReferralReportRevisionActor")
 }
 
@@ -125,6 +126,7 @@ model AgentAdminNotificationClaimState {
   delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationClaimState_delivery_fkey")
   state String
   attempts Int @default(1)
+  retryCeiling Int @default(5)
   claimToken String?
   leaseUntil DateTime?
   nextAttemptAt DateTime?
@@ -132,6 +134,7 @@ model AgentAdminNotificationClaimState {
   @@id([applicationId, recipientKey])
   review AgentAdminNotificationReview?
   recoveries AgentAdminNotificationRecovery[]
+  replays AgentAdminNotificationReplay[]
   @@index([state, leaseUntil])
   @@index([state, nextAttemptAt])
 }
@@ -145,6 +148,20 @@ model AgentAdminNotificationRecovery {
   createdAt DateTime @default(now())
   claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationRecovery_claim_fkey")
   @@id([applicationId, recipientKey, attempt])
+}
+
+// A bounded operator authorization, not proof of delivery.
+model AgentAdminNotificationReplay {
+  requestId String @id
+  applicationId String
+  recipientKey String
+  actorId String
+  previousAttempt Int
+  retryCeiling Int
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReplay_claim_fkey")
+  actor User @relation("AgentNotificationReplayActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReplay_actor_fkey")
+  @@unique([applicationId, recipientKey, previousAttempt], map: "AgentAdminNotificationReplay_attempt_key")
 }
 
 // Acknowledgement is not proof of delivery and cannot authorize a retry.
