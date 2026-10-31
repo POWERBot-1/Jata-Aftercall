@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PRISMA_TEST_DATABASE_URL, realPrismaConfigured } from "../helpers/prisma-client";
+import { inspectReferralEvidenceDrift } from "@/lib/agents/referral-report-drift";
 const schema = `report_version_${randomUUID().replace(/-/g, "")}`;
 let pool: Pool;
 describe.skipIf(!realPrismaConfigured)("referral report version migration on disposable PostgreSQL", () => {
@@ -47,6 +48,26 @@ describe.skipIf(!realPrismaConfigured)("referral report version migration on dis
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-03', 'DAILY', '2026-01-02 21:00:00', '2026-01-03 21:00:00', 1, 0)`)).rejects.toThrow(/baseline membership mismatch/);
     expect((await pool.query('SELECT count(*)::int AS n FROM "AgentReferralReportSnapshot" WHERE "periodKey"=$1', ["daily:2026-01-03"])).rows[0].n).toBe(0);
     await expect(pool.query(`INSERT INTO "AgentReferralReportSnapshot" ("applicationId", "periodKey", "periodType", "startInclusive", "endExclusive", "registrationCount", "existingApplicationCount") VALUES ('agent', 'daily:2026-01-04', 'DAILY', '2026-01-03 21:00:00', '2026-01-04 21:00:00', 5001, 0)`)).rejects.toThrow(/exceeds membership limit/);
+  });
+  it("detects late, changed and removed evidence without changing the recorded report", async () => {
+    const db = { async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]) {
+      const text = strings.reduce((sql, part, i) => sql + part + (i < values.length ? `$${i + 1}` : ""), "");
+      return (await pool.query(text, values)).rows;
+    } } as never;
+    const inspect = () => inspectReferralEvidenceDrift(db, "agent", "daily:2026-01-02", 1);
+    expect(await inspect()).toBe("MATCHED");
+    expect(await inspectReferralEvidenceDrift(db, "agent", "daily:2026-01-01", 1)).toBe("LEGACY_UNVERIFIABLE");
+    expect(await inspectReferralEvidenceDrift(db, "suspended-agent", "daily:2026-01-02", 1)).toBe("REPORT_NOT_FOUND");
+    await pool.query(`INSERT INTO "AgentReferralAttribution" VALUES ('late-1', 'agent', 'REGISTRATION', '2026-01-02 13:00:00')`);
+    expect(await inspect()).toBe("RECONCILIATION_REQUIRED");
+    await pool.query(`DELETE FROM "AgentReferralAttribution" WHERE "id" = 'late-1'`);
+    await pool.query(`UPDATE "AgentReferralAttribution" SET "source" = 'EXISTING_ACCOUNT' WHERE "id" = 'e1'`);
+    expect(await inspect()).toBe("RECONCILIATION_REQUIRED");
+    await pool.query(`DELETE FROM "AgentReferralAttribution" WHERE "id" = 'e1'`);
+    expect(await inspect()).toBe("RECONCILIATION_REQUIRED");
+    await pool.query(`INSERT INTO "AgentReferralAttribution" VALUES ('e1', 'agent', 'REGISTRATION', '2026-01-02 12:00:00')`);
+    expect(await inspect()).toBe("MATCHED");
+    expect((await pool.query(`SELECT "eventId" FROM "AgentReferralReportMember" WHERE "periodKey" = 'daily:2026-01-02' AND "revision" = 1`)).rows).toEqual([{ eventId: "e1" }]);
   });
   it("allows membership only inside the revision creation transaction, including savepoints", async () => {
     const writer = await pool.connect();

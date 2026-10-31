@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { isSameOriginRequest } from "@/lib/agent-application";
 import { readSmallJson } from "@/lib/agent-registration";
 import { rateLimitByIdentity } from "@/lib/rate-limit";
+import { inspectReferralEvidenceDrift } from "@/lib/agents/referral-report-drift";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -80,12 +81,16 @@ export async function GET(req: Request) {
       const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
       if (!report) return { kind: "missing" as const };
       if (report.members.length > MAX_MEMBERS) return { kind: "too_large" as const };
-      return { kind: "ok" as const, report };
+      // A historical revision can differ from current evidence even when its own data is intact.
+      // Inspection is bounded by database timeouts and never silently changes the revision.
+      await tx.$executeRaw`SET LOCAL statement_timeout = '5s'`;
+      const evidenceStatus = await inspectReferralEvidenceDrift(tx, applications[0].id, periodKey, revision);
+      return { kind: "ok" as const, report, evidenceStatus };
     });
     if (result.kind === "forbidden") return message("An active agent account is required.", 403);
     if (result.kind === "missing") return message("Report revision not found.", 404);
     if (result.kind === "too_large") return message("Report exceeds the inspection limit; manual review is required.", 409);
     const row = result.report;
-    return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, members: row.members.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
+    return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, evidenceStatus: result.evidenceStatus, members: row.members.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
   } catch { return unavailable(); }
 }

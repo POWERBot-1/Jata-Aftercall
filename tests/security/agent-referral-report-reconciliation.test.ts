@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ session: vi.fn(), limit: vi.fn(), transaction: vi.fn(), query: vi.fn(), prior: vi.fn(), current: vi.fn(), create: vi.fn() }));
+const m = vi.hoisted(() => ({ session: vi.fn(), limit: vi.fn(), transaction: vi.fn(), query: vi.fn(), prior: vi.fn(), current: vi.fn(), create: vi.fn(), execute: vi.fn(), one: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getSession: m.session }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimitByIdentity: m.limit }));
 vi.mock("@/lib/db", () => ({ default: { $transaction: m.transaction } }));
-import { POST } from "@/app/api/agents/reports/referrals/reconcile/route";
+import { GET, POST } from "@/app/api/agents/reports/referrals/reconcile/route";
 const env = { ...process.env };
 const date = new Date("2026-01-01T12:00:00Z");
-const tx = { $queryRaw: m.query, agentReferralReportRevision: { findFirst: m.prior, create: m.create }, agentReferralAttribution: { findMany: m.current } };
+const tx = { $queryRaw: m.query, $executeRaw: m.execute, agentReferralReportRevision: { findFirst: m.prior, findUnique: m.one, create: m.create }, agentReferralAttribution: { findMany: m.current } };
 const request = (body: unknown = { periodKey: "daily:2026-01-01" }, origin = "https://agent.test") => new Request("https://agent.test/api/agents/reports/referrals/reconcile", { method: "POST", headers: { host: "agent.test", origin, "content-type": "application/json" }, body: JSON.stringify(body) });
 const prior = { revision: 1, registrationCount: BigInt(1), existingApplicationCount: BigInt(0), members: [{ eventId: "event-1", source: "REGISTRATION", eventCreatedAt: date }] };
 describe("own-agent referral report reconciliation", () => {
@@ -25,6 +25,17 @@ describe("own-agent referral report reconciliation", () => {
     expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toContain("no-store");
     expect(body).toMatchObject({ status: "UNCHANGED", revision: 1, added: 0, removed: 0, changed: 0, sales: "NOT_CHECKED", commission: "NOT_CHECKED" });
     expect(m.create).not.toHaveBeenCalled(); expect(JSON.stringify(body)).not.toContain("event-1");
+  });
+  it("inspects a revision's evidence only after authorizing the current agent", async () => {
+    m.query.mockReset(); m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ status: "RECONCILIATION_REQUIRED" }]);
+    m.one.mockResolvedValueOnce({ ...prior, kind: "BASELINE", createdAt: date, addedCount: 0, removedCount: 0, changedCount: 0 });
+    const response = await GET(new Request("https://agent.test/api/agents/reports/referrals/reconcile?periodKey=daily%3A2026-01-01&revision=1"));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.evidenceStatus).toBe("RECONCILIATION_REQUIRED");
+    expect(body.commission).toBe("NOT_CHECKED");
+    expect(m.one.mock.calls[0][0].where.applicationId_periodKey_revision.applicationId).toBe("own-app");
+    expect(m.execute).toHaveBeenCalledOnce();
   });
   it("fails closed for legacy snapshots or unbounded membership", async () => {
     m.prior.mockResolvedValueOnce(null); expect((await POST(request())).status).toBe(409); expect(m.current).not.toHaveBeenCalled();
