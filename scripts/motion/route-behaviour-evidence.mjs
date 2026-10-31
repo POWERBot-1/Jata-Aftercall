@@ -58,6 +58,21 @@ try {
  const race={kind:'real-reduced-motion-cancellation',started:before.trace.filter(e=>e.kind==='animate-start').length,runningBefore:before.running,runningAfter:after.running,reason:after.reason,disconnects:after.trace.filter(e=>e.kind==='disconnect').length,cancelEvents:after.trace.filter(e=>e.kind==='animate-cancel').length,trace:after.trace};
  race.result=race.started>0&&race.runningBefore>0&&race.runningAfter===0&&race.reason==='reduced-motion'&&race.disconnects>0?'PASS':'INCONCLUSIVE_OR_FAIL';events.push(race);save();
  console.log(`::notice title=Targeted real cancellation::${JSON.stringify({kind:race.kind,result:race.result,started:race.started,runningBefore:race.runningBefore,runningAfter:race.runningAfter,reason:race.reason,disconnects:race.disconnects,cancelEvents:race.cancelEvents})}`);
+ // Exercise repeated live preference transitions on the same real document. Do not
+ // synthesize intersections or assume previously seen targets replay on re-entry.
+ const transitions=[];
+ for(let i=0;i<3;i++){
+  for(const [preference,mode] of [['no-preference','motion'],['reduce','lite']]){
+   await owner.emulateMediaFeatures([{name:'prefers-reduced-motion',value:preference}]);
+   await owner.waitForFunction(expected=>document.querySelector('.eb-scope')?.dataset.renderMode===expected,{timeout:10000},mode);
+   transitions.push(await owner.evaluate(()=>({mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length})));
+  }
+ }
+ // Allow the import timeout and reveal fallback windows to elapse to detect late starts.
+ await new Promise(resolve=>setTimeout(resolve,2300));
+ const settled=await owner.evaluate(()=>({mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length,trace:window.__routeMotionTrace||[]}));
+ const repeat={kind:'repeated-preference-transitions',transitions,settled,result:transitions.length===6&&transitions.every((x,i)=>x.mode===(i%2?'lite':'motion')&&(!((i%2))||(x.reason==='reduced-motion'&&x.running===0)))&&settled.mode==='lite'&&settled.reason==='reduced-motion'&&settled.running===0?'PASS':'INCONCLUSIVE_OR_FAIL'};
+ events.push(repeat);save();console.log(`::notice title=Repeated preference transitions::${JSON.stringify({kind:repeat.kind,result:repeat.result,transitions,settled:{mode:settled.mode,reason:settled.reason,running:settled.running}})}`);
  // Actual owner preference and OS preference are applied independently through the real draft API.
  for(const widthHeight of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
   const [width,height]=widthHeight;await owner.bringToFront();await owner.setViewport({width,height,deviceScaleFactor:1});
@@ -80,4 +95,4 @@ try {
 
 }catch(e){events.push({kind:'BLOCKED',error:String(e?.stack||e).slice(0,1000)});}finally{save();await browser?.close();await db.$disconnect();}
 const errors=events.filter(x=>x.kind==='BLOCKED');const summary={sha,browser:browserVersion,rows:rows.length,errors,routeRows:rows.filter(x=>!x.setting).length,liteRows:rows.filter(x=>x.setting&&x.mode==='lite').length};console.log(`::notice title=Route behaviour observations::${JSON.stringify(summary)}`);
-if(errors.length||events.some(x=>x.kind==='real-reduced-motion-cancellation'&&x.result!=='PASS')||!events.some(x=>x.kind==='real-reduced-motion-cancellation')||summary.routeRows!==30||summary.liteRows!==12||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
+if(errors.length||['real-reduced-motion-cancellation','repeated-preference-transitions'].some(kind=>!events.some(x=>x.kind===kind&&x.result==='PASS'))||summary.routeRows!==30||summary.liteRows!==12||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
