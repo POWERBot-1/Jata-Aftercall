@@ -5533,6 +5533,24 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
  * nothing is hidden, nothing waits.
  * ------------------------------------------------------------------------ */
 
+/* Entry is opt-in on real application surfaces. Text and authoritative numbers are never
+   interpolated or replaced, so they remain readable and accurate throughout the animation. */
+@keyframes jata-surface-enter {
+  from { opacity: 0.92; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.jata-motion-entry, .jata-motion-section {
+  animation: jata-surface-enter var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+.jata-motion-entry .ws-stat {
+  animation: jata-surface-enter var(--jata-dur-slow) var(--jata-ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jata-motion-entry, .jata-motion-section, .jata-motion-entry .ws-stat {
+    animation: none; opacity: 1; transform: none;
+  }
+}
+
 /* Shared workspace feedback: presentation only, never a source of financial state.
    Navigation retains its focus ring and hit area; status text remains immediately readable. */
 .ws-rail a {

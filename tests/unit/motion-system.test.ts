@@ -210,3 +210,16 @@ describe("shared workspace motion feedback", () => {
     expect(reduced).toContain(".ws-rail a, .ws-status { transition: none;");
   });
 });
+
+describe("actual workspace and agent entrance motion", () => {
+  it("attaches opt-in motion to real routes and honours reduced motion", () => {
+    const dashboard = readFileSync("components/DashboardClient.tsx", "utf8");
+    const agent = readFileSync("app/agents/dashboard/page.tsx", "utf8");
+    const chart = readFileSync("components/ui/AnalyticsChart.tsx", "utf8");
+    expect(dashboard).toContain("ws-stack jata-motion-entry");
+    expect(agent).toContain("mk-prose jata-motion-section");
+    expect(chart).toContain("isAnimationActive={reducedMotion === false}");
+    expect(css).toContain(".jata-motion-entry .ws-stat");
+    expect(reducedMotionBlocks(css).join("\n")).toContain(".jata-motion-entry, .jata-motion-section, .jata-motion-entry .ws-stat");
+  });
+});

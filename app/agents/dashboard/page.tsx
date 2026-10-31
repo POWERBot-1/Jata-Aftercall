@@ -28,12 +28,12 @@ export default async function AgentDashboardPage() {
     });
   } catch {
     return <MarketingLayout signedIn eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
-      <MarketingSection title="Temporarily unavailable" id="unavailable"><div className="mk-prose"><p role="alert">We could not load your application. Please try again later.</p><Link href="/agents/dashboard">Try again</Link></div></MarketingSection>
+      <MarketingSection title="Temporarily unavailable" id="unavailable"><div className="mk-prose jata-motion-section"><p role="alert">We could not load your application. Please try again later.</p><Link href="/agents/dashboard">Try again</Link></div></MarketingSection>
     </MarketingLayout>;
   }
   return <MarketingLayout signedIn eyebrow="Agent programme" title="Application status" intro="Your account's agent application.">
     <MarketingSection title="Your application" id="application">
-      <div className="mk-prose">
+      <div className="mk-prose jata-motion-section">
         {!application ? <><p>No application is recorded for this account.</p><Link href="/agents/apply">Apply as an agent</Link></> : <>
           <p><strong>Applicant:</strong> {application.fullName}</p>
           <p><strong>Submitted:</strong> {formatDateTime(application.createdAt)} (Africa/Nairobi)</p>
@@ -46,7 +46,7 @@ export default async function AgentDashboardPage() {
       </div>
     </MarketingSection>
     <MarketingSection title="Referrals and commissions" id="programme-status" tone="cream">
-      <div className="mk-prose">{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <><RegistrationReferralSummary /><RegistrationReferralLink /></>}{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && process.env.AGENT_COMMISSION_SUMMARY_ENABLED === "true" && <CommissionStorageSummary />}<p>Sales performance reporting and verified commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
+      <div className="mk-prose jata-motion-section">{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <><RegistrationReferralSummary /><RegistrationReferralLink /></>}{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && process.env.AGENT_COMMISSION_SUMMARY_ENABLED === "true" && <CommissionStorageSummary />}<p>Sales performance reporting and verified commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
     </MarketingSection>
   </MarketingLayout>;
 }

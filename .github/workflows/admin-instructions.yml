@@ -19,3 +19,14 @@ jobs:
         run: node scripts/admin/check-building-instructions.mjs --ci
       - name: Exercise valid and destructive history fixtures
         run: node --test scripts/admin/tests/instruction-integrity.test.mjs
+  programme-completeness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test completeness gate
+        run: node --test scripts/admin/tests/programme-readiness.test.mjs
+      - name: Require verified programme acceptance
+        run: node scripts/admin/check-programme-readiness.mjs

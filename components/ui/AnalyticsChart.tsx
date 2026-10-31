@@ -64,7 +64,7 @@ export function AnalyticsChart({
               }}
               formatter={(value: number) => [formatNumber(value), title]}
             />
-            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={!reducedMotion}>
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={reducedMotion === false}>
               {series.map((entry) => (
                 <Cell key={entry.label} fill={entry.colour ?? "var(--jata-accent)"} />
               ))}
