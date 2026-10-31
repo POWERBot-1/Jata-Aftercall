@@ -28,7 +28,7 @@ function periodAt(start: Date, kind: SchedulePeriod) {
 }
 
 /** One caller-provided transaction: serialized cursor, bounded page, no network or delivery. */
-export async function processReferralReportBatch(tx: Tx, kind: SchedulePeriod, start: Date, now: Date): Promise<{ status: "CAUGHT_UP" | "BATCH" | "PERIOD_COMPLETE"; processed: number }> {
+export async function processReferralReportBatch(tx: Tx, kind: SchedulePeriod, start: Date, now: Date): Promise<{ status: "CAUGHT_UP" | "BATCH" | "PERIOD_COMPLETE"; processed: number; periodKey: string }> {
   if ((kind !== "DAILY" && kind !== "MONTHLY") || !Number.isFinite(start.getTime()) || !Number.isFinite(now.getTime()) || start > now) throw new Error("INVALID_SCHEDULE_CONFIG");
   await tx.$executeRaw`
     INSERT INTO "AgentReferralReportSchedule" ("periodType", "configuredStart", "periodStart")
@@ -38,7 +38,7 @@ export async function processReferralReportBatch(tx: Tx, kind: SchedulePeriod, s
   if (rows.length !== 1 || rows[0].configuredStart.getTime() !== start.getTime()) throw new Error("SCHEDULE_START_CHANGED");
   const cursor = rows[0];
   const period = periodAt(cursor.periodStart, kind);
-  if (period.endExclusive > now) return { status: "CAUGHT_UP", processed: 0 };
+  if (period.endExclusive > now) return { status: "CAUGHT_UP", processed: 0, periodKey: period.key };
   const applications = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id" FROM "AgentApplication"
     WHERE "status" = 'PENDING' AND "agentStatus" = 'ACTIVE' AND "createdAt" < ${period.endExclusive}
@@ -56,8 +56,8 @@ export async function processReferralReportBatch(tx: Tx, kind: SchedulePeriod, s
   }
   if (applications.length === BATCH_SIZE) {
     await tx.$executeRaw`UPDATE "AgentReferralReportSchedule" SET "lastApplicationId" = ${applications[applications.length - 1].id}, "updatedAt" = clock_timestamp() WHERE "periodType" = ${kind}`;
-    return { status: "BATCH", processed: applications.length };
+    return { status: "BATCH", processed: applications.length, periodKey: period.key };
   }
   await tx.$executeRaw`UPDATE "AgentReferralReportSchedule" SET "periodStart" = ${period.endExclusive}, "lastApplicationId" = NULL, "updatedAt" = clock_timestamp() WHERE "periodType" = ${kind}`;
-  return { status: "PERIOD_COMPLETE", processed: applications.length };
+  return { status: "PERIOD_COMPLETE", processed: applications.length, periodKey: period.key };
 }

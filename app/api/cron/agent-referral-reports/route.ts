@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { processReferralReportBatch, reportScheduleStart } from "@/lib/agents/referral-report-scheduler";
+import { reportScheduleStart } from "@/lib/agents/referral-report-scheduler";
+import { runReferralReportBatch } from "@/lib/agents/referral-report-scheduler-run";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -20,8 +21,8 @@ export async function GET(req: Request) {
     // Independent transactions prevent a failure in one period type from claiming it completed.
     // Each invocation advances at most one bounded page per type, making missed runs resumable.
     const now = new Date();
-    const daily = await prisma.$transaction((tx: typeof prisma) => processReferralReportBatch(tx, "DAILY", start, now));
-    const monthly = await prisma.$transaction((tx: typeof prisma) => processReferralReportBatch(tx, "MONTHLY", start, now));
+    const daily = await runReferralReportBatch(prisma, "DAILY", start, now);
+    const monthly = await runReferralReportBatch(prisma, "MONTHLY", start, now);
     return NextResponse.json({ daily, monthly, delivery: "NOT_AVAILABLE", scope: "REFERRAL_EVIDENCE_ONLY" }, { headers });
   } catch { return error("Scheduler unavailable.", 503); }
 }

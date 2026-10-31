@@ -583,6 +583,7 @@ function createFallbackPrisma(): any {
     agentReferralReportRevision: emptyModel(),
     agentReferralReportMember: emptyModel(),
     agentReferralReportSchedule: emptyModel(),
+    agentReferralReportScheduleRun: emptyModel(),
     agentReferralLink: emptyModel(),
     agentReferralAttribution: emptyModel(),
     agentRegistrationThrottle: emptyModel(),
