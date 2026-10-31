@@ -138,6 +138,15 @@ model AgentReferralReportSnapshot {
   @@index([applicationId, createdAt])
 }
 
+// Bounded scheduler cursor; no external scheduling or delivery is enabled by this model.
+model AgentReferralReportSchedule {
+  periodType String @id
+  configuredStart DateTime
+  periodStart DateTime
+  lastApplicationId String?
+  updatedAt DateTime @default(now())
+}
+
 // Immutable storage only. No application path creates accruals or authorizes payouts.
 model AgentCommissionLedgerEntry {
   id String @id
