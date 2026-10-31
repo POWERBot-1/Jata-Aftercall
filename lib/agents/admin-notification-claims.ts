@@ -66,9 +66,13 @@ export async function markExpiredAdminNotificationClaimsUnknown(db: Client): Pro
       WHERE "state" = 'CLAIMED' AND "leaseUntil" <= clock_timestamp()
       ORDER BY "leaseUntil", "applicationId", "recipientKey"
       FOR UPDATE SKIP LOCKED LIMIT 100
+    ), recovered AS (
+      UPDATE "AgentAdminNotificationClaimState" s SET "state" = 'UNKNOWN', "claimToken" = NULL,
+        "leaseUntil" = NULL, "updatedAt" = clock_timestamp()
+      FROM expired e WHERE s."applicationId" = e."applicationId" AND s."recipientKey" = e."recipientKey"
+        AND s."state" = 'CLAIMED' AND s."leaseUntil" <= clock_timestamp()
+      RETURNING s."applicationId", s."recipientKey", s."attempts"
     )
-    UPDATE "AgentAdminNotificationClaimState" s SET "state" = 'UNKNOWN', "claimToken" = NULL,
-      "leaseUntil" = NULL, "updatedAt" = clock_timestamp()
-    FROM expired e WHERE s."applicationId" = e."applicationId" AND s."recipientKey" = e."recipientKey"
-      AND s."state" = 'CLAIMED' AND s."leaseUntil" <= clock_timestamp()`;
+    INSERT INTO "AgentAdminNotificationRecovery" ("applicationId", "recipientKey", "attempt", "reason")
+    SELECT "applicationId", "recipientKey", "attempts", 'LEASE_EXPIRED_UNKNOWN' FROM recovered`;
 }

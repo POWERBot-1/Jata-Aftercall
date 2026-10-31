@@ -118,7 +118,7 @@ model AgentAdminNotificationCallback {
   attempt AgentAdminNotificationAttempt @relation(fields: [messageId], references: [messageId], onDelete: Restrict, map: "AgentAdminNotificationCallback_message_fkey")
 }
 
-// Internal claim state only; there is no delivery worker or provider integration.
+// Internal claim state; a claim is not proof of delivery.
 model AgentAdminNotificationClaimState {
   applicationId String
   recipientKey String
@@ -131,8 +131,20 @@ model AgentAdminNotificationClaimState {
   updatedAt DateTime @default(now())
   @@id([applicationId, recipientKey])
   review AgentAdminNotificationReview?
+  recoveries AgentAdminNotificationRecovery[]
   @@index([state, leaseUntil])
   @@index([state, nextAttemptAt])
+}
+
+// Automated conservative recovery evidence; it never authorizes replay.
+model AgentAdminNotificationRecovery {
+  applicationId String
+  recipientKey String
+  attempt Int
+  reason String
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationRecovery_claim_fkey")
+  @@id([applicationId, recipientKey, attempt])
 }
 
 // Acknowledgement is not proof of delivery and cannot authorize a retry.

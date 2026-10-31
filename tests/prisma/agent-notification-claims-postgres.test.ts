@@ -30,7 +30,7 @@ describe.skipIf(!realPrismaConfigured)("notification claims on disposable Postgr
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query('CREATE TABLE "AgentAdminNotificationEvent" ("applicationId" TEXT PRIMARY KEY)');
-    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
+    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261122000000_agent_notification_recovery_audit"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
     await pool.query(`INSERT INTO "AgentAdminNotificationEvent" VALUES ('app'); INSERT INTO "AgentAdminNotificationPlan" ("applicationId", "recipientKeyVersion") VALUES ('app', 'fixture');`);
     await pool.query('INSERT INTO "AgentAdminNotificationDelivery" ("applicationId", "recipientKey") VALUES ($1,$2),($1,$3)', ["app", key("a"), key("b")]);
     process.env.AGENT_ADMIN_NOTIFICATION_CLAIMS_ENABLED = "true";
@@ -100,7 +100,14 @@ describe.skipIf(!realPrismaConfigured)("notification claims on disposable Postgr
     await finishAdminNotificationClaim(db, other, "SAFE_PERMANENT_REJECTION");
     await pool.query('UPDATE "AgentAdminNotificationClaimState" SET "leaseUntil"=clock_timestamp() - INTERVAL \'1 second\' WHERE "recipientKey"=$1', [claimed.recipientKey]);
     expect(await finishAdminNotificationClaim(db, claimed, "ACCEPTED")).toBe(false);
-    expect(await markExpiredAdminNotificationClaimsUnknown(db)).toBe(1);
+    // An audit write failure rolls the state transition back: no unrecorded recovery.
+    await pool.query('INSERT INTO "AgentAdminNotificationRecovery" ("applicationId", "recipientKey", "attempt", "reason") VALUES ($1,$2,1,$3)', [claimed.applicationId, claimed.recipientKey, 'LEASE_EXPIRED_UNKNOWN']);
+    await expect(markExpiredAdminNotificationClaimsUnknown(db)).rejects.toThrow();
+    expect((await pool.query('SELECT "state" FROM "AgentAdminNotificationClaimState" WHERE "recipientKey"=$1', [claimed.recipientKey])).rows[0].state).toBe("CLAIMED");
+    await pool.query('DELETE FROM "AgentAdminNotificationRecovery"');
+    expect((await Promise.all([markExpiredAdminNotificationClaimsUnknown(db), markExpiredAdminNotificationClaimsUnknown(db)])).reduce((a, b) => a + b, 0)).toBe(1);
+    expect((await pool.query('SELECT "attempt", "reason" FROM "AgentAdminNotificationRecovery"')).rows).toEqual([{ attempt: 1, reason: "LEASE_EXPIRED_UNKNOWN" }]);
+    expect(await markExpiredAdminNotificationClaimsUnknown(db)).toBe(0);
     expect(await claimAdminNotification(db)).toBeNull();
     expect((await pool.query('SELECT "state" FROM "AgentAdminNotificationClaimState" WHERE "recipientKey"=$1', [claimed.recipientKey])).rows[0].state).toBe("UNKNOWN");
   });

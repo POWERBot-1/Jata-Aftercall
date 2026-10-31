@@ -144,6 +144,7 @@ describe("runtime and schema guards", () => {
       "20261119000000_agent_referral_evidence_immutability",
       "20261120000000_agent_referral_revision_write_fence",
       "20261121000000_agent_notification_attempt_history",
+      "20261122000000_agent_notification_recovery_audit",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -212,6 +213,7 @@ describe("runtime and schema guards", () => {
       "20261119000000_agent_referral_evidence_immutability",
       "20261120000000_agent_referral_revision_write_fence",
       "20261121000000_agent_notification_attempt_history",
+      "20261122000000_agent_notification_recovery_audit",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

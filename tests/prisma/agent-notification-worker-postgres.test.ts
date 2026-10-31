@@ -26,7 +26,7 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query('CREATE TABLE "AgentAdminNotificationEvent" ("applicationId" TEXT PRIMARY KEY, "eventType" TEXT NOT NULL)');
-    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261121000000_agent_notification_attempt_history"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
+    for (const name of ["20261112000000_agent_notification_outbox_plan", "20261113000000_agent_notification_claim_state", "20261122000000_agent_notification_recovery_audit", "20261121000000_agent_notification_attempt_history"]) await pool.query(readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8"));
     const require = createRequire(import.meta.url); const harness = process.env.PRISMA_WASM_HARNESS_DIR;
     if (harness) {
       const { PrismaClient } = require(path.join(harness, "generated", "wasm.js")); const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg")); const { Pool: AdapterPool } = require(path.join(harness, "node_modules", "pg"));
@@ -96,6 +96,7 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     const provider = new MockMessagingProvider();
     expect(await processAdminNotificationBatch(prisma, provider)).toMatchObject({ processed: 0, expired: 1 });
     expect(provider.sent).toHaveLength(0);
+    expect((await pool.query('SELECT "attempt", "reason" FROM "AgentAdminNotificationRecovery" WHERE "applicationId"=$1', ["crashed-app"])).rows).toEqual([{ attempt: 1, reason: "LEASE_EXPIRED_UNKNOWN" }]);
     expect((await pool.query('SELECT "state" FROM "AgentAdminNotificationClaimState" WHERE "applicationId" = $1', ["crashed-app"])).rows[0].state).toBe("UNKNOWN");
     process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
   });
