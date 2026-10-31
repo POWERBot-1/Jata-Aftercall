@@ -113,3 +113,59 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** no production changes or customer site republishing; baseline images must show actual applications, preserve branding, accessibility and tenant isolation.
 - **Affected:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md`, Studio render/preview/publish paths, existing motion helpers and browser test infrastructure. No schema changes for motion without separate authorization.
 - **Acceptance:** complete generation-path inventory, representative baseline screenshots, reuse plan, performance/reduced-motion tests and explicit NOT TESTED list. **Dependencies/conflicts:** existing open PRs #41/#42 and fixed PR #77 branch; no design changes or production publication authorized. **Evidence:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md` documents initial source inspection; actual baseline screenshots and full path inventory remain NOT TESTED. **Implementation commit:** the introduction commit can be identified with `git log --follow -- docs/agents/CONTROL_AND_MOTION_AUDIT.md`.
+
+## 014 — ADMIN-011: instruction integrity in CI
+- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Owner instruction:** integrate `scripts/admin/check-building-instructions.mjs` with CI; enforce unique sequential IDs, required fields, committed appends, validated corrections and retained superseded history; verify first introduction using actual Git history and test valid/invalid cases.
+- **Purpose / function:** fail closed on malformed or destructive edits. Corrections are new append-only entries identifying an earlier requirement, the change, approval and retained original; prior text is not rewritten.
+- **Security/privacy / UX:** no secret values in the register or logs. Error messages identify the failed requirement without revealing confidential information.
+- **Affected:** register, `.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`.
+- **Acceptance:** full-history CI, valid append, attempted rewrite/restoration, malformed IDs/fields, invalid correction and uncommitted or shallow-history failure tests. **Dependencies/conflicts:** full Git history is required; Git cannot prove that a recorded instruction or approval faithfully represents the owner. **Evidence:** local full-history first introduction `c2a4ca337e879fdd9cd20ab1eda394d587846313`; five temporary-repository tests passed. Final-head CI pending. **Implementation commit:** use `git log --follow -- scripts/admin/check-building-instructions.mjs`; not independently VERIFIED.
+
+## 015 — ADMIN-012: secure control implementation and route acceptance
+- **Date / approval / status:** 2026-10-31; owner-directed; PENDING.
+- **Owner instruction:** implement `/control` using existing identity and infrastructure, secure session/revocation, server-side resource permissions and tenant isolation; implement six requested roles only after confirming precise permissions. No production administrative writes or hidden bypass.
+- **Purpose / function:** distinct real console, not a hidden page or role manipulated in the browser; MFA where supported by existing architecture.
+- **Security/privacy / UX:** direct API, privilege-escalation, expiration, cross-tenant and unauthorized tests; protect private numbers and secrets; responsive, accessible interface.
+- **Affected:** `app/control/**`, future control APIs, existing auth/session and audit infrastructure; role and provisioning models as required by a separately reviewed design.
+- **Acceptance:** real authorized and denied sessions, security tests, route coverage and six-view genuine screenshots. **Dependencies/conflicts:** current roles are CUSTOMER/ADMIN; exact module/action permission boundaries and secure provisioning remain unspecified. Existing domain verification does not prove production `/control` availability. **Evidence/commit:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md`; not implemented.
+
+## 016 — ADMIN-013: connected agent and financial lifecycle
+- **Date / approval / status:** 2026-10-31; owner-directed; BLOCKED for approved-policy activation, independent synthetic engineering remains possible.
+- **Owner instruction:** registration through phone ownership, eligibility, activation, referral, verified payment, idempotent commission, reversal, reconciliation and Nairobi reports with abuse, hierarchy, notifications, scheduler recovery and >5,000-member coverage.
+- **Purpose / function:** prove the connected authenticated journey with synthetic events and immutable evidence, not a collection of disconnected models.
+- **Security/privacy / UX:** no real financial operations, message sending or false payment/verification status; protect tenant boundaries, consent and sensitive data.
+- **Affected:** `app/api/agents/**`, `app/api/paystack/**`, `lib/agents/**`, existing ledger, referral, report, scheduler and notification models and tests.
+- **Acceptance:** complete authenticated route E2E, duplicate/out-of-order/reversal/recovery tests and bounded large-report verification. **Dependencies/conflicts:** exact approved rates, events, attribution and reversal terms not located; do not invent or enable accrual/payouts. **Evidence/commit:** `docs/agents/RELEASE_GATE_AND_RUNBOOK.md`; connected journey remains incomplete.
+
+## 017 — ADMIN-014: native migration and recovery
+- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Owner instruction:** use native Prisma and disposable PostgreSQL 18 to prove fresh install, supported upgrade, migration failure handling, rollback where supported, forward recovery, backup/restore, data integrity and application compatibility.
+- **Purpose / function:** prove safe migration and recovery without relying on WASM/direct SQL alone.
+- **Security/privacy / UX:** never use production databases or credentials; preserve financial and referral evidence.
+- **Affected:** Prisma migrations, build/migration gates, CI rehearsal and release documentation.
+- **Acceptance:** recorded native command evidence for each requested phase, including non-reversible migration strategy. **Dependencies/conflicts:** local native binary download was blocked; prior native CI covered fresh migration and failure control, not all recovery phases. **Evidence/commit:** prior candidate workflow; full acceptance NOT TESTED.
+
+## 018 — ADMIN-015: actual responsive and security evidence
+- **Date / approval / status:** 2026-10-31; owner-directed; PENDING.
+- **Owner instruction:** capture genuine authorized and unauthorized control, registration, agent dashboard, financial state, motion and template-family browser journeys at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768; independently inspect every image and reduced-motion behavior.
+- **Purpose / function:** prove real application usability, state integrity and accessibility, not static or intercepted mockups.
+- **Security/privacy / UX:** synthetic test users and data only, no secrets or private administrator destinations; test clipping, overflow, keyboard, touch, readable status and motion.
+- **Affected:** browser E2E scripts, actual app routes, screenshot artifacts and release documentation.
+- **Acceptance:** six-view actual authenticated evidence and independent findings for each applicable surface. **Dependencies/conflicts:** the control route and complete connected journey are not implemented. **Evidence/commit:** existing general screenshots do not satisfy this requirement; NOT TESTED.
+
+### 019 — MOTION-004: shared motion primitives and universal coverage
+- **Date / approval / status:** 2026-10-31; owner-directed; PENDING.
+- **Owner instruction:** build on existing Website Studio runtime to implement shared motion tokens/primitives and consistent interactions, financial/transaction states and template inheritance, preserving the original visual identity and authoritative financial facts.
+- **Purpose / function:** consistent accessible interaction across actual supported modules and generated websites, without misleading status or unnecessary dependencies.
+- **Security/privacy / UX:** reduced-motion, keyboard/touch and responsive support; no simulated financial success or tenant leakage; do not change layout, brand or production site settings.
+- **Affected:** existing `lib/experience/motion*`, `components/storefront/**`, shared interaction components and actual Studio publishing paths; open PRs #41/#42 require overlap review.
+- **Acceptance:** behavior and inheritance tests for every applicable surface and supported template family, genuine browser evidence and no static visual regressions. **Dependencies/conflicts:** `MOTION-001`–`MOTION-003`; no universal inheritance or full coverage claimed until verified. **Evidence/commit:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md`; implementation not started for this directive.
+
+## 020 — ADMIN-016: instruction integrity implementation evidence
+- **Date / approval / status:** 2026-10-31; owner-directed continuation of ADMIN-011; IN PROGRESS.
+- **Owner instruction:** implement and test committed, full-history CI validation for the authoritative instruction register without changing earlier owner decisions.
+- **Purpose / function:** validate global and per-namespace numbering, required fields, committed appends, structurally referenced corrections and earlier-history retention; fail closed on shallow history.
+- **Security/privacy / UX:** error text omits sensitive data; checks cannot authenticate owner statements or protect against Git history rewritten outside the available repository.
+- **Affected:** `.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.
+- **Acceptance:** node test suite passes in isolated Git fixtures; full-history CI checks exact committed state and reports first introduction; review original owner text manually. **Dependencies/conflicts:** full Git history; append-only correction does not permit destructive edits, preserving ADMIN-001. **Evidence:** six temporary-Git tests passed locally; full-history checker identifies introduction `c2a4ca337e879fdd9cd20ab1eda394d587846313`; final-head CI pending. **Implementation commit:** find with `git log --follow -- scripts/admin/check-building-instructions.mjs`.
