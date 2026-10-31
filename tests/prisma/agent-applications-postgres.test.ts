@@ -8,6 +8,8 @@ const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role:
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session, hashPassword: async () => "synthetic-hash" }));
 import { GET, POST } from "@/app/api/agents/application/route";
+import { GET as reportHistory, POST as captureReport } from "@/app/api/agents/reports/referrals/route";
+import { previousDailyPeriod, previousMonthlyPeriod } from "@/lib/agents/report-periods";
 import { GET as notificationOperations, POST as acknowledgeNotification } from "@/app/api/admin/agents/notification-operations/route";
 import { enqueueApplicationSubmitted } from "@/lib/agents/admin-notification-event";
 import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
@@ -45,6 +47,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     if (throttleKeys.length || userKeys.length) await p.agentRegistrationThrottle.deleteMany({ where: { key: { in: [...throttleKeys, ...userKeys] } } });
     if (originalSecret === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = originalSecret;
     await p.auditEvent.deleteMany({ where: { actorId: { in: users } } });
+    await p.agentReferralReportSnapshot.deleteMany({ where: { application: { userId: { in: users } } } });
     await p.agentReferralAttribution.deleteMany({ where: { OR: [{ referrer: { userId: { in: users } } }, { referred: { userId: { in: users } } }] } });
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
@@ -121,6 +124,44 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       expect((await notificationOperations()).status).toBe(403);
       expect((await acknowledgeNotification(request("/api/admin/agents/notification-operations", data))).status).toBe(403);
     } finally { if (original === undefined) delete process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED; else process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED = original; }
+  });
+
+  it("captures idempotent Nairobi referral evidence snapshots scoped to active agents", async () => {
+    const original = process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED;
+    try {
+      process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = "true";
+      const agent = await p.user.create({ data: { email: `report-agent-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      const referred = await p.user.create({ data: { email: `report-referred-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      const other = await p.user.create({ data: { email: `report-other-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(agent.id, referred.id, other.id);
+      const app = await p.agentApplication.create({ data: { userId: agent.id, fullName: "Agent", phoneE164: "+254700000011", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+      const referredApp = await p.agentApplication.create({ data: { userId: referred.id, fullName: "Referred", phoneE164: "+254700000012", privacyAcknowledgedAt: new Date() } });
+      const otherApp = await p.agentApplication.create({ data: { userId: other.id, fullName: "Other", phoneE164: "+254700000013", privacyAcknowledgedAt: new Date(), agentStatus: "ACTIVE" } });
+      const link = await p.agentReferralLink.create({ data: { referrerApplicationId: app.id, tokenHash: `report-${uid()}`, expiresAt: new Date(Date.now() + 3600000) } });
+      const daily = previousDailyPeriod(new Date()); const monthly = previousMonthlyPeriod(new Date());
+      const evidenceTime = new Date(daily.startInclusive.getTime() + 60_000);
+      await p.agentReferralAttribution.create({ data: { referrerApplicationId: app.id, referredApplicationId: referredApp.id, linkId: link.id, source: "REGISTRATION", consentedAt: evidenceTime, createdAt: evidenceTime } });
+      mock.session = { userId: agent.id, role: "CUSTOMER", email: agent.email };
+      const make = (period: string) => request("/api/agents/reports/referrals", { period });
+      const results = await Promise.all([captureReport(make("DAILY")), captureReport(make("DAILY")), captureReport(make("DAILY"))]);
+      expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+      for (const res of results) { const json = await res.json(); expect(json.item.periodKey).toBe(daily.key); expect(json.item.registrationCount).toBe("1"); expect(json.item.existingApplicationCount).toBe("0"); expect(json.sales).toBe("NOT_CHECKED"); }
+      expect(await p.agentReferralReportSnapshot.count({ where: { applicationId: app.id, periodKey: daily.key } })).toBe(1);
+      const lateUser = await p.user.create({ data: { email: `report-late-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } }); users.push(lateUser.id);
+      const lateApp = await p.agentApplication.create({ data: { userId: lateUser.id, fullName: "Late", phoneE164: "+254700000014", privacyAcknowledgedAt: new Date() } });
+      await p.agentReferralAttribution.create({ data: { referrerApplicationId: app.id, referredApplicationId: lateApp.id, linkId: link.id, source: "REGISTRATION", consentedAt: evidenceTime, createdAt: evidenceTime } });
+      const replay = await (await captureReport(make("DAILY"))).json(); expect(replay.item.registrationCount).toBe("1");
+      const month = await (await captureReport(make("MONTHLY"))).json();
+      expect(month.item.periodKey).toBe(monthly.key);
+      expect(month.item.registrationCount).toBe(evidenceTime >= monthly.startInclusive && evidenceTime < monthly.endExclusive ? "2" : "0");
+      const history = await (await reportHistory()).json(); expect(history.items).toHaveLength(2); expect(history.items.every((x: { applicationId?: string }) => !x.applicationId)).toBe(true);
+      mock.session = { userId: other.id, role: "CUSTOMER", email: other.email };
+      const own = await (await captureReport(make("DAILY"))).json(); expect(own.item.registrationCount).toBe("0");
+      expect(await p.agentReferralReportSnapshot.count({ where: { applicationId: otherApp.id } })).toBe(1);
+      expect((await captureReport(request("/api/agents/reports/referrals", { period: "DAILY", applicationId: app.id }))).status).toBe(400);
+      await p.agentApplication.update({ where: { id: otherApp.id }, data: { agentStatus: "SUSPENDED" } });
+      expect((await reportHistory()).status).toBe(403); expect((await captureReport(make("DAILY"))).status).toBe(403);
+    } finally { if (original === undefined) delete process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED; else process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = original; mock.session = null; }
   });
 
   it("enforces an atomic shared account limit and resets an expired window", async () => {

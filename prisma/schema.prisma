@@ -48,6 +48,7 @@ model AgentApplication {
   phoneE164             String
   verifiedPhoneE164     String?  @unique
   phoneVerifiedAt       DateTime?
+  referralReports AgentReferralReportSnapshot[]
   commissionEntries AgentCommissionLedgerEntry[]
   adminNotificationEvent AgentAdminNotificationEvent?
   phoneChallenge        AgentPhoneChallenge?
@@ -120,6 +121,21 @@ model AgentAdminNotificationReview {
   reviewer User @relation("AgentNotificationReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReview_user_fkey")
   createdAt DateTime @default(now())
   @@id([applicationId, recipientKey])
+}
+
+// Persisted counts of referral evidence only; not financial or delivery records.
+model AgentReferralReportSnapshot {
+  applicationId String
+  periodKey String
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict, map: "AgentReferralReportSnapshot_application_fkey")
+  periodType String
+  startInclusive DateTime
+  endExclusive DateTime
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  createdAt DateTime @default(now())
+  @@id([applicationId, periodKey])
+  @@index([applicationId, createdAt])
 }
 
 // Immutable storage only. No application path creates accruals or authorizes payouts.
