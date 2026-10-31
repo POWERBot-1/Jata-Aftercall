@@ -1,0 +1,28 @@
+# Merged PR forensic review
+
+**Evidence source:** GitHub current PR records queried 2026-10-31; exact local baseline `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3`. Status/merge data below is live GitHub metadata; merged status is not a claim of successful user-facing behavior or ongoing production health.
+
+## Required PR review
+
+| PR | Status / merge commit | Intended scope and current tree evidence | CI / remaining risk |
+|---|---|---|---|
+| [#58](https://github.com/POWERBot-1/Jata-Aftercall/pull/58) | MERGED; `420d2af15257aa3d878116b1745205cb79ff2b20` | Mobile landing header wordmark spacing. | Mobile-specific code/test exists in merged history; full responsive matrix not established by this audit. |
+| [#59](https://github.com/POWERBot-1/Jata-Aftercall/pull/59) | MERGED; `2cae6cd52e22e8dd940e45e6207282ab4e89f018` | Website Studio canvas/outline/live draft preview/inspector. Current routes include canvas/design/preview. | Does not prove durable uploads, publish success or every template. |
+| [#63](https://github.com/POWERBot-1/Jata-Aftercall/pull/63) | MERGED; `34353d74a86262c84cd8d605ace239c10bf52914` | Offline-first POS queue and idempotent synchronization. Offline queue/sync tests are present. | No actual offline/online browser test or production ledger reconciliation in this turn. |
+| [#64](https://github.com/POWERBot-1/Jata-Aftercall/pull/64) | MERGED; `32b10ce2a79b9e134ad144ccc6fe5ba22f91b398` | Autopilot inactive controls, stacking, silent errors. | Later safety/control test families exist; no live interaction test here. |
+| [#65](https://github.com/POWERBot-1/Jata-Aftercall/pull/65) | MERGED; `083dfdb47a5811b729d221bbf3da996b626f4488` | Autopilot plan activation names/mapping. | Pricing/entitlement tests exist; real verified payment-to-entitlement path not proven here. |
+| [#68](https://github.com/POWERBot-1/Jata-Aftercall/pull/68) | MERGED; `b716247a84e80be549ef4a58b317eb8507f45a32` | Studio naming/status tokens/recovery screens. | Visual consistency is not a full accessibility or browser acceptance result. |
+| [#69](https://github.com/POWERBot-1/Jata-Aftercall/pull/69) | MERGED; `d8aa996e432374af8176bb81858c0d1d85dc6525` | Design restoration and contact/media/Qi seam. The title and supporting docs describe dependencies/release hold; merged state is verified, but the title is not evidence that dependencies are now activated. | R2/live Qi dependencies remain configuration/owner governed. JATA AFTERCALL must remain independent; no Qi/TANYA integration was called. |
+| [#76](https://github.com/POWERBot-1/Jata-Aftercall/pull/76) | MERGED; `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3` | Tenant-scoped POS product photos/category photos and farm-produce Studio path. This is the current local checkout and Vercel metadata's production source. | Its merge/READY deployment is evidence of code promotion, not durable upload bucket verification or every tenant-negative runtime behavior. |
+| [#77](https://github.com/POWERBot-1/Jata-Aftercall/pull/77) | MERGED; `847459b50726f4202496283cbbb9fb1b620d10b8` | Agent application/status portal, explicitly described as partial/not release-ready. Merged before #76; current main deployment includes its ancestry. | GitHub PR detail shows many workflows passed (static/release, E2E, motion capture, screenshots, POS/ERP), but `programme-completeness` failed. This single failure blocks a green-completeness claim. It remains incomplete per `docs/agents/RELEASE_GATE_AND_RUNBOOK.md`. |
+
+## Current repository / production cross-check
+
+- Current branch checkout exactly matches PR #76's merge commit. GitHub shows #77 is also merged, and its head is an ancestor of a later `main`/#76 progression according to the Vercel production metadata; this audit did not switch branches or alter remote history.
+- Read-only Vercel listing reports a `READY`/`PROMOTED` production deployment at source SHA `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3` with official-domain and Vercel aliases. This is platform control-plane evidence only; live user flow and DNS/TLS remain untested.
+- PR #76's latest check set is attached to its **head** `b76428b83fe896376f39850f5ac9fa42ad4c8b69`, not the current merge SHA: static/build, full no-DB suite, disposable PostgreSQL, interactive DB journey, POS/ERP and six-viewport browser screenshot workflows are green. The same head's `programme-completeness` check failed ([run 41243203445](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41243203445)). Do not describe those pass checks as having run on the later merge commit or the audit's uncommitted edits.
+- No open PR was changed or merged. `gh pr list` showed unrelated open work, including PR #49 and #51 (and other pre-existing work); the full current list is external to this PR-scoped code audit. PR #77 is not outstanding; its completeness check remains a failing historical result.
+
+## Conclusion
+
+Required PRs #58, #59, #63, #64, #65, #68, #69, #76 and #77 are currently `MERGED` by GitHub evidence. Merges, checks and deployment status do not clear independent acceptance requirements. No PR was merged by this audit, no deployment was initiated, and no claim is made that PR #77's full programme, finance or operational controls are release-ready.

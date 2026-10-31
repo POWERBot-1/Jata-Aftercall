@@ -1,0 +1,27 @@
+# Remediation register
+
+**Audit baseline:** `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3`. **Current code changes:** three stale public URL references and one narrow-screen marketing-nav clipping defect corrected; targeted QR-origin and CSS contract tests added. The table separates verified code fixes from open validation/owner blockers.
+
+| ID | Priority | Finding | Evidence | Change / disposition | Verification / owner |
+|---|---|---|---|---|---|
+| D-01 | P2 | AI QR generator defaulted to unrelated `https://jata.co.ke`. | `lib/qr.ts` fallback on baseline. | Fixed fallback to `https://jataaftercall.co.ke`; added `tests/unit/qr-domain.test.ts` for fallback, explicit origin and env origin. | PASS: included in 4-file/47-test targeted Vitest run; no production QR generated. |
+| D-02 | P2 | PWA install instructions displayed Vercel URL as the customer public address. | `app/install/page.tsx` baseline text. | Fixed customer-facing link to official domain; preserved Vercel operational reference elsewhere. | PASS: source-contract assertion included in 4-file/47-test targeted run; browser screen not tested in this turn. |
+| D-03 | P2 | Environment template described `jata.link` as future domain while owner identifies `.co.ke` as official. | `.env.example` comment. | Updated documentation comment to official intended URL and existing Vercel reference. | Diff/source check; no env values changed. |
+| D-04 | P2 | Marketing navigation links flex-shrank so the 320px screenshot visibly cut off the final “Install” label. | Existing browser artifact `docs/agents/evidence/landing-320x568.png`; desktop comparison `landing-1366x768.png`. | Fixed `.mk-nav a` with non-shrinking intrinsic flex sizing and added a mobile wrapping contract test in `tests/unit/pwa-marketing.test.ts`. | PASS: CSS contract test included in 4-file/47-test targeted run; no post-fix browser screenshot available in this environment. |
+| D-05 | P1 / owner blocker | Domain/DNS views conflict and mail repair remains unconfirmed. | Gmail registration/ticket records + read-only Vercel project/domain config; details in `DOMAIN_FORENSIC_AUDIT.md`. | No production change. Keep external URL claims blocked; owner follow up with HOSTAFRICA for authoritative records and mail test. | Owner approval/action; do not change nameservers or email records from this report. |
+| V-01 | P1 / release blocker | Official-domain HTTPS/canonical/auth/payment/publish journeys not evidenced. | Vercel metadata is positive but inconsistent config; no live network tests. | Not remediated by code; all live checks explicitly NOT TESTED. | Owner/operator to validate from normal network; no production setting change authorized. |
+| F-01 | P0 acceptance gate | Payment → subscription and complete POS settlement/refund/report reconciliation not independently proven in this assessment. | Existing test families and code; no isolated DB/provider run this turn. | Not claimed fixed; no real payments used. | Independent synthetic tests on exact final SHA. |
+| S-01 | P0 acceptance gate | Cross-tenant/direct-API/session authorization not fully executed in this assessment. | Security test families exist; no current-turn isolated accounts run. | No security weakening or production data accessed. | Run negative API/security matrix before release. |
+| M-01 | P1 launch gate | Durable customer image persistence/publication runtime remains unverified. | R2 adapter/test/docs exist; no configured storage service exercised. | No bucket credentials or production storage changed. | Owner-approved non-production storage and persistent upload/publish test. |
+| U-01 | P2 acceptance gate | Exhaustive clickable-function, responsive, reduced-motion and accessibility browser evidence absent from current turn; post-fix nav screenshot not captured. | Static control source count + historical screenshot/CI/artifact metadata. | Fixed one documented nav clipping defect; no post-fix screenshot or fake evidence. | Real browser and artifact review on exact final SHA. |
+| CI-01 | P1 | PR #77 `programme-completeness` check failed even though multiple other workflows passed. | GitHub PR #77 checks; merge commit `847459b50726f4202496283cbbb9fb1b620d10b8`. | No gate weakened. Merged PR remains explicitly partial/not release-ready. | Review/resolve full programme checklist; re-run CI on new candidate. |
+
+## Count summary
+
+- Reproduced and fixed source/UI defects: **4** (three stale URL references plus clipped 320px navigation).
+- Application/style/config changes: `app/install/page.tsx`, `lib/qr.ts`, `app/globals.css`, `.env.example`; two test changes: `tests/unit/qr-domain.test.ts` and `tests/unit/pwa-marketing.test.ts`.
+- Production/domain configuration changes: **0**.
+- Critical/security/financial defects newly reproduced by this bounded audit: **0**; this does not mean those requirements pass. They remain untested and release-blocking until positive evidence exists.
+- Open operational/acceptance items: **7** entries above (D-05, V-01, F-01, S-01, M-01, U-01, CI-01); grouped checklist items may contain multiple tests.
+
+Priority counts are issue-register entries, not an exhaustive count of every untested requirement: P0=2 acceptance gates, P1=4 blockers, P2=5 findings/acceptance items (four source/UI fixes plus U-01). No open P0/P1 may be treated as cleared. No open P0/P1 may be treated as cleared.

@@ -1,0 +1,31 @@
+# Backend function inventory
+
+**Source baseline:** `044ca8a948cdc058a2b992a4e9a7d405d3b2c3c3` (2026-10-31).
+**Static inventory:** 141 `app/api/**/route.ts` files, plus route-adjacent handlers, service modules, scheduled/cron routes and Prisma migration/schema layer. This is a route-family inventory; it is not a generated per-function call graph or proof that each function is reachable.
+
+## Route/service inventory
+
+| Function family | Entry points / service areas | Auth / scope expectations visible in architecture | Persistence / external effect | Audit verdict |
+|---|---|---|---|---|
+| Auth / account | `/api/auth/{register,login,logout,password-reset,password-reset/complete}`, `/api/account/team-access` | Session/token checks, rate limits, server-side role/session-version logic. Password reset delivery configuration-dependent. | User/session/token records; optional SMTP. | Tests cover session revocation and password flows. Current-turn live email/session journey not run. |
+| Business and storefront | `/api/business`, `/api/orders`, `/api/bookings`, `/api/cart`, `/api/offer`, `/api/experience/*`, `/api/media` | Public read paths separated from authenticated owner mutations; business/tenant ID must be verified. | Neon/Prisma content, orders/bookings/media refs; optional R2. | Unit/integration/security tests exist; per-route runtime validation not re-reviewed in this broad pass. Durable storage not activated/proven. |
+| Payments / commerce | `/api/checkout`, `/api/paystack/verify`, `/api/paystack/webhook`, `/api/payments/webhooks/{paystack,mpesa}/*`, `/api/merchant-payment` | Provider signature and server-side verification; bind verified payment to the intended record/tenant. | Paystack/M-PESA requests, payment and subscription/order DB writes. | Security/idempotency tests are present in repository; no real provider call/payment. End-to-end reconciliation not proven. |
+| AI / Autopilot | `/api/ai/*`, `/api/autopilot/*`, `/api/experience/assist` | Authenticated merchant configuration, paid entitlement, per-business data isolation, consent and approval policy. Public Front Desk must use published authoritative business facts. | AI providers (when configured), business brain/conversation/lead data, proposal/audit state. | Targeted tests exist; no live AI provider/session executed. Exact production entitlements/config unverified. |
+| POS | `/api/pos/[businessId]/*` | Business owner/staff role, business membership and subscription checks; anonymous access refused; validate route IDs against tenant. | Sales, inventory, stock, refunds, payments, products/photos, reports; transaction/idempotency requirements. | Many unit/security/DB integration tests exist, including offline sync and tenant isolation. Full browser and ledger acceptance not executed. |
+| ERP / messaging / reports | `/api/erp/[businessId]/*`, notification and messaging APIs | Business-scoped authorization, consent and provider/cost/approval gates. | DB reports, message planning/dispatch, optional external providers. | Source and tests exist; no real message was sent. Some scheduling/delivery features are expressly disabled/incomplete in existing status docs. |
+| Admin / agent / cron | `/api/admin/*`, `/api/agents/*`, `/api/cron/*` | Server-side admin/session checks; own-agent access and feature flags; cron bearer configuration fail-closed. | Admin changes, agent application/referral data and scheduled records. | PR #77 final CI includes a failed programme-completeness check despite several passing workflows. No production scheduler or admin mutation was invoked. |
+| Analytics / notifications | `/api/analytics/*`, `/api/notifications*`, `/api/notification-recipients` | Tenant-scoped/private aggregation; consent and rate limiting for outbound delivery. | Events/aggregates and notification plans/attempts; provider adapter may be disabled. | Endpoint/coverage inventory not exhaustively reconciled. No outbound notifications. |
+
+## Service and infrastructure paths
+
+- **Database:** Prisma via `lib/db.ts` / `lib/prismaRuntime.ts`; Postgres schema/migrations under `prisma/`. The approved architecture is Neon/PostgreSQL. No migration or database write was performed during this audit.
+- **Paystack:** `lib/paystack.ts`, `lib/payments/providers/paystack.ts`, payment verification helpers and webhook routes. Server key is read from environment; webhook signature uses HMAC-SHA512. Provider verification is expected to be authoritative; frontend callback is not itself settlement evidence. Tests exist, but current-turn provider sandbox/live verification was not run.
+- **Storage:** `lib/storage/*`, including R2 adapter and durable media policy. Setup docs and adapter tests exist; durable production bucket, lifecycle/access policy and customer upload persistence were not independently demonstrated. Do not infer storage availability from code or test-only mocks.
+- **Background work:** cron routes and default-off scheduler hooks are present. Existing agent release-gate docs say no registered Vercel cron is configured for one reporting flow and that it remains disabled; read-only project metadata also showed no cron definitions. No scheduler invoked.
+- **Notifications/AI:** adapters are optional/config-gated; external calls require provider configuration and consent. None were sent or called in this assessment.
+
+## Contract review limits and risks
+
+A textual route inventory cannot establish runtime callers, request/response contract consistency, SQL isolation, transaction boundaries or idempotency for all 141 endpoints. The existing test suite names dedicated tests for payment security, session revocation, tenant isolation, publication, uploads, POS permissions, offline queue, refunds and reporting. That is useful regression coverage, not evidence that every handler is reachable or that the tests pass on this audit commit.
+
+Critical revalidation before release: establish the exact native PostgreSQL/Prisma runtime, run the current full test and migration rehearsal, verify route-level authorization with two isolated tenants, exercise webhook duplicate/out-of-order/failure paths, reconcile all ledger/report figures, test media storage/public-vs-private policies, and exercise retry/idempotency under concurrent requests. Do not run the production migration script against production as part of this audit.

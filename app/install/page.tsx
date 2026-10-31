@@ -14,7 +14,7 @@ export default function InstallPage() {
       <MarketingSection title="Android (Chrome, Edge, Samsung Internet)" id="android">
         <div className="mk-prose">
           <ol>
-            <li>Open <Link href="/">https://jata-aftercall.vercel.app</Link> in Chrome over HTTPS.</li>
+            <li>Open <Link href="https://jataaftercall.co.ke" target="_blank" rel="noreferrer">https://jataaftercall.co.ke</Link> in Chrome over HTTPS.</li>
             <li>Tap the browser menu (three dots) and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. On supported browsers an in-app <em>Install</em> prompt also appears; <em>Not now</em> dismisses it without blocking a feature.</li>
             <li>Open the new icon. The app launches in standalone display mode with the JATA AFTERCALL name, icons and espresso theme colour, starting at the homepage.</li>
             <li>When a new version is published, a non-intrusive <em>Refresh</em> toast appears. Tap it to activate the waiting service worker and reload.</li>
