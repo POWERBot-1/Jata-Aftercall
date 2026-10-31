@@ -228,15 +228,6 @@ describe("runtime and schema guards", () => {
           expect(sql, statement).toContain(statement);
           sql = sql.replace(statement, "");
         }
-      } else if (migration === "20261123000000_agent_notification_replay") {
-        for (const statement of [
-          'ALTER TABLE "AgentAdminNotificationClaimState" DROP CONSTRAINT "AgentAdminNotificationClaimState_attempts_check";',
-          'ALTER TABLE "AgentAdminNotificationClaimState" DROP CONSTRAINT "AgentAdminNotificationClaimState_retry_check";',
-          'ALTER TABLE "AgentAdminNotificationAttempt" DROP CONSTRAINT "AgentAdminNotificationAttempt_attempt_check";',
-          'ALTER TABLE "AgentAdminNotificationRecovery" DROP CONSTRAINT "AgentAdminNotificationRecovery_attempt_check";',
-        ]) { expect(sql).toContain(statement); sql = sql.replace(statement, ""); }
-        expect(sql).toContain('"attempts" <= "retryCeiling"');
-        expect(sql).toContain('"attempt" BETWEEN 1 AND 15');
       } else {
         // Every other migration leaves existing rows and column definitions completely alone.
         expect(sql).not.toContain("ALTER COLUMN");

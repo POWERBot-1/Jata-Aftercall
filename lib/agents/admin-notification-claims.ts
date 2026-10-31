@@ -29,7 +29,7 @@ export async function claimAdminNotification(db: Client): Promise<NotificationCl
         "nextAttemptAt" = NULL, "updatedAt" = clock_timestamp()
     WHERE "AgentAdminNotificationClaimState"."state" = 'RETRY'
       AND "AgentAdminNotificationClaimState"."nextAttemptAt" <= clock_timestamp()
-      AND "AgentAdminNotificationClaimState"."attempts" < "AgentAdminNotificationClaimState"."retryCeiling"
+      AND "AgentAdminNotificationClaimState"."attempts" < 5
     RETURNING "applicationId", "recipientKey", "claimToken", "attempts"`;
   return result[0] ?? null;
 }
@@ -40,17 +40,17 @@ export async function finishAdminNotificationClaim(db: Client, claim: Notificati
   if (!enabled()) return false;
   if (!["ACCEPTED", "UNKNOWN", "SAFE_TRANSIENT_REJECTION", "SAFE_PERMANENT_REJECTION"].includes(outcome)) throw new Error("INVALID_NOTIFICATION_OUTCOME");
   // Attempts are taken from the locked database row, never the caller's claim object.
-  // Exponential delay (1,2,4,8 minutes) plus 0–30 seconds jitter, bounded by the current authorization and capped at 15 total attempts.
+  // Exponential delay (1,2,4,8 minutes) plus 0–30 seconds jitter, bounded at four retries.
   const jitter = randomInt(0, 31);
   const count = await db.$executeRaw`
     UPDATE "AgentAdminNotificationClaimState"
     SET "state" = CASE
           WHEN ${outcome} = 'ACCEPTED' THEN 'ACCEPTED'
           WHEN ${outcome} = 'UNKNOWN' THEN 'UNKNOWN'
-          WHEN ${outcome} = 'SAFE_TRANSIENT_REJECTION' AND "attempts" < "retryCeiling" THEN 'RETRY'
+          WHEN ${outcome} = 'SAFE_TRANSIENT_REJECTION' AND "attempts" < 5 THEN 'RETRY'
           ELSE 'DEAD' END,
-        "nextAttemptAt" = CASE WHEN ${outcome} = 'SAFE_TRANSIENT_REJECTION' AND "attempts" < "retryCeiling"
-          THEN clock_timestamp() + (power(2, LEAST("attempts" - 1, 4)) * 60 + ${jitter}) * INTERVAL '1 second' ELSE NULL END,
+        "nextAttemptAt" = CASE WHEN ${outcome} = 'SAFE_TRANSIENT_REJECTION' AND "attempts" < 5
+          THEN clock_timestamp() + (power(2, "attempts" - 1) * 60 + ${jitter}) * INTERVAL '1 second' ELSE NULL END,
         "claimToken" = NULL, "leaseUntil" = NULL, "updatedAt" = clock_timestamp()
     WHERE "applicationId" = ${claim.applicationId} AND "recipientKey" = ${claim.recipientKey}
       AND "state" = 'CLAIMED' AND "claimToken" = ${claim.claimToken} AND "leaseUntil" > clock_timestamp()`;

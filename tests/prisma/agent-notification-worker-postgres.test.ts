@@ -146,14 +146,14 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     const responses = await Promise.all([POST(request()), POST(request())]);
     expect(responses.map((r) => r.status)).toEqual([200, 200]);
     expect((await Promise.all(responses.map((r) => r.json()))).filter((r) => r.alreadyAuthorized)).toHaveLength(1);
-    expect((await pool.query('SELECT "actorId", "previousAttempt", "retryCeiling" FROM "AgentAdminNotificationReplay" WHERE "applicationId"=$1', ["replay-app"])).rows).toEqual([{ actorId: "admin", previousAttempt: 1, retryCeiling: 6 }]);
+    expect((await pool.query('SELECT "actorId", "previousAttempt" FROM "AgentAdminNotificationReplay" WHERE "applicationId"=$1', ["replay-app"])).rows).toEqual([{ actorId: "admin", previousAttempt: 1 }]);
     expect((await processAdminNotificationBatch(prisma, provider)).processed).toBe(1);
     expect(keys[0]).toBe(keys[1]);
     expect((await pool.query('SELECT "state", "attempts" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["replay-app"])).rows[0]).toEqual({ state: "ACCEPTED", attempts: 2 });
     expect((await pool.query('SELECT "outcome" FROM "AgentAdminNotificationAttempt" WHERE "applicationId"=$1 ORDER BY "attempt"', ["replay-app"])).rows.map((r) => r.outcome)).toEqual(["SAFE_PERMANENT_REJECTION", "ACCEPTED"]);
     process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
   });
-  it("keeps replay retries bounded and records each attempt after the original limit", async () => {
+  it("does not replay a dead letter after the lifetime attempt cap", async () => {
     process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001";
     await prisma.$transaction((tx: typeof prisma) => enqueueApplicationSubmitted(tx, "exhausted-app"));
     const provider = new MockMessagingProvider();
@@ -164,11 +164,8 @@ describe.skipIf(!realPrismaConfigured)("notification worker lifecycle on disposa
     }
     const row = (await pool.query('SELECT "state", "recipientKey" FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0];
     expect(row.state).toBe("DEAD");
-    expect(await replayAdminNotification(prisma, { applicationId: "exhausted-app", recipientKey: row.recipientKey, actorId: "admin", requestId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" })).toBe("created");
-    expect((await processAdminNotificationBatch(prisma, provider, 1)).processed).toBe(1);
-    const state = (await pool.query('SELECT "state", "attempts", "retryCeiling", "nextAttemptAt" > clock_timestamp() AS future FROM "AgentAdminNotificationClaimState" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0];
-    expect(state).toEqual({ state: "RETRY", attempts: 6, retryCeiling: 10, future: true });
-    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentAdminNotificationAttempt" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0].n).toBe(6);
+    expect(await replayAdminNotification(prisma, { applicationId: "exhausted-app", recipientKey: row.recipientKey, actorId: "admin", requestId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" })).toBe("conflict");
+    expect((await pool.query('SELECT count(*)::int AS n FROM "AgentAdminNotificationAttempt" WHERE "applicationId"=$1', ["exhausted-app"])).rows[0].n).toBe(5);
     process.env.AGENT_ADMIN_NOTIFICATION_RECIPIENTS = "0700000001,0700000002";
   });
   it("never automatically retries a timeout or a changed recipient configuration", async () => {

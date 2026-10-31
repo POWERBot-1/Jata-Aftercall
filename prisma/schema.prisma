@@ -126,7 +126,6 @@ model AgentAdminNotificationClaimState {
   delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationClaimState_delivery_fkey")
   state String
   attempts Int @default(1)
-  retryCeiling Int @default(5)
   claimToken String?
   leaseUntil DateTime?
   nextAttemptAt DateTime?
@@ -157,7 +156,6 @@ model AgentAdminNotificationReplay {
   recipientKey String
   actorId String
   previousAttempt Int
-  retryCeiling Int
   createdAt DateTime @default(now())
   claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReplay_claim_fkey")
   actor User @relation("AgentNotificationReplayActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReplay_actor_fkey")
