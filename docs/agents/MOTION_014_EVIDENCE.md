@@ -1,0 +1,13 @@
+# MOTION-014 evidence plan and completeness investigation
+
+**MOTION ACCEPTANCE BLOCKED — DO NOT MERGE OR DEPLOY.**
+
+Starting head `82af7bf1cde162d4490a1d7618109465904b0f46`: [run 41221680577](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41221680577) captured 48 seeded classic/AI preview/denial/not-found observations and 48 recordings. [Artifact](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41221680577/artifacts/13050487637) is offered by GitHub but cannot be downloaded from this sandbox because its blob host is excluded by egress policy. No visual inspection is claimed for that artifact.
+
+The revised CI harness additionally provisions a **disposable seeded demo fixture** with a synthetic Studio entitlement, creates its experience over actual HTTP, requests every family via the real variant endpoint, applies the resulting document through guarded Studio PATCH, publishes through the application's own endpoint and captures authenticated draft and published HTML in real Chrome at all six viewports with and without reduced motion. Each row names commit, family, route, mode, viewport and screenshot; it fails closed on incomplete generation, publication or captures. This is experimental until the workflow actually runs; fixture subscription is not a payment-provider verification and synthetic Studio publication is not production republishing. No independent inspection, full commerce/AI published coverage, queue/re-entry/cleanup stress, baseline comparison, or family recordings are implied.
+
+For bounded independent inspection despite blob-host egress, the existing fictional classic demo's six small viewport images are emitted as base64 check annotations; they contain only the seeded, public demo data. They are additional previews, not substitutes for independently inspecting full-resolution artifacts or every family.
+
+## Strict completeness gate
+
+`scripts/admin/check-programme-readiness.mjs` requires a PASS record with explicit acceptance and existing evidence for **every** registered instruction. At starting head all 37 records were `NOT_TESTED`, so the gate correctly fails. It is not a false negative in the validator: material programme gaps include the absent `/control` six-role/MFA console, no verified agent commission writer/reversal lifecycle, >5,000-member write limitations, missing native database disaster-recovery acceptance, incomplete durable notification/scheduler recovery, and motion requirements without comprehensive independent browser evidence. Fixing those requires actual implementation and independent acceptance; none are marked PASS here, and the gate is unmodified. Details are retained in the append-only instruction register and existing programme audits.

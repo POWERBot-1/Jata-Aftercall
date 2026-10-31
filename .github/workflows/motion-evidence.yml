@@ -8,7 +8,7 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     services:
       postgres:
         image: postgres:16
@@ -54,6 +54,19 @@ jobs:
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           node scripts/motion/disposable-browser-evidence.mjs
+      - name: Capture real generated Studio family paths
+        if: ${{ !cancelled() }}
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          node scripts/motion/generated-family-evidence.mjs
+      - name: Upload exact-head generated-family observations and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-families-${{ github.event.pull_request.head.sha || github.sha }}
+          path: motion-family-evidence/
+          retention-days: 30
+          if-no-files-found: error
       - name: Upload exact-head observations, screenshots and recordings
         if: always()
         uses: actions/upload-artifact@v4

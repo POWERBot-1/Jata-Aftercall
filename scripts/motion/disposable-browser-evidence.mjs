@@ -61,6 +61,12 @@ try {
         animationCalls:window.__motionEvidence,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};
     },target.selector);
     await page.screenshot({path:path.join(out,`${name}.png`),fullPage:true}); row.screenshot=`${name}.png`;
+    // Public seeded fictional demo only: expose six small viewport captures via check annotations
+    // so they can be retrieved without the external artifact blob host. No customer data.
+    if(target.name==='classic' && !reduced && row.status===200) {
+      const thumbnail=await page.screenshot({type:'jpeg',quality:20,fullPage:false});
+      if(thumbnail.length<=35000) console.log(`::notice title=MOTION_VISUAL_${width}x${height}::${Buffer.from(thumbnail).toString('base64')}`);
+    }
     if(recorder) await recorder.stop();
     row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector) && row.video && existsSync(path.join(out,row.video)) && statSync(path.join(out,row.video)).size > 0)?'OBSERVED':'FAIL';
   } catch(error) { row.result='ERROR'; row.error=String(error?.stack||error).slice(0,800); }
