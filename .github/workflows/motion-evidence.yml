@@ -43,6 +43,13 @@ jobs:
           PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-server.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-server.log; exit 1
+      - name: Ensure video encoder is available on the disposable runner
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version
       - name: Capture classic and AI preview evidence in Chrome
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"

@@ -69,6 +69,6 @@ try {
   await context.close();
  }
 } finally {await browser.close();}
-const summary={commit:sha,browser:browserVersion,rows:results.length,observed:results.filter(x=>x.result==='OBSERVED').length,failed:results.filter(x=>x.result!=='OBSERVED').length,recordings:results.filter(x=>x.video && existsSync(path.join(out,x.video)) && statSync(path.join(out,x.video)).size>0).length,targets: [...new Set(results.map(x=>`${x.publishingMode}: ${x.observation?.renderMode || 'no-scope'} / ${x.observation?.reason || 'no-reason'}`))]};
+const summary={commit:sha,browser:browserVersion,rows:results.length,observed:results.filter(x=>x.result==='OBSERVED').length,failed:results.filter(x=>x.result!=='OBSERVED').length,recordings:results.filter(x=>x.video && existsSync(path.join(out,x.video)) && statSync(path.join(out,x.video)).size>0).length,recordingErrors:[...new Set(results.map(x=>x.recordingError).filter(Boolean))].slice(0,3),captureErrors:[...new Set(results.map(x=>x.error).filter(Boolean))].slice(0,3),targets: [...new Set(results.map(x=>`${x.publishingMode}: ${x.observation?.renderMode || 'no-scope'} / ${x.observation?.reason || 'no-reason'}`))]};
 console.log(`::notice title=Motion evidence summary::${JSON.stringify(summary)}`);
 if (results.some(x=>x.result!=='OBSERVED')) process.exitCode=1;
