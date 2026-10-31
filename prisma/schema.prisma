@@ -35,6 +35,7 @@ model User {
   agentApplication AgentApplication?
 
   @@index([email])
+  agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
 }
 
 // An application is not an agent entitlement. No activation is possible until a trusted,
@@ -104,8 +105,21 @@ model AgentAdminNotificationClaimState {
   nextAttemptAt DateTime?
   updatedAt DateTime @default(now())
   @@id([applicationId, recipientKey])
+  review AgentAdminNotificationReview?
   @@index([state, leaseUntil])
   @@index([state, nextAttemptAt])
+}
+
+// Acknowledgement is not proof of delivery and cannot authorize a retry.
+model AgentAdminNotificationReview {
+  applicationId String
+  recipientKey String
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReview_claim_fkey")
+  reviewedState String
+  reviewedBy String
+  reviewer User @relation("AgentNotificationReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReview_user_fkey")
+  createdAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
 }
 
 // Immutable storage only. No application path creates accruals or authorizes payouts.

@@ -8,6 +8,7 @@ const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role:
 vi.mock("@/lib/db", async () => ({ default: (await import("../helpers/prisma-client")).sharedPrisma() }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session, hashPassword: async () => "synthetic-hash" }));
 import { GET, POST } from "@/app/api/agents/application/route";
+import { GET as notificationOperations, POST as acknowledgeNotification } from "@/app/api/admin/agents/notification-operations/route";
 import { enqueueApplicationSubmitted } from "@/lib/agents/admin-notification-event";
 import { applyMetaStatus } from "@/lib/messaging/meta-whatsapp-webhook";
 import { MockMessagingProvider } from "@/lib/messaging/providers";
@@ -48,6 +49,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     await p.agentReferralLink.deleteMany({ where: { referrer: { userId: { in: users } } } });
     await p.agentWhatsAppWebhookEvent.deleteMany({ where: { challenge: { application: { userId: { in: users } } } } });
     await p.agentPhoneChallenge.deleteMany({ where: { application: { userId: { in: users } } } });
+    await p.agentAdminNotificationReview.deleteMany({ where: { claim: { delivery: { plan: { event: { application: { userId: { in: users } } } } } } } });
     await p.agentAdminNotificationClaimState.deleteMany({ where: { delivery: { plan: { event: { application: { userId: { in: users } } } } } } });
     await p.agentAdminNotificationDelivery.deleteMany({ where: { plan: { event: { application: { userId: { in: users } } } } } });
     await p.agentAdminNotificationPlan.deleteMany({ where: { event: { application: { userId: { in: users } } } } });
@@ -88,6 +90,37 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     } finally {
       for (const name of names) { if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name]; }
     }
+  });
+
+  it("audits one concurrent operator acknowledgement without retrying an unknown send", async () => {
+    const original = process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED;
+    try {
+      process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED = "true";
+      const admin = await p.user.create({ data: { email: `operator-${uid()}@test.invalid`, passwordHash: "test-only", role: "ADMIN" } });
+      const applicant = await p.user.create({ data: { email: `operator-applicant-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(admin.id, applicant.id);
+      const app = await p.agentApplication.create({ data: { userId: applicant.id, fullName: "Synthetic User", phoneE164: "+254700000003", privacyAcknowledgedAt: new Date() } });
+      const recipientKey = "a".repeat(64);
+      await p.agentAdminNotificationEvent.create({ data: { applicationId: app.id, eventType: "APPLICATION_SUBMITTED" } });
+      await p.agentAdminNotificationPlan.create({ data: { applicationId: app.id, recipientKeyVersion: "fixture" } });
+      await p.agentAdminNotificationDelivery.create({ data: { applicationId: app.id, recipientKey } });
+      await p.agentAdminNotificationClaimState.create({ data: { applicationId: app.id, recipientKey, state: "UNKNOWN", attempts: 1 } });
+      mock.session = { userId: admin.id, role: "ADMIN", email: admin.email };
+      const listed = await notificationOperations();
+      expect(listed.status).toBe(200);
+      expect((await listed.json()).items.some((x: { applicationId: string }) => x.applicationId === app.id)).toBe(true);
+      const data = { applicationId: app.id, recipientKey, action: "ACKNOWLEDGE_NO_RETRY" };
+      const results = await Promise.all([acknowledgeNotification(request("/api/admin/agents/notification-operations", data)), acknowledgeNotification(request("/api/admin/agents/notification-operations", data))]);
+      expect(results.map((r) => r.status)).toEqual([200, 200]);
+      expect((await Promise.all(results.map((r) => r.json()))).map((r) => r.alreadyReviewed).sort()).toEqual([false, true]);
+      expect(await p.agentAdminNotificationReview.count({ where: { applicationId: app.id } })).toBe(1);
+      expect(await p.auditEvent.count({ where: { action: "AGENT_NOTIFICATION_ACKNOWLEDGED_NO_RETRY", targetId: app.id } })).toBe(1);
+      expect((await p.agentAdminNotificationClaimState.findUniqueOrThrow({ where: { applicationId_recipientKey: { applicationId: app.id, recipientKey } } })).state).toBe("UNKNOWN");
+      expect((await (await notificationOperations()).json()).items.some((x: { applicationId: string }) => x.applicationId === app.id)).toBe(false);
+      mock.session = { userId: applicant.id, role: "ADMIN", email: applicant.email };
+      expect((await notificationOperations()).status).toBe(403);
+      expect((await acknowledgeNotification(request("/api/admin/agents/notification-operations", data))).status).toBe(403);
+    } finally { if (original === undefined) delete process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED; else process.env.AGENT_ADMIN_NOTIFICATION_OPERATIONS_ENABLED = original; }
   });
 
   it("enforces an atomic shared account limit and resets an expired window", async () => {

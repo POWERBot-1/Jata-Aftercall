@@ -578,6 +578,7 @@ function createFallbackPrisma(): any {
     agentAdminNotificationPlan: emptyModel(),
     agentAdminNotificationDelivery: emptyModel(),
     agentAdminNotificationClaimState: emptyModel(),
+    agentAdminNotificationReview: emptyModel(),
     agentReferralLink: emptyModel(),
     agentReferralAttribution: emptyModel(),
     agentRegistrationThrottle: emptyModel(),

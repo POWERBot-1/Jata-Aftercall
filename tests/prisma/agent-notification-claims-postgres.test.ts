@@ -39,13 +39,21 @@ describe.skipIf(!realPrismaConfigured)("notification claims on disposable Postgr
     if (previous === undefined) delete process.env.AGENT_ADMIN_NOTIFICATION_CLAIMS_ENABLED; else process.env.AGENT_ADMIN_NOTIFICATION_CLAIMS_ENABLED = previous;
     if (pool) { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); }
   });
-  it.skipIf(!process.env.PRISMA_WASM_HARNESS_DIR)("executes the claim and completion SQL through the Prisma WASM adapter", async () => {
+  it("executes claim and completion SQL through the configured Prisma engine", async () => {
     const require = createRequire(import.meta.url);
-    const harness = process.env.PRISMA_WASM_HARNESS_DIR!;
-    const { PrismaClient } = require(path.join(harness, "generated", "wasm.js"));
-    const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg"));
-    const { Pool: AdapterPool } = require(path.join(harness, "node_modules", "pg"));
-    const prisma = new PrismaClient({ adapter: new PrismaPg(new AdapterPool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` })) });
+    const harness = process.env.PRISMA_WASM_HARNESS_DIR;
+    let prisma: any;
+    if (harness) {
+      const { PrismaClient } = require(path.join(harness, "generated", "wasm.js"));
+      const { PrismaPg } = require(path.join(harness, "node_modules", "@prisma/adapter-pg"));
+      const { Pool: AdapterPool } = require(path.join(harness, "node_modules", "pg"));
+      prisma = new PrismaClient({ adapter: new PrismaPg(new AdapterPool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` })) });
+    } else {
+      const { PrismaClient } = require("@prisma/client");
+      const url = new URL(PRISMA_TEST_DATABASE_URL);
+      url.searchParams.set("schema", schema);
+      prisma = new PrismaClient({ datasourceUrl: url.toString() });
+    }
     try {
       const claim = await claimAdminNotification(prisma);
       expect(claim).not.toBeNull();
