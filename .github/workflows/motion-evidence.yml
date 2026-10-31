@@ -55,6 +55,19 @@ jobs:
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           node scripts/motion/generated-family-evidence.mjs
+      - name: Capture actual storefront and preview motion events
+        if: ${{ !cancelled() }}
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          node scripts/motion/route-behaviour-evidence.mjs
+      - name: Upload route behaviour observations and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-routes-${{ github.event.pull_request.head.sha || github.sha }}
+          path: motion-route-evidence/
+          retention-days: 30
+          if-no-files-found: error
       - name: Capture classic and AI preview evidence in Chrome
         if: ${{ !cancelled() }}
         run: |
