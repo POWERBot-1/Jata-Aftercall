@@ -90,7 +90,7 @@ export async function finalizeReportSnapshot(input: {
       const payload = JSON.parse(JSON.stringify({
         version: 1, capturedAt, basis: "sale-cohort-at-finalization-and-period-ledger", timezone: "UTC",
         saleBalanceNotice: "Sale balances are original unpaid amounts, not current amounts owed; account-level repayments are not allocated.",
-        note: "A finalized capture of current sale-cohort status and period ledger; not an as-of period-end reconstruction. Sale balances are original unpaid amounts; repayments are not allocated and these are not current amounts owed. Revisions replace, never add to, prior captures.",
+        note: "A finalized capture of current sale-cohort status and period ledger; not an as-of period-end reconstruction. Collected totals include recorded settled sale-linked payments only; completeness of older payment records is unverified. Sale balances are original unpaid amounts; repayments are not allocated and these are not current amounts owed. Revisions replace, never add to, prior captures.",
         saleCohort: { totals, tenders, refundAndVoidEvents: cohortActions, sales: sales.map((s: any) => ({ id: s.id, createdAt: s.createdAt, status: s.status, totalKES: s.totalKES, paidKES: s.paidKES, balanceKES: s.balanceKES, refundedKES: s.refundedKES, creditRefundedKES: s.creditRefundedKES, payments: s.payments })) },
         periodLedger: { methods: periodMethods, cashInKES: cash.inKES, cashOutKES: cash.outKES, cashNetKES: cash.inKES - cash.outKES, payments: ledger, expenses, refundAndVoidEvents: audit, creditEntries: credit, inventoryMovements: movements },
       }));

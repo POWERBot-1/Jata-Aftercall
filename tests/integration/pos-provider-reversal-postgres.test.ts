@@ -11,6 +11,8 @@ import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 import { applyReversal } from "@/lib/payments/engine";
 import { resolvePendingProviderRefund } from "@/lib/payments/refunds";
 import { summarizeSales } from "@/lib/pos/reports";
+import { runReport } from "@/lib/pos/reporting";
+import { baselineConfiguration } from "@/lib/pos/configuration";
 import { finalizeReportSnapshot } from "@/lib/pos/report-snapshots";
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -70,6 +72,21 @@ describe.skipIf(!realPrismaConfigured)("provider reversal persistence on Postgre
     expect((await db.posReportSnapshot.findUnique({ where: { id: capture.id } })).payload).toEqual(priorPayload);
     expect(await db.posPayment.count({ where: { businessId: otherId } })).toBe(0);
   }, 30000);
+  it("does not report a pending payment as a settled collection in the report or capture", async () => {
+    const date = new Date("2004-01-01T12:00:00Z");
+    const sale = await db.posSale.create({ data: { businessId, receiptNumber: `PENDING-${stamp}`, totalKES: 100, subtotalKES: 100, paidKES: 100, status: "COMPLETED", createdAt: date } });
+    await db.posPayment.create({ data: { businessId, saleId: sale.id, direction: "IN", purpose: "SALE", status: "PENDING", method: "mpesa", amountKES: 100, createdAt: date } });
+    const capture = await finalizeReportSnapshot({ businessId, branchId: null, actorId: ownerId, from: "2004-01-01", to: "2004-01-01" });
+    expect(capture.payload.saleCohort.totals.paidKES).toBe(0);
+    expect(capture.payload.saleCohort.tenders).toEqual([]);
+    expect(capture.payload.periodLedger.payments).toEqual([]);
+    expect(capture.payload.note).toContain("completeness of older payment records is unverified");
+    const config = baselineConfiguration(); config.capabilities.push("daily_sales", "payment_breakdown");
+    const range = { from: new Date("2004-01-01T00:00:00Z"), to: new Date("2004-01-01T23:59:59.999Z") };
+    const report = await runReport(businessId, config, "daily_sales", range);
+    expect(report.summary).toContainEqual({ label: "Collected", value: "KES 0" });
+    expect(report.notice).toContain("completeness of older payment records is unverified");
+  });
   async function fixture(label: string) {
     const ref = `${label}-${stamp}`;
     const sale = await db.posSale.create({ data: { businessId, receiptNumber: ref, totalKES: 100, subtotalKES: 100, paidKES: 100 } });

@@ -105,9 +105,11 @@ export function summarizeSales(sales: SaleRecord[], range?: DateRange): SalesSum
   const refundedKES = scoped.reduce((total, sale) => total + num(sale.refundedKES), 0);
   const netKES = scoped.reduce((total, sale) => total + num(sale.totalKES) - num(sale.refundedKES), 0);
   const paidKES = scoped.reduce((total, sale) => {
-    // When actual settled payment rows are present they are the source for collections:
-    // provider reversals can create an OUT without changing the sale's refundedKES field.
-    if (sale.payments?.length) {
+    // A loaded ledger, including an empty one, is the source for recorded settlements.
+    // Never fall back to paidKES merely because no settled rows survived filtering:
+    // pending payments or missing legacy rows do not establish a collection. Provider
+    // reversals can create an OUT without changing the sale's refundedKES field.
+    if (sale.payments !== undefined) {
       return total + sale.payments.reduce((sum, payment) => sum + (payment.direction === "OUT" ? -1 : 1) * num(payment.amountKES), 0);
     }
     // Older callers can lack payment rows; preserve the legacy calculation for those callers.
@@ -135,7 +137,7 @@ export function paymentBreakdown(sales: SaleRecord[], range?: DateRange): Method
   const scoped = (range ? sales.filter((sale) => inRange(sale.createdAt, range)) : sales).filter(countsAsRevenue);
   const totals = new Map<string, { amountKES: number; count: number }>();
   for (const sale of scoped) {
-    const payments = sale.payments?.length ? sale.payments : [{ method: "unspecified", amountKES: num(sale.paidKES) }];
+    const payments = sale.payments !== undefined ? sale.payments : [{ method: "unspecified", amountKES: num(sale.paidKES) - Math.max(0, num(sale.refundedKES) - num(sale.creditRefundedKES)) }];
     for (const payment of payments) {
       const key = (payment.method || "unspecified").toLowerCase();
       const entry = totals.get(key) ?? { amountKES: 0, count: 0 };

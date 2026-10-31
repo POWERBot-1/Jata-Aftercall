@@ -22,6 +22,16 @@ describe("sale-cohort refund snapshots", () => {
     expect(summarizeSales([reversed]).paidKES).toBe(0);
     expect(paymentBreakdown([reversed])[0].amountKES).toBe(0);
   });
+  it("does not invent collected payments when a loaded ledger has no settled rows", () => {
+    const pending = sale({ paidKES: 1000, payments: [] });
+    expect(summarizeSales([pending]).paidKES).toBe(0);
+    expect(paymentBreakdown([pending])).toEqual([]);
+  });
+  it("keeps unspecified legacy tender totals consistent with the refund-adjusted collection", () => {
+    const legacy = sale({ paidKES: 400, refundedKES: 300, creditRefundedKES: 100 });
+    expect(summarizeSales([legacy]).paidKES).toBe(200);
+    expect(paymentBreakdown([legacy])).toEqual([{ method: "unspecified", amountKES: 200, count: 1 }]);
+  });
   it("nets settled outflows by original tender without changing drawer ledger", () => {
     const rows = [sale({ refundedKES:300, payments:[{ method:"cash", amountKES:400 }, { method:"mpesa", amountKES:600 }, { method:"cash", amountKES:300, direction:"OUT" }] })];
     expect(paymentBreakdown(rows)).toEqual([{ method:"mpesa", amountKES:600, count:1 }, { method:"cash", amountKES:100, count:2 }]);

@@ -211,7 +211,7 @@ export async function runReport(
             balance: sale.balanceKES - (sale.creditRefundedKES ?? 0) > 0 ? formatKES(sale.balanceKES - (sale.creditRefundedKES ?? 0)) : "—",
           })),
         series: series.map((point) => ({ label: point.date, value: point.netKES })),
-        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : `Sales created in this period, shown at their current refund and void status. This is not a historical as-of snapshot or a cash-flow report for the period. Sale balances are original unpaid amounts less credit refunds; account-level repayments are not allocated, so they are not current amounts owed.${summary.count > 200 ? " Totals include the full cohort; only the latest 200 non-voided sales are shown." : ""}`,
+        notice: summary.count === 0 ? `No ${terminology.sales.toLowerCase()} recorded in this period yet.` : `Sales created in this period, shown at their current refund and void status. Collections include recorded settled sale-linked payments only; completeness of older payment records is unverified. This is not a historical as-of snapshot or a cash-flow report for the period. Sale balances are original unpaid amounts less credit refunds; account-level repayments are not allocated, so they are not current amounts owed.${summary.count > 200 ? " Totals include the full cohort; only the latest 200 non-voided sales are shown." : ""}`,
       });
     }
 
@@ -255,7 +255,7 @@ export async function runReport(
           share: total ? `${Math.round((method.amountKES / total) * 100)}%` : "—",
         })),
         series: methods.map((method) => ({ label: method.method, value: method.amountKES })),
-        notice: methods.length === 0 ? "No payments for sales created in this period." : "Payments and refunds for sales created in this period, shown at their current status; this is not a period cash-flow ledger.",
+        notice: methods.length === 0 ? "No settled payment rows were recorded for sales created in this period; older payment records may be incomplete." : "Recorded settled payments and refunds for sales created in this period, shown at their current status; older payment records may be incomplete. This is not a period cash-flow ledger.",
       });
     }
 
