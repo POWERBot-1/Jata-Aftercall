@@ -28,6 +28,9 @@ try {
  const login=await owner.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password:'Demo1234!'})});return r.status;});
  steps.push({stage:'login',status:login}); if(login!==200) throw Error(`fixture login failed HTTP ${login}`);
  const api=(url,method='GET',payload)=>owner.evaluate(async(url,method,payload)=>{const r=await fetch(url,{method,headers:payload?{'content-type':'application/json'}:{},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,payload);
+ // Beauty's real publication gate requires a product; seed through the application's API.
+ const product=await api('/api/products','POST',{businessId:fixture.id,name:'Fictional sample balm',basePriceKES:450,isActive:true});
+ steps.push({stage:'sample-product',status:product.status}); if(![200,201].includes(product.status)) throw Error(`sample product failed: ${product.status}`);
  const created=await api('/api/experience','POST',{businessId:fixture.id,categoryKey:'beauty'}); steps.push({stage:'create',status:created.status});
  if(created.status!==201) throw Error(`create failed ${created.status}: ${JSON.stringify(created.body).slice(0,400)}`);
  for(const family of families){
@@ -37,10 +40,13 @@ try {
    if(generated.status!==200 || generated.body?.candidate?.artDirection?.family!==family) throw Error(`generate ${family}: ${generated.status} ${JSON.stringify(generated.body).slice(0,250)}`);
    const applied=await api('/api/experience','PATCH',{businessId:fixture.id,expectedDraftVersion:generated.body.baseDraftVersion,document:generated.body.candidate});
    steps.push({family,stage:'apply',status:applied.status}); if(applied.status!==200) throw Error(`apply ${family}: ${applied.status} ${JSON.stringify(applied.body).slice(0,250)}`);
-   const current=await prisma.businessExperience.findUniqueOrThrow({where:{businessId:fixture.id},select:{draftVersion:true}});
-   const published=await api('/api/experience/publish','POST',{businessId:fixture.id,expectedDraftVersion:current.draftVersion});
-   steps.push({family,stage:'publish',status:published.status}); if(published.status!==200) throw Error(`publish ${family}: ${published.status} ${JSON.stringify(published.body).slice(0,250)}`);
-   for(const preview of [true,false]) for(const [width,height] of sizes) for(const reduced of [false,true]){
+   for(const preview of [true,false]) {
+    if(!preview) {
+     const current=await prisma.businessExperience.findUniqueOrThrow({where:{businessId:fixture.id},select:{draftVersion:true}});
+     const published=await api('/api/experience/publish','POST',{businessId:fixture.id,expectedDraftVersion:current.draftVersion});
+     steps.push({family,stage:'publish',status:published.status}); if(published.status!==200) throw Error(`publish ${family}: ${published.status}; failed checks ${JSON.stringify(published.body?.validation?.checks?.filter(c=>c.status==='fail').map(c=>({id:c.id,hint:c.hint})) || published.body?.error).slice(0,800)}`);
+    }
+    for(const [width,height] of sizes) for(const reduced of [false,true]){
     const p=preview?owner:await browser.newPage();
     const route=`/b/${fixture.slug}${preview?'?preview=draft':''}`;
     const row={sha,browser:browserVersion,family,route,mode:preview?'authorized draft':'published',viewport:`${width}x${height}`,reduced};
@@ -53,6 +59,7 @@ try {
      row.result=row.status===200 && row.observation.family===family && row.observation.probes===1 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL';
     }catch(e){row.result='ERROR';row.error=String(e).slice(0,400);}
     rows.push(row); save(); if(!preview) await p.close();
+    }
    }
   }catch(e){steps.push({family,stage:'ERROR',error:String(e).slice(0,400)});save();}
  }
