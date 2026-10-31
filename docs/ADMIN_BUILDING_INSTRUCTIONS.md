@@ -169,3 +169,15 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** error text omits sensitive data; checks cannot authenticate owner statements or protect against Git history rewritten outside the available repository.
 - **Affected:** `.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.
 - **Acceptance:** node test suite passes in isolated Git fixtures; full-history CI checks exact committed state and reports first introduction; review original owner text manually. **Dependencies/conflicts:** full Git history; append-only correction does not permit destructive edits, preserving ADMIN-001. **Evidence:** six temporary-Git tests passed locally; full-history checker identifies introduction `c2a4ca337e879fdd9cd20ab1eda394d587846313`; final-head CI pending. **Implementation commit:** find with `git log --follow -- scripts/admin/check-building-instructions.mjs`.
+
+## 021 — ADMIN-017: governance test placement and CI correction
+- **Date / approval / status:** 2026-10-31; engineering correction under the owner-directed CI integration; IN PROGRESS.
+- **Owner instruction:** preserve earlier requirements and make the instruction-integrity tests compatible with the existing CI test collection guard without weakening it.
+- **Purpose / function:** the standalone Node test is located outside the Vitest `tests/` tree so both test runners can execute their intended suites.
+- **Security/privacy / UX:** no production access or data; retain all integrity checks and original requirement text.
+- **Affected:** `.github/workflows/admin-instructions.yml`, `scripts/admin/tests/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.
+- **Acceptance:** standalone tests, test-collection guard and all final-head CI pass. **Dependencies/conflicts:** the original ADMIN-011 and ADMIN-016 paths remain in historical entries; this appended update documents the move. **Evidence:** intermediate CI failed the repository collection guard on the former path. **Implementation commit:** locate via `git log --follow -- scripts/admin/tests/instruction-integrity.test.mjs`.
+- **Correction of:** ADMIN-016
+- **Change:** move the standalone Node test from `tests/admin/instruction-integrity.test.mjs` to `scripts/admin/tests/instruction-integrity.test.mjs`; no change to owner requirements or test assertions.
+- **Approval:** owner directed CI compatibility and preservation of existing tests; this is an implementation-path correction, not a change to an owner decision.
+- **Original retained:** ADMIN-016 is retained verbatim above; its original path records the initial implementation.

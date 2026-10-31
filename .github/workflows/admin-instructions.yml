@@ -18,4 +18,4 @@ jobs:
       - name: Validate committed register and full history
         run: node scripts/admin/check-building-instructions.mjs --ci
       - name: Exercise valid and destructive history fixtures
-        run: node --test tests/admin/instruction-integrity.test.mjs
+        run: node --test scripts/admin/tests/instruction-integrity.test.mjs

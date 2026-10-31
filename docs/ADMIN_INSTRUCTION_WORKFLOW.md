@@ -8,7 +8,7 @@ Before committing, run:
 
 ```sh
 node scripts/admin/check-building-instructions.mjs
-node --test tests/admin/instruction-integrity.test.mjs
+node --test scripts/admin/tests/instruction-integrity.test.mjs
 ```
 
 After committing, run `node scripts/admin/check-building-instructions.mjs --ci`. The CI mode requires the file to match the committed candidate and rejects uncommitted additions. `.github/workflows/admin-instructions.yml` fetches complete history and runs both checks on pull requests. Shallow history is rejected; a local shallow checkout can fetch complete history before checking. The checker validates sequential IDs, required fields, structural correction references and append-only history from the earliest reachable introduction. It cannot prove that Git history was never rewritten outside its view, that a summary faithfully captures an owner message, or that a claimed owner approval is genuine. Human review against the original source is still mandatory.
