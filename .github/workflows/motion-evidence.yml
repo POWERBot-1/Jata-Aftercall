@@ -1,0 +1,57 @@
+name: Motion isolated browser evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      AUTH_SECRET: interactive-business-e2e-test-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      MOTION_ISOLATED: '1'
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: bash scripts/lib/prisma-generate.sh
+      - run: bash scripts/lib/prisma-cli.sh migrate deploy
+      - run: npm run seed
+      - run: npm run build
+      - name: Start isolated production build
+        run: |
+          PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-server.log 2>&1 &
+          for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
+          cat /tmp/motion-server.log; exit 1
+      - name: Capture classic and AI preview evidence in Chrome
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          node scripts/motion/disposable-browser-evidence.mjs
+      - name: Upload exact-head observations, screenshots and recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-partial-${{ github.event.pull_request.head.sha || github.sha }}
+          path: motion-evidence/
+          retention-days: 30
+          if-no-files-found: error
