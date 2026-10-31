@@ -181,3 +181,11 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Change:** move the standalone Node test from `tests/admin/instruction-integrity.test.mjs` to `scripts/admin/tests/instruction-integrity.test.mjs`; no change to owner requirements or test assertions.
 - **Approval:** owner directed CI compatibility and preservation of existing tests; this is an implementation-path correction, not a change to an owner decision.
 - **Original retained:** ADMIN-016 is retained verbatim above; its original path records the initial implementation.
+
+## 022 — ADMIN-018: current-role session enforcement
+- **Date / approval / status:** 2026-10-31; owner-directed authorization hardening; IN PROGRESS.
+- **Owner instruction:** enforce administrative permissions server-side, protect against privilege escalation, and support session expiration and revocation without treating existing ADMIN as the six console roles.
+- **Purpose / function:** shared session verification reads the current account role as well as its session version; reject a token if its signed role differs from the current role, including demotion and promotion.
+- **Security/privacy / UX:** fail closed for database errors and role mismatches; require sign-in after a role change; do not introduce administrative write operations or new privileges.
+- **Affected:** `lib/auth.ts`, `tests/security/auth-session-revocation.test.ts`.
+- **Acceptance:** security tests verify demotion and promotion, existing reset and failure behavior. **Dependencies/conflicts:** this check does not permanently revoke a token if a role is changed away and later restored; role-change provisioning must atomically increment sessionVersion for durable revocation. Six-role control authorization, MFA and audit remain incomplete. **Evidence:** focused security suites passed 10 tests locally; native Prisma generation/typecheck blocked locally by binary download TLS; exact-head CI must be checked. **Implementation commit:** find via `git log --follow -- lib/auth.ts`.

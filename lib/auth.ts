@@ -49,7 +49,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
-/** Fail closed if the account is gone or the password-reset revocation check cannot reach Postgres. */
+/** Fail closed for deleted accounts, stale roles, revoked sessions, and database errors. */
 async function verifyCurrentSession(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
   const session = await verifySession(token);
@@ -57,9 +57,9 @@ async function verifyCurrentSession(token: string | undefined): Promise<SessionP
   try {
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { sessionVersion: true },
+      select: { sessionVersion: true, role: true },
     });
-    if (!user) return null;
+    if (!user || user.role !== session.role) return null;
     const tokenVersion = session.sessionVersion ?? 0;
     if (tokenVersion !== Number(user.sessionVersion ?? 0)) return null;
     return { ...session, sessionVersion: tokenVersion };

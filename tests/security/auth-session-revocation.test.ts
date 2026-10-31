@@ -3,11 +3,12 @@ import { SignJWT } from "jose";
 
 const mocks = vi.hoisted(() => ({
   sessionVersion: 0,
+  role: "CUSTOMER",
   userExists: true,
   databaseFails: false,
   findUnique: vi.fn(async () => {
     if (mocks.databaseFails) throw new Error("database must not escape");
-    return mocks.userExists ? { sessionVersion: mocks.sessionVersion } : null;
+    return mocks.userExists ? { sessionVersion: mocks.sessionVersion, role: mocks.role } : null;
   }),
 }));
 
@@ -19,6 +20,7 @@ import { createSession, getSessionFromToken } from "@/lib/auth";
 beforeEach(() => {
   vi.stubEnv("AUTH_SECRET", "session-revocation-test-secret-with-more-than-32-characters");
   mocks.sessionVersion = 0;
+  mocks.role = "CUSTOMER";
   mocks.userExists = true;
   mocks.databaseFails = false;
   vi.clearAllMocks();
@@ -45,6 +47,22 @@ describe("credential-reset session revocation", () => {
 
     await expect(getSessionFromToken(token)).resolves.toMatchObject({ userId: "user-a", sessionVersion: 0 });
     mocks.sessionVersion = 1;
+    await expect(getSessionFromToken(token)).resolves.toBeNull();
+  });
+
+  it("rejects a previously issued admin session immediately after demotion", async () => {
+    mocks.role = "ADMIN";
+    const token = await createSession({ userId: "user-a", email: "owner@example.test", role: "ADMIN" });
+    await expect(getSessionFromToken(token)).resolves.toMatchObject({ role: "ADMIN" });
+    mocks.role = "CUSTOMER";
+    await expect(getSessionFromToken(token)).resolves.toBeNull();
+  });
+
+  it("requires a fresh session after promotion and rejects missing database roles", async () => {
+    const token = await createSession({ userId: "user-a", email: "owner@example.test", role: "CUSTOMER" });
+    mocks.role = "ADMIN";
+    await expect(getSessionFromToken(token)).resolves.toBeNull();
+    mocks.role = "";
     await expect(getSessionFromToken(token)).resolves.toBeNull();
   });
 
