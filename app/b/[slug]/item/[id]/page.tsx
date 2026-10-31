@@ -58,7 +58,7 @@ export default async function ItemPage({ params }: Props) {
   return (
     <StorefrontShell data={data} previewNotice={data.isPreview ? "Draft preview — only you can see these unpublished changes." : null}>
       <ItemViewTracker businessId={data.business.id} itemId={item.id} kind={item.kind} />
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container">
           <ItemDetailClient
             item={item}

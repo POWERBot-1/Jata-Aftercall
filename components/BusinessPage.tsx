@@ -6,6 +6,7 @@ import { getDirectionsUrl } from "@/lib/location";
 import { formatOpeningHours } from "@/lib/openingHours";
 import { formatNumber } from "@/lib/dateFormat";
 import { ContactActions } from "@/components/storefront/ContactActions";
+import { RenderModeProbe } from "@/components/storefront/RenderModeProbe";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -93,6 +94,7 @@ export default function BusinessPage({
 
   return (
     <div className={`jata-public min-h-screen ${t.colors.bg} ${t.colors.text}`}>
+      <RenderModeProbe preference="auto" />
       {/* Optional aftercall banner */}
       {business.aftercallMsg && (
         <div className={`border-b ${t.colors.border} ${t.colors.card} py-2 text-center text-sm font-medium`}>{business.aftercallMsg}</div>
@@ -188,7 +190,7 @@ export default function BusinessPage({
         )}
 
         {/* Services */}
-        <section id="services" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+        <section id="services" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Services and products</h2>
           {services.length === 0 ? (
             <p className={`mt-2 text-sm ${t.colors.muted}`}>No services listed yet.</p>
@@ -212,7 +214,7 @@ export default function BusinessPage({
         </section>
 
         {/* About */}
-        <section id="info" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+        <section id="info" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Info</h2>
           <p className={`mt-2 text-sm leading-6 ${t.colors.muted}`}>{business.description || "Welcome to " + business.name + " — serving you with quality and care."}</p>
           {business.location && (
@@ -229,7 +231,7 @@ export default function BusinessPage({
         </section>
 
         {/* Contact */}
-        <section id="quote" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+        <section id="quote" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Quote</h2>
           <p className={`mt-2 text-sm ${t.colors.muted}`}>Ask {business.name} for a quote. No payment is taken on this page.</p>
           {quoteHref && quoteHref !== "#quote" ? (

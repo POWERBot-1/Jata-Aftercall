@@ -261,6 +261,24 @@ describe("scoped lazy controller (unit doubles, not browser evidence)", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(env.scope.dataset.motionReason).toBe("reduced-motion");
   });
+  it("re-observes an unplayed section that leaves and later re-enters", async () => {
+    vi.useFakeTimers();
+    const env = environment();
+    const many = Array.from({ length: 9 }, () => ({ ...env.target, dataset: { motionRecipe: "slide" }, style: new Style() }));
+    env.scope.querySelectorAll = () => many;
+    mount(env); for (const target of many) env.observers[0].enter(target); await flush();
+    env.observers[0].enter(many[8], false, 10);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(env.animate).toHaveBeenCalledTimes(8);
+    env.observers[0].enter(many[8], true); await flush();
+    expect(env.animate).toHaveBeenCalledTimes(9);
+  });
+  it("does not observe or load any queued work when motion is disabled", () => {
+    const env = environment(); mount(env, { enabled: false });
+    expect(env.scope.dataset.motionReason).toBe("owner-lite");
+    expect(env.observers).toHaveLength(0);
+    expect(env.loader).not.toHaveBeenCalled();
+  });
   it("clears queued work before pending imports resolve on unmount", async () => {
     const env = environment(); let release: (value: MiniAnimate) => void;
     env.loader.mockImplementation(() => new Promise((resolve) => { release = resolve; }));

@@ -55,7 +55,7 @@ export default async function ShopPage({ params, searchParams }: Props) {
 
   return (
     <StorefrontShell data={data} previewNotice={data.isPreview ? "Draft preview — only you can see these unpublished changes." : null}>
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container">
           <header className="eb-section-head">
             <div>

@@ -22,7 +22,7 @@ export default async function BookingConfirmationPage({ params }: Props) {
 
   return (
     <StorefrontShell data={data}>
-      <section className="eb-section">
+      <section className="eb-section" data-motion-recipe="fade">
         <div className="eb-container" style={{ maxWidth: "40rem" }}>
           <div className="eb-card" style={{ padding: "clamp(1.25rem, 4vw, 2rem)" }}>
             <span aria-hidden="true" style={{ fontSize: "1.75rem" }}>{booking.status === "CANCELLED" ? "❌" : booking.status === "CONFIRMED" ? "✅" : "⏳"}</span>
