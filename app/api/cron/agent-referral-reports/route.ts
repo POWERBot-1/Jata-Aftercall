@@ -22,8 +22,15 @@ export async function GET(req: Request) {
     // Each invocation advances at most one bounded page per type, making missed runs resumable.
     const recoveredRuns = await recoverStaleReferralReportRuns(prisma);
     const now = new Date();
-    const daily = await runReferralReportBatch(prisma, "DAILY", start, now);
-    const monthly = await runReferralReportBatch(prisma, "MONTHLY", start, now);
-    return NextResponse.json({ daily, monthly, recoveredRuns, delivery: "NOT_AVAILABLE", scope: "REFERRAL_EVIDENCE_ONLY" }, { headers });
+    // Attempt both independently: a daily batch failure must not starve monthly reporting.
+    // No error details are exposed; each batch persists its own success/failure record.
+    const daily = await runReferralReportBatch(prisma, "DAILY", start, now).then(
+      (value) => ({ ok: true as const, value }), () => ({ ok: false as const }),
+    );
+    const monthly = await runReferralReportBatch(prisma, "MONTHLY", start, now).then(
+      (value) => ({ ok: true as const, value }), () => ({ ok: false as const }),
+    );
+    if (!daily.ok || !monthly.ok) return error("Scheduler unavailable.", 503);
+    return NextResponse.json({ daily: daily.value, monthly: monthly.value, recoveredRuns, delivery: "NOT_AVAILABLE", scope: "REFERRAL_EVIDENCE_ONLY" }, { headers });
   } catch { return error("Scheduler unavailable.", 503); }
 }

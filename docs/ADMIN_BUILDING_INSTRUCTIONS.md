@@ -213,3 +213,19 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Security/privacy / UX:** no production operations or removal of destructive-statement checks.
 - **Affected:** `tests/unit/repair-guards.test.ts`.
 - **Acceptance:** explicit allowlist and destructive scans pass, with final-head native migration and security tests. **Dependencies/conflicts:** ADMIN-020 remains in force. **Evidence:** intermediate candidate run 41211457742 deployed the migration but failed the explicit inventory; updated guard and session tests passed locally (22 tests). Exact-head CI pending. **Implementation commit:** locate via `git log --follow -- tests/unit/repair-guards.test.ts`.
+
+## 026 — ADMIN-022: parallel owner programme and reporting recovery
+- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Owner instruction:** audit every recorded instruction and advance motion, control, agent lifecycle, migration/recovery, real browser evidence and security as independent workstreams; do not focus only on security, documentation or CI; keep PR #77 open/draft and prohibit production operations, real financial operations and messaging.
+- **Purpose / function:** publish a requirements matrix and fix independent daily/monthly report processing so one failed period does not prevent the other from being attempted; return failure when either fails, without leaking errors.
+- **Security/privacy / UX:** scheduler remains default-off, bounded, authenticated and no-delivery; never infer success from a partial result. No financial policy or production operations are introduced.
+- **Affected:** `docs/agents/REQUIREMENTS_MATRIX.md`, `app/api/cron/agent-referral-reports/route.ts`, `tests/security/agent-report-scheduler.test.ts`.
+- **Acceptance:** retain original instruction IDs, test both failure directions and recovery failure; complete all workstreams with actual evidence. **Dependencies/conflicts:** fixed Arena PR branch; six-role permissions and precise approved financial terms remain unverified; `/control`, lifecycle, migration recovery and authentic six-viewport journeys remain incomplete. **Evidence:** focused scheduler and motion tests passed locally; final-head CI and browser evidence pending. **Implementation commit:** find via `git log --follow -- app/api/cron/agent-referral-reports/route.ts`.
+
+### 027 — MOTION-005: shared workspace navigation and status motion
+- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Owner instruction:** extend reusable FINTECH MOTION UI across the actual workspace, navigation and truthful financial/status feedback without redesign or inaccurate success states.
+- **Purpose / function:** workspace navigation and status components use existing shared duration/easing tokens for presentation-only transitions, with text immediately visible and reduced-motion overrides.
+- **Security/privacy / UX:** no financial state, route, colour, content, size, layout or permissions are altered; maintain existing focus indicators and touch targets.
+- **Affected:** `app/globals.css`, `tests/unit/motion-system.test.ts`, existing workspace navigation and status components.
+- **Acceptance:** shared token and reduced-motion tests pass; inspect actual keyboard, mobile and desktop behavior; complete remaining page, chart, loading, transaction and Website Studio family coverage before claiming universal motion. **Dependencies/conflicts:** no motion-related schema migration or production republish. **Evidence:** focused CSS and scheduler tests pass locally; real browser evidence NOT TESTED. **Implementation commit:** find via `git log --follow -- app/globals.css`.

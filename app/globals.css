@@ -5533,6 +5533,20 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
  * nothing is hidden, nothing waits.
  * ------------------------------------------------------------------------ */
 
+/* Shared workspace feedback: presentation only, never a source of financial state.
+   Navigation retains its focus ring and hit area; status text remains immediately readable. */
+.ws-rail a {
+  transition: background-color var(--jata-dur-fast) var(--jata-ease-out),
+    color var(--jata-dur-fast) var(--jata-ease-out), border-color var(--jata-dur-fast) var(--jata-ease-out);
+}
+.ws-status {
+  transition: background-color var(--jata-dur-state) var(--jata-ease-in-out),
+    border-color var(--jata-dur-state) var(--jata-ease-in-out), color var(--jata-dur-state) var(--jata-ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-rail a, .ws-status { transition: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

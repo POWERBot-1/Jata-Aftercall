@@ -27,4 +27,25 @@ describe("disabled report scheduler entry point", () => {
     expect(m.batch.mock.calls.map((c) => c[1])).toEqual(["DAILY", "MONTHLY"]);
     m.batch.mockRejectedValueOnce(new Error("private sql")); const failed = await GET(request()); expect(failed.status).toBe(503); expect(await failed.text()).not.toContain("private sql");
   });
+  it("attempts the other period when either batch fails without leaking its error", async () => {
+    for (const failedPeriod of ["DAILY", "MONTHLY"]) {
+      m.batch.mockReset();
+      m.batch.mockImplementation(async (_db, period) => {
+        if (period === failedPeriod) throw new Error("private SQL or connection details");
+        return { status: "CAUGHT_UP", processed: 0 };
+      });
+      const response = await GET(request());
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("private SQL");
+      expect(m.batch.mock.calls.map((c) => c[1])).toEqual(["DAILY", "MONTHLY"]);
+    }
+  });
+  it("does not start batches if stale-run recovery fails", async () => {
+    m.recover.mockRejectedValueOnce(new Error("private recovery details"));
+    const response = await GET(request());
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("private recovery");
+    expect(m.batch).not.toHaveBeenCalled();
+  });
+
 });

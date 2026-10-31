@@ -194,3 +194,19 @@ describe("reduced motion is complete, not decorative", () => {
     expect(tail).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
   });
 });
+
+
+describe("shared workspace motion feedback", () => {
+  it("uses shared timing for navigation and status without animating meaning", () => {
+    const start = css.indexOf("/* Shared workspace feedback:");
+    const end = css.indexOf("@media (prefers-reduced-motion: reduce)", start);
+    const rules = css.slice(start, end);
+    expect(rules).toContain(".ws-rail a");
+    expect(rules).toContain(".ws-status");
+    expect(rules).toContain("var(--jata-dur-fast)");
+    expect(rules).toContain("var(--jata-dur-state)");
+    expect(rules).not.toMatch(/opacity|transform|content:/);
+    const reduced = css.slice(end, css.indexOf("}", end) + 1);
+    expect(reduced).toContain(".ws-rail a, .ws-status { transition: none;");
+  });
+});
