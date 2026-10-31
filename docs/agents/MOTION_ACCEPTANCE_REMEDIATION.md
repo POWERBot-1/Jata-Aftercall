@@ -1,0 +1,16 @@
+# Motion acceptance remediation — status and evidence
+
+**MOTION ACCEPTANCE BLOCKED — DO NOT MERGE OR DEPLOY.** Starting PR head: `e7228e18d11aad5c130ddcdc1065f8c13b6639a4`.
+
+| Acceptance area | Status | Direct evidence or exact remaining work |
+|---|---|---|
+| Queue stress, eight concurrent reveals, drain/re-entry | NOT TESTED | Isolated controller doubles exercise the limit, but they are not real application browser stress. Generate enough real sections and exercise simultaneous visibility and real interactions, with recorded start/finish events and exit/re-entry. |
+| Cancellation, races and unmount | IN PROGRESS | The targeted Chrome check in this revision requests a live reduced-motion preference during a real preview animation, requires an actually running animation and checks disconnect/idle. Result is pending CI and does not cover pending import race, navigation or unmount. |
+| Historical baseline visual preservation | BLOCKED | No same-fixture, six-viewport browser captures and recordings of the historical pre-motion application have been produced; owner-lite versus reduced-motion at a single candidate is not a historical baseline. Create a compatible isolated historical-build setup, compare and independently inspect. |
+| Interactions across routes | NOT TESTED | [Earlier isolated route captures](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41230481396/artifacts/13053672197) are observations, not full interaction acceptance. Exercise keyboard, focus, forms, repeated navigation and business state without live transactions. |
+| Published AI with motion enabled | NOT TESTED | Preview is captured; no real entitled AI publication fixture with compatible Studio settings has been demonstrated. Configure fictional readiness and entitlement on a disposable database and use real publication API; do not treat provider-free fixture as payment proof. |
+| Complete commerce paths | NOT TESTED | Storefront, shop, item and checkout snapshots exist, not complete booking, enquiry, order/booking status and permitted interactions. Provision actual feature-compatible fictional fixtures through authorized application paths. |
+| Independent visual inspection | BLOCKED | GitHub artifacts redirect to `productionresultssa*.blob.core.windows.net`, which is not permitted outbound from this workspace; `gh run download` for the exact starting-head route artifact returned EOF. One seeded 320×568 classic screenshot was reconstructed from GitHub check annotations in prior work, not all required screenshots or recordings. Obtain them through a permitted viewer or safe evidence channel and independently inspect; do not promote acceptance on the annotation alone. |
+| Programme completeness | BLOCKED | The existing 39 records remain NOT_TESTED. Their individual acceptance work is listed in `REQUIREMENT_WORK_ASSIGNMENTS.md`. The 40th entry records this directive and is also NOT_TESTED. Passing the checker tests does not mean that programme acceptance is complete. |
+
+Previous real-browser 20-family observations at `52db11589135a427ff5de1092559108491719bbf` are preserved in [run 41226990709](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41226990709); they are not a replacement for these acceptance areas. No production settings, payments, messages or publication are touched by these tests.

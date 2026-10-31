@@ -43,3 +43,4 @@ Every assignment remains NOT_TESTED until independent acceptance is recorded. Ea
 | MOTION-013 | NOT_TESTED | independent visual evidence across every supported real generation/publishing route/family, six viewports, correct motion/disabled/reduced/queue behavior and exact-head workflow results. |
 | MOTION-014 | NOT_TESTED | real independently inspected baseline and after captures and recordings across all families, routes and states, real queue/re-entry/cleanup and accessibility checks, and exact-head results. |
 | MOTION-015 | NOT_TESTED | Complete real route and behavioural testing, baseline visual comparison, independent six-viewport evidence review, and exact-head workflow verification. |
+| MOTION-016 | NOT_TESTED | Close all six motion acceptance areas, inspect final-head screenshots and recordings, complete each prior requirement and validate exact-head workflows without weakening the gate. |

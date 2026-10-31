@@ -42,6 +42,22 @@ try {
    const row={sha,browser:browserVersion,route:target.route,viewport:`${width}x${height}`,status:response?.status()??null,...data,screenshot:name};rows.push(row);save();
   }
  }
+ // Real published application document, real browser preference change. Do not inject
+ // targets, observer notifications or animation implementations. This is a targeted race,
+ // not evidence that the eight-slot queue was stressed.
+ await owner.bringToFront();await owner.setViewport({width:390,height:844,deviceScaleFactor:1});
+ await setPreference('motion');await owner.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+ await owner.goto(new URL(`${routeBase}?preview=draft`,base).href,{waitUntil:'domcontentloaded'});
+ await owner.waitForFunction(()=>document.querySelector('.eb-scope')?.dataset.renderMode==='motion',{timeout:10000});
+ await owner.evaluate(()=>document.querySelector('.eb-scope [data-motion-recipe]')?.scrollIntoView({block:'center',behavior:'instant'}));
+ await owner.waitForFunction(()=>window.__routeMotionTrace?.some(e=>e.kind==='animate-start'),{timeout:8000}).catch(()=>{});
+ const before=await owner.evaluate(()=>({trace:window.__routeMotionTrace||[],running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length}));
+ await owner.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
+ await owner.waitForFunction(()=>document.querySelector('.eb-scope')?.dataset.renderMode==='lite',{timeout:10000});
+ const after=await owner.evaluate(()=>({trace:window.__routeMotionTrace||[],running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length,reason:document.querySelector('.eb-scope')?.dataset.motionReason}));
+ const race={kind:'real-reduced-motion-cancellation',started:before.trace.filter(e=>e.kind==='animate-start').length,runningBefore:before.running,runningAfter:after.running,reason:after.reason,disconnects:after.trace.filter(e=>e.kind==='disconnect').length,cancelEvents:after.trace.filter(e=>e.kind==='animate-cancel').length,trace:after.trace};
+ race.result=race.started>0&&race.runningBefore>0&&race.runningAfter===0&&race.reason==='reduced-motion'&&race.disconnects>0?'PASS':'INCONCLUSIVE_OR_FAIL';events.push(race);save();
+ console.log(`::notice title=Targeted real cancellation::${JSON.stringify({kind:race.kind,result:race.result,started:race.started,runningBefore:race.runningBefore,runningAfter:race.runningAfter,reason:race.reason,disconnects:race.disconnects,cancelEvents:race.cancelEvents})}`);
  // Actual owner preference and OS preference are applied independently through the real draft API.
  for(const widthHeight of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
   const [width,height]=widthHeight;await owner.bringToFront();await owner.setViewport({width,height,deviceScaleFactor:1});
@@ -64,4 +80,4 @@ try {
 
 }catch(e){events.push({kind:'BLOCKED',error:String(e?.stack||e).slice(0,1000)});}finally{save();await browser?.close();await db.$disconnect();}
 const errors=events.filter(x=>x.kind==='BLOCKED');const summary={sha,browser:browserVersion,rows:rows.length,errors,routeRows:rows.filter(x=>!x.setting).length,liteRows:rows.filter(x=>x.setting&&x.mode==='lite').length};console.log(`::notice title=Route behaviour observations::${JSON.stringify(summary)}`);
-if(errors.length||summary.routeRows!==30||summary.liteRows!==12||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
+if(errors.length||events.some(x=>x.kind==='real-reduced-motion-cancellation'&&x.result!=='PASS')||!events.some(x=>x.kind==='real-reduced-motion-cancellation')||summary.routeRows!==30||summary.liteRows!==12||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
