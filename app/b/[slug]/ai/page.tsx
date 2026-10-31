@@ -9,6 +9,8 @@ import { DEFAULT_SUGGESTED_ACTIONS } from "@/lib/ai-front-desk";
 import { generateAILinkQRCodeSvg, getShareableAILink } from "@/lib/qr";
 import AIFrontDeskCustomerClient from "@/components/AIFrontDeskCustomerClient";
 import { publicProductPrice } from "@/lib/ai-public-products";
+import { loadStorefront } from "@/lib/experience/storefront";
+import { isRenderPreference } from "@/lib/experience/renderMode";
 import { requestCache } from "@/lib/request-cache";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +52,8 @@ const loadAIPageData = requestCache(async (slug: string, isPreviewRequested: boo
     // The owner's private preview is reachable without a subscription (setup policy), but it is
     // labelled PREVIEW and never LIVE, because nothing has been published or paid for yet.
     const publication = await getAIFrontDeskPublication(business.id, { preview: true }).catch(() => null);
-    return { business, user, allowed: true, entitled: false, publication, brain: await getBusinessBrain(business.id), blocked: null };
+    const [brain, storefront] = await Promise.all([getBusinessBrain(business.id), loadStorefront(slug, { allowDraft: true, preferDraft: true }).catch(() => null)]);
+    return { business, user, allowed: true, entitled: false, publication, brain, storefront, blocked: null };
   }
   // The single source of truth: published + activated + server-verified entitlement. A LIVE desk
   // is the only thing a customer may reach, so DRAFT/PREVIEW/PAUSED/MAINTENANCE/SUSPENDED all
@@ -59,7 +62,8 @@ const loadAIPageData = requestCache(async (slug: string, isPreviewRequested: boo
   if (!publication || publication.publiclyOperational !== true) {
     return { business, user: null, allowed: false, entitled: false, publication, brain: null, blocked: "forbidden" as const };
   }
-  return { business, user: null, allowed: true, entitled: true, publication, brain: await getBusinessBrain(business.id), blocked: null };
+  const [brain, storefront] = await Promise.all([getBusinessBrain(business.id), loadStorefront(slug).catch(() => null)]);
+  return { business, user: null, allowed: true, entitled: true, publication, brain, storefront, blocked: null };
 });
 
 export async function generateMetadata({
@@ -113,6 +117,9 @@ export default async function PublicAIFrontDeskPage({
     notFound();
   }
   const brain = data.brain!;
+  // Missing/unreadable configuration fails closed to static without changing access or content.
+  const storefront = "storefront" in data ? data.storefront : null;
+  const preference = !storefront ? "lite" : isRenderPreference(storefront.document.renderPreference) ? storefront.document.renderPreference : "auto";
   const publicationState = data.publication?.state ?? (isPreviewRequested ? "PREVIEW" : "DRAFT");
   const share = getShareableAILink(business.slug);
   const qrSvg = generateAILinkQRCodeSvg(share.url, 180);
@@ -122,6 +129,8 @@ export default async function PublicAIFrontDeskPage({
 
   return (
     <AIFrontDeskCustomerClient
+      motionPreference={preference}
+      motionEnabled={Boolean(storefront && storefront.theme.treatment.motion !== "none")}
       business={business}
       products={brain.products
         .filter((p) => p.isActive !== false)

@@ -30,8 +30,7 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
     const root = "app/b/[slug]";
     const exceptions: Record<string, string[]> = {
       "app/b/[slug]/page.tsx": ["ExperienceSite", "BusinessPage"],
-      // AI uses a separate entitlement-gated renderer and does not yet inherit this controller.
-      "app/b/[slug]/ai/page.tsx": ["AIFrontDeskCustomerClient"],
+      "app/b/[slug]/ai/page.tsx": ["AIFrontDeskCustomerClient", "motionPreference={preference}", "motionEnabled={Boolean(storefront"],
     };
     for (const file of pages(root)) {
       const source = readFileSync(file, "utf8");

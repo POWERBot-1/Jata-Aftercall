@@ -43,7 +43,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
   const active = new Map<HTMLElement, () => void>();
   const listeners: Array<() => void> = [];
   const targets = Array.from(scope.querySelectorAll<HTMLElement>("[data-motion-recipe]"))
-    .filter((element) => element.closest(".eb-scope, .jata-public") === scope && isMotionRecipe(element.dataset.motionRecipe)).slice(0, 40);
+    .filter((element) => element.closest(".eb-scope, .jata-public, .jata-ai-motion") === scope && isMotionRecipe(element.dataset.motionRecipe)).slice(0, 40);
 
   try { media = win.matchMedia("(prefers-reduced-motion: reduce)"); } catch { /* static when preference cannot be read */ }
   try { connection = (win.navigator as Navigator & { connection?: MotionConnection }).connection || null; } catch { /* unknown network */ }
@@ -108,7 +108,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
     const key = element.dataset.motionRecipe;
     if (!isMotionRecipe(key)) { pending.delete(element); return; }
     const recipe = MOTION_RECIPES[key];
-    const stillEligible = () => generation === epoch && allowedNow() && element.isConnected && element.closest(".eb-scope, .jata-public") === scope && !element.contains(doc.activeElement);
+    const stillEligible = () => generation === epoch && allowedNow() && element.isConnected && element.closest(".eb-scope, .jata-public, .jata-ai-motion") === scope && !element.contains(doc.activeElement);
     const animationsOnTarget = (): Animation[] | null => {
       try {
         if (typeof element.getAnimations !== "function") return null;
@@ -173,7 +173,7 @@ export function attachStorefrontMotion(scope: HTMLElement, options: {
     while (queued.size && pending.size + active.size < MAX_ACTIVE_REVEALS) {
       const element = queued.values().next().value as HTMLElement;
       queued.delete(element);
-      if (seen.has(element) || !element.isConnected || element.closest(".eb-scope, .jata-public") !== scope) continue;
+      if (seen.has(element) || !element.isConnected || element.closest(".eb-scope, .jata-public, .jata-ai-motion") !== scope) continue;
       seen.add(element);
       observer?.unobserve(element);
       void reveal(element);

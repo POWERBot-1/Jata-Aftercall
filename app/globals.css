@@ -1833,10 +1833,10 @@ button:focus-visible {
 .eb-scope[data-render-mode="motion"] [data-motion-css="slide"] { animation: eb-motion-slide 0.42s ease-out; }
 .eb-scope[data-render-mode="motion"] [data-motion-css="scale"] { animation: eb-motion-scale 0.42s ease-out; }
 .eb-scope[data-render-mode="motion"] [data-motion-css="reveal"] { animation: eb-motion-reveal 0.56s ease-out; }
-.jata-public[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
-.jata-public [data-motion-static="true"] { animation: none !important; }
+:is(.jata-public, .jata-ai-motion)[data-render-mode="motion"] [data-motion-css="fade"] { animation: eb-motion-fade 0.32s ease-out; }
+:is(.jata-public, .jata-ai-motion) [data-motion-static="true"] { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .jata-public [data-motion-recipe] { animation: none !important; }
+  :is(.jata-public, .jata-ai-motion) [data-motion-recipe] { animation: none !important; }
 }
 @keyframes eb-motion-fade { from { opacity: 0.94; } to { opacity: 1; } }
 @keyframes eb-motion-slide { from { opacity: 0.94; transform: translateY(10px); } to { opacity: 1; transform: none; } }
