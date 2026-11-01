@@ -4,19 +4,19 @@
     "acceptance": "a later instruction is appended without modifying prior entries; correction includes source ID, previous decision, change and authorization; review required on conflict. Verify original instructions and evidence links against their sources.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §001 (ADMIN-001)",
     "implementationLocation": "this document; release/status documents; all future affected code, routes, models, integrations and tests. Existing Vercel/Neon architecture and product boundaries remain intact.",
-    "verificationMethod": "Full-history instruction-integrity Git fixture test plus exact-head `instruction-integrity` workflow; reviewed the 43 canonical entries and their traceability map.",
-    "testResult": "The cumulative register contains 43 sequential IDs; full-history integrity workflow and isolated append/rewrite/correction fixtures pass. This verifies register mechanics, not source authenticity for every historical owner statement.",
+    "verificationMethod": "Full-history instruction-integrity Git fixtures and exact-head instruction-integrity workflow on the current candidate; reviewed all 43 canonical entries and their traceability map.",
+    "testResult": "The cumulative register contains 43 sequential IDs; exact-head instruction-integrity CI and isolated append/rewrite/correction fixtures pass. This verifies register mechanics, not source authenticity for every historical owner statement.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-001",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-002": {
     "status": "BLOCKED",
@@ -24,32 +24,36 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §002 (ADMIN-002)",
     "implementationLocation": "PR #77, agent, financial, notification, reporting, shared design, `/control`, Vercel, Neon and Paystack. No automatic cron activation.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "Release discipline remains unmet because multiple required acceptance areas are BLOCKED/NOT_TESTED and programme-completeness fails.",
+    "testResult": "BLOCKED: release discipline remains unmet because 34 requirements are BLOCKED or NOT_TESTED and the exact-head programme-completeness gate correctly fails. All gating checks remain enabled; no production/provider/payment/message/DNS action was taken.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-002",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "Release discipline remains unmet because multiple required acceptance areas are BLOCKED/NOT_TESTED and programme-completeness fails.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-003": {
     "status": "BLOCKED",
     "acceptance": "Anonymous users, merchants and agents are denied both `/control` and its APIs; explicitly authorized roles are allowed; forged-role, CSRF and session-revocation tests pass; verify canonical HTTPS/domain without production changes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §003 (ADMIN-003)",
     "implementationLocation": "`app/control/page.tsx`, `app/control/sign-in/page.tsx`, `components/control/ControlConsole.tsx`, `components/LoginForm.tsx`, `app/login/page.tsx`, `lib/control/access.ts`, `app/api/control/**`.",
-    "verificationMethod": "Local targeted Vitest route/security/session suites, engine-less schema/client consistency, typecheck, lint, offline build, and loopback HTTP smoke for sign-in/anonymous control/API. These are not authenticated merchant/agent journeys or official-domain evidence.",
-    "testResult": "BLOCKED: `/control` and `/api/control/*` now exist. The anonymous page redirects to `/control/sign-in` (307) and overview API returns 401; mocked non-production route tests deny users without grants. Direct cross-tenant and CSRF mutation tests pass. No real role-provisioned browser journey, canonical-domain HTTPS verification, or CI run exists for this candidate.",
+    "verificationMethod": "Exact-head targeted route/security/session unit coverage within the passing full suite, exact-head disposable-PostgreSQL integration/security suite, and loopback HTTP smoke. CI browser journeys exercised existing Business/ERP routes, not authorized `/control` roles; canonical-domain HTTPS remains unverified.",
+    "testResult": "BLOCKED: `/control` and `/api/control/*` exist. Anonymous loopback `/control` redirects to sign-in (307), overview API returns 401, and ungranted/forged, cross-tenant, CSRF, expiry/revocation cases are covered by passing exact-head fixture tests. Full suite and disposable-PostgreSQL workflow passed on this SHA. No authorized Control role browser journey, canonical-domain HTTPS/cookie verification, or production grant exists.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-003",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No real provisioned role, merchant/agent direct-page/API journey, official-domain HTTPS/cookie check, or exact-head CI evidence; production grants remain intentionally unprovisioned.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "No authorized provisioned Control role or merchant/agent direct-page/API browser journey; official-domain HTTPS/cookie verification is still absent. Production grants remain intentionally unprovisioned.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
       "app/control/sign-in/page.tsx",
@@ -65,15 +69,20 @@
     "acceptance": "Test horizontal/vertical escalation, forged roles, direct API, unauthenticated requests, CSRF, session revocation, MFA and immutable audit; unauthorized financial/configuration changes must be impossible.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §004 (ADMIN-004)",
     "implementationLocation": "`prisma/schema.prisma`, `prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `lib/control/**`, `app/api/control/**`, `tests/unit/control-plane-*`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `tests/security/auth-session-revocation.test.ts`.",
-    "verificationMethod": "Run local targeted unit/route/session suites, Prisma engine-less generation and model-consistency check, typecheck and ESLint. PostgreSQL migration tests are present but skipped without an explicitly configured disposable loopback database; no real six-role browser matrix was run.",
-    "testResult": "BLOCKED: six canonical role names, explicit per-grant capabilities and tenant scopes, encrypted TOTP, short-lived MFA session checks, CSRF checks, session-version revocation and append-only audit triggers are implemented. Local fixtures passed 25 targeted security/route/session tests (the full targeted set including guards/schema had 56 passes); PostgreSQL tests were skipped. Exact role/action mapping, provisioning governance, live revocation and audit-trigger behavior remain unverified.",
+    "verificationMethod": "Exact-head full Vitest suite and real disposable PostgreSQL integration/security suite; PostgreSQL 18 candidate migration rehearsal and schema reconciliation; targeted local control-plane tests. No owner-approved role matrix or six-role authenticated browser matrix was available.",
+    "testResult": "BLOCKED: exact-head CI passed the control unit/route/session tests and PostgreSQL grant/audit foundation checks, including no seeded privileged grant, append-only audit and grant triggers, revocation constraints, DDL rollback/reapply; native PostgreSQL migration/rehearsal and exact schema/catalog checks also passed. Six role names, explicit grants/scopes, MFA and session-revocation code exist. Exact role/action/scope and provisioning/recovery policy remains unresolved, and there are no authorized six-role browser journeys.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-004",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Owner-approved role/action/scope and MFA/recovery policy is unresolved; PostgreSQL migration/immutability tests were skipped; no authenticated browser journeys or exact-head CI evidence.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "Owner-approved role/action/scope, MFA recovery and secure grant-provisioning policies remain unresolved; no authenticated six-role browser journeys or production grants. PostgreSQL migration, audit/grant-trigger and rollback checks have passed only in disposable CI databases.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/schema.prisma",
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
@@ -95,15 +104,19 @@
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §005 (ADMIN-005)",
     "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
-    "verificationMethod": "Mocked route tests cover scoped search, cross-tenant denial, reasoned status mutation, audit pagination and unauthenticated denial. Build/type/lint/schema model consistency pass. No actual six-viewport screenshots or database-backed role-isolation run.",
-    "testResult": "BLOCKED: the dashboard shows only request-time database-backed record counts/statuses, scoped business search, paginated businesses/audit, reasoned audited suspend/reinstate, agent/referral evidence, outbox states, exceptions and verified DB connectivity where available. Provider probes, owners/PII, MRR/ARR, AI/POS/usage, and financial eligibility are explicitly unavailable/not inferred. No six-viewport visual evidence.",
+    "verificationMethod": "Mocked Control route tests cover tenant filters, direct denial, reasoned status change/audit and pagination; exact-head CI passed migration/database suites and existing Business/ERP browser journeys. The CI six-viewport Chrome capture covered other application routes, not `/control`; no Control data-backed role-isolation/browser evidence or independent visual/a11y review.",
+    "testResult": "BLOCKED: the console reports only request-time database-backed records/statuses, scoped business search, paginated businesses/audit, reasoned audited suspend/reinstate, agent/referral evidence, outbox states, exceptions, and verified DB connectivity where available. Exact-head migrations and shared DB suites pass, but the Control overview/queries were not exercised as authenticated role-provisioned browser journeys. Provider probes, owner PII, MRR/ARR, AI/POS/usage, and financial eligibility remain unavailable/not inferred. Screenshots are not of `/control`.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-005",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Large sections of the canonical oversight scope are not implemented or owner-approved, database/provider sources were not exercised against PostgreSQL, and six-view screenshots/accessibility/browser acceptance are absent.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "Large canonical oversight panels remain unimplemented or owner-policy dependent; no role-provisioned Control data-source/tenant-isolation browser evidence or Control-specific six-view screenshots/accessibility review. Do not infer provider/financial values.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
       "app/api/control/businesses/route.ts",
@@ -128,7 +141,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-007": {
     "status": "BLOCKED",
@@ -145,7 +158,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-008": {
     "status": "BLOCKED",
@@ -162,7 +175,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-009": {
     "status": "BLOCKED",
@@ -177,22 +190,27 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: authoritative HOSTAFRICA zone export, current DNS/TLS/canonical redirects, exact mail records and successful delivery are not independently verified. No DNS/env change made.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-010": {
     "status": "BLOCKED",
     "acceptance": "Deliver a functional, non-mocked console with real data, audited changes, all modules and security tests; independently inspect real screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768; report status, recovery, exact branch/SHA/PR and production verification separately.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §010 (ADMIN-010)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `prisma/**`, `lib/control/**`, control route/security/PostgreSQL test paths, and `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Local typecheck, targeted lint and Vitest, engine-less Prisma generate/model consistency, production build using offline fallback, and loopback sign-in/anonymous HTTP smoke. No six-viewport captures, independent inspection, live database run or candidate CI.",
-    "testResult": "BLOCKED: the console and functioning database-backed API handlers are implemented, not a report-only deliverable. Local security/route fixtures and build pass, but the exact canonical role matrix, several modules, migration/recovery rehearsal, authenticated real-browser journeys, accessibility/reduced-motion review and six viewport evidence are missing.",
+    "verificationMethod": "Exact-head static/schema/type/unit/build CI, PostgreSQL migration/security workflows, existing product browser journeys and Real-Chrome screenshot workflow; local focused tests. The screenshot workflow did not visit `/control` or provision six control roles, and artifacts have not received independent visual/accessibility review.",
+    "testResult": "BLOCKED: `/control` and functioning database-backed API handlers are implemented, not an audit-only report. Exact-head full suite, PostgreSQL migrations/recovery checks, candidate catalog rehearsal and general Chrome journeys/captures passed. This CI capture is for other product journeys, not the requested authenticated/unauthorized Control console. The approved role matrix, several modules, independent Control screenshots/a11y, and exact Control browser journeys remain missing.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-010",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Full function, approved role/action matrix, PostgreSQL native migration/recovery tests, authenticated browser journeys, six-view screenshots and exact-head CI are incomplete.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "Full console scope, owner-approved role/action matrix, provisioned non-production role journeys, Control-specific six-view screenshots and independent accessibility/visual review remain incomplete; no production grants are authorized.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
       "app/control/sign-in/page.tsx",
@@ -220,7 +238,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-002": {
     "status": "BLOCKED",
@@ -238,7 +256,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-003": {
     "status": "NOT_TESTED",
@@ -253,7 +271,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-011": {
     "status": "PASS",
@@ -261,33 +279,37 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §014 (ADMIN-011)",
     "implementationLocation": "register, `.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`.",
     "verificationMethod": "Isolated Node test suite for append/rewrite/correction/shallow-history cases plus exact-head full-history CI.",
-    "testResult": "PASS: exact-head full-history instruction-integrity CI passed; isolated fixtures exercise committed append, rewrite/restoration, malformed fields/IDs, invalid correction and shallow/uncommitted failures.",
+    "testResult": "PASS: exact-head full-history instruction-integrity CI passed on the current candidate; isolated fixtures cover committed append, rewrite/restoration, malformed fields/IDs, invalid correction and shallow/uncommitted failures.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-011",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-012": {
     "status": "BLOCKED",
     "acceptance": "Implement secure `/control` using existing identity, session/revocation, server-side resource permissions and tenant isolation; support the six requested roles only after precise permissions are confirmed. Pass real authorized/denied sessions, security and route tests, and six-view genuine screenshots.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §015 (ADMIN-012)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `lib/control/**`, `prisma/schema.prisma`, control migration and tests.",
-    "verificationMethod": "Local role-capability/scope unit matrix, direct page/API handler fixtures, CSRF and session-revocation suites, engine-less schema generation/model-consistency check, typecheck, lint and build. No real database grants or authenticated browser sessions were created.",
-    "testResult": "BLOCKED: real `/control` and API routes exist. Server code checks explicit database-backed grants, scope and MFA; mutation rechecks and row-locks its active grant, uses optimistic status comparison, and commits its append-only audit event atomically. The six role names exist, but the owner-approved role/action map and provisioning process do not; PostgreSQL/browser proof is pending.",
+    "verificationMethod": "Exact-head route/security/session fixtures within full suite; disposable PostgreSQL grant/audit/rollback tests; exact-head migration rehearsal. CI browser journeys/six-viewport captures cover other product modules, not authorized/denied `/control` sessions.",
+    "testResult": "BLOCKED: real `/control` and APIs exist. Server code checks explicit database-backed grants, scope and MFA; mutations recheck and row-lock the grant and atomically commit audit. Exact-head route/security tests and PostgreSQL immutability/revocation/rollback tests pass in CI. The six role names exist, but owner-approved role/action boundaries, safe grant provisioning and real authorized/denied Control browser journeys/screenshots are still absent.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-012",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Precise role/action boundaries and secure grant provisioning remain owner decisions; no grants are seeded; disposable PostgreSQL and authenticated six-view browser validation remain outstanding.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "Precise role/action boundaries and secure grant provisioning remain owner decisions; no grants are seeded. No authorized/denied Control browser journey or Control-specific six-view review has been performed.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
       "app/api/control/**",
@@ -315,22 +337,26 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: end-to-end phone ownership → eligibility → verified payment → accrual → reversal/report is not proven; approved financial terms remain unavailable. No real financial activity.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-014": {
-    "status": "NOT_TESTED",
+    "status": "BLOCKED",
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Migration SQL reviewed statically; engine-less Prisma generation parsed the schema and check-models reported 163/163 model consistency. The disposable PostgreSQL test was collected but skipped because no `PRISMA_TEST_DATABASE_URL`/PostgreSQL is available. Native `prisma validate` and migration rehearsal remain blocked by restricted Prisma-engine download.",
-    "testResult": "NOT TESTED: forward DDL, transactional rollback/reapply and append-only trigger tests are implemented, but not executed against PostgreSQL. The recovery note explicitly forbids dropping audit history and requires forward-only repair after migration commit.",
+    "verificationMethod": "Exact-head native Prisma/PostgreSQL 18 release, clean-install/upgrade/rollback/recovery and control-plane disposable-schema migration tests; candidate migration rehearsal and catalog comparison. No production database was touched.",
+    "testResult": "BLOCKED: exact-head CI passed native PostgreSQL migration/schema validation, clean install and upgrade path, candidate seed/catalog comparison, disposable control-plane append-only grant/audit trigger tests, and rollback/reapply. Full canonical proof still lacks demonstrated backup/restore and independent acceptance of every requested recovery phase; production migration/recovery was intentionally not attempted.",
     "evidence": [],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-014",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No disposable PostgreSQL, native Prisma validation or migration execution was available; production migration/recovery was not attempted.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "blocker": "Backup/restore and independent end-to-end acceptance of every requested recovery phase remain unproven; only disposable CI databases were used, and production migration was not authorized.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
@@ -339,21 +365,21 @@
   },
   "ADMIN-015": {
     "status": "BLOCKED",
-    "acceptance": "six-view actual authenticated evidence and independent findings for each applicable surface. **Dependencies/conflicts:** the control route and complete connected journey are not implemented. **Evidence/commit:** existing general screenshots do not satisfy this requirement; NOT TESTED.",
+    "acceptance": "six-view actual authenticated evidence and independent findings for each applicable surface. **Dependencies/conflicts:** the Control route now exists, but authenticated role journeys and the complete connected journey remain unverified. **Evidence/commit:** existing general screenshots do not satisfy this requirement; Control-specific evidence remains outstanding.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §018 (ADMIN-015)",
     "implementationLocation": "browser E2E scripts, actual app routes, screenshot artifacts and release documentation.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: authenticated/unauthorized control and agent/finance screenshot matrix is incomplete; /control is absent and artifacts have not received independent full visual review.",
+    "verificationMethod": "Exact-head real-Chrome six-viewport screenshot/browser workflow passed for existing product journeys; the recorded tasks cover POS/onboarding/agent/ERP, not `/control`. Artifact inspection and authorized/denied Control, registration, agent, finance and motion coverage at each owner-specified viewport remain outstanding.",
+    "testResult": "BLOCKED: real Chrome screenshot/browser workflow passed its recorded non-Control journeys (595 checks, 0 failures) and uploaded artifacts; it did not capture authorized/unauthorized `/control` sessions or the full requested module matrix. This session could not independently inspect the uploaded images. Control-specific six-view responsiveness, accessibility and security acceptance remains unverified.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-015",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: authenticated/unauthorized control and agent/finance screenshot matrix is incomplete; /control is absent and artifacts have not received independent full visual review.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "blocker": "No authenticated/unauthorized Control and full owner-specified module screenshot matrix, no independent artifact inspection or accessibility findings; existing general screenshots do not satisfy this criterion.",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-004": {
     "status": "NOT_TESTED",
@@ -370,7 +396,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-016": {
     "status": "PASS",
@@ -378,18 +404,18 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §020 (ADMIN-016)",
     "implementationLocation": "`.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.",
     "verificationMethod": "Isolated Git history fixture suite plus exact-head instruction-integrity workflow; manual review against the canonical instruction file.",
-    "testResult": "PASS: exact-head full-history checker and isolated Git fixture tests pass; canonical requirement text was reviewed as repository source. Git cannot authenticate owner provenance beyond preserved repository history.",
+    "testResult": "PASS: exact-head full-history checker and isolated Git fixture tests pass on the current candidate; canonical requirement text was reviewed as repository source. Git cannot authenticate owner provenance beyond preserved repository history.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-016",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-017": {
     "status": "PASS",
@@ -397,37 +423,40 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §021 (ADMIN-017)",
     "implementationLocation": "`.github/workflows/admin-instructions.yml`, `scripts/admin/tests/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.",
     "verificationMethod": "Exact-head standalone instruction-integrity workflow and full no-database suite; test placement verified by repository workflow configuration.",
-    "testResult": "PASS: standalone integrity tests remain outside the Vitest collection tree; integrity CI and full no-database suite pass on the exact candidate.",
+    "testResult": "PASS: standalone integrity tests remain outside the Vitest collection tree; exact-head integrity CI and full no-database suite pass.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-017",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-018": {
     "status": "PASS",
     "acceptance": "Reject sessions with stale sessionVersion, deleted users, database errors or role claims mismatched against the current database role; require a fresh session after role changes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §022 (ADMIN-018)",
     "implementationLocation": "`lib/auth.ts`, `tests/security/auth-session-revocation.test.ts`, and the control self-revocation route `app/api/control/session/revoke/route.ts`.",
-    "verificationMethod": "`npx vitest run tests/security/auth-session-revocation.test.ts tests/unit/control-plane-routes.test.ts`; verifies expired/stale-version/role-mismatch denial and durable self-revocation route behavior in fixtures. This is local mocked/unit evidence, not PostgreSQL migration or browser acceptance.",
-    "testResult": "PASS for this narrow session criterion: 6 auth-revocation tests and the focused session-revocation route fixture passed; current account sessionVersion increments atomically and both current session/MFA cookies are cleared. It does not establish the full control-plane acceptance.",
+    "verificationMethod": "Exact-head full suite plus disposable PostgreSQL integration/security suite; focused tests cover expiration, stale/mismatched role/session version, and current-account all-session revocation/cookie clearing.",
+    "testResult": "The narrow current-role/session-revocation criterion passes on the exact candidate: unit/session fixtures and DB-backed security suite passed; all-device revocation increments the session version and clears cookies. This does not prove six-role Control browser acceptance.",
     "evidence": [
       "lib/auth.ts",
       "tests/security/auth-session-revocation.test.ts",
       "tests/unit/control-plane-routes.test.ts"
     ],
-    "evidenceLinks": [],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480"
+    ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-018",
-    "verificationCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "lib/auth.ts",
       "app/api/control/session/revoke/route.ts",
@@ -453,7 +482,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-019",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-020": {
     "status": "PASS",
@@ -474,7 +503,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-020",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-021": {
     "status": "PASS",
@@ -495,7 +524,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-021",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-022": {
     "status": "BLOCKED",
@@ -512,7 +541,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-005": {
     "status": "NOT_TESTED",
@@ -529,7 +558,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-023": {
     "status": "NOT_TESTED",
@@ -546,7 +575,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-006": {
     "status": "BLOCKED",
@@ -564,7 +593,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "ADMIN-024": {
     "status": "PASS",
@@ -572,19 +601,19 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §030 (ADMIN-024)",
     "implementationLocation": "`scripts/admin/check-programme-readiness.mjs`, `scripts/admin/tests/programme-readiness.test.mjs`, `docs/agents/PROGRAMME_READINESS.json`, `.github/workflows/admin-instructions.yml`.",
     "verificationMethod": "Local `node --test scripts/admin/tests/programme-readiness.test.mjs scripts/admin/tests/instruction-integrity.test.mjs`; direct readiness-checker invocation; exact-head admin CI result is recorded separately.",
-    "testResult": "PASS: local readiness/integrity tests and exact-head instruction-integrity job pass; the completeness test passes; the required acceptance step exits 1 and reports 34 genuine non-PASS requirements, as intended. The gate remains fail-closed; this is not programme completion.",
+    "testResult": "PASS: local readiness/integrity tests and exact-head instruction-integrity CI pass; the completeness-test self-test passes; the required acceptance step exits 1 and reports 34 genuine non-PASS requirements, as intended. The gate remains fail-closed; this is not programme completion.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/programme-readiness.test.mjs",
       "scripts/admin/check-programme-readiness.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-024",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-007": {
     "status": "BLOCKED",
@@ -601,7 +630,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-008": {
     "status": "BLOCKED",
@@ -619,7 +648,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-009": {
     "status": "NOT_TESTED",
@@ -636,7 +665,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-010": {
     "status": "NOT_TESTED",
@@ -654,7 +683,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-011": {
     "status": "BLOCKED",
@@ -672,7 +701,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-012": {
     "status": "BLOCKED",
@@ -690,7 +719,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-013": {
     "status": "BLOCKED",
@@ -708,7 +737,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-014": {
     "status": "BLOCKED",
@@ -726,7 +755,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-015": {
     "status": "BLOCKED",
@@ -744,7 +773,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-016": {
     "status": "BLOCKED",
@@ -762,7 +791,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-017": {
     "status": "BLOCKED",
@@ -781,7 +810,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "MOTION-018": {
     "status": "BLOCKED",
@@ -800,7 +829,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
   },
   "RELEASE-001": {
     "status": "BLOCKED",
@@ -822,7 +851,7 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, durable provider media, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified.",
-    "sourceCommit": "a414c0715ba6e29e96fc5d24e70388248a388126",
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/**",
       "app/api/control/**",
