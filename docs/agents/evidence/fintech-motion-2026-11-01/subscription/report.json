@@ -1,0 +1,413 @@
+{
+  "generatedAt": "2026-11-01T22:11:35.444Z",
+  "base": "http://localhost:3000",
+  "viewports": [
+    {
+      "viewport": "320x568",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/320x568-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/320x568-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/320x568-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/320x568-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/320x568-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/320x568-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/320x568-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/320x568-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    },
+    {
+      "viewport": "360x800",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/360x800-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/360x800-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/360x800-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/360x800-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/360x800-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/360x800-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/360x800-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/360x800-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    },
+    {
+      "viewport": "390x844",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/390x844-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/390x844-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/390x844-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/390x844-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/390x844-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/390x844-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/390x844-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/390x844-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    },
+    {
+      "viewport": "430x932",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/430x932-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/430x932-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/430x932-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/430x932-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/430x932-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/430x932-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/430x932-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/430x932-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    },
+    {
+      "viewport": "768x1024",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/768x1024-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/768x1024-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/768x1024-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/768x1024-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/768x1024-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/768x1024-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/768x1024-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/768x1024-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    },
+    {
+      "viewport": "1366x768",
+      "states": {
+        "registerInitial": {
+          "file": "/tmp/cap/out/subscription/1366x768-register-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerFailure": {
+          "file": "/tmp/cap/out/subscription/1366x768-register-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "registerSuccessSimulated": {
+          "file": "/tmp/cap/out/subscription/1366x768-register-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutInitial": {
+          "file": "/tmp/cap/out/subscription/1366x768-checkout-initial.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutPending": {
+          "ariaBusy": true,
+          "label": "Opening secure checkout…",
+          "file": "/tmp/cap/out/subscription/1366x768-checkout-pending.png"
+        },
+        "checkoutSuccessSimulated": {
+          "url": "/dev/subscription-fixture/paystack-simulated?outcome=success&ref=FIXTURE-SUCCESS-0001",
+          "file": "/tmp/cap/out/subscription/1366x768-result-success-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutFailure": {
+          "urlStayed": true,
+          "file": "/tmp/cap/out/subscription/1366x768-checkout-failure.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        },
+        "checkoutCancelledSimulated": {
+          "file": "/tmp/cap/out/subscription/1366x768-result-cancelled-simulated.png",
+          "overflow": 0,
+          "pageErrors": [],
+          "external": []
+        }
+      }
+    }
+  ],
+  "notes": [],
+  "keyboard": {
+    "viewport": "390x844",
+    "stops": 36,
+    "unoutlined": [],
+    "sample": [
+      {
+        "tag": "SUMMARY",
+        "label": "Choose JATA appearance",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-name",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-business",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-email",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-phone",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-password",
+        "visibleFocus": true
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Create account",
+        "visibleFocus": true
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Pay KES 1,500 with Paystack",
+        "visibleFocus": true
+      },
+      {
+        "tag": "A",
+        "label": "Back to subscription",
+        "visibleFocus": true
+      },
+      {
+        "tag": "SUMMARY",
+        "label": "Choose JATA appearance",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-name",
+        "visibleFocus": true
+      },
+      {
+        "tag": "INPUT",
+        "label": "register-business",
+        "visibleFocus": true
+      }
+    ],
+    "pageErrors": []
+  },
+  "reducedMotion": {
+    "normal": {
+      "count": 1,
+      "names": [
+        "jata-state-in"
+      ],
+      "playing": 0
+    },
+    "reduce": {
+      "count": 0,
+      "names": [],
+      "playing": 0
+    }
+  }
+}

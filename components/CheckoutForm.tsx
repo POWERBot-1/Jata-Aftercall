@@ -48,7 +48,7 @@ export default function CheckoutForm({ businessId, planId, businessName, planNam
     <button type="button" disabled={loading} aria-busy={loading} onClick={checkout} className="jata-btn jata-btn-primary mt-5 w-full">
       {loading ? "Opening secure checkout…" : `Pay KES ${formatNumber(amountKes ?? priceKES)} with Paystack`}
     </button>
-    {message && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{message}</p>}
+    {message && <p role="alert" className="jata-state-enter mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{message}</p>}
     <p className="mt-4 text-xs text-zinc-600">Your subscription is activated only after Paystack confirms the payment to our server. If the payment is still processing, you’ll see that status — never a false “success”.</p>
     <Link href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`} className="jata-btn jata-btn-ghost mt-3 underline">Back to subscription</Link>
   </main>;

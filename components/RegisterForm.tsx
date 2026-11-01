@@ -4,7 +4,14 @@ import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
-export default function RegisterForm({ refCode = null }: { refCode?: string | null }) {
+export default function RegisterForm({
+  refCode = null,
+  onRegistered,
+}: {
+  refCode?: string | null;
+  /** Development fixture hook. When omitted (production), a successful registration goes to /dashboard. */
+  onRegistered?: () => void;
+}) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", businessName: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,6 +31,10 @@ export default function RegisterForm({ refCode = null }: { refCode?: string | nu
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setErr(data.error || "We couldn't create your account. Please try again.");
+        return;
+      }
+      if (onRegistered) {
+        onRegistered();
         return;
       }
       router.push("/dashboard");
