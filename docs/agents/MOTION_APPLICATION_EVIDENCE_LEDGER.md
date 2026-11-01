@@ -286,7 +286,7 @@ Scope: Website Studio index, canvas/editor, image picker, publish panel and cate
 
 **Evidence** (`docs/agents/evidence/fintech-motion-2026-11-01/studio/`)
 - `report.json`: 134 entries across six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768). Each entry carries the file name, overflow flag and page-error count.
-- Committed PNGs: the 390×844 and 1366×768 sets (38 full-page captures) plus `focus-iframe-keyboard-1366x768.png` if present. The other four viewports were captured in the sandbox and are not committed (size). They can be regenerated with `scripts/studio-capture.mjs`.
+- Committed PNGs: the 390×844 and 1366×768 sets (38 full-page captures) plus the iframe-focus screenshot is kept in the sandbox only. The other four viewports were captured in the sandbox and are not committed (size). They can be regenerated with `scripts/studio-capture.mjs`.
 - `extra.json`: reduced-motion and focus checks. `scripts/`: capture and check scripts.
 - Opened and inspected: `03-editor-failure-result-390x844.png` ("Not saved — your last change is still on screen"; draft and live versions unchanged; Navigation row stayed in position after the failed move); `04-image-initial` and `04-image-after-use` at 390 (after the chip fix, "Simulated — not saved"); `05-publish-success-progress-390x844.png` ("Publishing…" with the progress bar); `05-publish-failure-result-390x844.png` ("FICTIONAL FIXTURE: simulated publish failure. The live site is unchanged.").
 
@@ -294,7 +294,7 @@ Scope: Website Studio index, canvas/editor, image picker, publish panel and cate
 - Page errors: 0 across all captures. Horizontal overflow: none.
 - Image upload control: absent at all six widths (0 matches for "Upload my photo" / "Change image"). The fixture passes no `businessId`.
 - Keyboard trace (editor, 390×844, 30 Tab stops): 26 stops have a computed outline. The 4 without are the preview iframe (focus moves into the storefront document) and the body. The iframe ring rule is in CSS, but I could not confirm it visually in headless Chromium: `:focus`, `:focus-visible` and `:focus-within` all reported false on the iframe while it was the active element. **Status: PARTIAL.**
-- Reduced motion (390×844): publish progress bar animation `none`. Editor iframe animation `none` (1366×768). Category label transition absent in both modes, so it is not a reduced-motion gap.
+- Reduced motion (390×844): publish progress bar animation `none`. Editor iframe animation `none` (1366×768). Category label transition under reduced motion: NOT VERIFIED. The check ran on the editor page, which has no category radio, so it measured nothing.
 
 **Financial correctness**: Studio shows no money values, so no amounts are animated. The publish checklist shows "FICTIONAL FIXTURE: plan status is simulated." No plan or payment state is implied.
 
