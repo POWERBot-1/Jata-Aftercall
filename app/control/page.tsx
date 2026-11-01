@@ -20,6 +20,7 @@ export default async function ControlPage() {
   if (!canRead) return (
     <WorkspaceSetupShell title="Control access not granted" subtitle="This identity is authenticated, but it has no explicit control read capability." backHref="/" backLabel="Public site">
       <p className="ws-muted">Role names alone do not grant access. A separately approved, tenant-scoped database permission is required. No admin was created or elevated by this page.</p>
+      <p className="ws-tiny mt-3"><a className="underline" href="/control/policy">Review the six-role pending authorization matrix</a></p>
     </WorkspaceSetupShell>
   );
   return (

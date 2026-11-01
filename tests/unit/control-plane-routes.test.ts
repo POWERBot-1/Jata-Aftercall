@@ -82,7 +82,8 @@ describe("direct control page and business APIs", () => {
     fixtures.state.grants = [];
     const page = await ControlPage() as any;
     expect(page.props.title).toBe("Control access not granted");
-    expect(page.props.children.type).toBe("p");
+    expect(page.props.children).toHaveLength(2);
+    expect(page.props.children[1].props.children.props.href).toBe("/control/policy");
     expect(fixtures.prisma.$transaction).not.toHaveBeenCalled();
   });
 

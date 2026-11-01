@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ControlRecordList } from "./ControlRecordList";
+import type { RecordKind, RecordList } from "./control-record-types";
 
 type Section = { state: "VERIFIED" | "PENDING" | "FAILED" | "UNAVAILABLE"; source: string; asOf: string; data: any; note?: string };
 type Overview = { asOf: string; roles: string[]; permissions: string[]; sections: Record<string, Section> };
@@ -43,6 +45,12 @@ export function ControlConsole() {
   const [auditNextCursor, setAuditNextCursor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [businessError, setBusinessError] = useState("");
+  const [recordLists, setRecordLists] = useState<Record<RecordKind, RecordList>>({
+    subscriptions: { items: [], nextCursor: null, loading: false, error: "" },
+    payments: { items: [], nextCursor: null, loading: false, error: "" },
+    agents: { items: [], nextCursor: null, loading: false, error: "" },
+    commissions: { items: [], nextCursor: null, loading: false, error: "" },
+  });
   const [reasonByBusiness, setReasonByBusiness] = useState<Record<string, string>>({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
@@ -72,15 +80,23 @@ export function ControlConsole() {
         setAuditEvents(auditResult.items || []);
         setAuditNextCursor(auditResult.nextCursor || null);
       }
+      const recordKinds: RecordKind[] = ["subscriptions", "payments", "agents", "commissions"];
+      await Promise.all(recordKinds.filter((kind) => Boolean(result.sections?.[kind === "subscriptions" ? "subscriptions.read" : kind === "payments" ? "payments.read" : `${kind}.read`])).map(async (kind) => {
+        setRecordLists((current) => ({ ...current, [kind]: { ...current[kind], loading: true, error: "" } }));
+        try {
+          const records = await parseJson(await fetch(`/api/control/records?kind=${kind}`, { cache: "no-store" }));
+          setRecordLists((current) => ({ ...current, [kind]: { items: records.items || [], nextCursor: records.nextCursor || null, loading: false, error: "" } }));
+        } catch (error) {
+          setRecordLists((current) => ({ ...current, [kind]: { ...current[kind], loading: false, error: error instanceof Error ? error.message : "The authorized record view is unavailable." } }));
+        }
+      }));
     } catch (error) {
       setOverviewError(error instanceof Error ? error.message : "Control data is unavailable.");
     }
   }, []);
 
   // These effects synchronize with server-authenticated state; all state writes occur after fetch resolves.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadStatus(); }, [loadStatus]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (mfaStatus?.verified) void loadControlData(); }, [mfaStatus, loadControlData]);
 
   async function beginEnrollment() {
@@ -142,6 +158,18 @@ export function ControlConsole() {
     } catch (error) { setOverviewError(error instanceof Error ? error.message : "Next audit page is unavailable."); }
   }
 
+  async function loadMoreRecords(kind: RecordKind) {
+    const cursor = recordLists[kind].nextCursor;
+    if (!cursor) return;
+    setRecordLists((current) => ({ ...current, [kind]: { ...current[kind], loading: true, error: "" } }));
+    try {
+      const result = await parseJson(await fetch(`/api/control/records?kind=${kind}&cursor=${encodeURIComponent(cursor)}`, { cache: "no-store" }));
+      setRecordLists((current) => ({ ...current, [kind]: { items: [...current[kind].items, ...(result.items || [])], nextCursor: result.nextCursor || null, loading: false, error: "" } }));
+    } catch (error) {
+      setRecordLists((current) => ({ ...current, [kind]: { ...current[kind], loading: false, error: error instanceof Error ? error.message : "The next record page is unavailable." } }));
+    }
+  }
+
   async function changeBusinessStatus(business: Business, status: "SUSPENDED" | "ACTIVE") {
     const action = status === "SUSPENDED" ? "SUSPEND" : "REINSTATE";
     setPendingAction(business.id); setBusinessError("");
@@ -196,6 +224,7 @@ export function ControlConsole() {
         <p className="ws-tiny mt-2">Roles: {overview?.roles.join(", ")} · Data read at {overview?.asOf}</p>
         <nav aria-label="Control modules" className="mt-4 flex flex-wrap gap-2">
           {nav.map((key) => <a key={key} className="ws-btn-outline ws-btn-outline--ink" href={`#${key.replaceAll(".", "-")}`}>{LABELS[key] || key}</a>)}
+          <a className="ws-btn-outline ws-btn-outline--ink" href="/control/policy">Role and permission policy</a>
           <button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={revokeSessions}>Revoke all my sessions &amp; sign out</button>
         </nav>
       </section>
@@ -207,14 +236,14 @@ export function ControlConsole() {
         </div>
         <p className="ws-tiny mt-1">Observed {section.asOf}</p>
         {section.note ? <p className="ws-muted mt-2">{section.note}</p> : null}
-        <SectionContent sectionKey={key} section={section} permissions={permissions} businesses={businesses} query={query} setQuery={setQuery} onSearch={searchBusinesses} onLoadMore={loadMoreBusinesses} hasMore={Boolean(businessNextCursor)} auditEvents={auditEvents} auditNextCursor={auditNextCursor} onLoadMoreAudit={loadMoreAudit} onStatusChange={changeBusinessStatus} reasonByBusiness={reasonByBusiness} setReasonByBusiness={setReasonByBusiness} pendingAction={pendingAction} businessError={businessError} />
+        <SectionContent sectionKey={key} section={section} permissions={permissions} businesses={businesses} query={query} setQuery={setQuery} onSearch={searchBusinesses} onLoadMore={loadMoreBusinesses} hasMore={Boolean(businessNextCursor)} auditEvents={auditEvents} auditNextCursor={auditNextCursor} onLoadMoreAudit={loadMoreAudit} recordLists={recordLists} onLoadMoreRecords={loadMoreRecords} onStatusChange={changeBusinessStatus} reasonByBusiness={reasonByBusiness} setReasonByBusiness={setReasonByBusiness} pendingAction={pendingAction} businessError={businessError} />
       </section>)}
       <p className="ws-tiny">Unavailable data remains unavailable; no inference is made from missing or failed sources.</p>
     </div>
   );
 }
 
-function SectionContent({ sectionKey, section, permissions, businesses, query, setQuery, onSearch, onLoadMore, hasMore, auditEvents, auditNextCursor, onLoadMoreAudit, onStatusChange, reasonByBusiness, setReasonByBusiness, pendingAction, businessError }: any) {
+function SectionContent({ sectionKey, section, permissions, businesses, query, setQuery, onSearch, onLoadMore, hasMore, auditEvents, auditNextCursor, onLoadMoreAudit, recordLists, onLoadMoreRecords, onStatusChange, reasonByBusiness, setReasonByBusiness, pendingAction, businessError }: any) {
   const data = section.data;
   if (!data) return <p className="ws-muted mt-3">No authoritative result is available.</p>;
   if (sectionKey === "businesses") return <>
@@ -231,18 +260,20 @@ function SectionContent({ sectionKey, section, permissions, businesses, query, s
   if (sectionKey === "subscriptions.read" || sectionKey === "payments.read") return <>
     <p className="mt-3 text-3xl font-semibold">{data.total}</p><p className="ws-tiny">Authoritative record count</p>
     <div className="mt-3 flex flex-wrap gap-2">{data.byStatus.map((row: any) => <span key={row.status} className="ws-pill" data-tone={row.status === "FAILED" ? "draft" : "live"}>{row.status}: {row.count}</span>)}</div>
-    {sectionKey === "payments.read" ? <p className="ws-tiny mt-3">No amount total is presented here; payment records alone do not establish reconciliation or commission eligibility.</p> : null}
+    {sectionKey === "payments.read" ? <p className="ws-tiny mt-3">Amounts, payment references and provider identifiers are withheld pending owner-approved financial and privacy policy. Status rows do not establish reconciliation or commission eligibility.</p> : null}
+    <ControlRecordList kind={sectionKey === "subscriptions.read" ? "subscriptions" : "payments"} list={recordLists[sectionKey === "subscriptions.read" ? "subscriptions" : "payments"]} onLoadMore={onLoadMoreRecords} />
   </>;
-  if (sectionKey === "agents.read") return <><div className="ws-stats mt-4"><Metric label="Applications" value={data.total} /><Metric label="Consented registration attributions" value={data.consentedRegistrationAttributions} /><Metric label="Activation" value="Not inferred" /></div><Breakdown label="Application status" rows={data.byStatus} /><Breakdown label="Agent status" rows={data.byAgentStatus} /></>;
-  if (sectionKey === "commissions.read") return <><p className="mt-3 text-3xl font-semibold">{data.total}</p><Breakdown label="Stored ledger entry types" rows={data.byEntryType.map((row: any) => ({ status: row.entryType, count: row.count }))} /><p className="ws-muted mt-3">No earning, payable amount, payout eligibility or policy is inferred from these immutable storage rows.</p></>;
+  if (sectionKey === "agents.read") return <><div className="ws-stats mt-4"><Metric label="Applications" value={data.total} /><Metric label="Consented registration attributions" value={data.consentedRegistrationAttributions} /><Metric label="Activation" value="Not inferred" /></div><Breakdown label="Application status" rows={data.byStatus} /><Breakdown label="Agent status" rows={data.byAgentStatus} /><p className="ws-tiny mt-3">Names, phone numbers and user identifiers are withheld pending owner-approved identity/PII policy. This read-only view does not change an application or grant agent status.</p><ControlRecordList kind="agents" list={recordLists.agents} onLoadMore={onLoadMoreRecords} /></>;
+  if (sectionKey === "commissions.read") return <><p className="mt-3 text-3xl font-semibold">{data.total}</p><Breakdown label="Stored ledger entry types" rows={data.byEntryType.map((row: any) => ({ status: row.entryType, count: row.count }))} /><p className="ws-muted mt-3">Amounts, currency, related payment/agent identities, earning eligibility and payable balance are withheld pending owner policy. No financial authority is inferred from these immutable storage rows.</p><ControlRecordList kind="commissions" list={recordLists.commissions} onLoadMore={onLoadMoreRecords} /></>;
   if (sectionKey === "communications") return <Breakdown label="Outbox states (not delivery receipts)" rows={data.byState.map((row: any) => ({ status: row.state, count: row.count }))} />;
   if (sectionKey === "system") return <div className="mt-3 flex gap-2"><span className="ws-pill" data-tone="live">Application {data.application}</span><span className="ws-pill" data-tone="live">Database {data.database}</span><span className="ws-tiny">{data.observedAt}</span></div>;
   if (sectionKey === "exceptions") return <div className="ws-stats mt-4"><Metric label="Failed/refunded payment records" value={data.failedOrRefundedPaymentRecords} /><Metric label="Pending agent applications" value={data.pendingAgentApplications} /><Metric label="Failed/unknown notification rows" value={data.failedOrUnknownNotificationRows} /></div>;
-  if (sectionKey === "audit") return <div className="mt-4 space-y-2">{auditEvents.length ? auditEvents.map((row: any) => <article key={row.id} className="rounded-lg border border-[color:var(--ws-border)] p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{row.action}</strong><span className="ws-pill" data-tone={row.outcome === "SUCCESS" ? "live" : "draft"}>{row.outcome}</span></div><p className="ws-tiny mt-1">{row.actorRole} · {row.actorId} · {row.targetType}{row.targetId ? `/${row.targetId}` : ""} · {formatAuditTimestamp(row.createdAt)}</p>{row.reason ? <p className="ws-muted mt-1">Reason: {row.reason}</p> : null}</article>) : <p className="ws-muted">No control audit events are in this permission scope.</p>}{auditNextCursor ? <button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={onLoadMoreAudit}>Load next audit page</button> : null}</div>;
+  if (sectionKey === "audit") return <div className="mt-4 space-y-2">{auditEvents.length ? auditEvents.map((row: any) => <article key={row.id} className="rounded-lg border border-[color:var(--ws-border)] p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{row.action}</strong><span className="ws-pill" data-tone={row.outcome === "SUCCESS" ? "live" : "draft"}>{row.outcome}</span></div><dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2"><dt className="font-semibold">Actor / role</dt><dd className="break-all">{row.actorId} / {row.actorRole}</dd><dt className="font-semibold">Target</dt><dd className="break-all">{row.targetType}{row.targetId ? ` / ${row.targetId}` : ""}</dd><dt className="font-semibold">Tenant scope</dt><dd className="break-all">{row.scopeBusinessId || "Platform-wide / not tenant-scoped"}</dd><dt className="font-semibold">Recorded</dt><dd>{formatAuditTimestamp(row.createdAt)}</dd><dt className="font-semibold">Correlation ID</dt><dd className="break-all">{row.correlationId || "Not supplied"}</dd></dl>{row.reason ? <p className="ws-muted mt-2">Reason: {row.reason}</p> : null}<details className="mt-2"><summary className="cursor-pointer text-sm font-semibold">Before/after state and event metadata</summary><div className="mt-2 grid gap-2 md:grid-cols-3"><AuditEvidence label="Before" value={row.beforeState} /><AuditEvidence label="After" value={row.afterState} /><AuditEvidence label="Metadata" value={row.metadata} /></div></details></article>) : <p className="ws-muted">No control audit events are in this permission scope.</p>}{auditNextCursor ? <button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={onLoadMoreAudit}>Load next audit page</button> : null}</div>;
   if (sectionKey === "providers") return <p className="ws-muted mt-3">{section.note}</p>;
   return <pre className="mt-3 overflow-auto rounded-lg bg-[color:var(--ws-canvas)] p-3 text-xs">{JSON.stringify(data, null, 2)}</pre>;
 }
 
+function AuditEvidence({ label, value }: { label: string; value: unknown }) { return <div className="min-w-0 rounded-lg bg-[color:var(--ws-canvas)] p-3"><h3 className="text-xs font-bold uppercase">{label}</h3><pre className="mt-1 whitespace-pre-wrap break-words text-xs">{value == null ? "No state recorded for this event." : JSON.stringify(value, null, 2)}</pre></div>; }
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className="ws-stat"><span className="ws-stat__label">{label}</span><strong className="ws-stat__value">{value}</strong></div>; }
 function Breakdown({ label, rows }: { label: string; rows: Array<{ status: string; count: number }> }) { return <div className="mt-4"><p className="ws-tiny">{label}</p><div className="mt-2 flex flex-wrap gap-2">{rows.length ? rows.map((row) => <span key={row.status} className="ws-pill" data-tone={row.status === "FAILED" || row.status === "UNKNOWN" ? "draft" : "live"}>{row.status}: {row.count}</span>) : <span className="ws-muted">No records</span>}</div></div>; }
 function BusinessAction({ business, status, label, reason, setReason, submit, pending }: { business: Business; status: "SUSPENDED" | "ACTIVE"; label: string; reason: string; setReason: (value: string) => void; submit: () => void; pending: boolean }) {

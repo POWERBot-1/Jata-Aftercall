@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasControlPermission, scopedBusinessIds, type ControlGrant } from "@/lib/control/access";
-import { CONTROL_ROLE_NAMES, isControlPermission } from "@/lib/control/permissions";
+import { CONTROL_PERMISSIONS, CONTROL_ROLE_NAMES, isControlPermission } from "@/lib/control/permissions";
 import { createControlMfaSession, decryptTotpSecret, encryptTotpSecret, matchingTotpStep, verifyControlMfaSession } from "@/lib/control/mfa";
 import { getCorrelationId, hasSameOrigin } from "@/lib/control/security";
 
@@ -32,6 +32,21 @@ describe("control-plane authorization boundaries", () => {
       expect(hasControlPermission([grant], "audit.read", "business-fixture")).toBe(true);
       expect(hasControlPermission([grant], "businesses.read", "business-fixture")).toBe(false);
       expect(hasControlPermission([grant], "audit.read", "another-business")).toBe(false);
+    }
+  });
+
+  it("covers every canonical role × capability pair with no implicit grant and exact tenant boundaries", () => {
+    for (const role of CONTROL_ROLE_NAMES) {
+      for (const permission of CONTROL_PERMISSIONS) {
+        const roleOnly: ControlGrant = { id: `role-only-${role}`, role, permissionKeys: [], scopeBusinessId: null };
+        expect(hasControlPermission([roleOnly], permission, "tenant-a")).toBe(false);
+        const scoped: ControlGrant = { id: `matrix-${role}-${permission}`, role, permissionKeys: [permission], scopeBusinessId: "tenant-a" };
+        expect(hasControlPermission([scoped], permission, "tenant-a")).toBe(true);
+        expect(hasControlPermission([scoped], permission, "tenant-b")).toBe(false);
+        for (const denied of CONTROL_PERMISSIONS.filter((candidate) => candidate !== permission)) {
+          expect(hasControlPermission([scoped], denied, "tenant-a")).toBe(false);
+        }
+      }
     }
   });
 
