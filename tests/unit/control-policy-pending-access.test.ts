@@ -14,6 +14,7 @@ vi.mock("@/lib/db", () => ({ default: {
 vi.mock("next/headers", () => ({ cookies: vi.fn(async () => ({ get: vi.fn() })) }));
 
 import { getControlIdentity, requireControlPermission } from "@/lib/control/access";
+import { GET as getControlOverview } from "@/app/api/control/overview/route";
 
 describe("pending Control role policy fails closed", () => {
   beforeEach(() => {
@@ -39,5 +40,22 @@ describe("pending Control role policy fails closed", () => {
     const result = await getControlIdentity();
     expect(result).toEqual({ ok: false, status: 401, code: "UNAUTHENTICATED" });
     expect(fixtures.grants).not.toHaveBeenCalled();
+  });
+
+  it("denies a direct overview API invocation anonymously before grant, MFA, or data access", async () => {
+    fixtures.session = null;
+    const response = await getControlOverview();
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(fixtures.grants).not.toHaveBeenCalled();
+    expect(fixtures.credential).not.toHaveBeenCalled();
+  });
+
+  it("denies the direct overview API for an authenticated synthetic session while owner policy is pending", async () => {
+    const response = await getControlOverview();
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "POLICY_PENDING" });
+    expect(fixtures.grants).not.toHaveBeenCalled();
+    expect(fixtures.credential).not.toHaveBeenCalled();
   });
 });
