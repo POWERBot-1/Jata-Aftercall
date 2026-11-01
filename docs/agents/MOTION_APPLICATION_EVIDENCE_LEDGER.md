@@ -71,3 +71,35 @@ Baseline: `main` `19f11d9ecd8daad1db2aaf35cc1166425f871acc`. No `MOTION-001–01
 | Keyboard/focus, screen reader, Lite preference | NOT TESTED | No keyboard journey run; `prefers-reduced-motion` tested only on the dev harness. Lite/None preference is not a workspace setting and was not exercised. |
 
 **Remaining blockers:** a Postgres-backed local environment (Prisma query engine download from `binaries.prisma.sh` is blocked in this sandbox), which blocks authenticated before/after captures of the real dashboard, POS, checkout and Studio; the Studio editor, AI workspace, Autopilot, subscription activation and onboarding motion work; and recorded interaction traces (only computed-style and frame evidence were captured).
+
+## 2026-11-01 — PR #79 continuation status (head `9eb6b940eeb86c3017260decdf2e8bfa0a8ef841`)
+
+**Overall verdict: FAIL against the full brief.** The branch contains the partial motion pass above and two regression fixes. It is not a completed fintech motion UI.
+
+**Regression fixes since `0a2bd8b`:** `app/dashboard/loading.tsx` had been overwritten and is restored to `main`; the `jata-line-in` keyframe no longer contains a hex fallback. Full no-database vitest run on this head: 340 files passed, 3,982 tests passed, 303 skipped. Earlier PR CI failures in "Unit suite" were these two tests.
+
+**CI on `1726529` (pre-fix):** "Admin instruction integrity" already fails on `main` `19f11d9` (not caused by this PR). Other failures (full-suite, POS/ERP verify, release gate, schema reconciliation, Postgres checks) were in progress or failing; logs could not be downloaded from this sandbox. Re-run CI on `9eb6b94` before relying on it.
+
+| Requirement | Verdict | Evidence / blocker |
+|---|---|---|
+| Workspace/section transitions | PASS (code) / NOT TESTED (visual) | Template wrappers exist; navigation was never exercised in a browser |
+| Dashboard card entrances, chart reveal | PARTIAL / NOT TESTED | Overview stagger on dev harness only; chart and authenticated dashboard not captured |
+| Navigation selection, mobile nav | PARTIAL / NOT TESTED | Active indicator and press CSS; no interaction recording |
+| Buttons, tabs, menus, forms | NOT TESTED | Not changed beyond existing button press styles |
+| Loading skeletons, async content | NOT TESTED | Existing dashboard skeleton preserved; no navigation capture |
+| Empty / success / pending / failure / error states | FAIL | Only the order status block changed; no captured state transitions |
+| POS cart add / remove / qty / discount / checkout | NOT TESTED / BLOCKED | Quantity-total pulse only; needs authenticated POS + DB |
+| Sales history, reports, refunds | NOT TESTED / BLOCKED | Not changed; needs DB |
+| Payment verification and subscription activation | NOT TESTED / BLOCKED | Order status keyed state only; no provider-to-entitlement run (no payments executed) |
+| Website Studio dashboard and editor | FAIL (not implemented) | Not changed |
+| AI Business Front Desk workspace | FAIL (not implemented) | Not changed; authenticated route needs DB |
+| JATA Autopilot workspace and approvals | FAIL (not implemented) | Not changed; needs DB |
+| Registration, login, onboarding | NOT TESTED | Not changed |
+| Drawers, dropdowns, dialogs, confirmations | FAIL (not implemented) | Not changed |
+| Reduced motion | PASS (dev harness computed styles) | 390×844 reduced-motion capture; not verified on authenticated routes |
+| Keyboard / focus / screen reader | NOT TESTED | No keyboard journey executed |
+| Six-viewport responsive | PARTIAL | Dev harness captures at six viewports, no horizontal overflow, 320px nav wraps; authenticated routes NOT TESTED |
+| Financial accuracy (no animated amounts, server-authoritative states) | PASS (code review) | No count-up or interpolated money values added; no payments executed |
+| Control access policy | PASS (unchanged) | No `/control` changes |
+
+**Blockers:** (1) Prisma query-engine download from `binaries.prisma.sh` is blocked in this sandbox, so no authenticated Postgres-backed route can run here. (2) GitHub Actions log and artifact downloads are blocked, so CI screenshots and recordings cannot be inspected here. Resolve by either allowing the Prisma engine host (or supplying a pre-downloaded engine) for a disposable local database, or by approving a CI-based evidence run with artifacts that can be reviewed. (3) Remaining surfaces (Studio, AI, Autopilot, subscription, onboarding, drawers/dialogs) require implementation work, which was not completed in this pass.
