@@ -81,7 +81,8 @@ describe("runtime and schema guards", () => {
     // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
     // column that records which clock a booking was anchored to, so a legacy row keeps its stored
     // instant and its meaning and no historical row is rewritten or backfilled), the media version
-    // counter (one defaulted integer for strict compare-and-swap), and password recovery (additive
+    // counter (one defaulted integer for strict compare-and-swap), durable media cleanup identity
+    // (two nullable object-reference columns only; no historical asset is rewritten), and password recovery (additive
     // token table, per-account cooldown, and a defaulted session revocation counter), and the
     // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only),
     // and the additive JATA Autopilot foundation (tenant-scoped Autopilot* tables, indexes, and
@@ -151,6 +152,7 @@ describe("runtime and schema guards", () => {
       "20261122000000_agent_notification_recovery_audit",
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
+      "20261125000000_media_storage_identity",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -304,6 +306,22 @@ describe("runtime and schema guards", () => {
       "utf8",
     );
     expect(sql).toContain('ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps durable media cleanup identity nullable, additive, and tenant-addressable", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model MediaAsset {");
+    const media = schema.slice(start, schema.indexOf("\n}", start));
+    expect(media).toContain("storageProvider String?");
+    expect(media).toContain("storageKey      String?  @db.Text");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261125000000_media_storage_identity/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "storageProvider" TEXT');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "storageKey" TEXT');
     expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
   });
 

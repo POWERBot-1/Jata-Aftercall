@@ -120,6 +120,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   for (const key of AI_ENV) {
     if (original[key] === undefined) delete process.env[key];
     else process.env[key] = original[key];
@@ -258,6 +259,9 @@ describe("generating images for a business", () => {
   });
 
   it("blocks generation when the monthly allowance is spent, without calling a provider", async () => {
+    // Keep fixture rows and the quota check in the same UTC month, even when CI runs at midnight.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-15T12:00:00.000Z"));
     mocks.entitlement = null; // Preview allowance: 3 images a month.
     const now = new Date();
     mocks.generations = Array.from({ length: PREVIEW_AI_QUOTA.imagesPerMonth }, (_, index) => ({

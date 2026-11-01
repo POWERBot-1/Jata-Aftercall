@@ -208,5 +208,10 @@
     "status": "NOT_TESTED",
     "acceptance": "",
     "evidence": []
+  },
+  "RELEASE-001": {
+    "status": "NOT_TESTED",
+    "acceptance": "Trace and remediate every release blocker from all ten audit reports on isolated fixtures; prove the domain/email owner gates, durable-media lifecycle, payments/financial integrity, tenant isolation, product journeys, visible controls, accessibility/motion, six viewports, inspectable browser evidence and exact-candidate completeness gate without production changes or weakened assertions.",
+    "evidence": []
   }
 }

@@ -34,7 +34,7 @@ import { logAudit } from "@/lib/audit";
 import { safeUrl } from "@/lib/experience/document";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE, isInlineImageDataUrl } from "@/lib/media/persistence-policy";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_CHARS, humanFileSize, parseImageDataUrl, validateImageBytes, type ImageFacts } from "@/lib/media/imageFormat";
-import { assertCanStore, CONTENT_TYPES_BY_KIND, resolveDurableStorageProvider, type ObjectStorageProvider, type StoredObjectRef } from "@/lib/storage";
+import { assertCanStore, CONTENT_TYPES_BY_KIND, keyBelongsToTenant, resolveDurableStorageProvider, type ObjectStorageProvider, type StoredObjectRef } from "@/lib/storage";
 import { checkStorageQuota, storageQuotaMessage } from "@/lib/media/storageQuota";
 import { randomUUID } from "node:crypto";
 
@@ -71,8 +71,9 @@ async function putDurableUpload(
       contentType: facts.mime,
       body: bytes,
     });
-    if (/^data:/i.test(ref.url) || !ref.key.startsWith(`tenants/${businessId}/`)) {
-      await provider.remove({ key: ref.key }).catch(() => undefined);
+    if (/^data:/i.test(ref.url) || ref.provider !== provider.id || !keyBelongsToTenant(ref.key, businessId)) {
+      // Never ask a provider to delete a reference outside the authenticated tenant's namespace.
+      if (keyBelongsToTenant(ref.key, businessId)) await provider.remove({ key: ref.key }).catch(() => undefined);
       return null;
     }
     return ref;
@@ -273,6 +274,10 @@ export async function POST(req: Request) {
       source,
       label,
       aiGenerationId: typeof body?.aiGenerationId === "string" ? body.aiGenerationId.slice(0, 40) : null,
+      // Preserve the provider identity and tenant-scoped key so later deletion can remove the
+      // durable object as well as its Neon metadata. External URL references remain null.
+      storageProvider: durableRef?.provider ?? null,
+      storageKey: durableRef?.key ?? null,
     };
     // Check the exact row immediately before persistence: aiGenerationId is caller-controlled
     // metadata, even when the image URL itself is a safe path.
@@ -393,6 +398,28 @@ export async function PATCH(req: Request) {
   }
 }
 
+const STORAGE_CLEANUP_UNAVAILABLE_CODE = "media_storage_cleanup_unavailable";
+const STORAGE_CLEANUP_UNAVAILABLE_MESSAGE = "Media cleanup did not complete. Library records were retained; retry after storage is available. Earlier files in a batch may already have been removed.";
+
+/** Remove only explicitly provider-managed objects whose key is inside the row's tenant. */
+async function removeStoredObject(asset: {
+  businessId: string;
+  storageProvider: string | null;
+  storageKey: string | null;
+}): Promise<boolean> {
+  if (asset.storageProvider == null && asset.storageKey == null) return true;
+  if (!asset.storageProvider || !asset.storageKey || !keyBelongsToTenant(asset.storageKey, asset.businessId)) return false;
+  const provider = resolveDurableStorageProvider();
+  if (!provider || provider.id !== asset.storageProvider) return false;
+  try {
+    // R2 DELETE is idempotent, so retrying after a later database failure safely completes cleanup.
+    await provider.remove({ key: asset.storageKey });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function DELETE(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
@@ -406,21 +433,41 @@ export async function DELETE(req: Request) {
     if (generationId) {
       const rows = await prisma.mediaAsset.findMany({
         where: { businessId: params.get("businessId")?.trim() || "", aiGenerationId: generationId },
-        select: { id: true, businessId: true },
+        select: { id: true, businessId: true, storageProvider: true, storageKey: true },
       });
       const first = rows[0];
       if (!first) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
       const guard = await guardTenantMutation(session, first.businessId, "configure");
       if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+      if (rows.some((row) => row.businessId !== first.businessId)) {
+        return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
+      }
+      for (const row of rows) {
+        if (!(await removeStoredObject(row))) {
+          return NextResponse.json(
+            { error: STORAGE_CLEANUP_UNAVAILABLE_MESSAGE, code: STORAGE_CLEANUP_UNAVAILABLE_CODE },
+            { status: 503 },
+          );
+        }
+      }
       const result = await prisma.mediaAsset.deleteMany({ where: { businessId: first.businessId, aiGenerationId: generationId } });
       await logAudit({ actorId: session.userId, action: "MEDIA_DELETED", targetType: "AI_GENERATION", targetId: generationId, metadata: { businessId: first.businessId, count: result?.count ?? rows.length } });
       return NextResponse.json({ ok: true, removed: result?.count ?? rows.length });
     }
 
-    const asset = await prisma.mediaAsset.findUnique({ where: { id }, select: { id: true, businessId: true } });
+    const asset = await prisma.mediaAsset.findUnique({
+      where: { id },
+      select: { id: true, businessId: true, storageProvider: true, storageKey: true },
+    });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const guard = await guardTenantMutation(session, asset.businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+    if (!(await removeStoredObject(asset))) {
+      return NextResponse.json(
+        { error: STORAGE_CLEANUP_UNAVAILABLE_MESSAGE, code: STORAGE_CLEANUP_UNAVAILABLE_CODE },
+        { status: 503 },
+      );
+    }
     await prisma.mediaAsset.delete({ where: { id } });
     await logAudit({ actorId: session.userId, action: "MEDIA_DELETED", targetType: "MEDIA_ASSET", targetId: id, metadata: { businessId: asset.businessId } });
     return NextResponse.json({ ok: true });

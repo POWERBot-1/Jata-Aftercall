@@ -1333,6 +1333,10 @@ model MediaAsset {
   updatedAt  DateTime @updatedAt @default(now())
   // Monotonic compare-and-swap token for media metadata edits; unlike updatedAt, it cannot collide within one millisecond.
   version    Int      @default(0)
+  // Durable-object identity is needed to remove customer bytes when the library row is deleted.
+  // Null for externally hosted URL references and legacy assets that predate this tracking.
+  storageProvider String?
+  storageKey      String?  @db.Text
 
   @@index([businessId])
   @@index([businessId, hash])
