@@ -29,6 +29,13 @@ import { migrationManifest } from "../ci/migration-manifest.mjs";
 // destructive statement, the rehearsal would report a verdict it had not
 // earned. Nothing here needs a database.
 
+test("candidate rehearsal gives the seed a fresh non-production fixture opt-in", () => {
+  const source = readFileSync("scripts/ci/rehearse-candidate-migrations.mjs", "utf8");
+  assert.match(source, /JATA_ALLOW_FIXTURE_SEED:\s*"true"/);
+  assert.match(source, /DEMO_FIXTURE_PASSWORD:\s*randomBytes\(32\)\.toString\("hex"\)/);
+  assert.match(source, /env:\s*seedEnv/);
+});
+
 const ADDITIVE_MEDIA = `-- Media metadata compare-and-swap token: one additive, defaulted integer column only.
 -- Existing rows read as version 0; no historical data is rewritten or backfilled.
 -- Apply this migration before deploying application code that selects/writes MediaAsset.version.
