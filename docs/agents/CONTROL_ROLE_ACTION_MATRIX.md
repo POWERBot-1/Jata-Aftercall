@@ -1,6 +1,6 @@
 # Control-plane six-role authorization policy
 
-**Effective policy: DENY all 90 role × capability cells.** `CONTROL_ROLE_POLICY_APPROVED = false`; protected Control routes remain fail-closed. The owner authorized this policy work and isolated synthetic test identities/disposable fixtures, but did not give role-by-role permissions. No role, capability, grant, production identity or production access is approved by that overall consent. JATA AFTERCALL remains separate from JATA Qi/TANYA-AI.
+**Owner-approved effective policy: DENY all 90 role × capability cells** (owner decision recorded 2026-11-01). `CONTROL_ROLE_POLICY_APPROVED = true` records approval of the denial document only. `CONTROL_ROLE_ACCESS_ENABLED = false` is the independent operational kill switch; protected Control routes remain fail-closed. The owner approved no ALLOW, grant, identity, permission, provisioning, or operational access. JATA AFTERCALL remains separate from JATA Qi/TANYA-AI.
 
 The exact 15×6 matrix, candidate capability semantics, read/write classifications, scope/data restrictions, session/MFA/audit/revocation/emergency controls, expiry gap and owner questions are recorded in `docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md`. This file is a short implementation summary, not a separate source of role grants.
 
@@ -19,7 +19,7 @@ The application policy object explicitly has one `DENY` for each of the 15 canon
 
 ## Authorization and safe technical behavior
 
-- The global approval switch remains false, so authenticated requests receive `POLICY_PENDING` before grant lookup, operational reads, mutation or MFA checks. Unauthenticated requests remain unauthenticated.
+- The documented all-DENY policy is owner-approved, but the independent `CONTROL_ROLE_ACCESS_ENABLED` switch remains false, so authenticated requests receive `POLICY_PENDING` before grant lookup, operational reads, mutation or MFA checks. Unauthenticated requests remain unauthenticated.
 - If an owner later approves an exact ALLOW and a separate implementation authorization is provided, a valid current session, active exact-key grant, exact resource/tenant scope and required MFA remain mandatory. Role name or JWT role alone never authorizes Control access.
 - Current ordinary sessions expire after seven days and `getSession` rechecks the stored user, base role and `sessionVersion`. Current Control MFA uses a user/session-bound 15-minute token. These are technical settings, not an approved role-specific policy; positive Control MFA acceptance is not established while the global gate is closed.
 - `ControlRoleGrant` supports revocation but has **no grant-expiry field**. Grant expiry is BLOCKED pending an owner decision and schema design; session expiry is not grant expiry. Do not invent client-side expiry or relax checks.
@@ -35,10 +35,10 @@ The application policy object explicitly has one `DENY` for each of the 15 canon
 4. Define suspension/reinstatement effects, financial authority, operational recovery, identity/grant/session administration and all unsupported high-impact actions.
 5. Approve MFA freshness, authenticator/recovery/lockout, session duration, grant expiry, revocation latency, emergency access, test-identity custodian and disposable fixture procedure.
 
-Until those decisions and all mandatory acceptance checks are complete, the 90 denials and `CONTROL_ROLE_POLICY_APPROVED = false` remain in effect.
+The owner-approved all-DENY decision is now recorded. Until any future ALLOW decision is separately authorized and all applicable acceptance checks complete, the 90 denials remain in effect and `CONTROL_ROLE_ACCESS_ENABLED = false`.
 
 ## Evidence boundary
 
-The owner approved isolated synthetic identities and disposable fixtures solely for non-production tests. The CI deny-path journey uses an ordinary synthetic session with no Control grant, calls the real built application over HTTP, attempts a valid business status mutation, checks persisted business/audit state and captures `/control` denial screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. It proves only denial behavior and responsiveness of the pending-policy shell, not positive role authorization, enabled-console UI, MFA success/recovery, grant expiry, complete persisted success-audit events or production behavior.
+The historical exact-head CI deny-path journey used a disposable synthetic session with no Control grant, called the built application over HTTP, attempted a business status mutation, checked persisted business/audit state and captured `/control` denial screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. It proves only denial behavior and responsive layout of the access-disabled shell, not positive role authorization, enabled-console UI, MFA success/recovery, grant expiry, successful persisted audit events or production behavior. The owner's latest instruction prohibits creating any new identity, grant or permission; do not rerun that identity-provisioning harness unless separately authorized.
 
 A full role-positive, tenant isolation, MFA/revocation, exact-grant/expiry, persisted audit and authenticated enabled-console acceptance remains **BLOCKED** until the owner supplies exact ALLOW decisions and required policy details. No acceptance is claimed from pure helper tests, mocked routes, unrelated green CI or denial-state screenshots.

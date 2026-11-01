@@ -22,13 +22,13 @@ import { getControlIdentity, requireControlPermission } from "@/lib/control/acce
 import { GET as getControlOverview } from "@/app/api/control/overview/route";
 import { PATCH as patchControlBusiness } from "@/app/api/control/businesses/route";
 
-describe("pending Control role policy fails closed", () => {
+describe("owner-approved all-DENY policy keeps Control access disabled", () => {
   beforeEach(() => {
     fixtures.session = { userId: "fixture-user", sessionVersion: 2 };
     vi.clearAllMocks();
   });
 
-  it("keeps an authenticated identity with a nominal broad grant blocked while owner policy is pending", async () => {
+  it("keeps an authenticated synthetic session blocked after owner approves the all-DENY document", async () => {
     const result = await getControlIdentity();
     expect(result).toEqual({ ok: false, status: 403, code: "POLICY_PENDING" });
     expect(fixtures.grants).not.toHaveBeenCalled();
@@ -57,12 +57,35 @@ describe("pending Control role policy fails closed", () => {
     expect(fixtures.credential).not.toHaveBeenCalled();
   });
 
-  it("denies the direct overview API for an authenticated synthetic session while owner policy is pending", async () => {
+  it("denies the direct overview API for an authenticated synthetic session while operational access is disabled", async () => {
     const response = await getControlOverview();
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "POLICY_PENDING" });
     expect(fixtures.grants).not.toHaveBeenCalled();
     expect(fixtures.credential).not.toHaveBeenCalled();
+  });
+
+  it("denies a cross-tenant business mutation before database lookup, writes, or success audit", async () => {
+    const request = new Request("https://jata.example.test/api/control/businesses", {
+      method: "PATCH",
+      headers: {
+        origin: "https://jata.example.test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        businessId: "foreign-tenant-business",
+        status: "SUSPENDED",
+        confirmation: "SUSPEND",
+        reason: "Synthetic cross-tenant denial case.",
+      }),
+    });
+    const response = await patchControlBusiness(request);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "POLICY_PENDING" });
+    expect(fixtures.grants).not.toHaveBeenCalled();
+    expect(fixtures.credential).not.toHaveBeenCalled();
+    expect(fixtures.transaction).not.toHaveBeenCalled();
+    expect(fixtures.auditWrite).not.toHaveBeenCalled();
   });
 
   it("denies a valid same-origin business mutation before database writes or success audit", async () => {

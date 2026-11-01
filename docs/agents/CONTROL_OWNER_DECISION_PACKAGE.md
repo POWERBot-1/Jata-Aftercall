@@ -1,52 +1,54 @@
 # `/control` owner decision package
 
-**Purpose:** record the conservative effective policy and obtain explicit owner decisions before any capability is enabled. The owner authorized this work and isolated test identities/disposable fixtures, but did not provide role-by-role permissions. This document records a technical deny-all policy, **not an owner-approved ALLOW, provisioning instruction or evidence of positive authorization acceptance**.
+**Purpose:** record the conservative effective policy and its owner decision without enabling any capability. On 2026-11-01 the owner approved DENY for all 90 cells only. The owner did not approve any ALLOW, grant, identity, permission or operational access. The current instruction prohibits creating any such grants/identities/permissions. Earlier CI denial evidence used a disposable synthetic fixture before this instruction and does not grant continuing provisioning authority.
 
 **Repository / PR:** `POWERBot-1/Jata-Aftercall`, PR #78, branch `arena/115a62e1-jata-aftercall`  
 **Baseline reviewed:** `34283dff5aa13579931cbed7dc62c497cec8e753`
 
-**Runtime policy:** `CONTROL_ROLE_POLICY_APPROVED = false` (intentionally unchanged). The effective matrix below explicitly denies all 90 role × capability cells. This does not create any grant or identity and does not enable protected routes.
+**Owner decision recorded:** On 2026-11-01, the owner explicitly approved DENY for every one of the 90 canonical role × capability cells listed below. This is approval of the documented all-DENY policy only; it approves no ALLOW, grant, permission, identity, provisioning, or operational Control access.
+
+**Implementation semantics:** `CONTROL_ROLE_POLICY_APPROVED = true` records that owner decision only. The independent runtime kill switch `CONTROL_ROLE_ACCESS_ENABLED = false` remains closed, so protected routes continue to fail closed. The approved decision does not create any grant or identity and does not enable any route.
 
 ## Decision protocol
 
-The effective matrix is currently **DENY** for every canonical role × capability cell. The owner must explicitly decide any proposed **ALLOW**, identify its exact action, data fields, tenant/resource scope, conditions and test/provisioning method. A blank, ambiguous or partial response remains **DENY**. Approval of the overall work, a role name or a role purpose alone grants no permission.
+The owner has explicitly approved **DENY** for every current canonical role × capability cell. The approved all-DENY matrix is the operative policy decision. It authorizes no access. Any future change to **ALLOW** requires a separate explicit owner decision for that exact cell, with action, data fields, tenant/resource scope, conditions and a non-production test plan, followed by separate implementation authorization and acceptance. A blank, ambiguous or partial change request remains **DENY**.
 
 Even a written ALLOW does not activate an operation. The implementation must be reviewed, the role-policy constant must only be changed under a separate explicit implementation authorization, and the exact approved mapping must be enforced and tested server-side before that capability is usable. Unsupported operations stay denied until implemented and independently verified.
 
 ### Decisions required before any positive-permission test or policy activation
 
 1. Confirm or replace each role’s purpose below; distinguish responsibilities rather than assuming the names define them.
-2. Decide each of the 15 explicit capability keys for each role: ALLOW or DENY. For every ALLOW specify tenant/resource scope, field-level visibility, conditions and whether platform-wide/null scope is prohibited or requires dual approval.
+2. The current 90 DENY decisions are approved. Before any future ALLOW, decide that exact role × capability cell and specify tenant/resource scope, field-level visibility, conditions and whether platform-wide/null scope is prohibited or requires separate dual approval.
 3. Approve or reject the current candidate operations and list business side effects. In particular, define exactly what suspension/reinstatement changes and what it must not change.
 4. Decide whether status-only payment/subscription data, agent/referral counts, commission-ledger metadata, communications state, audit records, system health, identities or any personal data may be seen. Specify minimum necessary fields, redaction and retention.
 5. Define MFA enrollment, authenticator/freshness requirements, lockout, recovery, lost-device handling, session lifetime and reauthentication for sensitive actions. Existing TOTP implementation is a technical capability, not an approved policy.
-6. Confirm the non-production identity/grant approver and custodian; specify test tenant fixtures, grant expiry/revocation, evidence handling, and separation from production. Current authorization permits only isolated synthetic identities and disposable fixtures for deny-path tests. It does not permit Control capability grants, production identities, grants, credentials or data.
+6. The current owner instruction prohibits creating grants, identities, permissions or ALLOW rules. Do not provision a new identity or grant for this all-DENY decision. Any future positive acceptance needs separate written authorization for the exact non-production test principals, fixture data, grant/scope/expiry, custodian, evidence handling and production separation; none is implied here.
 7. Define emergency access and recovery, if any: trigger, named approvers, dual control, duration, least privilege, alerting, audit, revocation and post-incident review. There is no current break-glass route or bootstrap bypass.
 8. Decide audit-read permissions and sensitive-read auditing separately from mutation auditing; define retention, legal/privacy limits, export and review procedure.
 
-## Proposed policy matrix — PROPOSED — OWNER APPROVAL REQUIRED
+## Owner-approved effective policy matrix — 90 DENY decisions; no ALLOW
 
-This is a recommendation, not an approved authorization policy and not a reason to enable any route. The available source records tentative role labels and candidate operations, but no owner-approved role duties, business need, field scope, tenant/resource scope, separation of duties, or authorized test-grant process. Assigning an ALLOW based only on a role name would invent consent. Accordingly, the defensible proposal for every cell is **DENY pending a specific owner decision**. The all-DENY runtime remains a separate safety baseline; this proposal does not make the role policy complete or accepted.
+The owner explicitly approved this all-DENY authorization policy on 2026-11-01. Role duties and operational needs remain unresolved; the approval does not infer them from names. No route is enabled, and no grant, identity, permission, or operational access is authorized. The separate runtime access kill switch remains false.
 
 | Capability | SUPER_ADMIN | PLATFORM_ADMIN | FINANCE_ADMIN | SUPPORT_ADMIN | SECURITY_ADMIN | READ_ONLY_AUDITOR |
 |---|---|---|---|---|---|---|
-| `businesses.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `businesses.suspend` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `businesses.reinstate` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `subscriptions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `payments.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `agents.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `agents.manage` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `commissions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `communications.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `communications.recover` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `providers.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `providers.configure` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `audit.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `exceptions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
-| `system.health.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `businesses.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `businesses.suspend` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `businesses.reinstate` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `subscriptions.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `payments.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `agents.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `agents.manage` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `commissions.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `communications.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `communications.recover` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `providers.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `providers.configure` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `audit.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `exceptions.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
+| `system.health.read` | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY | APPROVED DENY |
 
-**Cell semantics:** each of these 90 proposals permits no route, action, field, business, resource, tenant, null/global scope, side effect, or delegation. Reads and writes are both denied. No PII, payment detail, provider secret, commission amount, message body, audit export, or cross-tenant aggregate is exposed. There is no role inheritance, wildcard, self-approval, or exception. A denied request must not mutate state or create a misleading success audit record. MFA/session checks remain mandatory prerequisites but do not turn a denial into a grant. Any owner-requested ALLOW must replace the exact cell only after a written rationale, exact action and field list, scope, preconditions, side effects, approvals/separation-of-duties, MFA freshness, audit contract, and isolated test plan are recorded. Blank or ambiguous cells stay DENY.
+**Cell semantics:** each of these 90 owner-approved DENY cells permits no route, action, field, business, resource, tenant, null/global scope, side effect, or delegation. Reads and writes are both denied. No PII, payment detail, provider secret, commission amount, message body, audit export, or cross-tenant aggregate is exposed. There is no role inheritance, wildcard, self-approval, or exception. A denied request must not mutate state or create a misleading success audit record. MFA/session checks remain mandatory prerequisites but do not turn a denial into a grant. Any owner-requested ALLOW must replace the exact cell only after a written rationale, exact action and field list, scope, preconditions, side effects, approvals/separation-of-duties, MFA freshness, audit contract, and isolated test plan are recorded. Blank or ambiguous cells stay DENY.
 
 | Role | Proposed role-specific rationale (not inferred from identifier) |
 |---|---|
@@ -58,6 +60,8 @@ This is a recommendation, not an approved authorization policy and not a reason 
 | `READ_ONLY_AUDITOR` | No audit charter, record/field scope, tenant boundary, sensitive-read policy, or export mandate is supplied; “read-only” is not universal access. |
 
 ### High-risk decisions — deny unless separately confirmed
+
+The approved 90-cell DENY matrix closes the current capability decisions. Grant/identity administration, other-user session revocation, emergency access and unrestricted audit export are not capabilities in that matrix and remain unsupported and unauthorized separately; this owner decision does not add routes or create principals.
 
 | Decision | Operational need to establish | Security/operational impact if allowed | Safer alternative pending approval | Proposal |
 |---|---|---|---|---|
@@ -215,7 +219,7 @@ Owner decisions still required: whether these lifetimes and methods are acceptab
 
 ## Safe six-role acceptance plan — gated on owner approval
 
-This is a **test specification**. Current authorization permits isolated synthetic identities and disposable fixtures only for deny-path testing. Do not create Control grants or exercise a positive permission until its owner decision and isolated provisioning method are approved.
+This is a **future test specification**. The current owner instruction prohibits creating any new identities, grants or permissions. The earlier exact-head CI denial journey used an isolated synthetic session before this instruction and is historical evidence only. Do not rerun a journey that provisions an identity or create Control grants unless the owner separately authorizes that exact non-production test fixture. No positive permission may be exercised under the current decision.
 
 For the current deny-path journey, use only a disposable database and an isolated synthetic ordinary session with no Control grant; verify `/control`, protected APIs and mutations return an explicit denial, do not mutate fixtures and do not emit success audit events. For future positive acceptance (only after explicit role decisions), use synthetic businesses `tenant-a` and `tenant-b`, synthetic records, and one isolated test identity per approved role. Provision only exact approved grant keys/scopes through the approved mechanism; record no production credentials or PII. Test:
 
@@ -231,7 +235,7 @@ Acceptance evidence must identify test commit/source SHA, fixture schema identit
 
 ## Owner response record
 
-Please return one decision record per role and capability with:
+The owner decision on 2026-11-01 records DENY for all 90 current cells. For any future request to change a cell to ALLOW, provide a separate owner decision record for that exact role and capability with:
 
 - `Decision ID`, approver identity/authority, date and scope of approval.
 - Role purpose: confirm/rewrite/reject the tentative description.
@@ -241,4 +245,4 @@ Please return one decision record per role and capability with:
 - Audit event/read policy, retention, viewer/export access and personal-data handling.
 - Non-production provisioning authority and isolated test procedure.
 
-Until exact owner decisions and all mandatory acceptance evidence are recorded, preserve the current status: all role/action permissions remain DENY, `CONTROL_ROLE_POLICY_APPROVED` stays false, protected Control routes return `POLICY_PENDING`, and no positive or six-role authenticated acceptance is claimed.
+The all-DENY policy is owner-approved and `CONTROL_ROLE_POLICY_APPROVED` is true. `CONTROL_ROLE_ACCESS_ENABLED` remains false, all 90 capabilities remain denied, protected Control routes return `POLICY_PENDING`, and no positive or six-role authenticated acceptance is claimed. Approval of these denials does not waive the remaining acceptance evidence.

@@ -192,7 +192,7 @@ if (process.exitCode !== 2) {
       page.on("pageerror", (error) => consoleErrors.push(error.message));
       page.on("console", (message) => { if (message.type() === "error") consoleErrors.push("console.error"); });
       const response = await page.goto(`${baseUrl}/control`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      await page.waitForFunction(() => document.body.innerText.includes("Control access pending owner policy"), { timeout: 15_000 });
+      await page.waitForFunction(() => document.body.innerText.includes("Control access disabled by approved all-DENY policy"), { timeout: 15_000 });
       const state = await page.evaluate(() => ({
         text: document.body.innerText,
         viewportWidth: window.innerWidth,
@@ -200,7 +200,7 @@ if (process.exitCode !== 2) {
         heading: document.querySelector("h1")?.textContent?.trim() ?? "",
       }));
       const correctPending = response?.status() === 200
-        && state.heading === "Control access pending owner policy"
+        && state.heading === "Control access disabled by approved all-DENY policy"
         && state.text.includes("No operational data or administrative action is available.")
         && !state.text.includes(`Synthetic Control Denial ${runId}`)
         && !state.text.includes("ControlConsole");
@@ -256,7 +256,7 @@ if (process.exitCode !== 2) {
       testCommit: process.env.GITHUB_SHA ?? "local-uncommitted",
       generatedAt: new Date().toISOString(),
       environment: "disposable local PostgreSQL; synthetic ordinary session; no Control grant; no production credentials/data",
-      policy: "CONTROL_ROLE_POLICY_APPROVED=false; no role/capability ALLOW cells",
+      policy: "CONTROL_ROLE_POLICY_APPROVED=true (owner-approved all-DENY document); CONTROL_ROLE_ACCESS_ENABLED=false; no role/capability ALLOW cells",
       checks: results,
       viewports: viewportCases.map(([width, height]) => `${width}x${height}`),
       limitations: [

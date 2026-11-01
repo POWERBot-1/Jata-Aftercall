@@ -90,8 +90,8 @@ describe("direct control page and business APIs", () => {
   it("renders the explicit pending-policy state rather than the operational console", async () => {
     fixtures.state.accessFailure = { status: 403, code: "POLICY_PENDING" };
     const page = await ControlPage() as any;
-    expect(page.props.title).toBe("Control access pending owner policy");
-    expect(page.props.subtitle).toContain("No role/action permission mapping has been approved");
+    expect(page.props.title).toBe("Control access disabled by approved all-DENY policy");
+    expect(page.props.subtitle).toContain("Policy approval does not enable operational access");
   });
 
   it("denies direct cross-tenant mutation before touching the database", async () => {

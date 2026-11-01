@@ -1,12 +1,13 @@
 import { CONTROL_PERMISSIONS, CONTROL_ROLE_NAMES, isControlPermission, isControlRole, type ControlPermission, type ControlRoleName } from "@/lib/control/permissions";
 
 /**
- * Overall consent authorizes the least-privilege implementation work, not any particular ALLOW.
- * Until a role's duties and exact tenant/data scope are substantiated, the effective assignment is
- * DENY. This switch therefore stays false; an ALLOW requires a separate explicit owner decision
- * and acceptance evidence.
+ * Owner approval records the explicit all-DENY matrix (90 cells) dated 2026-11-01.
+ * This is approval of the documented denial policy only—not an ALLOW, grant, or access switch.
  */
-export const CONTROL_ROLE_POLICY_APPROVED = false as const;
+export const CONTROL_ROLE_POLICY_APPROVED = true as const;
+
+/** Operational Control access is a separate, deliberately closed kill switch. */
+export const CONTROL_ROLE_ACCESS_ENABLED = false as const;
 
 /**
  * Provisional role descriptions only. No capability follows from a role name.
@@ -23,7 +24,7 @@ export const CONTROL_ROLE_POLICY = [
 
 export type ControlCapabilityDecision = "ALLOW" | "DENY";
 
-// The conservative effective matrix is explicit at the role level. Shared all-deny cells are
+// The owner-approved effective matrix is explicit at the role level. Shared all-deny cells are
 // intentional: no role purpose, tenant scope, sensitive-data need, or high-impact permission was
 // supplied with sufficient precision to justify an ALLOW. New roles/capabilities are denied unless
 // deliberately added here, and unknown values fail closed in isControlCapabilityAllowed().
@@ -54,13 +55,13 @@ export function filterControlRolePermissions(role: unknown, permissionKeys: unkn
 }
 
 export const CONTROL_ROLE_POLICY_COLUMNS = [
-  { label: "Read", value: "DENY for all six roles until exact purpose, fields and tenant/resource scope are established." },
-  { label: "Write", value: "DENY for all six roles; supported and unsupported mutations remain unavailable." },
+  { label: "Read", value: "Owner-approved DENY for all six roles; no field or tenant/resource access is enabled." },
+  { label: "Write", value: "Owner-approved DENY for all six roles; supported and unsupported mutations remain unavailable." },
   { label: "Approval", value: "DENY. No approval, dual-control or financial authority is inferred." },
   { label: "Financial", value: "DENY. Amounts, adjustments, commission policy, refunds and payouts are unavailable." },
   { label: "Tenant scope", value: "No scope assigned. Tenant-keyed access and platform-wide/null scope are both denied." },
   { label: "Sensitive administration", value: "DENY: identities, grants, PII, provider configuration and recovery are unavailable." },
-  { label: "MFA", value: "DENY while the global policy gate remains false. If a future ALLOW is approved, existing protected-route checks require verified TOTP and a signed 15-minute MFA session bound to user and session version." },
+  { label: "MFA", value: "DENY while operational access remains disabled. Any separately approved future ALLOW must still satisfy verified TOTP and a signed 15-minute MFA session bound to user and session version." },
   { label: "Audit", value: "DENY audit-data visibility. Any future sensitive operation must emit an immutable, correctly attributed outcome in the same transaction where applicable; denials must never be represented as success." },
 ] as const;
 
@@ -71,7 +72,8 @@ export const CONTROL_POLICY_BOUNDARIES = [
     items: [
       "The six canonical role identifiers and 15 capability keys exist in the repository.",
       "Control access must use exact database grants, deny by default, enforce tenant/resource scope on the server, and re-check current grants per request.",
-      "Protected routes fail closed while CONTROL_ROLE_POLICY_APPROVED is false; a future role/capability ALLOW must also pass current-session, active-grant, exact-scope and short-lived MFA checks.",
+      "Protected routes fail closed while CONTROL_ROLE_ACCESS_ENABLED is false. CONTROL_ROLE_POLICY_APPROVED records approval of the all-DENY document only and never enables access; any future ALLOW requires a separate owner decision and implementation authorization.",
+      "Any separately authorized future operation must still pass current-session, active-grant, exact-scope, server-side tenant checks and short-lived MFA.",
       "Supported administrative mutations require server-side validation, confirmation/reason where applicable, and append-only audit evidence.",
       "No role name, sign-in, page navigation or UI visibility alone grants a capability.",
     ],
@@ -80,8 +82,8 @@ export const CONTROL_POLICY_BOUNDARIES = [
     title: "Effective least-privilege policy",
     status: "All 90 role/capability cells are DENY",
     items: [
-      "The overall consent authorizes policy work but does not specify any role's individual duties, permitted data fields, tenant relationship or high-impact authority.",
-      "Every capability is explicitly DENY for every canonical role until its precise action, fields, scope and owner decision are documented; there are no wildcard, implicit, inherited or platform-wide grants.",
+      "On 2026-11-01 the owner explicitly approved the all-DENY policy for all 90 role/capability cells; no role duties or operational ALLOW were approved.",
+      "Every capability is explicitly DENY for every canonical role; there are no wildcard, implicit, inherited or platform-wide grants. Changing any cell to ALLOW requires a separate exact owner decision and implementation authorization.",
       "Unknown roles, unknown capabilities, missing grants, empty/revoked grants, invalid or expired sessions, missing/invalid MFA and unsupported routes remain denied.",
     ],
   },

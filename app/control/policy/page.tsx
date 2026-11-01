@@ -9,11 +9,11 @@ export default function ControlPolicyPage() {
   return (
     <WorkspaceSetupShell
       title="Control role and permission matrix"
-      subtitle="Proposed responsibilities are descriptive only. This is not an approved grant policy or a provisioning instruction."
+      subtitle="The owner approved DENY for all 90 role/capability combinations. This approval is not an ALLOW, grant, or provisioning instruction."
       backHref="/control/sign-in"
       backLabel="Control sign in"
       width="xwide"
-      meta={<span className="ws-pill" data-tone="draft">OWNER APPROVAL PENDING · NO ROLE GRANTS</span>}
+      meta={<span className="ws-pill" data-tone="draft">ALL 90 DENIED · OPERATIONAL ACCESS DISABLED</span>}
     >
       <div className="ws-stack">
         <section className="ws-panel" aria-labelledby="matrix-title">
@@ -49,7 +49,7 @@ export default function ControlPolicyPage() {
         <section className="ws-panel" aria-labelledby="capabilities-title">
           <p className="ws-kicker">Exact capability vocabulary · 90 effective decisions</p>
           <h2 id="capabilities-title" className="ws-panel__title">Every role/capability cell is denied</h2>
-          <p className="ws-muted">Role names alone grant nothing. All 15 recognized capabilities are explicitly DENY for all six roles. The global approval gate remains false; this display does not create grants or enable any route.</p>
+          <p className="ws-muted">The owner approved all 90 DENY decisions. `CONTROL_ROLE_POLICY_APPROVED` records that document decision only; the separate `CONTROL_ROLE_ACCESS_ENABLED` gate remains false. This display does not create identities, permissions or grants, and does not enable any route.</p>
           <div className="mt-4 overflow-x-auto rounded-lg border border-[color:var(--ws-border)]" tabIndex={0} aria-label="Scrollable six-role capability denial matrix">
             <table className="w-full min-w-[900px] border-collapse text-left text-xs">
               <caption className="sr-only">All 90 role by capability policy decisions are deny.</caption>
