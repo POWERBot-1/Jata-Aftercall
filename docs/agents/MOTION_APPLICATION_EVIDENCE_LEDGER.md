@@ -419,3 +419,51 @@ Development-only fixture of the **real** `RegisterForm` and `CheckoutForm` with 
 - Dev-console hydration warning (`caret-color: transparent` on theme radios): not in source. Playwright's screenshot `caret: "hide"` option adds that style, so the warning is probably produced by capture tooling. **Not proven**; the captures here use `caret: "initial"`.
 
 **Status:** theme preservation PASS for computed styles and public routes. Authenticated routes (dashboard, POS, Studio, AI, Autopilot) NOT TESTED on this audit: they need the database. Homepage pixel stability: NOT VERIFIED (nondeterministic render, unresolved).
+
+## Phase 7 — Checkout and payment-state motion (code SHA 2232d95)
+
+**Verdict: checkout callback states PASS (fixture + real signed-out route). Authenticated, database-backed payment journeys BLOCKED. Autopilot NOT STARTED.**
+
+Source changes in this commit:
+- `components/checkout/PaymentCallbackClient.tsx` holds the real callback UI; `app/checkout/callback/page.tsx` re-exports it. Verification logic unchanged (`/api/paystack/verify`, server decides PAID plus subscription ACTIVE).
+- `lib/checkoutStatus.ts`: `REFUNDED` is its own terminal state (`refunded`, no polling, no retry). `FAILED` unchanged.
+- Motion: `jata-state-enter` state block; indeterminate `jata-publish-progress` bar only while verifying or re-checking. Reduced motion removes state animations (`jata-state-in` 1 normal / 0 reduced; bar sweep `none`).
+- Duplicate-submit: `CheckoutForm` and `RegisterForm` use a same-task `inFlight` ref lock plus `loading`, released in `finally`. Before fix, three synchronous activations sent 3 checkout and 3 register requests. After fix, 1 and 1.
+- Dev fixture `/dev/payment-callback-fixture` (404 in production; baseline `main` also returns 404 for it). Fictional outcomes only; fails closed on other `/api` calls; no real account or subscription created.
+
+Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/checkout-payment/`
+- Capture: `/tmp/cap/checkout.mjs` (exit 0), `report.json`, 16 callback PNGs (8 states × 390×844 and 1366×768, labelled `callback-*`, fixture) and 2 real-route PNGs (`real-callback-signed-out-{main,pr}-390x844.png`).
+- Callback rows: 48 (8 states × 6 widths), 0 page errors, 0 horizontal overflow.
+- Pending re-check: 2 calls at first pending, 3 calls after 6 s, confirmed view not shown.
+- Keyboard (390×844, callback failed): 12 stops, 3 non-focusable items reported.
+- Duplicate submit (synchronous triple-click): checkout failure 1 request; register 1 request.
+- Real route signed-out (`FIXTURE-REAL-ROUTE`): both `main` and PR render "Sign in to check this payment", 0 uncaught errors, two expected 401 responses from the unauthenticated verify call.
+- Opened and inspected at 390×844: `callback-paid`, `callback-processing`, `callback-refunded`, `real-callback-signed-out-pr`. Paid view says "Payment confirmed" only because the fixture supplies a verified response, and carries a simulated notice. Refunded view shows no success and no retry.
+
+Commands and exit codes (committed tree `2232d95`, dev servers stopped):
+- `npx tsc --noEmit`: exit 2. Three errors, all in Prisma-generated code (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). Environment BLOCKED (Prisma client not generated).
+- `npx vitest run` (no DB): exit 1. 344 files passed, 1 failed, 36 skipped. Tests 4060 passed, 1 failed, 303 skipped of 4364. The one failure is `autopilot-phase1-hardening` Priority 1 (`Prisma.dmmf` undefined; Prisma not generated). Environment BLOCKED.
+- Targeted: `checkout-payment-motion` 15/15; `pos-payment-confirmation` 12/12; `next-env-build-mode` 3/3 (passes on the clean tree).
+- `npx eslint` on changed files: exit 0, 0 errors, 1 warning (`PaymentCallbackClient.tsx` `set-state-in-effect`), pre-existing on `main`.
+
+Findings and open items:
+- Registration failure still shows the server message twice (field and form level). Pre-existing; not changed in this pass.
+- Dev-only hydration warning on the theme radio is pre-existing and not caused by this change.
+- Cancelled-outcome request count cannot be observed after navigation; verified by URL and on-screen state instead.
+- Authenticated payment journey (real `verify` with a DB-backed subscription, webhook, entitlement) BLOCKED: Prisma binaries cannot be generated in this sandbox.
+- Subscription/plan selection on `/pricing` inside the fixture, onboarding progress, and the Autopilot fixture are NOT STARTED in this pass.
+- CI status: GitHub Actions logs cannot be fetched from this sandbox; check with `gh pr checks 79`.
+
+**Status**
+| Criterion | Result |
+|---|---|
+| Callback states distinct (paid, processing, failed, refunded, cancelled, error, signin, activating) at 6 widths | PASS (fixture, 48 rows) |
+| No fake success: success only from server verification | PASS (code and fixture; source unchanged) |
+| Pending re-check, no confirmed view while pending | PASS (fixture) |
+| Duplicate submit prevented (checkout, register) | PASS (fixture, synchronous triple-click) |
+| Reduced motion honoured | PASS (fixture computed styles) |
+| Keyboard and visible focus on the callback | PASS (fixture, 12 stops; 3 non-focusable items noted) |
+| No horizontal overflow, no page errors | PASS (fixture) |
+| Real route signed-out behaviour matches `main` | PASS |
+| Authenticated real payment and subscription activation journey | BLOCKED (Prisma) |
+| Autopilot fixture | NOT STARTED |
