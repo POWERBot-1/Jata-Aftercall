@@ -1,26 +1,26 @@
 # `/control` owner decision package
 
-**Purpose:** obtain explicit owner decisions for the proposed six-role control plane before any role/action policy, privileged test identity or grant is enabled. This is a review worksheet, **not an authorization, approval, role description, provisioning instruction or evidence of acceptance**.
+**Purpose:** record the conservative effective policy and obtain explicit owner decisions before any capability is enabled. The owner authorized this work and isolated test identities/disposable fixtures, but did not provide role-by-role permissions. This document records a technical deny-all policy, **not an owner-approved ALLOW, provisioning instruction or evidence of positive authorization acceptance**.
 
 **Repository / PR:** `POWERBot-1/Jata-Aftercall`, PR #78, branch `arena/115a62e1-jata-aftercall`  
-**Application-code source reviewed:** `d842777bc3e4a3cd15a9f8dec0c15a1210a1764c`  
-**Documentation head at preparation:** `1842c60ab14e70ac0775d1827bc2092bb9c6e0d2`  
-**Runtime policy:** `CONTROL_ROLE_POLICY_APPROVED = false`. Protected Control routes remain fail-closed. This document does not change that constant or any route, permission, database record, identity, session or grant.
+**Baseline reviewed:** `34283dff5aa13579931cbed7dc62c497cec8e753`
+
+**Runtime policy:** `CONTROL_ROLE_POLICY_APPROVED = false` (intentionally unchanged). The effective matrix below explicitly denies all 90 role × capability cells. This does not create any grant or identity and does not enable protected routes.
 
 ## Decision protocol
 
-For every proposed role × capability cell, the owner must explicitly choose **ALLOW** or **DENY**, identify the applicable tenant/resource scope, define the data fields/actions, and authorize the safe test/provisioning method. A blank, ambiguous or partial decision means **OWNER DECISION REQUIRED; deny by default**. Approval of a role name or role purpose alone grants no permission.
+The effective matrix is currently **DENY** for every canonical role × capability cell. The owner must explicitly decide any proposed **ALLOW**, identify its exact action, data fields, tenant/resource scope, conditions and test/provisioning method. A blank, ambiguous or partial response remains **DENY**. Approval of the overall work, a role name or a role purpose alone grants no permission.
 
 Even a written ALLOW does not activate an operation. The implementation must be reviewed, the role-policy constant must only be changed under a separate explicit implementation authorization, and the exact approved mapping must be enforced and tested server-side before that capability is usable. Unsupported operations stay denied until implemented and independently verified.
 
-### Decisions required before any authenticated six-role test
+### Decisions required before any positive-permission test or policy activation
 
 1. Confirm or replace each role’s purpose below; distinguish responsibilities rather than assuming the names define them.
 2. Decide each of the 15 explicit capability keys for each role: ALLOW or DENY. For every ALLOW specify tenant/resource scope, field-level visibility, conditions and whether platform-wide/null scope is prohibited or requires dual approval.
 3. Approve or reject the current candidate operations and list business side effects. In particular, define exactly what suspension/reinstatement changes and what it must not change.
 4. Decide whether status-only payment/subscription data, agent/referral counts, commission-ledger metadata, communications state, audit records, system health, identities or any personal data may be seen. Specify minimum necessary fields, redaction and retention.
 5. Define MFA enrollment, authenticator/freshness requirements, lockout, recovery, lost-device handling, session lifetime and reauthentication for sensitive actions. Existing TOTP implementation is a technical capability, not an approved policy.
-6. Name the non-production test-identity/grant approver and custodian; specify test tenant fixtures, creation/deletion, grant expiry/revocation, evidence handling, and separation from production. Until this is approved, do not create role identities or grants, even in an ad hoc test environment.
+6. Confirm the non-production identity/grant approver and custodian; specify test tenant fixtures, grant expiry/revocation, evidence handling, and separation from production. Current authorization permits only isolated synthetic identities and disposable fixtures for deny-path tests. It does not permit Control capability grants, production identities, grants, credentials or data.
 7. Define emergency access and recovery, if any: trigger, named approvers, dual control, duration, least privilege, alerting, audit, revocation and post-incident review. There is no current break-glass route or bootstrap bypass.
 8. Decide audit-read permissions and sensitive-read auditing separately from mutation auditing; define retention, legal/privacy limits, export and review procedure.
 
@@ -57,29 +57,61 @@ No role-specific route assignment is currently approved. The routes below are th
 | `GET /api/control/mfa/status`, `POST /api/control/mfa/enroll`, `POST /api/control/mfa/verify` | Authenticated Control identity; enrollment/verification require explicit read grant after policy gate. | Encrypted TOTP enrollment and a short-lived MFA session. | Approve authenticators, enrollment timing, recovery, lockout, re-verification, support and audit policy. Do not treat implemented TOTP as a complete owner-approved MFA policy. |
 | User/grant administration, another user’s session revoke, agent status writes, communications recovery, provider configuration, financial mutation/refund/payout | No supported route is exposed by the current Control implementation for these operations. | Not available. | **Remain denied.** If requested, require a separate explicit scope, business/effect analysis, design, authorization review and tests before implementation. |
 
-### Capability decision sheet
+### Capability semantics, classification and effective decisions
 
-All cells are currently **OWNER DECISION REQUIRED**. The values below are deliberately not ALLOW defaults. For each cell, replace only after owner review with `ALLOW` or `DENY`, and add a reference to the written decision, data scope and any conditions. This worksheet itself must not be used to provision grants.
+**Policy result:** all 90 role × capability cells are **DENY**. This is the implemented least-privilege default because the owner's overall approval did not specify per-role duties, exact data needs, or tenant/resource scopes. It is not an owner-specific grant decision. There are no ALLOW cells, wildcard/inherited permissions or global-scope exceptions. The global policy switch remains false, so the protected routes reject before consulting grants or MFA.
 
-| Explicit capability key | SUPER_ADMIN | PLATFORM_ADMIN | FINANCE_ADMIN | SUPPORT_ADMIN | SECURITY_ADMIN | READ_ONLY_AUDITOR |
+| Capability | Read/write classification | Candidate semantics (not enabled) | Scope and sensitive-data restrictions | Effective decision |
+|---|---|---|---|---|
+| `businesses.read` | READ | Business name, slug, category, status, publication flag and timestamps; pagination/search. | Business-scoped only if later approved; never implicit global. No customer PII is needed by the current selector. | DENY |
+| `businesses.suspend` | WRITE / destructive | Change one business status to SUSPENDED after exact confirmation, reason, status precondition, rate limit and live grant recheck. | Exact business tenant only. Effects on bookings, publishing, subscriptions, payments, agents and users must be clarified; no side effect is authorized. | DENY |
+| `businesses.reinstate` | WRITE / destructive | Change one suspended business status to ACTIVE after exact confirmation, reason, status precondition, rate limit and live grant recheck. | Exact business tenant only. Reinstatement effects and approval/dual-control requirements are unresolved. | DENY |
+| `subscriptions.read` | READ | Subscription status and record metadata from the authoritative store. | Business-associated only if approved. No amount, payment instrument or customer identity is implied. | DENY |
+| `payments.read` | READ / financial-sensitive | Payment status and record metadata only; current selector withholds amount, reference, provider ID and customer identity. | Business-associated only if approved. No refund, adjustment, reconciliation, payout or amount visibility. | DENY |
+| `agents.read` | READ / personal-data-sensitive | Agent/application/referral status metadata; names, phone numbers and user identifiers are withheld. | Source lacks a tenant key. Platform-wide access is denied; no tenant inference or cross-tenant access. | DENY |
+| `agents.manage` | WRITE / unsupported | No Control mutation route is supported. | Denied regardless of role; requires separate design, scope, side-effect and owner review. | DENY |
+| `commissions.read` | READ / financial-sensitive | Entry type and timestamps only; amount, currency, identity, payable state and eligibility are withheld. | Business/payment relation only if available and approved. No rate, calculation, adjustment, balance or payout policy. | DENY |
+| `communications.read` | READ / personal-data-sensitive | Delivery state/counts only; message body and destination are not authorized. | Source does not provide safe tenant scope for all rows; global access denied. | DENY |
+| `communications.recover` | WRITE / unsupported | No Control replay/recovery operation is supported. | Denied; could duplicate external effects. Requires separate idempotency and safety design. | DENY |
+| `providers.read` | READ / security-sensitive | No authoritative provider probe or credential/configuration view is available in the Control module. | Denied; no secrets, health claims or cross-tenant provider data. | DENY |
+| `providers.configure` | WRITE / security-sensitive / unsupported | No Control provider-configuration route is supported. | Denied; no secret rotation or external provider change. | DENY |
+| `audit.read` | READ / security-sensitive | Actor ID/role, action, target, scope, outcome, reason, before/after, metadata, correlation and timestamp fields. | Tenant/resource filtering only where proven; platform-wide audit visibility, export, retention and sensitive-read policy unresolved. | DENY |
+| `exceptions.read` | READ / security-sensitive | Aggregated operational exceptions where available; no unsupported inferred metrics. | Source-specific scope must be proven. No global access or fabricated health result. | DENY |
+| `system.health.read` | READ / security-sensitive | Only authoritative app/service availability signals; never secrets or configuration. | Platform-wide by nature, but not authorized. No probes or health response is inferred. | DENY |
+
+### Complete role × capability matrix (90 decisions)
+
+Each cell is an explicit effective **DENY**. A future ALLOW requires a written owner decision for that exact role/capability, action and data scope, plus separate implementation authorization and acceptance evidence. No role name grants access.
+
+| Capability | SUPER_ADMIN | PLATFORM_ADMIN | FINANCE_ADMIN | SUPPORT_ADMIN | SECURITY_ADMIN | READ_ONLY_AUDITOR |
 |---|---|---|---|---|---|---|
-| `businesses.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `businesses.suspend` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `businesses.reinstate` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `subscriptions.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `payments.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `agents.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `agents.manage` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `commissions.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `communications.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `communications.recover` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `providers.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `providers.configure` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `audit.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `exceptions.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
-| `system.health.read` | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED | OWNER DECISION REQUIRED |
+| `businesses.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `businesses.suspend` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `businesses.reinstate` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `subscriptions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `payments.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `agents.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `agents.manage` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `commissions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `communications.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `communications.recover` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `providers.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `providers.configure` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `audit.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `exceptions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `system.health.read` | DENY | DENY | DENY | DENY | DENY | DENY |
 
-**Explicit deny-until-authorized boundary:** there are no role defaults. Capability keys without a route remain unavailable even if the owner elects a desired future policy; implementation and verification are prerequisites. Never infer platform-wide scope from `scopeBusinessId = null`; it requires an explicit, reviewed grant after approved policy and provisioning.
+### Global scope, sensitive data, audit, MFA, revocation and emergency controls
+
+- **Role separation:** the six role names do not establish responsibility. Confirm purpose, boundaries and any incompatible duties for each. No role inherits another role's access.
+- **Tenant scope:** no scope is assigned. Tenant-keyed capabilities would require an exact business/resource binding; null/global scope is denied. Agent, communications, provider, exception, audit and health data with missing/unsafe tenant keys remain denied.
+- **Sensitive data:** no PII, payment amounts/references, provider secrets, personal contact details, commission amounts/eligibility or cross-tenant aggregates are authorized. Define minimum fields and redaction before considering access.
+- **MFA/session:** ordinary JWT session is 7 days and revalidated against the current user role and `sessionVersion`; existing protected Control routes require an MFA token bound to user/session version and limited to 15 minutes. Those technical controls are not policy approval. Owner must decide MFA freshness, authenticators, recovery, reauthentication, session lifetime and revocation latency.
+- **Grant lifecycle:** `ControlRoleGrant` has revocation but no grant-expiry field. Grant expiry is **BLOCKED** pending a schema/design decision; do not emulate expiry client-side or treat session expiry as grant expiry. Unknown role/capability, missing/empty/revoked grant, invalid/expired session, missing/invalid MFA, unsupported operation and pending policy all deny.
+- **Audit:** current implementation includes append-only event support for selected reads/mutations, but complete persisted application-event coverage is not proven. Any future operation requires correctly attributed outcome, actor/role, scope, target, time, reason/correlation and relevant before/after in a durable event; mutation and success audit must commit/roll back together. A denial must never create a misleading success record. Decide sensitive-read audit, denial-event policy, retention, redaction and export.
+- **Revocation/emergency:** self-session revocation increments `sessionVersion`; a separate grant revocation is checked on requests if policy is enabled. Define required revocation latency and emergency-access handling. No break-glass path or bootstrap bypass exists; do not add one without a separate decision.
+- **Unsupported/high-impact operations:** agent management, communications recovery, provider configuration, user/grant administration, other-user session revocation, refunds, payout, commission adjustment and financial mutation remain denied and unimplemented.
+
 
 ## Cross-cutting data and security decisions
 
@@ -113,9 +145,9 @@ Owner decisions still required: whether these lifetimes and methods are acceptab
 
 ## Safe six-role acceptance plan — gated on owner approval
 
-This is a **test specification only**. Do not create these identities, sessions or grants until the owner approves the role/action mapping and an isolated provisioning method.
+This is a **test specification**. Current authorization permits isolated synthetic identities and disposable fixtures only for deny-path testing. Do not create Control grants or exercise a positive permission until its owner decision and isolated provisioning method are approved.
 
-After authorization, use a disposable/non-production database with synthetic businesses `tenant-a` and `tenant-b`, synthetic records, and one isolated test identity per approved role. Provision only the exact approved grant keys and scopes through the approved mechanism; record no production credentials or PII. For every role, test:
+For the current deny-path journey, use only a disposable database and an isolated synthetic ordinary session with no Control grant; verify `/control`, protected APIs and mutations return an explicit denial, do not mutate fixtures and do not emit success audit events. For future positive acceptance (only after explicit role decisions), use synthetic businesses `tenant-a` and `tenant-b`, synthetic records, and one isolated test identity per approved role. Provision only exact approved grant keys/scopes through the approved mechanism; record no production credentials or PII. Test:
 
 1. Anonymous page and API access; ordinary customer/admin session; sign-in, logout and session expiry.
 2. The signed-off allowed route/action list and a direct URL/API call for every denied capability; forged JWT role claims must not grant access.
@@ -139,4 +171,4 @@ Please return one decision record per role and capability with:
 - Audit event/read policy, retention, viewer/export access and personal-data handling.
 - Non-production provisioning authority and isolated test procedure.
 
-Until an owner decision is recorded, preserve the current status: all role/action permissions remain pending/denied, all protected Control routes remain blocked by `POLICY_PENDING`, and no authenticated six-role acceptance is claimed.
+Until exact owner decisions and all mandatory acceptance evidence are recorded, preserve the current status: all role/action permissions remain DENY, `CONTROL_ROLE_POLICY_APPROVED` stays false, protected Control routes return `POLICY_PENDING`, and no positive or six-role authenticated acceptance is claimed.

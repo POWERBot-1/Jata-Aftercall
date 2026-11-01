@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { CONTROL_ROLE_POLICY, CONTROL_ROLE_POLICY_COLUMNS, CONTROL_POLICY_BOUNDARIES, CONTROL_ROLE_POLICY_APPROVED } from "@/lib/control/role-policy";
-import { CONTROL_ROLE_NAMES } from "@/lib/control/permissions";
+import {
+  CONTROL_ROLE_POLICY,
+  CONTROL_ROLE_POLICY_COLUMNS,
+  CONTROL_POLICY_BOUNDARIES,
+  CONTROL_ROLE_POLICY_APPROVED,
+  CONTROL_ROLE_CAPABILITY_POLICY,
+  filterControlRolePermissions,
+  isControlCapabilityAllowed,
+} from "@/lib/control/role-policy";
+import { CONTROL_PERMISSIONS, CONTROL_ROLE_NAMES } from "@/lib/control/permissions";
 
 describe("Control role/action matrix", () => {
-  it("keeps authorization globally disabled until owner approval is recorded", () => {
+  it("keeps authorization globally disabled until per-capability owner approval and acceptance are recorded", () => {
     expect(CONTROL_ROLE_POLICY_APPROVED).toBe(false);
   });
 
@@ -12,13 +20,32 @@ describe("Control role/action matrix", () => {
     expect(CONTROL_ROLE_POLICY.every((row) => /proposed|unresolved/i.test(row.responsibility))).toBe(true);
   });
 
-  it("makes every permission dimension visible and pending rather than assigning role grants", () => {
+  it("makes all 90 role/capability decisions explicit DENY cells", () => {
+    expect(Object.keys(CONTROL_ROLE_CAPABILITY_POLICY)).toEqual([...CONTROL_ROLE_NAMES]);
+    for (const role of CONTROL_ROLE_NAMES) {
+      expect(Object.keys(CONTROL_ROLE_CAPABILITY_POLICY[role])).toEqual([...CONTROL_PERMISSIONS]);
+      for (const permission of CONTROL_PERMISSIONS) {
+        expect(CONTROL_ROLE_CAPABILITY_POLICY[role][permission], `${role} × ${permission}`).toBe("DENY");
+        expect(isControlCapabilityAllowed(role, permission), `${role} × ${permission}`).toBe(false);
+      }
+    }
+  });
+
+  it("keeps unknown roles, capabilities and wildcard-like grants denied", () => {
+    expect(isControlCapabilityAllowed("PLATFORM_OWNER", "businesses.read")).toBe(false);
+    expect(isControlCapabilityAllowed("SUPER_ADMIN", "*" )).toBe(false);
+    expect(isControlCapabilityAllowed("SUPER_ADMIN", "businesses.*")).toBe(false);
+    expect(filterControlRolePermissions("unknown", ["businesses.read"])).toEqual([]);
+    expect(filterControlRolePermissions("SUPER_ADMIN", ["businesses.read", "*", "businesses.suspend"])).toEqual([]);
+  });
+
+  it("keeps every permission dimension visible as denied or pending", () => {
     expect(CONTROL_ROLE_POLICY_COLUMNS.map((column) => column.label)).toEqual([
       "Read", "Write", "Approval", "Financial", "Tenant scope", "Sensitive administration", "MFA", "Audit",
     ]);
-    expect(CONTROL_ROLE_POLICY_COLUMNS.some((column) => /pending|denied|unassigned/i.test(column.value))).toBe(true);
+    expect(CONTROL_ROLE_POLICY_COLUMNS.every((column) => /DENY|denied|pending/i.test(column.value))).toBe(true);
     expect(CONTROL_POLICY_BOUNDARIES.map((row) => row.title)).toEqual([
-      "Repository-authorized behavior", "Safe technical behavior", "Owner approval required",
+      "Repository-authorized behavior", "Effective least-privilege policy", "Owner clarification required before any ALLOW",
     ]);
   });
 });

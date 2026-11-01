@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { verifyControlMfaSession } from "./mfa";
-import { isControlPermission, type ControlPermission, type ControlRoleName } from "./permissions";
-import { CONTROL_ROLE_POLICY_APPROVED } from "./role-policy";
+import { isControlRole, type ControlPermission, type ControlRoleName } from "./permissions";
+import { CONTROL_ROLE_POLICY_APPROVED, filterControlRolePermissions } from "./role-policy";
 
 export const CONTROL_MFA_COOKIE = "jata_control_mfa";
 
@@ -34,12 +34,20 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
       select: { id: true, role: true, permissionKeys: true, scopeBusinessId: true },
       orderBy: { createdAt: "desc" },
     });
-    const grants = rows.filter((row: any) => Array.isArray(row.permissionKeys)).map((row: any) => ({
-      id: row.id as string,
-      role: row.role as ControlRoleName,
-      permissionKeys: row.permissionKeys.filter((key: unknown): key is ControlPermission => typeof key === "string" && isControlPermission(key)),
-      scopeBusinessId: row.scopeBusinessId as string | null,
-    })).filter((grant: ControlGrant) => grant.permissionKeys.length > 0);
+    const grants: ControlGrant[] = [];
+    for (const row of rows as any[]) {
+      // Unknown role labels and database grants outside the explicit per-role policy are ignored.
+      // The grant table can narrow this matrix but cannot add capabilities to a role.
+      if (typeof row.role !== "string" || !isControlRole(row.role) || !Array.isArray(row.permissionKeys)) continue;
+      const permissionKeys = filterControlRolePermissions(row.role, row.permissionKeys);
+      if (!permissionKeys.length) continue;
+      grants.push({
+        id: row.id as string,
+        role: row.role as ControlRoleName,
+        permissionKeys,
+        scopeBusinessId: row.scopeBusinessId as string | null,
+      });
+    }
     if (!grants.length) return { ok: false, status: 403, code: "CONTROL_ACCESS_REQUIRED" };
     return { ok: true, identity: { session, grants } };
   } catch {

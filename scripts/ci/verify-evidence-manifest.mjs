@@ -91,6 +91,19 @@ export const REQUIRED_ARTIFACTS = [
   "scripts/__tests__/summarise-audit.test.mjs",
   "scripts/__tests__/verify-evidence-manifest.test.mjs",
   "scripts/__tests__/verify-reconciliation-justification.test.mjs",
+  // Control authorization decision and acceptance artifacts for PR #78.
+  "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md",
+  "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+  "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+  "docs/agents/PROGRAMME_READINESS.json",
+  ".github/workflows/interactive-business-e2e.yml",
+  "lib/control/access.ts",
+  "lib/control/role-policy.ts",
+  "app/control/policy/page.tsx",
+  "tests/unit/control-role-policy.test.ts",
+  "tests/unit/control-policy-pending-access.test.ts",
+  "scripts/browser/control-deny.check.mjs",
+  "package.json",
 ];
 
 /**

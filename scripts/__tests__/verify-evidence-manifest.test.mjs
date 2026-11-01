@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hashFile, parseManifest, verifyManifest } from "../ci/verify-evidence-manifest.mjs";
+import { hashFile, parseManifest, verifyManifest, REQUIRED_ARTIFACTS } from "../ci/verify-evidence-manifest.mjs";
 
 // A manifest is only worth having if it fails when it is wrong. Each test here
 // breaks one property and asserts that the break is reported.
@@ -110,6 +110,25 @@ test("parsing follows sha256sum format and rejects malformed lines", () => {
 
 test("an unreadable file is null, not an empty hash", () => {
   assert.equal(hashFile("/definitely/not/here.txt"), null);
+});
+
+test("the six-role Control policy and deny-path acceptance artifacts are required", () => {
+  for (const artifact of [
+    "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md",
+    "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+    "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+    "docs/agents/PROGRAMME_READINESS.json",
+    ".github/workflows/interactive-business-e2e.yml",
+    "lib/control/access.ts",
+    "lib/control/role-policy.ts",
+    "app/control/policy/page.tsx",
+    "tests/unit/control-role-policy.test.ts",
+    "tests/unit/control-policy-pending-access.test.ts",
+    "scripts/browser/control-deny.check.mjs",
+    "package.json",
+  ]) {
+    assert.ok(REQUIRED_ARTIFACTS.includes(artifact), `${artifact} must remain a required manifest entry`);
+  }
 });
 
 test("the repository's own manifest verifies", async () => {

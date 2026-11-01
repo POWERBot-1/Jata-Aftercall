@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { WorkspaceSetupShell } from "@/components/workspace/WorkspaceAuthShell";
-import { CONTROL_POLICY_BOUNDARIES, CONTROL_ROLE_POLICY, CONTROL_ROLE_POLICY_COLUMNS } from "@/lib/control/role-policy";
+import { CONTROL_POLICY_BOUNDARIES, CONTROL_ROLE_CAPABILITY_POLICY, CONTROL_ROLE_POLICY, CONTROL_ROLE_POLICY_COLUMNS } from "@/lib/control/role-policy";
+import { CONTROL_PERMISSIONS, CONTROL_ROLE_NAMES } from "@/lib/control/permissions";
 
 export const metadata = { title: "Control authorization policy | JATA AFTERCALL", robots: { index: false, follow: false } };
 
@@ -46,10 +47,31 @@ export default function ControlPolicyPage() {
           </section>
         ))}
         <section className="ws-panel" aria-labelledby="capabilities-title">
-          <p className="ws-kicker">Exact capability vocabulary</p>
-          <h2 id="capabilities-title" className="ws-panel__title">Available capability keys are not role assignments</h2>
-          <p className="ws-muted">The repository currently recognizes these explicit keys: <code>businesses.read</code>, <code>businesses.suspend</code>, <code>businesses.reinstate</code>, <code>subscriptions.read</code>, <code>payments.read</code>, <code>agents.read</code>, <code>agents.manage</code>, <code>commissions.read</code>, <code>communications.read</code>, <code>communications.recover</code>, <code>providers.read</code>, <code>providers.configure</code>, <code>audit.read</code>, <code>exceptions.read</code>, and <code>system.health.read</code>. None is assigned by this matrix.</p>
-          <p className="ws-tiny mt-3">Owner decision record: <code>docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md</code>. No production account, grant, or provisioning action has been performed.</p>
+          <p className="ws-kicker">Exact capability vocabulary · 90 effective decisions</p>
+          <h2 id="capabilities-title" className="ws-panel__title">Every role/capability cell is denied</h2>
+          <p className="ws-muted">Role names alone grant nothing. All 15 recognized capabilities are explicitly DENY for all six roles. The global approval gate remains false; this display does not create grants or enable any route.</p>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-[color:var(--ws-border)]" tabIndex={0} aria-label="Scrollable six-role capability denial matrix">
+            <table className="w-full min-w-[900px] border-collapse text-left text-xs">
+              <caption className="sr-only">All 90 role by capability policy decisions are deny.</caption>
+              <thead>
+                <tr className="border-b border-[color:var(--ws-border)]">
+                  <th scope="col" className="p-3">Capability</th>
+                  {CONTROL_ROLE_NAMES.map((role) => <th key={role} scope="col" className="p-3">{role.replaceAll("_", " ")}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {CONTROL_PERMISSIONS.map((permission) => (
+                  <tr key={permission} className="border-b border-[color:var(--ws-border)] last:border-0">
+                    <th scope="row" className="p-3 font-mono"><code>{permission}</code></th>
+                    {CONTROL_ROLE_NAMES.map((role) => (
+                      <td key={role} className="p-3"><span className="ws-pill" data-tone="draft">{CONTROL_ROLE_CAPABILITY_POLICY[role][permission]}</span></td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="ws-tiny mt-3">Owner decision record: <code>docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md</code>. No production account, grant, or provisioning action has been performed.</p>
         </section>
         <p className="ws-tiny"><Link className="underline" href="/control">Return to Control</Link></p>
       </div>
