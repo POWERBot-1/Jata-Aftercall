@@ -406,3 +406,16 @@ Development-only fixture of the **real** `RegisterForm` and `CheckoutForm` with 
 | Plan selection (`/pricing`) inside the fixture | NOT TESTED |
 | JATA Autopilot fixture (`AutopilotCommandCenter.tsx`) | NOT STARTED |
 | Authenticated, database-backed flows | BLOCKED (Prisma engine) |
+
+## Phase 7 — Parent theme audit against `main` (base `19f11d9`, PR head `468e694`)
+
+**Verdict: parent theme NOT changed (verified for computed styles and public routes).**
+
+- Source diff `origin/main..HEAD`: `app/globals.css` only (+109 lines, 0 deletions). No changes to `app/layout.tsx`, `components/ProductThemeProvider.tsx`, `lib/productThemes.ts`, Tailwind/PostCSS config, fonts, or theme tokens.
+- Additive global rules that touch shared classes (motion or hover only, not tokens): `.jata-input` hover border tint, `.jata-error` entrance, `.ws-rail a` / `.pos-nav-link` transition and press scale, `.jata-metric-grid > *` stagger. These are reviewed as motion and hover feedback, not theme changes.
+- Browser comparison (`theme-compare-summary.json`, script `theme-compare.mjs`): 4 public routes (`/`, `/login`, `/register`, `/pricing`) × 2 appearances (`lime-spark`, `emerald-ink`) × 6 viewports = 48 pairs. **Computed style fingerprint: 0 differing elements in all 48 pairs.** Theme attribute matched in all pairs. 0 page errors and 0 console errors.
+- Pixel diffs: 46 pairs identical. Two pairs differed (`/` at 430×932 emerald-ink, 586,369 px; `/` at 768×1024 lime-spark, 926 px). Re-running main against main, and main against PR, shows the same pairs alternate between 0 and a difference. The homepage render is therefore **nondeterministic** and the difference is not attributable to the PR. Styles were identical in both cases.
+- The product has two appearances, not a light/dark mode. No dark-mode theme exists to test.
+- Dev-console hydration warning (`caret-color: transparent` on theme radios): not in source. Playwright's screenshot `caret: "hide"` option adds that style, so the warning is probably produced by capture tooling. **Not proven**; the captures here use `caret: "initial"`.
+
+**Status:** theme preservation PASS for computed styles and public routes. Authenticated routes (dashboard, POS, Studio, AI, Autopilot) NOT TESTED on this audit: they need the database. Homepage pixel stability: NOT VERIFIED (nondeterministic render, unresolved).
