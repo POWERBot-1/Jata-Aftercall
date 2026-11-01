@@ -222,3 +222,53 @@ Results for this commit:
 | Motion recordings (video/trace) | NOT CAPTURED | Playwright video not attempted; runtime computed styles and screenshots only |
 
 Financial correctness (fixture): totals are server-shaped integers in KES. No amount is animated to a different value. No payment is executed.
+
+## POS remaining gaps and dashboard states — commit `84e71f3`
+
+**POS (`/dev/pos-fixture`, real `TillClient`, fictional fixtures; 404 in production)**
+
+Changes:
+- Removed cart line: a visual-only exit ghost (`ExitingLine`, `.pos-line-leaving`, 200 ms). It shows the product name only, carries no money value, is `aria-hidden`, and is created only when motion is allowed. The cart state already has no such line.
+- Owner-Lite: `motionPreference="lite"` sets `data-pos-motion="lite"` on the till and result panel. CSS disables animation and transition, and no exit ghost is created. Production omits the prop, so the default stays `auto`. Fixture: `?motion=lite`.
+- Reduced motion: the exit ghost is not created, and all POS animations compute to `none`.
+- Financial logic unchanged. The ghost is presentation only.
+
+Tests (`npx vitest run tests/unit/pos-fixture-harness.test.ts`): 27 pass in that file. Full suite: 341 files / 4,009 tests pass, 0 failures. `tsc --noEmit`: exit 0. ESLint: 0 errors.
+
+Evidence (`docs/agents/evidence/fintech-motion-2026-11-01/pos/keyboard/`, script `pos-keyboard.mjs`, `report.json`):
+- Keyboard journey at 390×844, default motion: Tab to product tile, Enter adds (KES 320), Tab to + and Enter (qty 2, KES 640), Tab to Cash and Enter, Tab to "Complete sale · KES 640" (enabled). Then Tab to −, Enter (qty 1, KES 320), Enter again (qty 0, KES 0). The exit ghost appears with `aria-hidden="true"` and is gone after 400 ms.
+- Focus visibility: all POS interactive stops have a computed outline (`solid 2–3px`). Screenshots `k1-qty-focus-390x844.png` and `k2-checkout-ready-focus-390x844.png` were opened. The k2 frame shows the focus ring on the enabled Complete button with the correct total.
+- Trace: `pos-keyboard-trace-390x844.zip` (Playwright trace with screenshots and snapshots, open with `npx playwright show-trace`).
+- Owner-Lite (`?motion=lite`): `data-pos-motion="lite"`, 0 non-none animations on the till, 0 exit ghosts after removal.
+- Reduced motion: line animation `none`, 0 ghosts, total KES 0 after removal.
+
+Earlier 14-state matrix (`pos/matrix/`) was captured at `c30713b`. The `84e71f3` change affects only removal timing and adds no layout change, so the matrix still applies to the state set. It was not re-captured.
+
+**Dashboard (`/dev/workspace-preview`, synthetic data, fixture only)**
+
+Changes: `?state=loading` renders the real `app/dashboard/loading.tsx`. `?state=error` renders the real `app/dashboard/error.tsx` through a client wrapper (`components/dev/DashboardStateFixture.tsx`). Default and `?state=empty` are unchanged.
+
+Evidence (`docs/agents/evidence/fintech-motion-2026-11-01/dashboard/states/`, script `dash-states.mjs`, `report.json`, sheets `sheets/*.jpg`):
+- Four states at six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768), 24 captures. 0 page errors. 0 horizontal overflow in every capture.
+- Loading: `aria-busy="true"` and a status region reading "Loading your businesses".
+- Error: "Your dashboard did not load", with retry and back links. Nothing is claimed as saved.
+- Keyboard Tab journey (populated, first 45 stops, 39 unique): 11 nav-like stops at every viewport. Every stop has a computed outline.
+- Reduced motion (390×844): no element has an active animation.
+- Opened and inspected the 390×844 and 1366×768 sheets. All four states render. The populated and empty states use the fictional synthetic banner.
+
+**Status for `84e71f3`**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| POS till (`TillClient` fixture) | 14 states, six viewports | PASS (fixture) | Matrix captured at `c30713b` |
+| POS cart removal exit | Pointer and keyboard | PASS (fixture) | Presentation only |
+| POS owner-Lite | `?motion=lite` | PASS (fixture) | Static till, no ghost |
+| POS keyboard journey and focus | 390×844 | PASS (fixture) | Trace captured |
+| POS reduced motion | 390×844 | PASS (fixture) | All animations `none` |
+| POS real sale, checkout, payment verification | Database-backed | BLOCKED | Prisma 5.22 engine unavailable |
+| Dashboard states (default, empty, loading, error) | Six viewports | PASS (fixture) | Synthetic data |
+| Dashboard keyboard Tab order and focus | Six viewports | PASS (fixture) | 11 nav-like stops, all outlined |
+| Dashboard real signed-in data | Authenticated | BLOCKED | Requires database |
+| Website Studio, AI Front Desk, Autopilot, subscription | — | NOT STARTED | Not implemented in this pass |
+
+Financial correctness (fixture): no money value is animated. Totals are server-shaped integers in KES. No payment or sale is executed.
