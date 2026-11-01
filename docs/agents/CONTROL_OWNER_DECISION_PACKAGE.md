@@ -24,6 +24,76 @@ Even a written ALLOW does not activate an operation. The implementation must be 
 7. Define emergency access and recovery, if any: trigger, named approvers, dual control, duration, least privilege, alerting, audit, revocation and post-incident review. There is no current break-glass route or bootstrap bypass.
 8. Decide audit-read permissions and sensitive-read auditing separately from mutation auditing; define retention, legal/privacy limits, export and review procedure.
 
+## Proposed policy matrix — PROPOSED — OWNER APPROVAL REQUIRED
+
+This is a recommendation, not an approved authorization policy and not a reason to enable any route. The available source records tentative role labels and candidate operations, but no owner-approved role duties, business need, field scope, tenant/resource scope, separation of duties, or authorized test-grant process. Assigning an ALLOW based only on a role name would invent consent. Accordingly, the defensible proposal for every cell is **DENY pending a specific owner decision**. The all-DENY runtime remains a separate safety baseline; this proposal does not make the role policy complete or accepted.
+
+| Capability | SUPER_ADMIN | PLATFORM_ADMIN | FINANCE_ADMIN | SUPPORT_ADMIN | SECURITY_ADMIN | READ_ONLY_AUDITOR |
+|---|---|---|---|---|---|---|
+| `businesses.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `businesses.suspend` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `businesses.reinstate` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `subscriptions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `payments.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `agents.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `agents.manage` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `commissions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `communications.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `communications.recover` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `providers.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `providers.configure` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `audit.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `exceptions.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+| `system.health.read` | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY | PROPOSED DENY |
+
+**Cell semantics:** each of these 90 proposals permits no route, action, field, business, resource, tenant, null/global scope, side effect, or delegation. Reads and writes are both denied. No PII, payment detail, provider secret, commission amount, message body, audit export, or cross-tenant aggregate is exposed. There is no role inheritance, wildcard, self-approval, or exception. A denied request must not mutate state or create a misleading success audit record. MFA/session checks remain mandatory prerequisites but do not turn a denial into a grant. Any owner-requested ALLOW must replace the exact cell only after a written rationale, exact action and field list, scope, preconditions, side effects, approvals/separation-of-duties, MFA freshness, audit contract, and isolated test plan are recorded. Blank or ambiguous cells stay DENY.
+
+| Role | Proposed role-specific rationale (not inferred from identifier) |
+|---|---|
+| `SUPER_ADMIN` | No documented authority boundary or operation list supports a broad grant; the title does not imply unrestricted access. |
+| `PLATFORM_ADMIN` | No platform-operation runbook or tenant boundary establishes a necessary capability; global administration is not presumed. |
+| `FINANCE_ADMIN` | No approved finance workflow, field need, reconciliation authority, or separation-of-duties rule is supplied. |
+| `SUPPORT_ADMIN` | No case-to-tenant relationship, support workflow, customer-data need, or status-change authority is supplied. |
+| `SECURITY_ADMIN` | No incident workflow, audit visibility decision, identity authority, or emergency mandate is supplied. |
+| `READ_ONLY_AUDITOR` | No audit charter, record/field scope, tenant boundary, sensitive-read policy, or export mandate is supplied; “read-only” is not universal access. |
+
+### High-risk decisions — deny unless separately confirmed
+
+| Decision | Operational need to establish | Security/operational impact if allowed | Safer alternative pending approval | Proposal |
+|---|---|---|---|---|
+| Provider configuration / secret rotation | Named operator duty, provider, specific setting, change window and rollback owner. | Secret exposure, payment/message outage, provider-wide effects, hard-to-reverse external changes. | Keep secrets in existing Vercel/provider secret management; use reviewed change ticket, two-person approval and provider-native audit. No Control secret read/write. | DENY for every role. |
+| Financial mutations (refunds, adjustments, commission changes, payouts) | Reconciliation/refund case, source-of-truth record, legal/accounting basis and accountable approvers. | Direct loss, duplicate payment, ledger imbalance, fraud or irreversible Paystack effect. | Preserve existing authenticated Paystack/payment workflows with idempotency, bounded action, dual approval and independent reconciliation; no new Control mutation. | DENY for every role. |
+| Agent management | Exact state transition and verified relation to an application/business. | Fraud, identity/PII exposure, referral/commission manipulation and cross-tenant impact. | Keep existing application/agent workflow; case-bound, tenant-scoped review with a separate approver and append-only history. | DENY for every role. |
+| Communications recovery/replay | Specific failed outbox event, retry budget and duplicate-suppression evidence. | Duplicate external messages, privacy leak, recipient harm, cost and provider throttling. | Use existing idempotent worker/recovery queue with event-ID allowlist, dry run, bounded retry and operator reason; no broad Control replay. | DENY for every role. |
+| Grant/identity administration | Named access custodian, target identity, approved role/capability, exact tenant scope and expiry. | Privilege escalation, persistence, lockout, insider abuse and self-granting. | Keep grants out of this console; require separate identity process, independent two-person approval, just-in-time scope, expiry/revocation and immutable audit. | DENY for every role. |
+| Other-user session revocation | Confirmed incident, exact target account and accountable incident lead. | Denial of service, retaliation, evidence loss or attacker-assisted lockout. | Existing incident response with verified target, second-person confirmation, alerting, reason and audited bounded action; no endpoint until separately designed. | DENY for every role. |
+| Emergency/break-glass access | Defined outage/incident trigger, approved responders and recovery objective. | Permanent bypass, stolen bootstrap credential, unreviewed cross-tenant access. | Continue normal owner/on-call escalation; no bypass or bootstrap admin. If later approved, require short expiry, dual control, alert, immutable audit and post-incident review. | DENY; no break-glass route. |
+| Audit export / sensitive-data access | Legal/compliance purpose, exact fields, time range, tenant and recipient. | Bulk PII/financial leakage, loss of audit confidentiality, uncontrolled copies. | Search narrowly in place with redaction and tenant filter; separately approve any encrypted, time-bound, logged export. | DENY for every role. |
+
+### Exact permitted-action and control proposal by capability
+
+For all six roles, the proposed permitted action for each capability below is **none**. The candidate description is not an authorization. The listed boundaries define what must be decided before a future proposal can be reconsidered; they do not grant a subset of the capability.
+
+| Capability | Proposed actions / data if reconsidered | Scope / sensitive-field boundary | Side effects, approvals, MFA, audit and separation-of-duties conditions before any future ALLOW |
+|---|---|---|---|
+| `businesses.read` | None now; candidate source fields are business name, slug, category, status, publication flag and timestamps. | One explicitly bound business only; no search-based existence leakage or cross-tenant aggregate; no customer PII. | Confirm per field and case/business relation; fresh MFA for any approved Control session; log actor, tenant, fields, query/result and outcome; reader cannot approve grants or change status. |
+| `businesses.suspend` | No state change now. | Exact business ID only; no inferred linked booking, subscription, payment, agent or user action. | Owner must define transition/effects, reason, confirmation, rollback, notice and dual approval; fresh MFA; transactional before/after audit; requester cannot be sole approver. |
+| `businesses.reinstate` | No state change now. | Exact suspended business ID only; no automatic republish, payment or user change. | Owner must define eligibility, side effects, reason, confirmation and independent approval; fresh MFA; transactional audit; no self-approval. |
+| `subscriptions.read` | None now; candidate is status/record metadata only. | Tenant-bound business relation; no amount, payment instrument or customer identity. | Owner confirms fields and tenant relation; audit sensitive reads and outcomes; no write authority derived from read. |
+| `payments.read` | None now; candidate is status/record metadata only. | Tenant-bound business relation; exclude amount, provider reference/ID and customer identity unless separately authorized. | Finance owner specifies exact field need and reconciliation separation; fresh MFA; audited purpose/tenant access; no refunds, adjustments or payouts. |
+| `agents.read` | None now; candidate status metadata only. | Source lacks safe tenant key; no platform-wide scope, names, phone numbers or user IDs. | First establish a verified tenant relation and need; otherwise remain unavailable. Audit filtered reads; no agent management or commission authority. |
+| `agents.manage` | None; unsupported status/write operation. | No identity or tenant scope is safe until workflow is designed. | Separate approved workflow, verified subject, dual approval, fresh MFA and atomic before/after audit required; manager cannot approve own change. |
+| `commissions.read` | None now; candidate entry type/timestamps only. | Business/payment relation must be verified; exclude amount, currency, identity, payable state and eligibility. | Finance owner defines permitted metadata and reconciliation separation; audit every read; no rate, adjustment, accrual or payout authority. |
+| `communications.read` | None now; candidate delivery state/count only. | No message body, recipient/destination or cross-tenant result; only verified tenant/event scope. | Owner defines privacy purpose and retention; audit query/result without copying message contents; no recovery or replay authority. |
+| `communications.recover` | None; no Control replay/recovery route. | Exact event IDs only if later designed; no bulk or cross-tenant replay. | Require idempotency proof, dry run, bounded retry, fresh MFA, independent approval and immutable attempt/outcome audit; no self-approval. |
+| `providers.read` | None; no authoritative Control probe or secret view. | No credentials, secret values, configuration, provider-wide tenant inference or unsupported health claim. | Prefer provider-native health/secret systems; any future metadata read must be redacted, tenant/purpose limited and audited. |
+| `providers.configure` | None; unsupported external configuration. | No secret/config mutation or global provider scope. | Use reviewed Vercel/provider change management, secret rotation, rollback and two-person approval; no Control route absent separate authorization. |
+| `audit.read` | None now; candidate event metadata only. | Exact tenant/time/event filter; redact personal/financial/provider secrets; no unrestricted export. | Owner defines audit charter, retention and reviewer independence; log audit-log reads/exports; auditor cannot mutate grants or delete/correct events. |
+| `exceptions.read` | None now; candidate authoritative operational exceptions only. | Each source must prove tenant binding; no inferred global count or personal data. | Owner defines source, severity and purpose; log queries and results; no remediation/write action from this read key. |
+| `system.health.read` | None now; no probes or unsupported health results. | Only verified aggregate service availability, no secrets, tenant data or configuration. | Owner defines service/source and incident use; log access; health reader cannot configure providers or change production state. |
+
+MFA freshness, recovery, session lifetime, grant expiry/revocation latency, approval identities, audit retention and the exact separation-of-duties model remain owner choices. The current technical 15-minute MFA token is not an approved freshness standard. Until those decisions are supplied, every proposal above remains **DENY** and no positive test grant may be provisioned.
+
 ## Canonical role identifiers and purpose questions
 
 The following identifiers exist in `prisma/schema.prisma` and `lib/control/permissions.ts`. The purpose text is copied as **tentative and unapproved** from the existing proposed matrix. Confirm, replace or reject each; no route or capability follows from the label.
