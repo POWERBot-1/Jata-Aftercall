@@ -5638,6 +5638,18 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
   .ws-stack.jata-motion-entry > *, .ws-hero__stats > * { animation: none !important; }
 }
 
+/* Form fields: focus and validation feedback. Only border colour and opacity change, so the
+   field's resting size, padding and layout are unchanged. Errors ease in once, when they mount. */
+.jata-input {
+  transition: border-color var(--jata-dur-fast) var(--jata-ease-out), box-shadow var(--jata-dur-fast) var(--jata-ease-out);
+}
+.jata-input:hover:not(:disabled):not(:focus) { border-color: color-mix(in srgb, var(--jata-ink) 35%, var(--jata-line)); }
+.jata-input[aria-invalid="true"] { border-color: var(--jata-danger); }
+.jata-error { animation: jata-state-in 200ms var(--jata-ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .jata-input, .jata-error { transition: none; animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

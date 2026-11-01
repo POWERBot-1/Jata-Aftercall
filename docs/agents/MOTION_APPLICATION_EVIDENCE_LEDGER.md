@@ -111,3 +111,25 @@ Owner approved allowing `binaries.prisma.sh` for the isolated sandbox. The sandb
 Status unchanged: authenticated, database-backed routes (dashboard, POS, checkout, Studio, AI Front Desk, Autopilot, subscription, onboarding) are **BLOCKED** for browser evidence. Mandatory fixes needed from the owner or sandbox operator: allow `binaries.prisma.sh` egress in the sandbox network policy, or place a matching `libquery_engine-debian-openssl-3.0.x.so.node` (Prisma 5.22.0) in the sandbox workspace. Either change does not touch production.
 
 No additional motion surfaces were implemented in this pass because they could not be verified against authenticated routes. Phase 1 audit: `docs/agents/FINTECH_MOTION_PHASE1_AUDIT_2026-11-01.md`.
+
+## 2026-11-01 — Public auth routes: form-field motion (no database required)
+
+**Change:** shared `.jata-input` focus/hover border transition and `.jata-error` ease-in on mount (colour and opacity only; resting size unchanged). Reduced motion disables both. Global reduced-motion block remains last in `app/globals.css`.
+
+**Evidence:** `docs/agents/evidence/fintech-motion-2026-11-01/auth/` — `before/` (`main` 19f11d9) and `after/` (this branch) screenshots of `/login`, `/login` focus state, `/register`, `/register` after submit, and `/pricing` at all six viewports; `report.json`; `auth-capture.mjs`.
+
+| Route | Scenario | 320×568 | 360×800 | 390×844 | 430×932 | 768×1024 | 1366×768 |
+|---|---|---|---|---|---|---|---|
+| `/login` | settled and focused email field | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| `/register` | submit with fictional valid fields → real server failure (no DB) → inline error | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| `/pricing` | settled | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| all three | horizontal overflow | none detected | none | none | none | none | none |
+
+- Failure message is the real server response (`We couldn't create your account. Please try again.`) produced without a database; it is not a success state and no account was created.
+- Observed existing behaviour, unchanged: the register page shows the failure message in two places (general and field-level). Not altered in this change.
+- Reduced motion (390×844, `prefers-reduced-motion: reduce`): the error element's computed animation is `none`. PASS (computed style + screenshot).
+- Keyboard: focus moves to the email field via `focus()`; a visible focus ring is shown (screenshot). Full Tab-order journey: NOT TESTED.
+- Financial integrity: N/A on these routes (no payment initiated; pricing values are static configuration, not changed).
+- Dashboard, POS, checkout, Studio, AI, Autopilot and onboarding: still BLOCKED (authenticated, database-backed; Prisma engine unavailable).
+
+Commit under test: this entry's implementation commit (see PR #79 head).

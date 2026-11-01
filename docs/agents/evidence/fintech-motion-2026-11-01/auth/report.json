@@ -1,0 +1,91 @@
+[
+  {
+    "label": "before",
+    "viewport": "320x568",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "360x800",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "390x844",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "430x932",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "768x1024",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "1366x768",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "320x568",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "360x800",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "390x844",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "430x932",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "768x1024",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "1366x768",
+    "pageErrors": 0,
+    "alertText": "We couldn't create your account. Please try again.",
+    "overflowX": false
+  },
+  {
+    "label": "after-reduced",
+    "viewport": "390x844",
+    "errorAnimation": "none"
+  }
+]
