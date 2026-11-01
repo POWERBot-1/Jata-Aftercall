@@ -4,6 +4,12 @@
 
 The complete matrix, capability semantics, read/write classification, scope/data restrictions and owner questions are in `docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md`.
 
+## Exact-head evidence and result
+
+Feature head `8e9e10167c0558ba020412a2c724aa9044c0b82a` (PR merge-tree SHA `1ced1075a75a75847a9cea5234af91fb410e9c2e`) passed the authenticated real-browser/API denial journey in [Interactive Business E2E run 41316683783](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41316683783). It verified anonymous API denial, `POLICY_PENDING` on authenticated protected reads and a valid same-origin mutation, unchanged disposable business state, no provisioned grant, and no persisted success audit event. Six `/control` denial-state screenshots were uploaded, but GitHub artifact download returned EOF; independent visual inspection therefore remains BLOCKED.
+
+Exact-head [full no-database suite 41316683724](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41316683724), [Release Validation 41316683716](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41316683716), [candidate migration rehearsal 41316683687](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41316683687), and [PostgreSQL/POS/ERP verification 41316683679](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41316683679) passed. `instruction-integrity` passed in run 41316683695; `programme-completeness` failed because programme acceptance is not established. These workflow results do not approve any role or capability. Acceptance remains BLOCKED pending owner decisions and positive/tenant/MFA/revocation/audit/visual evidence.
+
 ## Six roles × 15 capabilities
 
 | Capability | `SUPER_ADMIN` | `PLATFORM_ADMIN` | `FINANCE_ADMIN` | `SUPPORT_ADMIN` | `SECURITY_ADMIN` | `READ_ONLY_AUDITOR` |
