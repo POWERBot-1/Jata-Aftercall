@@ -112,8 +112,12 @@ const plans = [
   { id: "p4", key: "INTERACTIVE_BUSINESS", name: "Website Studio", priceKES: 999, durationDays: 30 },
 ];
 
-export default function WorkspaceDesignPreviewPage() {
+export default async function WorkspaceDesignPreviewPage({ searchParams }: { searchParams: Promise<{ state?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
+  // Development-only switch: `?state=empty` renders the real DashboardClient empty branch with no businesses.
+  const emptyState = (await searchParams).state === "empty";
+  const shownBusinesses = emptyState ? [] : businesses;
+  const shownMetrics = emptyState ? {} : metricsMap;
   return (
     <div className="ws-shell min-h-screen">
       <header className="ws-chrome">
@@ -135,7 +139,7 @@ export default function WorkspaceDesignPreviewPage() {
           Developer preview · synthetic sample data · not a customer dashboard · development builds only.
         </p>
         <div className="ws-stack">
-          <DashboardClient businesses={businesses as never} metricsMap={metricsMap as never} accountEmail="mary@example.com" />
+          <DashboardClient businesses={shownBusinesses as never} metricsMap={shownMetrics as never} accountEmail="mary@example.com" />
 
           <section aria-label="Plans visual check" className="ws-stack">
             <WorkspaceHero

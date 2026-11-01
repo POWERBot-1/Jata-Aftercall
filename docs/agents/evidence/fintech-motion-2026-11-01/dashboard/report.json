@@ -1,0 +1,125 @@
+[
+  {
+    "label": "before",
+    "viewport": "320x568",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "360x800",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "390x844",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "430x932",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "768x1024",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "before",
+    "viewport": "1366x768",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "320x568",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "360x800",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "390x844",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "430x932",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "768x1024",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after",
+    "viewport": "1366x768",
+    "status": "ok",
+    "pageErrors": 0,
+    "focusedAfterTab3": "Home",
+    "overflowX": false,
+    "emptyOverflowX": false
+  },
+  {
+    "label": "after-reduced",
+    "viewport": "390x844",
+    "animations": [
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none",
+      "none"
+    ]
+  }
+]

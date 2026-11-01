@@ -133,3 +133,24 @@ No additional motion surfaces were implemented in this pass because they could n
 - Dashboard, POS, checkout, Studio, AI, Autopilot and onboarding: still BLOCKED (authenticated, database-backed; Prisma engine unavailable).
 
 Commit under test: this entry's implementation commit (see PR #79 head).
+
+## 2026-11-01 — Merchant dashboard: default and empty state (dev harness of the real DashboardClient)
+
+**Scope honesty:** `/dev/workspace-preview` is a development-only route (404 in production) that renders the real `DashboardClient` with synthetic fixtures. This is presentation evidence, not authenticated integration evidence. Real `/dashboard` requires a signed-in account and the database, which is BLOCKED.
+
+**Change in this pass:** dev-only `?state=empty` switch on the preview (passes an empty business list into the real component so its empty branch renders). `before/` was generated from `main` with the same switch applied to the baseline copy in a scratch directory, so the comparison isolates the product change.
+
+**Evidence:** `docs/agents/evidence/fintech-motion-2026-11-01/dashboard/` — `before/` and `after/` screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 for `default`, `empty` and `keyboard-focus` (after three Tab presses); `report.json`; `dash-capture.mjs`; `after/reduced-motion-390x844.png`.
+
+| Surface | Scenario | Six viewports | Verdict |
+|---|---|---|---|
+| Dashboard overview (dev harness) | settled default state | no page errors, no horizontal overflow | PASS (visual, fixture data) |
+| Dashboard overview (dev harness) | empty state (no businesses) | renders the real empty branch, no overflow | PASS (visual, fixture data) |
+| Dashboard overview | keyboard | Tab ×3 reaches "Home" in the chrome; rail focus not reached in three presses | NOT TESTED (full Tab-order journey not done) |
+| Dashboard overview | reduced motion (390×844) | all entrance animations computed as `none` | PASS (computed style + screenshot) |
+| Dashboard overview | loading state (route-level skeleton) | not exercised by this harness | NOT TESTED |
+| Dashboard overview | real signed-in data, financial values | requires database | BLOCKED |
+
+- No financial values were changed or animated. Fixture figures are labelled synthetic on the page.
+- Dev overlay "1 Issue" badge is Next.js development tooling, not part of the product.
+- Priorities 2–6 (POS, Studio, AI Front Desk, Autopilot, subscription/onboarding) were not implemented in this pass. See the section above for their status.
