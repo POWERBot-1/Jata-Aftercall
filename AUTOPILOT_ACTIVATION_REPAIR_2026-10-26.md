@@ -198,12 +198,12 @@ The existing webhook, verification, settlement and order/payment suites all stil
    unavailable or a row is missing, so identical prices on the public page are **not** evidence
    that the rows exist.
 
-2. **Do not run `npm run seed` against production to fix missing rows.** `prisma/seed.ts` has no
-   scope flag: besides the plans it also upserts the page themes, four demo businesses, a demo
-   customer, and an ADMIN user derived from `ADMIN_EMAILS` whose **created** password is the
-   well-known `Admin123!`. Point 1's query decides whether anything is needed; if it is, the
-   minimal idempotent repair below touches only the three plan rows (it keeps any existing `id`,
-   so historical `Payment.planId` references stay valid):
+2. **Do not run `npm run seed` against production to fix missing rows.** The current
+   `prisma/seed.ts` explicitly rejects production and requires ephemeral, opt-in non-production
+   fixture credentials; its plan/theme/demo fixture scope is not a production repair mechanism.
+   Existing production account state remains unverified. Point 1's query decides whether anything
+   is needed; if it is, the minimal idempotent repair below touches only the three plan rows (it
+   keeps any existing `id`, so historical `Payment.planId` references stay valid). The SQL below is a proposed repair only; do not execute it under this audit/remediation. Any production write requires a separate approved change with a verified backup and recovery plan. No production access or write occurred here.
 
    ```sql
    INSERT INTO "PlanConfig" ("id","key","name","priceKES","durationDays","isActive","createdAt","updatedAt")

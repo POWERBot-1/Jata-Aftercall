@@ -11,6 +11,8 @@ const chrome = process.env.CHROME_PATH;
 if (!chrome || !existsSync(chrome)) throw Error('BLOCKED: Chrome missing');
 const sha = execFileSync('git', ['rev-parse','HEAD'], {encoding:'utf8'}).trim();
 if (process.env.EXPECTED_SHA !== sha) throw Error(`Wrong tested commit: ${sha}`);
+const demoFixturePassword = process.env.DEMO_FIXTURE_PASSWORD;
+if (!demoFixturePassword) throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const out = process.env.EVIDENCE_DIR || 'motion-evidence'; mkdirSync(out,{recursive:true});
 const dims = [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
 const routes = [
@@ -39,7 +41,7 @@ try {
   try {
     if (target.login) {
       await page.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
-      await page.type('#login-email','demo@jata.link'); await page.type('#login-password','Demo1234!');
+      await page.type('#login-email','demo@jata.link'); await page.type('#login-password',demoFixturePassword);
       await Promise.all([page.waitForFunction(() => location.pathname !== '/login',{timeout:20000}),page.click('button[type="submit"]')]);
     }
     const name=`${target.name}-${width}x${height}-${reduced?'reduced':'motion'}`;

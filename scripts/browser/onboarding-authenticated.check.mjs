@@ -9,6 +9,8 @@ const db = new URL(process.env.DATABASE_URL || "postgresql://invalid.invalid/inv
 const base = new URL(process.env.BASE_URL || "http://127.0.0.1:4100");
 if (process.env.JATA_DISPOSABLE_BROWSER_DB !== "1" || !["localhost", "127.0.0.1"].includes(db.hostname) || !["localhost", "127.0.0.1"].includes(base.hostname) || base.protocol !== "http:") throw new Error("Requires explicit disposable local database and local HTTP server.");
 if (!process.env.CHROME_PATH || !existsSync(process.env.CHROME_PATH)) throw new Error("Chrome unavailable");
+const demoFixturePassword = process.env.DEMO_FIXTURE_PASSWORD;
+if (!demoFixturePassword) throw new Error("Missing ephemeral DEMO_FIXTURE_PASSWORD for isolated browser fixture.");
 const prisma = new PrismaClient();
 const name = `Onboarding browser ${randomUUID().slice(0, 8)}`;
 const sizes = [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
@@ -22,7 +24,7 @@ try {
   await page.waitForSelector("#login-email");
   await new Promise((done) => setTimeout(done, 1200));
   await page.type("#login-email", process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link");
-  await page.type("#login-password", process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!");
+  await page.type("#login-password", demoFixturePassword);
   const login = page.waitForResponse((r) => r.url().endsWith("/api/auth/login") && r.request().method() === "POST");
   await page.click('button[type="submit"]');
   if (!(await login).ok()) throw new Error("Fixture login failed");

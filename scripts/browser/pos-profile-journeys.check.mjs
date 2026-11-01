@@ -11,6 +11,8 @@ const db = new URL(process.env.DATABASE_URL || "postgresql://invalid.invalid/inv
 const base = new URL(process.env.BASE_URL || "http://127.0.0.1:4100");
 if (process.env.JATA_DISPOSABLE_BROWSER_DB !== "1" || !["localhost", "127.0.0.1"].includes(db.hostname) || !["localhost", "127.0.0.1"].includes(base.hostname) || base.protocol !== "http:") throw new Error("Requires explicit disposable local database and local HTTP server");
 if (!process.env.CHROME_PATH || !existsSync(process.env.CHROME_PATH)) throw new Error("Chrome unavailable");
+const demoFixturePassword = process.env.DEMO_FIXTURE_PASSWORD;
+if (!demoFixturePassword) throw new Error("Missing ephemeral DEMO_FIXTURE_PASSWORD for isolated browser fixture.");
 const prisma = new PrismaClient();
 const uid = randomUUID().slice(0, 8);
 const sizes = [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
@@ -65,7 +67,7 @@ try {
   browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   const page = await browser.newPage(); page.setDefaultTimeout(30000);
   await page.setViewport({ width: 390,height:844 });
-  await login(page, process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link", process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!");
+  await login(page, process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link", demoFixturePassword);
   // Synthetic browser event exercises presentation and dismissal, not the browser's native install flow.
   await new Promise((done) => setTimeout(done, 1200));
   await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt", { cancelable:true })));

@@ -1,7 +1,7 @@
 /**
  * Seeded demo/admin account audit (Premium Transformation Phase 4, 2026-10-27).
  *
- * Source-level regression guards for the two accounts `prisma/seed.ts` creates. The audit
+ * Source-level regression guards for the demo account and optional admin fixture in `prisma/seed.ts`. The audit
  * itself is docs/security/SEEDED_ACCOUNT_AUDIT_2026-10-27.md; this file turns the properties
  * the audit relies on into executable assertions so a later change cannot silently:
  *   - widen the demo owner into an admin,
@@ -14,10 +14,12 @@
  * the sandbox and is marked BLOCKED/NOT TESTED in the audit document.
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEMO_OWNER_EMAIL, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
+import { validateSeedEnvironment } from "@/scripts/lib/seed-safety";
 
 const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
@@ -29,13 +31,15 @@ const loginRoute = read("app/api/auth/login/route.ts");
 const restoreScript = read("scripts/restore-demo-businesses.ts");
 
 describe("seeded account inventory (prisma/seed.ts)", () => {
-  it("creates exactly one ADMIN and one CUSTOMER demo user, via upsert", () => {
+  it("creates a demo CUSTOMER fixture and only creates an admin fixture when explicitly configured", () => {
     expect(seed).toContain('role: "ADMIN"');
     expect(seed).toContain('role: "CUSTOMER"');
+    expect(seed).toContain("if (seedEnvironment.adminEmail && seedEnvironment.adminInitialPassword)");
+    expect(seed).toContain("update: {},"); // reruns cannot promote or mutate an existing account
     // The demo owner must never be granted the platform role.
-    const demoBlock = seed.slice(seed.indexOf("Demo customer user"));
+    const demoBlock = seed.slice(seed.indexOf("const demoUserEmail"), seed.indexOf("const demos"));
     expect(demoBlock).toContain("where: { email: demoUserEmail }");
-    expect(demoBlock.slice(0, demoBlock.indexOf("const demos"))).not.toContain('role: "ADMIN"');
+    expect(demoBlock).not.toContain('role: "ADMIN"');
   });
 
   it("pins the demo owner identity to the shared constant", () => {
@@ -43,16 +47,53 @@ describe("seeded account inventory (prisma/seed.ts)", () => {
     expect(seed).toContain("const demoUserEmail = DEMO_OWNER_EMAIL;");
   });
 
-  it("hashes both seeded passwords with bcrypt — no plaintext credential is persisted", () => {
+  it("hashes only ephemeral environment-provided fixture passwords and has no source-visible default credential", () => {
     expect(seed).toMatch(/bcrypt\.hash\(/g);
     expect(seed).not.toMatch(/password:\s*"(?!").+"/);
     expect(seed).toContain("passwordHash: adminHash");
     expect(seed).toContain("passwordHash: demoHash");
+    expect(seed).not.toMatch(/bcrypt\.hash\(\s*"[^"]+"/);
+    expect(seed).not.toMatch(/bcrypt\.hash\(\s*["']/);
   });
 
-  it("derives the admin email from ADMIN_EMAILS with a fixed fallback rather than hard-coding a tenant address", () => {
-    expect(seed).toContain("process.env.ADMIN_EMAILS");
-    expect(seed).toContain('admin@jata.link');
+  it("validates seed safety before constructing Prisma and never runs in production", () => {
+    const password = "f".repeat(64);
+    const guardIndex = seed.indexOf("const seedEnvironment = validateSeedEnvironment(process.env)");
+    const prismaImportIndex = seed.indexOf('import("@prisma/client")');
+    const clientIndex = seed.indexOf("new PrismaClient()");
+    expect(guardIndex).toBeGreaterThanOrEqual(0);
+    expect(prismaImportIndex).toBeGreaterThan(guardIndex);
+    expect(clientIndex).toBeGreaterThan(prismaImportIndex);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "production", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: password })).toThrow(/production/i);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", VERCEL_ENV: "production", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: password })).toThrow(/production/i);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", DEMO_FIXTURE_PASSWORD: password })).toThrow(/opt-in/i);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: "short" })).toThrow(/32 characters/i);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: password })).not.toThrow();
+  });
+
+  it("refuses production in the actual seed CLI before Prisma loads or a DB URL is needed", () => {
+    const cli = path.join(root, "node_modules", "tsx", "dist", "cli.mjs");
+    const result = spawnSync(process.execPath, [cli, path.join(root, "prisma", "seed.ts")], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH || "",
+        NODE_ENV: "production",
+        JATA_ALLOW_FIXTURE_SEED: "true",
+        DEMO_FIXTURE_PASSWORD: "f".repeat(64),
+      },
+    });
+    const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(output).toMatch(/Refusing to run the fixture seed in a production environment/i);
+    expect(output).not.toContain("Cannot find module");
+  });
+
+  it("requires both configured admin fixture identity and an ephemeral password", () => {
+    const password = "f".repeat(64);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: password, ADMIN_EMAILS: "admin@example.test" })).toThrow(/both ADMIN_EMAILS and ADMIN_INITIAL_PASSWORD/i);
+    expect(() => validateSeedEnvironment({ NODE_ENV: "test", JATA_ALLOW_FIXTURE_SEED: "true", DEMO_FIXTURE_PASSWORD: password, ADMIN_EMAILS: "admin@example.test", ADMIN_INITIAL_PASSWORD: password })).not.toThrow();
   });
 
   it("marks every seeded payment with the demo prefix so real Paystack rows can never be confused with fixtures", () => {

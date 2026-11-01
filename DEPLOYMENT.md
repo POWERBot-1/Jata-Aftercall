@@ -1,53 +1,47 @@
 # JATA AFTERCALL — Deployment
 
-## Zero-Cost MVP Architecture (no domain, no VPS, no paid SSL)
+## Supported deployment architecture
 
-This deployment satisfies §26A: entirely free, provider-generated HTTPS, serverless.
+Preserve Next.js on Vercel, Prisma/PostgreSQL on Neon, and Paystack. The intended customer domain is `https://jataaftercall.co.ke`; the existing Vercel host remains an operational reference. DNS, TLS, redirects and mail records have not been independently accepted in this audit, so do not change production settings or claim the domain is ready without owner-approved verification.
 
 ```
-GitHub (POWERBot-1/Jata-Aftercall @ arena/01a09b84-jata-aftercall)
+GitHub (POWERBot-1/Jata-Aftercall)
         ↓
-Free hosting — choose ONE:
-  A) Vercel  → https://jata-aftercall.vercel.app
-  B) Cloudflare Pages → https://jata-aftercall.pages.dev
-        ↓  (auto SSL, serverless functions)
-Postgres — free tier:
-  Neon (recommended) → DATABASE_URL  OR  Supabase → DATABASE_URL  OR  Cloudflare D1 (if on Pages)
+Next.js application on Vercel (existing deployment reference)
         ↓
-Paystack (merchant JATA ATLAS 2006074) — webhook → https://<provider-domain>/api/paystack/webhook
+Prisma / PostgreSQL on Neon
+        ↓
+Paystack (merchant JATA ATLAS 2006074; server verification and webhook)
+
+Intended customer origin: https://jataaftercall.co.ke
 ```
 
-### What is free vs paid
-
-| Component | MVP (free) | Limits | Future paid |
-|-----------|------------|--------|-------------|
-| Hosting (Vercel / Pages) | ✅ Free | 100 GB bandwidth/mo, ~6k hrs exec | Pro if traffic grows |
-| HTTPS / SSL | ✅ Auto | — | — |
-| DB (Neon/Supabase/D1) | ✅ Free ~0.5 GB | Connection caps; scale when needed | Paid tier |
-| Auth | ✅ JWT + bcrypt (no provider) | — | Email provider optional |
-| Paystack | Merchant account 2006074 | Per-transaction fee (merchant-paid) | Same |
-| Domain jata.link | ❌ Optional later | Requires purchase ~KES 1.5k/yr + DNS | Custom domain |
-| VPS | ❌ Not required | — | Only if justified (§26A) |
-| WhatsApp / SMS API | ❌ Not required V1 | — | V2+ |
-
-No Redis, queues, workers, paid APIs are used in V1.
+This describes the supported architecture, not proof of configured production services, domain acceptance, availability or cost. Do not substitute another host/database/provider without an approved architecture decision. No Redis, queues, workers or paid APIs are authorized by this runbook.
 
 ---
 
 ## Environment Variables
 
-Set these in Vercel Dashboard → Settings → Environment Variables (or `wrangler secret` for Pages). **Never commit `.env`.**
+Environment variables are owner-managed. Use Vercel Dashboard → Settings → Environment Variables only under a separately approved production change; this remediation did not inspect or change deployed values. For local development, use `.env.local`. **Never commit `.env` or print secret values.**
 
 ```ini
 DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require"
-AUTH_SECRET="openssl rand -base64 32 — 32+ chars"
-PUBLIC_BASE_URL="https://jata-aftercall.vercel.app"   # or https://jata-aftercall.pages.dev
-NEXTAUTH_URL="https://jata-aftercall.vercel.app"
+AUTH_SECRET="<generate a fresh 32+ character secret locally; do not commit>"
+# Local development only:
+PUBLIC_BASE_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="same-as-AUTH_SECRET"
 PAYSTACK_MERCHANT_ID="2006074"                          # JATA ATLAS — configuration, not secret
-PAYSTACK_SECRET_KEY="sk_test_xxx"                       # server only — never exposed to frontend
-PAYSTACK_PUBLIC_KEY="pk_test_xxx"
-ADMIN_EMAILS="admin@jata.link"
+PAYSTACK_SECRET_KEY=""                                  # configure test credentials only in a secure local store
+PAYSTACK_PUBLIC_KEY=""
+# Production canonical-origin values are owner-managed. Do not change them until DNS/TLS is verified
+# and a separate production-configuration change is approved.
+# Intended canonical origin: https://jataaftercall.co.ke
+
+# Optional local admin fixture only; both values must be supplied from a secure local environment.
+# Existing accounts are not promoted or modified by seeding.
+# ADMIN_EMAILS="owner@example.test"
+# ADMIN_INITIAL_PASSWORD=""
 ```
 
 Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://localhost:3000`).
@@ -63,7 +57,7 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
 - Baseline migration exists at `prisma/migrations/20250915000000_init/migration.sql` (12 tables, 4 enums, 20 indexes, 12 FKs, 0 DROP — parity with `schema.prisma`).
 - `scripts/migrate.sh`: if `DATABASE_URL` set → `npx prisma migrate deploy`, fail fast on error, no seed, no secret logging. If `DATABASE_URL` not set → skip (preview/offline).
 - `scripts/build.sh`: isolated gate — if `DATABASE_URL` present → run `migrate.sh` (failure aborts build, `next build` NOT executed). If absent → skip migration, `prisma generate` with offline fallback, then `next build` proceeds (preview).
-- Seed remains manual/trusted: `npm run seed` creates plans, themes, demo businesses + `admin@jata.link`. No `/api/seed`, `/api/migrate`, `/api/init` endpoint. Build/migrate gate never invokes seed.
+- Seeding is restricted to explicitly opted-in non-production fixtures. It refuses when `NODE_ENV=production` or `VERCEL_ENV=production`, requires `JATA_ALLOW_FIXTURE_SEED=true` plus an ephemeral `DEMO_FIXTURE_PASSWORD` of at least 32 characters, and never uses a committed default credential. Admin fixture creation is optional and requires both `ADMIN_EMAILS` and `ADMIN_INITIAL_PASSWORD`; an existing account's role/password is never changed. The build/migrate gate never invokes seed. Existing production account state is unknown and must be reviewed/rotated by the owner separately.
 - `package.json` build is now `bash scripts/build.sh` (via `npm run build`).
 
 1. https://neon.tech → Create project `jata-aftercall` → copy **both** connection strings:
@@ -77,9 +71,12 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
    ```bash
    npm ci
    npx prisma migrate deploy   # or: npx prisma db push (dev) — or via gate: bash scripts/migrate.sh
-   npm run seed                # creates plans, themes, 4 demo businesses + admin@jata.link
+   export JATA_ALLOW_FIXTURE_SEED=true
+   export DEMO_FIXTURE_PASSWORD="$(openssl rand -hex 32)"
+   npm run seed                # non-production plans/themes and fictional demo fixtures only
+   # Keep the generated value in this local shell; never print, commit, or reuse it in production.
    ```
-   Production (Vercel): `DATABASE_URL` present → `npm run build` automatically runs `scripts/migrate.sh` → `migrate deploy` → `next build`. If migration fails, build fails fast (gate). No manual `migrate deploy` needed in prod, but remains idempotent if run manually.
+   Production deployments are owner-managed: `DATABASE_URL` can cause the build gate to run `migrate deploy` before `next build`. Treat this as a database write and deploy operation: it requires a separate reviewed change, backup/recovery plan and explicit owner approval. No production build, migration or deployment is authorized by this runbook/remediation; CI-only disposable PostgreSQL rehearsal is not production approval.
 
    **Why `DIRECT_URL` exists (do not skip it on Neon).** Neon's pooled endpoint is PgBouncer in
    transaction mode. Prisma Migrate takes a *session-level* advisory lock before applying migrations, and
@@ -104,30 +101,26 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
 | present, migrate failure | deploy fail, exit 1 | migrate fail → build aborts, next build NOT executed | Production build FAIL (gate) |
 
 ### 2. Hosting — Vercel (recommended)
-1. https://vercel.com → **Add New Project** → Import `POWERBot-1/Jata-Aftercall`.
-2. Framework: Next.js — Build command: `npm run build` (`bash scripts/build.sh` — runs migrate gate if `DATABASE_URL` set, else preview) — Output: `.next`.
-3. Add all env vars above (Production + Preview). Production must have `DATABASE_URL`; Preview may omit for offline build test.
-4. **Deploy** → get `https://jata-aftercall.vercel.app`.
-5. Set `PUBLIC_BASE_URL` to that URL and redeploy (or set before first deploy).
-6. Verify: `https://jata-aftercall.vercel.app/health` → `{"status":"ok","db":"up"}`. If migration failed, deploy fails at build step (gate) — check logs for `[migrate] ERROR`.
+1. Use the existing owner-managed Vercel project for this repository; do not create or reconfigure a project as part of remediation.
+2. Its Next.js build command is `npm run build` (`bash scripts/build.sh`); with production `DATABASE_URL` configured, the gate may run migrations, which remain separately approval-controlled.
+3. Configure environment variables only through the owner-approved Vercel process. Production values were not inspected here; no production variable changes are authorized. A preview may omit database settings for the offline build path.
+4. Use the existing Vercel deployment reference only as operational context; do not deploy from this remediation task.
+5. Do not change `PUBLIC_BASE_URL`, DNS, domain assignments or email records here. The intended canonical domain needs owner-approved DNS/TLS/mail verification first.
+6. Validate builds and health checks only on disposable CI/preview infrastructure. A Vercel integration check is not proof that the official domain, database or customer flows are accepted.
 
 **Isolated gate notes:**
 - No secret logging: `DATABASE_URL` never echoed.
 - No seed in gate: `npm run seed` remains manual post-migration.
 - No `/api/seed` endpoint — verified via `grep app/api`.
 
-### 3. Hosting — Cloudflare Pages (alternative)
-1. https://dash.cloudflare.com → Pages → **Connect to Git** → same repo.
-2. Build: `npm run build`, Output: `.next` (or use `next-on-pages` for full Pages compatibility — not required for MVP; Vercel is simpler).
-3. Add env vars via **Settings → Environment Variables**.
-4. Same verification via `/health`.
+### 3. Paystack (JATA ATLAS 2006074)
 
-### 4. Paystack (JATA ATLAS 2006074)
-1. https://dashboard.paystack.com → Settings → API Keys → copy **Test** keys (then **Live** after revenue validation).
-2. Set `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` in hosting env (test first).
-3. Settings → Webhooks → Add `https://<provider-domain>/api/paystack/webhook`.
-   - No additional secret needed — Paystack signs with `PAYSTACK_SECRET_KEY` via `x-paystack-signature` (HMAC-SHA512).
-4. Test with a KES 50 test transaction (Paystack test cards).
+Paystack keys, dashboard settings and webhook configuration are owner-managed. This remediation does not access or change them. Any future verification must use an approved test-mode environment with synthetic transactions only; do not enable live keys or charge real money without a separate explicit owner decision.
+
+1. Use test keys only in an isolated, owner-approved non-production environment.
+2. Configure `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` through the secure secret-management process; never commit or print them.
+3. Configure the webhook URL only through a separately approved provider change. The application verifies `x-paystack-signature` server-side with HMAC-SHA512.
+4. Test-mode transactions and provider callbacks are not production acceptance and are not run by this guide.
 
 ---
 
@@ -137,79 +130,37 @@ Copy `.env.example` to `.env.local` for local dev (`PUBLIC_BASE_URL=http://local
 npm install
 cp .env.example .env.local  # fill DATABASE_URL (Neon dev branch) + AUTH_SECRET
 npx prisma migrate dev
-npm run seed
+export JATA_ALLOW_FIXTURE_SEED=true
+export DEMO_FIXTURE_PASSWORD="$(openssl rand -hex 32)"
+npm run seed                # refuses production; creates only disposable/local fixtures
 npm run dev                  # http://localhost:3000
 ```
 
-Demo logins after seed:
-- Admin: `admin@jata.link` / `Admin123!`
-- Demo owner: `demo@jata.link` / `Demo1234!`
-
-Demo pages (no login needed): `/b/nyumbani-kitchen`, `/b/marys-beauty-studio`, `/b/kamau-auto-care`, `/b/john-kamau-properties`
+A new demo-owner row uses the ephemeral password generated in the local shell; the value is not printed or committed. Existing demo or admin rows are not promoted, modified or password-reset by a rerun, so use only a disposable/local database and do not reuse fixture credentials in any deployed environment. No admin account is created unless both `ADMIN_EMAILS` and a fresh `ADMIN_INITIAL_PASSWORD` (at least 32 characters) are explicitly supplied in the local environment. The public fictional demo pages are `/b/nyumbani-kitchen`, `/b/marys-beauty-studio`, `/b/kamau-auto-care` and `/b/john-kamau-properties`.
 
 ---
 
-## Health & Verification
+## Health, sitemap, and payment acceptance
 
-```bash
-curl https://jata-aftercall.vercel.app/health
-# {"status":"ok","db":"up","version":"1.0.0"}
+Do not run HTTP checks or synthetic callbacks against the production Vercel host from this remediation. Health/sitemap output from a host is not proof of full acceptance. Use CI or an isolated local preview only after confirming its database is disposable.
 
-# Sitemap & robots
-curl https://jata-aftercall.vercel.app/sitemap.xml
-curl https://jata-aftercall.vercel.app/robots.txt
-```
+For payment acceptance, use the existing isolated PostgreSQL journey and provider fakes/test mode; preserve server-side verification, signature checks, amount/currency/reference matching, idempotency and tenant authorization. Never handcraft a success webhook against a deployed URL or use live provider keys. No Paystack callback, test charge or real transaction was performed here.
+
+The local mock checkout is restricted by application code to non-production environments and is not settlement or production evidence. Production provider configuration and any test-mode dashboard changes require separate owner authorization.
 
 ---
 
-## Paystack Verification & Webhook Testing
+## Recovery and rollback planning
 
-### Verify manually
-```bash
-# After checkout, Paystack redirects to /checkout/callback?reference=jata_xxx
-# Server verifies via GET /api/paystack/verify?reference=jata_xxx
-curl "https://jata-aftercall.vercel.app/api/paystack/verify?reference=jata_xxx"
-# Requires the signed-in payment owner (or an authorized admin); anonymous verification is denied.
-```
-
-### Webhook idempotency test
-```bash
-PAYLOAD='{"event":"charge.success","data":{"reference":"jata_abc","amount":99900,"currency":"KES","id":123}}'
-SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha512 -hmac "$PAYSTACK_SECRET_KEY" | cut -d' ' -f2)
-# First delivery
-curl -X POST https://jata-aftercall.vercel.app/api/paystack/webhook -H "x-paystack-signature: $SIG" -H "Content-Type: application/json" -d "$PAYLOAD"
-# → {"status":"processed"}
-# Duplicate
-curl -X POST https://jata-aftercall.vercel.app/api/paystack/webhook -H "x-paystack-signature: $SIG" -H "Content-Type: application/json" -d "$PAYLOAD"
-# → {"status":"already_processed"}
-```
-
-The webhook verifies the transaction against Paystack and checks reference, amount, currency and status before the atomic payment/subscription transition. Mismatches return a safe error and do not activate.
-
-### Local test checkout (when PAYSTACK_SECRET_KEY is not set)
-- In non-production environments only, checkout returns a test-only link at `/checkout/mock?reference=...`.
-- The signed-in payment owner can choose **Simulate test payment**; the server accepts this mock only outside production and never treats a browser redirect as proof.
-- The same mock path is disabled in production; missing live Paystack configuration fails closed with HTTP 503.
+Code, database and environment rollback are separate owner-controlled production operations; none is authorized by this remediation. Do not assume a Prisma migration is reversible or resolve migration history manually. For a future approved change, document the exact migration's forward-recovery/restore plan, verified backups, application compatibility and responsible operator before any production action. Keep secrets in the provider secret manager; do not copy them into Git or this runbook.
 
 ---
 
-## Rollback
+## Official domain and mail verification (owner action required)
 
-- **Code:** Vercel Dashboard → Deployments → select previous → **Rollback** (instant), or `git revert <commit> && git push`.
-- **DB:** `npx prisma migrate resolve` + previous migration. Demo: `npx prisma migrate deploy` is idempotent. No destructive migrations in V1.
-- **Config:** Env vars are versioned in Vercel — revert via dashboard.
+The intended canonical URL is `https://jataaftercall.co.ke`; `https://jata-aftercall.vercel.app` remains an operational reference. Current DNS/name-server reports conflict and the final MX/SPF/DKIM/DMARC state and delivery have not been verified. Do not add, remove or change DNS records, email records, Vercel domains or production variables from this runbook. The owner should obtain the authoritative zone export from HOSTAFRICA, compare it with Vercel's domain configuration, preserve mail records, then independently verify HTTPS, redirects, secure cookies and mail delivery before authorizing any production update.
 
----
-
-## Custom Domain Upgrade (future, optional)
-
-1. Purchase `jata.link`.
-2. Vercel → Settings → Domains → Add `jata.link` and `*.jata.link` (or Pages → Custom Domains).
-3. Configure DNS as provider instructs (CNAME / A).
-4. Change `PUBLIC_BASE_URL=https://jata.link` in env and redeploy.
-5. Same code works — `getBusinessUrl(slug)` now returns `https://jata.link/b/slug`. Wildcard `https://slug.jata.link` can be enabled later behind a feature flag without re-architecture.
-
-No code rewrite needed — domain is abstracted via `PUBLIC_BASE_URL`.
+`lib/url.ts` centralizes generated origins, but source defaults and Vercel metadata do not establish live canonical behavior.
 
 ---
 
@@ -241,12 +192,12 @@ Do not add recurring cost for convenience.
 ```bash
 npm ci
 npx prisma generate
-bash scripts/migrate.sh      # prod gate: runs migrate deploy if DATABASE_URL set, else skip; fail fast
-npx prisma migrate deploy   # prod (manual idempotent, also via gate)
-npx prisma migrate dev      # dev (creates migration)
-npm run seed                 # demo data + admin — manual, never via build gate
-npm run build                # = bash scripts/build.sh — isolated gate: migrate (if DB) → generate → next build; fail prevents build
-npm test                     # vitest — 50 tests, tenant isolation
+bash scripts/migrate.sh      # local/disposable DB only here; production migration requires separate owner approval
+npx prisma migrate deploy   # local/disposable DB only here; production migration is not authorized by this guide
+npx prisma migrate dev      # local dev only (creates migration)
+JATA_ALLOW_FIXTURE_SEED=true DEMO_FIXTURE_PASSWORD="$(openssl rand -hex 32)" npm run seed  # local fixtures only; seed refuses production
+npm run build                # isolated build; production DATABASE_URL can trigger a migration gate, so require separate approval
+npm test                     # Vitest suite (count depends on current revision); use disposable DB for DB integration coverage
 npm run dev
 ```
 

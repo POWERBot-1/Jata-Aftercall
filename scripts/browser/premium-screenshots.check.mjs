@@ -45,7 +45,8 @@ if (!shotDir) {
 mkdirSync(shotDir, { recursive: true });
 
 const loginEmail = process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link";
-const loginPassword = process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!";
+const loginPassword = process.env.DEMO_FIXTURE_PASSWORD;
+if (!loginPassword) throw new Error("Missing ephemeral DEMO_FIXTURE_PASSWORD for isolated screenshot fixture.");
 
 const VIEWPORTS = [
   { label: "320x568", width: 320, height: 568 },

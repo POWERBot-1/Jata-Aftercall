@@ -321,7 +321,12 @@ jobs:
           fi
           echo "PASS: second deployment applied nothing"
 
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+
       - name: Seed disposable database
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
         run: |
           set -o pipefail
           npm run seed 2>&1 | tee /tmp/step-seed.log
@@ -798,7 +803,12 @@ jobs:
             exit 1
           fi
 
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+
       - name: Seed the reconciled database
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
         run: |
           set -o pipefail
           npm run seed 2>&1 | tail -n 25

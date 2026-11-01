@@ -105,7 +105,12 @@ jobs:
           set -o pipefail
           bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate.log
 
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+
       - name: Seed plans
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
         run: |
           set -o pipefail
           npm run seed 2>&1 | tee /tmp/step-seed.log

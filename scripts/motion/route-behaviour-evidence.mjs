@@ -10,6 +10,7 @@ import sharp from 'sharp';
 const base=new URL(process.env.BASE_URL||'http://localhost:4100');
 if(base.protocol!=='http:'||!['localhost','127.0.0.1'].includes(base.hostname)||base.port!=='4100'||base.pathname!=='/'||process.env.CI!=='true'||process.env.MOTION_ISOLATED!=='1'||process.env.DATABASE_URL!=='postgresql://jata:jata@localhost:5432/jata_e2e?schema=public'||process.env.AUTH_SECRET!=='interactive-business-e2e-test-secret') throw Error('Not isolated');
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
+const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[];let browser;
 const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,limitations:['No published AI fixture','No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
@@ -18,7 +19,7 @@ try {
  const product=await db.product.findFirstOrThrow({where:{businessId:business.id,isActive:true},select:{id:true}});
  browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,protocolTimeout:120000,args:['--no-sandbox','--disable-dev-shm-usage']});browserVersion=await browser.version();
  const owner=await browser.newPage();await owner.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
- const login=await owner.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password:'Demo1234!'})});return r.status;});if(login!==200) throw Error(`fixture login ${login}`);
+ const login=await owner.evaluate(async(password)=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password})});return r.status;},demoFixturePassword);if(login!==200) throw Error(`fixture login ${login}`);
  const api=(url,method='GET',data)=>owner.evaluate(async(url,method,data)=>{const r=await fetch(url,{method,headers:data?{'content-type':'application/json'}:{},body:data?JSON.stringify(data):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,data);
  async function setPreference(preference){const current=await api(`/api/experience?businessId=${business.id}`);if(current.status!==200)throw Error(`read draft ${current.status}`);const document={...current.body.document,themeKey:'beauty-editorial',renderPreference:preference};const patch=await api('/api/experience','PATCH',{businessId:business.id,expectedDraftVersion:current.body.experience.draftVersion,document});if(patch.status!==200)throw Error(`preference patch ${patch.status}`);}
  await setPreference('motion');
