@@ -180,3 +180,45 @@ Matrix status for this commit:
 | Studio, AI Front Desk, Autopilot, subscription | NOT TESTED / FAIL | Not implemented in this commit. |
 
 Financial correctness (fixture): all money values are server-shaped integer KES. No amount is animated. No payment success is fabricated outside the labelled simulator.
+
+## POS 14-state matrix and motion — commit `c30713b`
+
+Route: `/dev/pos-fixture` (development-only; 404 in production). Component: real `TillClient` via `PosFixtureTill`. Fictional fixtures and simulator only.
+
+Changes in `c30713b`:
+- Total line re-pulses when the server-shaped total changes (`jata-value-bump`). Digits are not interpolated.
+- Result panel re-enters keyed by outcome (`jata-state-enter`).
+- Pending result heading reads "Payment pending confirmation" instead of "Sale recorded". The change is keyed on `sale.status === "PENDING_CONFIRMATION"`. No such status is produced anywhere in the repo's sales API, so production output is unchanged.
+- Product tiles give press feedback (`scale(0.98)`). Reduced motion disables it.
+- Fixture receipts for pending and failure now state "Not a real sale".
+
+Test commands:
+- `npx vitest run tests/unit/pos-fixture-harness.test.ts`: 22 pass.
+- `npx vitest run`: 341 files and 4,004 tests pass, 0 failures.
+- `npx tsc --noEmit`: exit 0.
+
+Browser evidence (`docs/agents/evidence/fintech-motion-2026-11-01/pos/matrix/`, capture script `pos-matrix.mjs`, `matrix.json`):
+- Six viewports: 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768. Each has 14 states: empty, single, multiple, quantity increase, quantity decrease, item removed, empty quantity input, invalid decimal, zero quantity, multi-item total, checkout-ready, success, pending, failure.
+- 84 full-page PNGs in `after/`. Contact sheets for each viewport are in `sheets/`.
+- All 84 screenshots were inspected. Six contact sheets were opened. Full-size views were opened for 390×844 (cart-ready, success), 320×568 (cart-ready) and 1366×768 (checkout-ready).
+- Numeric checks from `matrix.json`: 320+30=350; quantity increase to 670; decrease to 350; decimal 2.7 becomes 2 (KES 640); empty input keeps quantity 1; zero removes the line (KES 0); multi total 410; checkout enabled.
+- Zero page errors. Zero requests to `/api/pos`. No horizontal overflow.
+
+Motion runtime (`pos-motion.mjs`, `motion.json`, 390×844):
+- Line entry `jata-line-in`. Quantity bump `jata-value-bump`. Total bump `jata-value-bump`. Result `jata-state-in`. Tile transition `transform, border-color`.
+- Reduced motion: all of the above are `none`, and tile transition is `none`.
+
+Results for this commit:
+| Area | Result | Note |
+|---|---|---|
+| POS 14 states at six viewports | PASS (fixture) | Inspected; no visual defects found |
+| POS cart entrance | PASS (fixture) | Runtime `jata-line-in` |
+| POS cart removal exit | NOT IMPLEMENTED | Removal is immediate; no exit animation |
+| POS quantity and total feedback | PASS (fixture) | Runtime bump; reduced motion none |
+| POS pending/success/failure transitions | PASS (fixture) | Labels distinct; receipts say "Not a real sale" |
+| Owner-Lite preference on POS | NOT TESTED | POS rules are gated by reduced motion only, not by the Lite setting |
+| Real POS sale, checkout, payment verification | BLOCKED | Prisma engine unavailable |
+| Full POS keyboard journey | NOT TESTED | |
+| Motion recordings (video/trace) | NOT CAPTURED | Playwright video not attempted; runtime computed styles and screenshots only |
+
+Financial correctness (fixture): totals are server-shaped integers in KES. No amount is animated to a different value. No payment is executed.
