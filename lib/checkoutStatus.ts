@@ -3,7 +3,7 @@
  * The browser returning from Paystack is never treated as success: only a server
  * response with status PAID *and* an ACTIVE subscription is shown as confirmed.
  */
-export type CheckoutViewState = "paid" | "activating" | "processing" | "cancelled" | "expired" | "failed" | "signin" | "error";
+export type CheckoutViewState = "paid" | "activating" | "processing" | "cancelled" | "expired" | "failed" | "refunded" | "signin" | "error";
 
 export type CheckoutView = { state: CheckoutViewState; title: string; message: string; poll: boolean };
 
@@ -31,7 +31,11 @@ export function interpretVerifyResponse(httpStatus: number, data: unknown): Chec
   if (body.status === "EXPIRED") {
     return { state: "expired", title: "Payment expired", message: "This payment attempt expired before it was completed. Start a new checkout to try again.", poll: false };
   }
-  if (body.status === "FAILED" || body.status === "REFUNDED") {
+  if (body.status === "REFUNDED") {
+    // Money was returned after a settled payment. Shown as its own state, never as success or as a retry.
+    return { state: "refunded", title: "Payment refunded", message: "This payment was refunded. Your subscription has not been activated by this payment.", poll: false };
+  }
+  if (body.status === "FAILED") {
     return { state: "failed", title: "Payment not completed", message: serverError || "The payment was not completed. Your subscription has not been activated.", poll: false };
   }
   if (httpStatus >= 500) {

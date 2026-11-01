@@ -42,7 +42,10 @@ function installSubscriptionFixtureTransport() {
         body = {};
       }
     }
-    const simulated = await simulateSubscriptionApi({ outcome: outcomeFromPage(), method, path: url.pathname, body });
+    const outcome = outcomeFromPage();
+    (window as unknown as { __jataFixtureRequests?: { method: string; path: string; outcome: string }[] }).__jataFixtureRequests ??= [];
+    (window as unknown as { __jataFixtureRequests: { method: string; path: string; outcome: string }[] }).__jataFixtureRequests.push({ method, path: url.pathname, outcome });
+    const simulated = await simulateSubscriptionApi({ outcome, method, path: url.pathname, body });
     return (
       simulated ??
       new Response(JSON.stringify({ error: "FICTIONAL FIXTURE: this request is not part of the fixture. Nothing was sent." }), {

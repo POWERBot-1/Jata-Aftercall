@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { formatNumber } from "@/lib/dateFormat";
 
@@ -9,9 +9,12 @@ export default function CheckoutForm({ businessId, planId, businessName, planNam
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [amountKes, setAmountKes] = useState<number | null>(null);
+  // A ref locks the button within the same task, before React has committed `loading`; a closure can read stale state.
+  const inFlight = useRef(false);
 
   async function checkout() {
-    if (loading) return;
+    if (inFlight.current || loading) return;
+    inFlight.current = true;
     setLoading(true);
     setMessage("");
     let redirecting = false;
@@ -31,7 +34,7 @@ export default function CheckoutForm({ businessId, planId, businessName, planNam
     } catch {
       setMessage("We couldn’t reach checkout. Check your connection and try again.");
     } finally {
-      if (!redirecting) setLoading(false);
+      if (!redirecting) { setLoading(false); inFlight.current = false; }
     }
   }
 
@@ -48,6 +51,7 @@ export default function CheckoutForm({ businessId, planId, businessName, planNam
     <button type="button" disabled={loading} aria-busy={loading} onClick={checkout} className="jata-btn jata-btn-primary mt-5 w-full">
       {loading ? "Opening secure checkout…" : `Pay KES ${formatNumber(amountKes ?? priceKES)} with Paystack`}
     </button>
+    {loading ? <div className="jata-publish-progress mt-3" aria-hidden="true"><div className="jata-publish-progress__bar" /></div> : null}
     {message && <p role="alert" className="jata-state-enter mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{message}</p>}
     <p className="mt-4 text-xs text-zinc-600">Your subscription is activated only after Paystack confirms the payment to our server. If the payment is still processing, you’ll see that status — never a false “success”.</p>
     <Link href={`/dashboard/subscription?businessId=${encodeURIComponent(businessId)}`} className="jata-btn jata-btn-ghost mt-3 underline">Back to subscription</Link>

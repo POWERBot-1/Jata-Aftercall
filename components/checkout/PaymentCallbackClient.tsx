@@ -1,0 +1,123 @@
+"use client";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { CHECKOUT_POLL_INTERVALS_MS, interpretVerifyResponse, type CheckoutView } from "@/lib/checkoutStatus";
+
+const LOADING: CheckoutView = { state: "error", title: "Checking payment", message: "Verifying payment with the server…", poll: false };
+
+/**
+ * Where to send somebody who just paid for the Business POS (§4, §43, §67).
+ *
+ * The id is resolved by the server from the plan the payment actually settled — it is never taken
+ * from the URL — and it is shape-checked here before it becomes a link, so this cannot be aimed at
+ * another business or turned into an open redirect.
+ */
+const POS_BUSINESS_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+function posReturnHref(value: unknown): string | null {
+  return typeof value === "string" && POS_BUSINESS_ID.test(value) ? `/dashboard/pos/${encodeURIComponent(value)}` : null;
+}
+
+function autopilotReturnHref(value: unknown): string | null {
+  return typeof value === "string" && POS_BUSINESS_ID.test(value) ? `/dashboard/autopilot/${encodeURIComponent(value)}` : null;
+}
+
+export function CallbackInner() {
+  const searchParams = useSearchParams();
+  const reference = searchParams.get("reference") || searchParams.get("trxref") || "";
+  const testMock = searchParams.get("mock") === "success";
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<CheckoutView>(LOADING);
+  const [posHref, setPosHref] = useState<string | null>(null);
+  const [autopilotHref, setAutopilotHref] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const verify = useCallback(async () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (!reference) {
+      setLoading(false);
+      setView({ state: "error", title: "Payment status unavailable", message: "No payment reference was returned. Check your payment history or contact support.", poll: false });
+      return;
+    }
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({ reference });
+      if (testMock) query.set("mock", "success");
+      const response = await fetch(`/api/paystack/verify?${query.toString()}`, { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      setPosHref(posReturnHref((data as { posBusinessId?: unknown } | null)?.posBusinessId));
+      setAutopilotHref(autopilotReturnHref((data as { autopilotBusinessId?: unknown } | null)?.autopilotBusinessId));
+      setView(interpretVerifyResponse(response.status, data));
+    } catch {
+      setView({ state: "error", title: "Payment status unavailable", message: "We couldn’t reach payment verification. Check your connection — we’ll keep trying.", poll: true });
+    } finally {
+      setLoading(false);
+    }
+  }, [reference, testMock]);
+
+  useEffect(() => { void verify(); }, [verify]);
+
+  // Automatic re-checks with backoff while the payment is still processing.
+  useEffect(() => {
+    if (loading || !view.poll) return;
+    if (attempt >= CHECKOUT_POLL_INTERVALS_MS.length) return;
+    timer.current = setTimeout(() => { setAttempt((n) => n + 1); void verify(); }, CHECKOUT_POLL_INTERVALS_MS[attempt]);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [loading, view, attempt, verify]);
+
+  const stoppedPolling = view.poll && attempt >= CHECKOUT_POLL_INTERVALS_MS.length;
+  const tone = view.state === "paid" ? "alert-success" : view.state === "processing" || view.state === "activating" || view.state === "refunded" ? "alert-warning" : view.state === "error" || view.state === "signin" ? "alert-warning" : "alert-error";
+  // Indeterminate bar only while the server is actually being asked again (loading or still processing).
+  const awaitingServer = loading || view.state === "processing";
+
+  return <main id="main" className="mx-auto max-w-md px-4 py-10 text-center">
+    <div aria-live="polite" aria-busy={loading}>
+      {loading && view === LOADING ? (
+        <>
+          <p role="status" className="text-sm">Verifying payment with the server…</p>
+          <div className="jata-publish-progress mt-3" aria-hidden="true"><div className="jata-publish-progress__bar" /></div>
+        </>
+      ) : (
+        <div key={view.state} className="jata-state-enter">
+          <h1 className="text-xl font-bold">{view.title}{view.state === "paid" ? " ✓" : ""}</h1>
+          <p role="status" className={`mt-3 rounded-xl border p-3 text-sm ${tone}`}>{view.message}</p>
+          {awaitingServer ? <div className="jata-publish-progress mt-3" aria-hidden="true"><div className="jata-publish-progress__bar" /></div> : null}
+          {view.state === "processing" && <p className="mt-2 text-xs text-zinc-600">Paying by M-Pesa? Approve the prompt on your phone. Confirmation can take a minute.</p>}
+          {stoppedPolling && <p className="mt-2 text-xs text-zinc-600">We’ve stopped checking automatically. Use “Check payment status” to try again — you won’t be charged twice.</p>}
+          {reference && <p className="mt-2 break-all font-mono text-xs text-zinc-600">Reference: {reference}</p>}
+        </div>
+      )}
+    </div>
+    {view.state === "paid" ? (
+      // Somebody who paid for the Business POS lands in the POS they just bought, not in a
+      // dashboard that has never mentioned it (§4 ends at "LIVE", §67 keeps the products apart).
+      <Link href={autopilotHref ?? (posHref ?? "/dashboard")} className="jata-btn jata-btn-primary mt-6">
+        {posHref ? "Go to my POS" : autopilotHref ? "Go to JATA Autopilot" : "Go to dashboard"}
+      </Link>
+    ) : view !== LOADING && (
+      <>
+        {view.state === "refunded" ? null : view.state === "signin" ? (
+          <Link href="/login" className="jata-btn jata-btn-primary mt-5">Sign in</Link>
+        ) : view.state === "cancelled" || view.state === "expired" || view.state === "failed" ? (
+          <Link href={autopilotHref ?? (posHref ? `${posHref}/plan` : "/dashboard/subscription")} className="jata-btn jata-btn-primary mt-5">Try again</Link>
+        ) : (
+          <button type="button" onClick={() => { setAttempt(0); void verify(); }} disabled={loading} className="jata-btn jata-btn-primary mt-5">
+            {loading ? "Checking…" : "Check payment status"}
+          </button>
+        )}
+        <div>
+          <Link href={autopilotHref ?? (posHref ? `${posHref}/plan` : "/dashboard/subscription")} className="jata-btn jata-btn-ghost mt-3 underline">
+            {posHref ? "Back to my POS plan" : autopilotHref ? "Back to JATA Autopilot" : "Back to subscription"}
+          </Link>
+        </div>
+      </>
+    )}
+  </main>;
+}
+
+/** The real checkout callback: the browser's return from Paystack is only a trigger to ask the server. */
+export default function PaymentCallbackClient() {
+  return <Suspense fallback={<p className="p-8 text-center">Checking payment…</p>}><CallbackInner /></Suspense>;
+}
