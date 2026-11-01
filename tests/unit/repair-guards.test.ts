@@ -261,6 +261,12 @@ describe("runtime and schema guards", () => {
     expect(controlPlane).toContain("CREATE TABLE \"ControlAuditEvent\"");
     expect(controlPlane).toContain("control_audit_event_immutable");
     expect(controlPlane).toContain("control_role_grant_immutable");
+    expect(controlPlane).toContain('"ControlAuditEvent_actorId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_action_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_scopeBusinessId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_targetType_targetId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_actorId_fkey"');
+    expect(controlPlane).toContain('"ControlAuditEvent_scopeBusinessId_fkey"');
     expect(controlPlane).not.toMatch(/INSERT\s+INTO\s+\"ControlRoleGrant\"/i);
     expect(controlPlane).not.toMatch(/UPDATE\s+\"User\"|UPDATE\s+\"Business\"/i);
     const activationReview = readFileSync(path.join(root, "prisma/migrations/20261107000000_agent_activation_review/migration.sql"), "utf8");

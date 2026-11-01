@@ -169,7 +169,7 @@ export function ControlConsole() {
       {secret ? <div className="mt-4 rounded-xl border border-[color:var(--ws-border)] p-4" aria-live="polite">
         <p className="font-semibold">Add this account to an authenticator app</p>
         <p className="ws-tiny mt-1">This secret is shown once. Store it only in the authenticator; do not send it to support or paste it into a ticket.</p>
-        <code className="mt-3 block break-all rounded bg-[color:var(--ws-canvas)] p-3 text-sm">{secret}</code>
+        <code className="mt-3 block break-all rounded-sm bg-[color:var(--ws-canvas)] p-3 text-sm">{secret}</code>
         {uri ? <p className="ws-tiny mt-2">Issuer: JATA AFTERCALL Control · TOTP, SHA1, 6 digits, 30 seconds</p> : null}
       </div> : null}
       {mfaStatus.enrolled || secret ? <form className="mt-4 space-y-3" onSubmit={verifyMfa}>
@@ -238,7 +238,7 @@ function SectionContent({ sectionKey, section, permissions, businesses, query, s
   if (sectionKey === "communications") return <Breakdown label="Outbox states (not delivery receipts)" rows={data.byState.map((row: any) => ({ status: row.state, count: row.count }))} />;
   if (sectionKey === "system") return <div className="mt-3 flex gap-2"><span className="ws-pill" data-tone="live">Application {data.application}</span><span className="ws-pill" data-tone="live">Database {data.database}</span><span className="ws-tiny">{data.observedAt}</span></div>;
   if (sectionKey === "exceptions") return <div className="ws-stats mt-4"><Metric label="Failed/refunded payment records" value={data.failedOrRefundedPaymentRecords} /><Metric label="Pending agent applications" value={data.pendingAgentApplications} /><Metric label="Failed/unknown notification rows" value={data.failedOrUnknownNotificationRows} /></div>;
-  if (sectionKey === "audit") return <div className="mt-4 space-y-2">{auditEvents.length ? auditEvents.map((row: any) => <article key={row.id} className="rounded-lg border border-[color:var(--ws-border)] p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{row.action}</strong><span className="ws-pill" data-tone={row.outcome === "SUCCESS" ? "live" : "draft"}>{row.outcome}</span></div><p className="ws-tiny mt-1">{row.actorRole} · {row.actorId} · {row.targetType}{row.targetId ? `/${row.targetId}` : ""} · {new Date(row.createdAt).toLocaleString()}</p>{row.reason ? <p className="ws-muted mt-1">Reason: {row.reason}</p> : null}</article>) : <p className="ws-muted">No control audit events are in this permission scope.</p>}{auditNextCursor ? <button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={onLoadMoreAudit}>Load next audit page</button> : null}</div>;
+  if (sectionKey === "audit") return <div className="mt-4 space-y-2">{auditEvents.length ? auditEvents.map((row: any) => <article key={row.id} className="rounded-lg border border-[color:var(--ws-border)] p-3"><div className="flex flex-wrap justify-between gap-2"><strong>{row.action}</strong><span className="ws-pill" data-tone={row.outcome === "SUCCESS" ? "live" : "draft"}>{row.outcome}</span></div><p className="ws-tiny mt-1">{row.actorRole} · {row.actorId} · {row.targetType}{row.targetId ? `/${row.targetId}` : ""} · {formatAuditTimestamp(row.createdAt)}</p>{row.reason ? <p className="ws-muted mt-1">Reason: {row.reason}</p> : null}</article>) : <p className="ws-muted">No control audit events are in this permission scope.</p>}{auditNextCursor ? <button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={onLoadMoreAudit}>Load next audit page</button> : null}</div>;
   if (sectionKey === "providers") return <p className="ws-muted mt-3">{section.note}</p>;
   return <pre className="mt-3 overflow-auto rounded-lg bg-[color:var(--ws-canvas)] p-3 text-xs">{JSON.stringify(data, null, 2)}</pre>;
 }
@@ -255,4 +255,10 @@ function BusinessAction({ business, status, label, reason, setReason, submit, pe
       <div className="flex gap-2"><button type="button" disabled={pending || reason.trim().length < 12} className="ws-btn-amber" onClick={submit}>{pending ? "Saving…" : `Confirm ${label.toLowerCase()}`}</button><button type="button" className="ws-btn-outline ws-btn-outline--ink" onClick={() => setConfirm(false)}>Cancel</button></div>
     </div>}
   </div>;
+}
+
+function formatAuditTimestamp(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Unknown time";
+  return new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" }).format(date);
 }

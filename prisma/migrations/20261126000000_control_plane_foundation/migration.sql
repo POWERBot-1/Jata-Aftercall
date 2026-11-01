@@ -17,13 +17,13 @@ CREATE TABLE "ControlRoleGrant" (
   "revocationReason" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ControlRoleGrant_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "ControlRoleGrant_user_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT "ControlRoleGrant_scopeBusiness_fkey" FOREIGN KEY ("scopeBusinessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT "ControlRoleGrant_provisioner_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT "ControlRoleGrant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "ControlRoleGrant_scopeBusinessId_fkey" FOREIGN KEY ("scopeBusinessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "ControlRoleGrant_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
-CREATE INDEX "ControlRoleGrant_user_revoked_idx" ON "ControlRoleGrant"("userId", "revokedAt");
-CREATE INDEX "ControlRoleGrant_role_revoked_idx" ON "ControlRoleGrant"("role", "revokedAt");
-CREATE INDEX "ControlRoleGrant_scope_revoked_idx" ON "ControlRoleGrant"("scopeBusinessId", "revokedAt");
+CREATE INDEX "ControlRoleGrant_userId_revokedAt_idx" ON "ControlRoleGrant"("userId", "revokedAt");
+CREATE INDEX "ControlRoleGrant_role_revokedAt_idx" ON "ControlRoleGrant"("role", "revokedAt");
+CREATE INDEX "ControlRoleGrant_scopeBusinessId_revokedAt_idx" ON "ControlRoleGrant"("scopeBusinessId", "revokedAt");
 
 -- Grant rows are historical records. The only permitted update is one-time revocation; permission,
 -- actor, role and scope changes require a new row so audits can reconstruct prior authorization.
@@ -63,7 +63,7 @@ CREATE TABLE "ControlMfaCredential" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "ControlMfaCredential_pkey" PRIMARY KEY ("userId"),
-  CONSTRAINT "ControlMfaCredential_user_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "ControlMfaCredential_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT "ControlMfaCredential_failedAttempts_check" CHECK ("failedAttempts" >= 0)
 );
 
@@ -83,13 +83,13 @@ CREATE TABLE "ControlAuditEvent" (
   "correlationId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ControlAuditEvent_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "ControlAuditEvent_actor_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT "ControlAuditEvent_business_fkey" FOREIGN KEY ("scopeBusinessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT "ControlAuditEvent_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "ControlAuditEvent_scopeBusinessId_fkey" FOREIGN KEY ("scopeBusinessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
-CREATE INDEX "ControlAuditEvent_actor_created_idx" ON "ControlAuditEvent"("actorId", "createdAt");
-CREATE INDEX "ControlAuditEvent_action_created_idx" ON "ControlAuditEvent"("action", "createdAt");
-CREATE INDEX "ControlAuditEvent_scope_created_idx" ON "ControlAuditEvent"("scopeBusinessId", "createdAt");
-CREATE INDEX "ControlAuditEvent_target_created_idx" ON "ControlAuditEvent"("targetType", "targetId", "createdAt");
+CREATE INDEX "ControlAuditEvent_actorId_createdAt_idx" ON "ControlAuditEvent"("actorId", "createdAt");
+CREATE INDEX "ControlAuditEvent_action_createdAt_idx" ON "ControlAuditEvent"("action", "createdAt");
+CREATE INDEX "ControlAuditEvent_scopeBusinessId_createdAt_idx" ON "ControlAuditEvent"("scopeBusinessId", "createdAt");
+CREATE INDEX "ControlAuditEvent_targetType_targetId_createdAt_idx" ON "ControlAuditEvent"("targetType", "targetId", "createdAt");
 
 CREATE FUNCTION control_audit_event_immutable() RETURNS trigger AS $$
 BEGIN
