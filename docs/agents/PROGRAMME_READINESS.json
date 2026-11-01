@@ -45,19 +45,23 @@
     "acceptance": "Anonymous users, merchants and agents are denied both `/control` and its APIs; explicitly authorized roles are allowed; forged-role, CSRF and session-revocation tests pass; verify canonical HTTPS/domain without production changes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7003 (ADMIN-003)",
     "implementationLocation": "`app/control/page.tsx`, `app/control/sign-in/page.tsx`, `components/control/ControlConsole.tsx`, `components/LoginForm.tsx`, `app/login/page.tsx`, `lib/control/access.ts`, `app/api/control/**`.",
-    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292`: full local suite, focused Control route/security tests, typecheck and HTTP smoke. Unauthenticated `/control` redirects 307 to sign-in; authenticated access is denied with `POLICY_PENDING` before grant lookup by unit test; `/api/control/records?kind=payments` returns 401 without a session and invalid kind returns 400. No authenticated browser journey or canonical-domain check.",
-    "testResult": "BLOCKED: on `0560ac24467e0f7125b4b6dedbacf23f4080a292`, `npm test` passed 339 suites / 3,972 tests (36 suites and 301 DB-dependent tests skipped). `/control` is locked behind `CONTROL_ROLE_POLICY_APPROVED = false`; the authenticated page presents the pending-policy state and every protected API returns `POLICY_PENDING` after authentication, regardless of a nominal stored grant. Loopback unauthenticated `/control` \u2192 307, `/control/policy` \u2192 200, records API \u2192 401, invalid kind \u2192 400. No owner-approved test grants/accounts, six-role browser sessions, screenshots, canonical-domain verification, or production grants.",
+    "verificationMethod": "At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (CI pull-request merge commit `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used.",
+    "testResult": "BLOCKED: At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (the CI pull-request merge commit was `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. Policy remains closed. The prior direct API denials are unit-level evidence; the authenticated real-browser/API journey did not complete its policy assertion on this head. Do not infer acceptance from the unrelated passing suite/build.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877581",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877473",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877523"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-003",
-    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "verificationCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No owner-approved role/action/scope and safe non-production provisioning path; `CONTROL_ROLE_POLICY_APPROVED` intentionally remains false. No authenticated six-role browser journeys, screenshots/recordings, or canonical-domain HTTPS/cookie verification. Production grants intentionally remain unprovisioned.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "blocker": "No owner-provided per-role ALLOW decisions or exact scope; all 90 cells remain DENY and CONTROL_ROLE_POLICY_APPROVED=false. The first authenticated browser PATCH assertion failed at test-harness Origin handling; corrected browser-origin validation and its exact-head CI result are required. Positive six-role sessions, MFA/recovery, grant expiry, tenant-authorized flows, full persisted application audit outcomes and canonical production-domain verification remain untested/blocked.",
+    "sourceCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "implementationEvidence": [
       "app/control/page.tsx",
       "app/control/policy/page.tsx",
@@ -72,18 +76,21 @@
       "tests/unit/control-records-route.test.ts",
       "tests/unit/control-role-policy.test.ts",
       "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
-      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md"
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+      "scripts/browser/control-deny.check.mjs",
+      "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md"
     ],
-    "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentSourceSha": "0153c07d5d712701e2536f184ae14fcd25680f0e",
+    "currentAssessmentStatus": "BLOCKED",
+    "testedPullRequestMergeSha": "c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1"
   },
   "ADMIN-004": {
     "status": "BLOCKED",
     "acceptance": "Test horizontal/vertical escalation, forged roles, direct API, unauthenticated requests, CSRF, session revocation, MFA and immutable audit; unauthorized financial/configuration changes must be impossible.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7004 (ADMIN-004)",
     "implementationLocation": "`prisma/schema.prisma`, `prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `lib/control/**`, `app/api/control/**`, `tests/unit/control-plane-*`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `tests/security/auth-session-revocation.test.ts`.",
-    "verificationMethod": "On exact PR head d842777bc3e4a3cd15a9f8dec0c15a1210a1764c, unit/helper suites and the isolated PostgreSQL E2E job passed. The DB-backed `npx vitest run --exclude \"tests/e2e/**\"` step is explicitly fail-on-skip and passed; it includes `tests/prisma/control-plane-foundation-postgres.test.ts`, which creates a disposable scratch schema, verifies zero seeded grants, and proves audit/grant update/delete resistance plus rollback/reapply. This validates trigger-level integrity for the current migration/source, not a successful role-mediated production API write or a complete event with every before/after/correlation field. Global role policy remains pending; six authenticated journeys/provisioning require owner approval.",
-    "testResult": "BLOCKED: current-head DB-backed run 41304813212 passed its no-skip application suite, including the disposable Control foundation PostgreSQL test for append-only audit/grant behavior and rollback/reapply; current-head migration/PG verification also passed in 41304813216. The DB fixture proves ordinary update/delete resistance on audit rows and grants but does not create a real authenticated Control actor/event or verify the complete actor/role/action/target/time/outcome/correlation/before-after record through an enabled API. No approved role/action policy or provisioning path, six-role browser journeys, MFA recovery policy or full cross-tenant browser acceptance.",
+    "verificationMethod": "At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (CI pull-request merge commit `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used.",
+    "testResult": "BLOCKED: At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (the CI pull-request merge commit was `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. Policy remains closed. The prior direct API denials are unit-level evidence; the authenticated real-browser/API journey did not complete its policy assertion on this head. Do not infer acceptance from the unrelated passing suite/build.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -92,13 +99,17 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813212",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813216",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813296"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813296",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877581",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877473",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877576",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877454"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-004",
-    "verificationCommit": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
+    "verificationCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Exact role/action/scope, identity and financial visibility, MFA recovery, initial grant/bootstrap and role-specific session policy remain owner decisions. The role policy remains unapproved and the global access guard remains closed. No production grants; non-production authenticated six-role and real database browser acceptance remain blocked.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "blocker": "No owner-provided per-role ALLOW decisions or exact scope; all 90 cells remain DENY and CONTROL_ROLE_POLICY_APPROVED=false. The first authenticated browser PATCH assertion failed at test-harness Origin handling; corrected browser-origin validation and its exact-head CI result are required. Positive six-role sessions, MFA/recovery, grant expiry, tenant-authorized flows, full persisted application audit outcomes and canonical production-domain verification remain untested/blocked.",
+    "sourceCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "implementationEvidence": [
       "lib/control/permissions.ts",
       "lib/control/access.ts",
@@ -114,29 +125,35 @@
       "tests/security/auth-session-revocation.test.ts",
       "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
       "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
-      "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
+      "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md",
+      "scripts/browser/control-deny.check.mjs",
+      "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md"
     ],
-    "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentSourceSha": "0153c07d5d712701e2536f184ae14fcd25680f0e",
+    "currentAssessmentStatus": "BLOCKED",
+    "testedPullRequestMergeSha": "c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1"
   },
   "ADMIN-005": {
     "status": "BLOCKED",
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7005 (ADMIN-005)",
     "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
-    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` route tests, full local test suite and loopback HTTP smoke. `/api/control/records` contains row-locked explicit permission checks, paginated tenant-scoped subscription/payment/commission reads, platform-wide-only agent application reads, minimal field selection and per-page audit evidence; production access is currently disabled by the global pending-policy guard. No browser or live DB role data inspected.",
-    "testResult": "BLOCKED: candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` adds authoritative paginated record-view code for subscriptions, payment statuses, agent applications and immutable commission metadata, with tenant cursor isolation and `CONTROL_RECORDS_READ` audit evidence. It withholds payment amounts/provider IDs, agent contacts and commission amounts. The global `POLICY_PENDING` gate means no protected operational data is currently exposed. Communications/exceptions/health/audit modules remain aggregate or unavailable; full six-role DB validation, viewport screenshots, accessibility and reduced-motion inspection not performed.",
+    "verificationMethod": "At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (CI pull-request merge commit `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. The CI artifact upload step succeeded, but its ZIP could not be independently downloaded from GitHub artifact storage (EOF); screenshots are not independently inspected.",
+    "testResult": "BLOCKED: At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (the CI pull-request merge commit was `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. The new check generated pending-policy `/control` screenshots at the six requested viewports and uploaded its artifact before the job failed. Artifact download returned EOF, so no screenshot is independently inspected. These images depict denial state only, not an enabled console or operational data. No authorized role-positive browser journey, tenant-scoped read/write or enabled-console visual acceptance is established.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877581",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877473"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-005",
-    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "verificationCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Owner-approved grant mapping and non-production DB roles unavailable; global fail-closed policy gate intentionally prevents current operational reads. User PII, full communications detail/recovery, provider probes, financial amounts/eligibility and several actions remain pending/unavailable. No six-viewport evidence.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "blocker": "Exact role/action/scope decisions are absent; all 90 cells remain DENY and the global policy gate remains false. Screenshots are from the pending-policy shell only and could not be independently inspected because artifact download returned EOF. Enabled-console data/operation, positive role/tenant isolation, persisted successful audit, MFA/revocation, accessibility/reduced-motion and visual acceptance remain blocked or not tested.",
+    "sourceCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
       "app/api/control/records/route.ts",
@@ -150,10 +167,14 @@
       "tests/unit/control-plane-routes.test.ts",
       "tests/unit/control-records-route.test.ts",
       "tests/unit/control-plane-security.test.ts",
-      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md"
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+      "scripts/browser/control-deny.check.mjs",
+      "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md",
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md"
     ],
-    "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentSourceSha": "0153c07d5d712701e2536f184ae14fcd25680f0e",
+    "currentAssessmentStatus": "BLOCKED",
+    "testedPullRequestMergeSha": "c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1"
   },
   "ADMIN-006": {
     "status": "BLOCKED",
@@ -235,20 +256,23 @@
     "acceptance": "Deliver a functional, non-mocked console with real data, audited changes, all modules and security tests; independently inspect real screenshots at 320\u00d7568, 360\u00d7800, 390\u00d7844, 430\u00d7932, 768\u00d71024 and 1366\u00d7768; report status, recovery, exact branch/SHA/PR and production verification separately.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7010 (ADMIN-010)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `prisma/**`, `lib/control/**`, control route/security/PostgreSQL test paths, and `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` full local suite (339 passed suites, 36 skipped; 3,972 tests passed, 301 skipped), current typecheck, focused Control tests, targeted lint and HTTP smoke. Repository-wide lint has 0 errors/49 warnings on the preceding code batch. An earlier production build attempt compiled before being killed during TypeScript after offline Prisma engine TLS failure; it was not a successful build on this candidate. No browser executable/screenshot artifact available for inspection.",
-    "testResult": "BLOCKED: policy matrix and scoped read-only list UI/API are implemented, but protected Control is intentionally disabled pending role policy. `/control/policy` renders (HTTP 200), unauthenticated Control redirects/denies safely, and authenticated policy gate is unit-tested. Candidate `npm test` passes 3,972 tests. No approved role provisioning, authenticated journeys, genuine screenshots/recordings, six viewport review, independent accessibility/reduced-motion review, completed full production build or complete all-module operations.",
+    "verificationMethod": "At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (CI pull-request merge commit `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. The CI artifact upload step succeeded, but its ZIP could not be independently downloaded from GitHub artifact storage (EOF); screenshots are not independently inspected.",
+    "testResult": "BLOCKED: At feature head `0153c07d5d712701e2536f184ae14fcd25680f0e` (the CI pull-request merge commit was `c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1`), the focused local Control policy/access/security suite passed 20/20. Exact-head full no-database suite 41314877407 passed (374 test files, 4,232 tests); Release Validation 41314877473, migration rehearsal 41314877576, and POS/ERP verification 41314877454 passed; these are not enabled Control acceptance. Interactive Business E2E 41314877581 passed dependency installation, Prisma generation, lint/typecheck, migrations, database suites, business journeys and production build, then FAILED in the new Control denial test: the valid PATCH returned HTTP 403 without `POLICY_PENDING` (`code=none`). The initial harness supplied Origin from Node fetch rather than a browser-origin request, so this is a test-harness failure and not proof of a product authorization defect or a passing denial. The test harness was corrected in the follow-up source to issue PATCH from Chromium; this pre-correction run is not acceptance. No positive capability access or production data/grant was used. The new check generated pending-policy `/control` screenshots at the six requested viewports and uploaded its artifact before the job failed. Artifact download returned EOF, so no screenshot is independently inspected. These images depict denial state only, not an enabled console or operational data. No authorized role-positive browser journey, tenant-scoped read/write or enabled-console visual acceptance is established.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877581",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41314877473"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-010",
-    "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "verificationCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No owner-approved role mapping or isolated disposable-account provisioning; global policy gate intentionally denies access. Authenticated journeys and real Control screenshots/recordings at six viewports, independent visual/accessibility review, current full native production build and several operational modules remain outstanding.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "blocker": "Exact role/action/scope decisions are absent; all 90 cells remain DENY and the global policy gate remains false. Screenshots are from the pending-policy shell only and could not be independently inspected because artifact download returned EOF. Enabled-console data/operation, positive role/tenant isolation, persisted successful audit, MFA/revocation, accessibility/reduced-motion and visual acceptance remain blocked or not tested.",
+    "sourceCommit": "0153c07d5d712701e2536f184ae14fcd25680f0e",
     "implementationEvidence": [
       "app/control/page.tsx",
       "app/control/policy/page.tsx",
@@ -263,10 +287,13 @@
       "tests/unit/control-records-route.test.ts",
       "tests/unit/control-role-policy.test.ts",
       "tests/unit/control-plane-routes.test.ts",
-      "tests/unit/control-plane-security.test.ts"
+      "tests/unit/control-plane-security.test.ts",
+      "scripts/browser/control-deny.check.mjs",
+      "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md"
     ],
-    "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentSourceSha": "0153c07d5d712701e2536f184ae14fcd25680f0e",
+    "currentAssessmentStatus": "BLOCKED",
+    "testedPullRequestMergeSha": "c185c3a1e502efc1c47ce6fbf78c2bbc8c0bedf1"
   },
   "MOTION-001": {
     "status": "BLOCKED",
