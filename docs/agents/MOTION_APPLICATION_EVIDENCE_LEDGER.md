@@ -371,3 +371,38 @@ Code commits: `2846f93` (Studio focus, framing, AI fixture) and `6d69075` (check
 - `npx vitest run` (no DB): 343 files passed, 36 skipped; 4,035 tests passed, 303 skipped; 0 failures. Exit 1 only from 67 unhandled `PrismaClientInitializationError` (environment).
 - `tsc --noEmit`: exit 0. ESLint: clean on changed files.
 - CI on `6d69075`: see PR #79 checks. A pending check is not a pass.
+
+## Phase 7 — Registration and checkout fixture (code `d51350e`)
+
+Development-only fixture of the **real** `RegisterForm` and `CheckoutForm` with fictional data. Route: `/dev/subscription-fixture?outcome=success|failure|cancelled`; simulated result page `/dev/subscription-fixture/paystack-simulated`. Both return 404 in production. No payment, charge, subscription, entitlement, or account is created. The simulated checkout returns a same-origin fixture URL only.
+
+**Environment notes (this pass)**
+- `node_modules` restored with `npm ci` (lockfile). `next` 16.4.2 confirmed. `prisma generate` cannot download its engine (`binaries.prisma.sh` blocked), so Prisma-typed `tsc` errors remain in `tests/prisma/*` and `autopilot-phase1-hardening` (environment only).
+- The Next dev server **must be opened on `localhost`**. On `127.0.0.1` the HMR WebSocket fails and React never hydrates, so forms fall back to native submit. Captures use `localhost`.
+- Framing check on the live server: `/dev/studio-fixture/site` → `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`; `/dev/subscription-fixture`, `/pricing` → `DENY`.
+
+**Code changes**
+- `components/RegisterForm.tsx`: optional `onRegistered` hook. Production still calls `router.push("/dashboard")` (tested).
+- `components/CheckoutForm.tsx`: error alert uses the existing `jata-state-enter` class (reduced-motion safe). Checkout logic is unchanged; the amount still comes from the server.
+- `components/subscription/fixture/SubscriptionFixtureClient.tsx`, `lib/subscription/fixtures/subscriptionFixture.ts`, two pages under `app/dev/subscription-fixture/`.
+- `tests/unit/subscription-fixture-harness.test.ts`: 10 tests, passing (production 404, no provider host or secret, same-origin fixture URLs, fail-closed routes, KES 1,500 from fixture, failure creates no account or payment, simulated labels never claim activation).
+
+**Evidence** (`docs/agents/evidence/fintech-motion-2026-11-01/subscription/`)
+- Six viewports × nine states (register initial, register failure, register success simulated, checkout initial, checkout pending, checkout success simulated, checkout failure, checkout cancelled simulated). Totals: 0 page errors, 0 horizontal overflow, 0 external requests (`report.json`).
+- 390×844 and 1366×768 PNGs committed. Opened and inspected: `390x844-register-failure`, `390x844-checkout-failure`, `390x844-result-success-simulated`.
+- Keyboard (390×844): 36 tab stops, all with visible focus. Reduced motion: checkout alert runs `jata-state-in` normally (1 animation) and none under `prefers-reduced-motion` (0).
+
+**Findings**
+- Registration failure shows the server message twice (field error plus form alert) because `RegisterForm` assigns `err` to both the name and email fields. This is pre-existing production behaviour, not changed here.
+- Dev-only hydration warning on every page: the product-theme radio input has a style mismatch from the root layout. Not from this fixture; not fixed here.
+- Motion added to these forms is limited to the alert entrance. The forms are otherwise visually unchanged. This does **not** meet the checkout/payment motion acceptance criteria.
+
+**Status after this pass**
+| Surface | Result |
+|---|---|
+| Registration form: states, keyboard, reduced motion | PASS (fixture) |
+| Checkout: pending, simulated success/failure/cancel | PASS (fixture); motion is minimal |
+| Payment verified/refunded transitions, subscription activation, onboarding progress | NOT TESTED / NOT STARTED |
+| Plan selection (`/pricing`) inside the fixture | NOT TESTED |
+| JATA Autopilot fixture (`AutopilotCommandCenter.tsx`) | NOT STARTED |
+| Authenticated, database-backed flows | BLOCKED (Prisma engine) |
