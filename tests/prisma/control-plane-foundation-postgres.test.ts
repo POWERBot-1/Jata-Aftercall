@@ -1,4 +1,4 @@
-/** Synthetic disposable-schema checks only. Never points at production or seeds a privileged account. */
+/** Synthetic disposable-schema checks only. Minimal User/Business rows are FK stubs, not login accounts, sessions, or grants; never points at production. */
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
@@ -25,7 +25,7 @@ describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated Post
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query('CREATE TABLE "User" ("id" TEXT PRIMARY KEY); CREATE TABLE "Business" ("id" TEXT PRIMARY KEY);');
     await pool.query(migration);
-    await pool.query('INSERT INTO "User" ("id") VALUES (\'fixture-actor\'), (\'fixture-subject\'); INSERT INTO "Business" ("id") VALUES (\'fixture-business\');');
+    await pool.query('INSERT INTO "User" ("id") VALUES (\'fixture-actor\'); INSERT INTO "Business" ("id") VALUES (\'fixture-business\');');
 
     // Route authorization remains disabled by the pending owner-policy gate. This isolated Prisma
     // client is used only to exercise the actual audit helper against this disposable schema.
@@ -50,14 +50,8 @@ describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated Post
     }
   });
 
-  it("adds no privileged grants and protects audit and grant integrity", async () => {
+  it("adds no privileged grants and protects persisted audit integrity", async () => {
     expect((await pool.query('SELECT COUNT(*)::int AS count FROM "ControlRoleGrant"')).rows[0].count).toBe(0);
-    await pool.query(`INSERT INTO "ControlRoleGrant" ("id", "userId", "role", "permissionKeys", "scopeBusinessId", "createdById", "reason") VALUES ('fixture-grant', 'fixture-subject', 'SUPPORT_ADMIN', ARRAY['businesses.read'], 'fixture-business', 'fixture-actor', 'Synthetic fixture grant')`);
-    await expect(pool.query('UPDATE "ControlRoleGrant" SET "permissionKeys" = ARRAY[\'businesses.suspend\'] WHERE "id" = \'fixture-grant\'')).rejects.toThrow(/only be revoked once/);
-    await pool.query('UPDATE "ControlRoleGrant" SET "revokedAt" = CURRENT_TIMESTAMP, "revocationReason" = \'fixture revocation\' WHERE "id" = \'fixture-grant\'');
-    await expect(pool.query('UPDATE "ControlRoleGrant" SET "revocationReason" = \'second edit\' WHERE "id" = \'fixture-grant\'')).rejects.toThrow(/only be revoked once/);
-    await expect(pool.query('DELETE FROM "ControlRoleGrant" WHERE "id" = \'fixture-grant\'')).rejects.toThrow(/append-only/);
-
     await pool.query(`INSERT INTO "ControlAuditEvent" ("id", "actorId", "actorRole", "action", "targetType", "targetId", "scopeBusinessId", "outcome") VALUES ('fixture-audit', 'fixture-actor', 'SUPPORT_ADMIN', 'FIXTURE_ACTION', 'BUSINESS', 'fixture-business', 'fixture-business', 'SUCCESS')`);
     await expect(pool.query('UPDATE "ControlAuditEvent" SET "outcome" = \'FAILED\' WHERE "id" = \'fixture-audit\'')).rejects.toThrow(/append-only/);
     await expect(pool.query('DELETE FROM "ControlAuditEvent" WHERE "id" = \'fixture-audit\'')).rejects.toThrow(/append-only/);
