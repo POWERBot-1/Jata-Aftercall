@@ -81,7 +81,8 @@ describe("runtime and schema guards", () => {
     // and the booking-time contract marker (owner decision 2026-10-14, report §J.1: one nullable
     // column that records which clock a booking was anchored to, so a legacy row keeps its stored
     // instant and its meaning and no historical row is rewritten or backfilled), the media version
-    // counter (one defaulted integer for strict compare-and-swap), and password recovery (additive
+    // counter (one defaulted integer for strict compare-and-swap), durable media cleanup identity
+    // (two nullable object-reference columns only; no historical asset is rewritten), and password recovery (additive
     // token table, per-account cooldown, and a defaulted session revocation counter), and the
     // additive paid-POS publication-resolution case (one table, indexes, and foreign keys only),
     // and the additive JATA Autopilot foundation (tenant-scoped Autopilot* tables, indexes, and
@@ -151,6 +152,8 @@ describe("runtime and schema guards", () => {
       "20261122000000_agent_notification_recovery_audit",
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
+      "20261125000000_media_storage_identity",
+      "20261126000000_control_plane_foundation",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -226,6 +229,7 @@ describe("runtime and schema guards", () => {
       "20261122000000_agent_notification_recovery_audit",
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
+      "20261126000000_control_plane_foundation",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -250,6 +254,21 @@ describe("runtime and schema guards", () => {
       expect(sql).not.toContain("DELETE FROM");
       expect(sql).not.toContain("UPDATE \"");
     }
+    const controlPlane = readFileSync(path.join(root, "prisma/migrations/20261126000000_control_plane_foundation/migration.sql"), "utf8");
+    expect(controlPlane).toContain("CREATE TYPE \"ControlRole\" AS ENUM");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlRoleGrant\"");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlMfaCredential\"");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlAuditEvent\"");
+    expect(controlPlane).toContain("control_audit_event_immutable");
+    expect(controlPlane).toContain("control_role_grant_immutable");
+    expect(controlPlane).toContain('"ControlAuditEvent_actorId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_action_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_scopeBusinessId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_targetType_targetId_createdAt_idx"');
+    expect(controlPlane).toContain('"ControlAuditEvent_actorId_fkey"');
+    expect(controlPlane).toContain('"ControlAuditEvent_scopeBusinessId_fkey"');
+    expect(controlPlane).not.toMatch(/INSERT\s+INTO\s+\"ControlRoleGrant\"/i);
+    expect(controlPlane).not.toMatch(/UPDATE\s+\"User\"|UPDATE\s+\"Business\"/i);
     const activationReview = readFileSync(path.join(root, "prisma/migrations/20261107000000_agent_activation_review/migration.sql"), "utf8");
     expect(activationReview).toContain(`CHECK ("agentStatus" IN ('INACTIVE', 'ACTIVE', 'SUSPENDED'))`);
     expect(activationReview).toContain(`ADD COLUMN "agentStatus" TEXT NOT NULL DEFAULT 'INACTIVE'`);
@@ -304,6 +323,22 @@ describe("runtime and schema guards", () => {
       "utf8",
     );
     expect(sql).toContain('ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0');
+    expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
+  });
+
+  it("keeps durable media cleanup identity nullable, additive, and tenant-addressable", () => {
+    const schema = readFileSync(path.join(root, "prisma/schema.prisma"), "utf8");
+    const start = schema.indexOf("model MediaAsset {");
+    const media = schema.slice(start, schema.indexOf("\n}", start));
+    expect(media).toContain("storageProvider String?");
+    expect(media).toContain("storageKey      String?  @db.Text");
+
+    const sql = readFileSync(
+      path.join(root, "prisma/migrations/20261125000000_media_storage_identity/migration.sql"),
+      "utf8",
+    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "storageProvider" TEXT');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "storageKey" TEXT');
     expect(sql.toUpperCase()).not.toMatch(/DROP|TRUNCATE|DELETE FROM|UPDATE \"|ALTER COLUMN/);
   });
 

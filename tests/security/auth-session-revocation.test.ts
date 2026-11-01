@@ -38,6 +38,16 @@ describe("credential-reset session revocation", () => {
     await expect(getSessionFromToken(token)).resolves.toBeNull();
   });
 
+  it("rejects an expired signed session before consulting account permissions", async () => {
+    const expiredToken = await new SignJWT({ userId: "user-a", email: "owner@example.test", role: "CUSTOMER", sessionVersion: 0 })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt(1)
+      .setExpirationTime(2)
+      .sign(new TextEncoder().encode(process.env.AUTH_SECRET));
+    await expect(getSessionFromToken(expiredToken)).resolves.toBeNull();
+    expect(mocks.findUnique).not.toHaveBeenCalled();
+  });
+
   it("keeps pre-feature sessions at the legacy default version zero until a reset occurs", async () => {
     const token = await new SignJWT({ userId: "user-a", email: "owner@example.test", role: "CUSTOMER" })
       .setProtectedHeader({ alg: "HS256" })

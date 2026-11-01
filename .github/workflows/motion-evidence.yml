@@ -36,7 +36,12 @@ jobs:
       - run: npm ci
       - run: bash scripts/lib/prisma-generate.sh
       - run: bash scripts/lib/prisma-cli.sh migrate deploy
-      - run: npm run seed
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+      - name: Seed fictional database fixtures
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
+        run: npm run seed
       - run: npm run build
       - name: Start isolated production build
         run: |

@@ -11,6 +11,8 @@
  * is live because the code for it exists.
  */
 
+import { getBaseUrl } from "../url";
+
 export type MpesaConfig = {
   env: "sandbox" | "production";
   baseUrl: string;
@@ -42,7 +44,9 @@ function absoluteUrl(value: string, base: string, path: string): string {
 }
 
 export function publicBaseUrl(): string {
-  return (envValue("PUBLIC_BASE_URL") || envValue("NEXTAUTH_URL") || "http://localhost:3000").replace(/\/$/, "");
+  // Keep provider callbacks on the same stable origin as auth, metadata and business URLs.
+  // In Vercel deployments this avoids falling back to localhost when operator URLs are unset.
+  return getBaseUrl(process.env);
 }
 
 export function readMpesaConfig(): MpesaConfig {

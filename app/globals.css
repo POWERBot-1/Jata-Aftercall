@@ -5487,7 +5487,7 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 .mk-brand__mark { background: rgb(240 160 60); color: rgb(26 20 13); border-radius: 0.35rem; padding: 0.2rem 0.4rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }
 .mk-brand__name { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; }
 .mk-nav { display: flex; flex: 1 1 auto; gap: 0.2rem 0.85rem; flex-wrap: wrap; min-width: 0; }
-.mk-nav a { min-height: 2.75rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.78); font-size: 0.82rem; font-weight: 600; text-decoration: none; }
+.mk-nav a { flex: 0 0 auto; min-height: 2.75rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.78); font-size: 0.82rem; font-weight: 600; text-decoration: none; }
 .mk-nav a:hover, .mk-link:hover { color: rgb(240 160 60); text-decoration: underline; }
 .mk-header__actions { display: flex; align-items: center; gap: 0.6rem; margin-left: auto; }
 .mk-link { min-height: 2.75rem; display: inline-flex; align-items: center; color: rgb(247 242 232 / 0.82); font-size: 0.82rem; font-weight: 700; text-decoration: none; }

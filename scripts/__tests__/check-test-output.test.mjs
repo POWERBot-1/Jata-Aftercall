@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCounts, stripAnsi, summaryLine, verdict } from "../ci/check-test-output.mjs";
+import { failureExcerpt, workflowCommandMessage } from "../ci/report-vitest-failure.mjs";
 
 // These tests cover the release gate's own failure logic. They exist because a
 // gate whose "fail" branch has never executed is decoration, not a gate.
@@ -59,4 +60,22 @@ test("FAIL: an unparseable summary blocks rather than silently passing", () => {
 
 test("FAIL: a run below the executed-test floor blocks", () => {
   assert.match(verdict({ passed: 3, failed: 0, skipped: 0, todo: 0 }, { min: 100 })[0], /floor is 100/);
+});
+
+test("failure diagnostics preserve Vitest title, assertion and stack in a bounded excerpt", () => {
+  const excerpt = failureExcerpt([
+    " ✓ passing.test.ts > okay",
+    " FAIL  tests/example.test.ts > reconciled model > rejects stale row",
+    "AssertionError: expected 1 to equal 2",
+    " ❯ tests/example.test.ts:41:19",
+    "Test Files  1 failed (1)",
+    "Tests  1 failed | 4 passed (5)",
+  ].join("\n"));
+  assert.ok(excerpt.includes("tests/example.test.ts > reconciled model > rejects stale row"));
+  assert.ok(excerpt.includes("expected 1 to equal 2"));
+  assert.ok(excerpt.includes("tests/example.test.ts:41:19"));
+});
+
+test("failure annotation encodes workflow-command metacharacters and line breaks", () => {
+  assert.equal(workflowCommandMessage("a%b\nc\rd"), "a%25b%0Ac%0Dd");
 });

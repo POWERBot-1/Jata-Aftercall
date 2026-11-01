@@ -149,3 +149,13 @@ prefixing, the skip-when-not-exclusively-demo guard, absence of any web-triggera
 the admin layout role gate, login rate limiting and generic errors, the restore-script account
 restriction, tenant guard exports, audit logging, and the "migrate never seeds" deployment rule.
 Run: `npx vitest run tests/unit/seeded-account-audit.test.ts`.
+
+## 8. Addendum — seed hardening (2026-11-01, implementation pending verification)
+
+This report is a historical snapshot. The seed implementation has since been changed locally:
+`prisma/seed.ts` validates environment safety before constructing Prisma, refuses production,
+requires an explicit fixture-seed opt-in and an ephemeral password (minimum 32 characters), and
+never updates an existing account's role or password. Optional admin-fixture creation requires
+paired email/password configuration. CI seed jobs generate a run-scoped random password.
+
+**Local verification update (2026-11-01):** `npx vitest run tests/unit/seeded-account-audit.test.ts` passed 16/16; ESLint on the changed TypeScript files passed. Workflow YAML parsed. Direct `npx tsx prisma/seed.ts` invocations with `NODE_ENV=production` and with `VERCEL_ENV=production` returned the expected refusal before dynamically importing or constructing Prisma; no database URL was set. `npm run typecheck` is blocked by the absent generated Prisma Client. The changes have not yet been tested in CI or pushed. They do **not** establish the state or rotation of any existing production account; that remains BLOCKED pending an owner-approved, read-only review and any separately authorized rotation. No production access or change was made.

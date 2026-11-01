@@ -13,6 +13,8 @@ if (process.env.JATA_DISPOSABLE_BROWSER_DB !== "1" || !["localhost", "127.0.0.1"
 const chrome = process.env.CHROME_PATH;
 const image = resolve("public/category/agriculture-720.jpg");
 if (!chrome || !existsSync(chrome) || !existsSync(image)) throw new Error("Real Chrome and the local photo fixture are required.");
+const demoFixturePassword = process.env.DEMO_FIXTURE_PASSWORD;
+if (!demoFixturePassword) throw new Error("Missing ephemeral DEMO_FIXTURE_PASSWORD for isolated browser fixture.");
 const base = process.env.BASE_URL || "http://127.0.0.1:4100";
 const screenshots = process.env.SHOT_DIR || "premium-shots";
 mkdirSync(screenshots, { recursive: true });
@@ -31,7 +33,7 @@ try {
   // Wait for the client form to hydrate before typing controlled inputs.
   await new Promise((done) => setTimeout(done, 1200));
   await page.type("#login-email", process.env.SCREENSHOT_LOGIN_EMAIL || "demo@jata.link");
-  await page.type("#login-password", process.env.SCREENSHOT_LOGIN_PASSWORD || "Demo1234!");
+  await page.type("#login-password", demoFixturePassword);
   const loginResponse = page.waitForResponse((response) => response.url().endsWith("/api/auth/login") && response.request().method() === "POST", { timeout: 30000 });
   await page.click('button[type="submit"]');
   const login = await loginResponse;

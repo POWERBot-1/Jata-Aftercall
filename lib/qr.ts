@@ -12,7 +12,7 @@ import crypto from "crypto";
 export function getShareableAILink(slug: string, baseUrl?: string): { path: string; url: string } {
   const cleanSlug = String(slug || "").trim().replace(/^\/+|\/+$/g, "");
   const path = `/b/${cleanSlug}/ai`;
-  const origin = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || "https://jata.co.ke").replace(/\/+$/, "");
+  const origin = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || "https://jataaftercall.co.ke").replace(/\/+$/, "");
   return {
     path,
     url: `${origin}${path}`,

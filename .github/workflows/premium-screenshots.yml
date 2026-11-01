@@ -58,10 +58,7 @@ jobs:
       DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_shots?schema=public
       AUTH_SECRET: premium-screenshots-test-secret
       NEXT_TELEMETRY_DISABLED: "1"
-      # Fictional seeded demo credentials only; the same values prisma/seed.ts creates and
-      # DEPLOYMENT.md documents. No production credential is used or stored here.
       SCREENSHOT_LOGIN_EMAIL: demo@jata.link
-      SCREENSHOT_LOGIN_PASSWORD: Demo1234!
 
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +77,12 @@ jobs:
       - name: Apply migrations to the disposable database
         run: bash scripts/lib/prisma-cli.sh migrate deploy
 
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+
       - name: Seed fictional plans and demo dataset
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
         run: npm run seed
 
       - name: Production build of the candidate tree

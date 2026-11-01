@@ -9,6 +9,7 @@ import path from 'node:path';
 const base = new URL(process.env.BASE_URL || 'http://localhost:4100');
 if (base.protocol !== 'http:' || !['localhost','127.0.0.1'].includes(base.hostname) || base.port !== '4100' || base.pathname !== '/' || process.env.CI !== 'true' || process.env.MOTION_ISOLATED !== '1' || process.env.DATABASE_URL !== 'postgresql://jata:jata@localhost:5432/jata_e2e?schema=public' || process.env.AUTH_SECRET !== 'interactive-business-e2e-test-secret') throw Error('Refusing non-disposable CI');
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(); if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
+const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const families=['cinematic','editorial','luxury','minimal','magazine','marketplace','product-first','storytelling','spatial','interactive-showroom','gallery','split-screen','fullscreen-media','scrollytelling','cardless-immersive','map-driven','catalog','portfolio','service-journey','experimental'];
 const sizes=[[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
 const out='motion-family-evidence'; mkdirSync(out,{recursive:true});
@@ -25,7 +26,7 @@ try {
  const owner=await browser.newPage(); await owner.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
  // Authenticate through the real server endpoint from the browser. Avoid typing into a
  // controlled React form before hydration; do not log the response body or session cookie.
- const login=await owner.evaluate(async()=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password:'Demo1234!'})});return r.status;});
+ const login=await owner.evaluate(async(password)=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password})});return r.status;},demoFixturePassword);
  steps.push({stage:'login',status:login}); if(login!==200) throw Error(`fixture login failed HTTP ${login}`);
  const api=(url,method='GET',payload)=>owner.evaluate(async(url,method,payload)=>{const r=await fetch(url,{method,headers:payload?{'content-type':'application/json'}:{},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,payload);
  // Beauty's real publication gate requires a product; seed through the application's API.

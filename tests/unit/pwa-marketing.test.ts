@@ -140,6 +140,20 @@ describe("public marketing pages", () => {
     expect(renderToStaticMarkup(createElement(MarketingFooter as any))).toContain("/b/nyumbani-kitchen");
   });
 
+  it("points public install instructions at the official domain, not the deployment reference", () => {
+    const install = read("app/install/page.tsx");
+    expect(install).toContain('href="https://jataaftercall.co.ke"');
+    expect(install).not.toContain("jata-aftercall.vercel.app");
+  });
+
+  it("keeps mobile marketing navigation labels intact instead of shrinking them into clipped text", () => {
+    const css = read("app/globals.css");
+    const navLink = css.match(/\.mk-nav a\s*\{([^}]*)\}/);
+    expect(navLink, "marketing navigation link rule").toBeTruthy();
+    expect(navLink![1]).toMatch(/flex:\s*0 0 auto/);
+    expect(css).toMatch(/@media \(max-width: 700px\)[^{]*\{[^}]*\.mk-nav[^}]*flex-wrap:\s*wrap/);
+  });
+
   it("sitemap lists every new static page", async () => {
     const source = read("app/sitemap.ts");
     for (const route of ["/products", "/pricing", "/faq", "/help", "/contact", "/install", "/privacy", "/terms"]) {

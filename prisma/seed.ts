@@ -1,12 +1,21 @@
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { installInlineMediaPrismaWritePolicy } from "../lib/media/prisma-write-policy";
 import { DEMO_OWNER_EMAIL, DEMO_PAYMENT_PREFIX } from "../lib/demoData";
+import { validateSeedEnvironment } from "../scripts/lib/seed-safety";
 
-const prisma = installInlineMediaPrismaWritePolicy(new PrismaClient());
+// Fail before loading or constructing a database client or issuing any query. Fixture
+// accounts/passwords are permitted only in an explicitly opted-in, non-production seed run.
+const seedEnvironment = validateSeedEnvironment(process.env);
+let disconnectPrisma: (() => Promise<void>) | undefined;
 
 async function main() {
-  console.log("Seeding JATA AFTERCALL…");
+  const [{ PrismaClient }, { installInlineMediaPrismaWritePolicy }] = await Promise.all([
+    import("@prisma/client"),
+    import("../lib/media/prisma-write-policy"),
+  ]);
+  const client = new PrismaClient();
+  disconnectPrisma = () => client.$disconnect();
+  const prisma = installInlineMediaPrismaWritePolicy(client);
+  console.log("Seeding JATA AFTERCALL non-production fixtures…");
 
   // Plans — DB-driven pricing. `isActive: true` is part of both create and update so a
   // re-run always restores the intended KES plans instead of leaving them deactivated.
@@ -48,19 +57,30 @@ async function main() {
     await prisma.pageTheme.upsert({ where: { key: t.key }, update: { name: t.name }, create: t });
   }
 
-  // Demo admin user
-  const adminEmail = (process.env.ADMIN_EMAILS || "admin@jata.link").split(",")[0].trim().toLowerCase();
-  const adminHash = await bcrypt.hash("Admin123!", 10);
-  const admin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: { role: "ADMIN" },
-    create: { email: adminEmail, name: "Jata Admin", phone: "0700000000", passwordHash: adminHash, role: "ADMIN" },
-  });
-  console.log("Admin:", admin.email);
+  // Administrator fixtures are opt-in only; an existing account's role and password are never
+  // changed by this seed. Production administration must use the approved owner workflow.
+  if (seedEnvironment.adminEmail && seedEnvironment.adminInitialPassword) {
+    const adminHash = await bcrypt.hash(seedEnvironment.adminInitialPassword, 10);
+    await prisma.user.upsert({
+      where: { email: seedEnvironment.adminEmail },
+      update: {},
+      create: {
+        email: seedEnvironment.adminEmail,
+        name: "Jata Admin Fixture",
+        phone: "0700000000",
+        passwordHash: adminHash,
+        role: "ADMIN",
+      },
+    });
+    console.log("Optional non-production administrator fixture ensured; existing account attributes were not changed.");
+  } else {
+    console.log("No administrator fixture requested.");
+  }
 
-  // Demo customer user
+  // A fresh demo-owner row receives this run's ephemeral password hash. Existing rows are left
+  // unchanged, including their password; rerunning the seed does not rotate or disclose credentials.
   const demoUserEmail = DEMO_OWNER_EMAIL;
-  const demoHash = await bcrypt.hash("Demo1234!", 10);
+  const demoHash = await bcrypt.hash(seedEnvironment.demoFixturePassword, 10);
   const demoUser = await prisma.user.upsert({
     where: { email: demoUserEmail },
     update: {},
@@ -245,8 +265,8 @@ async function main() {
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await disconnectPrisma?.();
   });

@@ -2,15 +2,15 @@
 
 Lightweight Kenyan SME after-interaction conversion pages. A customer scans/finds your link → lands on a fast, mobile-first page with WhatsApp, Call, Directions, Services, Offer & Analytics.
 
-**V1 is a sellable MVP — create a business page in ~5 minutes, demonstrable in 60 seconds.**
+**Release status: NOT READY.** This repository contains the JATA AFTERCALL implementation; use `docs/agents/PROGRAMME_READINESS.json` and the current PR evidence for verified status. Demo pages and unit/route tests are not production or owner acceptance.
 
-> `https://jata-aftercall.vercel.app/b/marys-beauty-studio` (path-based, zero-cost)
+> Intended customer domain: `https://jataaftercall.co.ke` (DNS/TLS/mail acceptance is still pending owner verification). Existing Vercel deployment reference: `https://jata-aftercall.vercel.app/b/marys-beauty-studio`.
 
 ---
 
 ## 60-Second Demo
 
-> "Give me your business name and number." → Create page → Open the current zero-cost demo at `https://jata-aftercall.vercel.app/b/marys-beauty-studio` → "This is what your customer can see after dealing with you."
+> "Give me your business name and number." → Create page → Open the fictional demo through the existing Vercel operational reference at `https://jata-aftercall.vercel.app/b/marys-beauty-studio` → "This is what your customer can see after dealing with you." The official customer domain remains subject to independent DNS/TLS acceptance.
 
 ---
 
@@ -24,13 +24,13 @@ Lightweight Kenyan SME after-interaction conversion pages. A customer scans/find
 - **Admin panel** `/admin` — customers, businesses, payments, subscriptions, plan config (pricing admin-editable), aggregate metrics, health
 - **Analytics** — privacy-preserving `page_view`, `whatsapp_click`, `call_click`, `direction_click`, `share_click`, `service_click` per business
 - **Self-service referrals (Stage 2)** — every published page carries an opaque `/r/<code>` link; a recipient opens it without an account, registers themselves, and the referral is recorded in the same database transaction that creates their first business
-- **Zero-cost infra** — serverless Next.js on Vercel/Pages (`*.vercel.app` / `*.pages.dev`), Neon Postgres free tier, no VPS/domain/paid SSL required; `PUBLIC_BASE_URL` abstraction for future `jata.link`
+- **Architecture** — Next.js on Vercel with Prisma/PostgreSQL on Neon and Paystack; `PUBLIC_BASE_URL` keeps public origins configurable. Intended canonical domain is `https://jataaftercall.co.ke`; existing Vercel URL is an operational reference, and DNS/email acceptance remains owner-blocked.
 
 ---
 
 ## Stack
 
-Next.js 14 • TypeScript • Tailwind • Prisma • PostgreSQL (Neon free tier) • bcrypt + jose (JWT) • Paystack • Vitest
+Next.js • TypeScript • Tailwind • Prisma • PostgreSQL (Neon) • bcrypt + jose (JWT) • Paystack • Vitest
 
 ---
 
@@ -41,11 +41,13 @@ npm install
 cp .env.example .env.local
 # fill DATABASE_URL (Neon free) and AUTH_SECRET (openssl rand -base64 32)
 npx prisma migrate dev
-npm run seed   # plans + themes + development/demo accounts + 4 demo businesses
+export JATA_ALLOW_FIXTURE_SEED=true
+export DEMO_FIXTURE_PASSWORD="$(openssl rand -hex 32)"
+npm run seed   # non-production fixtures only; seed refuses production
 npm run dev    # http://localhost:3000
 ```
 
-Demo pages (no login): `/b/nyumbani-kitchen` `/b/marys-beauty-studio` `/b/kamau-auto-care` `/b/john-kamau-properties`
+Demo pages (no login): `/b/nyumbani-kitchen` `/b/marys-beauty-studio` `/b/kamau-auto-care` `/b/john-kamau-properties`. The ephemeral value is used only when creating a new demo-owner row; rerunning the seed never resets an existing password. Use a disposable/local database and do not reuse that credential in any deployed environment.
 
 ---
 
@@ -58,16 +60,17 @@ DATABASE_URL=postgresql://...
 AUTH_SECRET=...
 PUBLIC_BASE_URL=http://localhost:3000
 PAYSTACK_MERCHANT_ID=2006074
-PAYSTACK_SECRET_KEY=sk_test_xxx   # server only
+PAYSTACK_SECRET_KEY=sk_test_xxx   # server only; test credentials only in non-production
 PAYSTACK_PUBLIC_KEY=pk_test_xxx
-ADMIN_EMAILS=admin@jata.link
+# Optional local admin fixture: set ADMIN_EMAILS and ADMIN_INITIAL_PASSWORD only in your secure local environment.
+# Existing accounts are never promoted or changed by the seed.
 ```
 
 ---
 
-## Deployment (zero-cost)
+## Deployment
 
-See `DEPLOYMENT.md` — GitHub → Vercel (or Cloudflare Pages) → provider HTTPS URL → Neon → Paystack webhook `https://<provider>/api/paystack/webhook`. Includes rollback, domain upgrade, webhook/idempotency tests, and cost gates.
+Preserve the existing Next.js/Vercel + Prisma/Neon + Paystack architecture. See `DEPLOYMENT.md` for non-production procedures and explicit owner-dependent deployment/domain checks. This remediation does not authorize a production deploy, DNS/email edit, payment, migration, or provider change.
 
 ---
 
@@ -290,7 +293,10 @@ and is skipped unless `DATABASE_URL` is set.
 
 ```bash
 export DATABASE_URL="postgresql://user:pass@host:5432/jata_e2e"   # disposable database
-npx prisma migrate deploy && npm run seed
+npx prisma migrate deploy
+export JATA_ALLOW_FIXTURE_SEED=true
+export DEMO_FIXTURE_PASSWORD="$(openssl rand -hex 32)"
+npm run seed
 npm run test:e2e          # the §66 Interactive Business journey
 npm run test:e2e:pos      # the Business POS journey
 ```

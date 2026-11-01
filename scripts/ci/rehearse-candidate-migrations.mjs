@@ -68,7 +68,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -1217,7 +1217,12 @@ function main() {
   // candidate when they are failures of the harness.
   let seeded = false;
   try {
-    const seed = run("npm", ["run", "seed"], { cwd: candidateDir, env, timeout: 300000 });
+    const seedEnv = {
+      ...env,
+      JATA_ALLOW_FIXTURE_SEED: "true",
+      DEMO_FIXTURE_PASSWORD: randomBytes(32).toString("hex"),
+    };
+    const seed = run("npm", ["run", "seed"], { cwd: candidateDir, env: seedEnv, timeout: 300000 });
     if (seed.status === 0) {
       pass("the candidate seed runs against the migrated database");
       seeded = true;

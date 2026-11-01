@@ -105,7 +105,12 @@ jobs:
           set -o pipefail
           bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate.log
 
+      - name: Generate ephemeral demo fixture password
+        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+
       - name: Seed plans
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
         run: |
           set -o pipefail
           npm run seed 2>&1 | tee /tmp/step-seed.log
@@ -167,6 +172,26 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee /tmp/step-build.log
+
+      - name: Control authorization deny-path over authenticated browser and API
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — Control browser check NOT RUN, not passed." >&2
+            exit 1
+          fi
+          CONTROL_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts/control-denial" \
+            npm run test:browser:control-deny 2>&1 | tee /tmp/step-control-denial.log
+
+      - name: Upload Control denial screenshots and sanitized result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-pending-denial-${{ github.sha }}
+          path: artifacts/control-denial/
+          retention-days: 30
+          if-no-files-found: ignore
 
       # E14: the ERP pages over real HTTP. The unit suites prove the domain rules and the PostgreSQL
       # suites prove the SQL, but neither proves that a signed-in person receives a working page, that
@@ -314,6 +339,7 @@ jobs:
               ['Full native DB suite', '/tmp/step-full-suite.log'],
               ['Experience journey', '/tmp/step-journey.log'],
               ['Business POS journey', '/tmp/step-pos-journey.log'],
+              ['Control authenticated deny-path/API/browser/screenshots (not positive-role acceptance)', '/tmp/step-control-denial.log'],
               ['Production HTTP isolation smoke', '/tmp/step-studio-smoke.log'],
               ['Authenticated production HTTP/browser/DB journey (synthetic entitlement, no provider)', '/tmp/step-authenticated-browser.log'],
               ['Actual isolated booking SSR/hydration (timezone/midnight)', '/tmp/step-hydration-browser.log'],
@@ -355,7 +381,7 @@ jobs:
             // line. The head/tail windows above can elide the middle of a long log, which is
             // exactly where the failing check's name sat; this section cannot.
             const signatureFiles = [
-              '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-hydration-browser.log',
+              '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-control-denial.log', '/tmp/step-hydration-browser.log',
               '/tmp/step-replay-hydration.log',  '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
               '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
               '/tmp/step-actionbar-browser.log',
@@ -380,6 +406,7 @@ jobs:
               ['Dependency audit', '/tmp/step-dependency-audit.log', 2500],
               ['npx vitest run --exclude tests/e2e', '/tmp/step-full-suite.log', 11000],
               ['Authenticated production HTTP browser', '/tmp/step-authenticated-browser.log', 11000],
+              ['Control authenticated deny-path browser/API', '/tmp/step-control-denial.log', 5000],
               ['Booking SSR/hydration', '/tmp/step-hydration-browser.log', 3000],
               ['Hydration #418 controlled race reproduction', '/tmp/step-hydration-race.log', 3000],
               ['Hydration replay-cursor regression', '/tmp/step-replay-hydration.log', 3000],
