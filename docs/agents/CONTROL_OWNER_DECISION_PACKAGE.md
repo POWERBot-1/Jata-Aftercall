@@ -1,11 +1,11 @@
 # `/control` owner decision package
 
-**Purpose:** record the conservative effective policy and its owner decision without enabling any capability. On 2026-11-01 the owner approved DENY for all 90 cells only. The owner did not approve any ALLOW, grant, identity, permission or operational access. The current instruction prohibits creating any such grants/identities/permissions. Earlier CI denial evidence used a disposable synthetic fixture before this instruction and does not grant continuing provisioning authority.
+**Purpose:** record the conservative effective policy and its owner decision without enabling any capability. On 2026-11-01 the owner approved DENY for all 90 cells only. The owner approved no ALLOW, Control grant, role assignment, permission or operational/production identity. Separately, the owner explicitly authorized a temporary synthetic ordinary `User` solely inside the isolated disposable PostgreSQL database used by PR #78 CI; that fixture has no Control grant or role and is discarded with the database. This narrow test-only authorization does not enable production access or any Control capability.
 
 **Repository / PR:** `POWERBot-1/Jata-Aftercall`, PR #78, branch `arena/115a62e1-jata-aftercall`  
 **Baseline reviewed:** `34283dff5aa13579931cbed7dc62c497cec8e753`
 
-**Owner decision recorded:** On 2026-11-01, the owner explicitly approved DENY for every one of the 90 canonical role × capability cells listed below. This is approval of the documented all-DENY policy only; it approves no ALLOW, grant, permission, identity, provisioning, or operational Control access.
+**Owner decision recorded:** On 2026-11-01, the owner explicitly approved DENY for every one of the 90 canonical role × capability cells listed below. This is approval of the documented all-DENY policy only; it approves no ALLOW, Control grant, role assignment, permission, operational identity, provisioning, or operational Control access. The separately authorized disposable CI test `User` is an ordinary synthetic account and receives no Control role or grant.
 
 **Implementation semantics:** `CONTROL_ROLE_POLICY_APPROVED = true` records that owner decision only. The independent runtime kill switch `CONTROL_ROLE_ACCESS_ENABLED = false` remains closed, so protected routes continue to fail closed. The approved decision does not create any grant or identity and does not enable any route.
 
@@ -22,13 +22,13 @@ Even a written ALLOW does not activate an operation. The implementation must be 
 3. Approve or reject the current candidate operations and list business side effects. In particular, define exactly what suspension/reinstatement changes and what it must not change.
 4. Decide whether status-only payment/subscription data, agent/referral counts, commission-ledger metadata, communications state, audit records, system health, identities or any personal data may be seen. Specify minimum necessary fields, redaction and retention.
 5. Define MFA enrollment, authenticator/freshness requirements, lockout, recovery, lost-device handling, session lifetime and reauthentication for sensitive actions. Existing TOTP implementation is a technical capability, not an approved policy.
-6. The current owner instruction prohibits creating grants, identities, permissions or ALLOW rules. Do not provision a new identity or grant for this all-DENY decision. Any future positive acceptance needs separate written authorization for the exact non-production test principals, fixture data, grant/scope/expiry, custodian, evidence handling and production separation; none is implied here.
+6. No Control grant, role assignment, permission, ALLOW rule, operational identity, or production identity is authorized by this decision. On 2026-11-01 the owner separately authorized only the temporary synthetic ordinary `User` required by PR #78 CI, confined to its isolated disposable PostgreSQL database and discarded with that database. It receives no Control grant or role; do not broaden this exception. Any future positive authorization test still requires separate written approval for its exact principal, fixture data, grant/scope/expiry, custodian, evidence handling and production separation.
 7. Define emergency access and recovery, if any: trigger, named approvers, dual control, duration, least privilege, alerting, audit, revocation and post-incident review. There is no current break-glass route or bootstrap bypass.
 8. Decide audit-read permissions and sensitive-read auditing separately from mutation auditing; define retention, legal/privacy limits, export and review procedure.
 
 ## Owner-approved effective policy matrix — 90 DENY decisions; no ALLOW
 
-The owner explicitly approved this all-DENY authorization policy on 2026-11-01. Role duties and operational needs remain unresolved; the approval does not infer them from names. No route is enabled, and no grant, identity, permission, or operational access is authorized. The separate runtime access kill switch remains false.
+The owner explicitly approved this all-DENY authorization policy on 2026-11-01. Role duties and operational needs remain unresolved; the approval does not infer them from names. No route is enabled, and no Control grant, role assignment, permission, operational identity or operational access is authorized. The separately authorized synthetic ordinary CI `User` is not a Control principal. The separate runtime access kill switch remains false.
 
 | Capability | SUPER_ADMIN | PLATFORM_ADMIN | FINANCE_ADMIN | SUPPORT_ADMIN | SECURITY_ADMIN | READ_ONLY_AUDITOR |
 |---|---|---|---|---|---|---|
@@ -219,7 +219,7 @@ Owner decisions still required: whether these lifetimes and methods are acceptab
 
 ## Safe six-role acceptance plan — gated on owner approval
 
-This is a **future test specification**. The current owner instruction prohibits creating any new identities, grants or permissions. The earlier exact-head CI denial journey used an isolated synthetic session before this instruction and is historical evidence only. Do not rerun a journey that provisions an identity or create Control grants unless the owner separately authorizes that exact non-production test fixture. No positive permission may be exercised under the current decision.
+This is a **future test specification**. The owner has separately authorized one temporary synthetic ordinary `User` solely inside the isolated disposable PostgreSQL database for PR #78 CI; it receives no Control grant, role assignment or permission and is discarded with the database. This narrow test-fixture authorization does not authorize any positive permission or operational identity. Any future positive-role test still requires separate authorization for the exact role, grant, scope and fixture.
 
 For the current deny-path journey, use only a disposable database and an isolated synthetic ordinary session with no Control grant; verify `/control`, protected APIs and mutations return an explicit denial, do not mutate fixtures and do not emit success audit events. For future positive acceptance (only after explicit role decisions), use synthetic businesses `tenant-a` and `tenant-b`, synthetic records, and one isolated test identity per approved role. Provision only exact approved grant keys/scopes through the approved mechanism; record no production credentials or PII. Test:
 

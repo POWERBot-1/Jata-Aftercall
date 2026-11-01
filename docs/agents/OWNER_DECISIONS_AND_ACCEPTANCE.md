@@ -35,7 +35,7 @@ The five workflows on the starting head completed successfully: Candidate `41194
 
 ## Control-plane owner decision and remaining acceptance gaps
 
-On 2026-11-01 the owner explicitly approved DENY for all 90 role × capability cells. This is an approved all-DENY policy only: no ALLOW, grant, identity, permission, provisioning or operational Control access is authorized. Exact role duties, positive access scope, MFA policy and enabled-console acceptance remain unresolved.
+On 2026-11-01 the owner explicitly approved DENY for all 90 role × capability cells. This is an approved all-DENY policy only: no ALLOW, Control grant, role assignment, permission, operational identity, provisioning or operational Control access is authorized. Separately, the owner authorized one temporary synthetic ordinary `User` solely inside the isolated disposable PostgreSQL database used by PR #78 CI; it has no Control grant/role and is discarded with the database. Exact role duties, positive access scope, MFA policy and enabled-console acceptance remain unresolved.
 
 | Decision | Clarification required | Safe current boundary |
 |---|---|---|
