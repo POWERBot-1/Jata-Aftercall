@@ -154,3 +154,29 @@ Commit under test: this entry's implementation commit (see PR #79 head).
 - No financial values were changed or animated. Fixture figures are labelled synthetic on the page.
 - Dev overlay "1 Issue" badge is Next.js development tooling, not part of the product.
 - Priorities 2–6 (POS, Studio, AI Front Desk, Autopilot, subscription/onboarding) were not implemented in this pass. See the section above for their status.
+
+## POS fixture harness evidence — commit `1be3580`
+
+Scope: development-only `/dev/pos-fixture` (returns 404 when `NODE_ENV=production`). It renders the real `TillClient` with fictional catalogue, customer and methods. Completion is routed to an in-memory simulator (`?outcome=success|pending|failure`). The simulator performs no I/O and writes nothing. No database, payment provider, or real `/api/pos` call is involved.
+
+Code changes in this commit:
+- `TillClient` accepts an optional `submitSaleRequest` transport. The production sell page does not pass it, so production still posts to `/api/pos/{businessId}/sales`.
+- Quantity input is whole-unit only. An empty entry is ignored, so clearing the box no longer removes the line. Decimals are floored. Quantities at or below zero still remove the line.
+
+Verification:
+- `tests/unit/pos-fixture-harness.test.ts`: 21 tests pass. They cover arithmetic, simulator envelopes, no-network, fixture isolation, production exclusion, transport default, and jsdom cart interactions (add, ±, zero-removal, empty input, decimals, multi-item totals, checkout gating, simulated success, simulated failure).
+- Full no-DB vitest: 341 files and 4,003 tests pass, 0 failures. `tsc --noEmit` exit 0.
+- Browser (`docs/agents/evidence/fintech-motion-2026-11-01/pos/`, capture script `pos-capture.mjs`, report `report.json`): six viewports, 0 page errors, 0 calls to `/api/pos`, no horizontal overflow. Failure outcome checked at 390×844. Reduced motion gives `jata-value-bump` = `none`.
+- Opened and inspected `after/02-cart-ready-390x844.png`, `after/03-success-390x844.png`, and `after/02-cart-ready-320x568.png`. Totals read KES 640 for 2 × KES 320. Success is labelled simulated and says "Not a real sale". No overflow.
+
+Matrix status for this commit:
+| Route / area | Status | Note |
+|---|---|---|
+| POS till cart (fixture) | PASS (fixture only) | Real TillClient. Quantity guard covered by tests. |
+| POS cart motion | PARTIAL | Existing keyed value bump only. No new cart enter/exit transition. Not recorded as a trace. |
+| POS success/failure states (fixture) | PASS (fixture only) | Simulated, labelled. |
+| Real POS sale, checkout, payment verification, refunds | BLOCKED | Requires Prisma engine (`binaries.prisma.sh` unreachable). |
+| Dashboard with real signed-in data | BLOCKED | Same database blocker. |
+| Studio, AI Front Desk, Autopilot, subscription | NOT TESTED / FAIL | Not implemented in this commit. |
+
+Financial correctness (fixture): all money values are server-shaped integer KES. No amount is animated. No payment success is fabricated outside the labelled simulator.
