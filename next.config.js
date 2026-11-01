@@ -57,6 +57,15 @@ const nextConfig = {
         ],
       },
       {
+        // Development-only Website Studio fixture preview (returns 404 in production). Same-origin framing
+        // only, so the fixture's storefront preview can render in the fixture editor. No other route changes.
+        source: "/dev/studio-fixture/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
+      {
         // Owner push-to-talk voice briefs inside JATA Autopilot Command Center (§9).
         // Every other route retains `microphone=()` from the global rule above.
         source: "/dashboard/autopilot/:path*",

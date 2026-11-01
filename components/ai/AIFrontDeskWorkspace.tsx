@@ -178,6 +178,7 @@ export default function AIFrontDeskWorkspace({
   initialEntitlement,
   initialReadiness,
   plan,
+  simulated = false,
 }: {
   businessId: string;
   businessSlug: string;
@@ -188,6 +189,11 @@ export default function AIFrontDeskWorkspace({
   initialEntitlement: EntitlementSummary;
   initialReadiness: ReadinessSummary;
   plan: { name: string; priceKES: number; durationDays: number } | null;
+  /**
+   * Development fixture only: every request is answered by a simulated transport and nothing is saved or
+   * published. Success notices then say so, instead of the production "saved" / "published" wording.
+   */
+  simulated?: boolean;
 }) {
   const [step, setStep] = useState<StepId>("welcome");
   const [profile, setProfile] = useState<ProfileSummary>(initialProfile);
@@ -339,7 +345,12 @@ export default function AIFrontDeskWorkspace({
         setProfileNotice({ tone: "error", text: data.error || "We could not save your business details. Please try again." });
         return;
       }
-      setProfileNotice({ tone: "success", text: "Business details saved. Your front desk will use them immediately." });
+      setProfileNotice({
+        tone: "success",
+        text: simulated
+          ? "FICTIONAL FIXTURE — simulated save. Nothing was saved."
+          : "Business details saved. Your front desk will use them immediately.",
+      });
       await refresh();
     } catch {
       setProfileNotice({ tone: "error", text: "No connection. Your changes are still on this page — try again when you are back online." });
@@ -377,7 +388,12 @@ export default function AIFrontDeskWorkspace({
         });
         return;
       }
-      setResponseNotice({ tone: "success", text: "Saved as a draft. Customers see these answers after you publish." });
+      setResponseNotice({
+        tone: "success",
+        text: simulated
+          ? "FICTIONAL FIXTURE — simulated save. Nothing was saved."
+          : "Saved as a draft. Customers see these answers after you publish.",
+      });
       await refresh();
     } catch {
       setResponseNotice({ tone: "error", text: "No connection. Your settings are still on this page — try again." });
@@ -466,7 +482,9 @@ export default function AIFrontDeskWorkspace({
       }
       setPublishNotice({
         tone: "success",
-        text: `Published. Customers can now reach your front desk at ${data.sharePath || `/b/${businessSlug}/ai`}.`,
+        text: simulated
+          ? "FICTIONAL FIXTURE — simulated publish. Nothing was published and no customer can reach this desk."
+          : `Published. Customers can now reach your front desk at ${data.sharePath || `/b/${businessSlug}/ai`}.`,
       });
       // Re-read the derived state from the server; the LIVE label appears only if it comes back LIVE.
       await refresh();

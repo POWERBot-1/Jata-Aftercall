@@ -5616,8 +5616,8 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
    changes border, background and opacity. Text, values and the preview content are shown at their final state. */
 label:has(> input[type="radio"][name="category"]) { transition: border-color 160ms var(--jata-ease-out, ease-out), background-color 160ms var(--jata-ease-out, ease-out); }
 .jc-frame__iframe { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
-/* Focus can sit inside the storefront document, so the ring is drawn on the frame wrapper as well. */
-.jc-frame__iframe:focus-visible, .jc-frame:has(.jc-frame__iframe:focus-visible), .jc-frame:focus-within > .jc-frame__iframe { outline: 2px solid var(--jata-focus); outline-offset: 3px; }
+/* Keyboard focus on the preview frame: the ring is drawn from the .is-focused state set on focus/blur (StudioCanvas). */
+.jc-frame.is-focused > .jc-frame__iframe { outline: 2px solid var(--jata-focus); outline-offset: 3px; }
 .jc-alert[role="status"], .jc-alert[role="alert"] { animation: jata-state-in 200ms var(--jata-ease-out, ease-out) both; }
 @media (prefers-reduced-motion: reduce) {
   label:has(> input[type="radio"][name="category"]), .jc-frame__iframe, .jc-alert[role="status"], .jc-alert[role="alert"] {

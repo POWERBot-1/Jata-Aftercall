@@ -84,6 +84,9 @@ export function StudioCanvas(props: StudioCanvasProps) {
 
   const [document, setDocument] = useState<ExperienceDocument>(props.document);
   const [version, setVersion] = useState<number | null>(props.draftVersion);
+  // Keyboard focus on the preview frame is drawn by the wrapper: the frame's own outline is not reliable across browsers.
+  const [frameFocused, setFrameFocused] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [dirty, setDirty] = useState(props.hasUnpublishedChanges);
   const [selectedId, setSelectedId] = useState<string | null>(props.document.sections[0]?.id ?? null);
   const [device, setDevice] = useState<CanvasDeviceKey>("phone");
@@ -124,6 +127,29 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const fields = useMemo(() => inspectorFieldsFor(selected), [selected]);
   const summary = useMemo(() => buildSummary(document), [document]);
   const previewSrc = previewSrcFor ? previewSrcFor({ mode, revision }) : canvasPreviewSrc({ slug, mode, revision });
+  // Keyboard focus that Tab moves INTO the same-origin preview fires the frame window's focus/blur, not the
+  // <iframe> element's. Listen on the frame window (re-attached after each load) so the ring follows real focus.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    let win: Window | null = null;
+    const on = () => setFrameFocused(true);
+    const off = () => setFrameFocused(false);
+    const attach = () => {
+      win?.removeEventListener("focus", on);
+      win?.removeEventListener("blur", off);
+      win = frame.contentWindow;
+      win?.addEventListener("focus", on);
+      win?.addEventListener("blur", off);
+    };
+    frame.addEventListener("load", attach);
+    attach();
+    return () => {
+      frame.removeEventListener("load", attach);
+      win?.removeEventListener("focus", on);
+      win?.removeEventListener("blur", off);
+    };
+  }, [previewSrc, mode, device, revision]);
 
   /** One write path for every edit: optimistic local change, then the versioned draft save. */
   const persist = useCallback(
@@ -370,7 +396,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
             <button type="button" className="jc-chip" onClick={() => setRevision((value) => value + 1)} aria-label="Refresh preview">↻ Refresh</button>
           </div>
 
-          <div className="jc-frame" data-device={activeDevice.key}>
+          <div className={frameFocused ? "jc-frame is-focused" : "jc-frame"} data-device={activeDevice.key}>
             <div className="jc-frame__chrome" aria-hidden="true">
               <span className="jc-frame__notch" />
               <span className="jc-frame__url">{slug}.jata.site · {activeDevice.width} px</span>
@@ -378,6 +404,9 @@ export function StudioCanvas(props: StudioCanvasProps) {
             <iframe
               key={`${mode}-${device}-${revision}`}
               className="jc-frame__iframe"
+              ref={frameRef}
+              onFocus={() => setFrameFocused(true)}
+              onBlur={() => setFrameFocused(false)}
               title={`${mode === "draft" ? "Draft" : "Live"} preview of ${businessName} at ${activeDevice.label.toLowerCase()} width`}
               src={previewSrc}
               style={{ width: Math.min(activeDevice.width, 1440) }}

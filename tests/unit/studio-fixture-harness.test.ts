@@ -133,3 +133,24 @@ describe("fixture isolation (source guards)", () => {
     expect(read("components/dashboard/PublishPanel.tsx")).toMatch(/refresh/);
   });
 });
+
+describe("framing headers (fixture preview only)", () => {
+  it("only the public business preview (/b/:slug*) and the dev fixture route allow same-origin framing", async () => {
+    // next.config.js is CommonJS; load it for its header rules.
+    const { createRequire } = await import("node:module");
+    const require = createRequire(import.meta.url);
+    const config = require(path.join(ROOT, "next.config.js")) as { headers: () => Promise<Array<{ source: string; headers: Array<{ key: string; value: string }> }>> };
+    const rules = await config.headers();
+    const framing = rules
+      .filter((r) => r.headers.some((h) => h.key === "X-Frame-Options" && h.value === "SAMEORIGIN"))
+      .map((r) => r.source)
+      .sort();
+    expect(framing).toEqual(["/b/:slug*", "/dev/studio-fixture/:path*"]);
+    const fixtureRule = rules.find((r) => r.source === "/dev/studio-fixture/:path*");
+    expect(fixtureRule?.headers).toEqual(
+      expect.arrayContaining([
+        { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+      ]),
+    );
+  });
+});

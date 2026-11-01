@@ -8,6 +8,7 @@
  * unpaid or incomplete site.
  */
 
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -104,8 +105,13 @@ export function PublishPanel({
       <ul className="mt-4 grid gap-2 text-sm" aria-label="Publish checklist">
         {checks.map((check) => (
           <li key={check.id} className="flex items-start gap-2">
-            <span aria-hidden="true">{check.status === "pass" ? "✅" : "⚠️"}</span>
+            {check.status === "pass" ? (
+              <CircleCheck size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-400" />
+            ) : (
+              <CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-300" />
+            )}
             <span>
+              <span className="sr-only">{check.status === "pass" ? "Done: " : "Needs attention: "}</span>
               <span className="font-semibold">{check.label}</span>
               {check.hint ? <span className="block text-zinc-600">{check.hint}</span> : null}
             </span>
