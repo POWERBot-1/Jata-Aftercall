@@ -1,0 +1,20 @@
+[
+  {
+    "reduce": false,
+    "iframeAnim": "jata-state-in",
+    "alertAnim": "absent",
+    "categoryTransition": "absent"
+  },
+  {
+    "reduce": true,
+    "iframeAnim": "none",
+    "alertAnim": "absent",
+    "categoryTransition": "absent"
+  },
+  {
+    "tabTo11": "BUTTON"
+  },
+  {
+    "iframeFocusOutline": "none"
+  }
+]

@@ -62,6 +62,14 @@ export type StudioCanvasProps = {
   initialPanel?: PanelTab;
   /** Demo: no network writes. Every edit stays in this tab. Used only by the labelled preview build. */
   demo?: boolean;
+  /**
+   * Transport for the versioned draft write. Production omits it and the canvas PATCHes `/api/experience`.
+   * The development-only Studio fixture supplies a simulator so save progress, success and failure run
+   * through the same code path without touching any business data.
+   */
+  submitWrite?: (body: Record<string, unknown>) => Promise<Response>;
+  /** Preview iframe URL override (fixtures point the preview at a fictional storefront). Production omits it. */
+  previewSrcFor?: (options: { mode: "draft" | "live"; revision: number }) => string;
 };
 
 type PanelTab = "section" | "design";
@@ -71,7 +79,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const router = useRouter();
   const {
     businessId, slug, businessName, categoryLabel, publishedVersion,
-    directions, themes, currentDirectionKey, currentThemeKey, publicUrl, demo = false,
+    directions, themes, currentDirectionKey, currentThemeKey, publicUrl, demo = false, submitWrite, previewSrcFor,
   } = props;
 
   const [document, setDocument] = useState<ExperienceDocument>(props.document);
@@ -115,7 +123,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const selected = document.sections.find((section) => section.id === selectedId) ?? null;
   const fields = useMemo(() => inspectorFieldsFor(selected), [selected]);
   const summary = useMemo(() => buildSummary(document), [document]);
-  const previewSrc = canvasPreviewSrc({ slug, mode, revision });
+  const previewSrc = previewSrcFor ? previewSrcFor({ mode, revision }) : canvasPreviewSrc({ slug, mode, revision });
 
   /** One write path for every edit: optimistic local change, then the versioned draft save. */
   const persist = useCallback(
@@ -136,11 +144,14 @@ export function StudioCanvas(props: StudioCanvasProps) {
 
       setSave("saving");
       try {
-        const response = await fetch("/api/experience", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessId, ...payload, expectedDraftVersion: version }),
-        });
+        const writeBody = { businessId, ...payload, expectedDraftVersion: version };
+        const response = submitWrite
+          ? await submitWrite(writeBody)
+          : await fetch("/api/experience", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(writeBody),
+            });
         const saved = readSaveResponse(response.ok, await response.json().catch(() => ({})));
         if (!saved.ok) {
           setDocument(before); // never leave an unsaved change looking saved
@@ -170,7 +181,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
         inFlight.current = false;
       }
     },
-    [businessId, demo, document, router, version],
+    [businessId, demo, document, router, version, submitWrite],
   );
 
   const moveTo = (id: string, index: number) => persist({ op: "reorder", sectionId: id, toIndex: index }, (doc) => moveSectionTo(doc, id, index));

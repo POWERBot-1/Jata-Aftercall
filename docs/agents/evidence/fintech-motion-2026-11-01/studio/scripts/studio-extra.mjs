@@ -1,0 +1,30 @@
+import chromium from "@sparticuz/chromium";
+import { chromium as pw } from "playwright-core";
+import fs from "node:fs";
+const BASE = "http://localhost:3000/dev/studio-fixture";
+const b = await pw.launch({ executablePath: await chromium.executablePath(), args: chromium.args.filter(a => !["--single-process","--no-zygote"].includes(a)), headless: true, env: { ...process.env, LD_LIBRARY_PATH: "/tmp/al/lib" } });
+const out = [];
+for (const reduce of [false, true]) {
+  const ctx = await b.newContext({ viewport: { width: 1366, height: 768 }, reducedMotion: reduce ? "reduce" : "no-preference" });
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}?state=editor&outcome=success`, { waitUntil: "networkidle", timeout: 240000 });
+  const iframeAnim = await p.evaluate(() => { const f = document.querySelector(".jc-frame__iframe"); return f ? getComputedStyle(f).animationName : "absent"; });
+  const alertAnim = await p.evaluate(() => { const a = document.querySelector(".jc-alert"); return a ? getComputedStyle(a).animationName : "absent"; });
+  const cat = await p.evaluate(() => { const l = document.querySelector('label:has(input[name="category"])'); return l ? getComputedStyle(l).transitionDuration : "absent"; });
+  out.push({ reduce, iframeAnim, alertAnim, categoryTransition: cat });
+  await ctx.close();
+}
+const ctx = await b.newContext({ viewport: { width: 1366, height: 768 } });
+const p = await ctx.newPage();
+await p.goto(`${BASE}?state=editor&outcome=success`, { waitUntil: "networkidle", timeout: 240000 });
+await p.keyboard.press("Tab"); for (let i=0;i<11;i++) await p.keyboard.press("Tab");
+const focused = await p.evaluate(() => document.activeElement?.tagName);
+const iframeFocusCount = await p.locator("iframe").count();
+out.push({ tabTo11: focused });
+await p.locator(".jc-frame__iframe").focus().catch(()=>{});
+await p.locator(".jc-frame__iframe").focus();
+await p.waitForTimeout(200);
+await p.screenshot({ path: "out/studio/focus-iframe-1366x768.png" });
+out.push({ iframeFocusOutline: await p.evaluate(() => getComputedStyle(document.querySelector(".jc-frame__iframe")).outlineStyle) });
+fs.writeFileSync("out/studio/extra.json", JSON.stringify(out, null, 2));
+await b.close(); console.log(JSON.stringify(out));

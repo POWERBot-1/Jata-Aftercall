@@ -5612,6 +5612,27 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 .pos-line { animation: jata-line-in 280ms var(--jata-ease-out, ease-out) both; }
 .pos-qty .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
 
+/* Website Studio (restrained): category choice, preview entrance and status presentation. Motion only
+   changes border, background and opacity. Text, values and the preview content are shown at their final state. */
+label:has(> input[type="radio"][name="category"]) { transition: border-color 160ms var(--jata-ease-out, ease-out), background-color 160ms var(--jata-ease-out, ease-out); }
+.jc-frame__iframe { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
+/* Focus can sit inside the storefront document, so the ring is drawn on the frame wrapper as well. */
+.jc-frame__iframe:focus-visible, .jc-frame:has(.jc-frame__iframe:focus-visible), .jc-frame:focus-within > .jc-frame__iframe { outline: 2px solid var(--jata-focus); outline-offset: 3px; }
+.jc-alert[role="status"], .jc-alert[role="alert"] { animation: jata-state-in 200ms var(--jata-ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  label:has(> input[type="radio"][name="category"]), .jc-frame__iframe, .jc-alert[role="status"], .jc-alert[role="alert"] {
+    transition: none !important; animation: none !important;
+  }
+}
+
+/* Publishing progress (Studio): an indeterminate bar shown only while the server's answer is awaited. */
+.jata-publish-progress { position: relative; height: 4px; overflow: hidden; border-radius: 999px; background: var(--jata-line); }
+.jata-publish-progress__bar { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--jata-accent); animation: jata-publish-sweep 1.1s var(--jata-ease-in-out, ease-in-out) infinite; }
+@keyframes jata-publish-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .jata-publish-progress__bar { animation: none; width: 100%; opacity: 0.45; }
+}
+
 /* Product tiles and totals: press feedback on the tile, and the total pulses when it changes.
    The total is the server-computed figure; only its paint is animated, never its digits. */
 .pos-item { transition: transform 120ms var(--jata-ease-out, ease-out), border-color 160ms ease; }
