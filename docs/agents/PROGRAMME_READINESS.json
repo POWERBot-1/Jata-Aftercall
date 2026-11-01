@@ -16,7 +16,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-001",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-002": {
     "status": "BLOCKED",
@@ -34,15 +36,17 @@
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "Release discipline remains unmet because multiple required acceptance areas are BLOCKED/NOT_TESTED and programme-completeness fails.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-003": {
     "status": "BLOCKED",
     "acceptance": "Anonymous users, merchants and agents are denied both `/control` and its APIs; explicitly authorized roles are allowed; forged-role, CSRF and session-revocation tests pass; verify canonical HTTPS/domain without production changes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §003 (ADMIN-003)",
     "implementationLocation": "`app/control/page.tsx`, `app/control/sign-in/page.tsx`, `components/control/ControlConsole.tsx`, `components/LoginForm.tsx`, `app/login/page.tsx`, `lib/control/access.ts`, `app/api/control/**`.",
-    "verificationMethod": "Exact-head targeted route/security/session unit coverage within the passing full suite, exact-head disposable-PostgreSQL integration/security suite, and loopback HTTP smoke. CI browser journeys exercised existing Business/ERP routes, not authorized `/control` roles; canonical-domain HTTPS remains unverified.",
-    "testResult": "BLOCKED: `/control` and `/api/control/*` exist. Anonymous loopback `/control` redirects to sign-in (307), overview API returns 401, and ungranted/forged, cross-tenant, CSRF, expiry/revocation cases are covered by passing exact-head fixture tests. Full suite and disposable-PostgreSQL workflow passed on this SHA. No authorized Control role browser journey, canonical-domain HTTPS/cookie verification, or production grant exists.",
+    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292`: full local suite, focused Control route/security tests, typecheck and HTTP smoke. Unauthenticated `/control` redirects 307 to sign-in; authenticated access is denied with `POLICY_PENDING` before grant lookup by unit test; `/api/control/records?kind=payments` returns 401 without a session and invalid kind returns 400. No authenticated browser journey or canonical-domain check.",
+    "testResult": "BLOCKED: on `0560ac24467e0f7125b4b6dedbacf23f4080a292`, `npm test` passed 339 suites / 3,972 tests (36 suites and 301 DB-dependent tests skipped). `/control` is locked behind `CONTROL_ROLE_POLICY_APPROVED = false`; the authenticated page presents the pending-policy state and every protected API returns `POLICY_PENDING` after authentication, regardless of a nominal stored grant. Loopback unauthenticated `/control` → 307, `/control/policy` → 200, records API → 401, invalid kind → 400. No owner-approved test grants/accounts, six-role browser sessions, screenshots, canonical-domain verification, or production grants.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
@@ -52,25 +56,34 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-003",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No authorized provisioned Control role or merchant/agent direct-page/API browser journey; official-domain HTTPS/cookie verification is still absent. Production grants remain intentionally unprovisioned.",
+    "blocker": "No owner-approved role/action/scope and safe non-production provisioning path; `CONTROL_ROLE_POLICY_APPROVED` intentionally remains false. No authenticated six-role browser journeys, screenshots/recordings, or canonical-domain HTTPS/cookie verification. Production grants intentionally remain unprovisioned.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
-      "app/control/sign-in/page.tsx",
-      "components/control/ControlConsole.tsx",
+      "app/control/policy/page.tsx",
+      "app/api/control/records/route.ts",
       "app/api/control/overview/route.ts",
+      "components/control/ControlConsole.tsx",
+      "lib/control/role-policy.ts",
+      "lib/control/access.ts",
+      "tests/unit/control-policy-pending-access.test.ts",
       "tests/unit/control-plane-routes.test.ts",
       "tests/unit/control-plane-security.test.ts",
-      "tests/security/auth-session-revocation.test.ts"
-    ]
+      "tests/unit/control-records-route.test.ts",
+      "tests/unit/control-role-policy.test.ts",
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md"
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-004": {
     "status": "BLOCKED",
     "acceptance": "Test horizontal/vertical escalation, forged roles, direct API, unauthenticated requests, CSRF, session revocation, MFA and immutable audit; unauthorized financial/configuration changes must be impossible.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §004 (ADMIN-004)",
     "implementationLocation": "`prisma/schema.prisma`, `prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `lib/control/**`, `app/api/control/**`, `tests/unit/control-plane-*`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `tests/security/auth-session-revocation.test.ts`.",
-    "verificationMethod": "Exact-head full Vitest suite and real disposable PostgreSQL integration/security suite; PostgreSQL 18 candidate migration rehearsal and schema reconciliation; targeted local control-plane tests. No owner-approved role matrix or six-role authenticated browser matrix was available.",
-    "testResult": "BLOCKED: exact-head CI passed the control unit/route/session tests and PostgreSQL grant/audit foundation checks, including no seeded privileged grant, append-only audit and grant triggers, revocation constraints, DDL rollback/reapply; native PostgreSQL migration/rehearsal and exact schema/catalog checks also passed. Six role names, explicit grants/scopes, MFA and session-revocation code exist. Exact role/action/scope and provisioning/recovery policy remains unresolved, and there are no authorized six-role browser journeys.",
+    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` full local suite and targeted route/security tests; role × capability helper matrix covers 6 canonical roles × all 15 keys, with no-grant, exact permission, wrong permission and cross-tenant checks. The production policy gate independently denies before grant lookup while owner approval is pending. Prior PostgreSQL immutability/recovery CI is historical evidence on earlier SHA, not rerun on this candidate.",
+    "testResult": "BLOCKED: exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` passes local role/capability and scoped route fixtures, including grant-revocation race, out-of-scope cursor, direct cross-tenant mutation denial and policy-pending gate. `npm test`: 3,972 passed, 301 DB-dependent skipped. Earlier disposable PostgreSQL trigger/rollback checks passed on prior source; no owner-approved role map/provisioner, six authenticated-role browser sessions, current-candidate DB test, or approved MFA recovery policy.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -81,31 +94,35 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-004",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Owner-approved role/action/scope, MFA recovery and secure grant-provisioning policies remain unresolved; no authenticated six-role browser journeys or production grants. PostgreSQL migration, audit/grant-trigger and rollback checks have passed only in disposable CI databases.",
+    "blocker": "Exact role/action/scope, identity and financial visibility, MFA recovery, initial grant/bootstrap and role-specific session policy remain owner decisions. The role policy remains unapproved and the global access guard remains closed. No production grants; non-production authenticated six-role and real database browser acceptance remain blocked.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
-      "prisma/schema.prisma",
-      "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "lib/control/permissions.ts",
       "lib/control/access.ts",
-      "lib/control/mfa.ts",
       "lib/control/audit.ts",
+      "lib/control/role-policy.ts",
+      "app/api/control/records/route.ts",
       "app/api/control/session/revoke/route.ts",
+      "tests/unit/control-policy-pending-access.test.ts",
       "tests/unit/control-plane-security.test.ts",
       "tests/unit/control-plane-routes.test.ts",
+      "tests/unit/control-records-route.test.ts",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "tests/security/auth-session-revocation.test.ts",
-      "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md",
-      "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
-    ]
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+      "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-005": {
     "status": "BLOCKED",
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §005 (ADMIN-005)",
     "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
-    "verificationMethod": "Mocked Control route tests cover tenant filters, direct denial, reasoned status change/audit and pagination; exact-head CI passed migration/database suites and existing Business/ERP browser journeys. The CI six-viewport Chrome capture covered other application routes, not `/control`; no Control data-backed role-isolation/browser evidence or independent visual/a11y review.",
-    "testResult": "BLOCKED: the console reports only request-time database-backed records/statuses, scoped business search, paginated businesses/audit, reasoned audited suspend/reinstate, agent/referral evidence, outbox states, exceptions, and verified DB connectivity where available. Exact-head migrations and shared DB suites pass, but the Control overview/queries were not exercised as authenticated role-provisioned browser journeys. Provider probes, owner PII, MRR/ARR, AI/POS/usage, and financial eligibility remain unavailable/not inferred. Screenshots are not of `/control`.",
+    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` route tests, full local test suite and loopback HTTP smoke. `/api/control/records` contains row-locked explicit permission checks, paginated tenant-scoped subscription/payment/commission reads, platform-wide-only agent application reads, minimal field selection and per-page audit evidence; production access is currently disabled by the global pending-policy guard. No browser or live DB role data inspected.",
+    "testResult": "BLOCKED: candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` adds authoritative paginated record-view code for subscriptions, payment statuses, agent applications and immutable commission metadata, with tenant cursor isolation and `CONTROL_RECORDS_READ` audit evidence. It withholds payment amounts/provider IDs, agent contacts and commission amounts. The global `POLICY_PENDING` gate means no protected operational data is currently exposed. Communications/exceptions/health/audit modules remain aggregate or unavailable; full six-role DB validation, viewport screenshots, accessibility and reduced-motion inspection not performed.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -115,15 +132,25 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-005",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Large canonical oversight panels remain unimplemented or owner-policy dependent; no role-provisioned Control data-source/tenant-isolation browser evidence or Control-specific six-view screenshots/accessibility review. Do not infer provider/financial values.",
+    "blocker": "Owner-approved grant mapping and non-production DB roles unavailable; global fail-closed policy gate intentionally prevents current operational reads. User PII, full communications detail/recovery, provider probes, financial amounts/eligibility and several actions remain pending/unavailable. No six-viewport evidence.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
+      "app/api/control/records/route.ts",
       "app/api/control/businesses/route.ts",
       "app/api/control/audit/route.ts",
       "components/control/ControlConsole.tsx",
-      "tests/unit/control-plane-routes.test.ts"
-    ]
+      "components/control/ControlRecordList.tsx",
+      "lib/control/access.ts",
+      "lib/control/role-policy.ts",
+      "tests/unit/control-policy-pending-access.test.ts",
+      "tests/unit/control-plane-routes.test.ts",
+      "tests/unit/control-records-route.test.ts",
+      "tests/unit/control-plane-security.test.ts",
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md"
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-006": {
     "status": "BLOCKED",
@@ -141,7 +168,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-007": {
     "status": "BLOCKED",
@@ -158,7 +187,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-008": {
     "status": "BLOCKED",
@@ -175,7 +206,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-009": {
     "status": "BLOCKED",
@@ -190,15 +223,17 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: authoritative HOSTAFRICA zone export, current DNS/TLS/canonical redirects, exact mail records and successful delivery are not independently verified. No DNS/env change made.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-010": {
     "status": "BLOCKED",
     "acceptance": "Deliver a functional, non-mocked console with real data, audited changes, all modules and security tests; independently inspect real screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768; report status, recovery, exact branch/SHA/PR and production verification separately.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §010 (ADMIN-010)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `prisma/**`, `lib/control/**`, control route/security/PostgreSQL test paths, and `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Exact-head static/schema/type/unit/build CI, PostgreSQL migration/security workflows, existing product browser journeys and Real-Chrome screenshot workflow; local focused tests. The screenshot workflow did not visit `/control` or provision six control roles, and artifacts have not received independent visual/accessibility review.",
-    "testResult": "BLOCKED: `/control` and functioning database-backed API handlers are implemented, not an audit-only report. Exact-head full suite, PostgreSQL migrations/recovery checks, candidate catalog rehearsal and general Chrome journeys/captures passed. This CI capture is for other product journeys, not the requested authenticated/unauthorized Control console. The approved role matrix, several modules, independent Control screenshots/a11y, and exact Control browser journeys remain missing.",
+    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` full local suite (339 passed suites, 36 skipped; 3,972 tests passed, 301 skipped), current typecheck, focused Control tests, targeted lint and HTTP smoke. Repository-wide lint has 0 errors/49 warnings on the preceding code batch. An earlier production build attempt compiled before being killed during TypeScript after offline Prisma engine TLS failure; it was not a successful build on this candidate. No browser executable/screenshot artifact available for inspection.",
+    "testResult": "BLOCKED: policy matrix and scoped read-only list UI/API are implemented, but protected Control is intentionally disabled pending role policy. `/control/policy` renders (HTTP 200), unauthenticated Control redirects/denies safely, and authenticated policy gate is unit-tested. Candidate `npm test` passes 3,972 tests. No approved role provisioning, authenticated journeys, genuine screenshots/recordings, six viewport review, independent accessibility/reduced-motion review, completed full production build or complete all-module operations.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
@@ -209,18 +244,26 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-010",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Full console scope, owner-approved role/action matrix, provisioned non-production role journeys, Control-specific six-view screenshots and independent accessibility/visual review remain incomplete; no production grants are authorized.",
+    "blocker": "No owner-approved role mapping or isolated disposable-account provisioning; global policy gate intentionally denies access. Authenticated journeys and real Control screenshots/recordings at six viewports, independent visual/accessibility review, current full native production build and several operational modules remain outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
-      "app/control/sign-in/page.tsx",
+      "app/control/policy/page.tsx",
+      "app/api/control/records/route.ts",
       "components/control/ControlConsole.tsx",
-      "app/api/control/**",
+      "components/control/ControlRecordList.tsx",
+      "lib/control/access.ts",
+      "lib/control/role-policy.ts",
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
+      "tests/unit/control-policy-pending-access.test.ts",
+      "tests/unit/control-records-route.test.ts",
+      "tests/unit/control-role-policy.test.ts",
       "tests/unit/control-plane-routes.test.ts",
-      "tests/unit/control-plane-security.test.ts",
-      "tests/prisma/control-plane-foundation-postgres.test.ts",
-      "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
-    ]
+      "tests/unit/control-plane-security.test.ts"
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-001": {
     "status": "BLOCKED",
@@ -238,7 +281,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-002": {
     "status": "BLOCKED",
@@ -256,7 +301,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-003": {
     "status": "NOT_TESTED",
@@ -271,7 +318,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "ADMIN-011": {
     "status": "PASS",
@@ -290,15 +339,17 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-011",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-012": {
     "status": "BLOCKED",
     "acceptance": "Implement secure `/control` using existing identity, session/revocation, server-side resource permissions and tenant isolation; support the six requested roles only after precise permissions are confirmed. Pass real authorized/denied sessions, security and route tests, and six-view genuine screenshots.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §015 (ADMIN-012)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `lib/control/**`, `prisma/schema.prisma`, control migration and tests.",
-    "verificationMethod": "Exact-head route/security/session fixtures within full suite; disposable PostgreSQL grant/audit/rollback tests; exact-head migration rehearsal. CI browser journeys/six-viewport captures cover other product modules, not authorized/denied `/control` sessions.",
-    "testResult": "BLOCKED: real `/control` and APIs exist. Server code checks explicit database-backed grants, scope and MFA; mutations recheck and row-lock the grant and atomically commit audit. Exact-head route/security tests and PostgreSQL immutability/revocation/rollback tests pass in CI. The six role names exist, but owner-approved role/action boundaries, safe grant provisioning and real authorized/denied Control browser journeys/screenshots are still absent.",
+    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` focused route/security suite and full local suite; role × capability matrix checks all six role labels against all 15 keys; record API holds and rechecks live grant rows, constrains tenant queries and audits successful list reads after policy enablement. Current global gate denies every protected request before grant lookup/MFA. Database trigger tests are present but skipped in local no-DATABASE_URL run.",
+    "testResult": "BLOCKED: exact-key/scope/MFA implementation, revocation race denial, no-grant behavior, cursor isolation, direct/cross-tenant route fixtures, reasoned business transitions, audit display, and the `POLICY_PENDING` access gate are covered on `0560ac24467e0f7125b4b6dedbacf23f4080a292`. Full local suite passes with DB-dependent tests skipped. No owner-approved role mapping, provisioning process, authenticated browser journey, or visual artifact inspection.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -308,19 +359,31 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-012",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Precise role/action boundaries and secure grant provisioning remain owner decisions; no grants are seeded. No authorized/denied Control browser journey or Control-specific six-view review has been performed.",
+    "blocker": "No owner-approved role/action mapping and no approved non-production provisioning procedure. The global policy guard remains closed. Authenticated allowed/denied sessions for each role, current exact-candidate PostgreSQL audit rewrite/delete proof, and six-view browser acceptance are outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
-      "app/api/control/**",
-      "lib/control/**",
-      "prisma/schema.prisma",
-      "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
+      "app/control/sign-in/page.tsx",
+      "app/control/policy/page.tsx",
+      "app/api/control/overview/route.ts",
+      "app/api/control/records/route.ts",
+      "app/api/control/businesses/route.ts",
+      "app/api/control/audit/route.ts",
+      "app/api/control/session/revoke/route.ts",
+      "lib/control/permissions.ts",
+      "lib/control/access.ts",
+      "lib/control/audit.ts",
+      "lib/control/role-policy.ts",
+      "tests/unit/control-policy-pending-access.test.ts",
       "tests/unit/control-plane-routes.test.ts",
       "tests/unit/control-plane-security.test.ts",
+      "tests/unit/control-records-route.test.ts",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
-      "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
-    ]
+      "tests/security/auth-session-revocation.test.ts",
+      "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md"
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-013": {
     "status": "BLOCKED",
@@ -337,7 +400,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: end-to-end phone ownership → eligibility → verified payment → accrual → reversal/report is not proven; approved financial terms remain unavailable. No real financial activity.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-014": {
     "status": "BLOCKED",
@@ -361,7 +426,9 @@
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
-    ]
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-015": {
     "status": "BLOCKED",
@@ -379,7 +446,9 @@
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No authenticated/unauthorized Control and full owner-specified module screenshot matrix, no independent artifact inspection or accessibility findings; existing general screenshots do not satisfy this criterion.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-004": {
     "status": "NOT_TESTED",
@@ -396,7 +465,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "ADMIN-016": {
     "status": "PASS",
@@ -415,7 +486,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-016",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-017": {
     "status": "PASS",
@@ -435,7 +508,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-017",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-018": {
     "status": "PASS",
@@ -462,7 +537,9 @@
       "app/api/control/session/revoke/route.ts",
       "tests/security/auth-session-revocation.test.ts",
       "tests/unit/control-plane-routes.test.ts"
-    ]
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-019": {
     "status": "PASS",
@@ -482,7 +559,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-019",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-020": {
     "status": "PASS",
@@ -503,7 +582,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-020",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-021": {
     "status": "PASS",
@@ -524,7 +605,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-021",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-022": {
     "status": "BLOCKED",
@@ -541,7 +624,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-005": {
     "status": "NOT_TESTED",
@@ -558,7 +643,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "ADMIN-023": {
     "status": "NOT_TESTED",
@@ -575,7 +662,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "MOTION-006": {
     "status": "BLOCKED",
@@ -593,7 +682,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-024": {
     "status": "PASS",
@@ -613,7 +704,9 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-024",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "PASS"
   },
   "MOTION-007": {
     "status": "BLOCKED",
@@ -630,7 +723,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-008": {
     "status": "BLOCKED",
@@ -648,7 +743,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-009": {
     "status": "NOT_TESTED",
@@ -665,7 +762,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "MOTION-010": {
     "status": "NOT_TESTED",
@@ -683,7 +782,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "NOT_TESTED"
   },
   "MOTION-011": {
     "status": "BLOCKED",
@@ -701,7 +802,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-012": {
     "status": "BLOCKED",
@@ -719,7 +822,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-013": {
     "status": "BLOCKED",
@@ -737,7 +842,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-014": {
     "status": "BLOCKED",
@@ -755,7 +862,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-015": {
     "status": "BLOCKED",
@@ -773,7 +882,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-016": {
     "status": "BLOCKED",
@@ -791,7 +902,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-017": {
     "status": "BLOCKED",
@@ -810,7 +923,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-018": {
     "status": "BLOCKED",
@@ -829,7 +944,9 @@
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet.",
-    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6"
+    "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   },
   "RELEASE-001": {
     "status": "BLOCKED",
@@ -862,6 +979,8 @@
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
       "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
-    ]
+    ],
+    "currentAssessmentSourceSha": "0560ac24467e0f7125b4b6dedbacf23f4080a292",
+    "currentAssessmentStatus": "BLOCKED"
   }
 }
