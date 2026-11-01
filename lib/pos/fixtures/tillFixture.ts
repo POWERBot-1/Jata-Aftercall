@@ -87,7 +87,7 @@ export function fixtureSimulatedResponse(outcome: FixtureOutcome, body: unknown)
   const sale = (body ?? {}) as SaleBody;
   if (outcome === "failure") {
     return new Response(
-      JSON.stringify({ ok: false, error: "FICTIONAL FIXTURE: the simulated payment provider declined. No sale was recorded." }),
+      JSON.stringify({ ok: false, error: "FICTIONAL FIXTURE: the simulated payment provider declined. No sale was recorded. Not a real sale." }),
       { status: 422, headers: { "content-type": "application/json" } },
     );
   }
@@ -95,7 +95,7 @@ export function fixtureSimulatedResponse(outcome: FixtureOutcome, body: unknown)
   const pending = outcome === "pending";
   const receiptText = [
     FIXTURE_NOTICE,
-    pending ? "SIMULATED PENDING: awaiting a fictional confirmation. Not a payment." : "SIMULATED SUCCESS: fictional receipt. Not a real sale.",
+    pending ? "SIMULATED PENDING: awaiting a fictional confirmation. Not a real sale or payment." : "SIMULATED SUCCESS: fictional receipt. Not a real sale.",
     `Subtotal KES ${totals.subtotalKES}`,
     `Total KES ${totals.totalKES}`,
   ].join("\n");

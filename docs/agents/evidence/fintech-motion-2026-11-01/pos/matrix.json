@@ -1,0 +1,776 @@
+[
+  {
+    "viewport": "320x568",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "320x568",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "320x568",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "320x568",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "320x568",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "320x568",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "320x568",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "360x800",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "360x800",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "360x800",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "360x800",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "360x800",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "360x800",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "390x844",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "390x844",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "390x844",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "390x844",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "390x844",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "390x844",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "430x932",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "430x932",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "430x932",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "430x932",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "430x932",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "430x932",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "768x1024",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "768x1024",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "768x1024",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "01-empty-cart",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-single-product",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-multiple-products",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "04-quantity-increase",
+    "total": "KES 670",
+    "lines": 2,
+    "complete": "Complete sale · KES 670",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-quantity-decrease",
+    "total": "KES 350",
+    "lines": 2,
+    "complete": "Complete sale · KES 350",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "06-item-removed",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "07-empty-quantity-input",
+    "total": "KES 320",
+    "lines": 1,
+    "complete": "Complete sale · KES 320",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "1"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "08-invalid-decimal-input",
+    "total": "KES 640",
+    "lines": 1,
+    "complete": "Complete sale · KES 640",
+    "completeDisabled": true,
+    "overflowX": false,
+    "qtyValue": "2"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "09-zero-quantity-removes-line",
+    "total": "KES 0",
+    "lines": 0,
+    "complete": "Complete sale · KES 0",
+    "completeDisabled": true,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "10-subtotal-total-multi",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": true,
+    "overflowX": false,
+    "expectedTotal": "KES 410"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "11-checkout-ready",
+    "total": "KES 410",
+    "lines": 2,
+    "complete": "Complete sale · KES 410",
+    "completeDisabled": false,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "12-success",
+    "total": null,
+    "lines": 0,
+    "complete": null,
+    "completeDisabled": null,
+    "overflowX": false
+  },
+  {
+    "viewport": "1366x768",
+    "state": "pending",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "1366x768",
+    "state": "failure",
+    "text": "",
+    "outcomeText": ""
+  },
+  {
+    "viewport": "1366x768",
+    "state": "meta",
+    "pageErrors": 0,
+    "realPosApiCalls": 0
+  }
+]

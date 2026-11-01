@@ -421,10 +421,11 @@ export function TillClient({
   }
 
   if (result?.receipt || result?.receiptText) {
+    const pendingConfirmation = result.sale?.status === "PENDING_CONFIRMATION";
     return (
-      <div className="space-y-4">
+      <div key={pendingConfirmation ? "pending" : "recorded"} className="space-y-4 jata-state-enter">
         <div className="jata-card p-5">
-          <p className="jata-kicker">Sale recorded</p>
+          <p className="jata-kicker">{pendingConfirmation ? "Payment pending confirmation" : "Sale recorded"}</p>
           <h2 className="text-lg font-bold">{result.sale?.receiptNumber ?? nextReceiptNumber}</h2>
           <p className="pos-note">
             {result.totals ? `Total KES ${formatNumber(result.totals.totalKES)}` : ""}
@@ -558,7 +559,7 @@ export function TillClient({
             ) : null}
             {flags.taxEnabled ? <div><span>{flags.taxLabel || "Tax"}</span><span>Included by the server</span></div> : null}
             {feeKES > 0 ? <div><span>Delivery</span><span>KES {formatNumber(feeKES)}</span></div> : null}
-            <div className="pos-total-line"><span>Total</span><span>KES {formatNumber(total)}</span></div>
+            <div className="pos-total-line"><span>Total</span><span key={total} className="jata-value-bump">KES {formatNumber(total)}</span></div>
           </div>
 
           {flags.discounts && flags.canDiscount && cart.length > 0 ? (

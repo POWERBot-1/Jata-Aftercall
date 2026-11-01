@@ -66,6 +66,7 @@ describe("fixture simulator (no I/O)", () => {
     const json = await fixtureSimulatedResponse("pending", body).json();
     expect(json.sale.status).toBe("PENDING_CONFIRMATION");
     expect(json.receiptText).toContain("SIMULATED PENDING");
+    expect(json.receiptText).toContain("Not a real sale");
     expect(json.receiptText).not.toContain("SIMULATED SUCCESS");
   });
 
@@ -257,6 +258,27 @@ describe("failure outcome from the real component", () => {
     await act(async () => complete.click());
     expect(container.textContent).toContain("FICTIONAL FIXTURE: the simulated payment provider declined");
     expect(container.querySelector(".pos-line")).not.toBeNull();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
+describe("pending outcome presentation", () => {
+  it("labels a simulated pending result as pending, never as recorded", async () => {
+    const { PosFixtureTill: Harness } = await import("@/components/pos/PosFixtureTill");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(Harness, { outcome: "pending" })));
+    await act(async () => (container.querySelector<HTMLButtonElement>("button.pos-item") as HTMLButtonElement).click());
+    const cashBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Cash") as HTMLButtonElement;
+    await act(async () => cashBtn.click());
+    const complete = [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Complete sale")) as HTMLButtonElement;
+    await act(async () => complete.click());
+    expect(container.textContent).toContain("Payment pending confirmation");
+    expect(container.textContent).not.toContain("Sale recorded");
+    expect(container.textContent).toContain("SIMULATED PENDING");
+    expect(container.textContent).toContain("Not a real sale");
     await act(async () => root.unmount());
     container.remove();
   });

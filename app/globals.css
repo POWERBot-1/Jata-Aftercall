@@ -5612,14 +5612,21 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 .pos-line { animation: jata-line-in 280ms var(--jata-ease-out, ease-out) both; }
 .pos-qty .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
 
+/* Product tiles and totals: press feedback on the tile, and the total pulses when it changes.
+   The total is the server-computed figure; only its paint is animated, never its digits. */
+.pos-item { transition: transform 120ms var(--jata-ease-out, ease-out), border-color 160ms ease; }
+.pos-item:active:not(:disabled) { transform: scale(0.98); }
+.pos-total-line .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
+
 /* Payment / order state: the state block re-enters when its state changes. */
 .jata-state-enter { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .jata-route-enter, .jata-metric-grid > *, .ws-rail a[aria-current="page"], .pos-nav-link[data-active="true"],
-  .pos-line, .pos-qty .jata-value-bump, .jata-state-enter {
+  .pos-line, .pos-qty .jata-value-bump, .pos-total-line .jata-value-bump, .jata-state-enter {
     animation: none !important;
   }
+  .pos-item, .pos-item:active { transition: none !important; transform: none !important; }
   .ws-rail a, .pos-nav-link, .ws-rail a:active, .pos-nav-link:active { transition: none !important; transform: none !important; }
 }
 
