@@ -142,7 +142,10 @@ if (process.exitCode !== 2) {
     await mkdir(evidenceDir, { recursive: true });
 
     const port = await freePort();
-    baseUrl = `http://127.0.0.1:${port}`;
+    // Use `localhost` consistently for browser Origin and Host. Next's production server may
+    // canonicalize loopback URLs to localhost; mixing it with 127.0.0.1 makes the strict origin
+    // check reject an otherwise same-origin test request.
+    baseUrl = `http://localhost:${port}`;
     server = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-H", "127.0.0.1", "-p", String(port)], {
       env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" },
       stdio: ["ignore", "pipe", "pipe"],
