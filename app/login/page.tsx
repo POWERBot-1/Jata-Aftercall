@@ -9,8 +9,8 @@ export const metadata: Metadata = { title: "Log in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   const params = await searchParams;
-  // Only an explicit local destination is permitted; never use an arbitrary next URL.
-  const destination = params.next === "agents" ? "/agents/dashboard" : "/dashboard";
+  // Only explicit local destinations are permitted; never accept an arbitrary next URL.
+  const destination = params.next === "agents" ? "/agents/dashboard" : params.next === "control" ? "/control" : "/dashboard";
   const session = await getSession();
   if (session) redirect(destination);
   return (

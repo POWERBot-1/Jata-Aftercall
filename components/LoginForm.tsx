@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
-export default function LoginForm({ destination = "/dashboard" }: { destination?: "/dashboard" | "/agents/dashboard" }) {
+export default function LoginForm({ destination = "/dashboard" }: { destination?: "/dashboard" | "/agents/dashboard" | "/control" }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
