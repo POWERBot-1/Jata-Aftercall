@@ -39,11 +39,13 @@ function createFallbackPrisma(): any {
   // Minimal stub that satisfies the Prisma API used in the app but returns empty data.
   // All methods return sensible defaults so build and unit tests pass without a DB.
   const stub = {
-    $queryRaw: async () => [{ "?column?": 1 }],
+    $queryRaw: async () => { throw new Error("DB not available (fallback)"); },
+    $transaction: async () => { throw new Error("DB not available (fallback)"); },
     $disconnect: async () => {},
     user: {
       findUnique: async () => null,
       findMany: async () => [],
+      update: async () => { throw new Error("DB not available (fallback)"); },
       create: async () => { throw new Error("DB not available (fallback)"); },
       upsert: async () => { throw new Error("DB not available"); },
       count: async () => 0,
@@ -51,6 +53,7 @@ function createFallbackPrisma(): any {
     business: {
       findMany: async () => [],
       findUnique: async () => null,
+      updateMany: async () => { throw new Error("DB not available (fallback)"); },
       create: async () => { throw new Error("DB not available"); },
       update: async () => { throw new Error("DB not available"); },
       upsert: async () => { throw new Error("DB not available"); },
@@ -99,6 +102,7 @@ function createFallbackPrisma(): any {
     subscription: {
       findUnique: async () => null,
       findMany: async () => [],
+      groupBy: async () => [],
       findFirst: async () => null,
       upsert: async () => { throw new Error("DB not available"); },
       update: async () => { throw new Error("DB not available"); },
@@ -107,6 +111,7 @@ function createFallbackPrisma(): any {
     payment: {
       findUnique: async () => null,
       findMany: async () => [],
+      groupBy: async () => [],
       create: async () => { throw new Error("DB not available"); },
       update: async () => { throw new Error("DB not available"); },
       upsert: async () => { throw new Error("DB not available"); },
@@ -597,6 +602,10 @@ function createFallbackPrisma(): any {
     // Password-reset tokens (main's `lib/password-reset.ts`). Reads answer empty and writes throw,
     // so an offline build cannot report a reset link that was never stored.
     passwordResetToken: emptyModel(),
+    // Control-plane reads are empty offline and every write refuses; a fallback is never an authority.
+    controlRoleGrant: emptyModel(),
+    controlMfaCredential: emptyModel(),
+    controlAuditEvent: emptyModel(),
     // Offline reads remain empty and every write refuses; this is not an agent database.
     agentApplication: emptyModel(),
     agentCommissionLedgerEntry: emptyModel(),
@@ -664,9 +673,6 @@ function createFallbackPrisma(): any {
     msgMessageEvent: emptyModel(),
     msgWallet: emptyModel(),
     msgLedgerEntry: emptyModel(),
-    $transaction: async () => {
-      throw new Error("DB not available (fallback)");
-    },
   };
   return stub;
 }

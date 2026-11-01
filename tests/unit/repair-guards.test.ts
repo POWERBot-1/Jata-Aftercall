@@ -153,6 +153,7 @@ describe("runtime and schema guards", () => {
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
+      "20261126000000_control_plane_foundation",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -228,6 +229,7 @@ describe("runtime and schema guards", () => {
       "20261122000000_agent_notification_recovery_audit",
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
+      "20261126000000_control_plane_foundation",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -252,6 +254,15 @@ describe("runtime and schema guards", () => {
       expect(sql).not.toContain("DELETE FROM");
       expect(sql).not.toContain("UPDATE \"");
     }
+    const controlPlane = readFileSync(path.join(root, "prisma/migrations/20261126000000_control_plane_foundation/migration.sql"), "utf8");
+    expect(controlPlane).toContain("CREATE TYPE \"ControlRole\" AS ENUM");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlRoleGrant\"");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlMfaCredential\"");
+    expect(controlPlane).toContain("CREATE TABLE \"ControlAuditEvent\"");
+    expect(controlPlane).toContain("control_audit_event_immutable");
+    expect(controlPlane).toContain("control_role_grant_immutable");
+    expect(controlPlane).not.toMatch(/INSERT\s+INTO\s+\"ControlRoleGrant\"/i);
+    expect(controlPlane).not.toMatch(/UPDATE\s+\"User\"|UPDATE\s+\"Business\"/i);
     const activationReview = readFileSync(path.join(root, "prisma/migrations/20261107000000_agent_activation_review/migration.sql"), "utf8");
     expect(activationReview).toContain(`CHECK ("agentStatus" IN ('INACTIVE', 'ACTIVE', 'SUSPENDED'))`);
     expect(activationReview).toContain(`ADD COLUMN "agentStatus" TEXT NOT NULL DEFAULT 'INACTIVE'`);

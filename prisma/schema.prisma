@@ -38,6 +38,10 @@ model User {
   agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
   agentNotificationReplays AgentAdminNotificationReplay[] @relation("AgentNotificationReplayActor")
   referralReportRevisions AgentReferralReportRevision[] @relation("ReferralReportRevisionActor")
+  controlRoleGrants ControlRoleGrant[] @relation("ControlRoleGrantSubject")
+  controlGrantsProvisioned ControlRoleGrant[] @relation("ControlRoleGrantProvisioner")
+  controlMfaCredential ControlMfaCredential?
+  controlAuditEvents ControlAuditEvent[] @relation("ControlAuditActor")
 }
 
 // An application is not an agent entitlement. No activation is possible until a trusted,
@@ -357,6 +361,78 @@ enum Role {
   ADMIN
 }
 
+// Dedicated control-plane roles are separate from application CUSTOMER/ADMIN roles.
+// Permission grants are stored explicitly; there are no inferred role-to-permission defaults.
+enum ControlRole {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  FINANCE_ADMIN
+  SUPPORT_ADMIN
+  SECURITY_ADMIN
+  READ_ONLY_AUDITOR
+}
+
+model ControlRoleGrant {
+  id String @id @default(cuid())
+  userId String
+  user User @relation("ControlRoleGrantSubject", fields: [userId], references: [id], onDelete: Restrict)
+  role ControlRole
+  // Explicit approved capability keys only. Empty/no grant means deny.
+  permissionKeys String[] @default([])
+  // Null scope means platform-wide and must be explicitly approved by the grant provisioner.
+  scopeBusinessId String?
+  scopeBusiness Business? @relation(fields: [scopeBusinessId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation("ControlRoleGrantProvisioner", fields: [createdById], references: [id], onDelete: Restrict)
+  reason String @db.Text
+  revokedAt DateTime?
+  revocationReason String? @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([role, revokedAt])
+  @@index([scopeBusinessId, revokedAt])
+}
+
+model ControlMfaCredential {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  secretCiphertext String @db.Text
+  secretIv String
+  secretTag String
+  verifiedAt DateTime?
+  lastAcceptedStep BigInt?
+  failedAttempts Int @default(0)
+  lockedUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Append-only platform administrative trail. A PostgreSQL trigger rejects UPDATE and DELETE.
+model ControlAuditEvent {
+  id String @id @default(cuid())
+  actorId String
+  actor User @relation("ControlAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  actorRole ControlRole
+  action String
+  targetType String
+  targetId String?
+  scopeBusinessId String?
+  scopeBusiness Business? @relation(fields: [scopeBusinessId], references: [id], onDelete: Restrict)
+  outcome String
+  reason String? @db.Text
+  beforeState Json?
+  afterState Json?
+  metadata Json?
+  correlationId String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([scopeBusinessId, createdAt])
+  @@index([targetType, targetId, createdAt])
+}
+
 // A single active recovery token per account. Only its SHA-256 digest is stored.
 model PasswordResetToken {
   id        String   @id @default(cuid())
@@ -428,6 +504,8 @@ model Business {
   demandInsights DemandInsight[]
   aiQualityEvents AIQualityEvent[]
   // ── JATA AFTERCALL Business POS (spec §80: additive back-relations only) ──
+  controlRoleGrants ControlRoleGrant[]
+  controlAuditEvents ControlAuditEvent[]
   posConfiguration         PosConfiguration?
   posConfigurationVersions PosConfigurationVersion[]
   posSubscription          PosSubscription?
