@@ -3,6 +3,7 @@ import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { verifyControlMfaSession } from "./mfa";
 import { isControlPermission, type ControlPermission, type ControlRoleName } from "./permissions";
+import { CONTROL_ROLE_POLICY_APPROVED } from "./role-policy";
 
 export const CONTROL_MFA_COOKIE = "jata_control_mfa";
 
@@ -20,12 +21,13 @@ export type ControlIdentity = {
 
 export type ControlAccessResult =
   | { ok: true; identity: ControlIdentity }
-  | { ok: false; status: 401 | 403 | 503; code: "UNAUTHENTICATED" | "CONTROL_ACCESS_REQUIRED" | "MFA_REQUIRED" | "ACCESS_UNAVAILABLE" };
+  | { ok: false; status: 401 | 403 | 503; code: "UNAUTHENTICATED" | "POLICY_PENDING" | "CONTROL_ACCESS_REQUIRED" | "MFA_REQUIRED" | "ACCESS_UNAVAILABLE" };
 
 /** Read entitlements from the database on every request. JWT role claims never grant control access. */
 export async function getControlIdentity(): Promise<ControlAccessResult> {
   const session = await getSession();
   if (!session) return { ok: false, status: 401, code: "UNAUTHENTICATED" };
+  if (!CONTROL_ROLE_POLICY_APPROVED) return { ok: false, status: 403, code: "POLICY_PENDING" };
   try {
     const rows = await prisma.controlRoleGrant.findMany({
       where: { userId: session.userId, revokedAt: null },
@@ -106,6 +108,7 @@ export async function requireAnyControlPermission(permissions: readonly ControlP
 export function controlAccessError(result: Extract<ControlAccessResult, { ok: false }>): { error: string; code: string } {
   const messages = {
     UNAUTHENTICATED: "Sign in to continue.",
+    POLICY_PENDING: "Control access is disabled until the owner approves the six-role permission policy.",
     CONTROL_ACCESS_REQUIRED: "No active control-plane permission grants this operation.",
     MFA_REQUIRED: "Verify your control-plane MFA to continue.",
     ACCESS_UNAVAILABLE: "Control access could not be verified. No action was performed.",

@@ -87,6 +87,13 @@ describe("direct control page and business APIs", () => {
     expect(fixtures.prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it("renders the explicit pending-policy state rather than the operational console", async () => {
+    fixtures.state.accessFailure = { status: 403, code: "POLICY_PENDING" };
+    const page = await ControlPage() as any;
+    expect(page.props.title).toBe("Control access pending owner policy");
+    expect(page.props.subtitle).toContain("No role/action permission mapping has been approved");
+  });
+
   it("denies direct cross-tenant mutation before touching the database", async () => {
     const response = await changeBusinessStatus(request("https://control.example.test/api/control/businesses", {
       businessId: "business-b", status: "SUSPENDED", confirmation: "SUSPEND", reason: "Owner-reported policy violation",

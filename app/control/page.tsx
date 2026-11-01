@@ -11,6 +11,12 @@ const READ_PERMISSIONS = CONTROL_PERMISSIONS.filter((permission) => permission.e
 export default async function ControlPage() {
   const access = await getControlIdentity();
   if (access.ok === false && access.code === "UNAUTHENTICATED") redirect("/control/sign-in");
+  if (access.ok === false && access.code === "POLICY_PENDING") return (
+    <WorkspaceSetupShell title="Control access pending owner policy" subtitle="No role/action permission mapping has been approved. Even an existing capability grant cannot enable Control until that policy decision is recorded." backHref="/control/sign-in" backLabel="Sign in">
+      <p className="ws-muted" role="status">No operational data or administrative action is available. Unapproved permissions remain denied; no account or grant was created.</p>
+      <p className="ws-tiny mt-3"><a className="underline" href="/control/policy">Review the proposed six-role authorization matrix</a></p>
+    </WorkspaceSetupShell>
+  );
   if (access.ok === false) return (
     <WorkspaceSetupShell title="Control access unavailable" subtitle="The control identity and permission store could not be verified." backHref="/control/sign-in" backLabel="Sign in">
       <p className="ws-muted" role="alert">No control data or administrative action is available. Please try again after the authoritative service recovers.</p>
