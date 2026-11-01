@@ -14,14 +14,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function PosFixturePage({ searchParams }: { searchParams: Promise<{ outcome?: string }> }) {
+export default async function PosFixturePage({ searchParams }: { searchParams: Promise<{ outcome?: string; motion?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
-  const requested = (await searchParams).outcome;
+  const params = await searchParams;
+  const requested = params.outcome;
+  const motion = params.motion === "lite" ? "lite" : "auto";
   const outcome = isFixtureOutcome(requested) ? requested : "success";
   return (
     <main id="main" className="mx-auto max-w-5xl space-y-4 p-4">
       <h1 className="text-xl font-bold">POS till — fictional fixture</h1>
-      <PosFixtureTill outcome={outcome} />
+      <PosFixtureTill outcome={outcome} motion={motion} />
     </main>
   );
 }

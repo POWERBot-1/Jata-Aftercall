@@ -5617,6 +5617,14 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 .pos-item { transition: transform 120ms var(--jata-ease-out, ease-out), border-color 160ms ease; }
 .pos-item:active:not(:disabled) { transform: scale(0.98); }
 .pos-total-line .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
+/* Removed cart line: eases out while the cart state has already dropped it. Presentation only; the
+   ghost carries no money value, is aria-hidden and ignores pointer input. */
+@keyframes jata-line-out { to { opacity: 0; transform: translate3d(8px, 0, 0); } }
+.pos-line-leaving { animation: jata-line-out 200ms var(--jata-ease-in, ease-in) both; pointer-events: none; }
+/* Owner-Lite: the till renders static. Same rule the storefront applies for the "lite" preference. */
+[data-pos-motion="lite"], [data-pos-motion="lite"] * { animation: none !important; transition: none !important; }
+[data-pos-motion="lite"] .pos-item:active { transform: none; }
+/* No exit ghost is created under owner-Lite or reduced motion (see TillClient exitMotionAllowed). */
 
 /* Payment / order state: the state block re-enters when its state changes. */
 .jata-state-enter { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }

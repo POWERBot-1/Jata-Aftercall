@@ -1,4 +1,6 @@
 import DashboardClient from "@/components/DashboardClient";
+import DashboardLoading from "@/app/dashboard/loading";
+import { DashboardErrorFixture } from "@/components/dev/DashboardStateFixture";
 import DashboardNav from "@/components/DashboardNav";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
@@ -116,6 +118,9 @@ export default async function WorkspaceDesignPreviewPage({ searchParams }: { sea
   if (process.env.NODE_ENV === "production") notFound();
   // Development-only switch: `?state=empty` renders the real DashboardClient empty branch with no businesses.
   const emptyState = (await searchParams).state === "empty";
+  // Development-only: `?state=loading` renders the real app/dashboard/loading.tsx skeleton, `?state=error` renders the
+  // real app/dashboard/error.tsx boundary. Neither touches data.
+  const dashState = (await searchParams).state;
   const shownBusinesses = emptyState ? [] : businesses;
   const shownMetrics = emptyState ? {} : metricsMap;
   return (
@@ -139,7 +144,13 @@ export default async function WorkspaceDesignPreviewPage({ searchParams }: { sea
           Developer preview · synthetic sample data · not a customer dashboard · development builds only.
         </p>
         <div className="ws-stack">
-          <DashboardClient businesses={shownBusinesses as never} metricsMap={shownMetrics as never} accountEmail="mary@example.com" />
+          {dashState === "loading" ? (
+            <DashboardLoading />
+          ) : dashState === "error" ? (
+            <DashboardErrorFixture />
+          ) : (
+            <DashboardClient businesses={shownBusinesses as never} metricsMap={shownMetrics as never} accountEmail="mary@example.com" />
+          )}
 
           <section aria-label="Plans visual check" className="ws-stack">
             <WorkspaceHero

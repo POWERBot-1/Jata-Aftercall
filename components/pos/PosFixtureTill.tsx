@@ -6,6 +6,7 @@
  * Imported only by app/dev/pos-fixture (404 in production).
  */
 import { TillClient } from "@/components/pos/TillClient";
+import type { RenderPreference } from "@/lib/experience/renderMode";
 import {
   FIXTURE_BASE_PATH,
   FIXTURE_BUSINESS_ID,
@@ -19,7 +20,7 @@ import {
   type FixtureOutcome,
 } from "@/lib/pos/fixtures/tillFixture";
 
-export function PosFixtureTill({ outcome }: { outcome: FixtureOutcome }) {
+export function PosFixtureTill({ outcome, motion = "auto" }: { outcome: FixtureOutcome; motion?: RenderPreference }) {
   return (
     <section aria-label="Fictional POS fixture" className="space-y-3">
       <p role="note" className="rounded-xl border border-dashed border-[color:var(--jata-line)] px-3 py-2 text-sm font-semibold">
@@ -38,6 +39,7 @@ export function PosFixtureTill({ outcome }: { outcome: FixtureOutcome }) {
         nextReceiptNumber="FIXTURE-0001"
         wallet={{ destinations: [] }}
         submitSaleRequest={async (_businessId, body) => fixtureSimulatedResponse(outcome, body)}
+        motionPreference={motion}
       />
     </section>
   );

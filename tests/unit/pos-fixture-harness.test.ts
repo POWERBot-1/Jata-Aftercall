@@ -283,3 +283,68 @@ describe("pending outcome presentation", () => {
     container.remove();
   });
 });
+
+describe("cart removal exit and owner-Lite (real TillClient)", () => {
+  async function mount(motion?: "lite") {
+    const { PosFixtureTill: Harness } = await import("@/components/pos/PosFixtureTill");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(Harness, { outcome: "success", motion })));
+    const click = async (el: Element | null | undefined) => {
+      expect(el, "element to click").toBeTruthy();
+      await act(async () => (el as HTMLElement).click());
+    };
+    const byLabel = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    const tile = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("button.pos-item")].find((b) => b.textContent?.includes(name));
+    const cleanup = async () => {
+      await act(async () => root.unmount());
+      container.remove();
+    };
+    return { container, click, byLabel, tile, cleanup };
+  }
+
+  it("removing a line leaves an aria-hidden, money-free exit ghost that then disappears", async () => {
+    const m = await mount();
+    await m.click(m.tile("Fixture Tea"));
+    await m.click(m.byLabel("One less Fixture Tea 250g"));
+    const ghost = m.container.querySelector<HTMLElement>(".pos-line-leaving");
+    expect(ghost).not.toBeNull();
+    expect(ghost?.getAttribute("aria-hidden")).toBe("true");
+    expect(ghost?.textContent).toContain("Fixture Tea 250g");
+    expect(ghost?.textContent).not.toContain("KES");
+    // The real cart has no line any more and the total is back to zero.
+    expect(m.container.querySelectorAll(".pos-line:not(.pos-line-leaving)").length).toBe(0);
+    expect(m.container.querySelector(".pos-total-line")?.textContent).toContain("KES 0");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 280)));
+    expect(m.container.querySelector(".pos-line-leaving")).toBeNull();
+    await m.cleanup();
+  });
+
+  it("owner-Lite renders the till static and creates no exit ghost", async () => {
+    const m = await mount("lite");
+    expect(m.container.querySelector(".pos-till")?.getAttribute("data-pos-motion")).toBe("lite");
+    await m.click(m.tile("Fixture Tea"));
+    await m.click(m.byLabel("One less Fixture Tea 250g"));
+    expect(m.container.querySelector(".pos-line-leaving")).toBeNull();
+    await m.cleanup();
+  });
+
+  it("default (auto) keeps the motion hook off the till root", async () => {
+    const m = await mount();
+    expect(m.container.querySelector(".pos-till")?.hasAttribute("data-pos-motion")).toBe(false);
+    await m.cleanup();
+  });
+
+  it("the production sell page still does not choose a motion preference", () => {
+    const sell = read("app/dashboard/pos/[businessId]/sell/page.tsx");
+    expect(sell).not.toContain("motionPreference");
+    expect(sell).not.toContain("submitSaleRequest");
+  });
+
+  it("exit and Lite CSS is gated by reduced motion and owner-Lite", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/\[data-pos-motion="lite"\], \[data-pos-motion="lite"\] \* \{ animation: none !important;/);
+    expect(css).toMatch(/\.pos-line-leaving \{ animation: jata-line-out 200ms[^}]*pointer-events: none; \}/);
+  });
+});
