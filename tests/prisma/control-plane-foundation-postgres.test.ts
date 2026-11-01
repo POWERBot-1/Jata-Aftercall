@@ -88,7 +88,7 @@ describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated Post
     expect(created.scopeBusinessId).toBe("fixture-business");
     expect(created.outcome).toBe("SUCCESS");
     expect(created.reason).toBe("Synthetic audit-helper integration fixture");
-    expect(created.beforeState).toEqual({ status: "ACTIVE", credentials: { apiToken: "[REDACTED]" } });
+    expect(created.beforeState).toEqual({ status: "ACTIVE", credentials: "[REDACTED]" });
     expect(created.afterState).toEqual({ status: "SUSPENDED" });
     expect(created.metadata).toEqual({ fixture: true, correlationNote: "request from isolated test", apiKey: "[REDACTED]" });
     expect(created.correlationId).toBe("control-audit:fixture-1");
@@ -99,7 +99,7 @@ describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated Post
       id: created.id, actorId: "fixture-actor", actorRole: "SUPPORT_ADMIN", action: "BUSINESS_SUSPEND",
       targetType: "BUSINESS", targetId: "fixture-business", scopeBusinessId: "fixture-business",
       outcome: "SUCCESS", correlationId: "control-audit:fixture-1",
-      beforeState: { status: "ACTIVE", credentials: { apiToken: "[REDACTED]" } },
+      beforeState: { status: "ACTIVE", credentials: "[REDACTED]" },
       afterState: { status: "SUSPENDED" },
     });
     await expect(pool.query('UPDATE "ControlAuditEvent" SET "outcome" = \'FAILED\' WHERE "id" = $1', [created.id])).rejects.toThrow(/append-only/);
