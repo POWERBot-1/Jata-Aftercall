@@ -106,9 +106,9 @@ export function PublishPanel({
         {checks.map((check) => (
           <li key={check.id} className="flex items-start gap-2">
             {check.status === "pass" ? (
-              <CircleCheck size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-400" />
+              <CircleCheck size={18} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--jata-success)" }} />
             ) : (
-              <CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-300" />
+              <CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--jata-warning)" }} />
             )}
             <span>
               <span className="sr-only">{check.status === "pass" ? "Done: " : "Needs attention: "}</span>

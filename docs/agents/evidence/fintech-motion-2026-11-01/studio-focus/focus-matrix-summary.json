@@ -1,0 +1,68 @@
+[
+  {
+    "viewport": "320x568",
+    "reachedIframe": true,
+    "enteredAt": 12,
+    "leftAt": 35,
+    "iframeStops": 23,
+    "iframeStopsOutlined": 23,
+    "iframeStopsWrapFocused": 23,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 39
+  },
+  {
+    "viewport": "360x800",
+    "reachedIframe": true,
+    "enteredAt": 12,
+    "leftAt": 35,
+    "iframeStops": 23,
+    "iframeStopsOutlined": 23,
+    "iframeStopsWrapFocused": 23,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 39
+  },
+  {
+    "viewport": "390x844",
+    "reachedIframe": true,
+    "enteredAt": 12,
+    "leftAt": 35,
+    "iframeStops": 23,
+    "iframeStopsOutlined": 23,
+    "iframeStopsWrapFocused": 23,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 39
+  },
+  {
+    "viewport": "430x932",
+    "reachedIframe": true,
+    "enteredAt": 12,
+    "leftAt": 35,
+    "iframeStops": 23,
+    "iframeStopsOutlined": 23,
+    "iframeStopsWrapFocused": 23,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 39
+  },
+  {
+    "viewport": "768x1024",
+    "reachedIframe": true,
+    "enteredAt": 12,
+    "leftAt": 35,
+    "iframeStops": 23,
+    "iframeStopsOutlined": 23,
+    "iframeStopsWrapFocused": 23,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 39
+  },
+  {
+    "viewport": "1366x768",
+    "reachedIframe": true,
+    "enteredAt": 52,
+    "leftAt": -1,
+    "iframeStops": 18,
+    "iframeStopsOutlined": 18,
+    "iframeStopsWrapFocused": 18,
+    "otherStopsWithoutOutline": 0,
+    "totalStops": 70
+  }
+]

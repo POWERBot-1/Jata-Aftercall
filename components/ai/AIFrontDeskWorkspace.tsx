@@ -551,7 +551,7 @@ export default function AIFrontDeskWorkspace({
             const active = entry.id === step;
             const done = completed[entry.id] && !active;
             return (
-              <li key={entry.id} className="min-w-0 flex-1 snap-start">
+              <li key={entry.id} className="min-w-[8.5rem] flex-1 snap-start">
                 <button
                   type="button"
                   onClick={() => goToStep(entry.id)}
@@ -1188,7 +1188,7 @@ export default function AIFrontDeskWorkspace({
                     testTurns.map((turn, index) => (
                       <div key={`${turn.role}-${index}`} className={`flex ${turn.role === "owner" ? "justify-end" : "justify-start"}`}>
                         <div
-                          className="max-w-[85%] rounded-[var(--ws-radius-md)] px-3 py-2 text-sm"
+                          className="jata-state-enter max-w-[85%] rounded-[var(--ws-radius-md)] px-3 py-2 text-sm"
                           style={
                             turn.role === "owner"
                               ? { background: "var(--ws-ink)", color: "var(--ws-on-ink)" }

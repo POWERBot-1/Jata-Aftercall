@@ -319,3 +319,50 @@ Scope: Website Studio index, canvas/editor, image picker, publish panel and cate
 | AI Front Desk, Autopilot, subscription, checkout | — | NOT STARTED | Not implemented in this pass |
 
 **Unit suite** (`npx vitest run`, no database, sandbox): 342 files passed, 36 skipped; 4,021 tests passed, 303 skipped; 0 failures. Exit code 1 from 67 unhandled `PrismaClientInitializationError` (no query engine, environment-only). `tsc --noEmit` exit 0. ESLint clean on the changed Studio files.
+
+## Phase 7 — Studio remediation and AI Business Front Desk fixture
+
+Code commit: `2846f93`. Ledger commit: this section (see the PR comment for the final SHA). Development fixtures only. Production returns 404 for every fixture route. Fictional data, simulated responses, nothing saved, sent or published.
+
+**Studio remediation**
+- **Keyboard focus (preview iframe).** Three of the four missing outlines were the preview iframe and the body-escape stop. The iframe ring was not reliable as CSS alone. A Tab into the preview fires the frame window's focus, not the `<iframe>` element's, so the ring is now driven by the frame window's focus and blur (re-attached after each load). Measured at all six widths (`studio-focus/focus-matrix-summary.json`): the iframe stops show the ring on every stop. Focus enters the storefront at stop 12 (390 px) and leaves at stop 35 after 23 storefront stops. At 1366 px it enters at 52 and leaves at 75. No keyboard trap. The editor trace now has 30 of 30 stops outlined. Screenshot: `studio-focus/iframe-focus-390x844.png`. The ring was checked visually, not only in CSS.
+- **Preview blocked by framing headers (defect found and fixed).** The fixture preview was refused by `X-Frame-Options: DENY`, so the earlier captures had never shown the storefront. `next.config.js` now allows same-origin framing for `/dev/studio-fixture/:path*` only. `/b/:slug*` is unchanged. A unit test pins the framing rules to exactly those two sources.
+- **Reduced motion (category state).** Measured on the real category-selection state (`studio/reduced-motion-category.json`): label transition 0.16 s normal, 0 s reduced. No keyframe animation runs during selection or submit.
+- **Publish checklist icons.** Emoji replaced by lucide `CircleCheck` and `CircleAlert`, with `sr-only` labels "Done:" / "Needs attention:". Verified in `studio/05-publish-success-result-390x844.png`: green check icons render.
+- **Regression.** Six-viewport capture: 114 PNGs. Page errors 0. Overflow none. Upload control absent at all six widths. Checks at the baseline capture still hold.
+- **Programme-completeness.** Pre-existing. Exit 1 on `main` and on `HEAD` with identical output (`check-programme-readiness.mjs`). Not caused by this work.
+
+**AI Business Front Desk fixture** (`/dev/ai-front-desk-fixture`; `?outcome=success|empty|failure`)
+- Components reused: `AIFrontDeskWorkspace` (actual, 1,445 lines, unmodified except for the `simulated` prop and layout and motion edits below). Fixture wrapper: `components/ai/fixture/AIFrontDeskFixtureClient.tsx`.
+- Simulated transport: `lib/ai/fixtures/aiFrontDeskFixture.ts`. Answers only `/api/ai/{status,readiness,entitlement,chat,config,publish}` and `PATCH /api/business`. Any other `/api/*` request returns 404, and nothing leaves the browser. Status changes (LIVE/PAUSED) are always refused. Publish never publishes.
+- Workspace changes: `simulated` prop. Success notices read "FICTIONAL FIXTURE — simulated save. Nothing was saved." and "simulated publish. Nothing was published…". Production wording unchanged. Step bar: `min-w-[8.5rem]` per step so labels are no longer squeezed to single letters at 390 px. The step bar scrolls horizontally instead (defect found in screenshot, fixed). Test-chat turns get `jata-state-enter`.
+- Replies: every reply begins "SIMULATED FIXTURE REPLY — not from a live AI service." Grounded only in the fictional catalogue. Missing information is listed as "Missing on your side".
+- Entitlement: shown as VERIFIED / NOT_ENTITLED with a simulated-check reason. An UNAVAILABLE value displayed a billing-check failure, which was wrong, and was corrected.
+- Tests: `tests/unit/ai-front-desk-fixture.test.ts` (route exclusion, fail-closed transport, labelling, isolation from DB/auth/providers, wording guards).
+- Evidence: `ai-front-desk/` (390 and 1366 PNGs, `report.json`, scripts). Capture: 60 screenshots and a report across six viewports, three outcomes. Page errors 0. Overflow none. Zero API requests reached the network.
+- Keyboard (390×844, test-input path): 12 stops, all outlined (last stop is the body).
+- Reduced motion (390×844, loading state): no running animation; submit transition 0.12 s normal, 1e-5 s reduced.
+- Not done: AI conversation list and conversation detail states (the real workspace has no such list; the customer-facing `AIFrontDeskCustomerClient` is a separate component and is not covered). Configuration-toggle motion is only the existing workspace transitions.
+
+**Not started in this pass**
+- JATA Autopilot fixture: `components/autopilot/AutopilotCommandCenter.tsx` (1,201 lines) is identified and not built. No consent, approval, cap, quiet-hour or kill-switch behaviour was exercised.
+- Subscription and onboarding fixture: `CheckoutForm`, `OnboardingForm` and `RegisterForm` are identified and not built. No payment simulation was built or verified.
+
+**Database blocker (unchanged)**: Prisma 5.22.0 query engine unavailable. Authenticated and database-backed flows remain BLOCKED.
+
+**Matrix (Phase 7)**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| Studio editor: keyboard focus, preview iframe | Six viewports | PASS (fixture) | 30/30 editor stops outlined; iframe ring verified by screenshot |
+| Studio: preview framing | Fixture route | PASS (fixture) | Was DENY; fixed; test pins scope |
+| Studio: category reduced motion | 390×844 | PASS (fixture) | Transition 0.16 s → 0 s |
+| Studio: publish checklist icons | Normal and failure | PASS (fixture) | Icons render; sr labels |
+| Studio: regression, six viewports | 114 captures | PASS (fixture) | No errors, no overflow |
+| AI Front Desk: overview, test chat, reply, save, failure, empty | Six viewports | PASS (fixture) | Simulated, labelled |
+| AI Front Desk: keyboard and reduced motion | 390×844 | PASS (fixture) | Stops outlined; no running animation |
+| AI Front Desk: conversation list and detail | — | NOT TESTED | No list in the real workspace |
+| AI Front Desk: live AI, customer messaging | — | NOT TESTED | Not authorised |
+| Autopilot (all states) | — | NOT STARTED | Component identified |
+| Subscription, onboarding, checkout, payment | — | NOT STARTED | Components identified |
+| Authenticated and database-backed flows | — | BLOCKED | Prisma engine unavailable |

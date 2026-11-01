@@ -1022,104 +1022,6 @@
       {
         "tag": "IFRAME",
         "label": "",
-        "outline": "none",
-        "outlineWidth": "0px",
-        "shadow": false
-      },
-      {
-        "tag": "A",
-        "label": "Back to overview",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BODY",
-        "label": "◐AppearanceLime Spark / GraphiteChoose your JATA t",
-        "outline": "none",
-        "outlineWidth": "0px",
-        "shadow": false
-      },
-      {
-        "tag": "SUMMARY",
-        "label": "Choose JATA appearance",
-        "outline": "solid",
-        "outlineWidth": "3px",
-        "shadow": false
-      },
-      {
-        "tag": "A",
-        "label": "Open live site",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "A",
-        "label": "Review & publish",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Sections",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Preview",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": true
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Edit",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Phone",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Tablet",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Desktop",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Draft",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Live",
-        "outline": "solid",
-        "outlineWidth": "2px",
-        "shadow": false
-      },
-      {
-        "tag": "BUTTON",
-        "label": "Refresh preview",
         "outline": "solid",
         "outlineWidth": "2px",
         "shadow": false
@@ -1127,22 +1029,120 @@
       {
         "tag": "IFRAME",
         "label": "",
-        "outline": "none",
-        "outlineWidth": "0px",
-        "shadow": false
-      },
-      {
-        "tag": "A",
-        "label": "Back to overview",
         "outline": "solid",
         "outlineWidth": "2px",
         "shadow": false
       },
       {
-        "tag": "BODY",
-        "label": "◐AppearanceLime Spark / GraphiteChoose your JATA t",
-        "outline": "none",
-        "outlineWidth": "0px",
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
         "shadow": false
       }
     ]
