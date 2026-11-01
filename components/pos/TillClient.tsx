@@ -530,7 +530,7 @@ export function TillClient({
                   onChange={(event) => setQuantity(line.key, Math.max(0, Number(event.target.value)))}
                 />
                 <button type="button" aria-label={`One more ${line.name}`} onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
-                <strong className="ml-2">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</strong>
+                <strong className="ml-2"><span key={line.quantity} className="jata-value-bump">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</span></strong>
               </div>
             </div>
           ))}

@@ -5577,6 +5577,67 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
   .ws-rail a, .ws-status { transition: none; }
 }
 
+
+/* ------------------------------------------------------------------------
+ * Fintech workspace motion (route transitions, navigation feedback, staggered
+ * entrances, cart and payment-state transitions).
+ *
+ * Every rule here animates presentation only. Money values, balances, statuses and
+ * labels are rendered at their final text from the first frame, so no amount is
+ * counted up/down and no status can appear to be a different result mid-animation.
+ * Reduced motion removes all movement; content stays fully visible.
+ * ------------------------------------------------------------------------ */
+@keyframes jata-route-in { from { opacity: 0; transform: translate3d(0, 8px, 0); } to { opacity: 1; transform: none; } }
+@keyframes jata-indicator-in { from { opacity: 0.6; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes jata-line-in { from { opacity: 0; transform: translate3d(-6px, 0, 0); background-color: color-mix(in srgb, var(--jata-accent, #f0a03c) 14%, transparent); } to { opacity: 1; transform: none; background-color: transparent; } }
+@keyframes jata-value-bump { 0% { transform: scale(1.06); } 100% { transform: none; } }
+@keyframes jata-state-in { from { opacity: 0; transform: translate3d(0, 4px, 0); } to { opacity: 1; transform: none; } }
+@keyframes jata-stagger-in { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+
+.jata-route-enter { animation: jata-route-in 260ms var(--jata-ease-out, cubic-bezier(0.22, 0.61, 0.36, 1)) both; }
+
+/* Staggered entrance for metric cards and section lists (first paint only, max 6 steps). */
+.jata-metric-grid > * { animation: jata-stagger-in 320ms var(--jata-ease-out, ease-out) both; }
+.jata-metric-grid > :nth-child(2) { animation-delay: 60ms; }
+.jata-metric-grid > :nth-child(3) { animation-delay: 120ms; }
+.jata-metric-grid > :nth-child(4) { animation-delay: 180ms; }
+.jata-metric-grid > :nth-child(n+5) { animation-delay: 240ms; }
+
+/* Navigation: the active section animates in, and presses feel physical. */
+.ws-rail a[aria-current="page"], .pos-nav-link[data-active="true"] { animation: jata-indicator-in 220ms var(--jata-ease-out, ease-out) both; }
+.ws-rail a, .pos-nav-link { transition: transform 120ms var(--jata-ease-out, ease-out), background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.ws-rail a:active, .pos-nav-link:active { transform: scale(0.96); }
+
+/* POS cart: a new line eases in, and a changed quantity total pulses once. */
+.pos-line { animation: jata-line-in 280ms var(--jata-ease-out, ease-out) both; }
+.pos-qty .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
+
+/* Payment / order state: the state block re-enters when its state changes. */
+.jata-state-enter { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jata-route-enter, .jata-metric-grid > *, .ws-rail a[aria-current="page"], .pos-nav-link[data-active="true"],
+  .pos-line, .pos-qty .jata-value-bump, .jata-state-enter {
+    animation: none !important;
+  }
+  .ws-rail a, .pos-nav-link, .ws-rail a:active, .pos-nav-link:active { transition: none !important; transform: none !important; }
+}
+
+/* Overview: sections and the hero statistic tiles enter in sequence (first paint only).
+   Figures are rendered at their final value; nothing is counted up. */
+.ws-stack.jata-motion-entry { animation: none; }
+.ws-stack.jata-motion-entry > * { animation: jata-stagger-in 340ms var(--jata-ease-out, ease-out) both; }
+.ws-stack.jata-motion-entry > :nth-child(2) { animation-delay: 70ms; }
+.ws-stack.jata-motion-entry > :nth-child(3) { animation-delay: 140ms; }
+.ws-stack.jata-motion-entry > :nth-child(n+4) { animation-delay: 210ms; }
+.ws-hero__stats > * { animation: jata-stagger-in 320ms var(--jata-ease-out, ease-out) both; }
+.ws-hero__stats > :nth-child(2) { animation-delay: 60ms; }
+.ws-hero__stats > :nth-child(3) { animation-delay: 120ms; }
+.ws-hero__stats > :nth-child(n+4) { animation-delay: 180ms; }
+@media (prefers-reduced-motion: reduce) {
+  .ws-stack.jata-motion-entry > *, .ws-hero__stats > * { animation: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

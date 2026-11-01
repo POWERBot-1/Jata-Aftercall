@@ -1,0 +1,235 @@
+{
+  "generatedAt": "2026-11-01T16:42:47.809Z",
+  "rows": [
+    {
+      "label": "before",
+      "viewport": "320x568",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/320x568.png",
+      "overflowX": false
+    },
+    {
+      "label": "before",
+      "viewport": "360x800",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/360x800.png",
+      "overflowX": false
+    },
+    {
+      "label": "before",
+      "viewport": "390x844",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/390x844.png",
+      "overflowX": false
+    },
+    {
+      "label": "before",
+      "viewport": "430x932",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/430x932.png",
+      "overflowX": false
+    },
+    {
+      "label": "before",
+      "viewport": "768x1024",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/768x1024.png",
+      "overflowX": false
+    },
+    {
+      "label": "before",
+      "viewport": "1366x768",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "none",
+        "statsThird": "none",
+        "sectionFirst": "none",
+        "stackOwnAnimation": "jata-surface-enter",
+        "railAria": null
+      },
+      "screenshot": "out/before/1366x768.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "320x568",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/320x568.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "360x800",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/360x800.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "390x844",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/390x844.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "430x932",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/430x932.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "768x1024",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/768x1024.png",
+      "overflowX": false
+    },
+    {
+      "label": "after",
+      "viewport": "1366x768",
+      "status": 200,
+      "pageErrors": [],
+      "anim": {
+        "routeEnter": null,
+        "statsFirst": "jata-stagger-in",
+        "statsThird": "jata-stagger-in",
+        "sectionFirst": "jata-stagger-in",
+        "stackOwnAnimation": "none",
+        "railAria": null
+      },
+      "screenshot": "out/after/1366x768.png",
+      "overflowX": false
+    }
+  ],
+  "reducedMotion": [
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    },
+    {
+      "anim": "none",
+      "opacity": "1"
+    }
+  ]
+}

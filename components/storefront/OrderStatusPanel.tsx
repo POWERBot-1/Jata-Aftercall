@@ -46,7 +46,9 @@ export function OrderStatusPanel({
 
   return (
     <div className="eb-card" style={{ padding: "clamp(1.25rem, 4vw, 2rem)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      {/* Keyed on the payment state: when it changes (waiting → verified) the block re-enters,
+          so the customer sees the transition. The wording is the authoritative server state. */}
+      <div key={paid ? "verified" : "pending"} className="jata-state-enter" role="status" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }} data-payment-state={paid ? "verified" : "pending"}>
         <span aria-hidden="true" style={{ fontSize: "1.75rem" }}>{paid ? "🎉" : "⏳"}</span>
         <div>
           <h1 className="eb-h2" style={{ marginBottom: "0.2rem" }}>{paid ? confirmationLabel : "Waiting for payment"}</h1>
