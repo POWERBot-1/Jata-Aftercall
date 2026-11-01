@@ -39,6 +39,7 @@ export const COVERED_SOURCES = [
   "scripts/ci/migration-expectations.mjs",
   "scripts/ci/check-schema-drift.mjs",
   "scripts/ci/check-test-output.mjs",
+  "scripts/ci/report-vitest-failure.mjs",
   // The tests that pin each claim are part of the claim. A regression test that
   // is edited to match broken behaviour should invalidate the manifest.
   "scripts/__tests__/authorize-migration.test.mjs",
