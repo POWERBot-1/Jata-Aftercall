@@ -49,3 +49,25 @@ No motion-specific real-browser evidence in E1 demonstrates the JATA dashboard/s
 ## Result
 
 The current runs establish reproducible **bounded technical observations**: family renderer mode and probe after API-mediated generation/publish, selected route modes, owner-Lite/OS-reduced rendering, preference changes, and cancellation of active reveals. They do not establish universal motion acceptance. Preserve the current readiness statuses in `docs/agents/PROGRAMME_READINESS.json`; do not promote any `MOTION-001–018` row from this ledger alone.
+
+## 2026-11-01 — Fintech workspace motion pass (implementation SHA `0a2bd8b9160021bb8bb811fcbfc1e1d53c6e9ddb`)
+
+Baseline: `main` `19f11d9ecd8daad1db2aaf35cc1166425f871acc`. No `MOTION-001–018` row is promoted by this section.
+
+**Changed (presentation only):** workspace route transitions (`app/dashboard/template.tsx`, POS template), skeleton loading on navigation (`loading.tsx`), active-nav indicator and press feedback (`.ws-rail`, `.pos-nav-link`), overview section and hero-stat stagger, POS cart line entry and a one-shot pulse on the line total, and a live, keyed payment state block in `OrderStatusPanel` (waiting → verified). No money value is animated, counted or replaced mid-animation. `prefers-reduced-motion` disables all new rules, and the global reduced-motion block is still last in `globals.css`.
+
+**Evidence (stored in-repo):** `docs/agents/evidence/fintech-motion-2026-11-01/` — before (`main`) and after (this SHA) screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 of `/dev/workspace-preview` (synthetic fixtures), a reduced-motion 390×844 capture, `report.json` (computed animation names, page errors, horizontal-overflow check) and `capture.mjs`. Result: all six viewports load with 200 status, no page errors, no horizontal overflow; computed styles show the stagger only on the after build and `none` under reduced motion.
+
+| Route / surface | Verdict | Notes |
+|---|---|---|
+| `/dev/workspace-preview` overview (dev harness of real `DashboardClient`, nav, hero) | PASS (computed styles + screenshots at 6 viewports) | Visual change is modest; staggered entrance was NOT captured in frames (page settled before the first frame). Visually reviewed: 320px nav wraps without clipping. |
+| `/dev/workspace-preview` reduced motion (390×844) | PASS (computed styles) | All stagger animations `none`, content opacity 1. |
+| `/dashboard` route transition and loading skeleton | NOT TESTED | Requires a signed-in account and a database; the sandbox cannot run Prisma queries (query engine download blocked). |
+| `/dashboard/pos/[id]/sell` (till cart, quantity pulse) | NOT TESTED / BLOCKED | Requires authenticated POS fixture + DB. Change is code-level only. |
+| `/dashboard/pos/[id]` POS dashboard, sales, reports, payments | NOT TESTED / BLOCKED | Requires DB. |
+| Storefront order confirmation (`OrderStatusPanel`, waiting → paid) | NOT TESTED / BLOCKED | Requires a real order and Paystack state; no payment executed. |
+| `/dashboard/studio`, `/dashboard/ai`, `/dashboard/autopilot`, `/dashboard/subscription`, onboarding | NOT TESTED | Not changed in this pass; Studio editor, AI Front Desk, Autopilot controls, subscription activation progress and modal/dropdown transitions were NOT implemented. |
+| `/control` | Out of scope | Unchanged; all-DENY policy untouched. |
+| Keyboard/focus, screen reader, Lite preference | NOT TESTED | No keyboard journey run; `prefers-reduced-motion` tested only on the dev harness. Lite/None preference is not a workspace setting and was not exercised. |
+
+**Remaining blockers:** a Postgres-backed local environment (Prisma query engine download from `binaries.prisma.sh` is blocked in this sandbox), which blocks authenticated before/after captures of the real dashboard, POS, checkout and Studio; the Studio editor, AI workspace, Autopilot, subscription activation and onboarding motion work; and recorded interaction traces (only computed-style and frame evidence were captured).
