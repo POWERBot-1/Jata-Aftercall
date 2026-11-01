@@ -138,6 +138,18 @@ describe("direct control page and business APIs", () => {
     expect(await response.json()).toMatchObject({ business: { id: "business-a", status: "SUSPENDED" }, audit: "recorded" });
   });
 
+  it("does not emit a SUCCESS audit event when the conditional business update changes no row", async () => {
+    const before = { id: "business-a", name: "Fixture Market", status: "ACTIVE", isPublished: true };
+    fixtures.tx.business.findUnique.mockResolvedValueOnce(before);
+    fixtures.tx.business.updateMany.mockResolvedValue({ count: 0 });
+    const response = await changeBusinessStatus(request("https://control.example.test/api/control/businesses", {
+      businessId: "business-a", status: "SUSPENDED", confirmation: "SUSPEND", reason: "Owner-reported policy violation",
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "The business changed concurrently; reload before retrying." });
+    expect(fixtures.audit.createControlAuditEvent).not.toHaveBeenCalled();
+  });
+
   it("prevents an unconfirmed or reasonless change from reaching persistence", async () => {
     const response = await changeBusinessStatus(request("https://control.example.test/api/control/businesses", {
       businessId: "business-a", status: "SUSPENDED", confirmation: "REINSTATE", reason: "short",
