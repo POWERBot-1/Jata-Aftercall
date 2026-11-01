@@ -322,7 +322,7 @@ Scope: Website Studio index, canvas/editor, image picker, publish panel and cate
 
 ## Phase 7 — Studio remediation and AI Business Front Desk fixture
 
-Code commit: `2846f93`. Ledger commit: this section (see the PR comment for the final SHA). Development fixtures only. Production returns 404 for every fixture route. Fictional data, simulated responses, nothing saved, sent or published.
+Code commits: `2846f93` (Studio focus, framing, AI fixture) and `6d69075` (checklist token colours, AI step bar and turn entrance, evidence). Evidence and this section are at `6d69075`. Development fixtures only. Production returns 404 for every fixture route. Fictional data, simulated responses, nothing saved, sent or published.
 
 **Studio remediation**
 - **Keyboard focus (preview iframe).** Three of the four missing outlines were the preview iframe and the body-escape stop. The iframe ring was not reliable as CSS alone. A Tab into the preview fires the frame window's focus, not the `<iframe>` element's, so the ring is now driven by the frame window's focus and blur (re-attached after each load). Measured at all six widths (`studio-focus/focus-matrix-summary.json`): the iframe stops show the ring on every stop. Focus enters the storefront at stop 12 (390 px) and leaves at stop 35 after 23 storefront stops. At 1366 px it enters at 52 and leaves at 75. No keyboard trap. The editor trace now has 30 of 30 stops outlined. Screenshot: `studio-focus/iframe-focus-390x844.png`. The ring was checked visually, not only in CSS.
@@ -366,3 +366,8 @@ Code commit: `2846f93`. Ledger commit: this section (see the PR comment for the 
 | Autopilot (all states) | — | NOT STARTED | Component identified |
 | Subscription, onboarding, checkout, payment | — | NOT STARTED | Components identified |
 | Authenticated and database-backed flows | — | BLOCKED | Prisma engine unavailable |
+
+**Final verification at `6d69075`**
+- `npx vitest run` (no DB): 343 files passed, 36 skipped; 4,035 tests passed, 303 skipped; 0 failures. Exit 1 only from 67 unhandled `PrismaClientInitializationError` (environment).
+- `tsc --noEmit`: exit 0. ESLint: clean on changed files.
+- CI on `6d69075`: see PR #79 checks. A pending check is not a pass.
