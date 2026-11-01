@@ -11,10 +11,10 @@
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-001",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-002": {
@@ -26,11 +26,11 @@
     "testResult": "Release discipline remains unmet because multiple required acceptance areas are BLOCKED/NOT_TESTED and programme-completeness fails.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426619"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-002",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "Release discipline remains unmet because multiple required acceptance areas are BLOCKED/NOT_TESTED and programme-completeness fails."
   },
@@ -43,10 +43,10 @@
     "testResult": "FAIL: app/control and app/api/control do not exist; current /admin is a distinct, insufficient surface. Official-domain session verification is also blocked.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-003",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "FAIL: app/control and app/api/control do not exist; current /admin is a distinct, insufficient surface. Official-domain session verification is also blocked."
   },
@@ -59,11 +59,11 @@
     "testResult": "FAIL: requested six-role model, MFA and scoped authorization/audit console are not implemented; current CUSTOMER/ADMIN roles are not equivalent.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-004",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "FAIL: requested six-role model, MFA and scoped authorization/audit console are not implemented; current CUSTOMER/ADMIN roles are not equivalent."
   },
@@ -76,11 +76,11 @@
     "testResult": "FAIL: requested operational command-centre metrics/search/actions and audit views are absent; no six-viewport console evidence.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-005",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "FAIL: requested operational command-centre metrics/search/actions and audit views are absent; no six-viewport console evidence."
   },
@@ -93,11 +93,11 @@
     "testResult": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426623"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-006",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled."
   },
@@ -110,10 +110,10 @@
     "testResult": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426619"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-007",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated."
   },
@@ -126,10 +126,10 @@
     "testResult": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-008",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent."
   },
@@ -143,7 +143,7 @@
     "evidence": [],
     "evidenceLinks": [],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-009",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: authoritative HOSTAFRICA zone export, current DNS/TLS/canonical redirects, exact mail records and successful delivery are not independently verified. No DNS/env change made."
   },
@@ -156,10 +156,10 @@
     "testResult": "FAIL: dedicated /control console and its accepted role/API matrix are absent; /admin is not the requested implementation.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-010",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "FAIL: dedicated /control console and its accepted role/API matrix are absent; /admin is not the requested implementation."
   },
@@ -172,11 +172,11 @@
     "testResult": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-001",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete."
   },
@@ -189,11 +189,11 @@
     "testResult": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-002",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable."
   },
@@ -207,7 +207,7 @@
     "evidence": [],
     "evidenceLinks": [],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-003",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -223,10 +223,10 @@
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-011",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-012": {
@@ -238,11 +238,11 @@
     "testResult": "FAIL: /control and control APIs are absent; no six-role permission/provisioning or real authorized/denied control journey.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-012",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "FAIL: /control and control APIs are absent; no six-role permission/provisioning or real authorized/denied control journey."
   },
@@ -255,10 +255,10 @@
     "testResult": "BLOCKED: end-to-end phone ownership → eligibility → verified payment → accrual → reversal/report is not proven; approved financial terms remain unavailable. No real financial activity.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-013",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: end-to-end phone ownership → eligibility → verified payment → accrual → reversal/report is not proven; approved financial terms remain unavailable. No real financial activity."
   },
@@ -271,11 +271,11 @@
     "testResult": "NOT_TESTED: fresh native PostgreSQL migration, candidate rehearsal and failure controls pass, but rollback/forward recovery, backup/restore and compatibility matrix are not evidenced.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426623",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426619"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-014",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -288,11 +288,11 @@
     "testResult": "BLOCKED: authenticated/unauthorized control and agent/finance screenshot matrix is incomplete; /control is absent and artifacts have not received independent full visual review.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-015",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: authenticated/unauthorized control and agent/finance screenshot matrix is incomplete; /control is absent and artifacts have not received independent full visual review."
   },
@@ -305,10 +305,10 @@
     "testResult": "NOT_TESTED: shared primitives and scoped runtime tests exist, but universal applicable-surface/family behavior and financial-state acceptance are not established.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-004",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -324,10 +324,10 @@
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-016",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-017": {
@@ -342,11 +342,11 @@
       "scripts/admin/tests/instruction-integrity.test.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426611"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-017",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-018": {
@@ -361,11 +361,11 @@
       "tests/security/auth-session-revocation.test.ts"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426611"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-018",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-019": {
@@ -381,10 +381,10 @@
       "scripts/erp/tasks-page.check.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-019",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-020": {
@@ -400,11 +400,11 @@
       "prisma/migrations/20261124000000_user_role_session_revocation/migration.sql"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426655"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418364"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-020",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-021": {
@@ -419,12 +419,12 @@
       "tests/unit/repair-guards.test.ts"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426619",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426623",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-021",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "ADMIN-022": {
@@ -436,10 +436,10 @@
     "testResult": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-022",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off."
   },
@@ -452,10 +452,10 @@
     "testResult": "NOT_TESTED: source/token and reduced-motion unit checks pass, but actual workspace keyboard/mobile/status interaction inspection is not complete.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426611"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-005",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -468,10 +468,10 @@
     "testResult": "NOT_TESTED: cursor/tenant rejection source tests exist; a dedicated exact browser journey for own-agent pagination and >5,000-member report generation/reconciliation is not established.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-023",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -484,11 +484,11 @@
     "testResult": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-006",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance."
   },
@@ -498,17 +498,17 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §030 (ADMIN-024)",
     "implementationLocation": "`scripts/admin/check-programme-readiness.mjs`, `scripts/admin/tests/programme-readiness.test.mjs`, `docs/agents/PROGRAMME_READINESS.json`, `.github/workflows/admin-instructions.yml`.",
     "verificationMethod": "Local `node --test scripts/admin/tests/programme-readiness.test.mjs scripts/admin/tests/instruction-integrity.test.mjs`; direct readiness-checker invocation; exact-head admin CI result is recorded separately.",
-    "testResult": "PASS: readiness checker tests now explicitly cover missing IDs, BLOCKED/NOT_TESTED, absent/short acceptance, outside/nonexistent evidence and unknown IDs; exact-head CI must pass these tests and correctly report remaining blockers.",
+    "testResult": "PASS: local readiness/integrity tests and exact-head instruction-integrity job pass; the completeness test passes; the required acceptance step exits 1 and reports 34 genuine non-PASS requirements, as intended. The gate remains fail-closed; this is not programme completion.",
     "evidence": [
       "docs/audits/REQUIREMENT_TRACEABILITY_43.md",
       "scripts/admin/tests/programme-readiness.test.mjs",
       "scripts/admin/check-programme-readiness.mjs"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-024",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone."
   },
   "MOTION-007": {
@@ -520,10 +520,10 @@
     "testResult": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-007",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented."
   },
@@ -536,11 +536,11 @@
     "testResult": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-008",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial."
   },
@@ -553,10 +553,10 @@
     "testResult": "NOT_TESTED: unit tests cover bounded queue, off-screen removal and preference changes, and live reduced-motion passes; real queue saturation/order/re-entry/route disposal remain unproven.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-009",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -569,11 +569,11 @@
     "testResult": "NOT_TESTED: current Chrome route evidence passes storefront/shop/item/checkout/AI preview and reduced/Lite checks, but other routes, fallbacks, publication states and independent visual review remain uncovered.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-010",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section."
   },
@@ -586,11 +586,11 @@
     "testResult": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-011",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete."
   },
@@ -603,11 +603,11 @@
     "testResult": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-012",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing."
   },
@@ -620,11 +620,11 @@
     "testResult": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-013",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete."
   },
@@ -637,11 +637,11 @@
     "testResult": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-014",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance."
   },
@@ -654,11 +654,11 @@
     "testResult": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-015",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing."
   },
@@ -671,11 +671,11 @@
     "testResult": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-016",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open."
   },
@@ -688,12 +688,12 @@
     "testResult": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-017",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion."
   },
@@ -706,12 +706,12 @@
     "testResult": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426611",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-018",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet."
   },
@@ -724,15 +724,15 @@
     "testResult": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, durable provider media, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified.",
     "evidence": [],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426637",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426619",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426623",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426642",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426612",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41286426663"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443"
     ],
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — RELEASE-001",
-    "verificationCommit": "262c69ec9493c4d32d0875e7570ecb4afa374b4b",
+    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, durable provider media, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified."
   }
