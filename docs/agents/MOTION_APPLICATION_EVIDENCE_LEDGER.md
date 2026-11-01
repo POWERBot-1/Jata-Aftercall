@@ -272,3 +272,50 @@ Evidence (`docs/agents/evidence/fintech-motion-2026-11-01/dashboard/states/`, sc
 | Website Studio, AI Front Desk, Autopilot, subscription | — | NOT STARTED | Not implemented in this pass |
 
 Financial correctness (fixture): no money value is animated. Totals are server-shaped integers in KES. No payment or sale is executed.
+
+## Website Studio fixture and Studio motion — code `59c4416`
+
+Scope: Website Studio index, canvas/editor, image picker, publish panel and category set-up. Development fixture only (`/dev/studio-fixture`, `/dev/studio-fixture/site`; both `notFound()` in production). Fictional data, simulated writes and simulated outcomes. No business is read or written, no image is uploaded, no website is published, no payment is executed.
+
+**Code changes**
+- `components/studio/StudioIndexView.tsx`: presentation extracted from `app/dashboard/studio/page.tsx`. The page keeps its Prisma and session loading. Refactor only.
+- `StudioCanvas` (`submitWrite`, `previewSrcFor`), `PublishPanel` (`submitPublish`, indeterminate progress bar), `CreateExperienceForm` (`submitCreate`): optional transports. Production defaults are unchanged, including `router.refresh()` on success.
+- `CategoryImagePicker` `simulated` prop: notice reads "Simulated in this fixture — nothing was saved.", and the chip reads "Simulated — not saved" instead of "Image saved".
+- `app/globals.css`: `.jata-publish-progress`, `.jc-frame__iframe` entrance, status/alert entrance, category label transition, iframe focus ring. All disabled under reduced motion. Focus uses the existing `--jata-focus` token.
+- Tests: `tests/unit/studio-fixture-harness.test.ts` (12 tests: parsing, simulated responses, production 404 for both pages, no DB/auth/storage/payments/server-action imports, no `fetch` in the fixture client, real components used). `tests/unit/workspace-design.test.ts` now reads `StudioIndexView` for the moved Studio assertions. Assertions unchanged.
+
+**Evidence** (`docs/agents/evidence/fintech-motion-2026-11-01/studio/`)
+- `report.json`: 134 entries across six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768). Each entry carries the file name, overflow flag and page-error count.
+- Committed PNGs: the 390×844 and 1366×768 sets (38 full-page captures) plus `focus-iframe-keyboard-1366x768.png` if present. The other four viewports were captured in the sandbox and are not committed (size). They can be regenerated with `scripts/studio-capture.mjs`.
+- `extra.json`: reduced-motion and focus checks. `scripts/`: capture and check scripts.
+- Opened and inspected: `03-editor-failure-result-390x844.png` ("Not saved — your last change is still on screen"; draft and live versions unchanged; Navigation row stayed in position after the failed move); `04-image-initial` and `04-image-after-use` at 390 (after the chip fix, "Simulated — not saved"); `05-publish-success-progress-390x844.png` ("Publishing…" with the progress bar); `05-publish-failure-result-390x844.png` ("FICTIONAL FIXTURE: simulated publish failure. The live site is unchanged.").
+
+**Checks (sandbox, six viewports)**
+- Page errors: 0 across all captures. Horizontal overflow: none.
+- Image upload control: absent at all six widths (0 matches for "Upload my photo" / "Change image"). The fixture passes no `businessId`.
+- Keyboard trace (editor, 390×844, 30 Tab stops): 26 stops have a computed outline. The 4 without are the preview iframe (focus moves into the storefront document) and the body. The iframe ring rule is in CSS, but I could not confirm it visually in headless Chromium: `:focus`, `:focus-visible` and `:focus-within` all reported false on the iframe while it was the active element. **Status: PARTIAL.**
+- Reduced motion (390×844): publish progress bar animation `none`. Editor iframe animation `none` (1366×768). Category label transition absent in both modes, so it is not a reduced-motion gap.
+
+**Financial correctness**: Studio shows no money values, so no amounts are animated. The publish checklist shows "FICTIONAL FIXTURE: plan status is simulated." No plan or payment state is implied.
+
+**Observations**
+- The publish checklist icons (`✅`/`⚠️`) render as empty boxes in this headless sandbox, which has no emoji font. This is existing code, not changed here. Real browsers render them. Recorded so reviewers don't mistake it for a regression.
+- The "1 Issue" dev overlay remains visible in dev captures. It is not part of the app.
+
+**Matrix (Website Studio, this commit)**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| Studio index (`StudioIndexView`) | Six viewports, real components | PASS (fixture) | Presentation refactor; Prisma data path BLOCKED |
+| Studio editor: draft save in flight / saved / failed | Six viewports | PASS (fixture) | Status pill announced via live region; failure shows "Not saved"; no row moves on failure |
+| Studio editor: keyboard focus | 390×844 | PARTIAL | 26/30 stops outlined; iframe ring not confirmed visually |
+| Studio editor: preview iframe entrance | 1366×768, reduced and not | PASS (fixture) | `jata-state-in` normal; `none` reduced |
+| Category set-up: busy / success / failure | Six viewports | PASS (fixture) | Success message shown only when a transport is injected; production still refreshes |
+| Image picker: simulated use | Six viewports | PASS (fixture) | Labels say not saved; upload hidden |
+| Publish: progress / success / failure | Six viewports | PASS (fixture) | Labelled simulated; progress bar `none` under reduced motion |
+| Storefront preview (`/dev/studio-fixture/site`) | Six viewports | PASS (fixture) | Fictional content only; no real site |
+| Real customer Studio data, authenticated editor | Database-backed | BLOCKED | Prisma 5.22 engine unavailable |
+| Real publish / real storefront generation | Production | NOT TESTED | Not authorised; not run |
+| AI Front Desk, Autopilot, subscription, checkout | — | NOT STARTED | Not implemented in this pass |
+
+**Unit suite** (`npx vitest run`, no database, sandbox): 342 files passed, 36 skipped; 4,021 tests passed, 303 skipped; 0 failures. Exit code 1 from 67 unhandled `PrismaClientInitializationError` (no query engine, environment-only). `tsc --noEmit` exit 0. ESLint clean on the changed Studio files.
