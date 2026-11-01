@@ -76,6 +76,7 @@ export function TillClient({
   entitlementReason,
   nextReceiptNumber,
   wallet,
+  submitSaleRequest,
 }: {
   businessId: string;
   basePath: string;
@@ -101,6 +102,12 @@ export function TillClient({
   nextReceiptNumber: string;
   /** Where this business gets paid through JATA (§10, §21). Empty until a destination is added. */
   wallet: { destinations: WalletDestinationTile[] };
+  /**
+   * Transport for recording a sale. Production omits it and the till posts to the real sales
+   * endpoint. The development-only POS fixture harness supplies a simulator here so the same cart
+   * and completion logic runs without ever reaching the server. Never pass a real-data transport.
+   */
+  submitSaleRequest?: (businessId: string, body: unknown) => Promise<Response>;
 }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payments, setPayments] = useState<PaymentLine[]>([]);
@@ -251,11 +258,13 @@ export function TillClient({
       payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
     };
     try {
-      const response = await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(saleBody),
-      });
+      const response = submitSaleRequest
+        ? await submitSaleRequest(businessId, saleBody)
+        : await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(saleBody),
+          });
       const data: SaleResponse = await response.json();
       if (!response.ok || data.ok === false) {
         setError(data.error ?? "We couldn't record that sale.");
@@ -527,7 +536,14 @@ export function TillClient({
                   type="number"
                   min={0}
                   value={line.quantity}
-                  onChange={(event) => setQuantity(line.key, Math.max(0, Number(event.target.value)))}
+                  onChange={(event) => {
+                    // Whole units only. An empty or non-numeric entry is ignored (the field keeps the last valid
+                    // quantity), so clearing the box can no longer silently remove the line; decimals are floored.
+                    const raw = event.target.value.trim();
+                    if (raw === "") return;
+                    const next = Math.floor(Number(raw));
+                    if (Number.isFinite(next)) setQuantity(line.key, Math.max(0, next));
+                  }}
                 />
                 <button type="button" aria-label={`One more ${line.name}`} onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
                 <strong className="ml-2"><span key={line.quantity} className="jata-value-bump">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</span></strong>
