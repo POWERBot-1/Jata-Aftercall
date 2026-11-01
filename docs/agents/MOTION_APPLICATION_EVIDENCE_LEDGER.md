@@ -103,3 +103,11 @@ Baseline: `main` `19f11d9ecd8daad1db2aaf35cc1166425f871acc`. No `MOTION-001–01
 | Control access policy | PASS (unchanged) | No `/control` changes |
 
 **Blockers:** (1) Prisma query-engine download from `binaries.prisma.sh` is blocked in this sandbox, so no authenticated Postgres-backed route can run here. (2) GitHub Actions log and artifact downloads are blocked, so CI screenshots and recordings cannot be inspected here. Resolve by either allowing the Prisma engine host (or supplying a pre-downloaded engine) for a disposable local database, or by approving a CI-based evidence run with artifacts that can be reviewed. (3) Remaining surfaces (Studio, AI, Autopilot, subscription, onboarding, drawers/dialogs) require implementation work, which was not completed in this pass.
+
+## 2026-11-01 — Environment re-check after owner approval
+
+Owner approved allowing `binaries.prisma.sh` for the isolated sandbox. The sandbox egress allowlist (enforced outside the repository) still blocks that host (HTTP 000 on the Prisma engine URL for client version 5.22.0). Its npm mirror offers `@prisma/query-engine-wasm` (6.20.x), which does not match the 5.22 client and would require changing the client adapter architecture, so it was not used.
+
+Status unchanged: authenticated, database-backed routes (dashboard, POS, checkout, Studio, AI Front Desk, Autopilot, subscription, onboarding) are **BLOCKED** for browser evidence. Mandatory fixes needed from the owner or sandbox operator: allow `binaries.prisma.sh` egress in the sandbox network policy, or place a matching `libquery_engine-debian-openssl-3.0.x.so.node` (Prisma 5.22.0) in the sandbox workspace. Either change does not touch production.
+
+No additional motion surfaces were implemented in this pass because they could not be verified against authenticated routes. Phase 1 audit: `docs/agents/FINTECH_MOTION_PHASE1_AUDIT_2026-11-01.md`.
