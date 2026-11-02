@@ -23,6 +23,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, mkdtempSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 process.chdir(root);
@@ -45,7 +46,9 @@ if (prep.status !== 0) {
 }
 const harness = join(root, "node_modules", ".jata-wasm-harness");
 
-const EmbeddedPostgres = (await import("embedded-postgres")).default;
+// Test-only dependencies are resolved from the harness, not from the product dependency graph.
+const harnessRequire = createRequire(join(harness, "package.json"));
+const EmbeddedPostgres = (await import(pathToFileURL(harnessRequire.resolve("embedded-postgres")).href)).default;
 const pg = require("pg");
 
 const password = randomBytes(18).toString("hex");

@@ -3,7 +3,7 @@
 # native query-engine / schema-engine binaries cannot be downloaded (sandbox TLS policy).
 #
 # What it does:
-#   * generates the client from tests/db/prisma/schema.wasm-test.prisma (a copy of the production
+#   * generates the client from scripts/test-db/schema.wasm-test.prisma (a copy of the production
 #     schema with previewFeatures = ["driverAdapters"] and a harness output path). The production
 #     schema and the pinned production client are NOT changed.
 #   * the query engine that runs is Prisma's own engine compiled to WebAssembly, shipped inside the
@@ -12,7 +12,7 @@
 #     no mirror is used, and TLS verification is untouched. The placeholder is never executed by the
 #     WASM client.
 #
-# Output: node_modules/.jata-wasm-harness/{generated,node_modules,placeholder}
+# Output: node_modules/.jata-wasm-harness/{generated,node_modules (adapter-pg, pg, embedded-postgres),placeholder}
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -21,7 +21,14 @@ placeholder_dir="$harness/placeholder"
 placeholder="$placeholder_dir/libquery_engine-placeholder.so.node"
 
 mkdir -p "$placeholder_dir"
-ln -sfn "$root/node_modules" "$harness/node_modules"
+
+# Test-only dependencies live in the harness, not in the product lockfile. The product's npm ci,
+# audit and CI installs are unchanged by this harness.
+cp "$root/scripts/test-db/harness-package.json" "$harness/package.json"
+if [ ! -f "$harness/node_modules/@prisma/adapter-pg/package.json" ] || [ ! -f "$harness/node_modules/embedded-postgres/package.json" ]; then
+  (cd "$harness" && npm install --no-audit --no-fund --package-lock=false)
+fi
+test -f "$harness/node_modules/@prisma/adapter-pg/package.json" || { echo "harness install failed" >&2; exit 1; }
 printf '%s\n' \
   "PLACEHOLDER — NOT A PRISMA ENGINE." \
   "Written by scripts/test-db/prepare-wasm-harness.sh so that prisma generate does not attempt a download." \
@@ -36,7 +43,7 @@ export PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 export PRISMA_GENERATE_SKIP_AUTOINSTALL=1
 
 cd "$root"
-npx prisma generate --schema tests/db/prisma/schema.wasm-test.prisma
+npx prisma generate --schema scripts/test-db/schema.wasm-test.prisma
 test -f "$harness/generated/wasm.js" || { echo "harness generation produced no wasm.js" >&2; exit 1; }
 echo "WASM harness ready: $harness/generated/wasm.js"
 

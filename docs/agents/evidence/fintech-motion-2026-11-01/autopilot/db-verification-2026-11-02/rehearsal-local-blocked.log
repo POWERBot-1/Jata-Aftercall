@@ -1,0 +1,10 @@
+
+──── Preconditions ─────────────────────────────────────────────────────
+PASS the target is a disposable local server — 127.0.0.1:55445 database=postgres
+PASS the candidate tree exists — /home/user/Jata-Aftercall/prisma/migrations
+PASS the baseline migration tree exists — /tmp/jata-pg/baseline/prisma/migrations
+PASS the candidate migration lock exists — /home/user/Jata-Aftercall/prisma/migrations/migration_lock.toml
+PASS the baseline migration lock exists — /tmp/jata-pg/baseline/prisma/migrations/migration_lock.toml
+BLOCKED psql is available — install postgresql-client; without it nothing can be verified
+
+RESULT: BLOCKED

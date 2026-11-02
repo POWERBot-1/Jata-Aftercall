@@ -794,53 +794,72 @@ Verdicts unchanged: Autopilot remediation complete NO; production-ready NO; Phas
 ## Phase 7 — Autopilot database-backed verification (sandbox PostgreSQL 18.6, WASM engine)
 
 Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/db-verification-2026-11-02/`
-(`db-suite-run.log` from `npm run test:db:autopilot`, `negative-control-kill-switch-disabled.log`, `wasm-harness-prepare.log`).
+- `db-suite-run.log`: verbose output of `npm run test:db:autopilot` (final tree).
+- `negative-control-kill-switch-disabled.log`: kill-switch check disabled on purpose; the kill-switch test fails.
+- `wasm-harness-prepare.log`: harness build.
+- `full-vitest-no-database-summary.txt`: default no-database run totals (see below).
+- `rehearsal-local-blocked.log`: local rehearsal attempt, stopped at the missing `psql` precondition.
 
 ### Why the engine is not the pinned native one
-- `npx prisma generate` (default and `--no-engine`) fails on `binaries.prisma.sh` with a TLS disconnect (`SSL_ERROR_SYSCALL`). The native query/schema engine cannot be downloaded in this sandbox. No mirror was used and sandbox egress was not changed.
-- Path used instead: Prisma's own query engine compiled to WebAssembly, shipped inside `@prisma/client` (`query_engine_bg.wasm`), driven through `@prisma/adapter-pg`. The engine label recorded by the runner is `wasm-query-engine+adapter-pg`. It is NOT the pinned native-engine path.
-- Test-only harness: `tests/db/prisma/schema.wasm-test.prisma` (copy of the production schema plus `previewFeatures = ["driverAdapters"]`, output `node_modules/.jata-wasm-harness/generated`). The production `prisma/schema.prisma` and production client are unchanged.
-- The generated client's import map points at edge loaders that cannot load `.wasm` under Node. `scripts/test-db/prepare-wasm-harness.sh` swaps in a Node loader that compiles the same bundled file with `WebAssembly.compile`. The native-engine env vars point at a labelled placeholder file, which the WASM client never loads.
+- `npx prisma generate` (default and `--no-engine`) fails on `binaries.prisma.sh` (TLS disconnect). The native query and schema engines cannot be downloaded in this sandbox. No mirror was used, and sandbox egress was not changed.
+- Path used instead: Prisma's query engine compiled to WebAssembly, shipped inside `@prisma/client` (`query_engine_bg.wasm`), driven through `@prisma/adapter-pg`. The runner labels it `wasm-query-engine+adapter-pg`. It is NOT the pinned native-engine path.
+- Test-only harness, built by `scripts/test-db/prepare-wasm-harness.sh` into `node_modules/.jata-wasm-harness/` (gitignored):
+  - Schema: `scripts/test-db/schema.wasm-test.prisma`, a copy of the production schema plus `previewFeatures = ["driverAdapters"]`. The production `prisma/schema.prisma` and production client are unchanged.
+  - Dependencies: `scripts/test-db/harness-package.json` (exact pins: `@prisma/adapter-pg` 5.22.0, `pg` 8.23.1, `embedded-postgres` 18.6.0-beta.19). They install into the harness only. **The product `package.json` and `package-lock.json` are unchanged from `main` except for one script line** (`test:db:autopilot`), so `npm ci`, the reproducibility check and the audit see the same dependency graph as `main`.
+  - The generated client's import map points at edge loaders that cannot load `.wasm` under Node. The prepare script swaps in a Node loader that compiles the same bundled file with `WebAssembly.compile`.
+  - Native-engine env vars point at a labelled placeholder file, which the WASM client never loads.
 
-### What was added (uncommitted until this turn's commit)
-- `scripts/test-db/prepare-wasm-harness.sh`: builds the harness (above).
-- `scripts/test-db/run-db-suite.mjs`: starts a disposable loopback PostgreSQL 18.6 (`embedded-postgres` 18.6.0-beta.19, `127.0.0.1` only, random superuser password not written to disk, data under the OS temp dir and deleted afterwards). Database name must end in `_test`. It never reads `DATABASE_URL` or `DIRECT_URL`. It applies all 57 `prisma/migrations/*/migration.sql` files in lexical order, runs vitest, then stops PostgreSQL. `prisma migrate` was not used because it needs the native schema-engine binary.
-- `vitest.db.config.ts`: database-only config; aliases `@prisma/client` to the harness client only when `PRISMA_WASM_HARNESS_DIR` is set. The default `vitest.config.ts` is unchanged.
-- `tests/db/autopilot-safety.test.ts`: 17 new DB-backed tests (below), on fictional `@test.invalid` tenants, using the real domain functions in `lib/autopilot/*` against the real database.
-- `package.json`: script `test:db:autopilot`; devDependencies `@prisma/adapter-pg` 5.22.0 and `embedded-postgres` 18.6.0-beta.19 (exact pins). `package-lock.json` updated.
+### What was added
+- `scripts/test-db/run-db-suite.mjs`: starts a disposable loopback PostgreSQL 18.6 (`127.0.0.1` only; random superuser password, not written to disk; data under the OS temp directory and deleted afterwards). The database name must end in `_test`. It never reads `DATABASE_URL` or `DIRECT_URL`. It applies all 57 `prisma/migrations/*/migration.sql` files in lexical order (raw SQL, because `prisma migrate` needs the native schema engine), runs vitest, then stops PostgreSQL.
+- `vitest.db.config.ts`: database-only configuration. It aliases `@prisma/client` to the harness client only when `PRISMA_WASM_HARNESS_DIR` is set, and loads `tests/helpers/db-setup.ts`. The default `vitest.config.ts` is unchanged.
+- `tests/helpers/db-setup.ts`: sets `globalThis.__prisma` (the hook `lib/db.ts` already honours) to the same real test client. Without it, `lib/db.ts` builds its own client through a CommonJS `require`, which vitest's alias does not intercept. Runs only when `PRISMA_TEST_DATABASE_URL` is set.
+- `tests/db/autopilot-safety.test.ts`: 17 DB-backed tests on fictional `@test.invalid` tenants, against the real domain functions in `lib/autopilot/*`.
+- `package.json`: script `test:db:autopilot` only.
 
-### Results (this run)
-- `npm run test:db:autopilot`: exit 0. Tests 20/20 passed.
-  - `tests/prisma/autopilot-constraints-and-concurrency.test.ts`: 3/3 (existing; FK and unique constraints, cascade deletes across 11 Autopilot tables, multi-client budget serialisation).
-  - `tests/db/autopilot-safety.test.ts`: 17/17 (new).
-- PostgreSQL: 18.6. Migrations applied: 57/57.
-- The default unit configuration reports the new file as skipped when no database is configured (`17 skipped`), so the suite cannot pass by accident.
+### Results (final tree)
+- `npm run test:db:autopilot`: exit 0; **20 of 20 passed**; no unhandled errors.
+  - `tests/prisma/autopilot-constraints-and-concurrency.test.ts`: 3 of 3 (existing: FK and unique constraints, cascade deletes across the 11 Autopilot tables, multi-client budget serialisation).
+  - `tests/db/autopilot-safety.test.ts`: 17 of 17 (new).
+- PostgreSQL 18.6. Migrations applied 57 of 57.
+- Default no-database run (`npx vitest run`, final tree): 348 files passed, 37 skipped; 4,156 tests passed, 320 skipped, **0 failed**. Exit code 1 comes only from 71 unhandled "Query Engine not found" errors. In this sandbox the default `@prisma/client` was generated with a placeholder engine so that `Prisma.dmmf` exists (see below). Those errors are an environment artefact, not test failures.
+- Collection guard (`tests/unit/test-collection-guard.test.ts`): 4 of 4.
+- `npm run lint` (`eslint app components lib`): exit 0, 0 errors (48 pre-existing warnings). ESLint on the new scripts, test file, setup file and config: exit 0.
+- `npx tsc --noEmit`: the same 3 pre-existing Prisma-typed errors as before. The default client is not generated in this sandbox. The new files add none.
+- Engine check: no `postgresql://` string appears in any evidence log.
 
-New control coverage (all asserted on real rows, with exact codes):
+Control coverage (asserted on real rows, exact codes):
 - Tenant isolation: tenant B cannot list, approve (`NOT_FOUND` 404) or reject tenant A's proposal, and A's row is unchanged. A budget idempotency key reused by tenant B returns `IDEMPOTENCY_TENANT_CONFLICT`, and only tenant A's ledger row exists.
-- Approval authority: STAFF approval returns `RBAC_FORBIDDEN` 403 and leaves the proposal `PROPOSED`. STAFF cannot change configuration (403, status stays `LIVE`).
-- Kill switch on the execution path: with `JATA_AUTOPILOT_GLOBAL_KILL_SWITCH=1`, an OWNER approval returns `GLOBAL_KILL_SWITCH_ACTIVE` and the proposal is not `EXECUTED`.
-- Pause: a `PAUSED` tenant is refused with `TENANT_AUTOPILOT_PAUSED`, either at proposal time or at approval time. Nothing executes.
+- Approval authority: STAFF approval returns `RBAC_FORBIDDEN` 403 and the proposal stays `PROPOSED`. STAFF cannot change configuration (403; status stays `LIVE`).
+- Kill switch on the execution path: with `JATA_AUTOPILOT_GLOBAL_KILL_SWITCH=1`, an OWNER approval returns `GLOBAL_KILL_SWITCH_ACTIVE`, and the proposal is not `EXECUTED`.
+- Pause: a `PAUSED` tenant is refused with `TENANT_AUTOPILOT_PAUSED`, at proposal time or at approval time. Nothing executes.
 - Fail closed: a tenant with no subscription gets `ENTITLEMENT_REQUIRED` 403 at approval.
-- Execution once: OWNER approval executes; replaying it returns `idempotentReplay` and does not execute again. A rejected proposal cannot be approved (`INVALID_PROPOSAL_STATE` 409).
-- Spend caps: a daily cap of 100 minor KES stops a second 60 reservation with `DAILY_SPEND_CAP_REACHED`, leaving one ledger row. Re-sending the same reservation key is `alreadyRecorded` with no double spend. Re-sending the same proposal key returns `duplicate` with one row.
-- Consent and quiet hours: quiet hours are evaluated in Africa/Nairobi, start-inclusive and end-exclusive (20:00 start, 07:00 end). With no consent record the result is `MISSING_CONSENT_RECORD`. Transactional opt-in does not authorise marketing (`CONSENT_NOT_GRANTED`). Quiet hours block a transactional send at 22:30 EAT (`QUIET_HOURS_ACTIVE`) except with the urgent transactional bypass. A STOP keyword opt-out returns `RECIPIENT_OPTED_OUT`, and tenant B's view of the same phone returns `MISSING_CONSENT_RECORD`.
-- Negative control: with the kill-switch check disabled in `lib/autopilot/policy.ts` (temporary, restored from git), the kill-switch test fails with `expected true to be false`. The policy file is back to its committed state.
+- Execute once: OWNER approval executes; replaying it returns `idempotentReplay` and does not execute again. A rejected proposal cannot be approved (`INVALID_PROPOSAL_STATE` 409).
+- Spend caps: a daily cap of 100 minor KES stops a second 60 reservation with `DAILY_SPEND_CAP_REACHED`, leaving one ledger row. Re-sending the same reservation key is `alreadyRecorded`, with no double spend. Re-sending the same proposal key returns `duplicate`, with one row.
+- Consent and quiet hours: quiet hours are evaluated in Africa/Nairobi, start-inclusive and end-exclusive (20:00 start, 07:00 end). With no consent record the result is `MISSING_CONSENT_RECORD`. Transactional opt-in does not authorise marketing (`CONSENT_NOT_GRANTED`). Quiet hours block a transactional send at 22:30 EAT (`QUIET_HOURS_ACTIVE`) except with the urgent transactional bypass. A STOP keyword opt-out returns `RECIPIENT_OPTED_OUT`. Tenant B's view of the same phone returns `MISSING_CONSENT_RECORD`.
+- Negative control: with the kill-switch check disabled in `lib/autopilot/policy.ts` (temporary; restored; the file equals `main`), the kill-switch test fails with `expected true to be false`.
 
-### Other checks this turn
-- `npx eslint` on the new scripts, test file and config: exit 0.
-- `npx tsc --noEmit`: the same 3 pre-existing Prisma-typed errors as before (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). The default client is not generated in this sandbox. The new files add no errors.
-- No `postgresql://` string appears in any evidence log.
+### CI on `6a529e6` (first push of this work) — FAIL, with cause analysis
+- Failed: `Schema, types, unit suite, build`; `full-suite`; `Journey against a real database`; `Static (install, generate, lint, typecheck, audit)`; `Exact candidate applies on disposable PostgreSQL 18`; `Migrations + schema on PostgreSQL 18`; `Schema reconciliation proposal closes the drift`; `Release gate (aggregate)`; `programme-completeness` (expected, 34 NOT READY).
+- Passed: `D2 — build, audit and controls`; `Failure paths actually fail`; `Migration target guard`; `Production build path on PostgreSQL 18`; `Real-Chrome six-viewport capture`; `capture`; `instruction-integrity`; `Vercel`; `Vercel Preview Comments`.
+- Confirmed cause (reproduced locally): `tests/unit/test-collection-guard.test.ts` requires every non-helper file under `tests/` to be collected by vitest. The first push placed `tests/db/prisma/schema.wasm-test.prisma` there, which broke the unit suite, `full-suite` and the Journey job, all of which run that guard. Fixed by moving the schema to `scripts/test-db/`.
+- Also changed: the first push added two devDependencies to the product `package.json`. Those are moved into the harness (above), so the product lockfile matches `main` again.
+- Not yet explained: the `Exact candidate applies` rehearsal and the `Migrations + schema` / `Schema reconciliation` checks failed on `6a529e6`. The rehearsal does not run vitest. Its GitHub log cannot be read (results-receiver and blob endpoints return EOF). Local reproduction is blocked: the rehearsal needs `psql`, which the embedded PostgreSQL package does not ship, and apt cannot reach Debian mirrors from this sandbox. The rehearsal is therefore NOT reproduced locally. Its status on the corrected head is pending CI.
+- `npm ci` in a clean copy leaves `package.json` and `package-lock.json` byte-identical to the committed files (so the reproducibility check passes). `npm audit` (production and full) reports 0 vulnerabilities.
+
+### Sandbox-only state I created (not committed)
+- `node_modules/.prisma/client` was generated with `prisma generate` (production schema, placeholder engine env). This gives `Prisma.dmmf`, which `tests/unit/autopilot-phase1-hardening.test.ts` needs. Before that, the `npm install` postinstall stub made that test fail with `Cannot read properties of undefined (reading 'datamodel')`. CI generates the client itself. The unit file is unchanged since `9c58d3d`.
+- A local rehearsal PostgreSQL (`127.0.0.1:55445`, disposable, data in /tmp) was started for the rehearsal attempt and stopped afterwards.
 
 ### Not covered (keep BLOCKED or NOT TESTED where they apply)
-- The pinned native-engine path. CI has not yet run this suite and no workflow was changed. CI on the exact head is still the release evidence for CI.
+- The pinned native-engine path. CI does not yet run `npm run test:db:autopilot`. No workflow was changed. CI on the exact head remains the release evidence for CI.
 - Neon pooled endpoints or PgBouncer. Only local PostgreSQL 18.6 was used.
-- AI command-centre turns, ingestion, usage recording through the HTTP routes, and the browser journey on the real database.
+- AI command-centre turns, ingestion, usage recording through the HTTP routes, and browser journeys on the real database.
 - Production, real customers, real offers or FAQs, real messaging, payments and entitlements. None were touched.
 
 ### Verdicts (separate)
-- Autopilot DB-backed controls (the controls listed above): PASS on sandbox PostgreSQL 18.6 with the WASM engine. Not CI evidence and not the native-engine path.
-- Autopilot remediation complete: NO. The Phase 7 gate still depends on the 34 records and CI.
+- Autopilot DB-backed controls (listed above): PASS on sandbox PostgreSQL 18.6 with the WASM engine, 20 of 20. Not CI evidence, and not the native-engine path.
+- CI on the current head: see the PR comment. At the time of this section it was NOT confirmed green.
+- Autopilot remediation complete: NO.
 - Autopilot production-ready: NO.
 - Phase 7 complete: NO. `programme-completeness` remains NOT READY (34) in `docs/agents/PROGRAMME_READINESS.json`. No record was upgraded. None of the 34 is specific to Autopilot database controls.
 - Release decision: HOLD.

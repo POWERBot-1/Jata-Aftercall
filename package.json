@@ -71,14 +71,12 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
-    "@prisma/adapter-pg": "5.22.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.186.0",
-    "embedded-postgres": "18.6.0-beta.19",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
     "jsdom": "^26.1.0",

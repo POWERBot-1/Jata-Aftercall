@@ -1,10 +1,10 @@
-Prisma schema loaded from tests/db/prisma/schema.wasm-test.prisma
+Prisma schema loaded from scripts/test-db/schema.wasm-test.prisma
 
-✔ Generated Prisma Client (v5.22.0) to ./node_modules/.jata-wasm-harness/generated in 2.09s
+✔ Generated Prisma Client (v5.22.0) to ./node_modules/.jata-wasm-harness/generated in 2.13s
 
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
-Tip: Easily identify and fix slow SQL queries in your app. Optimize helps you enhance your visibility: https://pris.ly/--optimize
+Tip: Want real-time updates to your database without manual polling? Discover how with Pulse: https://pris.ly/tip-0-pulse
 
 WASM harness ready: /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated/wasm.js
 Node WASM loader installed into /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated
@@ -15,7 +15,7 @@ Node WASM loader installed into /home/user/Jata-Aftercall/node_modules/.jata-was
  ↓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > tenant isolation > a budget idempotency key used by tenant B cannot replay tenant A's reservation
  ↓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > STAFF cannot approve or execute a proposal (RBAC)
  ↓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > STAFF cannot change tenant Autopilot settings (RBAC on configuration)
- × tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > the platform kill switch blocks execution even for an OWNER with an approved proposal 96ms
+ × tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > the platform kill switch blocks execution even for an OWNER with an approved proposal 112ms
    → expected true to be false // Object.is equality
  ↓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > a PAUSED tenant cannot execute, and resuming restores the gate only when LIVE
  ↓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > fails closed: a tenant with no subscription cannot execute
@@ -54,8 +54,8 @@ AssertionError: expected true to be false // Object.is equality
 
  Test Files  1 failed (1)
       Tests  1 failed | 16 skipped (17)
-   Start at  07:46:03
-   Duration  859ms (transform 373ms, setup 0ms, import 530ms, tests 195ms, environment 0ms)
+   Start at  08:29:09
+   Duration  859ms (transform 391ms, setup 113ms, import 389ms, tests 217ms, environment 0ms)
 
 DB_SUITE_SUMMARY {"engine":"wasm-query-engine+adapter-pg","postgres":"PostgreSQL 18.6 (embedded-postgres, loopback 127.0.0.1:55433, db jata_autopilot_db_test)","migrations":{"applied":57,"total":57},"vitest":{"exitCode":1}}
 SYNCHRONOUS TERMINATION NOTICE: When explicitly exiting the process via process.exit or via a parent process, asynchronous tasks in your exitHooks will not run. Either remove these tasks, use gracefulExit() instead of process.exit(), or ensure your parent process sends a SIGINT to the process running this code.

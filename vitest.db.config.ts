@@ -20,6 +20,8 @@ export default defineConfig({
     globals: false,
     // Shared database: run files one at a time so fixtures and resets cannot interleave.
     fileParallelism: false,
+    // Routes lib/db.ts to the same real test client (see tests/helpers/db-setup.ts).
+    setupFiles: ["tests/helpers/db-setup.ts"],
     testTimeout: 60000,
     hookTimeout: 60000,
   },

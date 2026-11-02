@@ -1,7 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
-  output          = "../../../node_modules/.jata-wasm-harness/generated"
+  output          = "../../node_modules/.jata-wasm-harness/generated"
 }
 
 datasource db {
