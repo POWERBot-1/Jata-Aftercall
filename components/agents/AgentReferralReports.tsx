@@ -114,7 +114,7 @@ export default function AgentReferralReports() {
           <p aria-live="polite">Showing {state.items.length} snapshot{state.items.length === 1 ? "" : "s"}.</p>
           {state.moreError && <p role="alert">{state.moreError}</p>}
           {state.nextCursor && (
-            <button type="button" disabled={state.loadingMore} onClick={() => state.nextCursor && loadOlder(state.nextCursor)}>
+            <button type="button" disabled={state.loadingMore} style={{ minHeight: "44px", minWidth: "44px", padding: "0.6rem 1rem" }} onClick={() => state.nextCursor && loadOlder(state.nextCursor)}>
               {state.loadingMore ? "Loading older snapshots…" : "Load older snapshots"}
             </button>
           )}

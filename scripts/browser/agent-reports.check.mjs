@@ -56,6 +56,8 @@ function check(name, ok, detail = "") {
   results.push({ name, ok: Boolean(ok) });
   if (!ok) failed += 1;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+  // A GitHub annotation so a failing check is visible in the job's annotations, not only in the log.
+  if (!ok) console.log(`::error title=ADMIN-023 browser check failed::${String(name).replace(/[\r\n]/g, " ").slice(0, 200)}${detail ? ` (${String(detail).replace(/[\r\n]/g, " ").slice(0, 160)})` : ""}`);
 }
 
 const runId = randomUUID().slice(0, 8);
@@ -258,6 +260,7 @@ try {
   await main();
 } catch (error) {
   console.log(`FAIL  journey aborted — ${String(error?.message ?? error).split("\n")[0].slice(0, 200)}`);
+  console.log(`::error title=ADMIN-023 browser journey aborted::${String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200)}`);
   failed += 1;
 } finally {
   await prisma.$disconnect().catch(() => {});
