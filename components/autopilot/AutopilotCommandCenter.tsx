@@ -1005,7 +1005,7 @@ export function AutopilotCommandCenter({
                         onClick={() =>
                           void runProposalOperation(prop.id, "APPROVE_AND_EXECUTE")
                         }
-                        className="jata-btn jata-btn-primary min-h-[44px]"
+                        className="jata-btn jata-btn-primary min-h-[44px] autopilot-approval-control"
                       >
                         <CheckCircle2 size={14} aria-hidden="true" /> Approve &amp; Execute
                       </button>
@@ -1013,7 +1013,7 @@ export function AutopilotCommandCenter({
                         type="button"
                         disabled={busy || !canConfigure}
                         onClick={() => void runProposalOperation(prop.id, "REJECT")}
-                        className="jata-btn jata-btn-secondary min-h-[44px]"
+                        className="jata-btn jata-btn-secondary min-h-[44px] autopilot-approval-control"
                       >
                         <XCircle size={14} aria-hidden="true" /> Reject
                       </button>

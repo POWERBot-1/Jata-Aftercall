@@ -289,6 +289,14 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* Autopilot approval controls. The action fill is the same colour as the global focus ring in
+   both product themes, so the ring is drawn in the theme's text colour instead: it differs from
+   the fill and contrasts with the card surface in Lime Spark (dark card) and Emerald Ink (light). */
+.jata-btn.autopilot-approval-control:focus-visible {
+  outline: 2px solid var(--jata-ink);
+  outline-offset: 2px;
+}
+
 .jata-hint {
   color: var(--jata-muted);
   font-size: 0.75rem;
@@ -609,6 +617,9 @@ button:focus-visible {
   background: var(--color-surface-muted);
 }
 .product-theme-option input { margin-top: 0.2rem; accent-color: var(--color-primary); }
+/* Touch target: the native radio is the control inside a label that is already large. Give the
+   radio itself a 24x24 CSS box (WCAG 2.5.8 minimum) so it is never the smallest hit area. */
+.product-theme-option input[type="radio"] { width: 24px; height: 24px; margin: 0.2rem 0 0; flex: none; }
 .product-theme-swatches { display: flex; overflow: hidden; height: 2.1rem; border: 1px solid var(--color-border); border-radius: 0.55rem; }
 .product-theme-swatches span { flex: 1; }
 .product-theme-option-copy { display: grid; gap: 0.2rem; }

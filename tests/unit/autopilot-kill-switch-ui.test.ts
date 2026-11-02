@@ -144,4 +144,13 @@ describe("source guards: the halted flag and in-flight guard are wired", () => {
     expect(guard).toBeLessThan(fetchAt);
     expect(src).toContain("Nothing was executed.");
   });
+
+  it("gives both approval controls the theme-text focus ring and keeps the 24px radio target", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("components/autopilot/AutopilotCommandCenter.tsx", "utf8");
+    const css = readFileSync("app/globals.css", "utf8");
+    expect(src.match(/autopilot-approval-control/g)?.length).toBe(2);
+    expect(css).toContain(".jata-btn.autopilot-approval-control:focus-visible {\n  outline: 2px solid var(--jata-ink);");
+    expect(css).toContain('.product-theme-option input[type="radio"] { width: 24px; height: 24px;');
+  });
 });
