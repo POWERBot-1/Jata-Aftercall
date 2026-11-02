@@ -7,6 +7,8 @@ import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
 import { isAutopilotPlanKey } from "./autopilot/entitlement";
 import { settleAutopilotPayment } from "./autopilot/settlement";
+import { MJENGO_PLAN_KEY } from "./mjengo/entitlement";
+import { settleMjengoPayment } from "./mjengo/settlement";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -168,6 +170,13 @@ export async function activateSubscriptionForPayment(
     }
     if (isAutopilotPlanKey(plan.key)) {
       return settleAutopilotPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
+    }
+    // MJENGO OS — KES 2,000 / 30 days, independent of BUSINESS_POS (KES 499) and ERP_PRO
+    // (KES 3,000). It writes planKey='MJENGO_OS' rows, so a POS payment can never switch it on
+    // and a MJENGO payment can never switch POS on. The product-terms guard lives inside
+    // settleMjengoPayment and refuses rather than granting a mismatched product.
+    if (plan.key === MJENGO_PLAN_KEY) {
+      return settleMjengoPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
     }
 
     const now = new Date();

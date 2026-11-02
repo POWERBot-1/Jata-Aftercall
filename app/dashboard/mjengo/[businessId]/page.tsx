@@ -1,89 +1,108 @@
-import { getSession } from "@/lib/auth";
-import { requireMjengoAccess } from "@/lib/mjengo/access";
-import { mjengoSafeText } from "@/lib/mjengo/sanitize";
+/**
+ * MJENGO OS — overview.
+ *
+ * Real tenant-scoped reads only. Counts come from the module that owns the data; anything this
+ * deployment cannot read reports "unavailable" rather than a fabricated number.
+ */
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import prisma from "@/lib/db";
+import { mjengoPath } from "@/lib/mjengo/navigation";
+import {
+  loadAccountingOverview,
+  loadCustomerCreditOverview,
+  loadInventoryOverview,
+  loadProcurementOverview,
+  loadSalesOverview,
+} from "@/lib/mjengo/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function MjengoDashboard({ params }: { params: Promise<{ businessId: string }> }) {
-  // Next.js 16 delivers route params as a promise; reading it synchronously fails the build's
-  // PageProps check.
-  const { businessId: rawBusinessId } = await params;
-  const businessId = rawBusinessId?.trim();
+const money = (centsOrKes: number) => `KES ${Math.round(Number(centsOrKes) || 0).toLocaleString("en-KE")}`;
+
+export default async function MjengoOverview({ params }: { params: Promise<{ businessId: string }> }) {
+  const { businessId: raw } = await params;
+  const businessId = String(raw ?? "").trim();
   if (!businessId) notFound();
-  const session = await getSession();
-  const gate = await requireMjengoAccess(businessId, session);
-  if (!gate.ok) {
-    return (
-      <main className="mx-auto max-w-3xl p-8">
-        <h1 className="text-2xl font-bold">MJENGO OS</h1>
-        <p className="mt-2 text-red-600">{gate.error}</p>
-        {gate.status === 402 ? (
-          <a className="mt-4 inline-block rounded-sm bg-black px-4 py-2 text-white" href={`/dashboard/mjengo/${encodeURIComponent(businessId)}/billing`}>
-            Add MJENGO OS — KES 2,000/month
-          </a>
-        ) : null}
-        <p className="mt-4 text-sm text-muted-foreground">
-          POS customers keep KES 499 pricing. MJENGO OS is separate and never auto-granted.
-        </p>
-      </main>
-    );
-  }
 
-  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true, slug: true } });
-  const safeName = mjengoSafeText(business?.name ?? businessId);
-
-  // Real backend counts (not mocks) — tenant-scoped reads
-  const [posProducts, pendingOrders, unpaidInvoices] = await Promise.all([
-    prisma.posProduct.count({ where: { businessId, isActive: true } }).catch(() => 0),
-    prisma.order?.count ? prisma.order.count({ where: { businessId, status: { in: ["CONFIRMED", "PROCESSING"] } as any } }).catch(() => 0) : Promise.resolve(0),
-    prisma.erpInvoice?.count ? prisma.erpInvoice.count({ where: { businessId, status: "ISSUED" } }).catch(() => 0) : Promise.resolve(0),
+  const [sales, inventory, procurement, credit, accounting] = await Promise.all([
+    loadSalesOverview(businessId),
+    loadInventoryOverview(businessId),
+    loadProcurementOverview(businessId),
+    loadCustomerCreditOverview(businessId),
+    loadAccountingOverview(businessId),
   ]);
 
+  const cards = [
+    { label: "Sales, last 30 days", value: money(sales.revenueKES), note: `${sales.sales.length} till sale(s)`, href: mjengoPath(businessId, "/sales") },
+    { label: "Unpaid on till sales", value: money(sales.outstandingKES), note: "Balance still owed", href: mjengoPath(businessId, "/sales") },
+    { label: "Stock items", value: String(inventory.stock.length), note: `${inventory.low.length} at or below reorder level`, href: mjengoPath(businessId, "/inventory") },
+    { label: "Suppliers", value: String(procurement.suppliers.length), note: `Payable ${money(procurement.payableKES)}`, href: mjengoPath(businessId, "/procurement") },
+    { label: "Open purchase orders", value: String(procurement.purchaseOrders.length), note: `${procurement.requisitions.length} requisition(s) awaiting a decision`, href: mjengoPath(businessId, "/procurement") },
+    { label: "Customer credit", value: money(credit.receivableKES), note: `${credit.overdueInvoices.length} overdue invoice(s)`, href: mjengoPath(businessId, "/customers") },
+    { label: "Journals on record", value: String(accounting.journals.length), note: accounting.integrity.available ? `${accounting.integrity.anomalies} integrity anomaly/anomalies` : "Integrity view not available (database not migrated)", href: mjengoPath(businessId, "/accounting") },
+    { label: "Reports", value: "Open", note: "Operational + financial summaries", href: mjengoPath(businessId, "/reports") },
+  ];
+
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">MJENGO OS — {safeName}</h1>
-          <p className="text-muted-foreground">Sales, inventory, procurement, accounting, credit, workforce — one workspace.</p>
+    <>
+      <section aria-labelledby="mjengo-overview-heading">
+        <h2 id="mjengo-overview-heading" className="text-lg font-semibold">
+          Today, at a glance
+        </h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {cards.map((card) => (
+            <Link key={card.label} href={card.href} className="rounded-sm border p-4 hover:bg-muted">
+              <div className="text-sm text-muted-foreground">{card.label}</div>
+              <div className="mt-1 text-2xl font-bold">{card.value}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{card.note}</div>
+            </Link>
+          ))}
         </div>
-        <span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800">Live — {gate.entitlement.planKey} KES {gate.entitlement.priceKES}/30d</span>
-      </header>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border p-4"><div className="text-sm text-muted-foreground">Active products</div><div className="text-2xl font-bold">{posProducts}</div></div>
-        <div className="rounded-xl border p-4"><div className="text-sm text-muted-foreground">Open orders</div><div className="text-2xl font-bold">{pendingOrders}</div></div>
-        <div className="rounded-xl border p-4"><div className="text-sm text-muted-foreground">Unpaid invoices</div><div className="text-2xl font-bold">{unpaidInvoices}</div></div>
-      </div>
-
-      <nav className="grid gap-3 md:grid-cols-4">
-        {[
-          { label: "Sales & orders", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/sales` },
-          { label: "Inventory", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/inventory` },
-          { label: "Procurement", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/procurement` },
-          { label: "Customers & credit", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/customers` },
-          { label: "Accounting", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/accounting` },
-          { label: "Workforce", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/workforce` },
-          { label: "Reports", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/reports` },
-          { label: "Settings & plan", href: `/dashboard/mjengo/${encodeURIComponent(businessId)}/settings` },
-        ].map((i) => (
-          <a key={i.label} href={i.href} className="rounded-lg border p-4 hover:bg-muted">
-            <div className="font-medium">{i.label}</div>
-            <div className="text-xs text-muted-foreground">Manage</div>
-          </a>
-        ))}
-      </nav>
-
-      <section className="rounded-xl border bg-muted/30 p-4">
-        <h2 className="font-semibold">Security & integrity — verified</h2>
-        <ul className="mt-2 list-disc pl-5 text-sm">
-          <li>Branding renders as safe text — no executable HTML.</li>
-          <li>Ledger is append-only at DB level; reversals are compensating journals.</li>
-          <li>Payments require provider verification; refunds are provider-confirmed.</li>
-          <li>Tenant access is server-enforced on every mutation.</li>
-        </ul>
       </section>
-    </main>
+
+      <section aria-labelledby="mjengo-recent-heading">
+        <h2 id="mjengo-recent-heading" className="text-lg font-semibold">
+          Latest activity
+        </h2>
+        {sales.sales.length === 0 && accounting.journals.length === 0 ? (
+          <p className="mt-2 rounded-sm border bg-muted/30 p-4 text-sm text-muted-foreground">
+            Nothing recorded yet in this business. Sales, stock movements and journal entries appear
+            here as soon as they are recorded through the POS or the accounting module — this page
+            never invents activity.
+          </p>
+        ) : (
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-sm border p-4">
+              <h3 className="font-medium">Recent till sales</h3>
+              <ul className="mt-2 space-y-1 text-sm">
+                {sales.sales.slice(0, 5).map((sale: any) => (
+                  <li key={sale.id} className="flex justify-between gap-3">
+                    <span>{sale.receiptNumber}</span>
+                    <span className="text-muted-foreground">
+                      {money(sale.totalKES)} · {sale.status}
+                    </span>
+                  </li>
+                ))}
+                {sales.sales.length === 0 ? <li className="text-muted-foreground">No till sales in the last 30 days.</li> : null}
+              </ul>
+            </div>
+            <div className="rounded-sm border p-4">
+              <h3 className="font-medium">Recent journals</h3>
+              <ul className="mt-2 space-y-1 text-sm">
+                {accounting.journals.slice(0, 5).map((journal: any) => (
+                  <li key={journal.id} className="flex justify-between gap-3">
+                    <span>
+                      {journal.journalNumber} — {journal.description}
+                    </span>
+                    <span className="text-muted-foreground">{journal.status}</span>
+                  </li>
+                ))}
+                {accounting.journals.length === 0 ? <li className="text-muted-foreground">No journals recorded yet.</li> : null}
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
+    </>
   );
 }
