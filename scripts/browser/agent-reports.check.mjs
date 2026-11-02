@@ -164,10 +164,13 @@ async function main() {
     // triggers on purpose, and is reported as such. Anything else is an unexpected console error.
     const expectedRefusals = [];
     const unexpectedConsole = [];
+    // True only while the journey itself injects a 503 to exercise the error state.
+    let injectingError = false;
     page.on("console", (message) => {
       if (message.type() !== "error") return;
       const text = message.text();
       if (/Failed to load resource: the server responded with a status of (401|403)\b/.test(text)) expectedRefusals.push(text);
+      else if (injectingError && /Failed to load resource: the server responded with a status of 503\b/.test(text)) expectedRefusals.push(text);
       else unexpectedConsole.push(text.slice(0, 200));
     });
 
@@ -286,7 +289,9 @@ async function main() {
     await nav;
     await page.waitForSelector("ol[aria-label]", { timeout: 20000 }).catch(() => {});
     interceptor("error");
+    injectingError = true;
     await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    injectingError = false;
     const errorText = await page.evaluate(() => document.querySelector('[role="alert"]')?.textContent || "");
     check("error state shows a safe message", errorText.includes("temporarily unavailable"), errorText.slice(0, 80));
 
