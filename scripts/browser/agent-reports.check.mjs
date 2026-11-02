@@ -160,7 +160,16 @@ async function main() {
       const frames = String(error?.stack ?? "").split("\n").slice(0, 3).map((l) => l.trim()).join(" <- ");
       pageErrors.push(`${String(error?.message ?? error).slice(0, 160)} [${new URL(page.url()).pathname}] ${frames}`.replace(/[\r\n]/g, " ").slice(0, 400));
     });
-    page.on("console", (message) => { if (message.type() === "error") pageErrors.push(`console: ${message.text()}`.slice(0, 300)); });
+    // Console errors are kept apart: a 401/403 resource response is the EXPECTED refusal the journey
+    // triggers on purpose, and is reported as such. Anything else is an unexpected console error.
+    const expectedRefusals = [];
+    const unexpectedConsole = [];
+    page.on("console", (message) => {
+      if (message.type() !== "error") return;
+      const text = message.text();
+      if (/Failed to load resource: the server responded with a status of (401|403)\b/.test(text)) expectedRefusals.push(text);
+      else unexpectedConsole.push(text.slice(0, 200));
+    });
 
     // 1. Anonymous visitors are sent to sign-in and receive no report data.
     await page.deleteCookie(...(await page.cookies()));
@@ -283,6 +292,7 @@ async function main() {
 
     // 8. The application's own pages produced no uncaught client error during the journey.
     check("no uncaught client-side page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
+    check("no unexpected console errors (expected 401/403 refusals excluded)", unexpectedConsole.length === 0, `expected refusals observed=${expectedRefusals.length}; unexpected=${unexpectedConsole.length}; ${unexpectedConsole.slice(0, 2).join(" | ")}`);
   } finally {
     await browser.close();
   }
