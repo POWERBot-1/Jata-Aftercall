@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { loadSalesOverview } from "@/lib/mjengo/workspace";
 
+import { formatKES } from "@/lib/format";
+
 export const dynamic = "force-dynamic";
-const money = (v: number) => `KES ${Math.round(Number(v) || 0).toLocaleString("en-KE")}`;
 
 export default async function MjengoSales({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId: raw } = await params;
@@ -20,8 +21,8 @@ export default async function MjengoSales({ params }: { params: Promise<{ busine
       </p>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Revenue, last 30 days</dt><dd className="text-xl font-bold">{money(revenueKES)}</dd></div>
-        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Unpaid balance</dt><dd className="text-xl font-bold">{money(outstandingKES)}</dd></div>
+        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Revenue, last 30 days</dt><dd className="text-xl font-bold">{formatKES(revenueKES)}</dd></div>
+        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Unpaid balance</dt><dd className="text-xl font-bold">{formatKES(outstandingKES)}</dd></div>
         <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Storefront orders</dt><dd className="text-xl font-bold">{orders.length}</dd></div>
       </dl>
 
@@ -32,9 +33,9 @@ export default async function MjengoSales({ params }: { params: Promise<{ busine
           {sales.map((sale: any) => (
             <tr key={sale.id} className="border-t">
               <td className="py-1">{sale.receiptNumber}</td>
-              <td>{money(sale.totalKES)}</td>
-              <td>{money(sale.paidKES)}</td>
-              <td>{money(sale.balanceKES)}</td>
+              <td>{formatKES(sale.totalKES)}</td>
+              <td>{formatKES(sale.paidKES)}</td>
+              <td>{formatKES(sale.balanceKES)}</td>
               <td>{sale.status}</td>
             </tr>
           ))}
@@ -47,7 +48,7 @@ export default async function MjengoSales({ params }: { params: Promise<{ busine
         {orders.map((order: any) => (
           <li key={order.id} className="flex justify-between gap-3 border-t py-1">
             <span>{order.orderReference}</span>
-            <span className="text-muted-foreground">{money(order.totalKES)} · {order.status}</span>
+            <span className="text-muted-foreground">{formatKES(order.totalKES)} · {order.status}</span>
           </li>
         ))}
         {orders.length === 0 ? <li className="text-muted-foreground">No storefront orders.</li> : null}

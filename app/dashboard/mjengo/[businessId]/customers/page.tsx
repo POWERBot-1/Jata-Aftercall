@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { loadCustomerCreditOverview } from "@/lib/mjengo/workspace";
 
+import { formatKES } from "@/lib/format";
+
 export const dynamic = "force-dynamic";
-const money = (v: number) => `KES ${Math.round(Number(v) || 0).toLocaleString("en-KE")}`;
-const cents = (v: number) => `KES ${((Number(v) || 0) / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
 export default async function MjengoCustomers({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId: raw } = await params;
@@ -19,7 +19,7 @@ export default async function MjengoCustomers({ params }: { params: Promise<{ bu
         state — a browser flag cannot raise a limit. Customer receivable and supplier payable are
         separate ledgers and never offset each other.
       </p>
-      <p className="mt-2 text-sm">Receivable: {money(receivableKES)} · overdue invoices: {overdueInvoices.length}</p>
+      <p className="mt-2 text-sm">Receivable: {formatKES(receivableKES)} · overdue invoices: {overdueInvoices.length}</p>
 
       <table className="mt-4 w-full text-sm">
         <caption className="sr-only">Customer credit balances</caption>
@@ -28,8 +28,8 @@ export default async function MjengoCustomers({ params }: { params: Promise<{ bu
           {customers.map((customer: any) => (
             <tr key={customer.id} className="border-t">
               <td className="py-1">{customer.name}</td>
-              <td>{money(customer.balanceKES)}</td>
-              <td>{money(customer.creditLimitKES)}</td>
+              <td>{formatKES(customer.balanceKES)}</td>
+              <td>{formatKES(customer.creditLimitKES)}</td>
               <td>{customer.creditEnabled ? "Enabled" : "Cash only"}</td>
             </tr>
           ))}
@@ -42,7 +42,7 @@ export default async function MjengoCustomers({ params }: { params: Promise<{ bu
         {invoices.map((invoice: any) => (
           <li key={invoice.id} className="flex justify-between gap-3 border-t py-1">
             <span>{invoice.invoiceNumber} — {invoice.customerName}</span>
-            <span className="text-muted-foreground">{cents(invoice.totalCents)} · paid {cents(invoice.paidCents)}</span>
+            <span className="text-muted-foreground">{formatKES(Number(invoice.totalCents) / 100)} · paid {formatKES(Number(invoice.paidCents) / 100)}</span>
           </li>
         ))}
         {invoices.length === 0 ? <li className="text-muted-foreground">No open invoices.</li> : null}

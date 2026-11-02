@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { loadReportsOverview } from "@/lib/mjengo/workspace";
 
+import { formatKES } from "@/lib/format";
+
 export const dynamic = "force-dynamic";
-const money = (v: number) => `KES ${Math.round(Number(v) || 0).toLocaleString("en-KE")}`;
 
 export default async function MjengoReports({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId: raw } = await params;
@@ -18,9 +19,9 @@ export default async function MjengoReports({ params }: { params: Promise<{ busi
         derived number that the source module does not produce.
       </p>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Revenue, last 30 days</dt><dd className="text-xl font-bold">{money(report.revenueKES)}</dd></div>
-        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Unpaid on till sales</dt><dd className="text-xl font-bold">{money(report.outstandingKES)}</dd></div>
-        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Customer receivable</dt><dd className="text-xl font-bold">{money(report.receivableKES)}</dd></div>
+        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Revenue, last 30 days</dt><dd className="text-xl font-bold">{formatKES(report.revenueKES)}</dd></div>
+        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Unpaid on till sales</dt><dd className="text-xl font-bold">{formatKES(report.outstandingKES)}</dd></div>
+        <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Customer receivable</dt><dd className="text-xl font-bold">{formatKES(report.receivableKES)}</dd></div>
         <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Tracked inventory items</dt><dd className="text-xl font-bold">{report.inventoryTracked}</dd></div>
         <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">At or below reorder level</dt><dd className="text-xl font-bold">{report.lowStock}</dd></div>
         <div className="rounded-sm border p-4"><dt className="text-sm text-muted-foreground">Journals on record</dt><dd className="text-xl font-bold">{report.journals}</dd></div>

@@ -22,9 +22,11 @@ export async function POST(req: Request) {
   if (!originCheck.ok) return reply({ error: `Origin check failed: ${originCheck.reason}` }, 403);
   const limit = rateLimit(req, { key: "mjengo-branding", max: 30, windowMs: 60_000 });
   if (!limit.allowed) return reply({ error: "Too many requests." }, 429);
-  if (!process.env.DATABASE_URL) return reply({ error: "Database unavailable." }, 503);
+  // Identity before environment: an anonymous caller learns nothing about this deployment's
+  // configuration state, and the 401 is the answer they would get on a fully configured server too.
   const session = await getSession();
   if (!session) return reply({ error: "Sign in to continue." }, 401);
+  if (!process.env.DATABASE_URL) return reply({ error: "Database unavailable." }, 503);
   let body: any; try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const businessId = String(body.businessId ?? "").trim();
   try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message ?? "Not allowed." }, e.status ?? 403); }

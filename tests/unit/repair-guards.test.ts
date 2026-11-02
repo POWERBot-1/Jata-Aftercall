@@ -162,6 +162,10 @@ describe("runtime and schema guards", () => {
       // level. Triggers, trigger functions and one read-only view only; no table, column or row is
       // created, rewritten or removed (no DROP/UPDATE/ALTER anywhere in the file).
       "20261127000001_ledger_immutability",
+      // Ledger line integrity: one foreign key so a journal line cannot exist without its journal.
+      // Additive and NOT VALID on purpose: new writes are enforced immediately, and an existing
+      // database can be repaired before the constraint is validated instead of failing the deploy.
+      "20261127000002_ledger_line_integrity",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

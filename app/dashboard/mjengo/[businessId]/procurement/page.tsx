@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { loadProcurementOverview } from "@/lib/mjengo/workspace";
+import { formatKES } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-const cents = (v: number) => `KES ${((Number(v) || 0) / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
 export default async function MjengoProcurement({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId: raw } = await params;
@@ -17,14 +17,14 @@ export default async function MjengoProcurement({ params }: { params: Promise<{ 
         Requisition → purchase order → goods received → supplier bill. Receiving stock and billing are
         separate steps, so an order is never treated as stock until it is received.
       </p>
-      <p className="mt-2 text-sm">Suppliers: {suppliers.length} · payable KES {Math.round(payableKES).toLocaleString("en-KE")}</p>
+      <p className="mt-2 text-sm">Suppliers: {suppliers.length} · payable {formatKES(payableKES)}</p>
 
       <h3 className="mt-6 font-medium">Open purchase orders</h3>
       <ul className="mt-2 space-y-1 text-sm">
         {purchaseOrders.map((po: any) => (
           <li key={po.id} className="flex justify-between gap-3 border-t py-1">
             <span>{po.orderNumber} — {po.supplierName}</span>
-            <span className="text-muted-foreground">{po.status} · {cents(po.totalCents)}</span>
+            <span className="text-muted-foreground">{po.status} · {formatKES(Number(po.totalCents) / 100)}</span>
           </li>
         ))}
         {purchaseOrders.length === 0 ? <li className="text-muted-foreground">No open purchase orders.</li> : null}
@@ -35,7 +35,7 @@ export default async function MjengoProcurement({ params }: { params: Promise<{ 
         {requisitions.map((req: any) => (
           <li key={req.id} className="flex justify-between gap-3 border-t py-1">
             <span>{req.requisitionNumber}</span>
-            <span className="text-muted-foreground">{req.status} · {cents(req.totalCents)}</span>
+            <span className="text-muted-foreground">{req.status} · {formatKES(Number(req.totalCents) / 100)}</span>
           </li>
         ))}
         {requisitions.length === 0 ? <li className="text-muted-foreground">No open requisitions.</li> : null}

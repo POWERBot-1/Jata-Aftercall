@@ -98,6 +98,30 @@ describe("mjengo: branding route — authentication and tenancy", () => {
     expect(response.status).toBe(403);
   });
 
+  it("answers 401 before revealing whether a database is configured", async () => {
+    state.session = null;
+    const previous = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      const response = await brandingPost(jsonRequest(`${origin}/api/mjengo/branding`, { businessId: "bizA", business_name: "X Store" }));
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: "Sign in to continue." });
+    } finally {
+      if (previous !== undefined) process.env.DATABASE_URL = previous;
+    }
+  });
+
+  it("returns 503 only for an authenticated caller when no database is configured", async () => {
+    const previous = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      const response = await brandingPost(jsonRequest(`${origin}/api/mjengo/branding`, { businessId: "bizA", business_name: "X Store" }));
+      expect(response.status).toBe(503);
+    } finally {
+      if (previous !== undefined) process.env.DATABASE_URL = previous;
+    }
+  });
+
   it("returns the tenant's own business name", async () => {
     const response = await brandingGet(new Request(`${origin}/api/mjengo/branding?businessId=bizA`));
     expect(response.status).toBe(200);

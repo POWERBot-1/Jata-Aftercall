@@ -50,7 +50,9 @@
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
-    "test:browser:agents": "node scripts/browser/agent-status.check.mjs"
+    "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
+    "verify:mjengo:pg": "node scripts/verify/mjengo-postgres-verify.mjs",
+    "test:mjengo": "vitest run tests/unit/mjengo-*.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -70,6 +72,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.12",

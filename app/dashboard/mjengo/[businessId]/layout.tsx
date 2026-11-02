@@ -13,6 +13,7 @@ import { getSession } from "@/lib/auth";
 import { requireMjengoAccess } from "@/lib/mjengo/access";
 import { MJENGO_MODULES, mjengoPath } from "@/lib/mjengo/navigation";
 import { mjengoSafeText } from "@/lib/mjengo/sanitize";
+import { formatKES } from "@/lib/format";
 import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export default async function MjengoLayout({
           <p className="text-xs uppercase tracking-wide text-muted-foreground">MJENGO OS</p>
           <h1 className="text-2xl font-bold tracking-tight">{safeName}</h1>
           <p className="text-sm text-muted-foreground">
-            {entitlement.planKey} · KES {entitlement.priceKES.toLocaleString("en-KE")} / 30 days ·{" "}
+            {entitlement.planKey} · {formatKES(entitlement.priceKES)} / 30 days ·{" "}
             {entitlement.status}
             {entitlement.expiresAt ? ` · renews/ends ${new Date(entitlement.expiresAt).toISOString().slice(0, 10)}` : ""}
           </p>

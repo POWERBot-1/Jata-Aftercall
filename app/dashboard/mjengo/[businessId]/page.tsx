@@ -15,9 +15,10 @@ import {
   loadSalesOverview,
 } from "@/lib/mjengo/workspace";
 
+import { formatKES } from "@/lib/format";
+
 export const dynamic = "force-dynamic";
 
-const money = (centsOrKes: number) => `KES ${Math.round(Number(centsOrKes) || 0).toLocaleString("en-KE")}`;
 
 export default async function MjengoOverview({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId: raw } = await params;
@@ -33,12 +34,12 @@ export default async function MjengoOverview({ params }: { params: Promise<{ bus
   ]);
 
   const cards = [
-    { label: "Sales, last 30 days", value: money(sales.revenueKES), note: `${sales.sales.length} till sale(s)`, href: mjengoPath(businessId, "/sales") },
-    { label: "Unpaid on till sales", value: money(sales.outstandingKES), note: "Balance still owed", href: mjengoPath(businessId, "/sales") },
+    { label: "Sales, last 30 days", value: formatKES(sales.revenueKES), note: `${sales.sales.length} till sale(s)`, href: mjengoPath(businessId, "/sales") },
+    { label: "Unpaid on till sales", value: formatKES(sales.outstandingKES), note: "Balance still owed", href: mjengoPath(businessId, "/sales") },
     { label: "Stock items", value: String(inventory.stock.length), note: `${inventory.low.length} at or below reorder level`, href: mjengoPath(businessId, "/inventory") },
-    { label: "Suppliers", value: String(procurement.suppliers.length), note: `Payable ${money(procurement.payableKES)}`, href: mjengoPath(businessId, "/procurement") },
+    { label: "Suppliers", value: String(procurement.suppliers.length), note: `Payable ${formatKES(procurement.payableKES)}`, href: mjengoPath(businessId, "/procurement") },
     { label: "Open purchase orders", value: String(procurement.purchaseOrders.length), note: `${procurement.requisitions.length} requisition(s) awaiting a decision`, href: mjengoPath(businessId, "/procurement") },
-    { label: "Customer credit", value: money(credit.receivableKES), note: `${credit.overdueInvoices.length} overdue invoice(s)`, href: mjengoPath(businessId, "/customers") },
+    { label: "Customer credit", value: formatKES(credit.receivableKES), note: `${credit.overdueInvoices.length} overdue invoice(s)`, href: mjengoPath(businessId, "/customers") },
     { label: "Journals on record", value: String(accounting.journals.length), note: accounting.integrity.available ? `${accounting.integrity.anomalies} integrity anomaly/anomalies` : "Integrity view not available (database not migrated)", href: mjengoPath(businessId, "/accounting") },
     { label: "Reports", value: "Open", note: "Operational + financial summaries", href: mjengoPath(businessId, "/reports") },
   ];
@@ -79,7 +80,7 @@ export default async function MjengoOverview({ params }: { params: Promise<{ bus
                   <li key={sale.id} className="flex justify-between gap-3">
                     <span>{sale.receiptNumber}</span>
                     <span className="text-muted-foreground">
-                      {money(sale.totalKES)} · {sale.status}
+                      {formatKES(sale.totalKES)} · {sale.status}
                     </span>
                   </li>
                 ))}

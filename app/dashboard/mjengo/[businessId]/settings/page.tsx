@@ -18,6 +18,7 @@ import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 import { MJENGO_PLAN_DURATION_DAYS, MJENGO_PLAN_KEY, MJENGO_PLAN_PRICE_KES } from "@/lib/mjengo/entitlement";
 import { getMjengoOsPlan } from "@/lib/pricing";
 import { mjengoSafeText } from "@/lib/mjengo/sanitize";
+import { formatKES, formatDate } from "@/lib/format";
 import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -55,10 +56,10 @@ export default async function MjengoPlanSettings({ params }: { params: Promise<{
         <div className="rounded-sm border p-4">
           <dt className="text-sm text-muted-foreground">Stored terms on this server</dt>
           <dd className="text-xl font-bold">
-            {plan ? `KES ${Number(plan.priceKES).toLocaleString("en-KE")} / ${plan.durationDays} days` : "Plan row missing"}
+            {plan ? `KES ${formatKES(Number(plan.priceKES)).replace("KES ", "")} / ${plan.durationDays} days` : "Plan row missing"}
           </dd>
           <dd className="text-sm text-muted-foreground">
-            Expected: KES {MJENGO_PLAN_PRICE_KES.toLocaleString("en-KE")} / {MJENGO_PLAN_DURATION_DAYS} days · key {MJENGO_PLAN_KEY}
+            Expected: {formatKES(MJENGO_PLAN_PRICE_KES)} / {MJENGO_PLAN_DURATION_DAYS} days · key {MJENGO_PLAN_KEY}
           </dd>
         </div>
         <div className="rounded-sm border p-4">
@@ -66,7 +67,7 @@ export default async function MjengoPlanSettings({ params }: { params: Promise<{
           <dd className="text-xl font-bold">{gate.ok ? gate.entitlement.status : "Not active"}</dd>
           <dd className="text-sm text-muted-foreground">
             {gate.ok && gate.entitlement.expiresAt
-              ? `Paid through ${new Date(gate.entitlement.expiresAt).toISOString().slice(0, 10)}`
+              ? `Paid through ${formatDate(gate.entitlement.expiresAt)}`
               : gate.ok
                 ? "No paid period recorded"
                 : gate.error}
@@ -104,7 +105,7 @@ export default async function MjengoPlanSettings({ params }: { params: Promise<{
               <input type="hidden" name="businessId" value={businessId} />
               <input type="hidden" name="planId" value={String(plan.id)} />
               <button type="submit" className="rounded-sm bg-black px-4 py-2 text-white">
-                Continue to checkout — KES {Number(plan.priceKES).toLocaleString("en-KE")} / {plan.durationDays} days
+                Continue to checkout — {formatKES(Number(plan.priceKES))} / {plan.durationDays} days
               </button>
             </form>
           </>
