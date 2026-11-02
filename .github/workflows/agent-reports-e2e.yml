@@ -85,9 +85,11 @@ jobs:
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           if [ -z "$CHROME_PATH" ]; then
-            echo "Chrome binary missing — agent report journey NOT RUN, not passed." >&2
+            echo "::error title=ADMIN-023 browser journey not run::No Chrome binary on the runner (google-chrome, chromium)." >&2
             exit 1
           fi
+          echo "Browser: $CHROME_PATH ($("$CHROME_PATH" --version 2>/dev/null | head -1))"
+          node -v
           AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
             npx next start -H 127.0.0.1 -p 3210 > /tmp/step-agent-reports-server.log 2>&1 &
           server=$!

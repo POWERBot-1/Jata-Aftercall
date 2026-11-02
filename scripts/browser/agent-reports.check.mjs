@@ -23,6 +23,13 @@ import path from "node:path";
 import { SignJWT } from "jose";
 
 const require = createRequire(import.meta.url);
+// Start-up faults (module load, client construction) must be visible, not a bare exit code.
+function startupFault(error) {
+  const line = String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200);
+  console.log(`::error title=ADMIN-023 browser check start-up failed::${line}`);
+  console.log("RESULT: FAIL");
+  process.exit(1);
+}
 const SECRET = process.env.AUTH_SECRET ?? "";
 const CHROME = process.env.CHROME_PATH ?? "";
 const DATABASE_URL = process.env.PRISMA_TEST_DATABASE_URL || process.env.DATABASE_URL || "";
@@ -31,6 +38,7 @@ const outDir = path.resolve(process.env.AGENT_REPORT_EVIDENCE_DIR || ".cache/age
 
 function blocked(reason) {
   console.log(`BLOCKED  ${reason}`);
+  console.log(`::error title=ADMIN-023 browser journey blocked::${reason.replace(/[\r\n]/g, " ").slice(0, 200)}`);
   console.log("RESULT: BLOCKED");
   process.exit(2);
 }
@@ -45,10 +53,16 @@ if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(dbUrl.hostname)) {
   blocked("DATABASE_URL must be a loopback database. Refusing to seed anything else.");
 }
 
-const puppeteer = require("puppeteer-core");
-// Same engine selection as scripts/erp/erp-pages.check.mjs: the product's native client, pointed at the test DB.
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
+let puppeteer;
+let prisma;
+try {
+  puppeteer = require("puppeteer-core");
+  // Same engine selection as scripts/erp/erp-pages.check.mjs: the product's native client, pointed at the test DB.
+  const { PrismaClient } = require("@prisma/client");
+  prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
+} catch (error) {
+  startupFault(error);
+}
 
 const results = [];
 let failed = 0;
