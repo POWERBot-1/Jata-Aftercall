@@ -1,0 +1,450 @@
+{
+  "base": "http://localhost:3001",
+  "startedAt": "2026-11-02T03:25:39.115Z",
+  "layout": [
+    {
+      "scenario": "ready",
+      "width": 320,
+      "height": 568,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "ready",
+      "width": 360,
+      "height": 800,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "ready",
+      "width": 390,
+      "height": 844,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "ready",
+      "width": 430,
+      "height": 932,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "ready",
+      "width": 768,
+      "height": 1024,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "ready",
+      "width": 1366,
+      "height": 768,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 320,
+      "height": 568,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 360,
+      "height": 800,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 390,
+      "height": 844,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 430,
+      "height": 932,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 768,
+      "height": 1024,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "approval-pending",
+      "width": 1366,
+      "height": 768,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 320,
+      "height": 568,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 360,
+      "height": 800,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 390,
+      "height": 844,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 430,
+      "height": 932,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 768,
+      "height": 1024,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "paused",
+      "width": 1366,
+      "height": 768,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 320,
+      "height": 568,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 360,
+      "height": 800,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 390,
+      "height": 844,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 430,
+      "height": 932,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 768,
+      "height": 1024,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    },
+    {
+      "scenario": "kill-switch",
+      "width": 1366,
+      "height": 768,
+      "overflowX": 0,
+      "smallTargets": 0,
+      "smallTargetSample": [],
+      "fixtureNotice": true,
+      "headingCount": 9,
+      "pageErrors": 0,
+      "pageErrorSample": [],
+      "consoleErrors": 0,
+      "hydrationWarnings": 0
+    }
+  ],
+  "interactions": {
+    "approveSuccess": {
+      "statusBefore": "PROPOSED",
+      "statusAfter": "EXECUTED",
+      "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+      "patchRequests": [
+        {
+          "method": "PATCH",
+          "path": "/api/autopilot/proposals",
+          "status": 200
+        }
+      ],
+      "pageErrors": 0
+    },
+    "duplicateApproveSyncTriple": {
+      "patchRequestsFromTripleClick": 3,
+      "statuses": [
+        200,
+        200,
+        200
+      ],
+      "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+      "statusAfter": "EXECUTED"
+    },
+    "rejectIsFinal": {
+      "statusAfterReject": "REJECTED",
+      "direct": {
+        "status": 409,
+        "body": {
+          "ok": false,
+          "code": "INVALID_PROPOSAL_STATE",
+          "error": "Proposal cannot be executed from status 'REJECTED'."
+        }
+      },
+      "banner": "SUCCESS Proposal rejected."
+    },
+    "pauseServerEnforced": {
+      "uiShowsResume": true,
+      "direct": {
+        "status": 409,
+        "body": {
+          "ok": false,
+          "code": "TENANT_AUTOPILOT_PAUSED",
+          "error": "JATA Autopilot is paused for this business. Resume Autopilot in Command Center settings before running actions."
+        }
+      },
+      "banner": "SUCCESS Emergency Pause activated — all autonomous proposals and executions are halted."
+    },
+    "killSwitch": {
+      "alertText": "Platform Kill Switch Active: Autonomous executions are globally paused. Diagnostic metrics and historical audit logs remain available.",
+      "approveEnabledInUi": true,
+      "banner": "ERROR Platform-wide JATA Autopilot emergency kill switch is active. All autonomous proposals and executions are halted.",
+      "statusAfter": "PROPOSED"
+    },
+    "staffReadOnly": {
+      "readOnlyNoticeShown": true,
+      "approveDisabledInUi": true,
+      "direct": {
+        "status": 403,
+        "body": {
+          "ok": false,
+          "code": "RBAC_FORBIDDEN",
+          "error": "Your role (STAFF) cannot approve, reject or roll back proposals."
+        }
+      }
+    },
+    "tenantB": {
+      "showsTenantB": true,
+      "showsTenantA": false,
+      "readAOverviewFromB": {
+        "status": 403,
+        "body": {
+          "ok": false,
+          "code": "TENANT_FORBIDDEN",
+          "error": "You are not a member of this business."
+        }
+      }
+    },
+    "consentRecorded": {
+      "banner": "SUCCESS Customer transactional consent recorded.",
+      "auditShowsUpdate": true
+    },
+    "keyboard": {
+      "reached": {
+        "text": "Approve & Execute",
+        "outlineStyle": "solid",
+        "outlineWidth": "2px",
+        "boxShadow": "none",
+        "tabIndexOk": true,
+        "tabPress": "reached-by-keyboard",
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patchCount": 1
+      }
+    },
+    "reducedMotionOff": {
+      "bannerAnimationName": "none"
+    },
+    "reducedMotionOn": {
+      "bannerAnimationName": "none"
+    },
+    "failClosed": {
+      "checkout": 501,
+      "command": 501,
+      "commandBody": "FICTIONAL FIXTURE: this request is not simulated here (command turns, document i"
+    }
+  },
+  "errors": [],
+  "finishedAt": "2026-11-02T03:27:04.543Z"
+}

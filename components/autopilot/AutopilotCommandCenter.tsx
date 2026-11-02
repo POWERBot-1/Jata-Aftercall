@@ -210,6 +210,7 @@ export function AutopilotCommandCenter({
   const [checkoutPlanKey, setCheckoutPlanKey] = useState<string | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<ActivationNotice | null>(null);
   const checkoutInFlight = useRef(false);
+  const proposalOpInFlight = useRef(false);
 
   // Command center prompt + voice state
   const [commandInput, setCommandInput] = useState("");
@@ -352,6 +353,11 @@ export function AutopilotCommandCenter({
     proposalId: string,
     operation: "APPROVE_AND_EXECUTE" | "REJECT" | "ROLLBACK",
   ) {
+    // Synchronous in-flight guard. React state (`busy`) has not re-rendered between two clicks
+    // in the same task, so a closure check alone lets duplicate requests through. The server is
+    // idempotent for approvals, but the UI must not send duplicates.
+    if (proposalOpInFlight.current) return;
+    proposalOpInFlight.current = true;
     setBusy(true);
     setBannerNotice(null);
     try {
@@ -384,6 +390,7 @@ export function AutopilotCommandCenter({
     } catch {
       setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
+      proposalOpInFlight.current = false;
       setBusy(false);
     }
   }
@@ -595,7 +602,7 @@ export function AutopilotCommandCenter({
       {data.globalKillSwitchActive ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+          className="jata-state-enter rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
           <strong>Platform Kill Switch Active:</strong> Autonomous executions are globally paused.
           Diagnostic metrics and historical audit logs remain available.
@@ -615,9 +622,10 @@ export function AutopilotCommandCenter({
 
       {bannerNotice ? (
         <div
+          key={`${bannerNotice.tone}:${bannerNotice.text}`}
           role={bannerNotice.tone === "error" ? "alert" : "status"}
           aria-live={bannerNotice.tone === "error" ? "assertive" : "polite"}
-          className="rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-4 py-3 text-sm"
+          className="jata-state-enter rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-4 py-3 text-sm"
         >
           <StatusPill
             tone={
