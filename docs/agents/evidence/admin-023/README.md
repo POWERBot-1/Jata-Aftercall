@@ -63,8 +63,8 @@ named disposable databases (`/jata_ci` and similar). It is not run by the DB sui
 
 ## 50,000-member scale evidence (disposable PostgreSQL, real route code)
 
-File: `tests/db/agent-referral-revision-scale-50k.test.ts`. It is gated by `JATA_SCALE_50K=1` and is **not** in the CI
-DB suite (CI lists its files explicitly; the count stays at 31). Report: `docs/agents/evidence/migration-20261127/scale-50k-timing.json`.
+File: `scripts/test-db/manual/agent-referral-revision-scale-50k.manual.ts`. It is gated by `JATA_SCALE_50K=1`, and it is kept
+out of every vitest glob on purpose: a skipped test in the CI database run fails the release guard. The header gives the copy-run-delete command. It is **not** in the CI DB suite (count stays at 31). Report: `docs/agents/evidence/migration-20261127/scale-50k-timing.json`.
 Sandbox timings, single run, synthetic data:
 
 | Measurement | Result |

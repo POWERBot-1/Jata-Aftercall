@@ -75,10 +75,14 @@ const reconcile = async () => {
 };
 
 /**
- * MANUAL SCALE EVIDENCE (ADMIN-023 §028 rehearsal). Not part of the CI DB suite, which lists its files explicitly.
- * Run only with JATA_SCALE_50K=1, via scripts/test-db/run-db-suite.mjs on a disposable loopback PostgreSQL:
+ * MANUAL SCALE EVIDENCE (ADMIN-023 §028 rehearsal). Deliberately NOT under tests/**: a skipped test in the
+ * default or CI database run fails the release guard (check-test-output / "skipped" check), so this file must
+ * never be matched by a vitest include glob. To run it on a disposable loopback PostgreSQL, copy it into tests/db
+ * for the run only, then delete the copy:
+ *   cp scripts/test-db/manual/agent-referral-revision-scale-50k.manual.ts tests/db/agent-referral-revision-scale-50k.test.ts
  *   JATA_SCALE_50K=1 JATA_SCALE_REPORT=docs/agents/evidence/migration-20261127/scale-50k-timing.json \
  *     node scripts/test-db/run-db-suite.mjs tests/db/agent-referral-revision-scale-50k.test.ts
+ *   rm tests/db/agent-referral-revision-scale-50k.test.ts
  * Times the real route handlers and real drift check at the 50,000-member cap. Synthetic data only.
  */
 import { writeFileSync, mkdirSync } from "node:fs";
