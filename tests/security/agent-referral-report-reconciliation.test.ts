@@ -60,4 +60,13 @@ describe("own-agent referral report reconciliation", () => {
     m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ startInclusive: date, endExclusive: new Date("2026-01-02T12:00:00Z") }]);
     m.prior.mockResolvedValueOnce({ ...prior, members: Array(50001).fill(prior.members[0]) }); expect((await POST(request())).status).toBe(409); expect(m.create).not.toHaveBeenCalled();
   });
+  it("runs the whole reconciliation under an explicit transaction budget, not the 5 s default", async () => {
+    m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ startInclusive: date, endExclusive: new Date("2026-01-02T12:00:00Z") }]);
+    m.prior.mockResolvedValueOnce(prior);
+    m.current.mockResolvedValueOnce([{ id: "event-1", source: "REGISTRATION", createdAt: date }]);
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    expect(m.transaction.mock.calls[0][1]).toEqual({ timeout: 15000, maxWait: 5000 });
+  });
 });

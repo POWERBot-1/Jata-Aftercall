@@ -770,7 +770,7 @@
   },
   "ADMIN-023": {
     "status": "NOT_TESTED",
-    "acceptance": "own-agent cursor pagination, malformed/cross-tenant rejection and regression tests, plus actual PostgreSQL and browser evidence. **Dependencies/conflicts:** the existing 5,000-member write/reconciliation and baseline trigger limits remain; this only adds paginated reads, not large-report generation or reconciliation. Instruction completeness release gate, control, motion, notification recovery, native DB recovery and genuine six-viewport evidence remain incomplete.",
+    "acceptance": "own-agent cursor pagination, malformed/cross-tenant rejection and regression tests, plus actual PostgreSQL and browser evidence. **Dependencies/conflicts:** the per-revision ceiling is raised from 5,000 to 50,000 members by migration 20261127000000 (refuse, never truncate), and reconciliation and reads are bounded to that cap. The 50,000 cap is NOT approved for production: owner decision pending. The migration has not been applied to production and needs owner approval. Instruction completeness release gate, control, motion, notification recovery, native DB recovery and genuine six-viewport evidence remain incomplete.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7028 (ADMIN-023)",
     "implementationLocation": "`app/api/agents/reports/referrals/reconcile/route.ts`, `tests/security/agent-referral-report-reconciliation.test.ts`.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",

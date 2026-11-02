@@ -5,7 +5,7 @@ import { isSameOriginRequest } from "@/lib/agent-application";
 import { readSmallJson } from "@/lib/agent-registration";
 import { rateLimitByIdentity } from "@/lib/rate-limit";
 import { inspectReferralEvidenceDrift } from "@/lib/agents/referral-report-drift";
-import { EVENT_CURSOR_PATTERN, MAX_MEMBERS_PER_REVISION, READ_PAGE_SIZE, READ_STATEMENT_TIMEOUT, RECONCILE_STATEMENT_TIMEOUT, RECONCILE_WRITE_CHUNK } from "@/lib/agents/referral-report-bounds";
+import { EVENT_CURSOR_PATTERN, MAX_MEMBERS_PER_REVISION, READ_PAGE_SIZE, READ_STATEMENT_TIMEOUT, RECONCILE_STATEMENT_TIMEOUT, RECONCILE_TRANSACTION_MAX_WAIT_MS, RECONCILE_TRANSACTION_TIMEOUT_MS, RECONCILE_WRITE_CHUNK } from "@/lib/agents/referral-report-bounds";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       }
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_REFERRAL_REPORT_RECONCILED", targetType: "AGENT_REPORT", targetId: applicationId, metadata: JSON.stringify({ periodKey, revision, added, removed, changed }) } });
       return { kind: "ok" as const, status: "RECONCILED", revision, registrationCount: registrationCount.toString(), existingApplicationCount: existingApplicationCount.toString(), added, removed, changed };
-    });
+    }, { timeout: RECONCILE_TRANSACTION_TIMEOUT_MS, maxWait: RECONCILE_TRANSACTION_MAX_WAIT_MS });
     if (result.kind === "forbidden") return message("An active agent account is required.", 403);
     if (result.kind === "missing") return message("Report not found.", 404);
     if (result.kind === "legacy") return message("Original report membership was not retained; manual review is required.", 409);

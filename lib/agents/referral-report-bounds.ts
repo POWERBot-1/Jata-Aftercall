@@ -18,6 +18,15 @@ export const READ_PAGE_SIZE = 500;
 export const RECONCILE_WRITE_CHUNK = 1_000;
 export const READ_STATEMENT_TIMEOUT = "5s";
 export const RECONCILE_STATEMENT_TIMEOUT = "10s";
+/**
+ * Whole-transaction budget for a reconciliation. Prisma interactive transactions default to 5,000 ms, which
+ * expired during the write at 50,000 members (measured 2 Nov 2026, Prisma "Transaction already closed").
+ * The statement timeout above bounds one statement only. Measured on the sandbox at 50,000 members: the full
+ * reconciliation write took 5.8 s; 15 s leaves about 2.6x headroom. A timeout rolls the whole revision back.
+ * Evidence: docs/agents/evidence/migration-20261127/scale-50k-timing.json.
+ */
+export const RECONCILE_TRANSACTION_TIMEOUT_MS = 15_000;
+export const RECONCILE_TRANSACTION_MAX_WAIT_MS = 5_000;
 
 if (!Number.isInteger(MAX_MEMBERS_PER_REVISION) || MAX_MEMBERS_PER_REVISION < READ_PAGE_SIZE) {
   throw new Error("Invalid referral report bounds");
