@@ -25,7 +25,7 @@ rejection, PostgreSQL evidence and browser evidence.
 
 | Check | Where | Result on this head |
 | --- | --- | --- |
-| Real PostgreSQL, 10 tests: 5,001-member baseline paged exactly once; next-page marker at 500 and 501; cursor replay; forged well-formed cursor cannot widen scope; malformed cursors; reconciliation beyond 5,000 with idempotent replay; write fence; rollback of partial reconciliation; database refusal above the cap and at the cap; concurrent reconciliation | `tests/db/agent-referral-revision-pages.test.ts`, run by `.github/workflows/db-suite.yml` (expects 30 tests across three files) | Database suite run `41441483430` on `05f5b33`: success |
+| Real PostgreSQL, 11 tests: 5,001-member baseline paged exactly once; next-page marker at 500 and 501; cursor replay; forged well-formed cursor cannot widen scope; malformed cursors; reconciliation beyond 5,000 with idempotent replay; write fence; rollback of partial reconciliation; database refusal above the cap and at the cap; concurrent reconciliation | `tests/db/agent-referral-revision-pages.test.ts`, run by `.github/workflows/db-suite.yml` (expects 31 tests across three files) | Database suite on the previous head (`05f5b33`, run `41441483430`): success. Current head: see the final CI report. |
 | Snapshot pagination, cross-tenant isolation on real PostgreSQL | `tests/db/agent-referral-report-pagination.test.ts` | same run |
 | Browser journey on the real route, real PostgreSQL, six viewports: refusals, snapshot pagination, the 5,001-member revision with a next-page marker, a full walk of every page at 390 px, probes for another agent's revision (404) and a malformed cursor (400), loading and error states | `scripts/browser/agent-reports.check.mjs`, `.github/workflows/agent-reports-e2e.yml` | Journey run `41441483303` on `05f5b33`: success |
 | Mocked route tests (bounds, pagination, legacy and over-cap refusal) | `tests/security/agent-referral-report-reconciliation.test.ts` | pass locally and in CI |
@@ -34,6 +34,21 @@ rejection, PostgreSQL evidence and browser evidence.
 The journey walks every page at 390 px only. Other viewports check the first 500-member page, the
 next-page marker, the touch target, overflow and a screenshot. The reason is the 30-per-minute
 per-agent limit on revision reads. The rate limit was not changed.
+
+## Performance finding and fix
+
+The first revision read on a 5,001-member revision took about 2.8 s, and every later page took the same time,
+because the evidence-drift check ran the full comparison on every request. The correlated `NOT EXISTS`
+comparison was the cost. Its cost grows with the square of the membership when statistics are stale, and
+the 5 s statement timeout would fail it on a loaded runner (one CI job returned 503 for this reason).
+
+The comparison is now a single full outer join on (eventId, source, eventCreatedAt) in
+`lib/agents/referral-report-drift.ts`. Measured on the same embedded PostgreSQL: a 5,001-member test fell from
+32.5 s to 2.0 s, and the reconciliation test fell from 46.5 s to 3.1 s. The drift statuses are unchanged and
+are asserted in `tests/db/agent-referral-revision-pages.test.ts`, which covers late, changed and removed evidence and restoration.
+
+`tests/prisma/agent-report-versions-postgres.test.ts` covers the same states, but its guard accepts only
+named disposable databases (`/jata_ci` and similar). It is not run by the DB suite runner, so it is not counted here.
 
 ## Not established
 

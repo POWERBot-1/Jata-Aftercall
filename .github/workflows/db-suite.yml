@@ -55,7 +55,7 @@ jobs:
       - name: Assert the suite actually ran against the migrated database
         run: |
           set -o pipefail
-          node scripts/test-db/assert-db-suite.mjs /tmp/db-suite.log --expect 30 2>&1 | tee /tmp/db-suite-assert.log
+          node scripts/test-db/assert-db-suite.mjs /tmp/db-suite.log --expect 31 2>&1 | tee /tmp/db-suite-assert.log
 
       - name: Upload the sanitised database suite log
         if: always()

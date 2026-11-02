@@ -164,6 +164,10 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     await p.agentApplication.createMany({ data: Array.from({ length: extra }, (_, i) => ({ id: `xa-${own.suffix}-${i}`, userId: `xu-${own.suffix}-${i}`, fullName: "Synthetic Referred", phoneE164: `+2549${String(i).padStart(8, "0")}`, status: "PENDING", agentStatus: "INACTIVE", privacyAcknowledgedAt: new Date() })) });
     await p.agentReferralAttribution.createMany({ data: Array.from({ length: extra }, (_, i) => ({ id: `xatt-${own.suffix}-${i}`, referrerApplicationId: own.app.id, referredApplicationId: `xa-${own.suffix}-${i}`, linkId: link.id, consentedAt: new Date(base), source: "REGISTRATION", createdAt: new Date(base + 120_000 + i) })) });
 
+    // Before reconciliation, revision 1 no longer matches current evidence.
+    const before = await readPage(1);
+    expect(before.body.evidenceStatus).toBe("RECONCILIATION_REQUIRED");
+
     const first = await reconcile();
     expect(first.status).toBe(200);
     expect(first.body.status).toBe("RECONCILED");
@@ -175,6 +179,8 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     expect(again.body.status).toBe("UNCHANGED");
     expect(again.body.revision).toBe(2);
 
+    const rev2Head = await readPage(2);
+    expect(rev2Head.body.evidenceStatus).toBe("MATCHED");
     const rev2 = await readAll(2);
     expect(rev2.ids).toHaveLength(5001 + extra);
     expect(new Set(rev2.ids).size).toBe(5001 + extra);
@@ -182,6 +188,35 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const rev1 = await readAll(1);
     expect(rev1.ids).toHaveLength(5001);
     expect(await p.agentReferralReportMember.count({ where: { applicationId: own.app.id, periodKey, revision: 1 } })).toBe(5001);
+  }, 120_000);
+
+  it("evidence drift tracks late, changed and removed evidence and clears when restored", async () => {
+    const own = await seedAgent(2);
+    asUser(own.user.id);
+    const first = `att-${own.suffix}-0`;
+    expect((await readPage(1)).body.evidenceStatus).toBe("MATCHED");
+
+    // Late evidence inside the period, after the revision was captured.
+    const link = await p.agentReferralLink.findFirst({ where: { referrerApplicationId: own.app.id } });
+    await p.user.create({ data: { id: `lu-${own.suffix}`, email: `lu-${own.suffix}@test.invalid`, passwordHash: "synthetic", role: "CUSTOMER" } });
+    await p.agentApplication.create({ data: { id: `la-${own.suffix}`, userId: `lu-${own.suffix}`, fullName: "Synthetic Referred", phoneE164: `+2544${own.suffix.replace(/\D/g, "").padEnd(8, "0").slice(0, 8)}`, status: "PENDING", agentStatus: "INACTIVE", privacyAcknowledgedAt: new Date() } });
+    await p.agentReferralAttribution.create({ data: { id: `late-${own.suffix}`, referrerApplicationId: own.app.id, referredApplicationId: `la-${own.suffix}`, linkId: link.id, consentedAt: new Date(base), source: "REGISTRATION", createdAt: new Date(base + 500_000) } });
+    expect((await readPage(1)).body.evidenceStatus).toBe("RECONCILIATION_REQUIRED");
+    await p.agentReferralAttribution.delete({ where: { id: `late-${own.suffix}` } });
+    expect((await readPage(1)).body.evidenceStatus).toBe("MATCHED");
+
+    // A changed source on captured evidence.
+    await p.agentReferralAttribution.update({ where: { id: first }, data: { source: "EXISTING_ACCOUNT" } });
+    expect((await readPage(1)).body.evidenceStatus).toBe("RECONCILIATION_REQUIRED");
+    await p.agentReferralAttribution.update({ where: { id: first }, data: { source: "REGISTRATION" } });
+    expect((await readPage(1)).body.evidenceStatus).toBe("MATCHED");
+
+    // Captured evidence removed, then restored.
+    const row = await p.agentReferralAttribution.findUnique({ where: { id: first } });
+    await p.agentReferralAttribution.delete({ where: { id: first } });
+    expect((await readPage(1)).body.evidenceStatus).toBe("RECONCILIATION_REQUIRED");
+    await p.agentReferralAttribution.create({ data: row });
+    expect((await readPage(1)).body.evidenceStatus).toBe("MATCHED");
   }, 120_000);
 
   it("the write fence seals a revision: members cannot be added outside its creating transaction", async () => {
