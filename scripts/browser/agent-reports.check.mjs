@@ -102,7 +102,8 @@ async function makeAgent(label, status, agentStatus, snapshotCount, periodPrefix
     await prisma.agentReferralReportSnapshot.createMany({
       data: Array.from({ length: snapshotCount }, (_, i) => ({
         applicationId: app.id,
-        periodKey: `${periodPrefix}:${new Date(base0 + i * DAY).toISOString().slice(0, 10)}`,
+        // Must match AgentReferralReportSnapshot_period_check: daily:YYYY-MM-DD or monthly:YYYY-MM.
+        periodKey: periodPrefix === "daily" ? `daily:${new Date(base0 + i * DAY).toISOString().slice(0, 10)}` : `monthly:2019-${String(i + 1).padStart(2, "0")}`,
         periodType: periodPrefix === "daily" ? "DAILY" : "MONTHLY",
         startInclusive: new Date(base0 + i * DAY),
         endExclusive: new Date(base0 + (i + 1) * DAY),

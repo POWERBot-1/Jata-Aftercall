@@ -10,7 +10,8 @@ export type ReportCursor = { endExclusive: Date; periodKey: string };
 
 const MAX_CURSOR_LENGTH = 256;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
-const PERIOD_KEY = /^(daily|monthly):\d{4}-\d{2}(-\d{2})?$/;
+// Mirrors AgentReferralReportSnapshot_period_check exactly: daily:YYYY-MM-DD or monthly:YYYY-MM.
+const PERIOD_KEY = /^(daily:\d{4}-\d{2}-\d{2}|monthly:\d{4}-\d{2})$/;
 
 export function encodeReportCursor(cursor: ReportCursor): string {
   return Buffer.from(

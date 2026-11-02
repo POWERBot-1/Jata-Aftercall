@@ -33,5 +33,8 @@ describe("agent referral report cursor", () => {
     expect(decodeReportCursor(make("2026-01-01T21:00:00.000Z", "../../etc"))).toEqual({ ok: false });
     expect(decodeReportCursor(make("2026-01-01T21:00:00.000Z", "weekly:2026-01"))).toEqual({ ok: false });
     expect(decodeReportCursor(make(42, "daily:2026-01-01"))).toEqual({ ok: false });
+    // Same shape the schema check AgentReferralReportSnapshot_period_check enforces: monthly keys have no day.
+    expect(decodeReportCursor(make("2026-01-01T21:00:00.000Z", "monthly:2026-01-01"))).toEqual({ ok: false });
+    expect(decodeReportCursor(make("2026-01-01T21:00:00.000Z", "monthly:2026-01"))).toEqual({ ok: true, cursor: { endExclusive: new Date("2026-01-01T21:00:00.000Z"), periodKey: "monthly:2026-01" } });
   });
 });
