@@ -1,0 +1,62 @@
+[
+  {
+    "reducedMotion": false,
+    "before": {
+      "labelTransition": "0.16s, 0.16s",
+      "labelBorder": "rgb(146, 154, 166)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "during": {
+      "labelTransition": "0.16s, 0.16s",
+      "labelBorder": "rgb(171, 224, 83)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "busy": {
+      "labelTransition": "0.16s, 0.16s",
+      "labelBorder": "rgb(182, 255, 46)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "done": {
+      "labelTransition": "0.16s, 0.16s",
+      "labelBorder": "rgb(182, 255, 46)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "statusText": [
+      "Set up (simulated) — FICTIONAL FIXTURE. Nothing was created."
+    ]
+  },
+  {
+    "reducedMotion": true,
+    "before": {
+      "labelTransition": "0s",
+      "labelBorder": "rgb(146, 154, 166)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "during": {
+      "labelTransition": "0s",
+      "labelBorder": "rgb(182, 255, 46)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "busy": {
+      "labelTransition": "0s",
+      "labelBorder": "rgb(182, 255, 46)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "done": {
+      "labelTransition": "0s",
+      "labelBorder": "rgb(182, 255, 46)",
+      "animating": [],
+      "animatingCount": 0
+    },
+    "statusText": [
+      "Set up (simulated) — FICTIONAL FIXTURE. Nothing was created."
+    ]
+  }
+]

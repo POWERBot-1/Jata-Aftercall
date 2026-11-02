@@ -5,6 +5,7 @@ import { isSameOriginRequest } from "@/lib/agent-application";
 import { readSmallJson } from "@/lib/agent-registration";
 import { rateLimitByIdentity } from "@/lib/rate-limit";
 import { previousDailyPeriod, previousMonthlyPeriod } from "@/lib/agents/report-periods";
+import { decodeReportCursor, encodeReportCursor } from "@/lib/agents/referral-report-cursor";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -21,20 +22,36 @@ async function activeApplication(tx: typeof prisma, userId: string): Promise<str
   return rows.length === 1 ? rows[0].id : null;
 }
 
-/** The most recent 100 persisted snapshots for this active agent only. */
-export async function GET() {
+/**
+ * Pages of at most 100 persisted snapshots for this active agent only, newest first.
+ * Pass the returned `nextCursor` back as `?cursor=` to read the next page. The cursor is a keyset
+ * position inside this agent's own rows; it never selects an application or tenant.
+ */
+export async function GET(req?: Request) {
   const session = await getSession();
   if (!session) return message("Sign in required.", 401);
   if (process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED !== "true") return unavailable();
   if (!rateLimitByIdentity(session.userId, { key: "agent-referral-report-read", max: 30, windowMs: 60_000 }).allowed) return message("Rate limit exceeded.", 429);
+  const cursorParam = req ? new URL(req.url).searchParams.get("cursor") : null;
+  const decoded = decodeReportCursor(cursorParam);
+  if (!decoded.ok) return message("Invalid request.", 400);
+  const after = decoded.cursor;
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const applicationId = await activeApplication(tx, session.userId);
       if (!applicationId) return null;
-      return tx.agentReferralReportSnapshot.findMany({ where: { applicationId }, orderBy: [{ endExclusive: "desc" }, { periodKey: "desc" }], take: 101 });
+      // Keyset on (endExclusive, periodKey), which is unique per agent, so no row is skipped or repeated.
+      const where = after
+        ? { applicationId, OR: [{ endExclusive: { lt: after.endExclusive } }, { endExclusive: after.endExclusive, periodKey: { lt: after.periodKey } }] }
+        : { applicationId };
+      return tx.agentReferralReportSnapshot.findMany({ where, orderBy: [{ endExclusive: "desc" }, { periodKey: "desc" }], take: 101 });
     });
     if (!result) return message("An active agent account is required.", 403);
-    return NextResponse.json({ ...labels, items: result.slice(0, 100).map(serialize), truncated: result.length > 100 }, { headers });
+    const page = result.slice(0, 100);
+    const truncated = result.length > 100;
+    const last = page[page.length - 1];
+    const nextCursor = truncated && last ? encodeReportCursor({ endExclusive: last.endExclusive, periodKey: last.periodKey }) : null;
+    return NextResponse.json({ ...labels, items: page.map(serialize), truncated, nextCursor }, { headers });
   } catch { return unavailable(); }
 }
 

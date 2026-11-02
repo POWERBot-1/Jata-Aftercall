@@ -49,3 +49,817 @@ No motion-specific real-browser evidence in E1 demonstrates the JATA dashboard/s
 ## Result
 
 The current runs establish reproducible **bounded technical observations**: family renderer mode and probe after API-mediated generation/publish, selected route modes, owner-Lite/OS-reduced rendering, preference changes, and cancellation of active reveals. They do not establish universal motion acceptance. Preserve the current readiness statuses in `docs/agents/PROGRAMME_READINESS.json`; do not promote any `MOTION-001–018` row from this ledger alone.
+
+## 2026-11-01 — Fintech workspace motion pass (implementation SHA `0a2bd8b9160021bb8bb811fcbfc1e1d53c6e9ddb`)
+
+Baseline: `main` `19f11d9ecd8daad1db2aaf35cc1166425f871acc`. No `MOTION-001–018` row is promoted by this section.
+
+**Changed (presentation only):** workspace route transitions (`app/dashboard/template.tsx`, POS template), skeleton loading on navigation (`loading.tsx`), active-nav indicator and press feedback (`.ws-rail`, `.pos-nav-link`), overview section and hero-stat stagger, POS cart line entry and a one-shot pulse on the line total, and a live, keyed payment state block in `OrderStatusPanel` (waiting → verified). No money value is animated, counted or replaced mid-animation. `prefers-reduced-motion` disables all new rules, and the global reduced-motion block is still last in `globals.css`.
+
+**Evidence (stored in-repo):** `docs/agents/evidence/fintech-motion-2026-11-01/` — before (`main`) and after (this SHA) screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 of `/dev/workspace-preview` (synthetic fixtures), a reduced-motion 390×844 capture, `report.json` (computed animation names, page errors, horizontal-overflow check) and `capture.mjs`. Result: all six viewports load with 200 status, no page errors, no horizontal overflow; computed styles show the stagger only on the after build and `none` under reduced motion.
+
+| Route / surface | Verdict | Notes |
+|---|---|---|
+| `/dev/workspace-preview` overview (dev harness of real `DashboardClient`, nav, hero) | PASS (computed styles + screenshots at 6 viewports) | Visual change is modest; staggered entrance was NOT captured in frames (page settled before the first frame). Visually reviewed: 320px nav wraps without clipping. |
+| `/dev/workspace-preview` reduced motion (390×844) | PASS (computed styles) | All stagger animations `none`, content opacity 1. |
+| `/dashboard` route transition and loading skeleton | NOT TESTED | Requires a signed-in account and a database; the sandbox cannot run Prisma queries (query engine download blocked). |
+| `/dashboard/pos/[id]/sell` (till cart, quantity pulse) | NOT TESTED / BLOCKED | Requires authenticated POS fixture + DB. Change is code-level only. |
+| `/dashboard/pos/[id]` POS dashboard, sales, reports, payments | NOT TESTED / BLOCKED | Requires DB. |
+| Storefront order confirmation (`OrderStatusPanel`, waiting → paid) | NOT TESTED / BLOCKED | Requires a real order and Paystack state; no payment executed. |
+| `/dashboard/studio`, `/dashboard/ai`, `/dashboard/autopilot`, `/dashboard/subscription`, onboarding | NOT TESTED | Not changed in this pass; Studio editor, AI Front Desk, Autopilot controls, subscription activation progress and modal/dropdown transitions were NOT implemented. |
+| `/control` | Out of scope | Unchanged; all-DENY policy untouched. |
+| Keyboard/focus, screen reader, Lite preference | NOT TESTED | No keyboard journey run; `prefers-reduced-motion` tested only on the dev harness. Lite/None preference is not a workspace setting and was not exercised. |
+
+**Remaining blockers:** a Postgres-backed local environment (Prisma query engine download from `binaries.prisma.sh` is blocked in this sandbox), which blocks authenticated before/after captures of the real dashboard, POS, checkout and Studio; the Studio editor, AI workspace, Autopilot, subscription activation and onboarding motion work; and recorded interaction traces (only computed-style and frame evidence were captured).
+
+## 2026-11-01 — PR #79 continuation status (head `9eb6b940eeb86c3017260decdf2e8bfa0a8ef841`)
+
+**Overall verdict: FAIL against the full brief.** The branch contains the partial motion pass above and two regression fixes. It is not a completed fintech motion UI.
+
+**Regression fixes since `0a2bd8b`:** `app/dashboard/loading.tsx` had been overwritten and is restored to `main`; the `jata-line-in` keyframe no longer contains a hex fallback. Full no-database vitest run on this head: 340 files passed, 3,982 tests passed, 303 skipped. Earlier PR CI failures in "Unit suite" were these two tests.
+
+**CI on `1726529` (pre-fix):** "Admin instruction integrity" already fails on `main` `19f11d9` (not caused by this PR). Other failures (full-suite, POS/ERP verify, release gate, schema reconciliation, Postgres checks) were in progress or failing; logs could not be downloaded from this sandbox. Re-run CI on `9eb6b94` before relying on it.
+
+| Requirement | Verdict | Evidence / blocker |
+|---|---|---|
+| Workspace/section transitions | PASS (code) / NOT TESTED (visual) | Template wrappers exist; navigation was never exercised in a browser |
+| Dashboard card entrances, chart reveal | PARTIAL / NOT TESTED | Overview stagger on dev harness only; chart and authenticated dashboard not captured |
+| Navigation selection, mobile nav | PARTIAL / NOT TESTED | Active indicator and press CSS; no interaction recording |
+| Buttons, tabs, menus, forms | NOT TESTED | Not changed beyond existing button press styles |
+| Loading skeletons, async content | NOT TESTED | Existing dashboard skeleton preserved; no navigation capture |
+| Empty / success / pending / failure / error states | FAIL | Only the order status block changed; no captured state transitions |
+| POS cart add / remove / qty / discount / checkout | NOT TESTED / BLOCKED | Quantity-total pulse only; needs authenticated POS + DB |
+| Sales history, reports, refunds | NOT TESTED / BLOCKED | Not changed; needs DB |
+| Payment verification and subscription activation | NOT TESTED / BLOCKED | Order status keyed state only; no provider-to-entitlement run (no payments executed) |
+| Website Studio dashboard and editor | FAIL (not implemented) | Not changed |
+| AI Business Front Desk workspace | FAIL (not implemented) | Not changed; authenticated route needs DB |
+| JATA Autopilot workspace and approvals | FAIL (not implemented) | Not changed; needs DB |
+| Registration, login, onboarding | NOT TESTED | Not changed |
+| Drawers, dropdowns, dialogs, confirmations | FAIL (not implemented) | Not changed |
+| Reduced motion | PASS (dev harness computed styles) | 390×844 reduced-motion capture; not verified on authenticated routes |
+| Keyboard / focus / screen reader | NOT TESTED | No keyboard journey executed |
+| Six-viewport responsive | PARTIAL | Dev harness captures at six viewports, no horizontal overflow, 320px nav wraps; authenticated routes NOT TESTED |
+| Financial accuracy (no animated amounts, server-authoritative states) | PASS (code review) | No count-up or interpolated money values added; no payments executed |
+| Control access policy | PASS (unchanged) | No `/control` changes |
+
+**Blockers:** (1) Prisma query-engine download from `binaries.prisma.sh` is blocked in this sandbox, so no authenticated Postgres-backed route can run here. (2) GitHub Actions log and artifact downloads are blocked, so CI screenshots and recordings cannot be inspected here. Resolve by either allowing the Prisma engine host (or supplying a pre-downloaded engine) for a disposable local database, or by approving a CI-based evidence run with artifacts that can be reviewed. (3) Remaining surfaces (Studio, AI, Autopilot, subscription, onboarding, drawers/dialogs) require implementation work, which was not completed in this pass.
+
+## 2026-11-01 — Environment re-check after owner approval
+
+Owner approved allowing `binaries.prisma.sh` for the isolated sandbox. The sandbox egress allowlist (enforced outside the repository) still blocks that host (HTTP 000 on the Prisma engine URL for client version 5.22.0). Its npm mirror offers `@prisma/query-engine-wasm` (6.20.x), which does not match the 5.22 client and would require changing the client adapter architecture, so it was not used.
+
+Status unchanged: authenticated, database-backed routes (dashboard, POS, checkout, Studio, AI Front Desk, Autopilot, subscription, onboarding) are **BLOCKED** for browser evidence. Mandatory fixes needed from the owner or sandbox operator: allow `binaries.prisma.sh` egress in the sandbox network policy, or place a matching `libquery_engine-debian-openssl-3.0.x.so.node` (Prisma 5.22.0) in the sandbox workspace. Either change does not touch production.
+
+No additional motion surfaces were implemented in this pass because they could not be verified against authenticated routes. Phase 1 audit: `docs/agents/FINTECH_MOTION_PHASE1_AUDIT_2026-11-01.md`.
+
+## 2026-11-01 — Public auth routes: form-field motion (no database required)
+
+**Change:** shared `.jata-input` focus/hover border transition and `.jata-error` ease-in on mount (colour and opacity only; resting size unchanged). Reduced motion disables both. Global reduced-motion block remains last in `app/globals.css`.
+
+**Evidence:** `docs/agents/evidence/fintech-motion-2026-11-01/auth/` — `before/` (`main` 19f11d9) and `after/` (this branch) screenshots of `/login`, `/login` focus state, `/register`, `/register` after submit, and `/pricing` at all six viewports; `report.json`; `auth-capture.mjs`.
+
+| Route | Scenario | 320×568 | 360×800 | 390×844 | 430×932 | 768×1024 | 1366×768 |
+|---|---|---|---|---|---|---|---|
+| `/login` | settled and focused email field | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| `/register` | submit with fictional valid fields → real server failure (no DB) → inline error | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| `/pricing` | settled | PASS (visual) | PASS | PASS | PASS | PASS | PASS |
+| all three | horizontal overflow | none detected | none | none | none | none | none |
+
+- Failure message is the real server response (`We couldn't create your account. Please try again.`) produced without a database; it is not a success state and no account was created.
+- Observed existing behaviour, unchanged: the register page shows the failure message in two places (general and field-level). Not altered in this change.
+- Reduced motion (390×844, `prefers-reduced-motion: reduce`): the error element's computed animation is `none`. PASS (computed style + screenshot).
+- Keyboard: focus moves to the email field via `focus()`; a visible focus ring is shown (screenshot). Full Tab-order journey: NOT TESTED.
+- Financial integrity: N/A on these routes (no payment initiated; pricing values are static configuration, not changed).
+- Dashboard, POS, checkout, Studio, AI, Autopilot and onboarding: still BLOCKED (authenticated, database-backed; Prisma engine unavailable).
+
+Commit under test: this entry's implementation commit (see PR #79 head).
+
+## 2026-11-01 — Merchant dashboard: default and empty state (dev harness of the real DashboardClient)
+
+**Scope honesty:** `/dev/workspace-preview` is a development-only route (404 in production) that renders the real `DashboardClient` with synthetic fixtures. This is presentation evidence, not authenticated integration evidence. Real `/dashboard` requires a signed-in account and the database, which is BLOCKED.
+
+**Change in this pass:** dev-only `?state=empty` switch on the preview (passes an empty business list into the real component so its empty branch renders). `before/` was generated from `main` with the same switch applied to the baseline copy in a scratch directory, so the comparison isolates the product change.
+
+**Evidence:** `docs/agents/evidence/fintech-motion-2026-11-01/dashboard/` — `before/` and `after/` screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768 for `default`, `empty` and `keyboard-focus` (after three Tab presses); `report.json`; `dash-capture.mjs`; `after/reduced-motion-390x844.png`.
+
+| Surface | Scenario | Six viewports | Verdict |
+|---|---|---|---|
+| Dashboard overview (dev harness) | settled default state | no page errors, no horizontal overflow | PASS (visual, fixture data) |
+| Dashboard overview (dev harness) | empty state (no businesses) | renders the real empty branch, no overflow | PASS (visual, fixture data) |
+| Dashboard overview | keyboard | Tab ×3 reaches "Home" in the chrome; rail focus not reached in three presses | NOT TESTED (full Tab-order journey not done) |
+| Dashboard overview | reduced motion (390×844) | all entrance animations computed as `none` | PASS (computed style + screenshot) |
+| Dashboard overview | loading state (route-level skeleton) | not exercised by this harness | NOT TESTED |
+| Dashboard overview | real signed-in data, financial values | requires database | BLOCKED |
+
+- No financial values were changed or animated. Fixture figures are labelled synthetic on the page.
+- Dev overlay "1 Issue" badge is Next.js development tooling, not part of the product.
+- Priorities 2–6 (POS, Studio, AI Front Desk, Autopilot, subscription/onboarding) were not implemented in this pass. See the section above for their status.
+
+## POS fixture harness evidence — commit `1be3580`
+
+Scope: development-only `/dev/pos-fixture` (returns 404 when `NODE_ENV=production`). It renders the real `TillClient` with fictional catalogue, customer and methods. Completion is routed to an in-memory simulator (`?outcome=success|pending|failure`). The simulator performs no I/O and writes nothing. No database, payment provider, or real `/api/pos` call is involved.
+
+Code changes in this commit:
+- `TillClient` accepts an optional `submitSaleRequest` transport. The production sell page does not pass it, so production still posts to `/api/pos/{businessId}/sales`.
+- Quantity input is whole-unit only. An empty entry is ignored, so clearing the box no longer removes the line. Decimals are floored. Quantities at or below zero still remove the line.
+
+Verification:
+- `tests/unit/pos-fixture-harness.test.ts`: 21 tests pass. They cover arithmetic, simulator envelopes, no-network, fixture isolation, production exclusion, transport default, and jsdom cart interactions (add, ±, zero-removal, empty input, decimals, multi-item totals, checkout gating, simulated success, simulated failure).
+- Full no-DB vitest: 341 files and 4,003 tests pass, 0 failures. `tsc --noEmit` exit 0.
+- Browser (`docs/agents/evidence/fintech-motion-2026-11-01/pos/`, capture script `pos-capture.mjs`, report `report.json`): six viewports, 0 page errors, 0 calls to `/api/pos`, no horizontal overflow. Failure outcome checked at 390×844. Reduced motion gives `jata-value-bump` = `none`.
+- Opened and inspected `after/02-cart-ready-390x844.png`, `after/03-success-390x844.png`, and `after/02-cart-ready-320x568.png`. Totals read KES 640 for 2 × KES 320. Success is labelled simulated and says "Not a real sale". No overflow.
+
+Matrix status for this commit:
+| Route / area | Status | Note |
+|---|---|---|
+| POS till cart (fixture) | PASS (fixture only) | Real TillClient. Quantity guard covered by tests. |
+| POS cart motion | PARTIAL | Existing keyed value bump only. No new cart enter/exit transition. Not recorded as a trace. |
+| POS success/failure states (fixture) | PASS (fixture only) | Simulated, labelled. |
+| Real POS sale, checkout, payment verification, refunds | BLOCKED | Requires Prisma engine (`binaries.prisma.sh` unreachable). |
+| Dashboard with real signed-in data | BLOCKED | Same database blocker. |
+| Studio, AI Front Desk, Autopilot, subscription | NOT TESTED / FAIL | Not implemented in this commit. |
+
+Financial correctness (fixture): all money values are server-shaped integer KES. No amount is animated. No payment success is fabricated outside the labelled simulator.
+
+## POS 14-state matrix and motion — commit `c30713b`
+
+Route: `/dev/pos-fixture` (development-only; 404 in production). Component: real `TillClient` via `PosFixtureTill`. Fictional fixtures and simulator only.
+
+Changes in `c30713b`:
+- Total line re-pulses when the server-shaped total changes (`jata-value-bump`). Digits are not interpolated.
+- Result panel re-enters keyed by outcome (`jata-state-enter`).
+- Pending result heading reads "Payment pending confirmation" instead of "Sale recorded". The change is keyed on `sale.status === "PENDING_CONFIRMATION"`. No such status is produced anywhere in the repo's sales API, so production output is unchanged.
+- Product tiles give press feedback (`scale(0.98)`). Reduced motion disables it.
+- Fixture receipts for pending and failure now state "Not a real sale".
+
+Test commands:
+- `npx vitest run tests/unit/pos-fixture-harness.test.ts`: 22 pass.
+- `npx vitest run`: 341 files and 4,004 tests pass, 0 failures.
+- `npx tsc --noEmit`: exit 0.
+
+Browser evidence (`docs/agents/evidence/fintech-motion-2026-11-01/pos/matrix/`, capture script `pos-matrix.mjs`, `matrix.json`):
+- Six viewports: 320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768. Each has 14 states: empty, single, multiple, quantity increase, quantity decrease, item removed, empty quantity input, invalid decimal, zero quantity, multi-item total, checkout-ready, success, pending, failure.
+- 84 full-page PNGs in `after/`. Contact sheets for each viewport are in `sheets/`.
+- All 84 screenshots were inspected. Six contact sheets were opened. Full-size views were opened for 390×844 (cart-ready, success), 320×568 (cart-ready) and 1366×768 (checkout-ready).
+- Numeric checks from `matrix.json`: 320+30=350; quantity increase to 670; decrease to 350; decimal 2.7 becomes 2 (KES 640); empty input keeps quantity 1; zero removes the line (KES 0); multi total 410; checkout enabled.
+- Zero page errors. Zero requests to `/api/pos`. No horizontal overflow.
+
+Motion runtime (`pos-motion.mjs`, `motion.json`, 390×844):
+- Line entry `jata-line-in`. Quantity bump `jata-value-bump`. Total bump `jata-value-bump`. Result `jata-state-in`. Tile transition `transform, border-color`.
+- Reduced motion: all of the above are `none`, and tile transition is `none`.
+
+Results for this commit:
+| Area | Result | Note |
+|---|---|---|
+| POS 14 states at six viewports | PASS (fixture) | Inspected; no visual defects found |
+| POS cart entrance | PASS (fixture) | Runtime `jata-line-in` |
+| POS cart removal exit | NOT IMPLEMENTED | Removal is immediate; no exit animation |
+| POS quantity and total feedback | PASS (fixture) | Runtime bump; reduced motion none |
+| POS pending/success/failure transitions | PASS (fixture) | Labels distinct; receipts say "Not a real sale" |
+| Owner-Lite preference on POS | NOT TESTED | POS rules are gated by reduced motion only, not by the Lite setting |
+| Real POS sale, checkout, payment verification | BLOCKED | Prisma engine unavailable |
+| Full POS keyboard journey | NOT TESTED | |
+| Motion recordings (video/trace) | NOT CAPTURED | Playwright video not attempted; runtime computed styles and screenshots only |
+
+Financial correctness (fixture): totals are server-shaped integers in KES. No amount is animated to a different value. No payment is executed.
+
+## POS remaining gaps and dashboard states — commit `84e71f3`
+
+**POS (`/dev/pos-fixture`, real `TillClient`, fictional fixtures; 404 in production)**
+
+Changes:
+- Removed cart line: a visual-only exit ghost (`ExitingLine`, `.pos-line-leaving`, 200 ms). It shows the product name only, carries no money value, is `aria-hidden`, and is created only when motion is allowed. The cart state already has no such line.
+- Owner-Lite: `motionPreference="lite"` sets `data-pos-motion="lite"` on the till and result panel. CSS disables animation and transition, and no exit ghost is created. Production omits the prop, so the default stays `auto`. Fixture: `?motion=lite`.
+- Reduced motion: the exit ghost is not created, and all POS animations compute to `none`.
+- Financial logic unchanged. The ghost is presentation only.
+
+Tests (`npx vitest run tests/unit/pos-fixture-harness.test.ts`): 27 pass in that file. Full suite: 341 files / 4,009 tests pass, 0 failures. `tsc --noEmit`: exit 0. ESLint: 0 errors.
+
+Evidence (`docs/agents/evidence/fintech-motion-2026-11-01/pos/keyboard/`, script `pos-keyboard.mjs`, `report.json`):
+- Keyboard journey at 390×844, default motion: Tab to product tile, Enter adds (KES 320), Tab to + and Enter (qty 2, KES 640), Tab to Cash and Enter, Tab to "Complete sale · KES 640" (enabled). Then Tab to −, Enter (qty 1, KES 320), Enter again (qty 0, KES 0). The exit ghost appears with `aria-hidden="true"` and is gone after 400 ms.
+- Focus visibility: all POS interactive stops have a computed outline (`solid 2–3px`). Screenshots `k1-qty-focus-390x844.png` and `k2-checkout-ready-focus-390x844.png` were opened. The k2 frame shows the focus ring on the enabled Complete button with the correct total.
+- Trace: `pos-keyboard-trace-390x844.zip` (Playwright trace with screenshots and snapshots, open with `npx playwright show-trace`).
+- Owner-Lite (`?motion=lite`): `data-pos-motion="lite"`, 0 non-none animations on the till, 0 exit ghosts after removal.
+- Reduced motion: line animation `none`, 0 ghosts, total KES 0 after removal.
+
+Earlier 14-state matrix (`pos/matrix/`) was captured at `c30713b`. The `84e71f3` change affects only removal timing and adds no layout change, so the matrix still applies to the state set. It was not re-captured.
+
+**Dashboard (`/dev/workspace-preview`, synthetic data, fixture only)**
+
+Changes: `?state=loading` renders the real `app/dashboard/loading.tsx`. `?state=error` renders the real `app/dashboard/error.tsx` through a client wrapper (`components/dev/DashboardStateFixture.tsx`). Default and `?state=empty` are unchanged.
+
+Evidence (`docs/agents/evidence/fintech-motion-2026-11-01/dashboard/states/`, script `dash-states.mjs`, `report.json`, sheets `sheets/*.jpg`):
+- Four states at six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768), 24 captures. 0 page errors. 0 horizontal overflow in every capture.
+- Loading: `aria-busy="true"` and a status region reading "Loading your businesses".
+- Error: "Your dashboard did not load", with retry and back links. Nothing is claimed as saved.
+- Keyboard Tab journey (populated, first 45 stops, 39 unique): 11 nav-like stops at every viewport. Every stop has a computed outline.
+- Reduced motion (390×844): no element has an active animation.
+- Opened and inspected the 390×844 and 1366×768 sheets. All four states render. The populated and empty states use the fictional synthetic banner.
+
+**Status for `84e71f3`**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| POS till (`TillClient` fixture) | 14 states, six viewports | PASS (fixture) | Matrix captured at `c30713b` |
+| POS cart removal exit | Pointer and keyboard | PASS (fixture) | Presentation only |
+| POS owner-Lite | `?motion=lite` | PASS (fixture) | Static till, no ghost |
+| POS keyboard journey and focus | 390×844 | PASS (fixture) | Trace captured |
+| POS reduced motion | 390×844 | PASS (fixture) | All animations `none` |
+| POS real sale, checkout, payment verification | Database-backed | BLOCKED | Prisma 5.22 engine unavailable |
+| Dashboard states (default, empty, loading, error) | Six viewports | PASS (fixture) | Synthetic data |
+| Dashboard keyboard Tab order and focus | Six viewports | PASS (fixture) | 11 nav-like stops, all outlined |
+| Dashboard real signed-in data | Authenticated | BLOCKED | Requires database |
+| Website Studio, AI Front Desk, Autopilot, subscription | — | NOT STARTED | Not implemented in this pass |
+
+Financial correctness (fixture): no money value is animated. Totals are server-shaped integers in KES. No payment or sale is executed.
+
+## Website Studio fixture and Studio motion — code `59c4416`
+
+Scope: Website Studio index, canvas/editor, image picker, publish panel and category set-up. Development fixture only (`/dev/studio-fixture`, `/dev/studio-fixture/site`; both `notFound()` in production). Fictional data, simulated writes and simulated outcomes. No business is read or written, no image is uploaded, no website is published, no payment is executed.
+
+**Code changes**
+- `components/studio/StudioIndexView.tsx`: presentation extracted from `app/dashboard/studio/page.tsx`. The page keeps its Prisma and session loading. Refactor only.
+- `StudioCanvas` (`submitWrite`, `previewSrcFor`), `PublishPanel` (`submitPublish`, indeterminate progress bar), `CreateExperienceForm` (`submitCreate`): optional transports. Production defaults are unchanged, including `router.refresh()` on success.
+- `CategoryImagePicker` `simulated` prop: notice reads "Simulated in this fixture — nothing was saved.", and the chip reads "Simulated — not saved" instead of "Image saved".
+- `app/globals.css`: `.jata-publish-progress`, `.jc-frame__iframe` entrance, status/alert entrance, category label transition, iframe focus ring. All disabled under reduced motion. Focus uses the existing `--jata-focus` token.
+- Tests: `tests/unit/studio-fixture-harness.test.ts` (12 tests: parsing, simulated responses, production 404 for both pages, no DB/auth/storage/payments/server-action imports, no `fetch` in the fixture client, real components used). `tests/unit/workspace-design.test.ts` now reads `StudioIndexView` for the moved Studio assertions. Assertions unchanged.
+
+**Evidence** (`docs/agents/evidence/fintech-motion-2026-11-01/studio/`)
+- `report.json`: 134 entries across six viewports (320×568, 360×800, 390×844, 430×932, 768×1024, 1366×768). Each entry carries the file name, overflow flag and page-error count.
+- Committed PNGs: the 390×844 and 1366×768 sets (38 full-page captures) plus the iframe-focus screenshot is kept in the sandbox only. The other four viewports were captured in the sandbox and are not committed (size). They can be regenerated with `scripts/studio-capture.mjs`.
+- `extra.json`: reduced-motion and focus checks. `scripts/`: capture and check scripts.
+- Opened and inspected: `03-editor-failure-result-390x844.png` ("Not saved — your last change is still on screen"; draft and live versions unchanged; Navigation row stayed in position after the failed move); `04-image-initial` and `04-image-after-use` at 390 (after the chip fix, "Simulated — not saved"); `05-publish-success-progress-390x844.png` ("Publishing…" with the progress bar); `05-publish-failure-result-390x844.png` ("FICTIONAL FIXTURE: simulated publish failure. The live site is unchanged.").
+
+**Checks (sandbox, six viewports)**
+- Page errors: 0 across all captures. Horizontal overflow: none.
+- Image upload control: absent at all six widths (0 matches for "Upload my photo" / "Change image"). The fixture passes no `businessId`.
+- Keyboard trace (editor, 390×844, 30 Tab stops): 26 stops have a computed outline. The 4 without are the preview iframe (focus moves into the storefront document) and the body. The iframe ring rule is in CSS, but I could not confirm it visually in headless Chromium: `:focus`, `:focus-visible` and `:focus-within` all reported false on the iframe while it was the active element. **Status: PARTIAL.**
+- Reduced motion (390×844): publish progress bar animation `none`. Editor iframe animation `none` (1366×768). Category label transition under reduced motion: NOT VERIFIED. The check ran on the editor page, which has no category radio, so it measured nothing.
+
+**Financial correctness**: Studio shows no money values, so no amounts are animated. The publish checklist shows "FICTIONAL FIXTURE: plan status is simulated." No plan or payment state is implied.
+
+**Observations**
+- The publish checklist icons (`✅`/`⚠️`) render as empty boxes in this headless sandbox, which has no emoji font. This is existing code, not changed here. Real browsers render them. Recorded so reviewers don't mistake it for a regression.
+- The "1 Issue" dev overlay remains visible in dev captures. It is not part of the app.
+
+**Matrix (Website Studio, this commit)**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| Studio index (`StudioIndexView`) | Six viewports, real components | PASS (fixture) | Presentation refactor; Prisma data path BLOCKED |
+| Studio editor: draft save in flight / saved / failed | Six viewports | PASS (fixture) | Status pill announced via live region; failure shows "Not saved"; no row moves on failure |
+| Studio editor: keyboard focus | 390×844 | PARTIAL | 26/30 stops outlined; iframe ring not confirmed visually |
+| Studio editor: preview iframe entrance | 1366×768, reduced and not | PASS (fixture) | `jata-state-in` normal; `none` reduced |
+| Category set-up: busy / success / failure | Six viewports | PASS (fixture) | Success message shown only when a transport is injected; production still refreshes |
+| Image picker: simulated use | Six viewports | PASS (fixture) | Labels say not saved; upload hidden |
+| Publish: progress / success / failure | Six viewports | PASS (fixture) | Labelled simulated; progress bar `none` under reduced motion |
+| Storefront preview (`/dev/studio-fixture/site`) | Six viewports | PASS (fixture) | Fictional content only; no real site |
+| Real customer Studio data, authenticated editor | Database-backed | BLOCKED | Prisma 5.22 engine unavailable |
+| Real publish / real storefront generation | Production | NOT TESTED | Not authorised; not run |
+| AI Front Desk, Autopilot, subscription, checkout | — | NOT STARTED | Not implemented in this pass |
+
+**Unit suite** (`npx vitest run`, no database, sandbox): 342 files passed, 36 skipped; 4,021 tests passed, 303 skipped; 0 failures. Exit code 1 from 67 unhandled `PrismaClientInitializationError` (no query engine, environment-only). `tsc --noEmit` exit 0. ESLint clean on the changed Studio files.
+
+## Phase 7 — Studio remediation and AI Business Front Desk fixture
+
+Code commits: `2846f93` (Studio focus, framing, AI fixture) and `6d69075` (checklist token colours, AI step bar and turn entrance, evidence). Evidence and this section are at `6d69075`. Development fixtures only. Production returns 404 for every fixture route. Fictional data, simulated responses, nothing saved, sent or published.
+
+**Studio remediation**
+- **Keyboard focus (preview iframe).** Three of the four missing outlines were the preview iframe and the body-escape stop. The iframe ring was not reliable as CSS alone. A Tab into the preview fires the frame window's focus, not the `<iframe>` element's, so the ring is now driven by the frame window's focus and blur (re-attached after each load). Measured at all six widths (`studio-focus/focus-matrix-summary.json`): the iframe stops show the ring on every stop. Focus enters the storefront at stop 12 (390 px) and leaves at stop 35 after 23 storefront stops. At 1366 px it enters at 52 and leaves at 75. No keyboard trap. The editor trace now has 30 of 30 stops outlined. Screenshot: `studio-focus/iframe-focus-390x844.png`. The ring was checked visually, not only in CSS.
+- **Preview blocked by framing headers (defect found and fixed).** The fixture preview was refused by `X-Frame-Options: DENY`, so the earlier captures had never shown the storefront. `next.config.js` now allows same-origin framing for `/dev/studio-fixture/:path*` only. `/b/:slug*` is unchanged. A unit test pins the framing rules to exactly those two sources.
+- **Reduced motion (category state).** Measured on the real category-selection state (`studio/reduced-motion-category.json`): label transition 0.16 s normal, 0 s reduced. No keyframe animation runs during selection or submit.
+- **Publish checklist icons.** Emoji replaced by lucide `CircleCheck` and `CircleAlert`, with `sr-only` labels "Done:" / "Needs attention:". Verified in `studio/05-publish-success-result-390x844.png`: green check icons render.
+- **Regression.** Six-viewport capture: 114 PNGs. Page errors 0. Overflow none. Upload control absent at all six widths. Checks at the baseline capture still hold.
+- **Programme-completeness.** Pre-existing. Exit 1 on `main` and on `HEAD` with identical output (`check-programme-readiness.mjs`). Not caused by this work.
+
+**AI Business Front Desk fixture** (`/dev/ai-front-desk-fixture`; `?outcome=success|empty|failure`)
+- Components reused: `AIFrontDeskWorkspace` (actual, 1,445 lines, unmodified except for the `simulated` prop and layout and motion edits below). Fixture wrapper: `components/ai/fixture/AIFrontDeskFixtureClient.tsx`.
+- Simulated transport: `lib/ai/fixtures/aiFrontDeskFixture.ts`. Answers only `/api/ai/{status,readiness,entitlement,chat,config,publish}` and `PATCH /api/business`. Any other `/api/*` request returns 404, and nothing leaves the browser. Status changes (LIVE/PAUSED) are always refused. Publish never publishes.
+- Workspace changes: `simulated` prop. Success notices read "FICTIONAL FIXTURE — simulated save. Nothing was saved." and "simulated publish. Nothing was published…". Production wording unchanged. Step bar: `min-w-[8.5rem]` per step so labels are no longer squeezed to single letters at 390 px. The step bar scrolls horizontally instead (defect found in screenshot, fixed). Test-chat turns get `jata-state-enter`.
+- Replies: every reply begins "SIMULATED FIXTURE REPLY — not from a live AI service." Grounded only in the fictional catalogue. Missing information is listed as "Missing on your side".
+- Entitlement: shown as VERIFIED / NOT_ENTITLED with a simulated-check reason. An UNAVAILABLE value displayed a billing-check failure, which was wrong, and was corrected.
+- Tests: `tests/unit/ai-front-desk-fixture.test.ts` (route exclusion, fail-closed transport, labelling, isolation from DB/auth/providers, wording guards).
+- Evidence: `ai-front-desk/` (390 and 1366 PNGs, `report.json`, scripts). Capture: 60 screenshots and a report across six viewports, three outcomes. Page errors 0. Overflow none. Zero API requests reached the network.
+- Keyboard (390×844, test-input path): 12 stops, all outlined (last stop is the body).
+- Reduced motion (390×844, loading state): no running animation; submit transition 0.12 s normal, 1e-5 s reduced.
+- Not done: AI conversation list and conversation detail states (the real workspace has no such list; the customer-facing `AIFrontDeskCustomerClient` is a separate component and is not covered). Configuration-toggle motion is only the existing workspace transitions.
+
+**Not started in this pass**
+- JATA Autopilot fixture: `components/autopilot/AutopilotCommandCenter.tsx` (1,201 lines) is identified and not built. No consent, approval, cap, quiet-hour or kill-switch behaviour was exercised.
+- Subscription and onboarding fixture: `CheckoutForm`, `OnboardingForm` and `RegisterForm` are identified and not built. No payment simulation was built or verified.
+
+**Database blocker (unchanged)**: Prisma 5.22.0 query engine unavailable. Authenticated and database-backed flows remain BLOCKED.
+
+**Matrix (Phase 7)**
+
+| Route / component | Scenario | Result | Notes |
+|---|---|---|---|
+| Studio editor: keyboard focus, preview iframe | Six viewports | PASS (fixture) | 30/30 editor stops outlined; iframe ring verified by screenshot |
+| Studio: preview framing | Fixture route | PASS (fixture) | Was DENY; fixed; test pins scope |
+| Studio: category reduced motion | 390×844 | PASS (fixture) | Transition 0.16 s → 0 s |
+| Studio: publish checklist icons | Normal and failure | PASS (fixture) | Icons render; sr labels |
+| Studio: regression, six viewports | 114 captures | PASS (fixture) | No errors, no overflow |
+| AI Front Desk: overview, test chat, reply, save, failure, empty | Six viewports | PASS (fixture) | Simulated, labelled |
+| AI Front Desk: keyboard and reduced motion | 390×844 | PASS (fixture) | Stops outlined; no running animation |
+| AI Front Desk: conversation list and detail | — | NOT TESTED | No list in the real workspace |
+| AI Front Desk: live AI, customer messaging | — | NOT TESTED | Not authorised |
+| Autopilot (all states) | — | NOT STARTED | Component identified |
+| Subscription, onboarding, checkout, payment | — | NOT STARTED | Components identified |
+| Authenticated and database-backed flows | — | BLOCKED | Prisma engine unavailable |
+
+**Final verification at `6d69075`**
+- `npx vitest run` (no DB): 343 files passed, 36 skipped; 4,035 tests passed, 303 skipped; 0 failures. Exit 1 only from 67 unhandled `PrismaClientInitializationError` (environment).
+- `tsc --noEmit`: exit 0. ESLint: clean on changed files.
+- CI on `6d69075`: see PR #79 checks. A pending check is not a pass.
+
+## Phase 7 — Registration and checkout fixture (code `d51350e`)
+
+Development-only fixture of the **real** `RegisterForm` and `CheckoutForm` with fictional data. Route: `/dev/subscription-fixture?outcome=success|failure|cancelled`; simulated result page `/dev/subscription-fixture/paystack-simulated`. Both return 404 in production. No payment, charge, subscription, entitlement, or account is created. The simulated checkout returns a same-origin fixture URL only.
+
+**Environment notes (this pass)**
+- `node_modules` restored with `npm ci` (lockfile). `next` 16.4.2 confirmed. `prisma generate` cannot download its engine (`binaries.prisma.sh` blocked), so Prisma-typed `tsc` errors remain in `tests/prisma/*` and `autopilot-phase1-hardening` (environment only).
+- The Next dev server **must be opened on `localhost`**. On `127.0.0.1` the HMR WebSocket fails and React never hydrates, so forms fall back to native submit. Captures use `localhost`.
+- Framing check on the live server: `/dev/studio-fixture/site` → `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`; `/dev/subscription-fixture`, `/pricing` → `DENY`.
+
+**Code changes**
+- `components/RegisterForm.tsx`: optional `onRegistered` hook. Production still calls `router.push("/dashboard")` (tested).
+- `components/CheckoutForm.tsx`: error alert uses the existing `jata-state-enter` class (reduced-motion safe). Checkout logic is unchanged; the amount still comes from the server.
+- `components/subscription/fixture/SubscriptionFixtureClient.tsx`, `lib/subscription/fixtures/subscriptionFixture.ts`, two pages under `app/dev/subscription-fixture/`.
+- `tests/unit/subscription-fixture-harness.test.ts`: 10 tests, passing (production 404, no provider host or secret, same-origin fixture URLs, fail-closed routes, KES 1,500 from fixture, failure creates no account or payment, simulated labels never claim activation).
+
+**Evidence** (`docs/agents/evidence/fintech-motion-2026-11-01/subscription/`)
+- Six viewports × nine states (register initial, register failure, register success simulated, checkout initial, checkout pending, checkout success simulated, checkout failure, checkout cancelled simulated). Totals: 0 page errors, 0 horizontal overflow, 0 external requests (`report.json`).
+- 390×844 and 1366×768 PNGs committed. Opened and inspected: `390x844-register-failure`, `390x844-checkout-failure`, `390x844-result-success-simulated`.
+- Keyboard (390×844): 36 tab stops, all with visible focus. Reduced motion: checkout alert runs `jata-state-in` normally (1 animation) and none under `prefers-reduced-motion` (0).
+
+**Findings**
+- Registration failure shows the server message twice (field error plus form alert) because `RegisterForm` assigns `err` to both the name and email fields. This is pre-existing production behaviour, not changed here.
+- Dev-only hydration warning on every page: the product-theme radio input has a style mismatch from the root layout. Not from this fixture; not fixed here.
+- Motion added to these forms is limited to the alert entrance. The forms are otherwise visually unchanged. This does **not** meet the checkout/payment motion acceptance criteria.
+
+**Status after this pass**
+| Surface | Result |
+|---|---|
+| Registration form: states, keyboard, reduced motion | PASS (fixture) |
+| Checkout: pending, simulated success/failure/cancel | PASS (fixture); motion is minimal |
+| Payment verified/refunded transitions, subscription activation, onboarding progress | NOT TESTED / NOT STARTED |
+| Plan selection (`/pricing`) inside the fixture | NOT TESTED |
+| JATA Autopilot fixture (`AutopilotCommandCenter.tsx`) | NOT STARTED |
+| Authenticated, database-backed flows | BLOCKED (Prisma engine) |
+
+## Phase 7 — Parent theme audit against `main` (base `19f11d9`, PR head `468e694`)
+
+**Verdict: parent theme NOT changed (verified for computed styles and public routes).**
+
+- Source diff `origin/main..HEAD`: `app/globals.css` only (+109 lines, 0 deletions). No changes to `app/layout.tsx`, `components/ProductThemeProvider.tsx`, `lib/productThemes.ts`, Tailwind/PostCSS config, fonts, or theme tokens.
+- Additive global rules that touch shared classes (motion or hover only, not tokens): `.jata-input` hover border tint, `.jata-error` entrance, `.ws-rail a` / `.pos-nav-link` transition and press scale, `.jata-metric-grid > *` stagger. These are reviewed as motion and hover feedback, not theme changes.
+- Browser comparison (`theme-compare-summary.json`, script `theme-compare.mjs`): 4 public routes (`/`, `/login`, `/register`, `/pricing`) × 2 appearances (`lime-spark`, `emerald-ink`) × 6 viewports = 48 pairs. **Computed style fingerprint: 0 differing elements in all 48 pairs.** Theme attribute matched in all pairs. 0 page errors and 0 console errors.
+- Pixel diffs: 46 pairs identical. Two pairs differed (`/` at 430×932 emerald-ink, 586,369 px; `/` at 768×1024 lime-spark, 926 px). Re-running main against main, and main against PR, shows the same pairs alternate between 0 and a difference. The homepage render is therefore **nondeterministic** and the difference is not attributable to the PR. Styles were identical in both cases.
+- The product has two appearances, not a light/dark mode. No dark-mode theme exists to test.
+- Dev-console hydration warning (`caret-color: transparent` on theme radios): not in source. Playwright's screenshot `caret: "hide"` option adds that style, so the warning is probably produced by capture tooling. **Not proven**; the captures here use `caret: "initial"`.
+
+**Status:** theme preservation PASS for computed styles and public routes. Authenticated routes (dashboard, POS, Studio, AI, Autopilot) NOT TESTED on this audit: they need the database. Homepage pixel stability: NOT VERIFIED (nondeterministic render, unresolved).
+
+## Phase 7 — Checkout and payment-state motion (code SHA 2232d95)
+
+**Verdict: checkout callback states PASS (fixture + real signed-out route). Authenticated, database-backed payment journeys BLOCKED. Autopilot NOT STARTED.**
+
+Source changes in this commit:
+- `components/checkout/PaymentCallbackClient.tsx` holds the real callback UI; `app/checkout/callback/page.tsx` re-exports it. Verification logic unchanged (`/api/paystack/verify`, server decides PAID plus subscription ACTIVE).
+- `lib/checkoutStatus.ts`: `REFUNDED` is its own terminal state (`refunded`, no polling, no retry). `FAILED` unchanged.
+- Motion: `jata-state-enter` state block; indeterminate `jata-publish-progress` bar only while verifying or re-checking. Reduced motion removes state animations (`jata-state-in` 1 normal / 0 reduced; bar sweep `none`).
+- Duplicate-submit: `CheckoutForm` and `RegisterForm` use a same-task `inFlight` ref lock plus `loading`, released in `finally`. Before fix, three synchronous activations sent 3 checkout and 3 register requests. After fix, 1 and 1.
+- Dev fixture `/dev/payment-callback-fixture` (404 in production; baseline `main` also returns 404 for it). Fictional outcomes only; fails closed on other `/api` calls; no real account or subscription created.
+
+Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/checkout-payment/`
+- Capture: `/tmp/cap/checkout.mjs` (exit 0), `report.json`, 16 callback PNGs (8 states × 390×844 and 1366×768, labelled `callback-*`, fixture) and 2 real-route PNGs (`real-callback-signed-out-{main,pr}-390x844.png`).
+- Callback rows: 48 (8 states × 6 widths), 0 page errors, 0 horizontal overflow.
+- Pending re-check: 2 calls at first pending, 3 calls after 6 s, confirmed view not shown.
+- Keyboard (390×844, callback failed): 12 stops, 3 non-focusable items reported.
+- Duplicate submit (synchronous triple-click): checkout failure 1 request; register 1 request.
+- Real route signed-out (`FIXTURE-REAL-ROUTE`): both `main` and PR render "Sign in to check this payment", 0 uncaught errors, two expected 401 responses from the unauthenticated verify call.
+- Opened and inspected at 390×844: `callback-paid`, `callback-processing`, `callback-refunded`, `real-callback-signed-out-pr`. Paid view says "Payment confirmed" only because the fixture supplies a verified response, and carries a simulated notice. Refunded view shows no success and no retry.
+
+Commands and exit codes (committed tree `2232d95`, dev servers stopped):
+- `npx tsc --noEmit`: exit 2. Three errors, all in Prisma-generated code (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). Environment BLOCKED (Prisma client not generated).
+- `npx vitest run` (no DB): exit 1. 344 files passed, 1 failed, 36 skipped. Tests 4060 passed, 1 failed, 303 skipped of 4364. The one failure is `autopilot-phase1-hardening` Priority 1 (`Prisma.dmmf` undefined; Prisma not generated). Environment BLOCKED.
+- Targeted: `checkout-payment-motion` 15/15; `pos-payment-confirmation` 12/12; `next-env-build-mode` 3/3 (passes on the clean tree).
+- `npx eslint` on changed files: exit 0, 0 errors, 1 warning (`PaymentCallbackClient.tsx` `set-state-in-effect`), pre-existing on `main`.
+
+Findings and open items:
+- Registration failure still shows the server message twice (field and form level). Pre-existing; not changed in this pass.
+- Dev-only hydration warning on the theme radio is pre-existing and not caused by this change.
+- Cancelled-outcome request count cannot be observed after navigation; verified by URL and on-screen state instead.
+- Authenticated payment journey (real `verify` with a DB-backed subscription, webhook, entitlement) BLOCKED: Prisma binaries cannot be generated in this sandbox.
+- Subscription/plan selection on `/pricing` inside the fixture, onboarding progress, and the Autopilot fixture are NOT STARTED in this pass.
+- CI status: GitHub Actions logs cannot be fetched from this sandbox; check with `gh pr checks 79`.
+
+**Status**
+| Criterion | Result |
+|---|---|
+| Callback states distinct (paid, processing, failed, refunded, cancelled, error, signin, activating) at 6 widths | PASS (fixture, 48 rows) |
+| No fake success: success only from server verification | PASS (code and fixture; source unchanged) |
+| Pending re-check, no confirmed view while pending | PASS (fixture) |
+| Duplicate submit prevented (checkout, register) | PASS (fixture, synchronous triple-click) |
+| Reduced motion honoured | PASS (fixture computed styles) |
+| Keyboard and visible focus on the callback | PASS (fixture, 12 stops; 3 non-focusable items noted) |
+| No horizontal overflow, no page errors | PASS (fixture) |
+| Real route signed-out behaviour matches `main` | PASS |
+| Authenticated real payment and subscription activation journey | BLOCKED (Prisma) |
+| Autopilot fixture | NOT STARTED |
+
+## Phase 7 — Autopilot fixture and safety verification (code SHA 378dd92)
+
+Scope: dev-only fixture around the real `AutopilotCommandCenter`. All data fictional (`fx-tenant-a`, `fx-tenant-b`). No message, payment, offer, FAQ, customer, consent or entitlement change; no automation executes. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/` (README there). Fixture evidence is labelled separately from real-database and production evidence.
+
+| Criterion | Result | Basis |
+|---|---|---|
+| Triple synchronous approve sends one PATCH | PASS (fixture) | main: 3 PATCH; branch: 1 PATCH (`fixture-baseline-main/report.json` vs `fixture-after/report.json`) |
+| Approve & Execute moves PROPOSED → EXECUTED with verified banner | PASS (fixture) | `report.json` approveSuccess |
+| Reject is final (approve after reject refused) | PASS (fixture, server 409 `INVALID_PROPOSAL_STATE`) | rejectIsFinal |
+| Paused tenant blocks execution | PASS (fixture, 409 `TENANT_AUTOPILOT_PAUSED`) | pauseServerEnforced |
+| Kill switch halts execution | PASS (fixture) — proposal stays PROPOSED. Finding: Approve controls remain enabled in the UI while the kill switch is active; the server refuses. | killSwitch |
+| STAFF is read-only | PASS (fixture, 403 `RBAC_FORBIDDEN`; approve disabled in UI) | staffReadOnly |
+| Tenant B cannot read or act on tenant A | PASS (fixture, 403 `TENANT_FORBIDDEN`; no tenant A data shown) | tenantB |
+| Customer consent recording | PASS (fixture) — fixture rows only | consentRecorded |
+| Keyboard reach and focus outline on Approve | PASS (computed 2px solid outline; visual focus ring NOT confirmed from screenshot) | keyboard |
+| Reduced motion suppresses banner entrance | PASS (normal `jata-state-in`, reduced `none`) | reducedMotion |
+| Six widths, 24 layout rows: no overflow, page errors, hydration warnings, small targets | PASS (fixture) | layout |
+| Unsimulated `/api/autopilot/*` fails closed | PASS (501) | failClosed |
+| Production returns 404 for fixture route and page | PASS (unit test `autopilot-fixture-safety`) | not a live production probe |
+| Policy, quiet hours, caps, payload validation | PASS (unit, 81/81 with existing suites) | `autopilot-safety-policy-matrix`, `autopilot-fixture-safety` |
+| DB-backed daily spend reservation, customer lookup, row-level tenant filters, concurrency | BLOCKED (Prisma client cannot be generated in sandbox; `binaries.prisma.sh` not reachable) | — |
+| Production Autopilot behaviour | NOT TESTED | — |
+
+Caps: `dailySpendCapMinorKES` 25000, `maxBatchRecipients` 50, `maxAutoDiscountPct` 0, quiet hours 20:00–07:00 `Africa/Nairobi` are schema defaults, not owner-approved caps; the fixture uses those defaults and says so.
+
+Checks run on 378dd92: vitest Autopilot set 218/219 (the one failure is the known Prisma DMMF `autopilot-phase1-hardening` Priority 1, environment-only); ESLint on changed Autopilot files exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors.
+
+## Phase 7 — Autopilot remediation: kill-switch UI, verification and blockers (code SHA 695a9a3)
+
+Scope: FIXTURE verification only (fictional tenants `fx-tenant-a`/`fx-tenant-b`, fixture decide route). No real automation, message, offer, FAQ, consent, payment or entitlement change. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-695a9a3/` (`report.json`, 22 PNGs, capture script). Earlier evidence: `…/autopilot/fixture-after/` and `…/fixture-baseline-main/`.
+
+Labels: **FIXTURE** = fictional data, fixture route. **REAL-APP** = authenticated real application against a real database. No REAL-APP evidence exists for Autopilot in this section.
+
+| Criterion | Status | Evidence / basis |
+|---|---|---|
+| Kill switch ACTIVE disables Approve & Execute | PASS (FIXTURE) | `report.json` killSwitchActive: 1 approve control, disabled; 0 requests from 1 synchronous blocked click |
+| Kill switch ACTIVE: explanation shown, no misleading success | PASS (FIXTURE) | alert text; `bannerText` null |
+| Kill switch INACTIVE: approval enabled for OWNER | PASS (FIXTURE, unit) | `autopilot-kill-switch-ui` tests |
+| Tenant paused disables approval | PASS (FIXTURE, unit + capture) | `paused`: 2 approve controls, both disabled |
+| STAFF read-only (kill switch inactive and active) | PASS (FIXTURE, unit + capture) | `staff`: 4 approve controls, all disabled |
+| Triple synchronous approve sends one PATCH | PASS (FIXTURE) | `approveSuccess`: 1 PATCH at all six widths |
+| Keyboard Enter on focused Approve sends one request | PASS (FIXTURE) | `keyboard.patchRequestsFromTwoEnterPresses`: 1 (second Enter hits a busy/disabled control) |
+| Approve-success banner announced politely | PASS (FIXTURE) | `role=status`, `aria-live=polite` (measured) |
+| Reject final; server refusal on approve after reject | PASS (FIXTURE, prior run) | 409 `INVALID_PROPOSAL_STATE`, earlier `report.json` |
+| Visible keyboard focus indicator on Approve | **FAIL** (FIXTURE) | Computed outline `rgb(182,255,46) solid 2px` is lime, the same family as the button fill; on the light fixture surface it is low contrast. Focused and unfocused crops (with 14px margin) are byte-identical, so the ring is not visibly distinguishable in captured output. Earlier "12.47:1" figure was wrong (walked to a dark ancestor) and is withdrawn. Fix needs a theme-token focus style; not changed in this pass. |
+| Keyboard focus order reaches Approve | PASS (FIXTURE) | 12 tab stops to first Approve |
+| Reduced motion suppresses alert entrance | PASS (FIXTURE) | normal `jata-state-in`; reduced `none` |
+| Contrast: kill-switch alert text | PASS (measured) | 9.16:1 |
+| Contrast: enabled Approve button text | NOT TESTED | measured only for disabled state (5.1:1, exempt from WCAG) |
+| Six widths: no overflow, no page errors | PASS (FIXTURE) | 24 layout rows, `ovf=false`, `errs=0` |
+| Touch targets ≥24px | **FAIL** (FIXTURE) | 2 interactive elements under 24px at every width; not yet identified or fixed |
+| Six widths: visual inspection | PARTIAL | Opened and inspected: kill-switch alert crop, approve-success 390 full page, focus crops. The other 19 PNGs are NOT yet opened and inspected. |
+| Server authority on kill switch | PASS (FIXTURE, server responses) | decision layer refuses; UI disabling is additive |
+| DB-backed controls (spend reservation, customer lookup, row-level tenant filters, concurrency) | BLOCKED | `prisma generate` fails: TLS disconnect to `binaries.prisma.sh` (see below) |
+| Production Autopilot behaviour | NOT TESTED | no production request made |
+| Programme-completeness (34 NOT READY) | NOT TESTED this pass | not reclassified in this section |
+
+Checks on 695a9a3: `vitest` six Autopilot files 119/119 exit 0; ESLint on `components/autopilot` and the new test exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors; `prisma generate` exit 1 (TLS disconnect to `binaries.prisma.sh`, environment).
+
+CI on PR head `e6cf0ae` (before this commit): all required checks pass except `programme-completeness` (fail). CI for `695a9a3` not yet observed at time of writing.
+
+## Phase 7 — Autopilot focus ring, touch targets and inspection (code SHA a90aae3)
+
+Labels: **FIXTURE** = fictional tenants and fixture routes only. **REAL-APP** and **REAL-DB**: none in this section. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-a90aae3/` (`lime-spark/` full run, `emerald-ink-focus/` focus run, measurement and probe scripts).
+
+### Correction to the previous section
+The earlier "keyboard focus FAIL" (ledger section 695a9a3) was based on crops that a full-page clip had mis-positioned, so byte-identical crops proved nothing. The "12.47:1" figure in that pass was also wrong. Corrected measurement (rendered PNG pixels, all four sides, buttons hidden for the surface reading) found the ring visible in both themes before any change. The previous FAIL is withdrawn.
+
+### Focus indicator (FIXTURE)
+- Before (action-colour ring = theme focus token): Lime Spark ring `182,255,46` on card `35,38,47` = 12.47:1; Emerald Ink ring `6,78,59` on card `255,249,240` = 9.28:1 (ring identical to the action fill in both themes).
+- Change: approval controls use `--jata-ink` (theme text colour) for the ring.
+- After, six widths, Lime Spark: ring `244,246,240` vs card `35,38,47` = **13.88:1** on all four sides, Approve and Reject, 320–1366 px. Ring vs lime fill 1.11:1, separated by the 2px surface gap.
+- After, Emerald Ink (390 and 768 measured): ring `24,53,43` vs card `255,249,240` = **12.67:1**. Ring vs dark-green fill 1.36:1, separated by the surface gap.
+- Keyboard: Tab reaches Approve after 12 stops; Enter×2 sends one PATCH.
+- Status: focus **PASS** against WCAG 2.4.7/1.4.11 (3:1) in both themes, FIXTURE only. Global focus rule for other primary buttons across the app is NOT changed and NOT tested.
+
+### Touch targets (FIXTURE)
+- Identified: 2 elements, `input` 13×13, selector `fieldset.product-theme-options > label.product-theme-option > input`, in the Appearance theme picker (Lime Spark and Emerald Ink radios). Visible only when the `details.product-theme-picker` is open; the label is 323×118–120 px.
+- Corrected: radio sized 24×24 (`.product-theme-option input[type="radio"]`).
+- After (six widths, picker closed and open): 0 visible interactive elements under 24 px. Audit uses `checkVisibility()`, so closed-`<details>` content is excluded from the closed state and included when open.
+- Status: targets **PASS** at 24 px (WCAG 2.5.8 minimum) for the Autopilot page, FIXTURE only. Other pages NOT TESTED.
+
+### Kill switch, approvals and states (FIXTURE, six widths, `lime-spark/report.json`)
+- Kill switch ACTIVE: 1 Approve & Execute control, disabled; 0 requests from blocked synchronous clicks; no success banner; alert text shown.
+- Approve success: triple synchronous click → 1 PATCH at all six widths; success banner `role=status`, `aria-live=polite`.
+- STAFF: 4 approve controls, all disabled. Paused: 2, all disabled. Tenant B: shows tenant B only.
+- Reduced motion: kill-switch alert animation `jata-state-in` (normal) / `none` (reduced).
+- Layout: no horizontal overflow, 0 page errors, 0 hydration warnings at six widths.
+- Contrast (measured): enabled Approve label 12.47:1 (Lime), 9.72:1 (Emerald); proposal title 13.88:1 / 12.67:1.
+- Decide responses: 10–12 HTTP 200 per run. One run (the first Lime run) had one 404 `FIXTURE_SESSION_NOT_FOUND` from the in-memory fixture session store after a dev-server recompile; the Approve at 320 px showed the red error banner (screenshot `approve-success-320x568.png` of that first run). A clean re-run had zero non-200 responses. The dev-only session loss is not a product defect, and the first run is not used as evidence.
+
+### Screenshots inspected in this pass
+- `lime-spark/kill-switch-320x568.png`, `kill-switch-360x800.png`, `kill-switch-390x844.png`, `kill-switch-430x932.png`, `kill-switch-768x1024.png`, `kill-switch-1366x768.png`: alert shown; Approve disabled; Reject enabled. Observation: the "Extend 30 days" label in the entitlement card looks low-contrast; not measured, outside approval scope, NOT TESTED.
+- `kill-switch-alert-390x844.png` (inspected in the 695a9a3 pass): alert text readable.
+- First-run `approve-success-320x568.png` (not the clean run): red session-not-found banner, recorded as the artefact above.
+- **NOT yet inspected in this pass:** `lime-spark/approval-pending-*` (six), `lime-spark/approve-success-*` (six, clean run), `lime-spark/focus-*` crops (24 files), and the emerald focus crops. Their numbers are measured; their visuals are not claimed.
+- Of the 22 PNGs in `…/remediation-695a9a3/`, the pre-existing set was only partially inspected in the 695a9a3 pass (approval-pending, approve-success and most kill-switch widths were not opened). That gap is not closed by this section.
+
+### Checks on a90aae3
+- `vitest`: six Autopilot files 119/119 exit 0; `autopilot-kill-switch-ui` 14/14 exit 0 (new focus-class and radio-size assertions included).
+- ESLint on `components/autopilot` and the test: exit 0.
+- `tsc --noEmit`: not re-run after this commit (last run on 695a9a3: exit 2, only the three known Prisma-only errors).
+- CI on `a90aae3`: not yet observed.
+
+### Blockers and NOT TESTED (not resolved this pass)
+- **REAL-DB (Autopilot controls): BLOCKED.** `prisma generate` previously failed with a TLS disconnect to `binaries.prisma.sh` (ledger 695a9a3). `binaries.prisma.sh` is not on the sandbox's outbound allowlist, so the owner's approval cannot be exercised from this sandbox without an egress-policy change. Not retried this pass. Affected: tenant isolation (DB), consent recording and withdrawal (DB), approval authorisation and expiry (DB), daily spend reservation and concurrency, recipient and action caps, quiet hours on the authoritative clock, global kill switch on the execution path, fail-closed on missing tenant context. The three Prisma-generated `tsc` errors remain BLOCKED.
+- **Programme completeness (34 NOT READY): NOT TESTED this pass.** Individual classifications were not produced.
+- **Production Autopilot: NOT TESTED.** No production request was made.
+- **Phase 7 surfaces beyond Autopilot: NOT TESTED** in this pass.
+
+
+## Phase 7 — Autopilot verification at afcc456 (review turn)
+
+Code head checked: `afcc456` (docs-only commits after code `a90aae3`). Scope: screenshot inspection, current-head checks, 34-record classification, Prisma status. No code change in this turn. No merge, deploy, production data or configuration change, real automation, messages, payments, consent or entitlement change.
+
+### Verdicts (separate, as required)
+- Autopilot remediation complete: **NO**. Remaining items: below.
+- Autopilot production-ready: **NO**. Real-database, authenticated and tenant-isolation evidence is BLOCKED (Prisma engine download).
+- Phase 7 complete: **NO**. 34 programme records remain NOT READY.
+- Fixture PASS is not real-database PASS.
+- Release decision: **HOLD**.
+
+### Current-head checks (`afcc456`)
+- `npx tsc --noEmit`: exit 2. Three errors, all in Prisma-dependent test files (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). Cause: generated Prisma client absent (`binaries.prisma.sh` TLS failure). Not application source. Environment-only.
+- Vitest, six Autopilot files: 120/120 pass, exit 0.
+- ESLint on `components/autopilot`, the kill-switch test, and fixture paths: exit 0.
+- `scripts/admin/check-programme-readiness.mjs`: exit 1, NOT READY (34). Not bypassed.
+- `gh pr checks 79`: 17 pass, `programme-completeness` fail (run head SHA not verified in this turn).
+
+### Screenshot inspection (opened and viewed)
+Opened, all in `remediation-a90aae3/`:
+- `lime-spark/approval-pending-*` at 320, 360, 390, 430, 768, 1366. Fixture notice visible. PROPOSED rows show enabled Approve & Execute and Reject. No success text.
+- `lime-spark/approve-success-*` at 320, 360, 390, 430, 768, 1366. Verified banner (`role=status`). One row EXECUTED with rollback. Other rows still PROPOSED.
+- `emerald-ink/approval-pending-*` at all six widths. Same structure.
+- `emerald-ink/approve-success-*` at all six widths. Same structure as Lime.
+- `lime-spark/focus-approve-{320,390,1366}` and `emerald-ink/focus-approve-{320,390,1366}`. Focus ring visible in both themes. Lime ring is near-white around lime fill. Emerald ring is dark around dark-green fill, separated by a gap from the cream card.
+- NOT opened in this turn: focus-approve at 360, 430, 768; all focus-reject and bare crops; the 19 PNGs in `remediation-695a9a3/`. Not claimed as reviewed.
+
+### Defect found (not fixed in this turn, logged for follow-up)
+- **Hero legibility, Emerald Ink**: the FIXTURE hero title ("FIXTURE Mama Pima Kitchen (tenant A)") and its body text render dark-on-dark over the photo at every width, and are nearly unreadable at 320 and 360. Visible in `emerald-ink/approval-pending-*` and `emerald-ink/approve-success-*`. Verdict: FAIL for hero text contrast. Not measured numerically. The approval controls themselves are unaffected.
+- Scope note: the hero is a shared Autopilot header, so fixing it means touching shared styles. It is queued as a follow-up, not hidden.
+
+### Programme readiness classification (34 records, source status unchanged)
+No status was upgraded. No threshold, assertion or exclusion changed.
+
+| ID | Source status | Classification / blocker family |
+|---|---|---|
+| ADMIN-002 | BLOCKED | Umbrella: 34 records remain open; root causes listed in the exact-head run |
+| ADMIN-003 | BLOCKED | Control-access DENY policy: owner-approved DENY cells recorded; access still disabled |
+| ADMIN-004 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-005 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-006 | BLOCKED | Commission ledger lifecycle: synthetic full lifecycle not established (DB-backed) |
+| ADMIN-007 | BLOCKED | Control-plane config history and provider health: owner-approved provider config missing |
+| ADMIN-008 | BLOCKED | Communications console, dead-letter and provider-authorised delivery unverified |
+| ADMIN-009 | BLOCKED | Domain/DNS/TLS/mail: authoritative zone export and live records not available |
+| ADMIN-010 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-012 | BLOCKED | Role/action mapping and non-production provisioning procedure not owner-approved |
+| ADMIN-013 | BLOCKED | Phone ownership → eligibility → payment → accrual → reversal not proven (DB-backed, payments) |
+| ADMIN-014 | BLOCKED | Backup/restore and end-to-end recovery acceptance unproven |
+| ADMIN-015 | BLOCKED | Authenticated/unauthorised Control screenshot matrix not produced |
+| ADMIN-022 | BLOCKED | Scheduler/report workstream integration and approval policy incomplete |
+| ADMIN-023 | NOT_TESTED | Full acceptance test not run |
+| MOTION-001 | BLOCKED | App-wide interaction/keyboard/layout evidence incomplete (only selected surfaces) |
+| MOTION-002 | BLOCKED | Studio families not all verified through generation, preview and publication |
+| MOTION-003 | NOT_TESTED | Full acceptance test not run |
+| MOTION-004 | NOT_TESTED | Full acceptance test not run |
+| MOTION-005 | NOT_TESTED | Full acceptance test not run |
+| MOTION-006 | BLOCKED | Authenticated app-wide before/after recordings missing |
+| MOTION-007 | BLOCKED | Cross-product motion engine and universal acceptance not proven |
+| MOTION-008 | BLOCKED | All modules/families/six-view recordings not produced |
+| MOTION-009 | NOT_TESTED | Full acceptance test not run |
+| MOTION-010 | NOT_TESTED | Full acceptance test not run |
+| MOTION-011 | BLOCKED | Reduced-motion passes; universal family/route/publish and a11y not complete |
+| MOTION-012 | BLOCKED | Chrome captures exist; full generation/publication matrix missing |
+| MOTION-013 | BLOCKED | Capture/CI passes; universal routes and independent inspection missing |
+| MOTION-014 | BLOCKED | 480 family rows pass; independently inspected baseline/after missing |
+| MOTION-015 | BLOCKED | Event-level reduced-motion passes; queue, history, AI, commerce gaps open |
+| MOTION-016 | BLOCKED | Targeted preference cancellation passes; six broad gaps open |
+| MOTION-017 | BLOCKED | Live preference transitions pass; independent review and prior criteria missing |
+| MOTION-018 | BLOCKED | No-DB and DB suites pass; queue, baseline, AI and commerce coverage incomplete |
+| RELEASE-001 | BLOCKED | Domain/email, durable provider media, financial policy and lifecycle not proven |
+
+Counts: 34 total. BLOCKED 28, NOT_TESTED 6 (MOTION-003, 004, 005, 009, 010, 023 — note ADMIN-023 is listed in source as NOT_TESTED). PASS 0. FAIL 0.
+
+### Autopilot DB-backed requirements — status BLOCKED at afcc456 (superseded: see "Phase 7 — Autopilot database-backed verification" below)
+Requires a disposable PostgreSQL and a generated Prisma client. Prisma engine cannot be downloaded (`binaries.prisma.sh` TLS failure, `SSL_ERROR_SYSCALL`, confirmed this turn). Not executed; no substitute result:
+- Tenant isolation across two fictional tenants (DB-level)
+- Consent and withdrawal
+- Approval authorisation and final rejection on the server
+- Daily spend reservation, including concurrency
+- Recipient and action caps from existing configuration (schema defaults are not owner-approved limits)
+- Quiet hours in `Africa/Nairobi` (enforcement on the execution path)
+- Kill-switch enforcement on the server execution path
+- Fail-closed behaviour
+
+Kill-switch UI behaviour, STAFF access, pending-proposal and submit-while-paused regression cases are covered by the 14-test kill-switch UI file (fixture level only).
+
+### Remaining work (not done)
+1. Fix Emerald Ink hero legibility (FAIL above) and re-capture.
+2. Open the remaining focus crops (360/430/768, reject, bare) and the 19 `remediation-695a9a3/` PNGs.
+3. Run the Prisma-backed requirements on a disposable PostgreSQL once the engine is available. No production credentials.
+4. Address the 34 NOT READY records through real evidence, not relabelling.
+5. Confirm the head SHA of the CI runs behind `programme-completeness`.
+
+Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-a90aae3/` (`lime-spark/`, `emerald-ink/` 44 files, `emerald-ink-focus/`).
+
+
+## Phase 7 — Emerald Ink hero legibility remediation (review turn, head after commit below)
+
+Scope: shared `WorkspaceHero` (`.ws-hero*` in `app/globals.css`). No component, route, data or business logic changed. No merge, deploy, production change, real automation, messages, payments, consent or entitlement change.
+
+### Root cause (verified)
+- `.ws-hero` read `--ws-ink` and `--ws-on-ink`. Those tokens are declared only on `.ws-shell`.
+- The `/dev/autopilot-fixture` page does not render inside `.ws-shell`. Computed values were empty.
+- Undefined `--ws-ink` left the hero background transparent over the photograph.
+- Undefined `--ws-on-ink` made the title inherit the Emerald Ink page text colour, `rgb(24, 53, 43)`, dark green on the photograph.
+- Lime Spark only looked correct because its inherited page text is light.
+- The real dashboard renders inside `.ws-shell` (`app/dashboard/layout.tsx`), so the defect was reproducible on the fixture page and fragile in the hero's token dependency.
+
+### Change (CSS only)
+1. `.ws-hero`, `.ws-hero__media`, `.ws-hero__title`, `.ws-hero__title em`, `.ws-kicker--light`: added fallbacks (`#14110f` ink, `#f7f2e8` on-ink, `#f0a03c` amber). The hero no longer depends on an ancestor shell.
+2. `.ws-hero__scrim`: strengthened the gradient where the subtitle and meta line sit (0.96 to 0.5 across, 0.9 to transparent down). Photograph still visible.
+3. New `.ws-hero__sub, .ws-hero__meta`: translucent ink backing `rgba(20,17,15,0.8)`, radius 0.35rem, padding 0.12rem 0.45rem. Needed because the brightest city lights sit behind this text. A scrim dark enough alone (verified to be insufficient) would have hidden the image.
+
+Files changed: `app/globals.css` only (plus `next-env.d.ts`, reverted).
+
+### Contrast method (measured, not inferred)
+- Playwright, `reducedMotion: reduce` (freezes photo drift), 6 widths, fixture `scenario=approval-pending`, OWNER, tenant A.
+- Each hero screenshot taken twice: as rendered, and with hero text set transparent (background only).
+- For each text node: tight line-fragment rectangles from `Range.getClientRects()`, not block boxes.
+- Text colour alpha blended over each background pixel, then WCAG 2.x contrast. Worst case = minimum over every background pixel inside the glyph rectangles. Pixels outside the 18px rounded clip excluded.
+- Script: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/hero-remediation/hero-measure.mjs`.
+
+Worst-case contrast (min over pixels), before → after. AA normal text 4.5:1; large text 3:1.
+
+| Theme | Width | Kicker | Title | Subtitle | Meta |
+|---|---|---|---|---|---|
+| Emerald Ink | 320 | 1.00 → 6.95 | 1.00 → 9.39 | 4.53 → 11.91 | 1.91 → 8.11 |
+| Emerald Ink | 360 | 1.00 → 7.04 | 1.00 → 9.54 | 3.27 → 11.94 | 2.12 → 8.27 |
+| Emerald Ink | 390 | 1.00 → 7.13 | 1.00 → 9.76 | 3.63 → 11.66 | 2.12 → 8.27 |
+| Emerald Ink | 430 | 1.00 → 6.50 | 1.00 → 9.92 | 2.82 → 11.11 | 1.74 → 8.02 |
+| Emerald Ink | 768 | 1.00 → 7.15 | 1.00 → 5.69 | 2.69 → 10.20 | 2.02 → 8.28 |
+| Emerald Ink | 1366 | 1.12 → 7.61 | 1.00 → 9.34 | 2.47 → 10.08 | 1.86 → 8.20 |
+| Lime Spark | 320 | 13.14 → 6.95 | 9.21 → 9.39 | 6.59 → 11.91 | 2.06 → 8.11 |
+| Lime Spark | 360 | 13.33 → 7.04 | 9.29 → 9.54 | 5.42 → 11.94 | 2.38 → 8.27 |
+| Lime Spark | 390 | 13.64 → 7.13 | 9.54 → 9.76 | 5.67 → 11.66 | 2.38 → 8.27 |
+| Lime Spark | 430 | 12.26 → 6.50 | 9.89 → 9.92 | 4.48 → 11.11 | 1.93 → 8.02 |
+| Lime Spark | 768 | 13.78 → 7.15 | 5.90 → 5.69 | 2.82 → 10.20 | 2.20 → 8.28 |
+| Lime Spark | 1366 | 14.80 → 7.61 | 9.33 → 9.34 | 2.58 → 10.08 | 1.93 → 8.20 |
+
+Notes:
+- Emerald after = Lime after to two decimals. The hero renders identically in both themes.
+- Lime kicker changed from near-white (inherited, fixture only) to amber (`#f0a03c`, the intended `--ws-amber`). Intentional. It now matches the product shell.
+- Pre-fix Lime subtitle and meta were already below AA at 768 and 1366 and at meta widths. The backing corrects that for Lime too.
+- Hero action buttons (Emergency Pause, Refresh diagnosis, All businesses) were not in the text measurement. Checked visually in every after capture; labels legible in both themes.
+- Overflow: 0 at all widths, both themes. Page errors and hydration errors: 0.
+
+Raw JSON: `hero-remediation/before/measure-*.json`, `hero-remediation/after/measure-*.json`. Note: the `before` lime measurement uses the pre-fix stylesheet; its earlier numbers in this section come from the tight-rect method.
+
+### Screenshots opened and inspected (this turn)
+Hero (`hero-remediation/before/` and `after/`), 6 widths × 2 themes × 2 states = 24 files:
+- `before/emerald-ink-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png`: title, kicker and all three action labels dark green on photo. FAIL. Confirmed defect.
+- `after/emerald-ink-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png`: all text legible, action labels legible, photo and focal point intact. PASS (visual).
+- `before/lime-spark-{...}.png` (6): baseline.
+- `after/lime-spark-{...}.png` (6): legible, unchanged layout, kicker amber. PASS (visual).
+
+Regression capture (`hero-remediation/regression/`, full approval page, fixed CSS, both themes):
+- `lime-spark/` (first run) and `lime-spark-rerun/`: first run had a dev-only `FIXTURE_SESSION_NOT_FOUND` 404 at 320 on approve (no banner, not product evidence). Re-run: all 12 decide calls 200; success banner `role=status` at all six widths; no overflow; no undersized targets (picker closed/open); no page errors.
+- `emerald-ink/`: all 12 decide calls 200; banner at six widths; no overflow; no undersized targets; no page errors.
+- Focus-approve ring preserved (Lime 13.88:1 vs surface, 1.11:1 vs fill; Emerald 12.67:1 vs surface, 1.36:1 vs fill) per `report.json`.
+
+Previously-recorded crops now opened (this turn):
+- `remediation-a90aae3/lime-spark/focus-approve-{360x800,430x932,768x1024}.png`: ring visible. PASS.
+- `remediation-a90aae3/emerald-ink/focus-approve-{360x800,430x932,768x1024}.png`: ring visible. PASS.
+- `remediation-a90aae3/lime-spark/focus-reject-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6): ring visible on dark button. PASS.
+- `remediation-a90aae3/emerald-ink/focus-reject-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6): ring visible on cream card. PASS.
+- `remediation-695a9a3/kill-switch-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6) and `kill-switch-alert-390x844.png`: alert visible; Approve & Execute disabled; Reject enabled; no success. PASS.
+- `remediation-695a9a3/focus-approve-focused-390x844.png` and `focus-approve-unfocused-390x844.png`: pre-fix capture (before `a90aae3`). No distinct focus ring in the focused crop. Consistent with the earlier focus FAIL. Historical, not a current pass.
+
+NOT opened in this turn (remain unreviewed; not claimed as PASS):
+- `remediation-a90aae3/*/focus-approve-bare-*` (12) and `focus-reject-bare-*` (12): background-only baselines.
+- `remediation-695a9a3/approval-pending-*` (6), `approve-success-*` (6). Full-page pre-fix captures.
+- Note: `remediation-695a9a3/` contains 21 PNG files, not 19. Full set: kill-switch 6, kill-switch-alert 1, approval-pending 6, approve-success 6, focus 2.
+
+### Tests and checks on the current branch
+- Vitest, six Autopilot files: 120/120 pass.
+- Vitest, ten CSS-reading suites (ai-front-desk-accessibility, autopilot-controls-repair, bos-pro-catalogue, dashboard-nav-bos, design-system, homepage-business-pos, landing-header, landing-motion, lime-spark-contrast, motion-system): 147/147 pass.
+- `tsc --noEmit`: 3 errors, all Prisma client (`PrismaClientKnownRequestError`, `BusinessUncheckedCreateInput`, `dmmf`). Environment-only; same as prior turns.
+- ESLint: not re-run (no TS/TSX change in this commit; prior exit 0 on Autopilot paths).
+- `npx prisma generate`: exit 1. `binaries.prisma.sh` HTTP 000, TLS client-socket disconnect (re-checked this turn). Blocker unchanged. Egress not changed.
+
+### Programme-completeness (34 records)
+- No record changed status. Still 28 BLOCKED, 6 NOT_TESTED, 0 PASS, 0 FAIL. No thresholds or assertions changed.
+- Hero work does not produce evidence for any NOT READY record. It is a visual defect fix in the shared hero and does not satisfy the cross-product motion requirements in MOTION-001 to 018 or ADMIN-015.
+- Programme gate fails on this head. Not bypassed.
+
+### Database-backed Autopilot controls
+- Not verified. Blocked by the Prisma engine download (see above). Fixture-level tests only.
+
+### Verdicts (unchanged)
+- Autopilot remediation complete: NO. Hero defect fixed; focus, targets, kill-switch and approval flows verified at fixture level only.
+- Autopilot production-ready: NO. Database-backed controls BLOCKED.
+- Phase 7 complete: NO. 34 NOT READY records remain.
+- Release decision: HOLD.
+
+### Remaining work
+1. Open the 12 bare crops and 12 pre-fix full-page captures listed above.
+2. Prisma engine egress blocker: unchanged. Database-backed verification BLOCKED.
+3. Resolve the 34 NOT READY records through real evidence. No status upgrade without it.
+4. Confirm CI on the new head (pending at time of writing; see PR comment).
+
+### Screenshot inventory completion (follow-up turn)
+Opened and inspected this turn:
+- `remediation-a90aae3/lime-spark/focus-approve-bare-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` and `focus-reject-bare-*` (12): card-surface-only baselines (button intentionally absent). Consistent with purpose.
+- `remediation-a90aae3/emerald-ink/focus-approve-bare-*` and `focus-reject-bare-*` (12): cream card-surface baselines. Consistent with purpose.
+- `remediation-695a9a3/approval-pending-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6), pre-fix Lime Spark: fixture notice, PROPOSED rows with enabled Approve & Execute, hero legible. Pre-fix focus/hero state; historical.
+- `remediation-695a9a3/approve-success-{360x800,390x844,430x932,768x1024,1366x768}.png` (5), pre-fix: SUCCESS banner visible, one row EXECUTED. PASS as historical evidence.
+- `remediation-695a9a3/approve-success-320x568.png`: the success banner is NOT confirmed inside the captured region on this review. Not claimed as PASS. Re-capture on the current head is the remedy (the current-head regression at 320 shows the banner, `lime-spark-rerun/`).
+
+Inventory status: all bare crops and all `remediation-695a9a3/` PNGs are now opened. The 21 PNG count in that folder is correct (kill-switch 6, kill-switch-alert 1, approval-pending 6, approve-success 6, focus 2).
+
+Verdicts unchanged: Autopilot remediation complete NO; production-ready NO; Phase 7 complete NO; HOLD.
+
+## Phase 7 — Autopilot database-backed verification (sandbox PostgreSQL 18.6, WASM engine)
+
+Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/db-verification-2026-11-02/`
+- `db-suite-run.log`: verbose output of `node scripts/test-db/run-db-suite.mjs tests/prisma/autopilot-constraints-and-concurrency.test.ts tests/db/autopilot-safety.test.ts` (final tree).
+- `negative-control-kill-switch-disabled.log`: kill-switch check disabled on purpose; the kill-switch test fails.
+- `wasm-harness-prepare.log`: harness build.
+- `full-vitest-no-database-summary.txt`: default no-database run totals (see below).
+- `rehearsal-local-blocked.log`: local rehearsal attempt, stopped at the missing `psql` precondition.
+
+### Why the engine is not the pinned native one
+- `npx prisma generate` (default and `--no-engine`) fails on `binaries.prisma.sh` (TLS disconnect). The native query and schema engines cannot be downloaded in this sandbox. No mirror was used, and sandbox egress was not changed.
+- Path used instead: Prisma's query engine compiled to WebAssembly, shipped inside `@prisma/client` (`query_engine_bg.wasm`), driven through `@prisma/adapter-pg`. The runner labels it `wasm-query-engine+adapter-pg`. It is NOT the pinned native-engine path.
+- Test-only harness, built by `scripts/test-db/prepare-wasm-harness.sh` into `node_modules/.jata-wasm-harness/` (gitignored):
+  - Schema: `scripts/test-db/schema.wasm-test.prisma`, a copy of the production schema plus `previewFeatures = ["driverAdapters"]`. The production `prisma/schema.prisma` and production client are unchanged.
+  - Dependencies: `scripts/test-db/harness-package.json` (exact pins: `@prisma/adapter-pg` 5.22.0, `pg` 8.23.1, `embedded-postgres` 18.6.0-beta.19). They install into the harness only. **The product `package.json` and `package-lock.json` are byte-identical to `main`.** `docs/release/EVIDENCE-MANIFEST.sha256` records a hash for `package.json`, so any edit there would fail the Static job, and the manifest was not altered.
+  - The generated client's import map points at edge loaders that cannot load `.wasm` under Node. The prepare script swaps in a Node loader that compiles the same bundled file with `WebAssembly.compile`.
+  - Native-engine env vars point at a labelled placeholder file, which the WASM client never loads.
+
+### What was added
+- `scripts/test-db/run-db-suite.mjs`: starts a disposable loopback PostgreSQL 18.6 (`127.0.0.1` only; random superuser password, not written to disk; data under the OS temp directory and deleted afterwards). The database name must end in `_test`. It never reads `DATABASE_URL` or `DIRECT_URL`. It applies all 57 `prisma/migrations/*/migration.sql` files in lexical order (raw SQL, because `prisma migrate` needs the native schema engine), runs vitest, then stops PostgreSQL.
+- `vitest.db.config.ts`: database-only configuration. It aliases `@prisma/client` to the harness client only when `PRISMA_WASM_HARNESS_DIR` is set, and loads `tests/helpers/db-setup.ts`. The default `vitest.config.ts` is unchanged.
+- `tests/helpers/db-setup.ts`: sets `globalThis.__prisma` (the hook `lib/db.ts` already honours) to the same real test client. Without it, `lib/db.ts` builds its own client through a CommonJS `require`, which vitest's alias does not intercept. Runs only when `PRISMA_TEST_DATABASE_URL` is set.
+- `tests/db/autopilot-safety.test.ts`: 17 DB-backed tests on fictional `@test.invalid` tenants, against the real domain functions in `lib/autopilot/*`.
+- `package.json`: not changed. There is no npm script; the runner is invoked directly (see the command above).
+
+### Results (final tree)
+- `node scripts/test-db/run-db-suite.mjs <the two files above>`: exit 0; **20 of 20 passed**; no unhandled errors.
+  - `tests/prisma/autopilot-constraints-and-concurrency.test.ts`: 3 of 3 (existing: FK and unique constraints, cascade deletes across the 11 Autopilot tables, multi-client budget serialisation).
+  - `tests/db/autopilot-safety.test.ts`: 17 of 17 (new).
+- PostgreSQL 18.6. Migrations applied 57 of 57.
+- Default no-database run (`npx vitest run`, final tree): 348 files passed, 37 skipped; 4,156 tests passed, 320 skipped, **0 failed**. Exit code 1 comes only from 71 unhandled "Query Engine not found" errors. In this sandbox the default `@prisma/client` was generated with a placeholder engine so that `Prisma.dmmf` exists (see below). Those errors are an environment artefact, not test failures.
+- Collection guard (`tests/unit/test-collection-guard.test.ts`): 4 of 4.
+- `npm run lint` (`eslint app components lib`): exit 0, 0 errors (48 pre-existing warnings). ESLint on the new scripts, test file, setup file and config: exit 0.
+- `npx tsc --noEmit`: the same 3 pre-existing Prisma-typed errors as before. The default client is not generated in this sandbox. The new files add none.
+- Engine check: no `postgresql://` string appears in any evidence log.
+
+Control coverage (asserted on real rows, exact codes):
+- Tenant isolation: tenant B cannot list, approve (`NOT_FOUND` 404) or reject tenant A's proposal, and A's row is unchanged. A budget idempotency key reused by tenant B returns `IDEMPOTENCY_TENANT_CONFLICT`, and only tenant A's ledger row exists.
+- Approval authority: STAFF approval returns `RBAC_FORBIDDEN` 403 and the proposal stays `PROPOSED`. STAFF cannot change configuration (403; status stays `LIVE`).
+- Kill switch on the execution path: with `JATA_AUTOPILOT_GLOBAL_KILL_SWITCH=1`, an OWNER approval returns `GLOBAL_KILL_SWITCH_ACTIVE`, and the proposal is not `EXECUTED`.
+- Pause: a `PAUSED` tenant is refused with `TENANT_AUTOPILOT_PAUSED`, at proposal time or at approval time. Nothing executes.
+- Fail closed: a tenant with no subscription gets `ENTITLEMENT_REQUIRED` 403 at approval.
+- Execute once: OWNER approval executes; replaying it returns `idempotentReplay` and does not execute again. A rejected proposal cannot be approved (`INVALID_PROPOSAL_STATE` 409).
+- Spend caps: a daily cap of 100 minor KES stops a second 60 reservation with `DAILY_SPEND_CAP_REACHED`, leaving one ledger row. Re-sending the same reservation key is `alreadyRecorded`, with no double spend. Re-sending the same proposal key returns `duplicate`, with one row.
+- Consent and quiet hours: quiet hours are evaluated in Africa/Nairobi, start-inclusive and end-exclusive (20:00 start, 07:00 end). With no consent record the result is `MISSING_CONSENT_RECORD`. Transactional opt-in does not authorise marketing (`CONSENT_NOT_GRANTED`). Quiet hours block a transactional send at 22:30 EAT (`QUIET_HOURS_ACTIVE`) except with the urgent transactional bypass. A STOP keyword opt-out returns `RECIPIENT_OPTED_OUT`. Tenant B's view of the same phone returns `MISSING_CONSENT_RECORD`.
+- Negative control: with the kill-switch check disabled in `lib/autopilot/policy.ts` (temporary; restored; the file equals `main`), the kill-switch test fails with `expected true to be false`.
+
+### CI on `6a529e6` (first push of this work) — FAIL, with cause analysis
+- Failed: `Schema, types, unit suite, build`; `full-suite`; `Journey against a real database`; `Static (install, generate, lint, typecheck, audit)`; `Exact candidate applies on disposable PostgreSQL 18`; `Migrations + schema on PostgreSQL 18`; `Schema reconciliation proposal closes the drift`; `Release gate (aggregate)`; `programme-completeness` (expected, 34 NOT READY).
+- Passed: `D2 — build, audit and controls`; `Failure paths actually fail`; `Migration target guard`; `Production build path on PostgreSQL 18`; `Real-Chrome six-viewport capture`; `capture`; `instruction-integrity`; `Vercel`; `Vercel Preview Comments`.
+- Confirmed cause (reproduced locally): `tests/unit/test-collection-guard.test.ts` requires every non-helper file under `tests/` to be collected by vitest. The first push placed `tests/db/prisma/schema.wasm-test.prisma` there, which broke the unit suite, `full-suite` and the Journey job, all of which run that guard. Fixed by moving the schema to `scripts/test-db/`.
+- Also changed: the first push added two devDependencies to the product `package.json`. Those are moved into the harness (above), so the product lockfile matches `main` again.
+- Not yet explained: the `Exact candidate applies` rehearsal and the `Migrations + schema` / `Schema reconciliation` checks failed on `6a529e6`. The rehearsal does not run vitest. Its GitHub log cannot be read (results-receiver and blob endpoints return EOF). Local reproduction is blocked: the rehearsal needs `psql`, which the embedded PostgreSQL package does not ship, and apt cannot reach Debian mirrors from this sandbox. The rehearsal is therefore NOT reproduced locally. Its status on the corrected head is pending CI.
+- `npm ci` in a clean copy leaves `package.json` and `package-lock.json` byte-identical to the committed files (so the reproducibility check passes). `npm audit` (production and full) reports 0 vulnerabilities.
+
+### Sandbox-only state I created (not committed)
+- `node_modules/.prisma/client` was generated with `prisma generate` (production schema, placeholder engine env). This gives `Prisma.dmmf`, which `tests/unit/autopilot-phase1-hardening.test.ts` needs. Before that, the `npm install` postinstall stub made that test fail with `Cannot read properties of undefined (reading 'datamodel')`. CI generates the client itself. The unit file is unchanged since `9c58d3d`.
+- A local rehearsal PostgreSQL (`127.0.0.1:55445`, disposable, data in /tmp) was started for the rehearsal attempt and stopped afterwards.
+
+### Not covered (keep BLOCKED or NOT TESTED where they apply)
+- The pinned native-engine path. CI does not yet run this suite. No workflow was changed. CI on the exact head remains the release evidence for CI.
+- Neon pooled endpoints or PgBouncer. Only local PostgreSQL 18.6 was used.
+- AI command-centre turns, ingestion, usage recording through the HTTP routes, and browser journeys on the real database.
+- Production, real customers, real offers or FAQs, real messaging, payments and entitlements. None were touched.
+
+### Verdicts (separate)
+- Autopilot DB-backed controls (listed above): PASS on sandbox PostgreSQL 18.6 with the WASM engine, 20 of 20. Not CI evidence, and not the native-engine path.
+- CI on the current head: see the PR comment. At the time of this section it was NOT confirmed green.
+- Autopilot remediation complete: NO.
+- Autopilot production-ready: NO.
+- Phase 7 complete: NO. `programme-completeness` remains NOT READY (34) in `docs/agents/PROGRAMME_READINESS.json`. No record was upgraded. None of the 34 is specific to Autopilot database controls.
+- Release decision: HOLD.

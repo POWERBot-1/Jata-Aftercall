@@ -1,0 +1,135 @@
+{
+  "keyboard": {
+    "steps": [
+      {
+        "step": "reach product tile",
+        "tag": "BUTTON",
+        "label": "Fixture Tea 250gKES 32012 pack",
+        "outlineVisible": true,
+        "outline": "solid 3px"
+      },
+      {
+        "step": "Enter adds Tea",
+        "lines": 1,
+        "total": "KES 320"
+      },
+      {
+        "step": "reach quantity +",
+        "tag": "BUTTON",
+        "label": "One more Fixture Tea 250g",
+        "outlineVisible": true,
+        "outline": "solid 3px"
+      },
+      {
+        "step": "Enter increases qty",
+        "qty": "2",
+        "total": "KES 640"
+      },
+      {
+        "step": "reach Cash",
+        "tag": "BUTTON",
+        "label": "Cash",
+        "outlineVisible": true,
+        "outline": "solid 3px"
+      },
+      {
+        "step": "reach checkout",
+        "tag": "BUTTON",
+        "label": "Complete sale · KES 640",
+        "outlineVisible": true,
+        "outline": "solid 2px",
+        "disabled": false
+      },
+      {
+        "step": "reach quantity −",
+        "tag": "BUTTON",
+        "label": "One less Fixture Tea 250g",
+        "outlineVisible": true,
+        "outline": "solid 3px"
+      },
+      {
+        "step": "after − (qty 1)",
+        "ghosts": 0,
+        "total": "KES 320"
+      },
+      {
+        "step": "after − (zero) exit ghost",
+        "ghosts": 1,
+        "ghostAriaHidden": "true",
+        "total": "KES 0"
+      },
+      {
+        "step": "after exit",
+        "ghosts": 0
+      }
+    ],
+    "pageErrors": 0
+  },
+  "reducedMotion": {
+    "lineAnim": "none",
+    "ghostsAfterRemoval": 0,
+    "totalAfterRemoval": "KES 0"
+  },
+  "ownerLite": {
+    "attr": "lite",
+    "nonNoneAnimations": 0,
+    "ghostsAfterRemoval": 0
+  },
+  "focusVisibility": {
+    "BUTTON:Fixture": {
+      "label": "Fixture MandaziKES 3040 each",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "BUTTON:Clear": {
+      "label": "Clear",
+      "outlineVisible": true,
+      "outline": "solid 2px"
+    },
+    "BUTTON:One": {
+      "label": "One less Fixture Tea 250g",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "INPUT:Quantity": {
+      "label": "Quantity of Fixture Tea 250g",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "INPUT:": {
+      "label": "",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "BUTTON:Cash": {
+      "label": "Cash",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "BUTTON:M-Pesa": {
+      "label": "M-Pesa",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "INPUT:Anything": {
+      "label": "Anything the next person should know",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "BODY:◐AppearanceLime": {
+      "label": "◐AppearanceLime Spark / GraphiteChoose y",
+      "outlineVisible": false,
+      "outline": "none 0px"
+    },
+    "SUMMARY:Choose": {
+      "label": "Choose JATA appearance",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    },
+    "INPUT:Search": {
+      "label": "Search products",
+      "outlineVisible": true,
+      "outline": "solid 3px"
+    }
+  }
+}

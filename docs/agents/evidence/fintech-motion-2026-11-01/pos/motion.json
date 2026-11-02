@@ -1,0 +1,34 @@
+{
+  "default": {
+    "lineEnter": [
+      "jata-line-in"
+    ],
+    "qtyBump": [
+      "jata-value-bump"
+    ],
+    "totalBump": [
+      "jata-value-bump"
+    ],
+    "tileTransition": "transform, border-color",
+    "resultEnter": [
+      "jata-state-in"
+    ],
+    "resultText": "Sale recorded"
+  },
+  "reduced": {
+    "lineEnter": [
+      "none"
+    ],
+    "qtyBump": [
+      "none"
+    ],
+    "totalBump": [
+      "none"
+    ],
+    "tileTransition": "none",
+    "resultEnter": [
+      "none"
+    ],
+    "resultText": "Sale recorded"
+  }
+}

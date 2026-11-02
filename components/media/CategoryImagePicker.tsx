@@ -48,6 +48,11 @@ type Props = {
   onRemove?: () => Promise<void> | void;
   /** Persist a repositioned crop without changing the picture. Omit to hide repositioning. */
   onFocalChange?: (focal: { x: number; y: number }) => Promise<void> | void;
+  /**
+   * Development fixture only: the callbacks are simulated and persist nothing, so the notice must not say
+   * "saved". Production omits this prop and keeps the saved-state wording.
+   */
+  simulated?: boolean;
 };
 
 function sameImage(image: CategoryImage, value: string | null): boolean {
@@ -57,7 +62,7 @@ function sameImage(image: CategoryImage, value: string | null): boolean {
 
 export function CategoryImagePicker({
   gallery, value, focal, businessId, createHref, title, description,
-  onUse, onRestore, onRemove, onFocalChange,
+  onUse, onRestore, onRemove, onFocalChange, simulated = false,
 }: Props) {
   const suggested = gallery.images.find((image) => image.id === gallery.suggestedId) ?? gallery.images[0];
   const selectedImage = gallery.images.find((image) => sameImage(image, value)) ?? null;
@@ -82,7 +87,7 @@ export function CategoryImagePicker({
     setNotice(null);
     try {
       await fn();
-      setNotice(done);
+      setNotice(simulated ? "Simulated in this fixture — nothing was saved." : done);
     } catch {
       setError("We couldn't save that. Check your connection and try again — nothing was changed.");
     } finally {
@@ -128,7 +133,7 @@ export function CategoryImagePicker({
           {description ? <p className="mt-1 max-w-xl text-sm text-zinc-600">{description}</p> : null}
         </div>
         <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
-          {value ? "Image saved" : "Suggested image"}
+          {value ? (simulated ? "Simulated — not saved" : "Image saved") : "Suggested image"}
         </span>
       </div>
 

@@ -1,0 +1,5 @@
+      1       Tests  4156 passed | 320 skipped (4476)
+      1  Test Files  348 passed | 37 skipped (385)
+     71 PrismaClientInitializationError: Prisma Client could not locate the Query Engine for runtime "debian-openssl-3.0.x".
+      1 Vitest caught 71 unhandled errors during the test run.
+exit=1 (sandbox: default @prisma/client generated with placeholder engine; 71 unhandled 'Query Engine not found'; 0 test failures)

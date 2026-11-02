@@ -1,0 +1,701 @@
+{
+  "generatedAt": "2026-11-01T23:01:02.164Z",
+  "prBase": "http://localhost:3000",
+  "mainBase": "http://localhost:3001",
+  "callbackStates": [
+    {
+      "viewport": "320x568",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "320x568",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "360x800",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "390x844",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "430x932",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "768x1024",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "paid",
+      "stateBlock": true,
+      "role": [
+        "Paystack confirmed the payment and your subscription is acti"
+      ],
+      "bar": 0,
+      "h1": "Payment confirmed ✓",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "activating",
+      "stateBlock": true,
+      "role": [
+        "Your payment is confirmed. We are still activating your subs"
+      ],
+      "bar": 0,
+      "h1": "Payment received — finishing activation",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "processing",
+      "stateBlock": true,
+      "role": [
+        "Paystack is still processing this payment. Your subscription"
+      ],
+      "bar": 1,
+      "h1": "Payment processing",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "cancelled",
+      "stateBlock": true,
+      "role": [
+        "The payment was cancelled. You have not been charged for thi"
+      ],
+      "bar": 0,
+      "h1": "Payment cancelled",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "failed",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification failure. No paymen"
+      ],
+      "bar": 0,
+      "h1": "Payment not completed",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "refunded",
+      "stateBlock": true,
+      "role": [
+        "This payment was refunded. Your subscription has not been ac"
+      ],
+      "bar": 0,
+      "h1": "Payment refunded",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "signin",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated sign-in requirement."
+      ],
+      "bar": 0,
+      "h1": "Sign in to check this payment",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    },
+    {
+      "viewport": "1366x768",
+      "outcome": "error",
+      "stateBlock": true,
+      "role": [
+        "FICTIONAL FIXTURE: simulated verification outage. Nothing wa"
+      ],
+      "bar": 0,
+      "h1": "Payment status unavailable",
+      "overflow": 0,
+      "pageErrors": [],
+      "verifyCalls": 2
+    }
+  ],
+  "duplicateSubmit": {
+    "checkoutFailureAlertText": "FICTIONAL FIXTURE: simulated checkout failure. No payment was started.",
+    "checkoutFailureRequestsAfterThreeSyncClicks": 1,
+    "registerRequestsAfterThreeSyncClicks": 1
+  },
+  "reducedMotion": {
+    "normal": {
+      "stateAnimations": [
+        "jata-state-in"
+      ],
+      "barAnimation": "jata-publish-sweep",
+      "barWidth": "130.391px"
+    },
+    "reduce": {
+      "stateAnimations": [],
+      "barAnimation": "none",
+      "barWidth": "326px"
+    }
+  },
+  "keyboard": {
+    "callbackFailed390": {
+      "stops": 12,
+      "unfocusable": 3,
+      "sample": [
+        {
+          "tag": "SUMMARY",
+          "text": "◐AppearanceLime Spark / Graphi",
+          "outline": true
+        },
+        {
+          "tag": "A",
+          "text": "Try again",
+          "outline": true
+        },
+        {
+          "tag": "A",
+          "text": "Back to subscription",
+          "outline": true
+        },
+        {
+          "tag": "BODY",
+          "text": "◐AppearanceLime Spark / Graphi",
+          "outline": false
+        }
+      ]
+    }
+  },
+  "realRoute": {
+    "main": {
+      "h1": "Sign in to check this payment",
+      "consoleErrors": [
+        "CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "uncaughtPageErrors": 0
+    },
+    "pr": {
+      "h1": "Sign in to check this payment",
+      "consoleErrors": [
+        "CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "CONSOLE Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "uncaughtPageErrors": 0
+    }
+  },
+  "pendingRecheck": {
+    "callsAtFirstPending": 2,
+    "callsAfter6s": 3,
+    "confirmedShown": false
+  }
+}

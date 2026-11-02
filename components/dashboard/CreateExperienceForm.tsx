@@ -11,30 +11,45 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORY_KEYS, getExperienceProfile } from "@/lib/experience/categories";
 
-export function CreateExperienceForm({ businessId, currentCategory }: { businessId: string; currentCategory?: string | null }) {
+export function CreateExperienceForm({
+  businessId,
+  currentCategory,
+  submitCreate,
+}: {
+  businessId: string;
+  currentCategory?: string | null;
+  /** Fixture-only transport. Production omits it and the form POSTs to `/api/experience`. */
+  submitCreate?: (body: Record<string, unknown>) => Promise<Response>;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<string>(
     CATEGORY_KEYS.includes(currentCategory as never) ? String(currentCategory) : "",
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Fixture only: with no page refresh, show the outcome in place. Production refreshes and this never shows.
+  const [fixtureDone, setFixtureDone] = useState(false);
 
   async function create() {
     if (!selected) return setError("Choose the type of business you run.");
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/experience", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, categoryKey: selected }),
-      });
+      const requestBody = { businessId, categoryKey: selected };
+      const response = submitCreate
+        ? await submitCreate(requestBody)
+        : await fetch("/api/experience", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(data.error || "We couldn’t start your website. Please try again.");
         return;
       }
-      router.refresh();
+      if (submitCreate) setFixtureDone(true);
+      else router.refresh();
     } catch {
       setError("We couldn’t reach the server. Please try again.");
     } finally {
@@ -75,6 +90,7 @@ export function CreateExperienceForm({ businessId, currentCategory }: { business
         })}
       </div>
       {error ? <p className="jata-error mt-3 text-sm" role="alert">{error}</p> : null}
+      {fixtureDone ? <p className="mt-3 text-sm font-semibold" role="status">Set up (simulated) — FICTIONAL FIXTURE. Nothing was created.</p> : null}
       <button type="button" className="jata-btn jata-btn-primary mt-4" disabled={busy} onClick={create}>
         {busy ? "Setting up…" : "Start my website"}
       </button>

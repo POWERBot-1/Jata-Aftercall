@@ -1,0 +1,330 @@
+[
+  {
+    "viewport": "320x568",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "320x568",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "320x568",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "320x568",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "320x568",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "360x800",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "360x800",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "360x800",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "360x800",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "360x800",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "390x844",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "390x844",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "390x844",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "390x844",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "390x844",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "430x932",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "430x932",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "430x932",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "430x932",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "430x932",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "768x1024",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "768x1024",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "768x1024",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "768x1024",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "1366x768",
+    "state": "populated",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "1366x768",
+    "state": "empty",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "1366x768",
+    "state": "loading",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": true,
+    "statusText": "Loading your businesses"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "error",
+    "pageErrors": 0,
+    "overflowX": false,
+    "busy": false,
+    "statusText": null
+  },
+  {
+    "viewport": "1366x768",
+    "keyboard": {
+      "uniqueStops": 39,
+      "navLikeStops": 11,
+      "allStopsOutlined": true,
+      "firstStops": [
+        "Choose JATA appearance",
+        "JATAAFTERCALL",
+        "Home",
+        "Log out",
+        "Overview",
+        "Subscription",
+        "AI Front Desk",
+        "Website Studio",
+        "Business POS",
+        "BOS",
+        "Autopilot",
+        "Add a business"
+      ]
+    }
+  },
+  {
+    "viewport": "390x844",
+    "reducedMotion": []
+  }
+]

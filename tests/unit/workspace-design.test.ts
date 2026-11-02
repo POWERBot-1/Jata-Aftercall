@@ -238,14 +238,15 @@ describe("workspace screens", () => {
   it("renders the shared workspace primitives on every owner surface", () => {
     expect(read("components/DashboardClient.tsx")).toContain("WorkspaceHero");
     for (const page of ["app/dashboard/subscription/page.tsx", "app/dashboard/studio/page.tsx", "app/dashboard/pos/page.tsx", "app/dashboard/ai/page.tsx"]) {
-      const source = read(page);
+      // The Studio index renders its presentation from components/studio/StudioIndexView.tsx (refactor).
+      const source = page === "app/dashboard/studio/page.tsx" ? read(page) + read("components/studio/StudioIndexView.tsx") : read(page);
       expect(source, page).toContain("WorkspaceHero");
       expect(source, page).toContain("workspaceImagery");
     }
   });
 
   it("shows every business state through the shared pill, never a raw enum", () => {
-    const studio = read("app/dashboard/studio/page.tsx");
+    const studio = read("app/dashboard/studio/page.tsx") + read("components/studio/StudioIndexView.tsx");
     const pos = read("app/dashboard/pos/page.tsx");
     for (const source of [read("components/DashboardClient.tsx"), studio, pos]) {
       expect(source).toContain("<StatusPill");

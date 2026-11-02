@@ -154,6 +154,11 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
+      // ADMIN-023 §028 bounded revision pages (owner-authorised 2026-11-02). Replaces ONLY the body of the
+      // baseline trigger function to raise its per-revision membership cap from 5,000 to 50,000. No table,
+      // row, trigger wiring, index or existing data is created, altered or rewritten. Rollback is documented
+      // in docs/agents/migrations/20261127000000-bounded-pages-rollback.sql.
+      "20261127000000_agent_referral_report_bounded_pages",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

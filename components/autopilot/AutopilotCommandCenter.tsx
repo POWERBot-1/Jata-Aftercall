@@ -210,6 +210,7 @@ export function AutopilotCommandCenter({
   const [checkoutPlanKey, setCheckoutPlanKey] = useState<string | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<ActivationNotice | null>(null);
   const checkoutInFlight = useRef(false);
+  const proposalOpInFlight = useRef(false);
 
   // Command center prompt + voice state
   const [commandInput, setCommandInput] = useState("");
@@ -352,6 +353,24 @@ export function AutopilotCommandCenter({
     proposalId: string,
     operation: "APPROVE_AND_EXECUTE" | "REJECT" | "ROLLBACK",
   ) {
+    // Synchronous in-flight guard. React state (`busy`) has not re-rendered between two clicks
+    // in the same task, so a closure check alone lets duplicate requests through. The server is
+    // idempotent for approvals, but the UI must not send duplicates.
+    if (proposalOpInFlight.current) return;
+    if (
+      operation === "APPROVE_AND_EXECUTE" &&
+      (data.globalKillSwitchActive || data.config.operationalStatus === "PAUSED")
+    ) {
+      // No request is sent while halted; the notice explains why nothing ran.
+      setBannerNotice({
+        tone: "error",
+        text: data.globalKillSwitchActive
+          ? "Approval is blocked: the platform kill switch is active. Nothing was executed."
+          : "Approval is blocked: Autopilot is paused for this business. Nothing was executed.",
+      });
+      return;
+    }
+    proposalOpInFlight.current = true;
     setBusy(true);
     setBannerNotice(null);
     try {
@@ -384,6 +403,7 @@ export function AutopilotCommandCenter({
     } catch {
       setBannerNotice(NETWORK_ERROR_NOTICE);
     } finally {
+      proposalOpInFlight.current = false;
       setBusy(false);
     }
   }
@@ -534,6 +554,10 @@ export function AutopilotCommandCenter({
   }
 
   const isPaused = data.config.operationalStatus === "PAUSED";
+  // Approvals and new proposals are halted by either the tenant pause or the platform-wide kill
+  // switch. The server enforces both (policy.ts checks the kill switch first); this flag only
+  // disables controls so users are not offered actions the server will refuse.
+  const isHalted = isPaused || data.globalKillSwitchActive;
   const canConfigure = ["OWNER", "ADMIN", "MANAGER"].includes(data.actorRole);
   const canManageBilling = ["OWNER", "ADMIN"].includes(data.actorRole);
   const canManageConsent = ["OWNER", "ADMIN", "MANAGER", "STAFF"].includes(data.actorRole);
@@ -595,10 +619,12 @@ export function AutopilotCommandCenter({
       {data.globalKillSwitchActive ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+          className="jata-state-enter rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
           <strong>Platform Kill Switch Active:</strong> Autonomous executions are globally paused.
-          Diagnostic metrics and historical audit logs remain available.
+          Approve &amp; Execute and new proposals are disabled here, and the server refuses them.
+          Rejecting proposals, diagnostics and audit logs remain available. Reactivation is an
+          authorised platform action and cannot be made from this screen.
         </div>
       ) : null}
 
@@ -615,9 +641,10 @@ export function AutopilotCommandCenter({
 
       {bannerNotice ? (
         <div
+          key={`${bannerNotice.tone}:${bannerNotice.text}`}
           role={bannerNotice.tone === "error" ? "alert" : "status"}
           aria-live={bannerNotice.tone === "error" ? "assertive" : "polite"}
-          className="rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-4 py-3 text-sm"
+          className="jata-state-enter rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] px-4 py-3 text-sm"
         >
           <StatusPill
             tone={
@@ -838,7 +865,7 @@ export function AutopilotCommandCenter({
                   </div>
                   <button
                     type="button"
-                    disabled={busy || isPaused || !canConfigure}
+                    disabled={busy || isHalted || !canConfigure}
                     onClick={() => void queueSuggestedProposal(cand)}
                     className="jata-btn jata-btn-primary min-h-[44px] self-start"
                   >
@@ -974,11 +1001,11 @@ export function AutopilotCommandCenter({
                     <>
                       <button
                         type="button"
-                        disabled={busy || isPaused || !canConfigure}
+                        disabled={busy || isHalted || !canConfigure}
                         onClick={() =>
                           void runProposalOperation(prop.id, "APPROVE_AND_EXECUTE")
                         }
-                        className="jata-btn jata-btn-primary min-h-[44px]"
+                        className="jata-btn jata-btn-primary min-h-[44px] autopilot-approval-control"
                       >
                         <CheckCircle2 size={14} aria-hidden="true" /> Approve &amp; Execute
                       </button>
@@ -986,7 +1013,7 @@ export function AutopilotCommandCenter({
                         type="button"
                         disabled={busy || !canConfigure}
                         onClick={() => void runProposalOperation(prop.id, "REJECT")}
-                        className="jata-btn jata-btn-secondary min-h-[44px]"
+                        className="jata-btn jata-btn-secondary min-h-[44px] autopilot-approval-control"
                       >
                         <XCircle size={14} aria-hidden="true" /> Reject
                       </button>
@@ -1061,7 +1088,7 @@ export function AutopilotCommandCenter({
           </div>
           <button
             type="submit"
-            disabled={busy || isPaused || !canConfigure || !ingestText.trim()}
+            disabled={busy || isHalted || !canConfigure || !ingestText.trim()}
             className="jata-btn jata-btn-secondary min-h-[44px]"
           >
             <FileSpreadsheet size={14} aria-hidden="true" /> Inspect &amp; Extract Safely

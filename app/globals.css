@@ -289,6 +289,14 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* Autopilot approval controls. The action fill is the same colour as the global focus ring in
+   both product themes, so the ring is drawn in the theme's text colour instead: it differs from
+   the fill and contrasts with the card surface in Lime Spark (dark card) and Emerald Ink (light). */
+.jata-btn.autopilot-approval-control:focus-visible {
+  outline: 2px solid var(--jata-ink);
+  outline-offset: 2px;
+}
+
 .jata-hint {
   color: var(--jata-muted);
   font-size: 0.75rem;
@@ -609,6 +617,9 @@ button:focus-visible {
   background: var(--color-surface-muted);
 }
 .product-theme-option input { margin-top: 0.2rem; accent-color: var(--color-primary); }
+/* Touch target: the native radio is the control inside a label that is already large. Give the
+   radio itself a 24x24 CSS box (WCAG 2.5.8 minimum) so it is never the smallest hit area. */
+.product-theme-option input[type="radio"] { width: 24px; height: 24px; margin: 0.2rem 0 0; flex: none; }
 .product-theme-swatches { display: flex; overflow: hidden; height: 2.1rem; border: 1px solid var(--color-border); border-radius: 0.55rem; }
 .product-theme-swatches span { flex: 1; }
 .product-theme-option-copy { display: grid; gap: 0.2rem; }
@@ -4495,7 +4506,7 @@ button:focus-visible {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.ws-kicker--light { color: var(--ws-amber); }
+.ws-kicker--light { color: var(--ws-amber, #f0a03c); }
 
 .ws-section-head {
   display: flex;
@@ -4522,12 +4533,16 @@ button:focus-visible {
   overflow: hidden;
   border: 1px solid rgba(247, 242, 232, 0.1);
   border-radius: var(--ws-radius-xl);
-  background: var(--ws-ink);
-  color: var(--ws-on-ink);
+  /* The hero is always a dark photographic band, so it carries its own fallback tokens. It must
+     not depend on `.ws-shell` being an ancestor: without the shell, an undefined --ws-ink leaves the
+     background transparent and an undefined --ws-on-ink inherits the page's dark text colour, which
+     painted the headline dark-on-photo under the Emerald Ink theme (measured 1.0:1). */
+  background: var(--ws-ink, #14110f);
+  color: var(--ws-on-ink, #f7f2e8);
   padding: clamp(1.15rem, 3.6vw, 2.5rem);
   box-shadow: var(--ws-elev-3);
 }
-.ws-hero__media { position: absolute; inset: 0; z-index: -2; background: var(--ws-ink); }
+.ws-hero__media { position: absolute; inset: 0; z-index: -2; background: var(--ws-ink, #14110f); }
 .ws-hero__media img {
   width: 100%;
   height: 100%;
@@ -4549,8 +4564,8 @@ button:focus-visible {
      line run to the middle of the card, over the brightest part of the city lights, so the scrim
      has to still be near-opaque there for the body copy to clear AA contrast. */
   background:
-    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.9) 42%, rgba(20, 17, 15, 0.74) 68%, rgba(20, 17, 15, 0.42) 100%),
-    linear-gradient(0deg, rgba(20, 17, 15, 0.7), transparent 62%);
+    linear-gradient(96deg, rgba(20, 17, 15, 0.96) 0%, rgba(20, 17, 15, 0.93) 46%, rgba(20, 17, 15, 0.84) 70%, rgba(20, 17, 15, 0.5) 100%),
+    linear-gradient(0deg, rgba(20, 17, 15, 0.9) 0%, rgba(20, 17, 15, 0.78) 34%, transparent 66%);
 }
 .ws-hero__inner { position: relative; display: grid; gap: 1rem; max-width: 46rem; }
 .ws-hero__title {
@@ -4559,11 +4574,23 @@ button:focus-visible {
   font-weight: 600;
   line-height: 1.06;
   letter-spacing: -0.02em;
-  color: var(--ws-on-ink);
+  color: var(--ws-on-ink, #f7f2e8);
   text-wrap: balance;
 }
-.ws-hero__title em { font-style: italic; color: var(--ws-amber); }
+.ws-hero__title em { font-style: italic; color: var(--ws-amber, #f0a03c); }
 .ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.88); font-size: 0.92rem; line-height: 1.6; }
+/* Text-local contrast backing. The photograph's brightest city lights sit behind the subtitle and
+   the meta line; a scrim dark enough to clear AA there would hide the image, so only these two lines
+   get a translucent ink backing. The photo, focal point and every other hero element are unchanged. */
+.ws-hero__sub, .ws-hero__meta {
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(20, 17, 15, 0.8);
+  border-radius: 0.35rem;
+  padding: 0.12rem 0.45rem;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
 .ws-hero__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
 .ws-hero__meta { color: rgba(247, 242, 232, 0.78); font-size: 0.75rem; }
 .ws-hero__stats {
@@ -5575,6 +5602,115 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ws-rail a, .ws-status { transition: none; }
+}
+
+
+/* ------------------------------------------------------------------------
+ * Fintech workspace motion (route transitions, navigation feedback, staggered
+ * entrances, cart and payment-state transitions).
+ *
+ * Every rule here animates presentation only. Money values, balances, statuses and
+ * labels are rendered at their final text from the first frame, so no amount is
+ * counted up/down and no status can appear to be a different result mid-animation.
+ * Reduced motion removes all movement; content stays fully visible.
+ * ------------------------------------------------------------------------ */
+@keyframes jata-route-in { from { opacity: 0; transform: translate3d(0, 8px, 0); } to { opacity: 1; transform: none; } }
+@keyframes jata-indicator-in { from { opacity: 0.6; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes jata-line-in { from { opacity: 0; transform: translate3d(-6px, 0, 0); background-color: color-mix(in srgb, var(--jata-accent) 14%, transparent); } to { opacity: 1; transform: none; background-color: transparent; } }
+@keyframes jata-value-bump { 0% { transform: scale(1.06); } 100% { transform: none; } }
+@keyframes jata-state-in { from { opacity: 0; transform: translate3d(0, 4px, 0); } to { opacity: 1; transform: none; } }
+@keyframes jata-stagger-in { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+
+.jata-route-enter { animation: jata-route-in 260ms var(--jata-ease-out, cubic-bezier(0.22, 0.61, 0.36, 1)) both; }
+
+/* Staggered entrance for metric cards and section lists (first paint only, max 6 steps). */
+.jata-metric-grid > * { animation: jata-stagger-in 320ms var(--jata-ease-out, ease-out) both; }
+.jata-metric-grid > :nth-child(2) { animation-delay: 60ms; }
+.jata-metric-grid > :nth-child(3) { animation-delay: 120ms; }
+.jata-metric-grid > :nth-child(4) { animation-delay: 180ms; }
+.jata-metric-grid > :nth-child(n+5) { animation-delay: 240ms; }
+
+/* Navigation: the active section animates in, and presses feel physical. */
+.ws-rail a[aria-current="page"], .pos-nav-link[data-active="true"] { animation: jata-indicator-in 220ms var(--jata-ease-out, ease-out) both; }
+.ws-rail a, .pos-nav-link { transition: transform 120ms var(--jata-ease-out, ease-out), background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.ws-rail a:active, .pos-nav-link:active { transform: scale(0.96); }
+
+/* POS cart: a new line eases in, and a changed quantity total pulses once. */
+.pos-line { animation: jata-line-in 280ms var(--jata-ease-out, ease-out) both; }
+.pos-qty .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
+
+/* Website Studio (restrained): category choice, preview entrance and status presentation. Motion only
+   changes border, background and opacity. Text, values and the preview content are shown at their final state. */
+label:has(> input[type="radio"][name="category"]) { transition: border-color 160ms var(--jata-ease-out, ease-out), background-color 160ms var(--jata-ease-out, ease-out); }
+.jc-frame__iframe { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
+/* Keyboard focus on the preview frame: the ring is drawn from the .is-focused state set on focus/blur (StudioCanvas). */
+.jc-frame.is-focused > .jc-frame__iframe { outline: 2px solid var(--jata-focus); outline-offset: 3px; }
+.jc-alert[role="status"], .jc-alert[role="alert"] { animation: jata-state-in 200ms var(--jata-ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  label:has(> input[type="radio"][name="category"]), .jc-frame__iframe, .jc-alert[role="status"], .jc-alert[role="alert"] {
+    transition: none !important; animation: none !important;
+  }
+}
+
+/* Publishing progress (Studio): an indeterminate bar shown only while the server's answer is awaited. */
+.jata-publish-progress { position: relative; height: 4px; overflow: hidden; border-radius: 999px; background: var(--jata-line); }
+.jata-publish-progress__bar { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--jata-accent); animation: jata-publish-sweep 1.1s var(--jata-ease-in-out, ease-in-out) infinite; }
+@keyframes jata-publish-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .jata-publish-progress__bar { animation: none; width: 100%; opacity: 0.45; }
+}
+
+/* Product tiles and totals: press feedback on the tile, and the total pulses when it changes.
+   The total is the server-computed figure; only its paint is animated, never its digits. */
+.pos-item { transition: transform 120ms var(--jata-ease-out, ease-out), border-color 160ms ease; }
+.pos-item:active:not(:disabled) { transform: scale(0.98); }
+.pos-total-line .jata-value-bump { display: inline-block; animation: jata-value-bump 180ms var(--jata-ease-out, ease-out) both; }
+/* Removed cart line: eases out while the cart state has already dropped it. Presentation only; the
+   ghost carries no money value, is aria-hidden and ignores pointer input. */
+@keyframes jata-line-out { to { opacity: 0; transform: translate3d(8px, 0, 0); } }
+.pos-line-leaving { animation: jata-line-out 200ms var(--jata-ease-in, ease-in) both; pointer-events: none; }
+/* Owner-Lite: the till renders static. Same rule the storefront applies for the "lite" preference. */
+[data-pos-motion="lite"], [data-pos-motion="lite"] * { animation: none !important; transition: none !important; }
+[data-pos-motion="lite"] .pos-item:active { transform: none; }
+/* No exit ghost is created under owner-Lite or reduced motion (see TillClient exitMotionAllowed). */
+
+/* Payment / order state: the state block re-enters when its state changes. */
+.jata-state-enter { animation: jata-state-in 260ms var(--jata-ease-out, ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jata-route-enter, .jata-metric-grid > *, .ws-rail a[aria-current="page"], .pos-nav-link[data-active="true"],
+  .pos-line, .pos-qty .jata-value-bump, .pos-total-line .jata-value-bump, .jata-state-enter {
+    animation: none !important;
+  }
+  .pos-item, .pos-item:active { transition: none !important; transform: none !important; }
+  .ws-rail a, .pos-nav-link, .ws-rail a:active, .pos-nav-link:active { transition: none !important; transform: none !important; }
+}
+
+/* Overview: sections and the hero statistic tiles enter in sequence (first paint only).
+   Figures are rendered at their final value; nothing is counted up. */
+.ws-stack.jata-motion-entry { animation: none; }
+.ws-stack.jata-motion-entry > * { animation: jata-stagger-in 340ms var(--jata-ease-out, ease-out) both; }
+.ws-stack.jata-motion-entry > :nth-child(2) { animation-delay: 70ms; }
+.ws-stack.jata-motion-entry > :nth-child(3) { animation-delay: 140ms; }
+.ws-stack.jata-motion-entry > :nth-child(n+4) { animation-delay: 210ms; }
+.ws-hero__stats > * { animation: jata-stagger-in 320ms var(--jata-ease-out, ease-out) both; }
+.ws-hero__stats > :nth-child(2) { animation-delay: 60ms; }
+.ws-hero__stats > :nth-child(3) { animation-delay: 120ms; }
+.ws-hero__stats > :nth-child(n+4) { animation-delay: 180ms; }
+@media (prefers-reduced-motion: reduce) {
+  .ws-stack.jata-motion-entry > *, .ws-hero__stats > * { animation: none !important; }
+}
+
+/* Form fields: focus and validation feedback. Only border colour and opacity change, so the
+   field's resting size, padding and layout are unchanged. Errors ease in once, when they mount. */
+.jata-input {
+  transition: border-color var(--jata-dur-fast) var(--jata-ease-out), box-shadow var(--jata-dur-fast) var(--jata-ease-out);
+}
+.jata-input:hover:not(:disabled):not(:focus) { border-color: color-mix(in srgb, var(--jata-ink) 35%, var(--jata-line)); }
+.jata-input[aria-invalid="true"] { border-color: var(--jata-danger); }
+.jata-error { animation: jata-state-in 200ms var(--jata-ease-out, ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .jata-input, .jata-error { transition: none; animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

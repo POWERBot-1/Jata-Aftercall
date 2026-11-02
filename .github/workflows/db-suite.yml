@@ -1,0 +1,69 @@
+name: Database suite (isolated PostgreSQL)
+
+# Runs the database-backed Autopilot safety suite and the agent referral report pagination suite
+# (tests/db/**) against a DISPOSABLE PostgreSQL 18 that scripts/test-db/run-db-suite.mjs starts on
+# loopback inside this job, applies all committed migrations to, runs the tests against, and stops.
+#
+# What this proves: the real domain functions and the committed SQL migrations, executed on a real
+# PostgreSQL, including the database-enforced rules (immutability triggers, baseline membership
+# checks, tenant scoping at query level).
+#
+# What this does NOT prove: the native Prisma query engine (this run uses Prisma's WASM engine with
+# the driver adapter, labelled in the summary); the production database or any production
+# migration; Paystack, Meta or any other provider; browser behaviour (see interactive-business-e2e.yml).
+#
+# No repository secret is used. No connection string is printed; the database password is random
+# per run and is never written to disk or logged. The job never reads DATABASE_URL or DIRECT_URL.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  db-suite:
+    name: Autopilot and agent-report database suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the database suite against a disposable PostgreSQL
+        run: |
+          set -o pipefail
+          node scripts/test-db/run-db-suite.mjs tests/db/autopilot-safety.test.ts tests/db/agent-referral-report-pagination.test.ts tests/db/agent-referral-revision-pages.test.ts 2>&1 | tee /tmp/db-suite.log
+
+      # The runner exits 0 when every test is skipped, so the pass condition is asserted here:
+      # exactly the expected number of tests, none failed, none skipped, all migrations applied.
+      - name: Assert the suite actually ran against the migrated database
+        run: |
+          set -o pipefail
+          node scripts/test-db/assert-db-suite.mjs /tmp/db-suite.log --expect 31 2>&1 | tee /tmp/db-suite-assert.log
+
+      - name: Upload the sanitised database suite log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-suite-log-${{ github.sha }}
+          path: |
+            /tmp/db-suite.log
+            /tmp/db-suite-assert.log
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,0 +1,634 @@
+[
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "320x568",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "360x800",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "430x932",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "768x1024",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "01-overview",
+    "file": "out/ai/01-overview-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "02-test-chat-empty",
+    "file": "out/ai/02-test-chat-empty-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "03-loading",
+    "file": "out/ai/03-loading-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "reply in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "04-simulated-reply-missing-info",
+    "file": "out/ai/04-simulated-reply-missing-info-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "05-simulated-reply-grounded",
+    "file": "out/ai/05-simulated-reply-grounded-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "06-save-progress",
+    "file": "out/ai/06-save-progress-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0,
+    "note": "settings save in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "success",
+    "state": "07-save-simulated-success",
+    "file": "out/ai/07-save-simulated-success-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "failure",
+    "state": "08-reply-failure",
+    "file": "out/ai/08-reply-failure-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "failure",
+    "state": "09-save-failure",
+    "file": "out/ai/09-save-failure-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "1366x768",
+    "outcome": "empty",
+    "state": "10-empty-outcome-reply",
+    "file": "out/ai/10-empty-outcome-reply-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "networkApiCalls": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "keyboard-after-test-input",
+    "stops": [
+      {
+        "tag": "BUTTON",
+        "label": "How much is Fictional braid kit?",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Tell me about Fictional braid styling",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "How much is delivery to Fixture Town cen",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "How long does delivery take?",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Are you open now?",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "I want to order",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Next: publish",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Back",
+        "outline": "solid"
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Next: Publish",
+        "outline": "solid"
+      },
+      {
+        "tag": "A",
+        "label": "Back to dashboard",
+        "outline": "solid"
+      },
+      {
+        "tag": "BODY",
+        "label": "◐AppearanceLime Spark / GraphiteChoose y",
+        "outline": "none"
+      },
+      {
+        "tag": "SUMMARY",
+        "label": "Choose JATA appearance",
+        "outline": "solid"
+      }
+    ]
+  },
+  {
+    "viewport": "390x844",
+    "state": "reduced-motion-off-loading",
+    "animating": [
+      "DIV:jata-state-in"
+    ],
+    "submitTransition": "0.12s, 0.12s, 0.12s"
+  },
+  {
+    "viewport": "390x844",
+    "state": "reduced-motion-on-loading",
+    "animating": [],
+    "submitTransition": "1e-05s"
+  }
+]

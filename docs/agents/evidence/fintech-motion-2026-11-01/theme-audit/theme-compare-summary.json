@@ -1,0 +1,1682 @@
+[
+  {
+    "viewport": "320x568",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x14034",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x14034",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x626",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x626",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x1042",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x1042",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x7889",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "320x568",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "320x7889",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x13279",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x13279",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x858",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x858",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x957",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x957",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x7312",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "360x800",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "360x7312",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x12961",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x12961",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x902",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x902",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x957",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x957",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x6783",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "390x844",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "390x6783",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x12461",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 586369,
+    "dims": "430x12461",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x990",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x990",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x990",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x990",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x6493",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "430x932",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "430x6493",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 926,
+    "dims": "768x9424",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x9424",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x1082",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x1082",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x1082",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x1082",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x4229",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "768x1024",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "768x4229",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x8483",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 661,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "JATA AFTERCALL — Business details and contact options in one page",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x8483",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/login",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x826",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/login",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 90,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Log in | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x826",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/register",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x991",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/register",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 101,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Create your account | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x991",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/pricing",
+    "theme": "lime-spark",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "lime-spark",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x4355",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  },
+  {
+    "viewport": "1366x768",
+    "route": "/pricing",
+    "theme": "emerald-ink",
+    "builds": {
+      "main": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      },
+      "pr": {
+        "status": 200,
+        "fpCount": 166,
+        "meta": {
+          "attr": "emerald-ink",
+          "overflow": 0,
+          "title": "Pricing and subscriptions — JATA AFTERCALL | JATA AFTERCALL",
+          "bodyBg": "rgb(250, 250, 248)",
+          "font": "Inter, system-ui, -apple-system, sans-serif"
+        },
+        "errors": []
+      }
+    },
+    "pixelDiff": 0,
+    "dims": "1366x4355",
+    "styleDiffElements": 0,
+    "firstStyleDiff": null
+  }
+]

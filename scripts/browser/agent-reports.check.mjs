@@ -1,0 +1,414 @@
+#!/usr/bin/env node
+/**
+ * ADMIN-023 browser journey: an active agent reads THEIR OWN referral report snapshots through the
+ * real application route (/agents/reports) and the real API, in Chrome, over six viewports.
+ *
+ *   AUTH_SECRET=... DATABASE_URL=postgresql://...@127.0.0.1:5432/<db> CHROME_PATH=... \
+ *   AGENT_TEST_BASE_URL=http://127.0.0.1:3200 AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+ *   node scripts/browser/agent-reports.check.mjs
+ *
+ * Start the production server first (`next start`) against the SAME database and env.
+ *
+ * Data: fictional agents only (`@example.test`), seeded into a disposable loopback database. No
+ * messages, payments, customer data, Paystack or live automation are touched. Session cookies are
+ * minted with the same AUTH_SECRET the server verifies, exactly as scripts/erp/erp-pages.check.mjs does.
+ *
+ * Output: one line per check, then `RESULT: PASS|FAIL|BLOCKED`. Connection strings, cookies and
+ * secrets are never printed. Screenshots are written to AGENT_REPORT_EVIDENCE_DIR (default .cache).
+ */
+import { mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { SignJWT } from "jose";
+
+const require = createRequire(import.meta.url);
+// Any promise nobody awaited must be reported and fail the run, never end it silently.
+process.on("unhandledRejection", (error) => {
+  console.log(`::error title=ADMIN-023 browser check unhandled error::${String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200)}`);
+  console.log("RESULT: FAIL");
+  process.exit(1);
+});
+/** Short, non-secret description of an error: the first informative lines and any Prisma error code. */
+function describe(error) {
+  const raw = String(error?.message ?? error ?? "");
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join(" | ");
+  const code = error && typeof error === "object" && "code" in error ? `code=${error.code} ` : "";
+  return `${code}${lines || error?.name || "unknown error"}`.replace(/postgres(ql)?:\/\/[^\s|]*/gi, "[connection string removed]").replace(/[\r\n]/g, " ").slice(0, 300);
+}
+// Start-up faults (module load, client construction) must be visible, not a bare exit code.
+function startupFault(error) {
+  const line = String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200);
+  console.log(`::error title=ADMIN-023 browser check start-up failed::${line}`);
+  console.log("RESULT: FAIL");
+  process.exit(1);
+}
+const SECRET = process.env.AUTH_SECRET ?? "";
+const CHROME = process.env.CHROME_PATH ?? "";
+const DATABASE_URL = process.env.PRISMA_TEST_DATABASE_URL || process.env.DATABASE_URL || "";
+const base = new URL(process.env.AGENT_TEST_BASE_URL || "http://127.0.0.1:3200");
+const outDir = path.resolve(process.env.AGENT_REPORT_EVIDENCE_DIR || ".cache/agent-reports");
+
+function blocked(reason) {
+  console.log(`BLOCKED  ${reason}`);
+  console.log(`::error title=ADMIN-023 browser journey blocked::${reason.replace(/[\r\n]/g, " ").slice(0, 200)}`);
+  console.log("RESULT: BLOCKED");
+  process.exit(2);
+}
+if (!SECRET) blocked("AUTH_SECRET is not set; cannot mint a session cookie the server will verify.");
+if (!CHROME) blocked("CHROME_PATH is not set; the browser journey was not run.");
+if (!DATABASE_URL) blocked("DATABASE_URL is not set; this journey needs a disposable database.");
+if (!["127.0.0.1", "localhost", "[::1]"].includes(base.hostname) || base.protocol !== "http:" || base.username || base.password) {
+  blocked("AGENT_TEST_BASE_URL must be an unauthenticated loopback http URL.");
+}
+const dbUrl = new URL(DATABASE_URL);
+if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(dbUrl.hostname)) {
+  blocked("DATABASE_URL must be a loopback database. Refusing to seed anything else.");
+}
+
+let puppeteer;
+let prisma;
+try {
+  puppeteer = require("puppeteer-core");
+  // Same engine selection as scripts/erp/erp-pages.check.mjs: the product's native client, pointed at the test DB.
+  const { PrismaClient } = require("@prisma/client");
+  prisma = new PrismaClient({ datasourceUrl: DATABASE_URL });
+} catch (error) {
+  startupFault(error);
+}
+
+const results = [];
+let failed = 0;
+function check(name, ok, detail = "") {
+  results.push({ name, ok: Boolean(ok) });
+  if (!ok) failed += 1;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+  // A GitHub annotation so a failing check is visible in the job's annotations, not only in the log.
+  if (!ok) console.log(`::error title=ADMIN-023 browser check failed::${String(name).replace(/[\r\n]/g, " ").slice(0, 200)}${detail ? ` (${String(detail).replace(/[\r\n]/g, " ").slice(0, 160)})` : ""}`);
+}
+
+const runId = randomUUID().slice(0, 8);
+const VIEWPORTS = [[320, 568], [360, 800], [390, 844], [430, 932], [768, 1024], [1366, 768]];
+const DAY = 86_400_000;
+const base0 = Date.UTC(2020, 0, 1, 21, 0, 0);
+
+async function makeAgent(label, status, agentStatus, snapshotCount, periodPrefix = "daily") {
+  const user = await prisma.user.create({ data: { email: `agent-report-${label}-${runId}@example.test`, passwordHash: "x", role: "CUSTOMER" } });
+  const phoneSuffix = String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
+  const app = await prisma.agentApplication.create({
+    data: { userId: user.id, fullName: `Synthetic ${label} ${runId}`, phoneE164: `+2547${phoneSuffix}`, status, agentStatus, privacyAcknowledgedAt: new Date() },
+  });
+  if (snapshotCount > 0) {
+    await prisma.agentReferralReportSnapshot.createMany({
+      data: Array.from({ length: snapshotCount }, (_, i) => ({
+        applicationId: app.id,
+        // Must match AgentReferralReportSnapshot_period_check: daily:YYYY-MM-DD or monthly:YYYY-MM.
+        periodKey: periodPrefix === "daily" ? `daily:${new Date(base0 + i * DAY).toISOString().slice(0, 10)}` : `monthly:2019-${String(i + 1).padStart(2, "0")}`,
+        periodType: periodPrefix === "daily" ? "DAILY" : "MONTHLY",
+        startInclusive: new Date(base0 + i * DAY),
+        endExclusive: new Date(base0 + (i + 1) * DAY),
+        registrationCount: BigInt(0),
+        existingApplicationCount: BigInt(0),
+      })),
+    });
+  }
+  return { user, app };
+}
+
+// ADMIN-023 §028: one fictional agent whose baseline revision holds MORE than 5,000 members, so the
+// reconcile GET must return a real next-page marker. Identifiers are run-scoped and fictional.
+const BIG_PERIOD = "daily:2019-06-15";
+const BIG_START = Date.UTC(2019, 5, 14, 21, 0, 0);
+const BIG_MEMBERS = 5001;
+async function seedLargeRevision(app) {
+  const link = await prisma.agentReferralLink.create({ data: { referrerApplicationId: app.id, tokenHash: `big-link-${runId}`, expiresAt: new Date(BIG_START + 365 * DAY) } });
+  const CHUNK = 1000;
+  for (let offset = 0; offset < BIG_MEMBERS; offset += CHUNK) {
+    const slice = Array.from({ length: Math.min(CHUNK, BIG_MEMBERS - offset) }, (_, k) => offset + k);
+    await prisma.user.createMany({ data: slice.map((i) => ({ id: `bigu-${runId}-${i}`, email: `big-ref-${runId}-${i}@example.test`, passwordHash: "x", role: "CUSTOMER" })) });
+    await prisma.agentApplication.createMany({ data: slice.map((i) => ({ id: `biga-${runId}-${i}`, userId: `bigu-${runId}-${i}`, fullName: "Synthetic referred", phoneE164: `+2546${String(i).padStart(8, "0")}`, status: "PENDING", agentStatus: "INACTIVE", privacyAcknowledgedAt: new Date() })) });
+    await prisma.agentReferralAttribution.createMany({ data: slice.map((i) => ({ id: `bigatt-${runId}-${i}`, referrerApplicationId: app.id, referredApplicationId: `biga-${runId}-${i}`, linkId: link.id, consentedAt: new Date(BIG_START), source: "REGISTRATION", createdAt: new Date(BIG_START + 1000 + i) })) });
+  }
+  await prisma.agentReferralReportSnapshot.create({ data: { applicationId: app.id, periodKey: BIG_PERIOD, periodType: "DAILY", startInclusive: new Date(BIG_START), endExclusive: new Date(BIG_START + DAY), registrationCount: BigInt(BIG_MEMBERS), existingApplicationCount: BigInt(0) } });
+}
+
+async function cookieFor(user) {
+  const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role, name: user.name ?? "", sessionVersion: user.sessionVersion ?? 0 })
+    .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("1h").sign(new TextEncoder().encode(SECRET));
+  return { name: "jata_session", value: token, url: base.origin };
+}
+
+async function waitForServer(timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(new URL("/login", base), { redirect: "manual" });
+      if (response.status < 500) return true;
+    } catch { /* not ready */ }
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  return false;
+}
+
+async function main() {
+  if (!(await waitForServer())) blocked("the server did not answer on AGENT_TEST_BASE_URL; start it first.");
+  await mkdir(outDir, { recursive: true });
+
+  // Seed. Counts are zero because the baseline trigger requires counts to equal real attribution rows.
+  const active = await makeAgent("active", "PENDING", "ACTIVE", 101);
+  const empty = await makeAgent("empty", "PENDING", "ACTIVE", 0);
+  const other = await makeAgent("other", "PENDING", "ACTIVE", 3, "monthly");
+  const pending = await makeAgent("pending", "PENDING", "INACTIVE", 2);
+  const big = await makeAgent("big", "PENDING", "ACTIVE", 0);
+  await seedLargeRevision(big.app);
+  const admin = await prisma.user.create({ data: { email: `agent-report-admin-${runId}@example.test`, passwordHash: "x", role: "ADMIN" } });
+  const customer = await prisma.user.create({ data: { email: `agent-report-customer-${runId}@example.test`, passwordHash: "x", role: "CUSTOMER" } });
+
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+  try {
+    const page = await browser.newPage();
+    await page.setCacheEnabled(false);
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      let url;
+      try { url = new URL(request.url()); } catch { return void request.abort().catch(() => {}); }
+      return url.origin === base.origin ? void request.continue().catch(() => {}) : void request.abort().catch(() => {});
+    });
+    const pageErrors = [];
+    page.on("pageerror", (error) => {
+      const frames = String(error?.stack ?? "").split("\n").slice(0, 3).map((l) => l.trim()).join(" <- ");
+      pageErrors.push(`${String(error?.message ?? error).slice(0, 160)} [${new URL(page.url()).pathname}] ${frames}`.replace(/[\r\n]/g, " ").slice(0, 400));
+    });
+    // Console errors are kept apart: a 401/403 resource response is the EXPECTED refusal the journey
+    // triggers on purpose, and is reported as such. Anything else is an unexpected console error.
+    const expectedRefusals = [];
+    const unexpectedConsole = [];
+    // True only while the journey itself injects a 503 to exercise the error state.
+    let injectingError = false;
+    // True only while the journey itself probes refusals (malformed cursor, another agent's revision).
+    let probingRefusals = false;
+    page.on("console", (message) => {
+      if (message.type() !== "error") return;
+      const text = message.text();
+      if (/Failed to load resource: the server responded with a status of (401|403)\b/.test(text)) expectedRefusals.push(text);
+      else if (injectingError && /Failed to load resource: the server responded with a status of 503\b/.test(text)) expectedRefusals.push(text);
+      else if (probingRefusals && /Failed to load resource: the server responded with a status of (400|404)\b/.test(text)) expectedRefusals.push(text);
+      else unexpectedConsole.push(text.slice(0, 200));
+    });
+
+    // 1. Anonymous visitors are sent to sign-in and receive no report data.
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setViewport({ width: 390, height: 844 });
+    await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    const anonUrl = new URL(page.url());
+    const anonBody = await page.evaluate(() => (document.body?.innerText ?? ""));
+    check("anonymous visitor is redirected to sign-in", anonUrl.pathname === "/login", anonUrl.pathname);
+    check("anonymous response shows no report data", !anonBody.includes("Referral evidence by completed period") && !anonBody.includes("Load older snapshots"));
+
+    // 2. Refused accounts: ADMIN and customer without an active agent application. No data, no admin path.
+    for (const [label, user] of [["ADMIN without agent application", admin], ["customer without agent application", customer], ["PENDING inactive agent", pending.user]]) {
+      await page.deleteCookie(...(await page.cookies()));
+      await page.setCookie(await cookieFor(user));
+      for (const [w, h] of VIEWPORTS) {
+        await page.setViewport({ width: w, height: h });
+        await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+        const state = await page.evaluate(() => ({
+          text: (document.body?.innerText ?? ""),
+          hasButton: Boolean([...document.querySelectorAll("button")].find((b) => /Load older/.test(b.textContent || ""))),
+          hasList: Boolean(document.querySelector("ol[aria-label]")),
+          overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        }));
+        const ok = state.text.includes("An active agent account is required") && !state.hasButton && !state.hasList && !state.overflow;
+        check(`${label} is refused at ${w}x${h}`, ok);
+        if (w === 390) await page.screenshot({ path: path.join(outDir, `refused-${label.split(" ")[0].toLowerCase()}-390x844.png`), captureBeyondViewport: false });
+      }
+      const apiStatus = await page.evaluate(async () => (await fetch("/api/agents/reports/referrals", { credentials: "same-origin" })).status);
+      check(`${label} API returns refusal`, apiStatus === 403 || apiStatus === 401, `HTTP ${apiStatus}`);
+    }
+
+    // 3. Active agent with 101 snapshots: populated, paginated, no duplicates, no other agent's data.
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(active.user));
+    for (const [w, h] of VIEWPORTS) {
+      await page.setViewport({ width: w, height: h });
+      await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+      await page.waitForSelector("ol[aria-label]");
+      const first = await page.evaluate(() => {
+        const items = [...document.querySelectorAll("ol[aria-label] > li")];
+        const button = [...document.querySelectorAll("button")].find((b) => /Load older/.test(b.textContent || ""));
+        const rect = button ? button.getBoundingClientRect() : null;
+        return {
+          count: items.length,
+          headings: items.map((li) => li.querySelector("h3")?.textContent || ""),
+          hasButton: Boolean(button),
+          buttonHeight: rect ? Math.round(rect.height) : 0,
+          overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+          text: (document.body?.innerText ?? ""),
+        };
+      });
+      check(`active agent sees the first 100 own snapshots at ${w}x${h}`, first.count === 100 && first.hasButton && !first.overflow, `count=${first.count}`);
+      check(`touch target for "Load older" is at least 44px at ${w}x${h}`, first.buttonHeight >= 44, `${first.buttonHeight}px`);
+      if (w === 390) await page.screenshot({ path: path.join(outDir, "populated-first-page-390x844.png") });
+
+      await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => /Load older/.test(b.textContent || ""))?.click());
+      await page.waitForFunction(() => document.querySelectorAll("ol[aria-label] > li").length === 101, { timeout: 15000 });
+      const after = await page.evaluate(() => {
+        const headings = [...document.querySelectorAll("ol[aria-label] > li h3")].map((h) => h.textContent || "");
+        const button = [...document.querySelectorAll("button")].find((b) => /Load older/.test(b.textContent || ""));
+        return { count: headings.length, unique: new Set(headings).size, buttonGone: !button, overflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      });
+      check(`"Load older" appends the remainder without duplicates at ${w}x${h}`, after.count === 101 && after.unique === 101 && after.buttonGone && !after.overflow, `items=${after.count} unique=${after.unique}`);
+      if (w === 390) await page.screenshot({ path: path.join(outDir, "populated-all-pages-390x844.png") });
+    }
+
+    // 4. Cross-tenant: the other agent's monthly periods never appear in this agent's page.
+    await page.setViewport({ width: 390, height: 844 });
+    await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    await page.waitForSelector("ol[aria-label]");
+    // The other agent's snapshots are MONTHLY; this agent's are DAILY. Any "Monthly" label or the
+    // other agent's name would therefore be a cross-tenant disclosure.
+    const leakText = await page.evaluate(() => (document.body?.innerText ?? ""));
+    check("another agent's snapshots and name never appear in this page", !leakText.includes("Monthly") && !leakText.includes(`Synthetic other ${runId}`) && !leakText.includes(`Synthetic big ${runId}`));
+
+    // 5. Keyboard: the load control is reachable and operable without a pointer.
+    await page.evaluate(() => { window.scrollTo(0, 0); });
+    const focusable = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("button")].find((x) => /Load older|Loading/.test(x.textContent || ""));
+      return Boolean(b) && !b.disabled;
+    });
+    check("load control is a focusable enabled button", focusable);
+
+    // 6. ADMIN-023 §028: the big agent's revision 1 (5,001 members) is read in server-paged pages through
+    //    the UI at every viewport. The next-page marker must appear, every page must be bounded, and the
+    //    full list must be complete with no duplicates. Pages are followed by clicking "Load more evidence".
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(big.user));
+    for (const [w, h] of VIEWPORTS) {
+      await page.setViewport({ width: w, height: h });
+      await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+      await page.waitForSelector("ol[aria-label]");
+      const opened = await page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => /Show evidence list/.test(x.getAttribute("aria-label") || x.textContent || ""));
+        if (!b) return false;
+        b.click();
+        return true;
+      });
+      check(`revision evidence control is present and opens at ${w}x${h}`, opened);
+      // The revision read is limited to 30 requests per minute per agent. A full 11-page walk at every
+      // viewport would exceed that budget, so the full walk runs once (390 px) and other viewports check the first page.
+      await page.waitForFunction(() => /Showing 500 evidence items/.test(document.body?.innerText ?? ""), { timeout: 30000 })
+        .then(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, true))
+        .catch(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, false, "no 500-item page"));
+      const first = await page.evaluate(() => {
+        const button = [...document.querySelectorAll("button")].find((b) => /Load more evidence/.test(b.textContent || ""));
+        const rect = button ? button.getBoundingClientRect() : null;
+        return { hasMarker: Boolean(button), height: rect ? Math.round(rect.height) : 0, overflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      });
+      check(`next-page marker is shown after the first revision page at ${w}x${h}`, first.hasMarker);
+      check(`"Load more evidence" touch target is at least 44px at ${w}x${h}`, first.height >= 44, `${first.height}px`);
+      check(`no horizontal overflow on the evidence list at ${w}x${h}`, !first.overflow);
+      await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: path.join(outDir, `revision-first-page-${w}x${h}.png`) });
+
+      // Follow every server page at 390 px only (rate budget). Each click must add members, never remove or repeat them.
+      if (w === 390) {
+        for (let guard = 0; guard < 20; guard += 1) {
+          const before = await page.evaluate(() => document.querySelectorAll(".jata-revision-evidence-list > li").length);
+          const clicked = await page.evaluate(() => {
+            const b = [...document.querySelectorAll("button")].find((x) => /Load more evidence/.test(x.textContent || ""));
+            if (!b) return false;
+            b.click();
+            return true;
+          });
+          if (!clicked) break;
+          const advanced = await page.waitForFunction((n) => document.querySelectorAll(".jata-revision-evidence-list > li").length > n, { timeout: 30000 }, before)
+            .then(() => true).catch(() => false);
+          if (!advanced) { check("each \"Load more evidence\" click adds members", false, `stalled after ${before} items`); break; }
+        }
+      }
+      const all = await page.evaluate(() => ({
+        count: document.querySelectorAll(".jata-revision-evidence-list > li").length,
+        summary: (document.body?.innerText ?? "").match(/Showing (\d+) evidence items? from revision 1/)?.[1] ?? "",
+        markerLeft: [...document.querySelectorAll("button")].some((b) => /Load more evidence/.test(b.textContent || "")),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      }));
+      if (w === 390) {
+        check(`all ${BIG_MEMBERS} revision members are listed, with no marker left, at ${w}x${h}`, all.count === BIG_MEMBERS && all.summary === String(BIG_MEMBERS) && !all.markerLeft && !all.overflow, `items=${all.count} summary=${all.summary}`);
+      }
+      await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: path.join(outDir, `revision-all-pages-${w}x${h}.png`) });
+    }
+
+    // 6b. Probes: another agent's revision and malformed cursors are refused by the server.
+    probingRefusals = true;
+    await page.setViewport({ width: 390, height: 844 });
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(active.user));
+    await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    const probe = async (query) => page.evaluate(async (url) => (await fetch(url, { credentials: "same-origin" })).status, new URL(`/api/agents/reports/referrals/reconcile?${query}`, base).href);
+    const foreign = await probe(`periodKey=${encodeURIComponent(BIG_PERIOD)}&revision=1`);
+    check("another agent's revision is not readable by this agent (404)", foreign === 404, `HTTP ${foreign}`);
+    const malformed = await probe(`periodKey=${encodeURIComponent("daily:2020-01-01")}&revision=1&after=${encodeURIComponent("bad cursor")}`);
+    check("a malformed cursor is refused (400) before any row is read", malformed === 400, `HTTP ${malformed}`);
+    probingRefusals = false;
+
+    // 6c. Empty state for an active agent with no snapshots.
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(empty.user));
+    for (const [w, h] of VIEWPORTS) {
+      await page.setViewport({ width: w, height: h });
+      await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+      const text = await page.evaluate(() => (document.body?.innerText ?? ""));
+      check(`empty state shown at ${w}x${h}`, text.includes("No referral report snapshots yet"));
+    }
+
+    // 7. Loading and error states, driven by intercepting the real API call.
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(active.user));
+    await page.setViewport({ width: 390, height: 844 });
+    const interceptor = (mode) => {
+      page.removeAllListeners("request");
+      page.on("request", (request) => {
+        let url;
+        try { url = new URL(request.url()); } catch { return void request.abort().catch(() => {}); }
+        if (url.origin !== base.origin) return void request.abort().catch(() => {});
+        if (url.pathname === "/api/agents/reports/referrals") {
+          if (mode === "error") return void request.respond({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Referral report snapshots are unavailable." }) }).catch(() => {});
+          if (mode === "delay") return void setTimeout(() => request.continue().catch(() => {}), 1500);
+        }
+        return void request.continue().catch(() => {});
+      });
+    };
+    interceptor("delay");
+    const nav = page.goto(new URL("/agents/reports", base).href, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => (document.body?.innerText ?? "").includes("Loading your referral report snapshots"), { timeout: 10000 }).then(() => check("loading state is announced while the API is pending", true)).catch(() => check("loading state is announced while the API is pending", false));
+    await nav;
+    await page.waitForSelector("ol[aria-label]", { timeout: 20000 }).catch(() => {});
+    interceptor("error");
+    injectingError = true;
+    await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    injectingError = false;
+    const errorText = await page.evaluate(() => document.querySelector('[role="alert"]')?.textContent || "");
+    check("error state shows a safe message", errorText.includes("temporarily unavailable"), errorText.slice(0, 80));
+
+    // 8. The application's own pages produced no uncaught client error during the journey.
+    check("no uncaught client-side page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
+    check("no unexpected console errors (expected 401/403 refusals excluded)", unexpectedConsole.length === 0, `expected refusals observed=${expectedRefusals.length}; unexpected=${unexpectedConsole.length}; ${unexpectedConsole.slice(0, 2).join(" | ")}`);
+  } finally {
+    await browser.close();
+  }
+}
+
+try {
+  await main();
+} catch (error) {
+  console.log(`FAIL  journey aborted — ${describe(error)}`);
+  console.log(`::error title=ADMIN-023 browser journey aborted::${describe(error)}`);
+  failed += 1;
+} finally {
+  await prisma.$disconnect().catch(() => {});
+}
+const passed = results.filter((r) => r.ok).length;
+console.log(`SUMMARY ${passed}/${results.length} checks passed, ${failed} failed`);
+console.log(failed === 0 && results.length > 0 ? "RESULT: PASS" : "RESULT: FAIL");
+process.exit(failed === 0 && results.length > 0 ? 0 : 1);

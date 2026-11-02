@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { safeImageUrl } from "@/lib/workspaceImagery";
 import type { MethodOption } from "@/lib/pos/money";
@@ -8,6 +8,7 @@ import { WalletPaymentPanel, type WalletDestinationTile } from "@/components/pos
 import type { ReceiptDocument } from "@/lib/pos/types";
 import { formatNumber } from "@/lib/dateFormat";
 import { submitSaleOfflineFirst } from "@/lib/pos/offline";
+import type { RenderPreference } from "@/lib/experience/renderMode";
 
 /**
  * The till (§58, §59, §62).
@@ -76,6 +77,8 @@ export function TillClient({
   entitlementReason,
   nextReceiptNumber,
   wallet,
+  submitSaleRequest,
+  motionPreference = "auto",
 }: {
   businessId: string;
   basePath: string;
@@ -101,6 +104,17 @@ export function TillClient({
   nextReceiptNumber: string;
   /** Where this business gets paid through JATA (§10, §21). Empty until a destination is added. */
   wallet: { destinations: WalletDestinationTile[] };
+  /**
+   * Transport for recording a sale. Production omits it and the till posts to the real sales
+   * endpoint. The development-only POS fixture harness supplies a simulator here so the same cart
+   * and completion logic runs without ever reaching the server. Never pass a real-data transport.
+   */
+  submitSaleRequest?: (businessId: string, body: unknown) => Promise<Response>;
+  /**
+   * Owner render preference. "lite" turns off all till motion (owner-Lite, the same rule the storefront
+   * applies in motionEligibility). Production omits it, which keeps the default "auto" behaviour.
+   */
+  motionPreference?: RenderPreference;
 }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payments, setPayments] = useState<PaymentLine[]>([]);
@@ -112,6 +126,17 @@ export function TillClient({
   const [channel, setChannel] = useState(flags.channels[0] ?? "walk_in");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
+  // Visual-only exit ghosts for lines removed from the cart. They show the product name, never a
+  // money value, are aria-hidden, and are created only when motion is allowed.
+  const [leaving, setLeaving] = useState<{ id: number; name: string }[]>([]);
+  const exitSeq = useRef(0);
+  const dropLeaving = useCallback((id: number) => setLeaving((list) => list.filter((entry) => entry.id !== id)), []);
+  const motionOff = motionPreference === "lite";
+  const motionAttr = motionOff ? "lite" : undefined;
+  function exitMotionAllowed(): boolean {
+    if (motionOff || typeof window === "undefined") return false;
+    return !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<SaleResponse | null>(null);
@@ -175,6 +200,11 @@ export function TillClient({
   }
 
   function setQuantity(key: string, quantity: number) {
+    const current = cart.find((line) => line.key === key);
+    if (current && quantity <= 0 && exitMotionAllowed()) {
+      exitSeq.current += 1;
+      setLeaving((list) => [...list, { id: exitSeq.current, name: current.name }]);
+    }
     setCart((lines) =>
       lines.flatMap((line) => (line.key === key ? (quantity <= 0 ? [] : [{ ...line, quantity }]) : [line])),
     );
@@ -251,11 +281,13 @@ export function TillClient({
       payments: payments.filter((payment) => payment.amountKES > 0 || payment.method === "credit"),
     };
     try {
-      const response = await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(saleBody),
-      });
+      const response = submitSaleRequest
+        ? await submitSaleRequest(businessId, saleBody)
+        : await fetch(`/api/pos/${encodeURIComponent(businessId)}/sales`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(saleBody),
+          });
       const data: SaleResponse = await response.json();
       if (!response.ok || data.ok === false) {
         setError(data.error ?? "We couldn't record that sale.");
@@ -412,10 +444,11 @@ export function TillClient({
   }
 
   if (result?.receipt || result?.receiptText) {
+    const pendingConfirmation = result.sale?.status === "PENDING_CONFIRMATION";
     return (
-      <div className="space-y-4">
+      <div key={pendingConfirmation ? "pending" : "recorded"} className="space-y-4 jata-state-enter" data-pos-motion={motionAttr}>
         <div className="jata-card p-5">
-          <p className="jata-kicker">Sale recorded</p>
+          <p className="jata-kicker">{pendingConfirmation ? "Payment pending confirmation" : "Sale recorded"}</p>
           <h2 className="text-lg font-bold">{result.sale?.receiptNumber ?? nextReceiptNumber}</h2>
           <p className="pos-note">
             {result.totals ? `Total KES ${formatNumber(result.totals.totalKES)}` : ""}
@@ -461,7 +494,7 @@ export function TillClient({
         </div>
       ) : null}
 
-      <div className="pos-till">
+      <div className="pos-till" data-pos-motion={motionAttr}>
         <div className="space-y-3">
           <div className="pos-toolbar">
             <input
@@ -510,6 +543,9 @@ export function TillClient({
             <p className="pos-note">Tap an item to start. {nextReceiptNumber} is the next receipt number.</p>
           ) : null}
 
+          {leaving.map((entry) => (
+            <ExitingLine key={entry.id} id={entry.id} name={entry.name} onDone={dropLeaving} />
+          ))}
           {cart.map((line) => (
             <div className="pos-line" key={line.key}>
               <div className="pos-line-main">
@@ -527,10 +563,17 @@ export function TillClient({
                   type="number"
                   min={0}
                   value={line.quantity}
-                  onChange={(event) => setQuantity(line.key, Math.max(0, Number(event.target.value)))}
+                  onChange={(event) => {
+                    // Whole units only. An empty or non-numeric entry is ignored (the field keeps the last valid
+                    // quantity), so clearing the box can no longer silently remove the line; decimals are floored.
+                    const raw = event.target.value.trim();
+                    if (raw === "") return;
+                    const next = Math.floor(Number(raw));
+                    if (Number.isFinite(next)) setQuantity(line.key, Math.max(0, next));
+                  }}
                 />
                 <button type="button" aria-label={`One more ${line.name}`} onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
-                <strong className="ml-2">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</strong>
+                <strong className="ml-2"><span key={line.quantity} className="jata-value-bump">KES {formatNumber(line.unitPriceKES * line.quantity - line.discountKES)}</span></strong>
               </div>
             </div>
           ))}
@@ -542,7 +585,7 @@ export function TillClient({
             ) : null}
             {flags.taxEnabled ? <div><span>{flags.taxLabel || "Tax"}</span><span>Included by the server</span></div> : null}
             {feeKES > 0 ? <div><span>Delivery</span><span>KES {formatNumber(feeKES)}</span></div> : null}
-            <div className="pos-total-line"><span>Total</span><span>KES {formatNumber(total)}</span></div>
+            <div className="pos-total-line"><span>Total</span><span key={total} className="jata-value-bump">KES {formatNumber(total)}</span></div>
           </div>
 
           {flags.discounts && flags.canDiscount && cart.length > 0 ? (
@@ -716,6 +759,21 @@ export function TillClient({
           </button>
           <p className="pos-note">Stock, the receipt and the payment are saved together in one step.</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** A removed cart line that eases out for a moment. Purely presentational: the cart state already has no such line. */
+function ExitingLine({ id, name, onDone }: { id: number; name: string; onDone: (id: number) => void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => onDone(id), 220);
+    return () => window.clearTimeout(timer);
+  }, [id, onDone]);
+  return (
+    <div className="pos-line pos-line-leaving" aria-hidden="true">
+      <div className="pos-line-main">
+        <strong>{name}</strong>
       </div>
     </div>
   );

@@ -1,0 +1,41 @@
+Prisma schema loaded from scripts/test-db/schema.wasm-test.prisma
+
+✔ Generated Prisma Client (v5.22.0) to ./node_modules/.jata-wasm-harness/generated in 2.23s
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+WASM harness ready: /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated/wasm.js
+Node WASM loader installed into /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated
+
+ RUN  v4.1.12 /home/user/Jata-Aftercall
+
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > tenant isolation > a proposal from tenant A cannot be read, approved or rejected through tenant B 66ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > tenant isolation > a budget idempotency key used by tenant B cannot replay tenant A's reservation 31ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > STAFF cannot approve or execute a proposal (RBAC) 37ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > STAFF cannot change tenant Autopilot settings (RBAC on configuration) 3ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > the platform kill switch blocks execution even for an OWNER with an approved proposal 34ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > a PAUSED tenant cannot execute, and resuming restores the gate only when LIVE 28ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > fails closed: a tenant with no subscription cannot execute 48ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > an authorised OWNER approval executes once; replaying the approval does not execute again 64ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > approval authority and execution gates > a rejected proposal cannot later be approved 26ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > spend caps and idempotency > a daily cap stops the second reservation that would exceed it, with a single ledger row 36ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > spend caps and idempotency > re-sending the same reservation key is idempotent and does not double-spend 32ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > spend caps and idempotency > proposal idempotency keys return the original proposal instead of creating a duplicate 40ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > customer consent and Africa/Nairobi quiet hours > quiet hours are evaluated in Africa/Nairobi, start inclusive and end exclusive 20ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > customer consent and Africa/Nairobi quiet hours > no consent record means no automated outbound contact 4ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > customer consent and Africa/Nairobi quiet hours > opted-in transactional consent does not authorise marketing on the same channel 20ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > customer consent and Africa/Nairobi quiet hours > quiet hours block automated messages even with valid consent, except urgent transactional 7ms
+ ✓ tests/db/autopilot-safety.test.ts > Autopilot safety on a real PostgreSQL database > customer consent and Africa/Nairobi quiet hours > a STOP keyword opt-out blocks all later automated contact, and tenant B's consent cannot cover tenant A 29ms
+ ✓ tests/prisma/autopilot-constraints-and-concurrency.test.ts > Autopilot PostgreSQL constraints, cascade deletes & multi-client budget concurrency > enforces foreign keys (P2003), unique constraints (P2002), and cross-tenant uniqueness isolation 236ms
+ ✓ tests/prisma/autopilot-constraints-and-concurrency.test.ts > Autopilot PostgreSQL constraints, cascade deletes & multi-client budget concurrency > cascades deletes cleanly across all 11 Autopilot models with zero orphan records 95ms
+ ✓ tests/prisma/autopilot-constraints-and-concurrency.test.ts > Autopilot PostgreSQL constraints, cascade deletes & multi-client budget concurrency > serializes concurrent budget reservations across independent PrismaClient connections without breaching dailySpendCapMinorKES 251ms
+
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
+   Start at  08:44:53
+   Duration  2.21s (transform 458ms, setup 161ms, import 572ms, tests 1.22s, environment 0ms)
+
+DB_SUITE_SUMMARY {"engine":"wasm-query-engine+adapter-pg","postgres":"PostgreSQL 18.6 (embedded-postgres, loopback 127.0.0.1:55433, db jata_autopilot_db_test)","migrations":{"applied":57,"total":57},"vitest":{"exitCode":0}}
+SYNCHRONOUS TERMINATION NOTICE: When explicitly exiting the process via process.exit or via a parent process, asynchronous tasks in your exitHooks will not run. Either remove these tasks, use gracefulExit() instead of process.exit(), or ensure your parent process sends a SIGINT to the process running this code.

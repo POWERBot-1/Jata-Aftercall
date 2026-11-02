@@ -62,6 +62,14 @@ export type StudioCanvasProps = {
   initialPanel?: PanelTab;
   /** Demo: no network writes. Every edit stays in this tab. Used only by the labelled preview build. */
   demo?: boolean;
+  /**
+   * Transport for the versioned draft write. Production omits it and the canvas PATCHes `/api/experience`.
+   * The development-only Studio fixture supplies a simulator so save progress, success and failure run
+   * through the same code path without touching any business data.
+   */
+  submitWrite?: (body: Record<string, unknown>) => Promise<Response>;
+  /** Preview iframe URL override (fixtures point the preview at a fictional storefront). Production omits it. */
+  previewSrcFor?: (options: { mode: "draft" | "live"; revision: number }) => string;
 };
 
 type PanelTab = "section" | "design";
@@ -71,11 +79,14 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const router = useRouter();
   const {
     businessId, slug, businessName, categoryLabel, publishedVersion,
-    directions, themes, currentDirectionKey, currentThemeKey, publicUrl, demo = false,
+    directions, themes, currentDirectionKey, currentThemeKey, publicUrl, demo = false, submitWrite, previewSrcFor,
   } = props;
 
   const [document, setDocument] = useState<ExperienceDocument>(props.document);
   const [version, setVersion] = useState<number | null>(props.draftVersion);
+  // Keyboard focus on the preview frame is drawn by the wrapper: the frame's own outline is not reliable across browsers.
+  const [frameFocused, setFrameFocused] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [dirty, setDirty] = useState(props.hasUnpublishedChanges);
   const [selectedId, setSelectedId] = useState<string | null>(props.document.sections[0]?.id ?? null);
   const [device, setDevice] = useState<CanvasDeviceKey>("phone");
@@ -115,7 +126,30 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const selected = document.sections.find((section) => section.id === selectedId) ?? null;
   const fields = useMemo(() => inspectorFieldsFor(selected), [selected]);
   const summary = useMemo(() => buildSummary(document), [document]);
-  const previewSrc = canvasPreviewSrc({ slug, mode, revision });
+  const previewSrc = previewSrcFor ? previewSrcFor({ mode, revision }) : canvasPreviewSrc({ slug, mode, revision });
+  // Keyboard focus that Tab moves INTO the same-origin preview fires the frame window's focus/blur, not the
+  // <iframe> element's. Listen on the frame window (re-attached after each load) so the ring follows real focus.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    let win: Window | null = null;
+    const on = () => setFrameFocused(true);
+    const off = () => setFrameFocused(false);
+    const attach = () => {
+      win?.removeEventListener("focus", on);
+      win?.removeEventListener("blur", off);
+      win = frame.contentWindow;
+      win?.addEventListener("focus", on);
+      win?.addEventListener("blur", off);
+    };
+    frame.addEventListener("load", attach);
+    attach();
+    return () => {
+      frame.removeEventListener("load", attach);
+      win?.removeEventListener("focus", on);
+      win?.removeEventListener("blur", off);
+    };
+  }, [previewSrc, mode, device, revision]);
 
   /** One write path for every edit: optimistic local change, then the versioned draft save. */
   const persist = useCallback(
@@ -136,11 +170,14 @@ export function StudioCanvas(props: StudioCanvasProps) {
 
       setSave("saving");
       try {
-        const response = await fetch("/api/experience", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessId, ...payload, expectedDraftVersion: version }),
-        });
+        const writeBody = { businessId, ...payload, expectedDraftVersion: version };
+        const response = submitWrite
+          ? await submitWrite(writeBody)
+          : await fetch("/api/experience", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(writeBody),
+            });
         const saved = readSaveResponse(response.ok, await response.json().catch(() => ({})));
         if (!saved.ok) {
           setDocument(before); // never leave an unsaved change looking saved
@@ -170,7 +207,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
         inFlight.current = false;
       }
     },
-    [businessId, demo, document, router, version],
+    [businessId, demo, document, router, version, submitWrite],
   );
 
   const moveTo = (id: string, index: number) => persist({ op: "reorder", sectionId: id, toIndex: index }, (doc) => moveSectionTo(doc, id, index));
@@ -359,7 +396,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
             <button type="button" className="jc-chip" onClick={() => setRevision((value) => value + 1)} aria-label="Refresh preview">↻ Refresh</button>
           </div>
 
-          <div className="jc-frame" data-device={activeDevice.key}>
+          <div className={frameFocused ? "jc-frame is-focused" : "jc-frame"} data-device={activeDevice.key}>
             <div className="jc-frame__chrome" aria-hidden="true">
               <span className="jc-frame__notch" />
               <span className="jc-frame__url">{slug}.jata.site · {activeDevice.width} px</span>
@@ -367,6 +404,9 @@ export function StudioCanvas(props: StudioCanvasProps) {
             <iframe
               key={`${mode}-${device}-${revision}`}
               className="jc-frame__iframe"
+              ref={frameRef}
+              onFocus={() => setFrameFocused(true)}
+              onBlur={() => setFrameFocused(false)}
               title={`${mode === "draft" ? "Draft" : "Live"} preview of ${businessName} at ${activeDevice.label.toLowerCase()} width`}
               src={previewSrc}
               style={{ width: Math.min(activeDevice.width, 1440) }}

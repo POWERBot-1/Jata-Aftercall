@@ -4,6 +4,7 @@ vi.mock("@/lib/auth", () => ({ getSession: m.session }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimitByIdentity: m.limit }));
 vi.mock("@/lib/db", () => ({ default: { $transaction: m.transaction } }));
 import { GET, POST } from "@/app/api/agents/reports/referrals/route";
+import { decodeReportCursor, encodeReportCursor } from "@/lib/agents/referral-report-cursor";
 const env = { ...process.env };
 const tx = { $queryRaw: m.query, $executeRaw: m.execute, agentReferralReportSnapshot: { findMany: m.list, findUniqueOrThrow: m.find } };
 const report = { periodKey: "daily:2026-01-01", periodType: "DAILY", startInclusive: new Date("2025-12-31T21:00:00Z"), endExclusive: new Date("2026-01-01T21:00:00Z"), registrationCount: BigInt(2), existingApplicationCount: BigInt(1), createdAt: new Date("2026-01-02T00:00:00Z"), applicationId: "private-id" };
@@ -27,6 +28,25 @@ describe("private referral evidence report snapshots", () => {
     expect(data.scope).toBe("OWN_REFERRAL_EVIDENCE_SNAPSHOT_ONLY"); expect(data.sales).toBe("NOT_CHECKED"); expect(data.commission).toBe("NOT_CHECKED"); expect(data.delivery).toBe("NOT_AVAILABLE");
     expect(data.item.registrationCount).toBe("2"); expect(data.item).not.toHaveProperty("applicationId");
     expect(m.find.mock.calls[0][0].where.applicationId_periodKey.applicationId).toBe("own-app");
+  });
+  it("refuses malformed cursors before any database access and keyset-pages within the own scope", async () => {
+    const get = (cursor: string) => GET(new Request(`https://agent.test/api/agents/reports/referrals?cursor=${cursor}`));
+    for (const bad of ["%%%", "not-valid", "eyJlIjoxfQ"]) expect((await get(bad)).status).toBe(400);
+    expect(m.transaction).not.toHaveBeenCalled();
+    const cursor = encodeReportCursor({ endExclusive: new Date("2026-01-02T21:00:00.000Z"), periodKey: "daily:2026-01-02" });
+    m.list.mockResolvedValueOnce([report]);
+    const res = await get(encodeURIComponent(cursor));
+    expect(res.status).toBe(200);
+    const where = m.list.mock.calls[0][0].where;
+    expect(where.applicationId).toBe("own-app");
+    expect(where.OR).toHaveLength(2);
+    expect(await res.json()).toMatchObject({ truncated: false, nextCursor: null });
+  });
+  it("returns an opaque nextCursor only when more own snapshots exist", async () => {
+    m.list.mockResolvedValueOnce(Array(101).fill(report)); const data = await (await GET(new Request("https://agent.test/api/agents/reports/referrals"))).json();
+    expect(typeof data.nextCursor).toBe("string");
+    expect(decodeReportCursor(data.nextCursor)).toEqual({ ok: true, cursor: { endExclusive: report.endExclusive, periodKey: report.periodKey } });
+    m.list.mockResolvedValueOnce([report]); expect((await (await GET()).json()).nextCursor).toBeNull();
   });
   it("returns at most 100 records and hides internal errors", async () => {
     m.list.mockResolvedValueOnce(Array(101).fill(report)); const res = await GET(); const data = await res.json();

@@ -179,7 +179,13 @@ describe("every other plan is untouched (§80)", () => {
 });
 
 describe("the callback page returns a POS buyer to their POS, safely (§4, §67)", () => {
-  const source = readFileSync(join(process.cwd(), "app/checkout/callback/page.tsx"), "utf8");
+  // The callback logic lives in the shared client component; the route only re-exports it (checked below).
+  const source = readFileSync(join(process.cwd(), "components/checkout/PaymentCallbackClient.tsx"), "utf8");
+  const route = readFileSync(join(process.cwd(), "app/checkout/callback/page.tsx"), "utf8");
+
+  it("the callback route still renders the shared client component", () => {
+    expect(route).toMatch(/export \{ default \} from "@\/components\/checkout\/PaymentCallbackClient"/);
+  });
 
   it("builds the link from the server-resolved business id and shape-checks it", () => {
     expect(source).toContain("posBusinessId");

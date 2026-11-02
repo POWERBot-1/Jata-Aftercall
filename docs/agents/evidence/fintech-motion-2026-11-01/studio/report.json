@@ -1,0 +1,1150 @@
+[
+  {
+    "viewport": "320x568",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "320x568",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-320x568.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "320x568",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "320x568",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-320x568.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "360x800",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-360x800.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "360x800",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "360x800",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-360x800.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "390x844",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-390x844.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "390x844",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-390x844.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "430x932",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-430x932.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "430x932",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "430x932",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-430x932.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "768x1024",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "768x1024",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "768x1024",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-768x1024.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "01-dashboard",
+    "file": "out/studio/01-dashboard-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-category-initial",
+    "file": "out/studio/02-category-initial-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-category-success-busy",
+    "file": "out/studio/02-category-success-busy-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-category-success-result",
+    "file": "out/studio/02-category-success-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-category-failure-busy",
+    "file": "out/studio/02-category-failure-busy-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "submit in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "02-category-failure-result",
+    "file": "out/studio/02-category-failure-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-initial",
+    "file": "out/studio/03-editor-initial-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-iframe-count",
+    "value": 1
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-success-saving",
+    "file": "out/studio/03-editor-success-saving-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-success-result",
+    "file": "out/studio/03-editor-success-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-failure-saving",
+    "file": "out/studio/03-editor-failure-saving-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "draft write in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "03-editor-failure-result",
+    "file": "out/studio/03-editor-failure-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "04-image-initial",
+    "file": "out/studio/04-image-initial-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "04-image-use-button-count",
+    "value": 1
+  },
+  {
+    "viewport": "1366x768",
+    "state": "04-image-after-use",
+    "file": "out/studio/04-image-after-use-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "04-image-upload-visible",
+    "value": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-publish-initial",
+    "file": "out/studio/05-publish-initial-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-publish-success-progress",
+    "file": "out/studio/05-publish-success-progress-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-publish-success-result",
+    "file": "out/studio/05-publish-success-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-publish-failure-progress",
+    "file": "out/studio/05-publish-failure-progress-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0,
+    "note": "publish in flight"
+  },
+  {
+    "viewport": "1366x768",
+    "state": "05-publish-failure-result",
+    "file": "out/studio/05-publish-failure-result-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "1366x768",
+    "state": "06-storefront-preview",
+    "file": "out/studio/06-storefront-preview-1366x768.png",
+    "overflow": false,
+    "pageErrors": 0
+  },
+  {
+    "viewport": "390x844",
+    "state": "reduced-motion",
+    "value": {
+      "progressAnimation": "none",
+      "frameAnimation": "no-frame-on-this-state"
+    }
+  },
+  {
+    "viewport": "390x844",
+    "state": "keyboard-trace-editor",
+    "stops": [
+      {
+        "tag": "SUMMARY",
+        "label": "Choose JATA appearance",
+        "outline": "solid",
+        "outlineWidth": "3px",
+        "shadow": false
+      },
+      {
+        "tag": "A",
+        "label": "Open live site",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "A",
+        "label": "Review & publish",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Sections",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Preview",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": true
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Edit",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Phone",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Tablet",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Desktop",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Draft",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Live",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "BUTTON",
+        "label": "Refresh preview",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      },
+      {
+        "tag": "IFRAME",
+        "label": "",
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "shadow": false
+      }
+    ]
+  }
+]

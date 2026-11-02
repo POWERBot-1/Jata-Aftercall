@@ -46,7 +46,7 @@ export default async function AgentDashboardPage() {
       </div>
     </MarketingSection>
     <MarketingSection title="Referrals and commissions" id="programme-status" tone="cream">
-      <div className="mk-prose jata-motion-section">{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <><RegistrationReferralSummary /><RegistrationReferralLink /></>}{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && process.env.AGENT_COMMISSION_SUMMARY_ENABLED === "true" && <CommissionStorageSummary />}<p>Sales performance reporting and verified commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
+      <div className="mk-prose jata-motion-section">{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && referralLifetimeSeconds() && <><RegistrationReferralSummary /><RegistrationReferralLink /></>}{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED === "true" && <p><Link href="/agents/reports">View your referral report snapshots</Link></p>}{application?.status === "PENDING" && application.agentStatus === "ACTIVE" && process.env.AGENT_COMMISSION_SUMMARY_ENABLED === "true" && <CommissionStorageSummary />}<p>Sales performance reporting and verified commission records are not available yet. Registration does not guarantee activation or commission. No reward rates or payouts have been activated.</p><Link href="/contact">Support options</Link></div>
     </MarketingSection>
   </MarketingLayout>;
 }

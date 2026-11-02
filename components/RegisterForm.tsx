@@ -1,17 +1,28 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
-export default function RegisterForm({ refCode = null }: { refCode?: string | null }) {
+export default function RegisterForm({
+  refCode = null,
+  onRegistered,
+}: {
+  refCode?: string | null;
+  /** Development fixture hook. When omitted (production), a successful registration goes to /dashboard. */
+  onRegistered?: () => void;
+}) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", businessName: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  // Same-task lock: a stale closure can't stop a second activation before React commits `loading`.
+  const inFlight = useRef(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setErr("");
     setLoading(true);
     try {
@@ -26,12 +37,17 @@ export default function RegisterForm({ refCode = null }: { refCode?: string | nu
         setErr(data.error || "We couldn't create your account. Please try again.");
         return;
       }
+      if (onRegistered) {
+        onRegistered();
+        return;
+      }
       router.push("/dashboard");
       router.refresh();
     } catch {
       setErr("We couldn't create your account. Please try again.");
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }
 
@@ -53,7 +69,8 @@ export default function RegisterForm({ refCode = null }: { refCode?: string | nu
         <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} autoComplete="new-password" />
       </Field>
       <FormError>{err}</FormError>
-      <Button type="submit" disabled={loading} className="w-full">
+      {loading ? <div className="jata-publish-progress" aria-hidden="true"><div className="jata-publish-progress__bar" /></div> : null}
+      <Button type="submit" disabled={loading} aria-busy={loading} className="w-full">
         {loading ? "Creating…" : "Create account"}
       </Button>
       <p className="text-center text-xs text-zinc-500">By creating an account you agree to our terms. No spam.</p>

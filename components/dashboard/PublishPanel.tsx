@@ -8,6 +8,7 @@
  * unpaid or incomplete site.
  */
 
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -23,6 +24,7 @@ export function PublishPanel({
   hasUnpublishedChanges,
   entitled,
   publicUrl,
+  submitPublish,
 }: {
   businessId: string;
   ready: boolean;
@@ -33,8 +35,17 @@ export function PublishPanel({
   hasUnpublishedChanges: boolean;
   entitled: boolean;
   publicUrl: string;
+  /**
+   * Transport for the publish request. Production omits it and the panel calls `/api/experience/publish`.
+   * The development-only Studio fixture supplies a simulator; it never publishes a real website.
+   */
+  submitPublish?: (body: Record<string, unknown>) => Promise<Response>;
 }) {
   const router = useRouter();
+  // When a fixture transport is injected there is no real page to refresh.
+  const refresh = () => {
+    if (!submitPublish) router.refresh();
+  };
   const [busy, setBusy] = useState<"" | "publish" | "unpublish">("");
   const [message, setMessage] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
 
@@ -42,26 +53,29 @@ export function PublishPanel({
     setBusy(action);
     setMessage(null);
     try {
-      const response = await fetch("/api/experience/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Publish exactly the draft version shown above. If it changed in another window, the server refuses (409).
-        body: JSON.stringify(action === "publish" ? { businessId, action, expectedDraftVersion: draftVersion } : { businessId, action }),
-      });
+      const requestBody = action === "publish" ? { businessId, action, expectedDraftVersion: draftVersion } : { businessId, action };
+      // Publish exactly the draft version shown above. If it changed in another window, the server refuses (409).
+      const response = submitPublish
+        ? await submitPublish(requestBody)
+        : await fetch("/api/experience/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409 && data.code === "draft_version_conflict") {
         setMessage({ tone: "error", text: data.error || "Your website changed in another window. Nothing was published." });
-        router.refresh();
+        refresh();
         return;
       }
       if (data.published) {
         setMessage({ tone: "ok", text: `${data.message || "You’re live 🎉"} ${data.url || publicUrl}` });
-        router.refresh();
+        refresh();
         return;
       }
       if (action === "unpublish" && response.ok) {
         setMessage({ tone: "warn", text: "Your site is now hidden. Your content is safe." });
-        router.refresh();
+        refresh();
         return;
       }
       setMessage({ tone: "error", text: data.error || "We couldn’t complete that. Please try again." });
@@ -91,8 +105,13 @@ export function PublishPanel({
       <ul className="mt-4 grid gap-2 text-sm" aria-label="Publish checklist">
         {checks.map((check) => (
           <li key={check.id} className="flex items-start gap-2">
-            <span aria-hidden="true">{check.status === "pass" ? "✅" : "⚠️"}</span>
+            {check.status === "pass" ? (
+              <CircleCheck size={18} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--jata-success)" }} />
+            ) : (
+              <CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--jata-warning)" }} />
+            )}
             <span>
+              <span className="sr-only">{check.status === "pass" ? "Done: " : "Needs attention: "}</span>
               <span className="font-semibold">{check.label}</span>
               {check.hint ? <span className="block text-zinc-600">{check.hint}</span> : null}
             </span>
@@ -126,9 +145,15 @@ export function PublishPanel({
             : "Finish the items above, then publish."
           : "Activate the Website Studio plan to unlock publishing."}
       </p>
+      {busy ? (
+        // Honest progress: the server's answer is awaited, so this is an indeterminate indicator, not a percentage.
+        <div className="jata-publish-progress mt-3" data-phase={busy} aria-hidden="true">
+          <span className="jata-publish-progress__bar" />
+        </div>
+      ) : null}
       {message ? (
         <p
-          className={`mt-3 text-sm ${
+          className={`jata-state-enter mt-3 text-sm ${
             message.tone === "error"
               ? "jata-error"
               : message.tone === "warn"
