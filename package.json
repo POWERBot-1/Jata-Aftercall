@@ -50,7 +50,8 @@
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
-    "test:browser:agents": "node scripts/browser/agent-status.check.mjs"
+    "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
+    "test:db:autopilot": "node scripts/test-db/run-db-suite.mjs tests/prisma/autopilot-constraints-and-concurrency.test.ts tests/db/autopilot-safety.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -70,12 +71,14 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "5.22.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.186.0",
+    "embedded-postgres": "18.6.0-beta.19",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
     "jsdom": "^26.1.0",

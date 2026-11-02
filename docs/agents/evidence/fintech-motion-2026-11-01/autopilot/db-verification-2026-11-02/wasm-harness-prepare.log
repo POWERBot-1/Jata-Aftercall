@@ -1,0 +1,10 @@
+Prisma schema loaded from tests/db/prisma/schema.wasm-test.prisma
+
+✔ Generated Prisma Client (v5.22.0) to ./node_modules/.jata-wasm-harness/generated in 1.94s
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+
+WASM harness ready: /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated/wasm.js
+Node WASM loader installed into /home/user/Jata-Aftercall/node_modules/.jata-wasm-harness/generated

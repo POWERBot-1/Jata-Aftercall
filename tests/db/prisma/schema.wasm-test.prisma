@@ -1,0 +1,4028 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  output          = "../../../node_modules/.jata-wasm-harness/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Runtime keeps using the pooled connection (serverless-friendly, and what Vercel should point at).
+  url      = env("DATABASE_URL")
+  // Migrate needs a connection that is NOT behind PgBouncer: it takes a session-level advisory lock,
+  // which transaction pooling does not reliably hold (P1002 / P3009). See scripts/lib/direct-url-guard.mjs.
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Core ──
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String?
+  phone        String?
+  passwordHash String
+  role         Role           @default(CUSTOMER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  // Incremented by credential recovery so every previously issued JWT is revoked.
+  sessionVersion Int          @default(0)
+  // Persistent per-account cooldown; avoids repeated recovery mail across app instances.
+  passwordResetRequestedAt DateTime?
+  ownedBusinesses Business[]
+  businesses   BusinessMember[]
+  passwordResetToken PasswordResetToken?
+  payments     Payment[]
+  subscriptions Subscription[]
+  auditEvents  AuditEvent[]
+  agentApplication AgentApplication?
+
+  @@index([email])
+  agentNotificationReviews AgentAdminNotificationReview[] @relation("AgentNotificationReviewer")
+  agentNotificationReplays AgentAdminNotificationReplay[] @relation("AgentNotificationReplayActor")
+  referralReportRevisions AgentReferralReportRevision[] @relation("ReferralReportRevisionActor")
+  controlRoleGrants ControlRoleGrant[] @relation("ControlRoleGrantSubject")
+  controlGrantsProvisioned ControlRoleGrant[] @relation("ControlRoleGrantProvisioner")
+  controlMfaCredential ControlMfaCredential?
+  controlAuditEvents ControlAuditEvent[] @relation("ControlAuditActor")
+}
+
+// An application is not an agent entitlement. No activation is possible until a trusted,
+// self-service phone verification mechanism and programme rules have been implemented.
+model AgentApplication {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  fullName              String
+  phoneE164             String
+  verifiedPhoneE164     String?  @unique
+  phoneVerifiedAt       DateTime?
+  referralReports AgentReferralReportSnapshot[]
+  commissionEntries AgentCommissionLedgerEntry[]
+  adminNotificationEvent AgentAdminNotificationEvent?
+  phoneChallenge        AgentPhoneChallenge?
+  referralLinks         AgentReferralLink[]
+  referrals             AgentReferralAttribution[] @relation("AgentReferrer")
+  referredBy            AgentReferralAttribution? @relation("AgentReferred")
+  status                String   @default("PENDING")
+  agentStatus           String   @default("INACTIVE")
+  privacyAcknowledgedAt DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+}
+
+// Durable application event only. Delivery and recipient selection are intentionally not implemented.
+model AgentAdminNotificationEvent {
+  applicationId String @id
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  eventType String
+  createdAt DateTime @default(now())
+  plan AgentAdminNotificationPlan?
+}
+
+// Recipient identities are keyed hashes, never destinations. No sender or worker exists.
+model AgentAdminNotificationPlan {
+  applicationId String @id
+  event AgentAdminNotificationEvent @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationPlan_event_fkey")
+  recipientKeyVersion String
+  createdAt DateTime @default(now())
+  deliveries AgentAdminNotificationDelivery[]
+}
+
+model AgentAdminNotificationDelivery {
+  applicationId String
+  recipientKey String
+  plan AgentAdminNotificationPlan @relation(fields: [applicationId], references: [applicationId], onDelete: Restrict, map: "AgentAdminNotificationDelivery_plan_fkey")
+  state String @default("QUEUED")
+  createdAt DateTime @default(now())
+  claimState AgentAdminNotificationClaimState?
+  attemptsHistory AgentAdminNotificationAttempt[]
+  @@id([applicationId, recipientKey])
+  @@index([state, createdAt])
+}
+
+// Durable provider attempt and callback history; acceptance is not proof of delivery.
+model AgentAdminNotificationAttempt {
+  applicationId String
+  recipientKey String
+  attempt Int
+  outcome String
+  providerKey String
+  messageId String? @unique
+  createdAt DateTime @default(now())
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationAttempt_delivery_fkey")
+  callbacks AgentAdminNotificationCallback[]
+  @@id([applicationId, recipientKey, attempt])
+}
+
+model AgentAdminNotificationCallback {
+  eventId String @id
+  messageId String
+  status String
+  createdAt DateTime @default(now())
+  attempt AgentAdminNotificationAttempt @relation(fields: [messageId], references: [messageId], onDelete: Restrict, map: "AgentAdminNotificationCallback_message_fkey")
+}
+
+// Internal claim state; a claim is not proof of delivery.
+model AgentAdminNotificationClaimState {
+  applicationId String
+  recipientKey String
+  delivery AgentAdminNotificationDelivery @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationClaimState_delivery_fkey")
+  state String
+  attempts Int @default(1)
+  claimToken String?
+  leaseUntil DateTime?
+  nextAttemptAt DateTime?
+  updatedAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+  review AgentAdminNotificationReview?
+  recoveries AgentAdminNotificationRecovery[]
+  replays AgentAdminNotificationReplay[]
+  @@index([state, leaseUntil])
+  @@index([state, nextAttemptAt])
+}
+
+// Automated conservative recovery evidence; it never authorizes replay.
+model AgentAdminNotificationRecovery {
+  applicationId String
+  recipientKey String
+  attempt Int
+  reason String
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationRecovery_claim_fkey")
+  @@id([applicationId, recipientKey, attempt])
+}
+
+// A bounded operator authorization, not proof of delivery.
+model AgentAdminNotificationReplay {
+  requestId String @id
+  applicationId String
+  recipientKey String
+  actorId String
+  previousAttempt Int
+  createdAt DateTime @default(now())
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReplay_claim_fkey")
+  actor User @relation("AgentNotificationReplayActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReplay_actor_fkey")
+  @@unique([applicationId, recipientKey, previousAttempt], map: "AgentAdminNotificationReplay_attempt_key")
+}
+
+// Acknowledgement is not proof of delivery and cannot authorize a retry.
+model AgentAdminNotificationReview {
+  applicationId String
+  recipientKey String
+  claim AgentAdminNotificationClaimState @relation(fields: [applicationId, recipientKey], references: [applicationId, recipientKey], onDelete: Restrict, map: "AgentAdminNotificationReview_claim_fkey")
+  reviewedState String
+  reviewedBy String
+  reviewer User @relation("AgentNotificationReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict, map: "AgentAdminNotificationReview_user_fkey")
+  createdAt DateTime @default(now())
+  @@id([applicationId, recipientKey])
+}
+
+// Persisted counts of referral evidence only; not financial or delivery records.
+model AgentReferralReportSnapshot {
+  applicationId String
+  periodKey String
+  application AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict, map: "AgentReferralReportSnapshot_application_fkey")
+  periodType String
+  startInclusive DateTime
+  endExclusive DateTime
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  createdAt DateTime @default(now())
+  revisions AgentReferralReportRevision[]
+  @@id([applicationId, periodKey])
+  @@index([applicationId, createdAt])
+}
+
+// Historical evidence is retained by value, including if an attribution is later corrected.
+model AgentReferralReportRevision {
+  applicationId String
+  periodKey String
+  revision Int
+  snapshot AgentReferralReportSnapshot @relation(fields: [applicationId, periodKey], references: [applicationId, periodKey], onDelete: Restrict, map: "AgentReferralReportRevision_snapshot_fkey")
+  kind String
+  actorId String?
+  actor User? @relation("ReferralReportRevisionActor", fields: [actorId], references: [id], onDelete: Restrict, map: "AgentReferralReportRevision_actor_fkey")
+  registrationCount BigInt
+  existingApplicationCount BigInt
+  addedCount Int @default(0)
+  removedCount Int @default(0)
+  changedCount Int @default(0)
+  createdAt DateTime @default(now())
+  members AgentReferralReportMember[]
+  writeFence AgentReferralReportRevisionWriteFence?
+  @@id([applicationId, periodKey, revision])
+}
+
+// Internal transaction fence; absent for revisions created before the fence migration.
+model AgentReferralReportRevisionWriteFence {
+  applicationId String
+  periodKey String
+  revision Int
+  transactionId String
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Cascade, map: "AgentReferralReportRevisionWriteFence_revision_fkey")
+  @@id([applicationId, periodKey, revision])
+}
+
+model AgentReferralReportMember {
+  applicationId String
+  periodKey String
+  revision Int
+  eventId String
+  source String
+  eventCreatedAt DateTime
+  reportRevision AgentReferralReportRevision @relation(fields: [applicationId, periodKey, revision], references: [applicationId, periodKey, revision], onDelete: Restrict, map: "AgentReferralReportMember_revision_fkey")
+  @@id([applicationId, periodKey, revision, eventId])
+}
+
+// Bounded scheduler cursor; no external scheduling or delivery is enabled by this model.
+model AgentReferralReportSchedule {
+  periodType String @id
+  configuredStart DateTime
+  periodStart DateTime
+  lastApplicationId String?
+  updatedAt DateTime @default(now())
+}
+
+// Operational run evidence; RUNNING after a crash is not proof of completion.
+model AgentReferralReportScheduleRun {
+  id String @id
+  periodType String
+  status String
+  periodKey String?
+  result String?
+  processed Int?
+  failureCode String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([startedAt, id])
+}
+
+// Immutable storage only. No application path creates accruals or authorizes payouts.
+model AgentCommissionLedgerEntry {
+  id String @id
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  agentApplicationId String
+  agentApplication AgentApplication @relation(fields: [agentApplicationId], references: [id], onDelete: Restrict)
+  entryType String
+  currency String
+  amountMinor BigInt
+  sourceEventId String @unique
+  originalEntryId String?
+  original AgentCommissionLedgerEntry? @relation("CommissionReversals", fields: [originalEntryId, paymentId, agentApplicationId, currency], references: [id, paymentId, agentApplicationId, currency], onDelete: Restrict, map: "AgentCommissionLedgerEntry_original_fkey")
+  reversals AgentCommissionLedgerEntry[] @relation("CommissionReversals")
+  policyVersion String
+  policySnapshot Json
+  createdAt DateTime @default(now())
+
+  @@unique([id, paymentId, agentApplicationId, currency], map: "AgentCommissionLedgerEntry_identity_key")
+  @@index([paymentId])
+  @@index([agentApplicationId, createdAt])
+}
+
+// Registration attribution is consented evidence only, not commission eligibility.
+model AgentReferralLink {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation(fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  attributions AgentReferralAttribution[]
+
+  @@index([referrerApplicationId])
+  @@unique([id, referrerApplicationId])
+}
+
+model AgentReferralAttribution {
+  id String @id @default(cuid())
+  referrerApplicationId String
+  referrer AgentApplication @relation("AgentReferrer", fields: [referrerApplicationId], references: [id], onDelete: Restrict)
+  referredApplicationId String @unique
+  referred AgentApplication @relation("AgentReferred", fields: [referredApplicationId], references: [id], onDelete: Restrict)
+  linkId String
+  link AgentReferralLink @relation(fields: [linkId, referrerApplicationId], references: [id, referrerApplicationId], onDelete: Restrict)
+  consentedAt DateTime
+  source String @default("REGISTRATION")
+  createdAt DateTime @default(now())
+
+  @@index([referrerApplicationId])
+}
+
+// A challenge is not an agent entitlement and never stores the OTP itself.
+model AgentPhoneChallenge {
+  id            String   @id @default(cuid())
+  applicationId String   @unique
+  application   AgentApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  phoneE164     String
+  nonce         String
+  codeDigest    String
+  deliveryChannel String?
+  deliveryState String @default("UNKNOWN")
+  providerMessageId String?
+  providerStatus String?
+  providerStatusAt DateTime?
+  webhookEvents AgentWhatsAppWebhookEvent[]
+  expiresAt     DateTime
+  sentAt        DateTime?
+  consumedAt    DateTime?
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([providerMessageId])
+}
+
+model AgentWhatsAppWebhookEvent {
+  id String @id
+  challengeId String
+  challenge AgentPhoneChallenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  providerMessageId String
+  status String
+  eventAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([challengeId])
+}
+
+// A keyed, expiring per-network bucket shared by all serverless instances. Keys never contain IPs.
+model AgentRegistrationThrottle {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+// Dedicated control-plane roles are separate from application CUSTOMER/ADMIN roles.
+// Permission grants are stored explicitly; there are no inferred role-to-permission defaults.
+enum ControlRole {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  FINANCE_ADMIN
+  SUPPORT_ADMIN
+  SECURITY_ADMIN
+  READ_ONLY_AUDITOR
+}
+
+model ControlRoleGrant {
+  id String @id @default(cuid())
+  userId String
+  user User @relation("ControlRoleGrantSubject", fields: [userId], references: [id], onDelete: Restrict)
+  role ControlRole
+  // Explicit approved capability keys only. Empty/no grant means deny.
+  permissionKeys String[] @default([])
+  // Null scope means platform-wide and must be explicitly approved by the grant provisioner.
+  scopeBusinessId String?
+  scopeBusiness Business? @relation(fields: [scopeBusinessId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation("ControlRoleGrantProvisioner", fields: [createdById], references: [id], onDelete: Restrict)
+  reason String @db.Text
+  revokedAt DateTime?
+  revocationReason String? @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([role, revokedAt])
+  @@index([scopeBusinessId, revokedAt])
+}
+
+model ControlMfaCredential {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  secretCiphertext String @db.Text
+  secretIv String
+  secretTag String
+  verifiedAt DateTime?
+  lastAcceptedStep BigInt?
+  failedAttempts Int @default(0)
+  lockedUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Append-only platform administrative trail. A PostgreSQL trigger rejects UPDATE and DELETE.
+model ControlAuditEvent {
+  id String @id @default(cuid())
+  actorId String
+  actor User @relation("ControlAuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  actorRole ControlRole
+  action String
+  targetType String
+  targetId String?
+  scopeBusinessId String?
+  scopeBusiness Business? @relation(fields: [scopeBusinessId], references: [id], onDelete: Restrict)
+  outcome String
+  reason String? @db.Text
+  beforeState Json?
+  afterState Json?
+  metadata Json?
+  correlationId String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([scopeBusinessId, createdAt])
+  @@index([targetType, targetId, createdAt])
+}
+
+// A single active recovery token per account. Only its SHA-256 digest is stored.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Business {
+  id            String         @id @default(cuid())
+  ownerId       String
+  owner         User           @relation(fields: [ownerId], references: [id])
+  slug          String         @unique
+  name          String
+  category      String
+  phone         String?
+  whatsapp      String?
+  location      String?
+  lat           Float?
+  lng           Float?
+  description   String?        @db.Text
+  logoUrl       String?
+  coverUrl      String?
+  language      String?        @default("en")
+  theme         String         @default("clean")
+  aftercallMsg  String?
+  isPublished   Boolean        @default(false)
+  status        BusinessStatus @default(PENDING)
+  openingHours  String?        @db.Text
+  socialLinks   String?        @db.Text
+  // Stage 2: opaque public referral code. Nullable + unique; minted lazily (on first eligible
+  // use) so existing rows need no backfill. Never derived from tenant data.
+  referralCode  String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  services      Service[]
+  offer         Offer?
+  events        AnalyticsEvent[]
+  subscription  Subscription?
+  payments      Payment[]
+  members       BusinessMember[]
+  // ── JATA Interactive Business (category-aware experience platform) ──
+  experience          BusinessExperience?
+  experienceVersions  ExperienceVersion[]
+  draftRevisions      ExperienceDraftRevision[]
+  bookings            Booking[]
+  media               MediaAsset[]
+  aiGenerations       AiGeneration[]
+  interactiveEntitlement InteractiveBusinessEntitlement?
+  aiConfiguration AIConfiguration?
+  products Product[]
+  productVariants ProductVariant[]
+  knowledgeDocuments KnowledgeDocument[]
+  faqs FAQ[]
+  aiPackageEntitlement AIPackageEntitlement?
+  carts Cart[]
+  orders Order[]
+  preOrders PreOrder[]
+  merchantPaymentConfig MerchantPaymentConfig?
+  notifications Notification[]
+  notificationRecipients NotificationRecipient[]
+  unansweredQuestions UnansweredQuestion[]
+  demandInsights DemandInsight[]
+  aiQualityEvents AIQualityEvent[]
+  // ── JATA AFTERCALL Business POS (spec §80: additive back-relations only) ──
+  controlRoleGrants ControlRoleGrant[]
+  controlAuditEvents ControlAuditEvent[]
+  posConfiguration         PosConfiguration?
+  posConfigurationVersions PosConfigurationVersion[]
+  posSubscription          PosSubscription?
+  posEntitlement           PosEntitlement?
+  posTemplates             PosTemplate[]
+  posBranches              PosBranch[]
+  posStaff                 PosStaff[]
+  posProducts              PosProduct[]
+  posCategories            PosCategory[]
+  posCategoryImages        PosCategoryImage[]
+  posReportSnapshots       PosReportSnapshot[]
+  posInventoryItems        PosInventoryItem[]
+  posInventoryMovements    PosInventoryMovement[]
+  posCustomers             PosCustomer[]
+  posCustomerAssets        PosCustomerAsset[]
+  posSuppliers             PosSupplier[]
+  posSales                 PosSale[]
+  posSaleItems             PosSaleItem[]
+  posPayments              PosPayment[]
+  posRepaymentRequests     PosRepaymentRequest[]
+  posCreditEntries         PosCreditEntry[]
+  posExpenses              PosExpense[]
+  posPurchases             PosPurchase[]
+  posPurchaseItems         PosPurchaseItem[]
+  posOrders                PosOrder[]
+  posOrderItems            PosOrderItem[]
+  posOrderEvents           PosOrderEvent[]
+  posAuditEvents           PosAuditEvent[]
+  posPublicationResolutions PosPublicationResolution[]
+  posIdempotencyRecords    PosIdempotencyRecord[]
+  checkoutIdempotencyRecords CheckoutIdempotencyRecord[]
+
+  // ── JATA AFTERCALL POS / ERP - PRO (additive back-relations) ──
+  erpConfiguration        ErpConfiguration?
+  erpSubscription         ErpSubscription?
+  erpEntitlement          ErpEntitlement?
+  erpAccounts             ErpAccount[]
+  erpPeriods              ErpPeriod[]
+  erpJournals             ErpJournal[]
+  erpJournalLines         ErpJournalLine[]
+  erpInvoices             ErpInvoice[]
+  erpInvoiceLines         ErpInvoiceLine[]
+  erpPayments             ErpPayment[]
+  erpPaymentAllocations   ErpPaymentAllocation[]
+  erpCreditNotes          ErpCreditNote[]
+  erpExpenses             ErpExpense[]
+  erpSupplierBills        ErpSupplierBill[]
+  erpTaxRules             ErpTaxRule[]
+  erpComplianceProfile    ErpComplianceProfile?
+  erpStoreOrders          ErpStoreOrder[]
+  erpStoreOrderItems      ErpStoreOrderItem[]
+  erpNotifications        ErpNotification[]
+  erpNotificationReads    ErpNotificationRead[]
+  erpApprovalRequests     ErpApprovalRequest[]
+  erpApprovalEvents       ErpApprovalEvent[]
+  erpTasks                ErpTask[]
+  erpPurchaseOrders       ErpPurchaseOrder[]
+  erpPurchaseOrderLines   ErpPurchaseOrderLine[]
+  erpGoodsReceipts        ErpGoodsReceipt[]
+  erpGoodsReceiptLines    ErpGoodsReceiptLine[]
+  erpRequisitions         ErpRequisition[]
+  erpRequisitionLines     ErpRequisitionLine[]
+  erpAutomationRules      ErpAutomationRule[]
+  erpAutomationRuns       ErpAutomationRun[]
+  erpKycDocuments         ErpKycDocument[]
+  erpAuditEvents          ErpAuditEvent[]
+  erpIdempotencyRecords   ErpIdempotencyRecord[]
+  erpSequences            ErpSequence[]
+  msgChannelConnections   MsgChannelConnection[]
+  msgSenderIds            MsgSenderId[]
+  msgSenderIdEvents       MsgSenderIdEvent[]
+  msgContacts             MsgContact[]
+  msgConsentRecords       MsgConsentRecord[]
+  msgSuppressions         MsgSuppression[]
+  msgAudiences            MsgAudience[]
+  msgTemplates            MsgTemplate[]
+  msgCampaigns            MsgCampaign[]
+  msgCampaignRecipients   MsgCampaignRecipient[]
+  msgMessageEvents        MsgMessageEvent[]
+  msgWallet               MsgWallet?
+  msgLedgerEntries        MsgLedgerEntry[]
+
+  // ── JATA Payment Wallet + Payment Orchestration (additive back-relations) ──
+  paymentDestinations      PaymentDestination[]
+  paymentConnections       PaymentProviderConnection[]
+  paymentTransactions      PaymentTransaction[]
+  paymentAttempts          PaymentAttempt[]
+  paymentNotifications     PaymentNotification[]
+  paymentReconciliations   PaymentReconciliation[]
+  paymentRefunds           Refund[]
+  paymentAuditEvents       PaymentAuditEvent[]
+
+  // ── JATA Autopilot (additive, separate subscription & entitlement) ──
+  autopilotSubscription    AutopilotSubscription?
+  autopilotEntitlement     AutopilotEntitlement?
+  autopilotConfiguration   AutopilotConfiguration?
+  autopilotUsageLedger     AutopilotUsageLedger[]
+  autopilotCustomers       AutopilotCustomerProfile[]
+  autopilotConsents        AutopilotConsentRecord[]
+  autopilotSessions        AutopilotSession[]
+  autopilotMessages        AutopilotMessage[]
+  autopilotIngestions      AutopilotIngestionRecord[]
+  autopilotActionProposals AutopilotActionProposal[]
+  autopilotAuditEvents     AutopilotAuditEvent[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+enum BusinessStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model BusinessMember {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   @default("OWNER")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+}
+
+model Service {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  description String? @db.Text
+  priceFrom  Int?
+  priceLabel String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  // ── Interactive Business service fields (§9, §12, §18) ──
+  updatedAt       DateTime  @updatedAt
+  imageUrl        String?   @db.Text
+  category        String?
+  pricingType     String    @default("FIXED")   // FIXED | QUOTE
+  priceToKES      Int?                          // "from … to …" range
+  durationMinutes Int?                          // Salon / automotive / consulting
+  depositKES      Int?                          // Optional booking deposit
+  staffName       String?                       // Where applicable
+  availability    String?   @db.Text            // JSON: { days: [1..7], slots: ["09:00"] }
+  bookingEnabled  Boolean   @default(true)
+  isFeatured      Boolean   @default(false)
+  isActive        Boolean   @default(true)
+
+  @@index([businessId])
+}
+
+//
+// Booking (§9, §29) — service businesses are never forced into a cart model.
+// A booking is tenant-scoped; every read and write is filtered by businessId.
+//
+model Booking {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  serviceId     String?
+  serviceName   String
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  staffName     String?
+  startAt       DateTime
+  endAt         DateTime?
+  // The clock this row's startAt was anchored to. "Africa/Nairobi" for bookings created under
+  // the 2026-10-14 contract; NULL for every row written before it, which was anchored to the
+  // server's ambient zone (UTC). Never rewritten — a reader picks the display clock from this
+  // value, so no stored instant changes meaning. See lib/experience/bookingTime.ts.
+  bookingTimeZone String?
+  notes         String?  @db.Text
+  // PENDING | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | NO_SHOW
+  status        String   @default("PENDING")
+  depositKES    Int      @default(0)
+  // UNPAID | PAID (§27) — fulfilment never assumes payment.
+  paymentStatus String   @default("UNPAID")
+  paymentId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, startAt])
+  @@index([businessId, status])
+}
+
+model Offer {
+  id         String    @id @default(cuid())
+  businessId String    @unique
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  subtitle   String?
+  validUntil DateTime?
+  isActive   Boolean   @default(true)
+  // Interactive Business additions (§7, §8) — offer presentation inside a section.
+  imageUrl   String?   @db.Text
+  ctaLabel   String?
+  badge      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model PageTheme {
+  id     String @id @default(cuid())
+  key    String @unique
+  name   String
+  config String @db.Text
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  eventType  String
+  source     String?
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  // Interactive Business analytics (§31, §32): subject = product/service id; sessionHash
+  // lets a conversion funnel be counted without storing personal data (§57).
+  subjectId  String?
+  sessionHash String?
+
+  @@index([businessId, eventType])
+  @@index([businessId, createdAt])
+  @@index([businessId, eventType, createdAt])
+}
+
+model PlanConfig {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  name         String
+  priceKES     Int
+  durationDays Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  businessId String             @unique
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User               @relation(fields: [userId], references: [id])
+  planId     String
+  plan       PlanConfig         @relation(fields: [planId], references: [id])
+  status     SubscriptionStatus @default(PENDING)
+  startAt    DateTime?
+  expiresAt  DateTime?
+  graceUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([userId])
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  reference  String        @unique
+  businessId String?
+  business   Business?     @relation(fields: [businessId], references: [id])
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  planId     String?
+  amount     Int
+  currency   String        @default("KES")
+  status     PaymentStatus @default(PENDING)
+  paystackId String?
+  raw        String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  // Interactive Business: one payment stack, many purposes (§25 reuses Paystack).
+  // SUBSCRIPTION | ORDER | BOOKING_DEPOSIT
+  purpose    String        @default("SUBSCRIPTION")
+  orderId    String?
+  order      Order?        @relation(fields: [orderId], references: [id])
+  bookingId    String?
+  customerEmail String?    // Guest checkout payer — never a secret (§47)
+  posPublicationResolution PosPublicationResolution?
+  agentCommissionEntries AgentCommissionLedgerEntry[]
+
+  @@index([userId])
+  @@index([businessId])
+  @@index([orderId])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  EXPIRED
+  CANCELLED
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+}
+
+model ProcessedWebhook {
+  id        String   @id
+  createdAt DateTime @default(now())
+}
+
+// ── Stage 2: self-service referral attribution ──
+// One row per referral touch. PENDING = anonymous attribution created when a recipient opens a
+// referral link; CONVERTED = the recipient registered and created their first business in the
+// same transaction; REJECTED/EXPIRED = the touch was ineligible or lapsed.
+// No foreign keys by design: the migration stays purely additive, no cascade can delete an
+// attribution record, and only opaque ids (never email/phone/IP) are stored.
+
+enum ReferralStatus {
+  PENDING
+  CONVERTED
+  REJECTED
+  EXPIRED
+}
+
+model Referral {
+  id                 String         @id @default(cuid())
+  code               String
+  referrerUserId     String
+  referrerBusinessId String?
+  // Unique: a referred user is only ever attributed once (first-touch wins at the DB level).
+  referredUserId     String?        @unique
+  referredBusinessId String?
+  status             ReferralStatus @default(PENDING)
+  // SHA-256 of the token held in the recipient's httpOnly cookie. The raw token is never stored.
+  tokenHash          String         @unique
+  rejectReason       String?
+  createdAt          DateTime       @default(now())
+  expiresAt          DateTime
+  convertedAt        DateTime?
+
+  @@index([code, status])
+  @@index([referrerUserId, status])
+  @@index([status, createdAt])
+}
+
+// ── AI Business Front Desk (§3, §6, §7, §9, §49) ──
+// Multi-tenant AI package: isolated business brain, AI config, products with inventory,
+// merchant payment credentials (encrypted refs only), and package entitlement.
+
+model AIConfiguration {
+  id                 String     @id @default(cuid())
+  businessId         String     @unique
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tone               String     @default("friendly") // professional | friendly | casual | premium | local | formal
+  language           String     @default("en") // en | sw | sheng | mixed
+  salesBehavior      String     @default("informational") // informational | recommend | upsell | cross_sell | promotions
+  orderingAllowed    Boolean    @default(true)
+  preordersAllowed   Boolean    @default(false)
+  humanEscalation    String     @default("uncertain") // always | business_hours | specified_topics | uncertain
+  welcomeMessage     String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model Product {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?    @db.Text
+  sku                String?
+  category           String?
+  basePriceKES       Int?
+  variantPriceKES    Int?
+  currency           String     @default("KES")
+  stockStatus        StockStatus @default(IN_STOCK)
+  quantity           Int?
+  minOrder           Int       @default(1)
+  maxOrder           Int?
+  preOrderAllowed    Boolean    @default(false)
+  deliveryEligible   Boolean    @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // ── Interactive Business catalogue fields (§7–§10, §17) ──
+  // Category-shaped, all optional: the experience profile decides which are shown.
+  // Sale price (KES). Applies ONLY inside [salePriceStartsAt, salePriceEndsAt): start-inclusive, end-exclusive,
+  // stored in UTC. Outside the window, or with no window, `basePriceKES` is charged. See lib/sale-pricing.ts.
+  salePriceKES       Int?
+  salePriceStartsAt  DateTime?  @db.Timestamp(3)
+  salePriceEndsAt    DateTime?  @db.Timestamp(3)
+  imageUrl           String?    @db.Text
+  images             String?    @db.Text   // JSON array of media urls (gallery)
+  brand              String?
+  portionSize        String?    // Food: "Full plate", Cosmetics: "50ml"
+  ingredients        String?    @db.Text
+  prepMinutes        Int?       // Food: preparation time
+  tags               String?    // JSON array of strings
+  addOns             String?    @db.Text   // JSON [{ id, name, priceKES }]
+  variantOptions     String?    @db.Text   // JSON { "Size": ["S","M"], "Colour": ["Red"] }
+  isFeatured         Boolean    @default(false)
+  isActive           Boolean    @default(true)
+  sortOrder          Int        @default(0)
+  variants           ProductVariant[]
+
+  @@index([businessId])
+  @@index([businessId, category])
+}
+
+//
+// A sellable variant of a product (e.g. "Red / M"). Pricing stays server-authoritative:
+// the checkout engine loads the variant by id inside the tenant and uses its price
+// override (falling back to the product price). Never trust a client price. (§26)
+//
+model ProductVariant {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label      String                        // "Red / M"
+  options    String?    @db.Text           // JSON { "Colour": "Red", "Size": "M" }
+  priceKES   Int?                          // Override; null = use product price
+  sku        String?
+  stockStatus StockStatus @default(IN_STOCK)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([productId])
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  PRE_ORDER
+  DISCONTINUED
+  AVAILABLE_ON_REQUEST
+}
+
+model KnowledgeDocument {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title              String
+  content            String     @db.Text
+  sourceType         String     // manual | csv_import | document_upload | website_import
+  isApproved         Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+model FAQ {
+  id                 String     @id @default(cuid())
+  businessId         String
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  question           String
+  approvedAnswer     String     @db.Text
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+// Package entitlement: explicit link between a business and the AI Front Desk package.
+// Not a replacement for Subscription; a business must have both an ACTIVE subscription
+// to the package key AND a verified PAID payment before the AI package is live.
+model AIPackageEntitlement {
+  id                 String     @id @default(cuid())
+  businessId         String     @unique
+  business           Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey         String     @default("AI_BUSINESS_FRONT_DESK")
+  status             String     @default("PENDING") // PENDING | ACTIVE | SUSPENDED | EXPIRED
+  activatedAt        DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+// ── Phase 3 Commerce (§12–§15, §30–§34, §51, §67, §76–§77, §89–§90) ──
+// Multi-tenant commerce: cart, orders, inventory reservation, pricing engine,
+// merchant payment configuration (business's own destination, never substituted),
+// pre-orders, and deterministic server-side calculation.
+
+model Cart {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId String?  // Optional; can be anonymous session reference
+  items      CartItem[]
+  status     String   @default("ACTIVE") // ACTIVE | CONVERTED | ABANDONED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([customerId])
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  cartId     String
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId  String?
+  serviceId  String?
+  variantDesc String? // Size, colour, etc.
+  quantity   Int      @default(1)
+  unitPriceKES Int?   // Authoritative price at time of cart creation (§11, §33)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([cartId])
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  orderReference  String         @unique // Example: JATA-ORD-20261001-...
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  deliveryLocation String?
+  deliveryInstructions String?
+  status          OrderStatus    @default(DRAFT)
+  subtotalKES     Int            @default(0)
+  deliveryFeeKES  Int            @default(0)
+  discountKES     Int            @default(0)
+  totalKES        Int            @default(0)
+  currency        String         @default("KES")
+  preOrder        Boolean        @default(false)
+  items           OrderItem[]
+  payments        Payment[]     // Related to this order; server-side verified only (§14, §35)
+  preOrders       PreOrder[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  completedAt     DateTime?
+
+  // ── Interactive Business checkout (§25, §27) ──
+  fulfilmentType  String?       // PICKUP | DELIVERY
+  notes           String?       @db.Text
+  source          String?       @default("STOREFRONT")
+  // UNPAID | PAID — an unpaid order is never treated as a sale (§27).
+  paymentStatus   String        @default("UNPAID")
+
+  @@index([businessId])
+  @@index([status])
+  @@index([customerId])
+  @@index([businessId, createdAt])
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_CUSTOMER_CONFIRMATION
+  PENDING_PAYMENT
+  PAYMENT_PROCESSING
+  PAYMENT_VERIFIED
+  CONFIRMED
+  PROCESSING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String?
+  serviceId  String?
+  name       String   // Authoritative name at order time
+  variantDesc String?
+  quantity   Int      @default(1)
+  unitPriceKES Int    // Authoritative price (§11, §33)
+  createdAt  DateTime @default(now())
+  // Interactive Business: chosen variant + add-ons, captured for fulfilment clarity.
+  variantId  String?
+  addOns     String?  @db.Text   // JSON [{ id, name, priceKES }]
+  imageUrl   String?  @db.Text
+
+  @@index([orderId])
+}
+
+// Pre-order support (§15) — separate from immediate orders.
+model PreOrder {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId     String?
+  customerName   String?
+  customerPhone  String?
+  productId      String
+  productName    String
+  variantDesc    String?
+  quantity       Int      @default(1)
+  depositRequiredKES Int?  // Configured deposit (§15)
+  fullPriceKES   Int?
+  status         PreOrderStatus @default(PENDING)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orders Order[]
+
+  @@index([businessId])
+  @@index([status])
+}
+
+enum PreOrderStatus {
+  PENDING
+  DEPOSIT_PAID
+  FULL_PAYMENT_PAID
+  READY_TO_FULFILL
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+// Merchant payment configuration (§6, §49) — the business's own payment destination.
+// Never substitutes JATA's destination. Never stores secret API keys in plaintext.
+model MerchantPaymentConfig {
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Public payment information (displayed to customers, safe for AI prompts)
+  publicInfo      String   @db.Text // Example: "M-Pesa: Buy Goods 12345678"
+  // Private API credentials are encrypted at rest and never exposed to AI or browser (§6, §43)
+  encryptedCredentials String? @db.Text // Encrypted payload (gateway OAuth tokens, etc.)
+  credentialRotationNote String? // Audit note without recording secrets (§47)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+// ── Phase 4 Notifications (§17, §18, §37, §63) ──
+// Multi-tenant notification system with nominated business number,
+// transaction notification, reliability tracking, and audit events.
+
+model Notification {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  eventType       String     // NEW_ORDER | PREORDER | BOOKING | HUMAN_HANDOFF | PAYMENT_VERIFIED | LOW_STOCK | OUT_OF_STOCK | FAILED_NOTIFICATION
+  title           String
+  message         String     @db.Text
+  channel         String     @default("WHATSAPP") // WHATSAPP | SMS | EMAIL | IN_APP
+  recipientNumber String?
+  recipientEmail  String?
+  status          NotificationStatus @default(PENDING)
+  deliveryAttempted Boolean  @default(false)
+  deliveryFailed  Boolean    @default(false)
+  retryCount      Int        @default(0)
+  maxRetries      Int        @default(3)
+  referenceId     String?    // Links to Order, PreOrder, or other entity
+  createdAt       DateTime   @default(now())
+  deliveredAt     DateTime?
+
+  @@index([businessId])
+  @@index([status])
+  @@index([businessId, eventType])
+}
+
+enum NotificationStatus {
+  PENDING
+  QUEUED
+  DELIVERED
+  FAILED
+  RETRY_QUEUED
+  SKIPPED
+}
+
+model NotificationRecipient {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  label           String     // PRIMARY | SECONDARY | STAFF | OWNER
+  phone           String?
+  email           String?
+  whatsappEnabled Boolean    @default(true)
+  smsEnabled      Boolean    @default(true)
+  emailEnabled    Boolean    @default(true)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@unique([businessId, label])
+}
+
+// ── Phase 5 Intelligence (§28, §29, §30, §54, §64, §65) ──
+// Intelligence panel: unanswered questions, missed-demand tracking,
+// AI quality tracking (source, confidence, escalation), and readiness enhancement.
+
+model UnansweredQuestion {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  question        String     @db.Text
+  askedCount      Int        @default(1) // How many times asked
+  firstAskedAt    DateTime   @default(now())
+  lastAskedAt     DateTime   @updatedAt
+  approvedAnswer  String?    @db.Text // Once owner approves an answer (§29)
+  isResolved      Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([isResolved])
+  @@index([question])
+}
+
+model DemandInsight {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  insightType     String     // MISSED_DEMAND | UNAVAILABLE_PRODUCT | OUT_OF_ZONE | SERVICE_NOT_OFFERED | PRICE_INQUIRY
+  subject         String     // What was requested (e.g., product name, service, delivery zone)
+  count           Int        @default(1)
+  firstRecorded   DateTime   @default(now())
+  lastRecorded    DateTime   @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([insightType])
+}
+
+model AIQualityEvent {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId  String?
+  sourceUsed      String     // structured_data | faq | knowledge_document | unknown
+  confidence      String?    // high | low | uncertain
+  escalatedToHuman Boolean  @default(false)
+  customerCorrectedAI Boolean @default(false)
+  missingBusinessInfo Boolean @default(false)
+  eventType       String?    // QUESTION | ORDER | BOOKING | HANDOFF
+  timestamp       DateTime   @default(now())
+  metadata        String?    @db.Text // Safe JSON, no secrets (§30, §43)
+
+  @@index([businessId])
+  @@index([eventType])
+  @@index([sourceUsed])
+}
+
+// ── JATA Interactive Business (§6, §14–§16, §38, §51, §58, §59) ──
+// Category-aware, multi-tenant business experience platform.
+//
+// Architecture (§51): Business + Category + ExperienceProfile + Theme + Sections + Data
+// + enabled features. There are no per-category applications and no template lock-in:
+// one renderer consumes one normalized experience document.
+
+//
+// The versioned website document for one tenant.
+//
+// DRAFT and PUBLISHED are strictly separated (§15): the owner edits `draftJson`, customers
+// only ever read `publishedJson`. Publishing copies the draft into `publishedJson`, bumps
+// `publishedVersion` and snapshots it in ExperienceVersion so a future rollback is possible.
+//
+model BusinessExperience {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryKey      String   @default("other")
+  themeKey         String   @default("core-minimal")
+  status           String   @default("DRAFT")      // DRAFT | PUBLISHED | UNPUBLISHED
+  draftJson        String   @db.Text
+  publishedJson    String?  @db.Text
+  draftVersion     Int      @default(1)
+  // Which draft revision the current draft equals, so Undo/Redo can move one step at a time (§45).
+  // 0 means "not tracked yet" (legacy rows and freshly created sites); it is then treated as the
+  // newest revision, which is exactly what an owner who has never pressed Undo expects.
+  historyCursor    Int      @default(0)
+  publishedVersion Int      @default(0)
+  publishedAt      DateTime?
+  publishedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, status])
+}
+
+// Immutable publication snapshot — enables rollback and an audit trail (§15, §46).
+model ExperienceVersion {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  version     Int
+  themeKey    String
+  categoryKey String
+  snapshotJson String  @db.Text
+  publishedAt DateTime @default(now())
+  publishedById String?
+  note        String?
+
+  @@unique([businessId, version])
+  @@index([businessId, publishedAt])
+}
+
+// Draft revision history — Undo, Redo and recovery for everything the owner changes (§15, §45).
+//
+// Every write to the draft — a section, a design change, a photo swap, a product edit, AI copy —
+// goes through the one Studio write path, which records the document it produced here. Undo and
+// Redo therefore work for every kind of change with one mechanism, and no owner work is ever
+// unrecoverable. Rows are bounded: the write path prunes to the newest DRAFT_HISTORY_LIMIT
+// revisions, so storage stays small and predictable.
+model ExperienceDraftRevision {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Mirrors BusinessExperience.draftVersion, so a revision and a draft number never disagree.
+  draftVersion Int
+  label        String?
+  // EDIT | AI | RESTORE | SYSTEM
+  source       String   @default("EDIT")
+  snapshotJson String   @db.Text
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([businessId, draftVersion])
+  @@index([businessId, createdAt])
+}
+
+//
+// Entitlement for the Interactive Business package (§59).
+// Deliberately separate from Subscription: a business needs BOTH a valid subscription
+// to the INTERACTIVE_BUSINESS plan AND a verified PAID payment, exactly like the
+// existing publish gate (§3). Expiry never deletes content (§59).
+//
+model InteractiveBusinessEntitlement {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String   @default("INTERACTIVE_BUSINESS")
+  status      String   @default("PENDING")   // PENDING | ACTIVE | PAST_DUE | EXPIRED | CANCELLED
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([status])
+}
+
+//
+// Tenant media library (§19). `hash` is retained for legacy rows and historical deduplication;
+// new inline uploads are refused, and reference-only rows do not claim stored bytes. Alt text
+// is stored with the asset so accessibility travels with the image (§48).
+//
+model MediaAsset {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  url        String   @db.Text
+  kind       String   @default("IMAGE")   // IMAGE | LOGO | HERO | OTHER
+  alt        String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  hash       String?
+  mime       String?
+  // Where the pixels came from (§18, §43). Provenance travels with the asset so the Studio can
+  // always answer "did the owner photograph this, or did JATA make it?".
+  source     String   @default("UPLOAD")  // UPLOAD | AI_GENERATED | AI_ENHANCED | ENHANCED
+  // What the image may claim to be (§15): ACTUAL = the real product, REPRESENTATIVE = designed
+  // artwork standing in for a photo the business does not have, AI_GENERATED = vendor photo.
+  label      String?
+  aiGenerationId String?
+  parentAssetId  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
+  // Monotonic compare-and-swap token for media metadata edits; unlike updatedAt, it cannot collide within one millisecond.
+  version    Int      @default(0)
+  // Durable-object identity is needed to remove customer bytes when the library row is deleted.
+  // Null for externally hosted URL references and legacy assets that predate this tracking.
+  storageProvider String?
+  storageKey      String?  @db.Text
+
+  @@index([businessId])
+  @@index([businessId, hash])
+  @@index([businessId, createdAt])
+  @@index([businessId, source])
+  @@index([businessId, kind])
+}
+
+// AI generation history and usage meter (§17, §43, §51).
+//
+// One row per request, whatever the outcome: what was asked, for whom, which provider and
+// model, how long it took and which media assets it produced. The image allowance is counted
+// from these rows, so the meter and the audit trail can never disagree, and deleting a
+// generation removes exactly the assets it created.
+model AiGeneration {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId         String?
+  kind           String                        // IMAGE | ENHANCE | COPY | ALT_TEXT
+  capability     String?                       // preset key, e.g. "product-photo"
+  subjectType    String?                       // PRODUCT | SERVICE | SECTION | BUSINESS
+  subjectId      String?
+  prompt         String?  @db.Text
+  promptHash     String?
+  providerKey    String   @default("jata-local")
+  modelKey       String?
+  status         String   @default("PENDING")  // PENDING | SUCCEEDED | FAILED | BLOCKED
+  errorCode      String?
+  assetIds       String?  @db.Text
+  selectedAssetId String?
+  durationMs     Int?
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, promptHash])
+  @@index([businessId, kind, status])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// JATA AFTERCALL — Configurable Business POS (spec §1–§81)
+//
+// ONE engine, many operating models (§76). Every model below is tenant-scoped by
+// `businessId` and indexed on it, so isolation is enforced in the data model as well as in
+// the access layer (§5). There is no per-industry table: a garage's vehicle, an estate
+// agent's unit and a school's locker are all `PosCustomerAsset`, and a restaurant's order,
+// a laundry's load and a courier's shipment are all `PosOrder` in a configured workflow
+// (§29, §52). What differs between businesses is configuration, not schema.
+//
+// Money is stored as whole Kenyan shillings (§31, §54). Transactions are never rewritten:
+// corrections are returns, refunds, adjustments or reversals with their own rows (§54).
+// ══════════════════════════════════════════════════════════════════════════════
+
+//
+// The Business Operating Profile (§7, §20). `draftJson` is what the owner is editing;
+// `publishedJson` is what the live POS executes. Publishing snapshots the draft into
+// PosConfigurationVersion so history stays interpretable when the business changes (§48).
+//
+model PosConfiguration {
+  id                  String    @id @default(cuid())
+  businessId          String    @unique
+  business            Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // DRAFT | CONFIGURED | PREVIEW | AWAITING_PAYMENT | PAYMENT_CONFIRMED | PROVISIONING |
+  // LIVE | SUSPENDED | CANCELLED (§44)
+  status              String    @default("DRAFT")
+  // INCOMPLETE | READY | PUBLISHED — the configuration's own completeness (§42)
+  configurationStatus String    @default("INCOMPLETE")
+  businessTypeKey     String    @default("other")
+  answersJson         String    @db.Text
+  draftJson           String    @db.Text
+  publishedJson       String?   @db.Text
+  draftVersion        Int       @default(1)
+  publishedVersion    Int       @default(0)
+  // Stable hash of the material configuration, used to decide when a version is deserved (§48)
+  fingerprint         String?
+  publishedAt         DateTime?
+  publishedById       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  versions            PosConfigurationVersion[]
+
+  @@index([businessId, status])
+}
+
+// Immutable configuration snapshots (§48). Rollback writes a new version; it never edits one.
+model PosConfigurationVersion {
+  id           String           @id @default(cuid())
+  businessId   String
+  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  configuration PosConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  configurationId String
+  version      Int
+  snapshotJson String           @db.Text
+  answersJson  String           @db.Text
+  fingerprint  String?
+  note         String?
+  createdById  String?
+  publishedAt  DateTime         @default(now())
+
+  @@unique([businessId, version])
+  @@index([businessId, publishedAt])
+}
+
+//
+// The Business POS subscription (§45). Deliberately separate from `Subscription`: a business
+// may hold its AFTERCALL plan and the POS product at the same time, and paying for one must
+// never disturb the other (§4, §80).
+//
+model PosSubscription {
+  id               String    @id @default(cuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String    @default("BUSINESS_POS")
+  // PENDING | ACTIVE | EXPIRING | PAST_DUE | EXPIRED | SUSPENDED | CANCELLED
+  status           String    @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([userId])
+}
+
+// Persisted entitlement so admin views and lifecycle jobs can query state directly (§44).
+model PosEntitlement {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String    @default("BUSINESS_POS")
+  status      String    @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+// Saved configurations — "my business template" (§26) and the source of a clone (§25, §50).
+// Structure only: no balances, transactions or credentials are ever stored here.
+model PosTemplate {
+  id                String    @id @default(cuid())
+  ownerId           String
+  businessId        String?
+  business          Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  key               String
+  name              String
+  description       String?
+  businessTypeKey   String    @default("other")
+  configurationJson String    @db.Text
+  answersJson       String    @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([businessId])
+}
+
+// Locations (§16). One branch row exists even for a single-location business so stock and
+// sales always have a home.
+model PosBranch {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  code       String?
+  location   String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+// Optional imagery for existing free-text POS product categories. Category names remain on
+// products; this table stores only their business-scoped presentation metadata.
+// An independent business-owned category. Product and image names use a tenant-scoped
+// composite foreign key, so renames carry associations and deletion cannot orphan products.
+model PosCategory {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  products   PosProduct[]
+  image      PosCategoryImage?
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+}
+
+model PosCategoryImage {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category   String
+  categoryRecord PosCategory @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
+  imageUrl   String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, category])
+  @@index([businessId])
+}
+
+//
+// People who operate the POS (§15, §36). A staff record may exist before it has a platform
+// login, so `userId` is nullable and intentionally not a foreign key: staff are business
+// records first, platform users only once invited.
+//
+// Finalized, append-only sale-cohort and period-ledger captures. Revisions supersede rather
+// than alter an earlier capture; they are alternatives, never additive entries.
+model PosReportSnapshot {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scopeKey     String   @default("")
+  periodStart  DateTime
+  periodEnd    DateTime
+  revision     Int
+  supersedesId String?
+  reason       String?  @db.Text
+  finalizedById String
+  finalizedAt  DateTime @default(now())
+  payload      Json
+
+  @@unique([businessId, scopeKey, periodStart, periodEnd, revision])
+  @@index([businessId, scopeKey, periodStart, periodEnd])
+}
+
+model PosStaff {
+  id                String    @id @default(cuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId            String?
+  name              String
+  phone             String?
+  email             String?
+  roleKey           String    @default("CASHIER")
+  branchId          String?
+  commissionPercent Int       @default(0)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([businessId, roleKey])
+  @@index([businessId, userId])
+}
+
+// Products and services (§8, §13). One table, configured fields: a restaurant dish, a
+// hardware item and a salon treatment differ by `kind`, unit and which columns the
+// configuration exposes (§24 — forms only ask for relevant fields).
+model PosProduct {
+  id                String    @id @default(cuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name              String
+  kind              String    @default("PRODUCT")   // PRODUCT | SERVICE
+  category          String?
+  categoryRecord    PosCategory? @relation(fields: [businessId, category], references: [businessId, name], onDelete: NoAction, onUpdate: Cascade)
+  description       String?   @db.Text
+  unitKey           String    @default("piece")
+  priceKES          Int       @default(0)
+  // Same sale-window rule as Product (lib/sale-pricing.ts): the sale applies only inside the window, UTC storage.
+  salePriceKES      Int?
+  salePriceStartsAt DateTime? @db.Timestamp(3)
+  salePriceEndsAt   DateTime? @db.Timestamp(3)
+  wholesalePriceKES Int?
+  costKES           Int?
+  sku               String?
+  barcode           String?
+  trackInventory    Boolean   @default(true)
+  reorderLevel      Int       @default(0)
+  taxable           Boolean   @default(false)
+  durationMinutes   Int?
+  variantOptions    String?   @db.Text   // JSON: { "Size": ["S","M"], "Colour": ["Red"] }
+  imageUrl          String?   @db.Text
+  isActive          Boolean   @default(true)
+  sortOrder         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  inventory         PosInventoryItem[]
+  movements         PosInventoryMovement[]
+
+  @@index([businessId, kind])
+  @@index([businessId, name])
+  @@index([businessId, barcode])
+}
+
+// Stock on hand per product and location (§16, §33). Never edited directly: the number is
+// the sum of PosInventoryMovement rows.
+model PosInventoryItem {
+  id           String     @id @default(cuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId    String
+  product      PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Empty string means "the business's own stock room". A nullable column would make the
+  // unique pair below meaningless in Postgres, where NULLs never collide (§16, §33).
+  branchId     String     @default("")
+  // Float: measurable units (kilogram, litre, metre) carry up to three decimal places (§13, §14);
+  // countable units are still stored whole. Never edited directly: the number is the sum of
+  // PosInventoryMovement rows.
+  quantity     Float      @default(0)
+  reorderLevel Int        @default(0)
+  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime   @default(now())
+
+  @@unique([productId, branchId])
+  @@index([businessId])
+  @@index([businessId, branchId])
+}
+
+// The stock ledger (§33): every change has a reason, an actor and a reference.
+model PosInventoryMovement {
+  id          String     @id @default(cuid())
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId   String
+  product     PosProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId    String?
+  reason      String     // SALE | RETURN | PURCHASE | ADJUSTMENT | DAMAGE | COUNT | TRANSFER_IN …
+  delta       Float      // signed change in base units (three-decimal precision, §13)
+  quantity    Float      @default(0)
+  unitKey     String?
+  refType     String?    // SALE | PURCHASE | ADJUSTMENT | TRANSFER
+  refId       String?
+  note        String?    @db.Text
+  createdById String?
+  createdAt   DateTime   @default(now())
+
+  @@index([businessId, productId, createdAt])
+  @@index([businessId, reason])
+  @@index([businessId, branchId])
+}
+
+// Customers (§14, §46). The structure is identical for every trade; only the label changes.
+model PosCustomer {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  email          String?
+  location       String?
+  customerNumber String?
+  segment        String?
+  notes          String?  @db.Text
+  creditEnabled  Boolean  @default(false)
+  creditLimitKES Int      @default(0)
+  // Denormalized running balance, always written together with a PosCreditEntry (§30).
+  balanceKES     Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assets         PosCustomerAsset[]
+  repaymentRequests PosRepaymentRequest[]
+
+  @@unique([businessId, id])
+  @@index([businessId, name])
+  @@index([businessId, phone])
+  @@index([businessId, creditEnabled])
+}
+
+//
+// Something a customer owns or occupies: a vehicle and registration number for a garage, a
+// property unit for an agent, a pet for a vet (§18). One generic model instead of a table
+// per trade (§52).
+//
+model PosCustomerAsset {
+  id          String      @id @default(cuid())
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    PosCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label       String      // "Vehicle", "Unit", "Pet" — set from terminology
+  name        String
+  identifier  String?     // registration number, unit number, tag
+  detailsJson String?     @db.Text
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([businessId, customerId])
+  @@index([businessId, identifier])
+}
+
+// Suppliers (§12, §30). Supplier credit is a separate ledger from customer credit.
+model PosSupplier {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String?
+  email        String?
+  location     String?
+  termsDays    Int      @default(0)
+  creditEnabled Boolean @default(false)
+  balanceKES   Int      @default(0)
+  notes        String?  @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([businessId, name])
+}
+
+// Sales (§27, §31, §54). Immutable once completed: corrections create new rows.
+model PosSale {
+  id                     String    @id @default(cuid())
+  businessId             String
+  business               Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId               String?
+  receiptNumber          String
+  sequence               Int       @default(1)
+  customerId             String?
+  customerName           String?
+  staffId                String?
+  staffName              String?
+  // Attribution source (§28, §70), stored with the engine's ChannelKey spelling:
+  // walk_in | phone | whatsapp | business_page | online | staff | delivery | other
+  channel                String    @default("walk_in")
+  // COMPLETED | PARTIALLY_PAID | REFUNDED | PARTIALLY_REFUNDED | VOIDED
+  status                 String    @default("COMPLETED")
+  kind                   String    @default("SALE")   // SALE | QUOTATION | INVOICE
+  subtotalKES            Int       @default(0)
+  discountKES            Int       @default(0)
+  taxKES                 Int        @default(0)
+  feeKES                 Int       @default(0)
+  totalKES               Int       @default(0)
+  paidKES                Int       @default(0)
+  balanceKES             Int       @default(0)
+  refundedKES            Int       @default(0)
+  // Of `refundedKES`, the part already applied against the customer's receivable (a credit refund
+  // never produces cash). The remainder of `refundedKES` is cash that left the till (§30, §54).
+  creditRefundedKES      Int       @default(0)
+  costKES                Int?
+  notes                  String?   @db.Text
+  // Which configuration produced this transaction, so it stays interpretable later (§48)
+  configurationVersion   Int       @default(1)
+  configurationFingerprint String?
+  createdAt              DateTime  @default(now())
+  completedAt            DateTime?
+  items                  PosSaleItem[]
+  payments               PosPayment[]
+
+  @@unique([businessId, receiptNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, customerId])
+  @@index([businessId, branchId, createdAt])
+  paymentTransactions PaymentTransaction[]
+}
+
+//
+// The per-business receipt sequence (§32). The single allocation point for sale receipt
+// numbers: a sale transaction claims its number with one atomic upsert, so concurrent sales
+// always receive unique sequences and no sale fails because another chose the same number.
+// No relation by design — like the stock room, the table is tenant-scoped by `businessId`
+// (primary key), and a plain column keeps the back-relation surface of `Business` unchanged.
+model PosReceiptSequence {
+  businessId String @id
+  nextValue  Int    @default(1)
+
+  @@index([businessId])
+}
+
+/// The replay guard for a till sale (§27, §32, §54).
+///
+/// A till sends the same sale twice more often than anyone expects: a second tap on "Charge"
+/// while the first request is still running, a retry after the network stalls, a page refreshed
+/// after the customer's phone has already shown the prompt. Without a guard each duplicate is a
+/// real second sale — stock moves twice, the customer is charged twice, and two receipts exist
+/// for one basket.
+///
+/// The key is scoped to `(businessId, actorId, scope, key)`, so one cashier's key can never
+/// spend or suppress another's request and the same key in two different shops is two different
+/// requests. `requestHash` makes a reused key with a *different* body a conflict instead of a
+/// silent replay. The row is written inside the sale's own transaction: a duplicate insert
+/// violates the unique index, the transaction rolls back, and no second sale is created.
+model PosIdempotencyRecord {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Whose key it is — taken from the session, never from the request body (§56).
+  actorId     String
+  /// What the key guards ("sale.create"), so one key space cannot be spent on another action.
+  scope       String
+  /// The client's key, trimmed and bounded before it is stored.
+  key         String
+  /// A hash of the request it was spent on: same key, different request is a conflict.
+  requestHash String
+  /// The sale this key bought, when the request did create one.
+  saleId      String?
+  createdAt   DateTime @default(now())
+
+  @@unique([businessId, actorId, scope, key])
+  @@index([businessId, createdAt])
+}
+
+/// Durable replay guard for an order placed from a customer or AI channel (storefront checkout, AI ordering).
+///
+/// A checkout can be sent twice: a double tap, a retry after a timeout, or a request repeated while the first is
+/// still running. The key is scoped to (businessId, scope, key) and written inside the same transaction that
+/// creates the order, its items, the stock decrement and the pending payment row. A duplicate insert violates the
+/// unique index, the transaction rolls back, and the caller is answered with the order the first request created.
+/// `requestHash` makes a reused key with a different request a conflict, not a silent replay.
+///
+/// The payment provider is called only after this transaction commits. `state` records how far the attempt got,
+/// so a retry after a crash resumes the provider step instead of creating a second order.
+model CheckoutIdempotencyRecord {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Which channel and action the key belongs to, e.g. "storefront.checkout" or "ai.order".
+  scope        String
+  /// The client's key, trimmed and bounded before it is stored.
+  key          String
+  /// Hash of the request the key was spent on.
+  requestHash  String
+  /// STARTED (inside the transaction), ORDER_CREATED (committed, provider step pending), COMPLETED (final response stored).
+  state        String
+  orderId      String?
+  paymentId    String?
+  /// The response returned to the caller once COMPLETED, replayed verbatim on a retry.
+  responseJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([businessId, scope, key])
+  @@index([businessId, createdAt])
+}
+
+model PosSaleItem {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  saleId       String
+  sale         PosSale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId    String?
+  // Authoritative name, unit and price at the moment of sale (§54)
+  name         String
+  kind         String   @default("PRODUCT")
+  unitKey      String?
+  // Float: measurable units (kilogram, litre, metre) carry up to three decimal places (§13, §14).
+  quantity     Float      @default(1)
+  // How much of this line has already been returned. A line may only ever be returned up to its
+  // quantity; the check is enforced atomically against this column (§54).
+  returnedQty  Float      @default(0)
+  unitPriceKES Int      @default(0)
+  discountKES  Int      @default(0)
+  taxKES       Int      @default(0)
+  totalKES     Int      @default(0)
+  costKES      Int?
+  variantDesc  String?
+  createdAt    DateTime @default(now())
+
+  @@index([saleId])
+  @@index([businessId, productId])
+}
+
+//
+// Money movement inside the POS (§31). Separate from the platform `Payment` model, which
+// records what customers pay *JATA*; this records what customers pay *the business*.
+//
+model PosPayment {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  saleId      String?
+  sale        PosSale?  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customerId  String?
+  supplierId  String?
+  branchId    String?
+  // IN | OUT
+  direction   String    @default("IN")
+  // SALE | CREDIT_REPAYMENT | SUPPLIER_PAYMENT | EXPENSE | DEPOSIT | REFUND
+  purpose     String    @default("SALE")
+  method      String    @default("cash")
+  amountKES   Int       @default(0)
+  reference   String?
+  // SETTLED | PENDING | REVERSED | FAILED
+  status      String    @default("SETTLED")
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+  repaymentRequest PosRepaymentRequest?
+
+  @@unique([businessId, customerId, id])
+  @@index([businessId, createdAt])
+  @@index([businessId, purpose])
+  @@index([saleId])
+  @@index([businessId, customerId])
+  @@index([businessId, supplierId])
+}
+
+// Committed repayment requests only. Customer-row locking serializes requests for a customer;
+// business-wide uniqueness also prevents the same key being spent on different customers.
+model PosRepaymentRequest {
+  id              String      @id @default(cuid())
+  businessId      String
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        PosCustomer @relation(fields: [businessId, customerId], references: [businessId, id], onDelete: NoAction)
+  key             String
+  requestHash     String
+  paymentId       String      @unique
+  payment         PosPayment  @relation(fields: [businessId, customerId, paymentId], references: [businessId, customerId, id], onDelete: NoAction)
+  amountKES       Int
+  balanceAfterKES Int
+  createdAt       DateTime    @default(now())
+
+  @@unique([businessId, key])
+  @@unique([businessId, customerId, paymentId])
+  @@index([businessId, createdAt])
+}
+
+// Credit ledger (§30). `partyType` keeps receivables and payables permanently separate.
+model PosCreditEntry {
+  id              String    @id @default(cuid())
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  partyType       String    @default("CUSTOMER")   // CUSTOMER | SUPPLIER
+  partyId         String
+  partyName       String?
+  direction       String    @default("DEBIT")      // DEBIT (owed) | CREDIT (paid)
+  amountKES       Int       @default(0)
+  balanceAfterKES Int       @default(0)
+  dueAt           DateTime?
+  saleId          String?
+  paymentId       String?
+  note            String?   @db.Text
+  createdById     String?
+  createdAt       DateTime  @default(now())
+
+  @@index([businessId, partyType, partyId])
+  @@index([businessId, dueAt])
+  @@index([businessId, createdAt])
+}
+
+// Expenses (§17). Categories come from the configuration, including custom ones.
+model PosExpense {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId    String?
+  categoryKey String
+  label       String?
+  amountKES   Int       @default(0)
+  method      String    @default("cash")
+  reference   String?
+  occurredAt  DateTime  @default(now())
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([businessId, occurredAt])
+  @@index([businessId, categoryKey])
+}
+
+// Purchases and purchase orders (§12, §33). Receiving writes stock movements.
+model PosPurchase {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplierId  String?
+  branchId    String?
+  reference   String
+  // DRAFT | ORDERED | PARTIAL | RECEIVED | CANCELLED
+  status      String    @default("ORDERED")
+  subtotalKES Int       @default(0)
+  totalKES    Int       @default(0)
+  paidKES     Int       @default(0)
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  notes       String?   @db.Text
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  items       PosPurchaseItem[]
+
+  @@unique([businessId, reference])
+  @@index([businessId, status])
+  @@index([businessId, supplierId])
+}
+
+model PosPurchaseItem {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseId   String
+  purchase     PosPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId    String?
+  name         String
+  unitKey      String?
+  quantity     Float       @default(1)
+  receivedQty  Float       @default(0)
+  unitCostKES  Int       @default(0)
+  totalKES     Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([purchaseId])
+  @@index([businessId, productId])
+}
+
+//
+// Orders (§28, §29). One table, configurable states: a restaurant ticket, a laundry load, a
+// courier shipment and a garage job all live here and move through the workflow their
+// configuration chose. Channel metadata is recorded for attribution reporting (§70).
+//
+model PosOrder {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId     String?
+  reference    String
+  customerId   String?
+  customerName String?
+  customerPhone String?
+  staffId      String?
+  assignedToId String?
+  channel      String    @default("walk_in")   // see PosSale.channel (§70)
+  workflowKey  String    @default("generic")
+  stateKey     String    @default("NEW")
+  fulfilment   String?   // DELIVERY | PICKUP | DINE_IN
+  address      String?
+  subtotalKES  Int       @default(0)
+  totalKES     Int       @default(0)
+  depositKES   Int       @default(0)
+  expectedAt   DateTime?
+  saleId       String?
+  notes        String?   @db.Text
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  items        PosOrderItem[]
+  events       PosOrderEvent[]
+
+  @@unique([businessId, reference])
+  @@index([businessId, stateKey])
+  @@index([businessId, createdAt])
+  @@index([businessId, channel])
+}
+
+model PosOrderItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  name        String
+  quantity    Float      @default(1)
+  unitKey     String?
+  unitPriceKES Int     @default(0)
+  totalKES    Int      @default(0)
+  modifiers   String?  @db.Text   // JSON: extras, notes to the kitchen
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([businessId])
+}
+
+// Order state history — the workflow engine's audit trail (§29).
+model PosOrderEvent {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromState   String?
+  toState     String
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([businessId, createdAt])
+}
+
+// POS audit log (§37). Tenant-scoped, unlike the platform-wide AuditEvent.
+model PosAuditEvent {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actorName  String?
+  action     String
+  targetType String?
+  targetId   String?
+  branchId   String?
+  metadata   String?   @db.Text
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
+}
+
+/// Owner-selected paid-but-unpublished POS safeguard. One row per confirmed POS subscription
+/// payment whose configuration did not publish in the settlement transaction. The payment and
+/// entitlement remain authoritative; this row tracks only publication resolution and never
+/// grants access, initiates a refund, or claims that a notification was delivered.
+model PosPublicationResolution {
+  id                              String    @id @default(cuid())
+  businessId                      String
+  business                        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  paymentId                       String    @unique
+  payment                         Payment   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  configurationId                 String?
+  paymentReference                String
+  /// Fresh: server settlement instant. Legacy repair: verified provider paid_at. Never mutable ledger timestamps.
+  confirmedAt                     DateTime
+  deadlineAt                      DateTime
+  blockerCode                     String
+  blockerDetail                   String?   @db.Text
+  /// OPEN | ESCALATED | RESOLVED. ESCALATED is derived from deadlineAt even before a worker runs.
+  status                          String    @default("OPEN")
+  /// Observational copy only. PosEntitlement remains the authorization source of truth.
+  entitlementStatus               String    @default("ACTIVE")
+  /// PENDING_PUBLICATION | OWNER_ESCALATED | PUBLISHED. No refund outcome is invented here.
+  remedyStatus                    String    @default("PENDING_PUBLICATION")
+  ownerNotificationQueuedAt       DateTime?
+  escalationNotificationScheduledAt DateTime?
+  escalatedAt                     DateTime?
+  resolvedAt                      DateTime?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([status, deadlineAt])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// JATA PAYMENT WALLET + JATA PAYMENT ORCHESTRATION (§4, §6, §75)
+//
+// The merchant's payment destination, the provider connection JATA operates on the
+// merchant's behalf, the payment transaction and its full evidentiary trail: attempts,
+// provider events, notifications, refunds, reconciliation and audit.
+//
+// Every row is tenant-owned (businessId), money is stored in integer minor units (§77)
+// and financial rows are never rewritten — corrections are new rows (§114).
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Which provider the destination (and every payment routed to it) belongs to.
+enum PaymentProviderKey {
+  MPESA
+  PAYSTACK
+  BANK
+  AIRTEL_MONEY
+}
+
+/// What the merchant entered — the only thing JATA asks them for (§9, §10).
+enum PaymentDestinationKind {
+  MPESA_TILL
+  MPESA_PAYBILL
+  MPESA_POCHI
+  BANK_ACCOUNT
+  PAYSTACK
+}
+
+/// How far the destination has actually been verified (§52). Never call a destination
+/// "connected" because its number has the right length.
+enum PaymentDestinationStatus {
+  UNVERIFIED
+  FORMAT_VERIFIED
+  PROVIDER_VERIFIED
+  CONNECTED
+  ACTION_REQUIRED
+  UNAVAILABLE
+  DISCONNECTED
+}
+
+/// The financial lifecycle (§31). Never collapsed into a boolean.
+enum PaymentTransactionStatus {
+  CREATED
+  PAYMENT_REQUESTED
+  PENDING
+  PROCESSING
+  CONFIRMED
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  REVERSED
+  PARTIALLY_PAID
+  PARTIALLY_REFUNDED
+  FULLY_REFUNDED
+}
+
+enum PaymentEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  REJECTED
+  FAILED
+}
+
+enum PaymentAttemptStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  FAILED
+  TIMEOUT
+}
+
+enum PaymentNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum PaymentNotificationAudience {
+  MERCHANT
+  CUSTOMER
+}
+
+enum PaymentReconciliationResult {
+  MATCHED
+  AMOUNT_MISMATCH
+  UNKNOWN_PAYMENT
+  DUPLICATE
+  UNCONFIRMED
+  MANUAL_MATCHED
+}
+
+enum RefundStatus {
+  REQUESTED
+  PENDING_PROVIDER
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
+/// Who caused the audited event. JATA_SYSTEM = the orchestrator itself; JATA_OPERATOR =
+/// internal administration, which never appears in the merchant POS (§73).
+enum PaymentActorKind {
+  MERCHANT_STAFF
+  CUSTOMER
+  JATA_SYSTEM
+  JATA_OPERATOR
+}
+
+/// Where the business gets paid (§9). Belongs to exactly one tenant.
+model PaymentDestination {
+  id                     String                    @id @default(cuid())
+  businessId             String
+  business               Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind                   PaymentDestinationKind
+  provider               PaymentProviderKey
+  /// Masked label for display, e.g. "M-PESA Till •••4567".
+  label                  String?
+  /// The number the merchant entered: till, paybill, pochi, bank account or Paystack reference.
+  providerDestinationId  String
+  /// PayBill business/account reference ("" when not applicable — keeps the unique key usable).
+  providerAccountRef     String                    @default("")
+  bankName               String?
+  accountName            String?
+  currency               String                    @default("KES")
+  /// Capabilities actually available for this destination (§8, §88). Never invented.
+  capabilities           String[]                     @default([])
+  status                 PaymentDestinationStatus @default(UNVERIFIED)
+  /// How the status was earned: FORMAT | PROVIDER | LIVE (§52).
+  verificationSource     String?
+  isPrimary              Boolean                   @default(false)
+  isActive               Boolean                   @default(true)
+  verifiedAt             DateTime?
+  connectedAt            DateTime?
+  disconnectedAt         DateTime?
+  lastEventAt            DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  transactions           PaymentTransaction[]
+  auditEvents            PaymentAuditEvent[]
+
+  @@unique([businessId, provider, providerDestinationId, providerAccountRef], map: "PaymentDestination_businessId_provider_providerDestinationId_pr")
+  @@index([businessId, isActive])
+  @@index([businessId, isPrimary])
+}
+
+/// JATA's own connection to a provider for one tenant (§2, §12). The merchant never sees
+/// credentials, callback URLs or keys: this row records only status and what JATA may do.
+model PaymentProviderConnection {
+  id                 String                    @id @default(cuid())
+  businessId         String
+  business           Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  provider           PaymentProviderKey
+  status             PaymentDestinationStatus @default(UNVERIFIED)
+  /// Provider-side identifier JATA holds for this tenant (subaccount code, shortcode, …).
+  /// Never a secret: secrets stay in JATA's server environment (§58).
+  providerConnectionId String?
+  displayName        String?
+  capabilities       String[]                   @default([])
+  healthy            Boolean                   @default(false)
+  /// Plain-language state for the merchant, never a technical error (§53, §86).
+  detail             String?
+  lastEventAt        DateTime?
+  lastHealthyAt      DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@unique([businessId, provider])
+  @@index([businessId, status])
+}
+
+/// One payment: JATA's request, the provider's answer and JATA's verification (§32, §101).
+model PaymentTransaction {
+  id                    String                   @id @default(cuid())
+  /// The merchant-visible JATA payment id, e.g. JTP-20261004-1048-X8K2 (§32).
+  jataPaymentId         String                   @unique
+  businessId            String
+  business              Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  destinationId         String?
+  destination           PaymentDestination?      @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  provider              PaymentProviderKey
+  status                PaymentTransactionStatus @default(CREATED)
+  /// JATA's reference handed to the provider (§64).
+  providerReference     String?
+  /// The provider's own transaction id — the authoritative external identity (§32, §33).
+  /// For M-PESA STK this remains the CheckoutRequestID correlation handle.
+  providerTransactionId String?
+  /// Actual M-PESA STK receipt from the authenticated callback; never a correlation substitute.
+  providerReceipt       String?
+  idempotencyKey        String                   @unique
+  /// How the payment was made: MPESA_STK | MPESA_PAYBILL | MPESA_QR | CARD | BANK_TRANSFER …
+  method                String?
+  amountMinor           Int
+  amountPaidMinor       Int                      @default(0)
+  amountRefundedMinor   Int                      @default(0)
+  currency              String                   @default("KES")
+  customerName          String?
+  customerPhoneMasked   String?
+  posCustomerId         String?
+  /// The POS sale this payment settled, once it is confirmed (§25). Unique: one payment can
+  /// never settle two sales, and a retry can never settle the same sale twice (§33, §98).
+  posSaleId             String?                  @unique
+  posSale               PosSale?                 @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
+  /// The service/order this payment is for, when it is not a counter sale.
+  orderId               String?
+  /// Server-priced settlement context (cart lines, actor, channel). Never trusted from the browser.
+  paymentContext        Json?
+  receiptNumber         String?
+  /// Unguessable token for the public receipt verification page (§38, §83).
+  receiptToken          String?                  @unique
+  receiptGeneratedAt    DateTime?
+  failureCode           String?
+  /// Plain-language failure shown to the merchant (§86).
+  failureReason         String?
+  /// When JATA stops waiting for a confirmation that never came (§68).
+  expiresAt             DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  requestedAt           DateTime?
+  providerAcceptedAt    DateTime?
+  providerConfirmedAt   DateTime?
+  jataVerifiedAt        DateTime?
+  paidAt                DateTime?
+  merchantNotifiedAt    DateTime?
+  customerNotifiedAt    DateTime?
+  reconciledAt          DateTime?
+
+  attempts        PaymentAttempt[]
+  events          PaymentEvent[]
+  notifications   PaymentNotification[]
+  refunds         Refund[]
+  reconciliations PaymentReconciliation[]
+  auditEvents     PaymentAuditEvent[]
+
+  @@unique([provider, providerReference])
+  @@unique([provider, providerTransactionId])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([status, expiresAt])
+  @@index([businessId, posSaleId])
+}
+
+/// Every call JATA made to a provider for this payment (§101). Attempts are evidence, not state.
+model PaymentAttempt {
+  id               String               @id @default(cuid())
+  businessId       String
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId    String
+  transaction      PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider         PaymentProviderKey
+  attemptNumber    Int                  @default(1)
+  status           PaymentAttemptStatus @default(REQUESTED)
+  requestReference String?
+  providerReference String?
+  errorCode        String?
+  errorMessage     String?
+  latencyMs        Int?
+  createdAt        DateTime             @default(now())
+
+  @@unique([transactionId, attemptNumber])
+  @@index([businessId, createdAt])
+}
+
+/// A provider event as JATA received it (§24, §34, §35). `(provider, providerEventId)` is the
+/// database-level replay guard: one provider event can never be processed twice (§33).
+model PaymentEvent {
+  id                String             @id @default(cuid())
+  provider          PaymentProviderKey
+  providerEventId   String
+  eventType         String
+  businessId        String?
+  transactionId     String?
+  transaction       PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  signatureVerified Boolean            @default(false)
+  status            PaymentEventStatus @default(RECEIVED)
+  /// Sanitised provider payload: enough to audit, never credentials, PINs or full personal data (§116).
+  payload           Json?
+  providerReference String?
+  errorCode         String?
+  receivedAt        DateTime           @default(now())
+  processedAt       DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([provider, status, receivedAt])
+  @@index([businessId, receivedAt])
+}
+
+/// Merchant and customer notifications for a payment (§26, §27, §100). Notification failure
+/// never changes a payment's status (§66).
+model PaymentNotification {
+  id             String                        @id @default(cuid())
+  businessId     String
+  business       Business                      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId  String?
+  transaction    PaymentTransaction?           @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  audience       PaymentNotificationAudience
+  channel        String                        @default("POS")
+  recipientMasked String?
+  title          String
+  message        String
+  status         PaymentNotificationStatus     @default(PENDING)
+  attempts       Int                           @default(0)
+  maxAttempts    Int                           @default(3)
+  lastError      String?
+  /// Stable per event so a retry can never send the same message twice (§66).
+  idempotencyKey String                        @unique
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([status, scheduledAt])
+  @@index([transactionId])
+}
+
+/// JATA's reconciliation of a payment against the provider's own record (§29, §42, §43).
+model PaymentReconciliation {
+  id                   String                       @id @default(cuid())
+  businessId           String
+  business             Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId        String?
+  transaction          PaymentTransaction?          @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  provider             PaymentProviderKey
+  providerReference    String?
+  result               PaymentReconciliationResult
+  expectedAmountMinor  Int?
+  receivedAmountMinor  Int?
+  differenceMinor      Int                          @default(0)
+  currency             String                       @default("KES")
+  notes                String?                      @db.Text
+  /// Manual matching is a named, reasoned, audited act — never a silent attach (§44).
+  matchedByActorId     String?
+  matchedByActorName   String?
+  matchedReason        String?
+  resolvedAt           DateTime?
+  createdAt            DateTime                     @default(now())
+
+  @@index([businessId, result, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/// Refunds (§47). The original payment is never overwritten: every refund is its own row
+/// and moves the running refunded total forward (§114).
+model Refund {
+  id                String            @id @default(cuid())
+  businessId        String
+  business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId     String
+  transaction       PaymentTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider          PaymentProviderKey
+  amountMinor       Int
+  currency          String            @default("KES")
+  status            RefundStatus      @default(REQUESTED)
+  reason            String
+  initiatedById     String?
+  initiatedByName   String?
+  providerReference String?
+  failureReason     String?
+  requestedAt       DateTime          @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([transactionId])
+  @@index([provider, providerReference])
+}
+
+/// Payment audit trail (§60, §98). Immutable through normal interfaces — a database trigger
+/// blocks updates, so a merchant UI or API bug cannot rewrite the history of money.
+model PaymentAuditEvent {
+  id            String            @id @default(cuid())
+  businessId    String
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  destinationId String?
+  destination   PaymentDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  actorKind     PaymentActorKind
+  actorId       String?
+  actorName     String?
+  action        String
+  summary       String
+  beforeState   Json?
+  afterState    Json?
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
+  @@index([transactionId, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JATA Autopilot — Additive Tenant-Scoped Foundation
+// Separate subscription & entitlement from AFTERCALL and Business POS so
+// subscribing, pausing, or lapsing Autopilot never disturbs existing plans.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AutopilotSubscription {
+  id               String    @id @default(cuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  // JATA_AUTOPILOT | JATA_AUTOPILOT_PRO | JATA_AUTOPILOT_ENTERPRISE
+  planKey          String    @default("JATA_AUTOPILOT")
+  // PENDING | ACTIVE | EXPIRING | PAST_DUE | EXPIRED | SUSPENDED | CANCELLED
+  status           String    @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([userId])
+}
+
+model AutopilotEntitlement {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String    @default("JATA_AUTOPILOT")
+  // STANDARD | PRO | ENTERPRISE
+  tier        String    @default("STANDARD")
+  // NONE | ACTIVE | GRACE | SUSPENDED | EXPIRED | CANCELLED
+  status      String    @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+model AutopilotConfiguration {
+  id                    String   @id @default(cuid())
+  businessId            String   @unique
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // ASSISTED | SUPERVISED | ADVANCED
+  autonomyMode          String   @default("ASSISTED")
+  // LIVE | PAUSED
+  operationalStatus     String   @default("LIVE")
+  industryPackKey       String   @default("generic_custom")
+  quietHoursStart       String   @default("20:00")
+  quietHoursEnd         String   @default("07:00")
+  timezone              String   @default("Africa/Nairobi")
+  dailySpendCapMinorKES Int      @default(25000)
+  maxBatchRecipients    Int      @default(50)
+  maxAutoDiscountPct    Int      @default(0)
+  voiceEnabled          Boolean  @default(false)
+  configJson            String?  @db.Text
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([businessId, operationalStatus])
+}
+
+model AutopilotUsageLedger {
+  id                    String   @id @default(cuid())
+  businessId            String
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  periodKey             String
+  dayKey                String
+  // LLM_REASONING | VISION_EXTRACT | VOICE_STT | VOICE_TTS | OUTBOUND_MSG | WORKFLOW_STEP
+  capability            String
+  provider              String
+  unitsIn               Int      @default(0)
+  unitsOut              Int      @default(0)
+  estimatedCostMinorKES Int      @default(0)
+  idempotencyKey        String   @unique
+  createdAt             DateTime @default(now())
+
+  @@index([businessId, periodKey])
+  @@index([businessId, dayKey])
+}
+
+model AutopilotCustomerProfile {
+  id                    String                   @id @default(cuid())
+  businessId            String
+  business              Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  displayName           String?
+  phoneNormalized       String?
+  emailNormalized       String?
+  // NEW_LEAD | ENQUIRED | BOOKED_OR_ORDERED | REPEAT | VIP | AT_RISK | DORMANT
+  lifecycleStage        String                   @default("NEW_LEAD")
+  tagsJson              String                   @default("[]") @db.Text
+  notesSummary          String?                  @db.Text
+  lastInteractionAt     DateTime?
+  totalOrdersSnapshot   Int                      @default(0)
+  totalSpentSnapshotKES Int                      @default(0)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  consents              AutopilotConsentRecord[]
+
+  @@unique([businessId, phoneNormalized])
+  @@unique([businessId, emailNormalized])
+  @@index([businessId, lifecycleStage])
+}
+
+model AutopilotConsentRecord {
+  id                String                   @id @default(cuid())
+  businessId        String
+  business          Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerProfileId String
+  customerProfile   AutopilotCustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  // WHATSAPP | SMS | EMAIL | VOICE
+  channel           String
+  // TRANSACTIONAL | MARKETING
+  scope             String                   @default("TRANSACTIONAL")
+  // OPTED_IN | OPTED_OUT | UNSUBSCRIBED_KEYWORD
+  status            String                   @default("OPTED_IN")
+  source            String
+  recordedByUserId  String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@unique([businessId, customerProfileId, channel, scope], map: "AutopilotConsentRecord_biz_profile_channel_scope_key")
+  @@index([businessId, status])
+}
+
+model AutopilotSession {
+  id          String             @id @default(cuid())
+  businessId  String
+  business    Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorUserId String
+  surface     String             @default("COMMAND_CENTER")
+  title       String?
+  status      String             @default("ACTIVE")
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  messages    AutopilotMessage[]
+
+  @@index([businessId, createdAt])
+}
+
+model AutopilotMessage {
+  id              String           @id @default(cuid())
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessionId       String
+  session         AutopilotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  // USER | ASSISTANT | SYSTEM
+  role            String
+  // TEXT | VOICE_TRANSCRIPT | DOCUMENT_EXTRACT
+  modality        String           @default("TEXT")
+  content         String           @db.Text
+  diagnosticsJson String?          @db.Text
+  createdAt       DateTime         @default(now())
+
+  @@index([businessId, sessionId, createdAt])
+}
+
+model AutopilotIngestionRecord {
+  id                   String   @id @default(cuid())
+  businessId           String
+  business             Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploadedByUserId     String
+  fileName             String
+  mimeType             String
+  byteSize             Int
+  sha256Hash           String
+  // MENU | CATALOGUE | PRICE_LIST | INVOICE | EXPENSE_RECEIPT | PAYMENT_SCREENSHOT_CLAIM | FAQ_DOC | OTHER
+  documentKind         String
+  extractedJson        String   @db.Text
+  confidence           String   @default("medium")
+  // NONE | UNVERIFIED_CLAIM_NEVER_PROOF
+  paymentClaimSafeFlag String   @default("NONE")
+  // PENDING_REVIEW | APPLIED | REJECTED
+  status               String   @default("PENDING_REVIEW")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, sha256Hash])
+}
+
+model AutopilotActionProposal {
+  id                       String    @id @default(cuid())
+  businessId               String
+  business                 Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessionId                String?
+  // CREATE_OR_UPDATE_OFFER | RESOLVE_UNANSWERED_FAQ | QUEUE_CONSENTED_FOLLOWUP
+  actionType               String
+  // READ_ONLY | LOW_RISK_DRAFT | MEDIUM_RISK_REVERSIBLE | HIGH_RISK_LOCKED
+  riskCategory             String    @default("LOW_RISK_DRAFT")
+  autonomyModeAtCreation   String    @default("ASSISTED")
+  // PROPOSED | APPROVED | EXECUTING | EXECUTED | REJECTED | EXPIRED | FAILED | ROLLED_BACK
+  status                   String    @default("PROPOSED")
+  title                    String
+  rationale                String    @db.Text
+  expectedImpact           String?   @db.Text
+  payloadJson              String    @db.Text
+  beforeSnapshotJson       String?   @db.Text
+  afterSnapshotJson        String?   @db.Text
+  rollbackSupported        Boolean   @default(true)
+  voiceTranscriptConfirmed Boolean   @default(false)
+  idempotencyKey           String
+  proposedBy               String    @default("AUTOPILOT")
+  decidedByUserId          String?
+  decidedAt                DateTime?
+  executedAt               DateTime?
+  rolledBackAt             DateTime?
+  expiresAt                DateTime?
+  lastError                String?   @db.Text
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+}
+
+model AutopilotAuditEvent {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // OWNER | STAFF | AUTOPILOT | SYSTEM | KILL_SWITCH
+  actorKind    String
+  actorUserId  String?
+  action       String
+  targetType   String?
+  targetId     String?
+  proposalId   String?
+  metadataJson String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([action])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+
+// One row per business. Holds the industry pack, commerce settings and the master feature flags
+// that keep new behaviour disabled until its dependencies pass.
+model ErpConfiguration {
+  id                String   @id @default(cuid())
+  businessId        String   @unique
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  industryPackKey   String   @default("retail")
+  countryCode       String   @default("KE")
+  currencyCode      String   @default("KES")
+  timeZone          String   @default("Africa/Nairobi")
+  legalName         String?
+  kraPin            String?
+  county            String?
+  // JSON: { erpProEnabled, automationKillSwitch, messagingKillSwitch, storefrontEnabled, ... }
+  featureFlagsJson  String   @default("{}") @db.Text
+  storefrontSlug    String?  @unique
+  storefrontJson    String   @default("{}") @db.Text
+  onboardingJson    String   @default("{}") @db.Text
+  // JSON: { [userId]: "ADMIN" | "MANAGER" | "FINANCE" | "STAFF" | "VIEWER" }. ERP-only: the shared
+  // BusinessMember.role column keeps driving the POS, so ERP roles live here instead.
+  teamRolesJson     String   @default("{}") @db.Text
+  messagingAllowanceSegments Int @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+// ERP PRO is billed on its own plan (KES 3,000/month). Kept apart from PosSubscription so a
+// payment for one product can never switch on the other.
+model ErpSubscription {
+  id               String    @id @default(cuid())
+  businessId       String    @unique
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String    @default("ERP_PRO")
+  status           String    @default("PENDING") // PENDING | ACTIVE | PAST_DUE | EXPIRED | SUSPENDED | CANCELLED
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+model ErpEntitlement {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String    @default("ERP_PRO")
+  status      String    @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([businessId, status])
+}
+
+// Gap-free, tenant-scoped document numbering. The increment is a single atomic statement.
+model ErpSequence {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  key        String
+  prefix     String
+  value      Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, key])
+  @@index([businessId])
+}
+
+model ErpAuditEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actorName  String?
+  action     String
+  targetType String
+  targetId   String?
+  outcome    String   @default("SUCCESS") // SUCCESS | DENIED | FAILED
+  reason     String?
+  beforeJson String?  @db.Text
+  afterJson  String?  @db.Text
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
+}
+
+model ErpIdempotencyRecord {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scope       String
+  key         String
+  requestHash String?
+  responseJson String? @db.Text
+  createdAt   DateTime @default(now())
+
+  @@unique([businessId, scope, key])
+  @@index([businessId, scope])
+}
+
+// ── Accounting ──────────────────────────────────────────────────────────────────────────────
+model ErpAccount {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  code       String
+  name       String
+  // ASSET | LIABILITY | EQUITY | INCOME | EXPENSE
+  type       String
+  parentCode String?
+  systemKey  String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, code])
+  @@index([businessId, type])
+}
+
+model ErpPeriod {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fiscalYear Int
+  month      Int
+  status     String    @default("OPEN") // OPEN | CLOSED
+  closedAt   DateTime?
+  closedById String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([businessId, fiscalYear, month])
+  @@index([businessId, status])
+}
+
+// A journal is immutable once POSTED. A correction is a new reversing journal, never an edit.
+model ErpJournal {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId        String?
+  journalNumber   String
+  entryDate       DateTime
+  description     String
+  // MANUAL | SALE | INVOICE | PAYMENT | EXPENSE | SUPPLIER_BILL | CREDIT_NOTE | OPENING | REVERSAL | AUTOMATION
+  sourceType      String   @default("MANUAL")
+  sourceId        String?
+  status          String   @default("DRAFT") // DRAFT | POSTED | REVERSED
+  currencyCode    String   @default("KES")
+  exchangeRate    Float    @default(1)
+  postedAt        DateTime?
+  postedById      String?
+  reversedById    String?
+  reversalOfId    String?
+  reversalReason  String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([businessId, journalNumber])
+  @@index([businessId, entryDate])
+  @@index([businessId, status])
+  @@index([businessId, sourceType, sourceId])
+}
+
+model ErpJournalLine {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  journalId   String
+  accountCode String
+  accountId   String
+  branchId    String?
+  description String?
+  debitCents  Int      @default(0)
+  creditCents Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([journalId])
+  @@index([businessId, accountCode])
+  @@index([businessId, branchId])
+}
+
+model ErpInvoice {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId        String?
+  invoiceNumber   String
+  customerId      String?
+  customerName    String
+  customerPhone   String?
+  customerPin     String?
+  status          String   @default("DRAFT") // DRAFT | ISSUED | PARTIALLY_PAID | PAID | VOIDED | CREDITED
+  issuedAt        DateTime?
+  dueAt           DateTime?
+  currencyCode    String   @default("KES")
+  subtotalCents   Int      @default(0)
+  discountCents   Int      @default(0)
+  taxCents        Int      @default(0)
+  totalCents      Int      @default(0)
+  amountPaidCents Int      @default(0)
+  balanceCents    Int      @default(0)
+  notes           String?  @db.Text
+  journalId       String?
+  // NONE | QUEUED | SUBMITTING | PENDING_ACK | ACCEPTED | REJECTED | UNCERTAIN | NOT_REQUIRED
+  etimsStatus     String   @default("NONE")
+  etimsControlNumber String?
+  etimsResponseJson  String? @db.Text
+  etimsSubmittedAt   DateTime?
+  sourceType      String?  // POS_SALE | STORE_ORDER | MANUAL
+  sourceId        String?
+  idempotencyKey  String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([businessId, invoiceNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status])
+  @@index([businessId, dueAt])
+  @@index([businessId, customerId])
+}
+
+model ErpInvoiceLine {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  description    String
+  quantity       Float    @default(1)
+  unitAmountCents Int     @default(0)
+  discountCents  Int      @default(0)
+  taxRuleKey     String?
+  taxRateBps     Int      @default(0)
+  taxTreatment   String   @default("STANDARD")
+  lineNetCents   Int      @default(0)
+  lineTaxCents   Int      @default(0)
+  lineTotalCents Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([businessId])
+}
+
+model ErpCreditNote {
+  id               String   @id @default(cuid())
+  businessId       String
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  creditNoteNumber String
+  invoiceId        String
+  reason           String   @db.Text
+  netCents         Int      @default(0)
+  taxCents         Int      @default(0)
+  totalCents       Int      @default(0)
+  status           String   @default("ISSUED") // ISSUED | APPLIED | VOIDED
+  journalId        String?
+  idempotencyKey   String?
+  createdById      String?
+  createdAt        DateTime @default(now())
+
+  @@unique([businessId, creditNoteNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, invoiceId])
+}
+
+model ErpPayment {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId       String?
+  receiptNumber  String
+  customerId     String?
+  customerName   String?
+  amountCents    Int
+  method         String   @default("cash")
+  reference      String?
+  receivedAt     DateTime @default(now())
+  status         String   @default("CONFIRMED") // CONFIRMED | REVERSED
+  journalId      String?
+  notes          String?  @db.Text
+  idempotencyKey String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([businessId, receiptNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, receivedAt])
+  @@index([businessId, customerId])
+}
+
+model ErpPaymentAllocation {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  paymentId   String
+  invoiceId   String
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  @@unique([paymentId, invoiceId])
+  @@index([businessId, invoiceId])
+}
+
+model ErpExpense {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId     String?
+  category     String
+  accountCode  String    @default("5700")
+  description  String
+  amountCents  Int
+  taxCents     Int       @default(0)
+  method       String    @default("cash")
+  paidFromCode String    @default("1000")
+  occurredAt   DateTime  @default(now())
+  status       String    @default("POSTED") // DRAFT | AWAITING_APPROVAL | APPROVED | POSTED | REJECTED
+  approvedById String?
+  journalId    String?
+  receiptUrl   String?
+  idempotencyKey String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, occurredAt])
+  @@index([businessId, status])
+}
+
+model ErpSupplierBill {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplierId   String?
+  /// The purchase order this bill settles, when there is one. Null for a bill entered by hand.
+  purchaseOrderId String?
+  supplierName String
+  billNumber   String
+  issuedAt     DateTime @default(now())
+  dueAt        DateTime?
+  subtotalCents Int     @default(0)
+  taxCents     Int      @default(0)
+  totalCents   Int      @default(0)
+  paidCents    Int      @default(0)
+  status       String   @default("OPEN") // OPEN | PARTIALLY_PAID | PAID | VOIDED
+  journalId    String?
+  createdAt    DateTime @default(now())
+
+  @@unique([businessId, supplierId, billNumber])
+  @@index([businessId, status])
+  @@index([businessId, dueAt])
+  @@index([businessId, purchaseOrderId])
+}
+
+model ErpTaxRule {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  key          String
+  label        String
+  rateBps      Int       @default(0)
+  // STANDARD | ZERO_RATED | EXEMPT | OUT_OF_SCOPE
+  treatment    String    @default("STANDARD")
+  inclusive    Boolean   @default(false)
+  effectiveFrom DateTime
+  effectiveTo  DateTime?
+  sourceRef    String?
+  verified     Boolean   @default(false)
+  // Shown beside a reference rate: a seeded default is not tax advice and must say so.
+  notes        String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([businessId, key, effectiveFrom])
+  @@index([businessId, key])
+}
+
+model ErpComplianceProfile {
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  taxpayerName    String?
+  kraPin          String?
+  vatRegistered   Boolean  @default(false)
+  turnoverBand    String?
+  sector          String?
+  county          String?
+  etimsSolution   String   @default("NONE") // NONE | LITE | CLIENT | OSCU | VSCU | PORTAL
+  etimsStatus     String   @default("NOT_STARTED")
+  etimsOnboardedAt DateTime?
+  etimsLastCheckAt DateTime?
+  etimsNotes      String?  @db.Text
+  invoicePrefix   String   @default("INV")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Commerce: public ordering ───────────────────────────────────────────────────────────────
+model ErpStoreOrder {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderNumber     String
+  publicToken     String   @unique
+  customerName    String
+  customerPhone   String
+  fulfilment      String   @default("PICKUP") // PICKUP | DELIVERY
+  deliveryAddress String?  @db.Text
+  notes           String?  @db.Text
+  subtotalCents   Int      @default(0)
+  taxCents        Int      @default(0)
+  deliveryCents   Int      @default(0)
+  totalCents      Int      @default(0)
+  status          String   @default("PENDING") // PENDING | CONFIRMED | REJECTED | READY | FULFILLED | CANCELLED
+  stockPolicy     String   @default("RESERVE_ON_CONFIRM")
+  idempotencyKey  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([businessId, orderNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+}
+
+model ErpStoreOrderItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId     String
+  productId   String
+  name        String
+  sku         String?
+  quantity    Float    @default(1)
+  unitAmountCents Int  @default(0)
+  lineTotalCents  Int  @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([businessId])
+}
+
+/// An in-app notification. Broadcast rows name an audience role; a row with `recipientId` is for one
+/// person. Read state is per person in `ErpNotificationRead`, so one teammate opening a shared notice
+/// does not make it disappear for everybody else.
+model ErpNotification {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind       String
+  title      String
+  body       String    @db.Text
+  href       String?
+  priority   String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  audienceRole String  @default("OWNER") // OWNER | ADMIN | MANAGER | FINANCE | STAFF | VIEWER | ALL
+  /// Set when the notice is for one person. Null means "everyone in audienceRole".
+  recipientId String?
+  /// What raised it: TASK | STORE_ORDER | CAMPAIGN | AUTOMATION | APPROVAL | SYSTEM.
+  sourceType String?
+  sourceId   String?
+  /// Unique per tenant so a retried job cannot notify the same person twice about the same thing.
+  dedupeKey  String?
+  /// In-app only unless a provider connection exists and a send was actually recorded.
+  deliveryStatus  String  @default("IN_APP") // IN_APP | SKIPPED | QUEUED | SENT | FAILED
+  deliveryChannel String?
+  deliveryError   String? @db.Text
+  deliveredAt     DateTime?
+  /// Legacy broadcast read flag, kept for rows written before per-person read state existed.
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  /// `@default(now())` as well as `@updatedAt`: the database needs a value for existing rows when
+  /// this column is added to a live table, and the client still refreshes it on every write.
+  updatedAt  DateTime  @default(now()) @updatedAt
+  reads      ErpNotificationRead[]
+
+  @@unique([businessId, dedupeKey])
+  @@index([businessId, createdAt])
+  @@index([businessId, readAt])
+  @@index([businessId, recipientId, readAt])
+}
+
+/// Per-person read state. Tenant-scoped, and unique per (notification, user) so marking read twice is
+/// idempotent.
+model ErpNotificationRead {
+  id             String          @id @default(cuid())
+  businessId     String
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  notificationId String
+  notification   ErpNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime        @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([businessId, userId, readAt])
+}
+
+/// A request for permission to do something consequential: commit spend, raise a purchase order, post
+/// a journal, give a discount. One row per request, with an append-only event list, so "who asked, who
+/// decided, when, and why" is a fact rather than an inference from a status column.
+///
+/// The authority to decide is never stored as a boolean. It is derived at decision time from the
+/// decider's role, the amount, the per-tenant threshold and separation of duties (see `lib/erp/access.ts`).
+model ErpApprovalRequest {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind          String   // SPEND | PURCHASE | JOURNAL | DISCOUNT | CAMPAIGN | OTHER
+  title         String
+  detail        String?  @db.Text
+  /// Integer cents, like every other money column. Zero for requests that have no amount.
+  amountCents   Int      @default(0)
+  currencyCode  String   @default("KES")
+  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED | WITHDRAWN
+  requestedBy   String
+  requestedName String?
+  requestedRole String?
+  /// Defaults to the person who asked: nobody may approve their own request.
+  approverRole  String   @default("OWNER")
+  /// Set when the request is addressed to one named decider instead of a role.
+  approverId    String?
+  decidedBy     String?
+  decidedName   String?
+  decidedRole   String?
+  decidedAt     DateTime?
+  decisionNote  String?  @db.Text
+  sourceType    String?
+  sourceId      String?
+  href          String?
+  /// Set when the grant is spent on the action it authorised. An approval is a single-use
+  /// permission slip: consuming it is what turns "you may spend up to X" into one recorded spend.
+  consumedAt    DateTime?
+  consumedBy    String?
+  /// What the grant was spent on, e.g. expense:<idempotency key>, so the trail is followed in both
+  /// directions.
+  consumedRef   String?
+  /// Unique per tenant so a retried automation or form cannot raise the same request twice.
+  idempotencyKey String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  events        ErpApprovalEvent[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, approverId, status])
+  @@index([businessId, requestedBy, status])
+  @@index([businessId, kind, status, consumedAt])
+}
+
+/// Append-only. Nothing updates or deletes an event; a correction is a new event.
+model ErpApprovalEvent {
+  id        String             @id @default(cuid())
+  businessId String
+  business  Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestId String
+  request   ErpApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  action    String             // REQUESTED | APPROVED | REJECTED | WITHDRAWN
+  actorId   String?
+  actorName String?
+  note      String?            @db.Text
+  createdAt DateTime           @default(now())
+
+  @@index([businessId, requestId, createdAt])
+}
+
+/// Procurement: what a business decided to buy, from whom, whether it was approved, what actually
+/// arrived and which supplier invoice settles it.
+///
+/// Suppliers are the POS catalogue's `PosSupplier` rows, referenced by id and copied by name: a
+/// purchase order must still read correctly after a supplier is deactivated, and this product never
+/// edits POS tables it does not own.
+model ErpPurchaseOrder {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tenant-scoped document number from ErpSequence (PO-000001), never a row count.
+  orderNumber    String
+  supplierId     String
+  /// Snapshot of the supplier's name at the time of ordering.
+  supplierName   String
+  status         String   @default("DRAFT") // DRAFT | AWAITING_APPROVAL | APPROVED | ORDERED | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+  currencyCode   String   @default("KES")
+  subtotalCents  Int      @default(0)
+  taxCents       Int      @default(0)
+  totalCents     Int      @default(0)
+  expectedAt     DateTime?
+  notes          String?  @db.Text
+  requestedBy    String
+  requestedName  String?
+  /// Set when the order exceeded the requester's limit and had to be approved first.
+  approvalRequestId String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  cancelledBy    String?
+  cancelledAt    DateTime?
+  cancelReason   String?  @db.Text
+  /// Unique per tenant so a retried submit cannot create a second order.
+  idempotencyKey String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lines          ErpPurchaseOrderLine[]
+  receipts       ErpGoodsReceipt[]
+
+  @@unique([businessId, orderNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, supplierId, status])
+}
+
+model ErpPurchaseOrderLine {
+  id               String          @id @default(cuid())
+  businessId       String
+  business         Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrderId  String
+  purchaseOrder    ErpPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  /// The POS product this line buys, when it is a stocked product rather than a free-text item.
+  productId        String?
+  description      String
+  quantity         Float
+  unitCostCents    Int             @default(0)
+  /// VAT as basis points (1600 = 16%); the tax is computed from it, never typed in twice.
+  taxRateBps       Int             @default(0)
+  lineSubtotalCents Int            @default(0)
+  lineTaxCents     Int             @default(0)
+  receivedQuantity Float           @default(0)
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+  receiptLines     ErpGoodsReceiptLine[]
+
+  @@index([businessId, purchaseOrderId])
+}
+
+model ErpGoodsReceipt {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrderId String
+  purchaseOrder   ErpPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receivedAt      DateTime @default(now())
+  receivedBy      String?
+  receivedName    String?
+  note            String?  @db.Text
+  /// Unique per tenant so a double-submitted form cannot receive the same delivery twice.
+  idempotencyKey  String?
+  createdAt       DateTime @default(now())
+  lines           ErpGoodsReceiptLine[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, purchaseOrderId, receivedAt])
+}
+
+model ErpGoodsReceiptLine {
+  id          String          @id @default(cuid())
+  businessId  String
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  receiptId   String
+  receipt     ErpGoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  lineId      String
+  line        ErpPurchaseOrderLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  quantity    Float
+  createdAt   DateTime        @default(now())
+
+  @@index([businessId, receiptId])
+  @@index([businessId, lineId])
+}
+
+/// A request to buy something, before anybody has promised money to a supplier.
+///
+/// First-class rather than a draft purchase order because the two answer different questions: a
+/// requisition records *who asked, why, and who allowed it*, and it survives after conversion — a
+/// rejected request is a decision worth keeping, and a purchase order nobody can trace back to a
+/// requester is exactly the gap an audit looks for. Tenant-scoped at every query, numbered from
+/// ErpSequence, and idempotent per tenant so a double-submitted form cannot raise two requests.
+model ErpRequisition {
+  id                 String    @id @default(cuid())
+  businessId         String
+  business           Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tenant-scoped number from ErpSequence (REQ-000001), never a row count.
+  requisitionNumber  String
+  status             String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED | CONVERTED | CANCELLED
+  title              String
+  justification      String?   @db.Text
+  department         String?
+  priority           String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  neededBy           DateTime?
+  supplierId         String?
+  supplierName       String?
+  currencyCode       String    @default("KES")
+  estimatedSubtotalCents Int   @default(0)
+  estimatedTaxCents      Int   @default(0)
+  estimatedTotalCents    Int   @default(0)
+  requestedBy        String
+  requestedName      String?
+  submittedAt        DateTime?
+  decidedBy          String?
+  decidedName        String?
+  decidedAt          DateTime?
+  decisionNote       String?   @db.Text
+  /// The purchase order this request became, when it was approved and converted.
+  purchaseOrderId    String?
+  cancelledBy        String?
+  cancelledAt        DateTime?
+  cancelReason       String?   @db.Text
+  /// Unique per tenant so a retried submit cannot create a second request.
+  idempotencyKey     String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lines              ErpRequisitionLine[]
+
+  @@unique([businessId, requisitionNumber])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, requestedBy, createdAt])
+}
+
+model ErpRequisitionLine {
+  id                     String          @id @default(cuid())
+  businessId             String
+  business               Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requisitionId          String
+  requisition            ErpRequisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  /// The POS product this line is for, when it is a stocked product rather than a free-text item.
+  productId              String?
+  description            String
+  quantity               Float
+  estimatedUnitCostCents Int             @default(0)
+  /// VAT as basis points (1600 = 16%); the tax is computed from it, never typed in twice.
+  taxRateBps             Int             @default(0)
+  lineSubtotalCents      Int             @default(0)
+  lineTaxCents           Int             @default(0)
+  sortOrder              Int             @default(0)
+  createdAt              DateTime        @default(now())
+
+  @@index([businessId, requisitionId])
+}
+
+/// A unit of operational work somebody owns. Four modules converge on "create a task" (compliance
+/// renewals, automation, approvals follow-up, the dashboard inbox), so it is one tenant-scoped table
+/// with an owner, a due date and an audited state transition — not a per-feature to-do list.
+model ErpTask {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title          String
+  detail         String?   @db.Text
+  status         String    @default("OPEN") // OPEN | IN_PROGRESS | DONE | CANCELLED
+  priority       String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  assignedTo     String?
+  assignedRole   String?
+  createdBy      String?
+  completedBy    String?
+  dueAt          DateTime?
+  completedAt    DateTime?
+  /// Where the task came from: MANUAL | AUTOMATION | ORDER | INVOICE | COMPLIANCE.
+  sourceType     String?
+  sourceId       String?
+  /// Relative link that opens the record the task is about.
+  href           String?
+  /// Set when an automation action raised the task, so a replayed event cannot duplicate it.
+  idempotencyKey String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, dueAt])
+  @@index([businessId, assignedTo, status])
+  @@index([businessId, createdAt])
+}
+
+// ── Automation ──────────────────────────────────────────────────────────────────────────────
+model ErpAutomationRule {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name            String
+  trigger         String
+  conditionsJson  String   @default("[]") @db.Text
+  actionsJson     String   @default("[]") @db.Text
+  status          String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED
+  requiresApproval Boolean @default(true)
+  maxRunsPerDay   Int      @default(50)
+  lastRunAt       DateTime?
+  runCountToday   Int      @default(0)
+  failureCount    Int      @default(0)
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([businessId, status])
+  @@index([businessId, trigger])
+}
+
+model ErpAutomationRun {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ruleId         String
+  trigger        String
+  eventJson      String   @db.Text
+  status         String   @default("PREVIEW") // PREVIEW | AWAITING_APPROVAL | EXECUTED | FAILED | SKIPPED
+  actionsJson    String?  @db.Text
+  resultJson     String?  @db.Text
+  error          String?  @db.Text
+  idempotencyKey String?
+  startedAt      DateTime @default(now())
+  finishedAt     DateTime?
+
+  @@unique([businessId, ruleId, idempotencyKey])
+  @@index([businessId, startedAt])
+  @@index([businessId, status])
+}
+
+model ErpKycDocument {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  senderIdId     String?
+  kind           String   // BUSINESS_REGISTRATION | ID_DOCUMENT | PROOF_OF_AUTHORITY | OTHER
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  checksumSha256 String?
+  status         String   @default("RECEIVED") // RECEIVED | REPLACED | REJECTED | DELETED
+  uploadedById   String?
+  retentionUntil DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, status])
+  @@index([senderIdId])
+}
+
+// ── Messaging: channels, identity, audiences, campaigns, dispatch, ledger ──────────────────
+model MsgChannelConnection {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  channel      String    // SMS | WHATSAPP | EMAIL
+  provider     String    // mock | approved provider key
+  status       String    @default("NOT_CONNECTED")
+  configJson   String    @default("{}") @db.Text
+  healthJson   String    @default("{}") @db.Text
+  lastCheckedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([businessId, channel])
+  @@index([businessId, status])
+}
+
+model MsgSenderId {
+  id               String    @id @default(cuid())
+  businessId       String
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  channel          String    @default("SMS")
+  requestedId      String
+  purpose          String    @default("TRANSACTIONAL")
+  network          String?   // SAFARICOM | AIRTEL | TELKOM | MULTI
+  status           String    @default("DRAFT")
+  applicationRef   String?
+  provider         String    @default("mock")
+  submittedAt      DateTime?
+  underReviewAt    DateTime?
+  approvedAt       DateTime?
+  activatedAt      DateTime?
+  rejectedAt       DateTime?
+  expiresAt        DateTime?
+  rejectionReason  String?   @db.Text
+  missingItemsJson String    @default("[]") @db.Text
+  feesJson         String    @default("[]") @db.Text
+  feeAcknowledgedAt DateTime?
+  resubmissionCount Int      @default(0)
+  replyCapable     Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([businessId, status])
+  @@index([businessId, requestedId])
+}
+
+model MsgSenderIdEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  senderIdId String
+  type       String
+  fromStatus String?
+  toStatus   String
+  source     String   @default("CUSTOMER") // CUSTOMER | PROVIDER | ADMIN | SYSTEM
+  actorId    String?
+  note       String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([senderIdId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+model MsgContact {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId    String?
+  phoneNormalized String
+  name          String?
+  email         String?
+  tagsJson      String   @default("[]") @db.Text
+  source        String   @default("MANUAL")
+  status        String   @default("ACTIVE") // ACTIVE | INVALID | ARCHIVED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([businessId, phoneNormalized])
+  @@index([businessId, status])
+  @@index([businessId, customerId])
+}
+
+model MsgConsentRecord {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contactId    String
+  channel      String
+  purpose      String   // MARKETING | TRANSACTIONAL
+  granted      Boolean
+  source       String   // IMPORT | MANUAL | STOREFRONT | OPT_IN_FORM | API
+  wordingVersion String?
+  evidenceJson String?  @db.Text
+  capturedAt   DateTime @default(now())
+  capturedById String?
+
+  @@index([businessId, contactId, channel, purpose])
+  @@index([businessId, capturedAt])
+}
+
+model MsgSuppression {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  phoneNormalized String
+  channel      String   @default("ALL")
+  reason       String   // OPT_OUT | COMPLAINT | HARD_BOUNCE | MANUAL | REGULATORY
+  source       String   @default("CUSTOMER")
+  note         String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@unique([businessId, phoneNormalized, channel])
+  @@index([businessId, phoneNormalized])
+}
+
+model MsgAudience {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name          String
+  definitionJson String  @default("{}") @db.Text
+  isSaved       Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+}
+
+model MsgTemplate {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  key            String
+  name           String
+  channel        String   @default("SMS")
+  category       String   @default("TRANSACTIONAL") // TRANSACTIONAL | MARKETING
+  body           String   @db.Text
+  variablesJson  String   @default("[]") @db.Text
+  version        Int      @default(1)
+  status         String   @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
+  whatsappTemplateName String?
+  whatsappTemplateStatus String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([businessId, key, version])
+  @@index([businessId, status])
+}
+
+model MsgCampaign {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name           String
+  channel        String   @default("SMS")
+  purpose        String   @default("MARKETING") // MARKETING | TRANSACTIONAL
+  status         String   @default("DRAFT")
+  audienceId     String?
+  audienceJson   String?  @db.Text
+  templateId     String?
+  messageBody    String   @db.Text
+  senderIdId     String?
+  scheduledAt    DateTime?
+  timeZone       String   @default("Africa/Nairobi")
+  totalRecipients Int     @default(0)
+  eligibleRecipients Int  @default(0)
+  excludedRecipients Int  @default(0)
+  estimatedCostCents Int  @default(0)
+  reservedCents  Int      @default(0)
+  actualCostCents Int     @default(0)
+  currencyCode   String   @default("KES")
+  approvalRequired Boolean @default(false)
+  approvedById   String?
+  approvedAt     DateTime?
+  createdById    String?
+  pausedAt       DateTime?
+  cancelledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failureReason  String?  @db.Text
+  notes          String?  @db.Text
+  // A test send is recorded only when the provider accepted it, and only to an explicitly chosen
+  // recipient. It is never inferred from a draft.
+  testSentAt     DateTime?
+  testSentTo     String?
+  dedupeKey      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([businessId, dedupeKey])
+  @@index([businessId, status])
+  @@index([businessId, scheduledAt])
+}
+
+model MsgCampaignRecipient {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  campaignId     String
+  contactId      String?
+  phoneNormalized String
+  name           String?
+  // QUEUED | BLOCKED | SUBMITTED | SENT | DELIVERED | FAILED | UNKNOWN | SUPPRESSED | SKIPPED
+  status         String   @default("QUEUED")
+  exclusionReason String?
+  segments       Int      @default(0)
+  costCents      Int      @default(0)
+  attempts       Int      @default(0)
+  idempotencyKey String
+  providerMessageId String?
+  failureReason  String?
+  submittedAt    DateTime?
+  deliveredAt    DateTime?
+  nextAttemptAt  DateTime?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@unique([campaignId, phoneNormalized])
+  @@unique([businessId, idempotencyKey])
+  @@index([campaignId, status])
+  @@index([businessId, status])
+  @@index([providerMessageId])
+}
+
+model MsgMessageEvent {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  recipientId     String?
+  provider        String
+  providerMessageId String?
+  eventType       String   // ACCEPTED | SENT | DELIVERED | FAILED | READ | UNKNOWN
+  payloadJson     String?  @db.Text
+  signatureVerified Boolean @default(false)
+  dedupeKey       String
+  receivedAt      DateTime @default(now())
+
+  @@unique([dedupeKey])
+  @@index([businessId, receivedAt])
+  @@index([campaignId, eventType])
+  @@index([providerMessageId])
+}
+
+model MsgWallet {
+  id            String   @id @default(cuid())
+  businessId    String   @unique
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  currencyCode  String   @default("KES")
+  balanceCents  Int      @default(0)
+  reservedCents Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model MsgLedgerEntry {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  type           String   // TOP_UP | RESERVE | RELEASE | CONSUME | REFUND | ADJUSTMENT
+  amountCents    Int      // signed: credits positive, debits negative
+  balanceAfterCents Int   @default(0)
+  reservedAfterCents Int  @default(0)
+  campaignId     String?
+  reference      String?
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, createdAt])
+  @@index([businessId, campaignId])
+}
