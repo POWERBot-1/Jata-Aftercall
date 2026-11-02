@@ -494,3 +494,37 @@ Scope: dev-only fixture around the real `AutopilotCommandCenter`. All data ficti
 Caps: `dailySpendCapMinorKES` 25000, `maxBatchRecipients` 50, `maxAutoDiscountPct` 0, quiet hours 20:00–07:00 `Africa/Nairobi` are schema defaults, not owner-approved caps; the fixture uses those defaults and says so.
 
 Checks run on 378dd92: vitest Autopilot set 218/219 (the one failure is the known Prisma DMMF `autopilot-phase1-hardening` Priority 1, environment-only); ESLint on changed Autopilot files exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors.
+
+## Phase 7 — Autopilot remediation: kill-switch UI, verification and blockers (code SHA 695a9a3)
+
+Scope: FIXTURE verification only (fictional tenants `fx-tenant-a`/`fx-tenant-b`, fixture decide route). No real automation, message, offer, FAQ, consent, payment or entitlement change. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-695a9a3/` (`report.json`, 22 PNGs, capture script). Earlier evidence: `…/autopilot/fixture-after/` and `…/fixture-baseline-main/`.
+
+Labels: **FIXTURE** = fictional data, fixture route. **REAL-APP** = authenticated real application against a real database. No REAL-APP evidence exists for Autopilot in this section.
+
+| Criterion | Status | Evidence / basis |
+|---|---|---|
+| Kill switch ACTIVE disables Approve & Execute | PASS (FIXTURE) | `report.json` killSwitchActive: 1 approve control, disabled; 0 requests from 1 synchronous blocked click |
+| Kill switch ACTIVE: explanation shown, no misleading success | PASS (FIXTURE) | alert text; `bannerText` null |
+| Kill switch INACTIVE: approval enabled for OWNER | PASS (FIXTURE, unit) | `autopilot-kill-switch-ui` tests |
+| Tenant paused disables approval | PASS (FIXTURE, unit + capture) | `paused`: 2 approve controls, both disabled |
+| STAFF read-only (kill switch inactive and active) | PASS (FIXTURE, unit + capture) | `staff`: 4 approve controls, all disabled |
+| Triple synchronous approve sends one PATCH | PASS (FIXTURE) | `approveSuccess`: 1 PATCH at all six widths |
+| Keyboard Enter on focused Approve sends one request | PASS (FIXTURE) | `keyboard.patchRequestsFromTwoEnterPresses`: 1 (second Enter hits a busy/disabled control) |
+| Approve-success banner announced politely | PASS (FIXTURE) | `role=status`, `aria-live=polite` (measured) |
+| Reject final; server refusal on approve after reject | PASS (FIXTURE, prior run) | 409 `INVALID_PROPOSAL_STATE`, earlier `report.json` |
+| Visible keyboard focus indicator on Approve | **FAIL** (FIXTURE) | Computed outline `rgb(182,255,46) solid 2px` is lime, the same family as the button fill; on the light fixture surface it is low contrast. Focused and unfocused crops (with 14px margin) are byte-identical, so the ring is not visibly distinguishable in captured output. Earlier "12.47:1" figure was wrong (walked to a dark ancestor) and is withdrawn. Fix needs a theme-token focus style; not changed in this pass. |
+| Keyboard focus order reaches Approve | PASS (FIXTURE) | 12 tab stops to first Approve |
+| Reduced motion suppresses alert entrance | PASS (FIXTURE) | normal `jata-state-in`; reduced `none` |
+| Contrast: kill-switch alert text | PASS (measured) | 9.16:1 |
+| Contrast: enabled Approve button text | NOT TESTED | measured only for disabled state (5.1:1, exempt from WCAG) |
+| Six widths: no overflow, no page errors | PASS (FIXTURE) | 24 layout rows, `ovf=false`, `errs=0` |
+| Touch targets ≥24px | **FAIL** (FIXTURE) | 2 interactive elements under 24px at every width; not yet identified or fixed |
+| Six widths: visual inspection | PARTIAL | Opened and inspected: kill-switch alert crop, approve-success 390 full page, focus crops. The other 19 PNGs are NOT yet opened and inspected. |
+| Server authority on kill switch | PASS (FIXTURE, server responses) | decision layer refuses; UI disabling is additive |
+| DB-backed controls (spend reservation, customer lookup, row-level tenant filters, concurrency) | BLOCKED | `prisma generate` fails: TLS disconnect to `binaries.prisma.sh` (see below) |
+| Production Autopilot behaviour | NOT TESTED | no production request made |
+| Programme-completeness (34 NOT READY) | NOT TESTED this pass | not reclassified in this section |
+
+Checks on 695a9a3: `vitest` six Autopilot files 119/119 exit 0; ESLint on `components/autopilot` and the new test exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors; `prisma generate` exit 1 (TLS disconnect to `binaries.prisma.sh`, environment).
+
+CI on PR head `e6cf0ae` (before this commit): all required checks pass except `programme-completeness` (fail). CI for `695a9a3` not yet observed at time of writing.

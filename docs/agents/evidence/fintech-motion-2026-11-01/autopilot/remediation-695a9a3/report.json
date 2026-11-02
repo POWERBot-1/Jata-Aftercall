@@ -1,0 +1,378 @@
+{
+  "base": "http://localhost:3000",
+  "generatedAt": "2026-11-02T04:26:52.249Z",
+  "layout": [
+    {
+      "name": "kill-switch",
+      "width": 320,
+      "height": 568,
+      "overflowX": false,
+      "scrollWidth": 320,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 320,
+      "height": 568,
+      "overflowX": false,
+      "scrollWidth": 320,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 360,
+      "height": 800,
+      "overflowX": false,
+      "scrollWidth": 360,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 360,
+      "height": 800,
+      "overflowX": false,
+      "scrollWidth": 360,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 390,
+      "height": 844,
+      "overflowX": false,
+      "scrollWidth": 390,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 390,
+      "height": 844,
+      "overflowX": false,
+      "scrollWidth": 390,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 430,
+      "height": 932,
+      "overflowX": false,
+      "scrollWidth": 430,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 430,
+      "height": 932,
+      "overflowX": false,
+      "scrollWidth": 430,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 768,
+      "height": 1024,
+      "overflowX": false,
+      "scrollWidth": 768,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 768,
+      "height": 1024,
+      "overflowX": false,
+      "scrollWidth": 768,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 1366,
+      "height": 768,
+      "overflowX": false,
+      "scrollWidth": 1366,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 1366,
+      "height": 768,
+      "overflowX": false,
+      "scrollWidth": 1366,
+      "smallTargets24": 2,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "pageErrors": 0,
+      "errors": []
+    }
+  ],
+  "interactions": {
+    "killSwitchActive": {
+      "approveButtons": 1,
+      "approveDisabled": [
+        true
+      ],
+      "syncClickAttempts": 1,
+      "requestsBeforeClicks": 0,
+      "requestsAfterClicks": 0,
+      "newRequestsFromBlockedClicks": 0,
+      "bannerText": null,
+      "alertText": "Platform Kill Switch Active: Autonomous executions are globally paused. Approve & Execute and new proposals are disabled here, and the server refuses them. Rejecting proposals, diagnostics and audit logs remain available. Reactivation is an authorised platform action and cannot be made from this screen.",
+      "alertAnimationName": "jata-state-in"
+    },
+    "approveSuccess": {
+      "320x568": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      },
+      "360x800": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      },
+      "patchRequestsFromTripleClick": 1,
+      "banner": {
+        "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "ariaLive": "polite",
+        "role": "status"
+      },
+      "patchCountBefore": 0,
+      "390x844": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      },
+      "430x932": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      },
+      "768x1024": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      },
+      "1366x768": {
+        "banner": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+        "patches": 1,
+        "okBanner": true
+      }
+    },
+    "keyboardOutlineContrast": {
+      "outlineRGB": [
+        182,
+        255,
+        46
+      ],
+      "adjacentBgRGB": [
+        35,
+        38,
+        47
+      ],
+      "outlineVsAdjacentBg": 12.47,
+      "outlineVsButtonFill": 1
+    },
+    "keyboard": {
+      "stepsToApprove": 12,
+      "focusOrderSample": [
+        "Choose JATA appearance",
+        "Emergency Pause",
+        "Refresh diagnosis",
+        "All businesses",
+        "Assisted (Draft & Queue Only — Recommended)Supervised Autopi",
+        "Generic custom (fixture)",
+        "Extend 30 days",
+        "Queue in Approval Queue",
+        "Text Command",
+        "Push-to-Talk Voice Transcript",
+        "TEXTAREA",
+        "Approve & Execute"
+      ],
+      "approveReached": {
+        "label": "Approve & Execute",
+        "isApprove": true,
+        "tag": "BUTTON"
+      },
+      "focusStyle": {
+        "outline": "rgb(182, 255, 46) solid 2px",
+        "outlineStyle": "solid",
+        "outlineWidth": "2px",
+        "boxShadow": "none",
+        "focusVisible": true
+      },
+      "focusedCropDiffersFromUnfocused": false,
+      "focusedPngBytes": 6056,
+      "unfocusedPngBytes": 6056,
+      "enterPresses": 2,
+      "patchRequestsFromTwoEnterPresses": 1
+    },
+    "contrast": {
+      "killAlertText": {
+        "fg": [
+          130,
+          24,
+          26
+        ],
+        "bg": [
+          254,
+          242,
+          242
+        ],
+        "ratio": 9.16
+      },
+      "approveDisabledButton": {
+        "fg": [
+          171,
+          178,
+          189
+        ],
+        "bg": [
+          56,
+          61,
+          72
+        ],
+        "ratio": 5.1
+      }
+    },
+    "reducedMotion_no-preference": {
+      "alertAnimationName": "jata-state-in"
+    },
+    "reducedMotion_reduce": {
+      "alertAnimationName": "none"
+    },
+    "staff": {
+      "approveButtons": 4,
+      "approveDisabled": [
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "paused": {
+      "approveButtons": 2,
+      "approveDisabled": [
+        true,
+        true
+      ]
+    },
+    "tenantB": {
+      "showsTenantB": true,
+      "showsTenantA": false
+    }
+  },
+  "decideResponses": [
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    }
+  ]
+}
