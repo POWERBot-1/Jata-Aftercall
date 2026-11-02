@@ -29,6 +29,13 @@ process.on("unhandledRejection", (error) => {
   console.log("RESULT: FAIL");
   process.exit(1);
 });
+/** Short, non-secret description of an error: the first informative lines and any Prisma error code. */
+function describe(error) {
+  const raw = String(error?.message ?? error ?? "");
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join(" | ");
+  const code = error && typeof error === "object" && "code" in error ? `code=${error.code} ` : "";
+  return `${code}${lines || error?.name || "unknown error"}`.replace(/postgres(ql)?:\/\/[^\s|]*/gi, "[connection string removed]").replace(/[\r\n]/g, " ").slice(0, 300);
+}
 // Start-up faults (module load, client construction) must be visible, not a bare exit code.
 function startupFault(error) {
   const line = String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200);
@@ -279,8 +286,8 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  console.log(`FAIL  journey aborted — ${String(error?.message ?? error).split("\n")[0].slice(0, 200)}`);
-  console.log(`::error title=ADMIN-023 browser journey aborted::${String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200)}`);
+  console.log(`FAIL  journey aborted — ${describe(error)}`);
+  console.log(`::error title=ADMIN-023 browser journey aborted::${describe(error)}`);
   failed += 1;
 } finally {
   await prisma.$disconnect().catch(() => {});
