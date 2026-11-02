@@ -29,7 +29,7 @@ COMPLETED WITH EVIDENCE (none in this set).
 | MOTION-004 | NOT TESTED | IMPLEMENTATION REQUIRED | Behaviour and inheritance for every surface and template family. Financial-state acceptance needs an owner decision. |
 | ADMIN-022 | BLOCKED | OWNER DECISION REQUIRED | Approval policy for the scheduler and reports, and integration of all workstreams. The scheduler stays default-off. |
 | MOTION-005 | NOT TESTED | NOT TESTED | Keyboard, mobile and desktop interaction inspection of the workspace and status surfaces. |
-| ADMIN-023 | NOT TESTED | IMPLEMENTATION REQUIRED (in progress) | Revision next-page marker is implemented and covered by DB and browser tests. Closes only after CI on the final head and inspection of the screenshots. See `docs/agents/evidence/admin-023/README.md`. |
+| ADMIN-023 | PASS | — (closed on 59a8bed, 2 Nov 2026) | §028 journey, DB suite and migration rehearsal green on 59a8bed. Owner visual review recorded as owner attestation only; the agent did not open the screenshots. The 50,000 production cap and the production migration remain owner decisions. |
 | MOTION-006 | BLOCKED | IMPLEMENTATION REQUIRED | Authenticated before-and-after recordings, six viewports and reduced-motion interaction across all surfaces. |
 | MOTION-007 | BLOCKED | OWNER DECISION REQUIRED | Umbrella criterion. The provenance of the "detailed spec" is ambiguous and must be confirmed by the owner before it can close. |
 | MOTION-008 | BLOCKED | OWNER DECISION REQUIRED | Sections 12–15 of the owner specification span all modules. The owner must confirm the release scope. |
@@ -45,13 +45,14 @@ COMPLETED WITH EVIDENCE (none in this set).
 | MOTION-018 | BLOCKED | DEPENDENT | Requires all owner criteria. Also needs the Prisma engine download, which the sandbox egress policy blocks. |
 | RELEASE-001 | BLOCKED | IMPLEMENTATION REQUIRED | Root-cause trace and appropriate independent evidence for each remediation ID. |
 
-## Summary (counted from the table above, 34 rows)
+## Summary (counted from the table above: 34 rows, of which 1 is closed and 33 are open)
 
-- **Implementation required:** 16 records, including ADMIN-023 (in progress). Repository work can progress these.
+- **Implementation required:** 15 records. Repository work can progress these. None has been implemented in this pass.
 - **Owner decision required:** 6 records (ADMIN-006, ADMIN-007, ADMIN-013, ADMIN-022, MOTION-007, MOTION-008).
 - **External evidence required:** 6 records (ADMIN-005, ADMIN-009, ADMIN-014, MOTION-011, MOTION-013, MOTION-014). Independent visual review, live DNS and the production restore.
 - **Blocked by provider:** 1 record (ADMIN-008).
 - **Not tested:** 2 records (MOTION-003, MOTION-005).
 - **Dependent:** 3 records (ADMIN-002, MOTION-017, MOTION-018).
+- **Closed:** 1 record (ADMIN-023, PASS on 59a8bed).
 
 No record in this set is closed by fixtures, documentation or green CI alone.
