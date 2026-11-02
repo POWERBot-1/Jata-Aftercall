@@ -1,0 +1,110 @@
+name: Agent referral report browser journey (ADMIN-023)
+
+# Runs scripts/browser/agent-reports.check.mjs against the PRODUCTION build of the real application
+# (`next start`), a real PostgreSQL service migrated with `prisma migrate deploy`, and Chrome.
+#
+# What this proves: an active agent reads THEIR OWN referral report snapshots through the real page
+# (/agents/reports) and the real API; the page refuses anonymous visitors and accounts without an
+# active agent application (including an ADMIN account); cursor pagination returns each own row once;
+# another agent's data does not appear; loading, empty and error states render; the layout fits six
+# viewports (320 to 1366 px) with no horizontal overflow; the load control meets a 44 px target.
+#
+# What this does NOT prove: production data, production deployment, the Vercel/Neon environment,
+# any real customer, payment or message. All agents are fictional and live only in this job's
+# disposable database. The Paystack and messaging providers are not contacted.
+#
+# No repository secret is used. The database and AUTH_SECRET are throwaway values local to this job.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  agent-reports:
+    name: Agent report browser journey (real route, real database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Both point ONLY at this job's disposable PostgreSQL service, never a deployment secret.
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      AUTH_SECRET: agent-reports-e2e-test-secret
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: |
+          set -o pipefail
+          bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-schema-validate.log
+          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
+
+      - name: Apply migrations to the disposable database
+        run: |
+          set -o pipefail
+          bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate.log
+
+      - name: Production build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/step-build.log
+
+      - name: Agent referral report browser journey over six viewports
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — agent report journey NOT RUN, not passed." >&2
+            exit 1
+          fi
+          AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+            npx next start -H 127.0.0.1 -p 3210 > /tmp/step-agent-reports-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          AGENT_TEST_BASE_URL=http://127.0.0.1:3210 AGENT_REPORT_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts/agent-reports" \
+            CHROME_PATH="$CHROME_PATH" AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+            node scripts/browser/agent-reports.check.mjs 2>&1 | tee /tmp/step-agent-reports.log
+          # A journey that did not run, or any failed check, is a failed job.
+          grep -q '^RESULT: PASS' /tmp/step-agent-reports.log || { echo "The agent report journey did not pass." >&2; exit 1; }
+
+      - name: Upload screenshots and the sanitised journey log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-reports-${{ github.sha }}
+          path: |
+            artifacts/agent-reports/
+            /tmp/step-agent-reports.log
+          retention-days: 30
+          if-no-files-found: ignore
