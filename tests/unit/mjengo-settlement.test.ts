@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ default: {}, prisma: {} }));
 
+import { deriveMjengoEntitlement } from "../../lib/mjengo/entitlement";
 import {
   MJENGO_PLAN_KEY,
   MJENGO_PLAN_PRICE_KES,
@@ -198,5 +199,86 @@ describe("mjengo: settlement", () => {
     });
     const write = seen.upsert.find((args) => args.where?.businessId === "biz1");
     expect(new Date(write.update.startAt).getTime()).toBe(future.getTime());
+  });
+
+  // ── The chain that matters commercially: verified payment → MJENGO entitlement ───────────────
+  // Each test below walks the whole path rather than one function, because the failure mode this
+  // guards is "the payment settles into the wrong product", which only shows up end-to-end.
+  const mjengoPlan = { id: "plan_mjengo", key: MJENGO_PLAN_KEY, priceKES: MJENGO_PLAN_PRICE_KES, durationDays: MJENGO_PLAN_DURATION_DAYS, isActive: true };
+  const paidMjengo = (overrides: any = {}) => ({ id: "pay_mj", businessId: "biz_mj", userId: "user_mj", status: "PENDING", reference: "ref_mj", planId: "plan_mjengo", ...overrides });
+
+  it("end to end: a verified MJENGO payment activates MJENGO OS and not an ordinary subscription", async () => {
+    const { tx, seen } = fakeTx({ payment: paidMjengo() });
+    const result = await settleMjengoPayment(tx, {
+      payment: paidMjengo(),
+      plan: mjengoPlan,
+      verification: { paystackId: "ps_123" },
+    });
+    const written = seen.upsert.map((u: any) => u.create ?? u.update);
+    expect(result.mjengoSubscription).toBe(true);
+    expect(result.alreadySettled).toBe(false);
+    // ErpSubscription + ErpEntitlement only — never `subscription` / `posSubscription`.
+    expect(written).toHaveLength(2);
+    expect(written[0]).toMatchObject({ planKey: MJENGO_PLAN_KEY, status: "ACTIVE", paymentId: "pay_mj", paymentReference: "ref_mj" });
+    expect(written[1]).toMatchObject({ packageKey: MJENGO_PLAN_KEY, status: "ACTIVE" });
+    expect(seen.upsert.some((u: any) => u.where && u.where.businessId === "biz_mj")).toBe(true);
+  });
+
+  it("end to end: the settled payment derives an ACTIVE MJENGO entitlement", async () => {
+    const { tx } = fakeTx({ payment: paidMjengo() });
+    const { subscription } = await settleMjengoPayment(tx, { payment: paidMjengo(), plan: mjengoPlan, verification: { paystackId: "ps_123" } });
+    const state = deriveMjengoEntitlement({
+      subscription: { status: "ACTIVE", planKey: MJENGO_PLAN_KEY, ...subscription },
+      configured: true,
+      paidPayment: { status: "PAID", planKey: MJENGO_PLAN_KEY },
+      now: new Date(),
+    });
+    expect(state.entitled).toBe(true);
+    expect(state.status).toBe("ACTIVE");
+    expect(state.planKey).toBe(MJENGO_PLAN_KEY);
+    expect(state.priceKES).toBe(2000);
+  });
+
+  it("a POS (BUSINESS_POS) plan key can never settle into a MJENGO subscription", async () => {
+    const { tx, seen } = fakeTx({ payment: paidMjengo() });
+    await expect(
+      settleMjengoPayment(tx, { payment: paidMjengo(), plan: { ...mjengoPlan, id: "plan_pos", key: "BUSINESS_POS", priceKES: 499 }, verification: { paystackId: "ps_1" } }),
+    ).rejects.toThrow(/MJENGO_PLAN_KEY_MISMATCH/);
+    expect(seen.upsert).toHaveLength(0);
+    expect(seen.updates).toHaveLength(0);
+  });
+
+  it("a failed / cancelled payment never activates MJENGO OS (no settlement without provider success)", async () => {
+    // The caller only invokes settlement after provider evidence says success. The guard here is
+    // that settlement itself refuses without a usable provider id, whatever the row claims.
+    for (const status of ["FAILED", "CANCELLED", "EXPIRED", "PENDING"]) {
+      const { tx, seen } = fakeTx({ payment: paidMjengo({ status }) });
+      await expect(settleMjengoPayment(tx, { payment: paidMjengo({ status }), plan: mjengoPlan })).rejects.toThrow(/PAYMENT_EVIDENCE_REQUIRED/);
+      expect(seen.upsert).toHaveLength(0);
+    }
+  });
+
+  it("rejects malformed provider evidence instead of trusting a hand-written id", async () => {
+    const { tx, seen } = fakeTx({ payment: paidMjengo() });
+    await expect(
+      settleMjengoPayment(tx, { payment: paidMjengo(), plan: mjengoPlan, verification: { paystackId: "not a valid/id!" } }),
+    ).rejects.toThrow(/PAYMENT_EVIDENCE_REQUIRED/);
+    expect(seen.upsert).toHaveLength(0);
+  });
+
+  it("tenant isolation: settlement only ever writes the paying business's rows", async () => {
+    const { tx, seen } = fakeTx({ payment: paidMjengo({ businessId: "biz_tenant_a" }) });
+    await settleMjengoPayment(tx, { payment: paidMjengo({ businessId: "biz_tenant_a" }), plan: mjengoPlan, verification: { paystackId: "ps_t" } });
+    const targets = seen.upsert.map((u: any) => u.where?.businessId ?? u.create?.businessId);
+    expect(new Set(targets)).toEqual(new Set(["biz_tenant_a"]));
+    expect(targets).not.toContain("biz_tenant_b");
+  });
+
+  it("tenant isolation: a payment with no business context is refused before any write", async () => {
+    const { tx, seen } = fakeTx({ payment: paidMjengo({ businessId: null }) });
+    await expect(
+      settleMjengoPayment(tx, { payment: paidMjengo({ businessId: null }), plan: mjengoPlan, verification: { paystackId: "ps_x" } }),
+    ).rejects.toThrow(/PAYMENT_CONTEXT_INVALID/);
+    expect(seen.upsert).toHaveLength(0);
   });
 });

@@ -23,6 +23,17 @@
 -- ON DELETE RESTRICT matches the delete guard in 20261127000001: a journal with lines is never
 -- deleted, so a cascade here would silently contradict it.
 --
+-- WHAT THIS DOES AND DOES NOT GUARANTEE — read before claiming integrity:
+--   • `NOT VALID` enforces the reference for every NEW insert and every UPDATE of journalId.
+--   • It does NOT scan existing rows. `pg_constraint.convalidated = false` therefore means "unknown
+--     for historical rows", not "clean". No existing-data integrity claim may be made from this
+--     migration alone.
+--   • `scripts/verify/mjengo-postgres-verify.mjs` reports `convalidated` explicitly and counts
+--     pre-existing orphans separately, so the two states cannot be confused in the report.
+--   • The constraint stays NOT VALID until an operator has run step 1–3 below and the count is zero.
+--     Validation is a deliberate, separate, downtime-free step: `VALIDATE CONSTRAINT` takes only a
+--     SHARE UPDATE EXCLUSIVE lock.
+--
 -- Rollback: ALTER TABLE "ErpJournalLine" DROP CONSTRAINT "ErpJournalLine_journalId_fkey";
 
 ALTER TABLE "ErpJournalLine"

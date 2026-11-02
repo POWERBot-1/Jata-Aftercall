@@ -121,6 +121,27 @@ describe("mjengo: ledger lifecycle", () => {
     expect(calls.some((call) => call.op === "journal.create")).toBe(true);
   });
 
+  it("documents which invariants are DATABASE-enforced and which are APPLICATION-only", async () => {
+    // database-enforced (proved on PostgreSQL in mjengo-ledger-sql-postgres.test.ts and
+    // scripts/verify/mjengo-postgres-verify.mjs):
+    //   • a line cannot be inserted/updated/deleted under a POSTED or REVERSED journal
+    //   • a POSTED header's identity fields cannot change; POSTED → DRAFT is refused
+    //   • a posted or non-empty journal cannot be deleted
+    //   • a line cannot reference a journal that does not exist (the NOT VALID FK)
+    //
+    // application-enforced, and NOT backstopped by any trigger:
+    //   • a journal cannot be reversed twice — the database permits overwriting `reversedById`
+    //     because it is the designated mutable column, so `reverseJournal` must refuse.
+    // This test pins the application half so a future refactor cannot quietly drop it.
+    const { tx, journals } = accountingTx();
+    const original = await postJournal(tx, { businessId: "bizA", entryDate: new Date(), description: "Sale of stock", lines: balancedLines });
+    const first = await reverseJournal(tx, { businessId: "bizA", journalId: original.id, reason: "Customer returned the goods" });
+    expect(journals.get(original.id)!.reversedById).toBe(first.id);
+    await expect(
+      reverseJournal(tx, { businessId: "bizA", journalId: original.id, reason: "Second attempt at a reversal" }),
+    ).rejects.toThrow(/already been reversed/i);
+  });
+
   it("never writes a line into a POSTED journal (the trigger's invariant)", async () => {
     const { tx, journals, calls } = accountingTx();
     const posted = await postJournal(tx, { businessId: "bizA", entryDate: new Date(), description: "Sale of stock", lines: balancedLines });

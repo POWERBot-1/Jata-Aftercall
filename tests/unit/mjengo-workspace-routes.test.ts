@@ -5,7 +5,16 @@
  * defect a user sees, and a route file that forgets the gate is a security defect. Both are
  * checked here, cheaply, on every `npm test`.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+
+const readdirSafe = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir) : []);
+const statSyncSafe = (full: string) => {
+  try {
+    return statSync(full);
+  } catch {
+    return null;
+  }
+};
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MJENGO_MODULES, MJENGO_SUB_ROUTES, mjengoPath } from "../../lib/mjengo/navigation";
@@ -54,6 +63,33 @@ describe("mjengo: workspace routes", () => {
       if (/\binnerHTML\b/.test(source)) offenders.push(`${file} (innerHTML)`);
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("every literal href inside the workspace resolves to a page or route handler (no 404 links)", () => {
+    // A hand-written <Link href="/dashboard/mjengo/…/foo"> is the other way a 404 reaches a user,
+    // and it is invisible to the nav assertion above. Mirrors scripts/verify/mjengo-nav-audit.mjs.
+    const walk = (dir: string): string[] =>
+      readdirSafe(dir).flatMap((entry) => {
+        const full = path.join(dir, entry);
+        if (statSyncSafe(full)?.isDirectory()) return walk(full);
+        return entry.endsWith(".tsx") ? [full] : [];
+      });
+    const files = walk(path.join(root, "app/dashboard/mjengo"));
+    expect(files.length).toBeGreaterThan(0);
+    const unresolved: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      for (const match of source.matchAll(/href=(?:"([^"]+)"|\{`([^`]+)`\})/g)) {
+        const href = match[1] ?? match[2];
+        if (!href || !href.startsWith("/") || href.startsWith("/api")) continue;
+        const cleaned = href.replace(/\$\{[^}]+\}/g, "[businessId]").split(/[?#]/)[0];
+        const target = path.join(root, "app", cleaned);
+        const resolves =
+          existsSync(path.join(target, "page.tsx")) || existsSync(`${target}.tsx`) || existsSync(path.join(target, "route.ts"));
+        if (!resolves) unresolved.push(`${path.relative(root, file)} -> ${href}`);
+      }
+    }
+    expect(unresolved, `links with no route:\n  ${unresolved.join("\n  ")}`).toEqual([]);
   });
 
   it("the entry page redirects into a business workspace and never renders data itself", () => {

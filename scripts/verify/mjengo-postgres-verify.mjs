@@ -96,6 +96,26 @@ record(
   `${objects.rows[0].triggers} triggers, ${objects.rows[0].views} integrity view, ${objects.rows[0].line_fk} line FK`,
 );
 
+// The FK is added NOT VALID on purpose: new writes are enforced, historic rows are not scanned.
+// Report the real state instead of implying the constraint validated the data.
+const fkState = await db.query(
+  `SELECT convalidated FROM pg_constraint WHERE conname = 'ErpJournalLine_journalId_fkey'`,
+);
+record(
+  "foreign key state: ErpJournalLine_journalId_fkey is present and NOT VALID (new writes enforced, historic rows unscanned)",
+  fkState.rows[0]?.convalidated === false,
+  `convalidated = ${fkState.rows[0]?.convalidated}`,
+);
+const orphans = await db.query(
+  `SELECT COUNT(*)::int AS n FROM "ErpJournalLine" l
+   LEFT JOIN "ErpJournal" j ON j.id = l."journalId" WHERE j.id IS NULL`,
+);
+record(
+  "orphan inventory: pre-existing orphaned lines counted (none can exist in a fresh database)",
+  orphans.rows[0].n === 0,
+  `${orphans.rows[0].n} orphaned line(s) — on a deployed database this number must be 0 before VALIDATE CONSTRAINT`,
+);
+
 // ── 2. Commercial rows: 499 / 2000 / 3000 stay distinct ─────────────────────────────────────────
 await db.query(`INSERT INTO "User" (id, email, "passwordHash", "updatedAt") VALUES ('u_owner', 'owner@example.test', 'x', NOW()) ON CONFLICT DO NOTHING`);
 await db.query(`INSERT INTO "User" (id, email, "passwordHash", "updatedAt") VALUES ('u_other', 'other@example.test', 'x', NOW()) ON CONFLICT DO NOTHING`);
@@ -216,15 +236,20 @@ record(
   reversalState.rows[0]?.reversedById === reversalId && reversalState.rows[0]?.reversal_status === "POSTED",
   `original.reversedById = ${reversalId}`,
 );
-await expectReject(
-  "lifecycle: a reversed journal cannot be reversed again through a second marker overwrite",
-  db.query(`UPDATE "ErpJournal" SET "reversedById" = 'someone_else', "updatedAt" = NOW() WHERE id = $1`, [balanced]).then(async (result) => {
-    // Overwriting the marker is allowed by the trigger (it is the designated mutable column); the
-    // application refuses it first. Prove the application-level guard exists instead.
-    if (result.rowCount === 1) throw new Error("marker overwrite accepted by the database; the double-reversal guard is application-level only");
-  }),
-  "",
+// The database deliberately ALLOWS rewriting reversedById: it is the designated mutable column, and
+// a trigger cannot tell a legitimate first reversal from a second one. Double reversal is therefore
+// an APPLICATION invariant (reverseJournal's ALREADY_REVERSED check). Recorded as such — asserting
+// it here as a database guarantee would be false.
+const markerOverwrite = await db.query(
+  `UPDATE "ErpJournal" SET "reversedById" = 'j_other', "updatedAt" = NOW() WHERE id = $1`,
+  [balanced],
 );
+record(
+  "database-enforced vs application-enforced: reversedById IS overwritable in the database (double reversal is blocked in lib/erp/accounting.ts, not by a trigger)",
+  markerOverwrite.rowCount === 1,
+  `UPDATE affected ${markerOverwrite.rowCount} row — application guard, not a DB constraint`,
+);
+await db.query(`UPDATE "ErpJournal" SET "reversedById" = $1, "updatedAt" = NOW() WHERE id = $2`, [reversalId, balanced]);
 
 // ── 6. Empty / unbalanced / orphaned ──────────────────────────────────────────────────────────
 const emptyId = await postJournal("bizA", [], { description: "Sealed with no lines" });
@@ -240,6 +265,25 @@ await expectReject(
             VALUES ('orphan', 'bizA', 'does_not_exist', '1100', '1100', 1, 0)`),
   "foreign key|violates",
 );
+
+// ── 6b. VALIDATE CONSTRAINT after repair ─────────────────────────────────────────────────────
+// The migration ships NOT VALID; this proves the documented validation step actually succeeds once
+// the data is clean, so the runbook is executable rather than aspirational.
+let validated = false;
+try {
+  await db.exec(`ALTER TABLE "ErpJournalLine" VALIDATE CONSTRAINT "ErpJournalLine_journalId_fkey";`);
+  const after = await db.query(`SELECT convalidated FROM pg_constraint WHERE conname = 'ErpJournalLine_journalId_fkey'`);
+  validated = after.rows[0]?.convalidated === true;
+} catch (error) {
+  record("foreign key validation: VALIDATE CONSTRAINT succeeds on clean data", false, String(error?.message ?? error).slice(0, 200));
+}
+if (validated) {
+  record(
+    "foreign key validation: VALIDATE CONSTRAINT succeeds on clean data and flips convalidated to true",
+    true,
+    "convalidated = true after the documented repair-then-validate step",
+  );
+}
 
 // ── 7. Rollback / atomicity ───────────────────────────────────────────────────────────────────
 await expectReject(
