@@ -467,3 +467,30 @@ Findings and open items:
 | Real route signed-out behaviour matches `main` | PASS |
 | Authenticated real payment and subscription activation journey | BLOCKED (Prisma) |
 | Autopilot fixture | NOT STARTED |
+
+## Phase 7 — Autopilot fixture and safety verification (code SHA 378dd92)
+
+Scope: dev-only fixture around the real `AutopilotCommandCenter`. All data fictional (`fx-tenant-a`, `fx-tenant-b`). No message, payment, offer, FAQ, customer, consent or entitlement change; no automation executes. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/` (README there). Fixture evidence is labelled separately from real-database and production evidence.
+
+| Criterion | Result | Basis |
+|---|---|---|
+| Triple synchronous approve sends one PATCH | PASS (fixture) | main: 3 PATCH; branch: 1 PATCH (`fixture-baseline-main/report.json` vs `fixture-after/report.json`) |
+| Approve & Execute moves PROPOSED → EXECUTED with verified banner | PASS (fixture) | `report.json` approveSuccess |
+| Reject is final (approve after reject refused) | PASS (fixture, server 409 `INVALID_PROPOSAL_STATE`) | rejectIsFinal |
+| Paused tenant blocks execution | PASS (fixture, 409 `TENANT_AUTOPILOT_PAUSED`) | pauseServerEnforced |
+| Kill switch halts execution | PASS (fixture) — proposal stays PROPOSED. Finding: Approve controls remain enabled in the UI while the kill switch is active; the server refuses. | killSwitch |
+| STAFF is read-only | PASS (fixture, 403 `RBAC_FORBIDDEN`; approve disabled in UI) | staffReadOnly |
+| Tenant B cannot read or act on tenant A | PASS (fixture, 403 `TENANT_FORBIDDEN`; no tenant A data shown) | tenantB |
+| Customer consent recording | PASS (fixture) — fixture rows only | consentRecorded |
+| Keyboard reach and focus outline on Approve | PASS (computed 2px solid outline; visual focus ring NOT confirmed from screenshot) | keyboard |
+| Reduced motion suppresses banner entrance | PASS (normal `jata-state-in`, reduced `none`) | reducedMotion |
+| Six widths, 24 layout rows: no overflow, page errors, hydration warnings, small targets | PASS (fixture) | layout |
+| Unsimulated `/api/autopilot/*` fails closed | PASS (501) | failClosed |
+| Production returns 404 for fixture route and page | PASS (unit test `autopilot-fixture-safety`) | not a live production probe |
+| Policy, quiet hours, caps, payload validation | PASS (unit, 81/81 with existing suites) | `autopilot-safety-policy-matrix`, `autopilot-fixture-safety` |
+| DB-backed daily spend reservation, customer lookup, row-level tenant filters, concurrency | BLOCKED (Prisma client cannot be generated in sandbox; `binaries.prisma.sh` not reachable) | — |
+| Production Autopilot behaviour | NOT TESTED | — |
+
+Caps: `dailySpendCapMinorKES` 25000, `maxBatchRecipients` 50, `maxAutoDiscountPct` 0, quiet hours 20:00–07:00 `Africa/Nairobi` are schema defaults, not owner-approved caps; the fixture uses those defaults and says so.
+
+Checks run on 378dd92: vitest Autopilot set 218/219 (the one failure is the known Prisma DMMF `autopilot-phase1-hardening` Priority 1, environment-only); ESLint on changed Autopilot files exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors.
