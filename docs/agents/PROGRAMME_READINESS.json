@@ -769,23 +769,39 @@
     "currentAssessmentStatus": "NOT_TESTED"
   },
   "ADMIN-023": {
-    "status": "NOT_TESTED",
+    "status": "PASS",
     "acceptance": "own-agent cursor pagination, malformed/cross-tenant rejection and regression tests, plus actual PostgreSQL and browser evidence. **Dependencies/conflicts:** the per-revision ceiling is raised from 5,000 to 50,000 members by migration 20261127000000 (refuse, never truncate), and reconciliation and reads are bounded to that cap. The 50,000 cap is NOT approved for production: owner decision pending. The migration has not been applied to production and needs owner approval. Instruction completeness release gate, control, motion, notification recovery, native DB recovery and genuine six-viewport evidence remain incomplete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7028 (ADMIN-023)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §028 (ADMIN-023)",
     "implementationLocation": "`app/api/agents/reports/referrals/reconcile/route.ts`, `tests/security/agent-referral-report-reconciliation.test.ts`.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
-    "testResult": "NOT_TESTED: cursor/tenant rejection source tests exist; a dedicated exact browser journey for own-agent pagination and >5,000-member report generation/reconciliation is not established.",
-    "evidence": [],
-    "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
+    "testResult": "PASS for §028 on exact commit 59a8bed (CI run set on 59a8bed, all success): agent report browser journey run 41453293674 (real route, real PostgreSQL, six viewports); Database suite run 41453293719 (31/31 tests, 58/58 migrations, PostgreSQL 18.6, isolated); full no-database suite run 41453293687; Release Validation run 41453293663 (migration candidate, typecheck, build); candidate migration rehearsal run 41453293651. Local: SQL-level migration rehearsal 11/11 (forward, rollback refusal above 5,000, rollback success, immutability, cap boundary, re-apply) and manual 50,000-member scale run 3/3 (see evidence). Owner visual review recorded 2 Nov 2026: PASS, owner attestation only, not independent; the agent did not open the screenshots. §028 does not require independent screenshot review. The 50,000-member cap is NOT approved for production, and the migration is NOT applied to production; both remain owner decisions.",
+    "evidence": [
+      "docs/agents/evidence/admin-023/README.md",
+      "tests/db/agent-referral-revision-pages.test.ts",
+      "tests/db/agent-referral-report-pagination.test.ts",
+      "tests/security/agent-referral-report-reconciliation.test.ts",
+      "scripts/browser/agent-reports.check.mjs",
+      ".github/workflows/agent-reports-e2e.yml",
+      "prisma/migrations/20261127000000_agent_referral_report_bounded_pages/migration.sql",
+      "docs/agents/migrations/20261127000000-bounded-pages-rollback.sql",
+      "scripts/test-db/rehearse-revision-bounds.mjs",
+      "docs/agents/evidence/migration-20261127/rehearsal-report.json",
+      "docs/agents/evidence/migration-20261127/scale-50k-timing.json"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-023",
-    "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41453293674",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41453293719",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41453293687",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41453293663",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41453293651"
+    ],
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-023",
+    "verificationCommit": "59a8bed",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
+    "blocker": "None for §028. Open owner decisions, not blockers of this record: production migration 20261127000000 (needs owner approval, irreversible once a revision exceeds 5,000 members); whether the 50,000-member cap is approved for production; independent review is not required by §028.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "NOT_TESTED"
+    "currentAssessmentStatus": "PASS"
   },
   "MOTION-006": {
     "status": "BLOCKED",

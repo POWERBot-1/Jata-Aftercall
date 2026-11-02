@@ -1,7 +1,7 @@
 # ADMIN-023 evidence record
 
-Status recorded in `docs/agents/PROGRAMME_READINESS.json`: **NOT_TESTED (unchanged)**.
-The ledger is not updated to PASS because the screenshots have not been inspected (see "Not established").
+Status recorded in `docs/agents/PROGRAMME_READINESS.json`: **PASS for §028**, verified on exact commit `59a8bed`
+(CI runs in the links in the ledger record). The owner's visual review is recorded as an owner attestation only. The agent did not open the screenshots (see "Not established").
 
 ## What the §028 criterion requires
 

@@ -231,7 +231,7 @@ Append a new sequential section containing: unique ID; date; exact owner instruc
 - **Acceptance:** shared token and reduced-motion tests pass; inspect actual keyboard, mobile and desktop behavior; complete remaining page, chart, loading, transaction and Website Studio family coverage before claiming universal motion. **Dependencies/conflicts:** no motion-related schema migration or production republish. **Evidence:** focused CSS and scheduler tests pass locally; real browser evidence NOT TESTED. **Implementation commit:** find via `git log --follow -- app/globals.css`.
 
 ## 028 — ADMIN-023: bounded revision inspection and concurrent programme
-- **Date / approval / status:** 2026-10-31; owner-directed; IN PROGRESS.
+- **Date / approval / status:** 2026-10-31; owner-directed; PASS for §028 on exact commit `59a8bed` (2 Nov 2026), per `docs/agents/PROGRAMME_READINESS.json` and `docs/agents/evidence/admin-023/README.md`. Production migration and the 50,000 cap for production remain owner decisions.
 - **Owner instruction:** advance all workstreams together, including bounded processing beyond 5,000 members, autonomous integration and an instruction-completeness release check; preserve owner decisions and keep production financial operations and messages disabled.
 - **Purpose / function:** own-agent immutable referral revision reads support a bounded event-ID cursor and next-page marker, without accepting a tenant selector or changing historical evidence.
 - **Security/privacy / UX:** active-agent authorization and private no-store responses remain; no financial verification or entitlement is implied; invalid, duplicated and cross-tenant query parameters fail closed.
