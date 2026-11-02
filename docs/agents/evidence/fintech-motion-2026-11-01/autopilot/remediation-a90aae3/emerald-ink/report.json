@@ -1,0 +1,1334 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "emerald-ink",
+  "generatedAt": "2026-11-02T06:51:59.625Z",
+  "layout": [
+    {
+      "name": "kill-switch",
+      "width": 320,
+      "height": 568,
+      "overflowX": false,
+      "scrollWidth": 320,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 320,
+      "height": 568,
+      "overflowX": false,
+      "scrollWidth": 320,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 360,
+      "height": 800,
+      "overflowX": false,
+      "scrollWidth": 360,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 360,
+      "height": 800,
+      "overflowX": false,
+      "scrollWidth": 360,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 390,
+      "height": 844,
+      "overflowX": false,
+      "scrollWidth": 390,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 390,
+      "height": 844,
+      "overflowX": false,
+      "scrollWidth": 390,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 430,
+      "height": 932,
+      "overflowX": false,
+      "scrollWidth": 430,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 430,
+      "height": 932,
+      "overflowX": false,
+      "scrollWidth": 430,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 768,
+      "height": 1024,
+      "overflowX": false,
+      "scrollWidth": 768,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 768,
+      "height": 1024,
+      "overflowX": false,
+      "scrollWidth": 768,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "kill-switch",
+      "width": 1366,
+      "height": 768,
+      "overflowX": false,
+      "scrollWidth": 1366,
+      "fixtureNotice": true,
+      "killAlertVisible": true,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    },
+    {
+      "name": "approval-pending",
+      "width": 1366,
+      "height": 768,
+      "overflowX": false,
+      "scrollWidth": 1366,
+      "fixtureNotice": true,
+      "killAlertVisible": false,
+      "smallTargetsClosed": [],
+      "smallTargetsPickerOpen": [],
+      "pageErrors": 0,
+      "errors": []
+    }
+  ],
+  "interactions": {
+    "approveSuccess": {
+      "320x568": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      },
+      "360x800": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      },
+      "390x844": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      },
+      "430x932": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      },
+      "768x1024": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      },
+      "1366x768": {
+        "okBanner": true,
+        "banner": {
+          "text": "SUCCESS Action verified and executed. You can roll it back with 1 click if needed.",
+          "ariaLive": "polite",
+          "role": "status"
+        },
+        "patchRequestsFromTripleClick": 1
+      }
+    },
+    "killSwitchActive": {
+      "approveButtons": 1,
+      "approveDisabled": [
+        true
+      ],
+      "requestsBeforeBlockedClicks": 0,
+      "requestsAfterBlockedClicks": 0,
+      "newRequestsFromBlockedClicks": 0,
+      "successBannerShown": false,
+      "alertText": "Platform Kill Switch Active: Autonomous executions are globally paused. Approve & Execute and new proposals are disabled here, and the server refuses them. Rejecting proposals, diagnostics and audit logs remain available. Reactivation is an authorised platform action and cannot be made from this screen."
+    },
+    "contrastText": {
+      "approveEnabledLabel": {
+        "fg": [
+          255,
+          255,
+          255
+        ],
+        "bg": [
+          6,
+          78,
+          59
+        ],
+        "ratio": 9.72
+      },
+      "proposalCardTitle": {
+        "fg": [
+          24,
+          53,
+          43
+        ],
+        "bg": [
+          255,
+          249,
+          240
+        ],
+        "ratio": 12.67
+      }
+    },
+    "reducedMotion_no-preference": {
+      "alertAnimationName": "jata-state-in"
+    },
+    "reducedMotion_reduce": {
+      "alertAnimationName": "none"
+    },
+    "staff": {
+      "approveButtons": 4,
+      "approveDisabled": [
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "paused": {
+      "approveButtons": 2,
+      "approveDisabled": [
+        true,
+        true
+      ]
+    },
+    "tenantB": {
+      "showsTenantB": true,
+      "showsTenantA": false
+    }
+  },
+  "focus": {
+    "320x568": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 262,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 314,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    },
+    "360x800": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 378,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 430,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    },
+    "390x844": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 399,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 243,
+          "y": 399,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    },
+    "430x932": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 444,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 243,
+          "y": 444,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    },
+    "768x1024": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 490,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 243,
+          "y": 490,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    },
+    "1366x768": {
+      "approve": {
+        "reached": true,
+        "box": {
+          "x": 29,
+          "y": 361,
+          "w": 206,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          6,
+          78,
+          59
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 1.36,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      },
+      "reject": {
+        "reached": true,
+        "box": {
+          "x": 243,
+          "y": 361,
+          "w": 104,
+          "h": 44
+        },
+        "ringRGB": [
+          24,
+          53,
+          43
+        ],
+        "surfaceRGB": [
+          255,
+          249,
+          240
+        ],
+        "fillRGB": [
+          255,
+          255,
+          255
+        ],
+        "ringVsSurfaceWorstSide": 12.67,
+        "ringVsFill": 13.27,
+        "perSide": {
+          "left": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "right": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "top": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          },
+          "bottom": {
+            "ring": [
+              24,
+              53,
+              43
+            ],
+            "surface": [
+              255,
+              249,
+              240
+            ],
+            "ratio": 12.67
+          }
+        },
+        "ringDrawnAllSides": true
+      }
+    }
+  },
+  "decideResponses": [
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"ok\":true,\"proposal\":{\"id\":\"fx-tenant-a-p-offer\",\"status\":\"EXECUTED\",\"actionType\":\"CREATE_OR_UPDATE_OFFER\"},\"fixtureNote\":\"FIXTURE: simulated execution. No bus"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "body": "{\"actorRole\":\"OWNER\",\"globalKillSwitchActive\":false,\"entitlement\":{\"entitled\":true,\"previewMode\":false,\"tier\":\"STANDARD\",\"planKey\":\"JATA_AUTOPILOT\",\"subscriptio"
+    }
+  ]
+}

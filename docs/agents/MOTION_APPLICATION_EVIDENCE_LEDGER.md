@@ -577,3 +577,99 @@ The earlier "keyboard focus FAIL" (ledger section 695a9a3) was based on crops th
 - **Programme completeness (34 NOT READY): NOT TESTED this pass.** Individual classifications were not produced.
 - **Production Autopilot: NOT TESTED.** No production request was made.
 - **Phase 7 surfaces beyond Autopilot: NOT TESTED** in this pass.
+
+
+## Phase 7 — Autopilot verification at afcc456 (review turn)
+
+Code head checked: `afcc456` (docs-only commits after code `a90aae3`). Scope: screenshot inspection, current-head checks, 34-record classification, Prisma status. No code change in this turn. No merge, deploy, production data or configuration change, real automation, messages, payments, consent or entitlement change.
+
+### Verdicts (separate, as required)
+- Autopilot remediation complete: **NO**. Remaining items: below.
+- Autopilot production-ready: **NO**. Real-database, authenticated and tenant-isolation evidence is BLOCKED (Prisma engine download).
+- Phase 7 complete: **NO**. 34 programme records remain NOT READY.
+- Fixture PASS is not real-database PASS.
+- Release decision: **HOLD**.
+
+### Current-head checks (`afcc456`)
+- `npx tsc --noEmit`: exit 2. Three errors, all in Prisma-dependent test files (`tests/prisma/autopilot-constraints-and-concurrency.test.ts`, `tests/prisma/experience-boundary.test.ts`, `tests/unit/autopilot-phase1-hardening.test.ts`). Cause: generated Prisma client absent (`binaries.prisma.sh` TLS failure). Not application source. Environment-only.
+- Vitest, six Autopilot files: 120/120 pass, exit 0.
+- ESLint on `components/autopilot`, the kill-switch test, and fixture paths: exit 0.
+- `scripts/admin/check-programme-readiness.mjs`: exit 1, NOT READY (34). Not bypassed.
+- `gh pr checks 79`: 17 pass, `programme-completeness` fail (run head SHA not verified in this turn).
+
+### Screenshot inspection (opened and viewed)
+Opened, all in `remediation-a90aae3/`:
+- `lime-spark/approval-pending-*` at 320, 360, 390, 430, 768, 1366. Fixture notice visible. PROPOSED rows show enabled Approve & Execute and Reject. No success text.
+- `lime-spark/approve-success-*` at 320, 360, 390, 430, 768, 1366. Verified banner (`role=status`). One row EXECUTED with rollback. Other rows still PROPOSED.
+- `emerald-ink/approval-pending-*` at all six widths. Same structure.
+- `emerald-ink/approve-success-*` at all six widths. Same structure as Lime.
+- `lime-spark/focus-approve-{320,390,1366}` and `emerald-ink/focus-approve-{320,390,1366}`. Focus ring visible in both themes. Lime ring is near-white around lime fill. Emerald ring is dark around dark-green fill, separated by a gap from the cream card.
+- NOT opened in this turn: focus-approve at 360, 430, 768; all focus-reject and bare crops; the 19 PNGs in `remediation-695a9a3/`. Not claimed as reviewed.
+
+### Defect found (not fixed in this turn, logged for follow-up)
+- **Hero legibility, Emerald Ink**: the FIXTURE hero title ("FIXTURE Mama Pima Kitchen (tenant A)") and its body text render dark-on-dark over the photo at every width, and are nearly unreadable at 320 and 360. Visible in `emerald-ink/approval-pending-*` and `emerald-ink/approve-success-*`. Verdict: FAIL for hero text contrast. Not measured numerically. The approval controls themselves are unaffected.
+- Scope note: the hero is a shared Autopilot header, so fixing it means touching shared styles. It is queued as a follow-up, not hidden.
+
+### Programme readiness classification (34 records, source status unchanged)
+No status was upgraded. No threshold, assertion or exclusion changed.
+
+| ID | Source status | Classification / blocker family |
+|---|---|---|
+| ADMIN-002 | BLOCKED | Umbrella: 34 records remain open; root causes listed in the exact-head run |
+| ADMIN-003 | BLOCKED | Control-access DENY policy: owner-approved DENY cells recorded; access still disabled |
+| ADMIN-004 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-005 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-006 | BLOCKED | Commission ledger lifecycle: synthetic full lifecycle not established (DB-backed) |
+| ADMIN-007 | BLOCKED | Control-plane config history and provider health: owner-approved provider config missing |
+| ADMIN-008 | BLOCKED | Communications console, dead-letter and provider-authorised delivery unverified |
+| ADMIN-009 | BLOCKED | Domain/DNS/TLS/mail: authoritative zone export and live records not available |
+| ADMIN-010 | BLOCKED | Control-access DENY policy (as ADMIN-003) |
+| ADMIN-012 | BLOCKED | Role/action mapping and non-production provisioning procedure not owner-approved |
+| ADMIN-013 | BLOCKED | Phone ownership → eligibility → payment → accrual → reversal not proven (DB-backed, payments) |
+| ADMIN-014 | BLOCKED | Backup/restore and end-to-end recovery acceptance unproven |
+| ADMIN-015 | BLOCKED | Authenticated/unauthorised Control screenshot matrix not produced |
+| ADMIN-022 | BLOCKED | Scheduler/report workstream integration and approval policy incomplete |
+| ADMIN-023 | NOT_TESTED | Full acceptance test not run |
+| MOTION-001 | BLOCKED | App-wide interaction/keyboard/layout evidence incomplete (only selected surfaces) |
+| MOTION-002 | BLOCKED | Studio families not all verified through generation, preview and publication |
+| MOTION-003 | NOT_TESTED | Full acceptance test not run |
+| MOTION-004 | NOT_TESTED | Full acceptance test not run |
+| MOTION-005 | NOT_TESTED | Full acceptance test not run |
+| MOTION-006 | BLOCKED | Authenticated app-wide before/after recordings missing |
+| MOTION-007 | BLOCKED | Cross-product motion engine and universal acceptance not proven |
+| MOTION-008 | BLOCKED | All modules/families/six-view recordings not produced |
+| MOTION-009 | NOT_TESTED | Full acceptance test not run |
+| MOTION-010 | NOT_TESTED | Full acceptance test not run |
+| MOTION-011 | BLOCKED | Reduced-motion passes; universal family/route/publish and a11y not complete |
+| MOTION-012 | BLOCKED | Chrome captures exist; full generation/publication matrix missing |
+| MOTION-013 | BLOCKED | Capture/CI passes; universal routes and independent inspection missing |
+| MOTION-014 | BLOCKED | 480 family rows pass; independently inspected baseline/after missing |
+| MOTION-015 | BLOCKED | Event-level reduced-motion passes; queue, history, AI, commerce gaps open |
+| MOTION-016 | BLOCKED | Targeted preference cancellation passes; six broad gaps open |
+| MOTION-017 | BLOCKED | Live preference transitions pass; independent review and prior criteria missing |
+| MOTION-018 | BLOCKED | No-DB and DB suites pass; queue, baseline, AI and commerce coverage incomplete |
+| RELEASE-001 | BLOCKED | Domain/email, durable provider media, financial policy and lifecycle not proven |
+
+Counts: 34 total. BLOCKED 28, NOT_TESTED 6 (MOTION-003, 004, 005, 009, 010, 023 — note ADMIN-023 is listed in source as NOT_TESTED). PASS 0. FAIL 0.
+
+### Autopilot DB-backed requirements — status BLOCKED (not executed)
+Requires a disposable PostgreSQL and a generated Prisma client. Prisma engine cannot be downloaded (`binaries.prisma.sh` TLS failure, `SSL_ERROR_SYSCALL`, confirmed this turn). Not executed; no substitute result:
+- Tenant isolation across two fictional tenants (DB-level)
+- Consent and withdrawal
+- Approval authorisation and final rejection on the server
+- Daily spend reservation, including concurrency
+- Recipient and action caps from existing configuration (schema defaults are not owner-approved limits)
+- Quiet hours in `Africa/Nairobi` (enforcement on the execution path)
+- Kill-switch enforcement on the server execution path
+- Fail-closed behaviour
+
+Kill-switch UI behaviour, STAFF access, pending-proposal and submit-while-paused regression cases are covered by the 14-test kill-switch UI file (fixture level only).
+
+### Remaining work (not done)
+1. Fix Emerald Ink hero legibility (FAIL above) and re-capture.
+2. Open the remaining focus crops (360/430/768, reject, bare) and the 19 `remediation-695a9a3/` PNGs.
+3. Run the Prisma-backed requirements on a disposable PostgreSQL once the engine is available. No production credentials.
+4. Address the 34 NOT READY records through real evidence, not relabelling.
+5. Confirm the head SHA of the CI runs behind `programme-completeness`.
+
+Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-a90aae3/` (`lime-spark/`, `emerald-ink/` 44 files, `emerald-ink-focus/`).
