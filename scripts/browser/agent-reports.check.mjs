@@ -294,6 +294,8 @@ async function main() {
         return true;
       });
       check(`revision evidence control is present and opens at ${w}x${h}`, opened);
+      // The revision read is limited to 30 requests per minute per agent. A full 11-page walk at every
+      // viewport would exceed that budget, so the full walk runs once (390 px) and other viewports check the first page.
       await page.waitForFunction(() => /Showing 500 evidence items/.test(document.body?.innerText ?? ""), { timeout: 30000 })
         .then(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, true))
         .catch(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, false, "no 500-item page"));
@@ -308,17 +310,21 @@ async function main() {
       await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: path.join(outDir, `revision-first-page-${w}x${h}.png`) });
 
-      // Follow every server page. Each click must add members, never remove or repeat them.
-      for (let guard = 0; guard < 20; guard += 1) {
-        const before = await page.evaluate(() => document.querySelectorAll(".jata-revision-evidence-list > li").length);
-        const clicked = await page.evaluate(() => {
-          const b = [...document.querySelectorAll("button")].find((x) => /Load more evidence/.test(x.textContent || ""));
-          if (!b) return false;
-          b.click();
-          return true;
-        });
-        if (!clicked) break;
-        await page.waitForFunction((n) => document.querySelectorAll(".jata-revision-evidence-list > li").length > n, { timeout: 30000 }, before);
+      // Follow every server page at 390 px only (rate budget). Each click must add members, never remove or repeat them.
+      if (w === 390) {
+        for (let guard = 0; guard < 20; guard += 1) {
+          const before = await page.evaluate(() => document.querySelectorAll(".jata-revision-evidence-list > li").length);
+          const clicked = await page.evaluate(() => {
+            const b = [...document.querySelectorAll("button")].find((x) => /Load more evidence/.test(x.textContent || ""));
+            if (!b) return false;
+            b.click();
+            return true;
+          });
+          if (!clicked) break;
+          const advanced = await page.waitForFunction((n) => document.querySelectorAll(".jata-revision-evidence-list > li").length > n, { timeout: 30000 }, before)
+            .then(() => true).catch(() => false);
+          if (!advanced) { check("each \"Load more evidence\" click adds members", false, `stalled after ${before} items`); break; }
+        }
       }
       const all = await page.evaluate(() => ({
         count: document.querySelectorAll(".jata-revision-evidence-list > li").length,
@@ -326,7 +332,9 @@ async function main() {
         markerLeft: [...document.querySelectorAll("button")].some((b) => /Load more evidence/.test(b.textContent || "")),
         overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       }));
-      check(`all ${BIG_MEMBERS} revision members are listed, with no marker left, at ${w}x${h}`, all.count === BIG_MEMBERS && all.summary === String(BIG_MEMBERS) && !all.markerLeft && !all.overflow, `items=${all.count} summary=${all.summary}`);
+      if (w === 390) {
+        check(`all ${BIG_MEMBERS} revision members are listed, with no marker left, at ${w}x${h}`, all.count === BIG_MEMBERS && all.summary === String(BIG_MEMBERS) && !all.markerLeft && !all.overflow, `items=${all.count} summary=${all.summary}`);
+      }
       await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: path.join(outDir, `revision-all-pages-${w}x${h}.png`) });
     }

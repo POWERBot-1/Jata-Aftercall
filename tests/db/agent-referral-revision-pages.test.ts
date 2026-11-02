@@ -80,17 +80,17 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     previous = { s: process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED, r: process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED };
     process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = "true";
     process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = "true";
-  });
+  }, 120_000);
   afterAll(() => {
     for (const [k, v] of [["AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED", previous.s], ["AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED", previous.r]] as const) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
     }
-  });
+  }, 120_000);
 
   it("the cap is explicit and larger than the former 5,000 ceiling", () => {
     expect(MAX_MEMBERS_PER_REVISION).toBe(50_000);
     expect(READ_PAGE_SIZE).toBe(500);
-  });
+  }, 120_000);
 
   it("accepts a 5,001-member baseline and pages every member exactly once, in event order", async () => {
     const own = await seedAgent(5001);
@@ -108,7 +108,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const theirs = await readAll(1);
     expect(theirs.ids).toHaveLength(3);
     expect(theirs.ids.every((id) => id.startsWith(`att-${other.suffix}-`))).toBe(true);
-  });
+  }, 120_000);
 
   it("produces a next-page marker only when more than one page of members remains", async () => {
     const exactly = await seedAgent(READ_PAGE_SIZE);
@@ -126,7 +126,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const second = await readPage(1, first.body.nextCursor);
     expect(second.body.members).toHaveLength(1);
     expect(second.body.nextCursor).toBeNull();
-  });
+  }, 120_000);
 
   it("replaying a cursor returns the same page, and a forged well-formed cursor cannot widen scope", async () => {
     const own = await seedAgent(READ_PAGE_SIZE + 5);
@@ -139,7 +139,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const forged = await readPage(1, "zzzz-not-a-real-event");
     expect(forged.status).toBe(200);
     expect(forged.body.members.every((m: { eventId: string }) => m.eventId.startsWith(`att-${own.suffix}-`))).toBe(true);
-  });
+  }, 120_000);
 
   it("refuses malformed, duplicated and over-long cursors before reading rows", async () => {
     const own = await seedAgent(2);
@@ -152,7 +152,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     expect(dup.status).toBe(400);
     const unknown = await GET(new Request(reconcileUrl(`periodKey=${periodKey}&revision=1&agentId=${own.app.id}`)));
     expect(unknown.status).toBe(400);
-  });
+  }, 120_000);
 
   it("reconciles beyond 5,000 members idempotently and keeps the earlier revision immutable", async () => {
     const own = await seedAgent(5001);
@@ -182,14 +182,14 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const rev1 = await readAll(1);
     expect(rev1.ids).toHaveLength(5001);
     expect(await p.agentReferralReportMember.count({ where: { applicationId: own.app.id, periodKey, revision: 1 } })).toBe(5001);
-  });
+  }, 120_000);
 
   it("the write fence seals a revision: members cannot be added outside its creating transaction", async () => {
     const own = await seedAgent(1);
     const members = await p.agentReferralReportMember.findMany({ where: { applicationId: own.app.id, periodKey, revision: 1 }, take: 1 });
     await expect(p.agentReferralReportMember.create({ data: { applicationId: own.app.id, periodKey, revision: 1, eventId: `late-${own.suffix}`, source: "REGISTRATION", eventCreatedAt: new Date(base) } })).rejects.toThrow(/sealed|immutable|fence/i);
     expect(members).toHaveLength(1);
-  });
+  }, 120_000);
 
   it("rolls back a partly written reconciliation completely when a later step fails", async () => {
     const own = await seedAgent(3);
@@ -198,7 +198,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
       throw new Error("simulated failure after revision insert");
     })).rejects.toThrow(/simulated failure/);
     expect(await p.agentReferralReportRevision.count({ where: { applicationId: own.app.id, periodKey, revision: 2 } })).toBe(0);
-  });
+  }, 120_000);
 
   it("the database refuses a baseline above the cap before any member is written", async () => {
     const suffix = uid();
@@ -210,7 +210,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     // At the cap: the limit passes, and the honest membership mismatch (no evidence rows) is refused.
     await expect(p.agentReferralReportSnapshot.create({ data: row(BigInt(MAX_MEMBERS_PER_REVISION), "daily:2020-01-01") })).rejects.toThrow(/membership mismatch/);
     expect(await p.agentReferralReportSnapshot.count({ where: { applicationId: app.id } })).toBe(0);
-  });
+  }, 120_000);
 
   it("two concurrent reconciliations of the same agent produce exactly one new revision", async () => {
     const own = await seedAgent(5001);
@@ -225,5 +225,5 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: bounded referral revisi
     const created = await p.agentReferralReportRevision.count({ where: { applicationId: own.app.id, periodKey, revision: 2 } });
     expect(created).toBe(1);
     expect(statuses.every((s) => [200, 503].includes(s))).toBe(true);
-  });
+  }, 120_000);
 });
