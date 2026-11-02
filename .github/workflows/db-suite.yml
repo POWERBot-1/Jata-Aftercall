@@ -48,14 +48,14 @@ jobs:
       - name: Run the database suite against a disposable PostgreSQL
         run: |
           set -o pipefail
-          node scripts/test-db/run-db-suite.mjs tests/db/autopilot-safety.test.ts tests/db/agent-referral-report-pagination.test.ts 2>&1 | tee /tmp/db-suite.log
+          node scripts/test-db/run-db-suite.mjs tests/db/autopilot-safety.test.ts tests/db/agent-referral-report-pagination.test.ts tests/db/agent-referral-revision-pages.test.ts 2>&1 | tee /tmp/db-suite.log
 
       # The runner exits 0 when every test is skipped, so the pass condition is asserted here:
       # exactly the expected number of tests, none failed, none skipped, all migrations applied.
       - name: Assert the suite actually ran against the migrated database
         run: |
           set -o pipefail
-          node scripts/test-db/assert-db-suite.mjs /tmp/db-suite.log --expect 20 2>&1 | tee /tmp/db-suite-assert.log
+          node scripts/test-db/assert-db-suite.mjs /tmp/db-suite.log --expect 30 2>&1 | tee /tmp/db-suite-assert.log
 
       - name: Upload the sanitised database suite log
         if: always()

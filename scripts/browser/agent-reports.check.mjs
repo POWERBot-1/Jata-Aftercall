@@ -115,6 +115,23 @@ async function makeAgent(label, status, agentStatus, snapshotCount, periodPrefix
   return { user, app };
 }
 
+// ADMIN-023 §028: one fictional agent whose baseline revision holds MORE than 5,000 members, so the
+// reconcile GET must return a real next-page marker. Identifiers are run-scoped and fictional.
+const BIG_PERIOD = "daily:2019-06-15";
+const BIG_START = Date.UTC(2019, 5, 14, 21, 0, 0);
+const BIG_MEMBERS = 5001;
+async function seedLargeRevision(app) {
+  const link = await prisma.agentReferralLink.create({ data: { referrerApplicationId: app.id, tokenHash: `big-link-${runId}`, expiresAt: new Date(BIG_START + 365 * DAY) } });
+  const CHUNK = 1000;
+  for (let offset = 0; offset < BIG_MEMBERS; offset += CHUNK) {
+    const slice = Array.from({ length: Math.min(CHUNK, BIG_MEMBERS - offset) }, (_, k) => offset + k);
+    await prisma.user.createMany({ data: slice.map((i) => ({ id: `bigu-${runId}-${i}`, email: `big-ref-${runId}-${i}@example.test`, passwordHash: "x", role: "CUSTOMER" })) });
+    await prisma.agentApplication.createMany({ data: slice.map((i) => ({ id: `biga-${runId}-${i}`, userId: `bigu-${runId}-${i}`, fullName: "Synthetic referred", phoneE164: `+2546${String(i).padStart(8, "0")}`, status: "PENDING", agentStatus: "INACTIVE", privacyAcknowledgedAt: new Date() })) });
+    await prisma.agentReferralAttribution.createMany({ data: slice.map((i) => ({ id: `bigatt-${runId}-${i}`, referrerApplicationId: app.id, referredApplicationId: `biga-${runId}-${i}`, linkId: link.id, consentedAt: new Date(BIG_START), source: "REGISTRATION", createdAt: new Date(BIG_START + 1000 + i) })) });
+  }
+  await prisma.agentReferralReportSnapshot.create({ data: { applicationId: app.id, periodKey: BIG_PERIOD, periodType: "DAILY", startInclusive: new Date(BIG_START), endExclusive: new Date(BIG_START + DAY), registrationCount: BigInt(BIG_MEMBERS), existingApplicationCount: BigInt(0) } });
+}
+
 async function cookieFor(user) {
   const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role, name: user.name ?? "", sessionVersion: user.sessionVersion ?? 0 })
     .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("1h").sign(new TextEncoder().encode(SECRET));
@@ -142,6 +159,8 @@ async function main() {
   const empty = await makeAgent("empty", "PENDING", "ACTIVE", 0);
   const other = await makeAgent("other", "PENDING", "ACTIVE", 3, "monthly");
   const pending = await makeAgent("pending", "PENDING", "INACTIVE", 2);
+  const big = await makeAgent("big", "PENDING", "ACTIVE", 0);
+  await seedLargeRevision(big.app);
   const admin = await prisma.user.create({ data: { email: `agent-report-admin-${runId}@example.test`, passwordHash: "x", role: "ADMIN" } });
   const customer = await prisma.user.create({ data: { email: `agent-report-customer-${runId}@example.test`, passwordHash: "x", role: "CUSTOMER" } });
 
@@ -166,11 +185,14 @@ async function main() {
     const unexpectedConsole = [];
     // True only while the journey itself injects a 503 to exercise the error state.
     let injectingError = false;
+    // True only while the journey itself probes refusals (malformed cursor, another agent's revision).
+    let probingRefusals = false;
     page.on("console", (message) => {
       if (message.type() !== "error") return;
       const text = message.text();
       if (/Failed to load resource: the server responded with a status of (401|403)\b/.test(text)) expectedRefusals.push(text);
       else if (injectingError && /Failed to load resource: the server responded with a status of 503\b/.test(text)) expectedRefusals.push(text);
+      else if (probingRefusals && /Failed to load resource: the server responded with a status of (400|404)\b/.test(text)) expectedRefusals.push(text);
       else unexpectedConsole.push(text.slice(0, 200));
     });
 
@@ -246,7 +268,7 @@ async function main() {
     // The other agent's snapshots are MONTHLY; this agent's are DAILY. Any "Monthly" label or the
     // other agent's name would therefore be a cross-tenant disclosure.
     const leakText = await page.evaluate(() => (document.body?.innerText ?? ""));
-    check("another agent's snapshots and name never appear in this page", !leakText.includes("Monthly") && !leakText.includes(`Synthetic other ${runId}`));
+    check("another agent's snapshots and name never appear in this page", !leakText.includes("Monthly") && !leakText.includes(`Synthetic other ${runId}`) && !leakText.includes(`Synthetic big ${runId}`));
 
     // 5. Keyboard: the load control is reachable and operable without a pointer.
     await page.evaluate(() => { window.scrollTo(0, 0); });
@@ -256,7 +278,73 @@ async function main() {
     });
     check("load control is a focusable enabled button", focusable);
 
-    // 6. Empty state for an active agent with no snapshots.
+    // 6. ADMIN-023 §028: the big agent's revision 1 (5,001 members) is read in server-paged pages through
+    //    the UI at every viewport. The next-page marker must appear, every page must be bounded, and the
+    //    full list must be complete with no duplicates. Pages are followed by clicking "Load more evidence".
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(big.user));
+    for (const [w, h] of VIEWPORTS) {
+      await page.setViewport({ width: w, height: h });
+      await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+      await page.waitForSelector("ol[aria-label]");
+      const opened = await page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => /Show evidence list/.test(x.getAttribute("aria-label") || x.textContent || ""));
+        if (!b) return false;
+        b.click();
+        return true;
+      });
+      check(`revision evidence control is present and opens at ${w}x${h}`, opened);
+      await page.waitForFunction(() => /Showing 500 evidence items/.test(document.body?.innerText ?? ""), { timeout: 30000 })
+        .then(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, true))
+        .catch(() => check(`first revision page is bounded at 500 items at ${w}x${h}`, false, "no 500-item page"));
+      const first = await page.evaluate(() => {
+        const button = [...document.querySelectorAll("button")].find((b) => /Load more evidence/.test(b.textContent || ""));
+        const rect = button ? button.getBoundingClientRect() : null;
+        return { hasMarker: Boolean(button), height: rect ? Math.round(rect.height) : 0, overflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      });
+      check(`next-page marker is shown after the first revision page at ${w}x${h}`, first.hasMarker);
+      check(`"Load more evidence" touch target is at least 44px at ${w}x${h}`, first.height >= 44, `${first.height}px`);
+      check(`no horizontal overflow on the evidence list at ${w}x${h}`, !first.overflow);
+      await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: path.join(outDir, `revision-first-page-${w}x${h}.png`) });
+
+      // Follow every server page. Each click must add members, never remove or repeat them.
+      for (let guard = 0; guard < 20; guard += 1) {
+        const before = await page.evaluate(() => document.querySelectorAll(".jata-revision-evidence-list > li").length);
+        const clicked = await page.evaluate(() => {
+          const b = [...document.querySelectorAll("button")].find((x) => /Load more evidence/.test(x.textContent || ""));
+          if (!b) return false;
+          b.click();
+          return true;
+        });
+        if (!clicked) break;
+        await page.waitForFunction((n) => document.querySelectorAll(".jata-revision-evidence-list > li").length > n, { timeout: 30000 }, before);
+      }
+      const all = await page.evaluate(() => ({
+        count: document.querySelectorAll(".jata-revision-evidence-list > li").length,
+        summary: (document.body?.innerText ?? "").match(/Showing (\d+) evidence items? from revision 1/)?.[1] ?? "",
+        markerLeft: [...document.querySelectorAll("button")].some((b) => /Load more evidence/.test(b.textContent || "")),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      }));
+      check(`all ${BIG_MEMBERS} revision members are listed, with no marker left, at ${w}x${h}`, all.count === BIG_MEMBERS && all.summary === String(BIG_MEMBERS) && !all.markerLeft && !all.overflow, `items=${all.count} summary=${all.summary}`);
+      await page.evaluate(() => document.querySelector("h4[id^='evidence-']")?.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: path.join(outDir, `revision-all-pages-${w}x${h}.png`) });
+    }
+
+    // 6b. Probes: another agent's revision and malformed cursors are refused by the server.
+    probingRefusals = true;
+    await page.setViewport({ width: 390, height: 844 });
+    await page.deleteCookie(...(await page.cookies()));
+    await page.setCookie(await cookieFor(active.user));
+    await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
+    const probe = async (query) => page.evaluate(async (url) => (await fetch(url, { credentials: "same-origin" })).status, new URL(`/api/agents/reports/referrals/reconcile?${query}`, base).href);
+    const foreign = await probe(`periodKey=${encodeURIComponent(BIG_PERIOD)}&revision=1`);
+    check("another agent's revision is not readable by this agent (404)", foreign === 404, `HTTP ${foreign}`);
+    const malformed = await probe(`periodKey=${encodeURIComponent("daily:2020-01-01")}&revision=1&after=${encodeURIComponent("bad cursor")}`);
+    check("a malformed cursor is refused (400) before any row is read", malformed === 400, `HTTP ${malformed}`);
+    probingRefusals = false;
+
+    // 6c. Empty state for an active agent with no snapshots.
     await page.deleteCookie(...(await page.cookies()));
     await page.setCookie(await cookieFor(empty.user));
     for (const [w, h] of VIEWPORTS) {

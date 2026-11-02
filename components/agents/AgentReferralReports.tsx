@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import AgentRevisionEvidence from "@/components/agents/AgentRevisionEvidence";
 
 /** Mirrors the API's labelled snapshot shape. Counts only: no names, phone numbers or application ids. */
 type Snapshot = {
@@ -108,6 +109,7 @@ export default function AgentReferralReports() {
                   <div><dt>New registrations from referral links</dt><dd>{item.registrationCount}</dd></div>
                   <div><dt>Existing accounts linked</dt><dd>{item.existingApplicationCount}</dd></div>
                 </dl>
+                <AgentRevisionEvidence periodKey={item.periodKey} label={`${item.periodType === "MONTHLY" ? "Monthly" : "Daily"} report, ${formatDay(item.startInclusive)} to ${formatDay(item.endExclusive)}`} />
               </li>
             ))}
           </ol>

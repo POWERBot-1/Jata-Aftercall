@@ -5,12 +5,12 @@ import { isSameOriginRequest } from "@/lib/agent-application";
 import { readSmallJson } from "@/lib/agent-registration";
 import { rateLimitByIdentity } from "@/lib/rate-limit";
 import { inspectReferralEvidenceDrift } from "@/lib/agents/referral-report-drift";
+import { EVENT_CURSOR_PATTERN, MAX_MEMBERS_PER_REVISION, READ_PAGE_SIZE, READ_STATEMENT_TIMEOUT, RECONCILE_STATEMENT_TIMEOUT, RECONCILE_WRITE_CHUNK } from "@/lib/agents/referral-report-bounds";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 const message = (error: string, status: number) => NextResponse.json({ error }, { status, headers });
 const unavailable = () => message("Report reconciliation is unavailable.", 503);
-const MAX_MEMBERS = 5000;
 type Member = { eventId: string; source: string; eventCreatedAt: Date };
 
 /** Manual, own-agent reconciliation of referral evidence only. No payment or delivery claims. */
@@ -27,18 +27,20 @@ export async function POST(req: Request) {
   const periodKey = body.periodKey;
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
+      // Trusted constant (never request data). Bounds database time for the whole reconciliation.
+      await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = '${RECONCILE_STATEMENT_TIMEOUT}'`);
       const applications: Array<{ id: string }> = await tx.$queryRaw`SELECT "id" FROM "AgentApplication" WHERE "userId" = ${session.userId} AND "status" = 'PENDING' AND "agentStatus" = 'ACTIVE' FOR SHARE`;
       if (applications.length !== 1) return { kind: "forbidden" as const };
       const applicationId = applications[0].id;
       const snapshots: Array<{ startInclusive: Date; endExclusive: Date }> = await tx.$queryRaw`SELECT "startInclusive", "endExclusive" FROM "AgentReferralReportSnapshot" WHERE "applicationId" = ${applicationId} AND "periodKey" = ${periodKey} FOR UPDATE`;
       if (snapshots.length !== 1) return { kind: "missing" as const };
-      const prior = await tx.agentReferralReportRevision.findFirst({ where: { applicationId, periodKey }, orderBy: { revision: "desc" }, include: { members: { orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
+      const prior = await tx.agentReferralReportRevision.findFirst({ where: { applicationId, periodKey }, orderBy: { revision: "desc" }, include: { members: { orderBy: { eventId: "asc" }, take: MAX_MEMBERS_PER_REVISION + 1 } } });
       // A count-only legacy snapshot cannot be reconstructed from present data without inventing history.
       if (!prior) return { kind: "legacy" as const };
-      if (prior.members.length > MAX_MEMBERS) return { kind: "too_large" as const };
+      if (prior.members.length > MAX_MEMBERS_PER_REVISION) return { kind: "too_large" as const };
       const snapshot = snapshots[0];
-      const current = await tx.agentReferralAttribution.findMany({ where: { referrerApplicationId: applicationId, source: { in: ["REGISTRATION", "EXISTING_ACCOUNT"] }, createdAt: { gte: snapshot.startInclusive, lt: snapshot.endExclusive } }, select: { id: true, source: true, createdAt: true }, orderBy: { id: "asc" }, take: MAX_MEMBERS + 1 });
-      if (current.length > MAX_MEMBERS) return { kind: "too_large" as const };
+      const current = await tx.agentReferralAttribution.findMany({ where: { referrerApplicationId: applicationId, source: { in: ["REGISTRATION", "EXISTING_ACCOUNT"] }, createdAt: { gte: snapshot.startInclusive, lt: snapshot.endExclusive } }, select: { id: true, source: true, createdAt: true }, orderBy: { id: "asc" }, take: MAX_MEMBERS_PER_REVISION + 1 });
+      if (current.length > MAX_MEMBERS_PER_REVISION) return { kind: "too_large" as const };
       const before = new Map<string, Member>(prior.members.map((item: Member) => [item.eventId, item]));
       let added = 0; let changed = 0;
       for (const item of current) {
@@ -51,7 +53,11 @@ export async function POST(req: Request) {
       const registrationCount = BigInt(current.filter((item: { source: string }) => item.source === "REGISTRATION").length);
       const existingApplicationCount = BigInt(current.length) - registrationCount;
       const revision = prior.revision + 1;
-      await tx.agentReferralReportRevision.create({ data: { applicationId, periodKey, revision, kind: "RECONCILED", actorId: session.userId, registrationCount, existingApplicationCount, addedCount: added, removedCount: removed, changedCount: changed, members: { createMany: { data: current.map((item: { id: string; source: string; createdAt: Date }) => ({ eventId: item.id, source: item.source, eventCreatedAt: item.createdAt })) } } } });
+      await tx.agentReferralReportRevision.create({ data: { applicationId, periodKey, revision, kind: "RECONCILED", actorId: session.userId, registrationCount, existingApplicationCount, addedCount: added, removedCount: removed, changedCount: changed } });
+      const rows = current.map((item: { id: string; source: string; createdAt: Date }) => ({ applicationId, periodKey, revision, eventId: item.id, source: item.source, eventCreatedAt: item.createdAt }));
+      for (let offset = 0; offset < rows.length; offset += RECONCILE_WRITE_CHUNK) {
+        await tx.agentReferralReportMember.createMany({ data: rows.slice(offset, offset + RECONCILE_WRITE_CHUNK) });
+      }
       await tx.auditEvent.create({ data: { actorId: session.userId, action: "AGENT_REFERRAL_REPORT_RECONCILED", targetType: "AGENT_REPORT", targetId: applicationId, metadata: JSON.stringify({ periodKey, revision, added, removed, changed }) } });
       return { kind: "ok" as const, status: "RECONCILED", revision, registrationCount: registrationCount.toString(), existingApplicationCount: existingApplicationCount.toString(), added, removed, changed };
     });
@@ -76,26 +82,29 @@ export async function GET(req: Request) {
   // A cursor is an opaque retained event id, never an application or tenant selector.
   if ([...query.keys()].some((key) => !["periodKey", "revision", "after"].includes(key)) ||
       query.getAll("periodKey").length !== 1 || query.getAll("revision").length !== 1 || query.getAll("after").length > 1 ||
-      (after !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(after)) ||
+      (after !== null && !EVENT_CURSOR_PATTERN.test(after)) ||
       !periodKey || !/^(?:daily:\d{4}-\d{2}-\d{2}|monthly:\d{4}-\d{2})$/.test(periodKey) || !revisionText || !/^[1-9]\d{0,8}$/.test(revisionText)) return message("Invalid request.", 400);
   const revision = Number(revisionText);
   try {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const applications: Array<{ id: string }> = await tx.$queryRaw`SELECT "id" FROM "AgentApplication" WHERE "userId" = ${session.userId} AND "status" = 'PENDING' AND "agentStatus" = 'ACTIVE' FOR SHARE`;
       if (applications.length !== 1) return { kind: "forbidden" as const };
-      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { ...(after ? { where: { eventId: { gt: after } } } : {}), orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
+      // Trusted constant. Bounds the page read and the drift inspection below.
+      await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = '${READ_STATEMENT_TIMEOUT}'`);
+      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { ...(after ? { where: { eventId: { gt: after } } } : {}), orderBy: { eventId: "asc" }, take: READ_PAGE_SIZE + 1 } } });
       if (!report) return { kind: "missing" as const };
       // A historical revision can differ from current evidence even when its own data is intact.
-      // Inspection is bounded by database timeouts and never silently changes the revision.
-      await tx.$executeRaw`SET LOCAL statement_timeout = '5s'`;
+      // Inspection is bounded by the statement timeout above and never silently changes the revision.
       const evidenceStatus = await inspectReferralEvidenceDrift(tx, applications[0].id, periodKey, revision);
       return { kind: "ok" as const, report, evidenceStatus };
     });
     if (result.kind === "forbidden") return message("An active agent account is required.", 403);
     if (result.kind === "missing") return message("Report revision not found.", 404);
     const row = result.report;
-    const page = row.members.slice(0, MAX_MEMBERS);
-    const nextCursor = row.members.length > MAX_MEMBERS ? page[page.length - 1].eventId : null;
+    // At most READ_PAGE_SIZE members per response. nextCursor is the last returned eventId, and is
+    // present only when at least one more member exists after it.
+    const page = row.members.slice(0, READ_PAGE_SIZE);
+    const nextCursor = row.members.length > READ_PAGE_SIZE ? page[page.length - 1].eventId : null;
     return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, evidenceStatus: result.evidenceStatus, nextCursor, members: page.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
   } catch { return unavailable(); }
 }
