@@ -1,0 +1,740 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "lime-spark",
+  "generatedAt": "2026-11-02T07:11:59.726Z",
+  "reducedMotion": true,
+  "results": [
+    {
+      "theme": "lime-spark",
+      "width": 320,
+      "height": 568,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 6.95,
+          "worstAt": [
+            287,
+            29
+          ],
+          "worstBg": [
+            29,
+            41,
+            47
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 18,
+            "w": 275,
+            "h": 13
+          },
+          "bestContrast": 8.05,
+          "meanContrast": 7.59
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.39,
+          "worstAt": [
+            248,
+            116
+          ],
+          "worstBg": [
+            60,
+            64,
+            66
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 65,
+            "w": 262,
+            "h": 27
+          },
+          "bestContrast": 15.14,
+          "meanContrast": 13.48
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 11.91,
+          "worstAt": [
+            263,
+            146
+          ],
+          "worstBg": [
+            32,
+            28,
+            25
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 137,
+            "w": 240,
+            "h": 17
+          },
+          "bestContrast": 12.95,
+          "meanContrast": 12.43
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8592,
+          "worstContrast": 8.11,
+          "worstAt": [
+            207,
+            384
+          ],
+          "worstBg": [
+            48,
+            45,
+            41
+          ],
+          "rectCount": 3,
+          "firstRect": {
+            "x": 24,
+            "y": 370,
+            "w": 241,
+            "h": 14
+          },
+          "bestContrast": 10.56,
+          "meanContrast": 10.32
+        }
+      ],
+      "heroBox": {
+        "w": 320,
+        "h": 441
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 360,
+      "height": 800,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 7.04,
+          "worstAt": [
+            293,
+            27
+          ],
+          "worstBg": [
+            28,
+            40,
+            46
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 18,
+            "w": 275,
+            "h": 13
+          },
+          "bestContrast": 8.07,
+          "meanContrast": 7.65
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.54,
+          "worstAt": [
+            249,
+            115
+          ],
+          "worstBg": [
+            59,
+            63,
+            65
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 65,
+            "w": 262,
+            "h": 27
+          },
+          "bestContrast": 15.48,
+          "meanContrast": 13.59
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 11.94,
+          "worstAt": [
+            248,
+            138
+          ],
+          "worstBg": [
+            31,
+            28,
+            25
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 137,
+            "w": 240,
+            "h": 17
+          },
+          "bestContrast": 13.02,
+          "meanContrast": 12.52
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8624,
+          "worstContrast": 8.27,
+          "worstAt": [
+            287,
+            369
+          ],
+          "worstBg": [
+            49,
+            43,
+            32
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 370,
+            "w": 298,
+            "h": 14
+          },
+          "bestContrast": 10.56,
+          "meanContrast": 10.22
+        }
+      ],
+      "heroBox": {
+        "w": 360,
+        "h": 423
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 390,
+      "height": 844,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 7.13,
+          "worstAt": [
+            281,
+            27
+          ],
+          "worstBg": [
+            27,
+            39,
+            45
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 18,
+            "w": 275,
+            "h": 13
+          },
+          "bestContrast": 8.12,
+          "meanContrast": 7.7
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.76,
+          "worstAt": [
+            250,
+            116
+          ],
+          "worstBg": [
+            56,
+            62,
+            63
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 65,
+            "w": 262,
+            "h": 27
+          },
+          "bestContrast": 15.51,
+          "meanContrast": 13.78
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 11.66,
+          "worstAt": [
+            341,
+            146
+          ],
+          "worstBg": [
+            35,
+            30,
+            26
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 137,
+            "w": 320,
+            "h": 17
+          },
+          "bestContrast": 13.02,
+          "meanContrast": 12.43
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8624,
+          "worstContrast": 8.27,
+          "worstAt": [
+            302,
+            369
+          ],
+          "worstBg": [
+            49,
+            43,
+            32
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 370,
+            "w": 334,
+            "h": 14
+          },
+          "bestContrast": 10.56,
+          "meanContrast": 10.29
+        }
+      ],
+      "heroBox": {
+        "w": 390,
+        "h": 423
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 430,
+      "height": 932,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5040,
+          "worstContrast": 6.5,
+          "worstAt": [
+            368,
+            31
+          ],
+          "worstBg": [
+            34,
+            46,
+            52
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 17,
+            "y": 18,
+            "w": 358,
+            "h": 13
+          },
+          "bestContrast": 8.23,
+          "meanContrast": 7.51
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.92,
+          "worstAt": [
+            250,
+            100
+          ],
+          "worstBg": [
+            55,
+            61,
+            61
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 17,
+            "y": 48,
+            "w": 262,
+            "h": 27
+          },
+          "bestContrast": 16.07,
+          "meanContrast": 14.13
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 11.11,
+          "worstAt": [
+            61,
+            153
+          ],
+          "worstBg": [
+            37,
+            35,
+            34
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 120,
+            "w": 359,
+            "h": 17
+          },
+          "bestContrast": 13.09,
+          "meanContrast": 12.47
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8640,
+          "worstContrast": 8.02,
+          "worstAt": [
+            303,
+            301
+          ],
+          "worstBg": [
+            49,
+            46,
+            42
+          ],
+          "rectCount": 2,
+          "firstRect": {
+            "x": 24,
+            "y": 301,
+            "w": 376,
+            "h": 14
+          },
+          "bestContrast": 10.56,
+          "meanContrast": 10.31
+        }
+      ],
+      "heroBox": {
+        "w": 430,
+        "h": 354
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 768,
+      "height": 1024,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5415,
+          "worstContrast": 7.15,
+          "worstAt": [
+            376,
+            22
+          ],
+          "worstBg": [
+            31,
+            38,
+            43
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 21,
+            "y": 22,
+            "w": 358,
+            "h": 13
+          },
+          "bestContrast": 8.72,
+          "meanContrast": 8.14
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "24.576px",
+          "fontWeight": "600",
+          "pixels": 16585,
+          "worstContrast": 5.69,
+          "worstAt": [
+            554,
+            77
+          ],
+          "worstBg": [
+            110,
+            92,
+            79
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 21,
+            "y": 52,
+            "w": 533,
+            "h": 29
+          },
+          "bestContrast": 16.55,
+          "meanContrast": 12.46
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9557,
+          "worstContrast": 10.2,
+          "worstAt": [
+            156,
+            115
+          ],
+          "worstBg": [
+            45,
+            42,
+            40
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 28,
+            "y": 101,
+            "w": 501,
+            "h": 17
+          },
+          "bestContrast": 13.16,
+          "meanContrast": 12.77
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8656,
+          "worstContrast": 8.28,
+          "worstAt": [
+            563,
+            209
+          ],
+          "worstBg": [
+            49,
+            43,
+            31
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 28,
+            "y": 206,
+            "w": 540,
+            "h": 14
+          },
+          "bestContrast": 10.57,
+          "meanContrast": 10.23
+        }
+      ],
+      "heroBox": {
+        "w": 768,
+        "h": 245
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 1366,
+      "height": 768,
+      "heroBg": "rgb(20, 17, 15)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(240, 160, 60)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5400,
+          "worstContrast": 7.61,
+          "worstAt": [
+            369,
+            29
+          ],
+          "worstBg": [
+            26,
+            33,
+            36
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 28,
+            "y": 29,
+            "w": 358,
+            "h": 13
+          },
+          "bestContrast": 8.62,
+          "meanContrast": 8.12
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(247, 242, 232)",
+          "fontSize": "32.8px",
+          "fontWeight": "600",
+          "pixels": 28520,
+          "worstContrast": 9.34,
+          "worstAt": [
+            738,
+            62
+          ],
+          "worstBg": [
+            66,
+            63,
+            63
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 28,
+            "y": 59,
+            "w": 711,
+            "h": 38
+          },
+          "bestContrast": 16.05,
+          "meanContrast": 13.83
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9557,
+          "worstContrast": 10.08,
+          "worstAt": [
+            278,
+            134
+          ],
+          "worstBg": [
+            47,
+            43,
+            37
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 35,
+            "y": 117,
+            "w": 501,
+            "h": 17
+          },
+          "bestContrast": 13.16,
+          "meanContrast": 12.81
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8672,
+          "worstContrast": 8.2,
+          "worstAt": [
+            237,
+            229
+          ],
+          "worstBg": [
+            49,
+            44,
+            34
+          ],
+          "rectCount": 1,
+          "firstRect": {
+            "x": 35,
+            "y": 222,
+            "w": 540,
+            "h": 14
+          },
+          "bestContrast": 10.56,
+          "meanContrast": 10.21
+        }
+      ],
+      "heroBox": {
+        "w": 1366,
+        "h": 268
+      }
+    }
+  ]
+}

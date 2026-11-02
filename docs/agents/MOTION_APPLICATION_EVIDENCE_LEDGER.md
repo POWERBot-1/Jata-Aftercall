@@ -673,3 +673,108 @@ Kill-switch UI behaviour, STAFF access, pending-proposal and submit-while-paused
 5. Confirm the head SHA of the CI runs behind `programme-completeness`.
 
 Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-a90aae3/` (`lime-spark/`, `emerald-ink/` 44 files, `emerald-ink-focus/`).
+
+
+## Phase 7 — Emerald Ink hero legibility remediation (review turn, head after commit below)
+
+Scope: shared `WorkspaceHero` (`.ws-hero*` in `app/globals.css`). No component, route, data or business logic changed. No merge, deploy, production change, real automation, messages, payments, consent or entitlement change.
+
+### Root cause (verified)
+- `.ws-hero` read `--ws-ink` and `--ws-on-ink`. Those tokens are declared only on `.ws-shell`.
+- The `/dev/autopilot-fixture` page does not render inside `.ws-shell`. Computed values were empty.
+- Undefined `--ws-ink` left the hero background transparent over the photograph.
+- Undefined `--ws-on-ink` made the title inherit the Emerald Ink page text colour, `rgb(24, 53, 43)`, dark green on the photograph.
+- Lime Spark only looked correct because its inherited page text is light.
+- The real dashboard renders inside `.ws-shell` (`app/dashboard/layout.tsx`), so the defect was reproducible on the fixture page and fragile in the hero's token dependency.
+
+### Change (CSS only)
+1. `.ws-hero`, `.ws-hero__media`, `.ws-hero__title`, `.ws-hero__title em`, `.ws-kicker--light`: added fallbacks (`#14110f` ink, `#f7f2e8` on-ink, `#f0a03c` amber). The hero no longer depends on an ancestor shell.
+2. `.ws-hero__scrim`: strengthened the gradient where the subtitle and meta line sit (0.96 to 0.5 across, 0.9 to transparent down). Photograph still visible.
+3. New `.ws-hero__sub, .ws-hero__meta`: translucent ink backing `rgba(20,17,15,0.8)`, radius 0.35rem, padding 0.12rem 0.45rem. Needed because the brightest city lights sit behind this text. A scrim dark enough alone (verified to be insufficient) would have hidden the image.
+
+Files changed: `app/globals.css` only (plus `next-env.d.ts`, reverted).
+
+### Contrast method (measured, not inferred)
+- Playwright, `reducedMotion: reduce` (freezes photo drift), 6 widths, fixture `scenario=approval-pending`, OWNER, tenant A.
+- Each hero screenshot taken twice: as rendered, and with hero text set transparent (background only).
+- For each text node: tight line-fragment rectangles from `Range.getClientRects()`, not block boxes.
+- Text colour alpha blended over each background pixel, then WCAG 2.x contrast. Worst case = minimum over every background pixel inside the glyph rectangles. Pixels outside the 18px rounded clip excluded.
+- Script: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/hero-remediation/hero-measure.mjs`.
+
+Worst-case contrast (min over pixels), before → after. AA normal text 4.5:1; large text 3:1.
+
+| Theme | Width | Kicker | Title | Subtitle | Meta |
+|---|---|---|---|---|---|
+| Emerald Ink | 320 | 1.00 → 6.95 | 1.00 → 9.39 | 4.53 → 11.91 | 1.91 → 8.11 |
+| Emerald Ink | 360 | 1.00 → 7.04 | 1.00 → 9.54 | 3.27 → 11.94 | 2.12 → 8.27 |
+| Emerald Ink | 390 | 1.00 → 7.13 | 1.00 → 9.76 | 3.63 → 11.66 | 2.12 → 8.27 |
+| Emerald Ink | 430 | 1.00 → 6.50 | 1.00 → 9.92 | 2.82 → 11.11 | 1.74 → 8.02 |
+| Emerald Ink | 768 | 1.00 → 7.15 | 1.00 → 5.69 | 2.69 → 10.20 | 2.02 → 8.28 |
+| Emerald Ink | 1366 | 1.12 → 7.61 | 1.00 → 9.34 | 2.47 → 10.08 | 1.86 → 8.20 |
+| Lime Spark | 320 | 13.14 → 6.95 | 9.21 → 9.39 | 6.59 → 11.91 | 2.06 → 8.11 |
+| Lime Spark | 360 | 13.33 → 7.04 | 9.29 → 9.54 | 5.42 → 11.94 | 2.38 → 8.27 |
+| Lime Spark | 390 | 13.64 → 7.13 | 9.54 → 9.76 | 5.67 → 11.66 | 2.38 → 8.27 |
+| Lime Spark | 430 | 12.26 → 6.50 | 9.89 → 9.92 | 4.48 → 11.11 | 1.93 → 8.02 |
+| Lime Spark | 768 | 13.78 → 7.15 | 5.90 → 5.69 | 2.82 → 10.20 | 2.20 → 8.28 |
+| Lime Spark | 1366 | 14.80 → 7.61 | 9.33 → 9.34 | 2.58 → 10.08 | 1.93 → 8.20 |
+
+Notes:
+- Emerald after = Lime after to two decimals. The hero renders identically in both themes.
+- Lime kicker changed from near-white (inherited, fixture only) to amber (`#f0a03c`, the intended `--ws-amber`). Intentional. It now matches the product shell.
+- Pre-fix Lime subtitle and meta were already below AA at 768 and 1366 and at meta widths. The backing corrects that for Lime too.
+- Hero action buttons (Emergency Pause, Refresh diagnosis, All businesses) were not in the text measurement. Checked visually in every after capture; labels legible in both themes.
+- Overflow: 0 at all widths, both themes. Page errors and hydration errors: 0.
+
+Raw JSON: `hero-remediation/before/measure-*.json`, `hero-remediation/after/measure-*.json`. Note: the `before` lime measurement uses the pre-fix stylesheet; its earlier numbers in this section come from the tight-rect method.
+
+### Screenshots opened and inspected (this turn)
+Hero (`hero-remediation/before/` and `after/`), 6 widths × 2 themes × 2 states = 24 files:
+- `before/emerald-ink-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png`: title, kicker and all three action labels dark green on photo. FAIL. Confirmed defect.
+- `after/emerald-ink-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png`: all text legible, action labels legible, photo and focal point intact. PASS (visual).
+- `before/lime-spark-{...}.png` (6): baseline.
+- `after/lime-spark-{...}.png` (6): legible, unchanged layout, kicker amber. PASS (visual).
+
+Regression capture (`hero-remediation/regression/`, full approval page, fixed CSS, both themes):
+- `lime-spark/` (first run) and `lime-spark-rerun/`: first run had a dev-only `FIXTURE_SESSION_NOT_FOUND` 404 at 320 on approve (no banner, not product evidence). Re-run: all 12 decide calls 200; success banner `role=status` at all six widths; no overflow; no undersized targets (picker closed/open); no page errors.
+- `emerald-ink/`: all 12 decide calls 200; banner at six widths; no overflow; no undersized targets; no page errors.
+- Focus-approve ring preserved (Lime 13.88:1 vs surface, 1.11:1 vs fill; Emerald 12.67:1 vs surface, 1.36:1 vs fill) per `report.json`.
+
+Previously-recorded crops now opened (this turn):
+- `remediation-a90aae3/lime-spark/focus-approve-{360x800,430x932,768x1024}.png`: ring visible. PASS.
+- `remediation-a90aae3/emerald-ink/focus-approve-{360x800,430x932,768x1024}.png`: ring visible. PASS.
+- `remediation-a90aae3/lime-spark/focus-reject-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6): ring visible on dark button. PASS.
+- `remediation-a90aae3/emerald-ink/focus-reject-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6): ring visible on cream card. PASS.
+- `remediation-695a9a3/kill-switch-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6) and `kill-switch-alert-390x844.png`: alert visible; Approve & Execute disabled; Reject enabled; no success. PASS.
+- `remediation-695a9a3/focus-approve-focused-390x844.png` and `focus-approve-unfocused-390x844.png`: pre-fix capture (before `a90aae3`). No distinct focus ring in the focused crop. Consistent with the earlier focus FAIL. Historical, not a current pass.
+
+NOT opened in this turn (remain unreviewed; not claimed as PASS):
+- `remediation-a90aae3/*/focus-approve-bare-*` (12) and `focus-reject-bare-*` (12): background-only baselines.
+- `remediation-695a9a3/approval-pending-*` (6), `approve-success-*` (6). Full-page pre-fix captures.
+- Note: `remediation-695a9a3/` contains 21 PNG files, not 19. Full set: kill-switch 6, kill-switch-alert 1, approval-pending 6, approve-success 6, focus 2.
+
+### Tests and checks on the current branch
+- Vitest, six Autopilot files: 120/120 pass.
+- Vitest, ten CSS-reading suites (ai-front-desk-accessibility, autopilot-controls-repair, bos-pro-catalogue, dashboard-nav-bos, design-system, homepage-business-pos, landing-header, landing-motion, lime-spark-contrast, motion-system): 147/147 pass.
+- `tsc --noEmit`: 3 errors, all Prisma client (`PrismaClientKnownRequestError`, `BusinessUncheckedCreateInput`, `dmmf`). Environment-only; same as prior turns.
+- ESLint: not re-run (no TS/TSX change in this commit; prior exit 0 on Autopilot paths).
+- `npx prisma generate`: exit 1. `binaries.prisma.sh` HTTP 000, TLS client-socket disconnect (re-checked this turn). Blocker unchanged. Egress not changed.
+
+### Programme-completeness (34 records)
+- No record changed status. Still 28 BLOCKED, 6 NOT_TESTED, 0 PASS, 0 FAIL. No thresholds or assertions changed.
+- Hero work does not produce evidence for any NOT READY record. It is a visual defect fix in the shared hero and does not satisfy the cross-product motion requirements in MOTION-001 to 018 or ADMIN-015.
+- Programme gate fails on this head. Not bypassed.
+
+### Database-backed Autopilot controls
+- Not verified. Blocked by the Prisma engine download (see above). Fixture-level tests only.
+
+### Verdicts (unchanged)
+- Autopilot remediation complete: NO. Hero defect fixed; focus, targets, kill-switch and approval flows verified at fixture level only.
+- Autopilot production-ready: NO. Database-backed controls BLOCKED.
+- Phase 7 complete: NO. 34 NOT READY records remain.
+- Release decision: HOLD.
+
+### Remaining work
+1. Open the 12 bare crops and 12 pre-fix full-page captures listed above.
+2. Prisma engine egress blocker: unchanged. Database-backed verification BLOCKED.
+3. Resolve the 34 NOT READY records through real evidence. No status upgrade without it.
+4. Confirm CI on the new head (pending at time of writing; see PR comment).

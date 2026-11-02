@@ -1,0 +1,356 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "lime-spark",
+  "generatedAt": "2026-11-02T07:09:32.568Z",
+  "reducedMotion": true,
+  "results": [
+    {
+      "theme": "lime-spark",
+      "width": 320,
+      "height": 568,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 13.14,
+          "bestContrast": 15.82,
+          "meanContrast": 14.75
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.21,
+          "bestContrast": 15.52,
+          "meanContrast": 13.54
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9481,
+          "worstContrast": 6.59,
+          "bestContrast": 12.64,
+          "meanContrast": 9.43
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8576,
+          "worstContrast": 2.06,
+          "bestContrast": 10.94,
+          "meanContrast": 9.74
+        }
+      ],
+      "heroBox": {
+        "w": 320,
+        "h": 433
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 360,
+      "height": 800,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 13.33,
+          "bestContrast": 15.74,
+          "meanContrast": 14.89
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.29,
+          "bestContrast": 15.89,
+          "meanContrast": 13.68
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 5.42,
+          "bestContrast": 12.61,
+          "meanContrast": 9.35
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8624,
+          "worstContrast": 2.38,
+          "bestContrast": 10.94,
+          "meanContrast": 9.29
+        }
+      ],
+      "heroBox": {
+        "w": 360,
+        "h": 415
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 390,
+      "height": 844,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5063,
+          "worstContrast": 13.64,
+          "bestContrast": 15.87,
+          "meanContrast": 15
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.54,
+          "bestContrast": 15.89,
+          "meanContrast": 13.9
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 5.67,
+          "bestContrast": 12.61,
+          "meanContrast": 9.5
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8624,
+          "worstContrast": 2.38,
+          "bestContrast": 10.94,
+          "meanContrast": 9.66
+        }
+      ],
+      "heroBox": {
+        "w": 390,
+        "h": 415
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 430,
+      "height": 932,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5040,
+          "worstContrast": 12.26,
+          "bestContrast": 16.19,
+          "meanContrast": 14.55
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "23.2px",
+          "fontWeight": "600",
+          "pixels": 13506,
+          "worstContrast": 9.89,
+          "bestContrast": 16.32,
+          "meanContrast": 14.31
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9481,
+          "worstContrast": 4.48,
+          "bestContrast": 13.24,
+          "meanContrast": 9.48
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8624,
+          "worstContrast": 1.93,
+          "bestContrast": 10.93,
+          "meanContrast": 9.72
+        }
+      ],
+      "heroBox": {
+        "w": 430,
+        "h": 346
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 768,
+      "height": 1024,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5415,
+          "worstContrast": 13.78,
+          "bestContrast": 17.19,
+          "meanContrast": 15.91
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "24.576px",
+          "fontWeight": "600",
+          "pixels": 16585,
+          "worstContrast": 5.9,
+          "bestContrast": 16.91,
+          "meanContrast": 12.95
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9519,
+          "worstContrast": 2.82,
+          "bestContrast": 13.7,
+          "meanContrast": 11.58
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8672,
+          "worstContrast": 2.2,
+          "bestContrast": 10.94,
+          "meanContrast": 9.6
+        }
+      ],
+      "heroBox": {
+        "w": 768,
+        "h": 261
+      }
+    },
+    {
+      "theme": "lime-spark",
+      "width": 1366,
+      "height": 768,
+      "heroBg": "rgba(0, 0, 0, 0)",
+      "tokens": {
+        "ink": "",
+        "onInk": ""
+      },
+      "overflowX": 0,
+      "errors": [],
+      "rows": [
+        {
+          "sel": ".ws-kicker--light",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "11.2px",
+          "fontWeight": "800",
+          "pixels": 5400,
+          "worstContrast": 14.8,
+          "bestContrast": 16.88,
+          "meanContrast": 15.99
+        },
+        {
+          "sel": ".ws-hero__title",
+          "css": "rgb(244, 246, 240)",
+          "fontSize": "32.8px",
+          "fontWeight": "600",
+          "pixels": 28520,
+          "worstContrast": 9.33,
+          "bestContrast": 16.45,
+          "meanContrast": 14.02
+        },
+        {
+          "sel": ".ws-hero__sub",
+          "css": "rgba(247, 242, 232, 0.88)",
+          "fontSize": "14.72px",
+          "fontWeight": "400",
+          "pixels": 9500,
+          "worstContrast": 2.58,
+          "bestContrast": 13.58,
+          "meanContrast": 11.9
+        },
+        {
+          "sel": ".ws-hero__meta",
+          "css": "rgba(247, 242, 232, 0.78)",
+          "fontSize": "12px",
+          "fontWeight": "400",
+          "pixels": 8656,
+          "worstContrast": 1.93,
+          "bestContrast": 10.88,
+          "meanContrast": 9.3
+        }
+      ],
+      "heroBox": {
+        "w": 1366,
+        "h": 284
+      }
+    }
+  ]
+}

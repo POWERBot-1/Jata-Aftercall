@@ -4506,7 +4506,7 @@ button:focus-visible {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.ws-kicker--light { color: var(--ws-amber); }
+.ws-kicker--light { color: var(--ws-amber, #f0a03c); }
 
 .ws-section-head {
   display: flex;
@@ -4533,12 +4533,16 @@ button:focus-visible {
   overflow: hidden;
   border: 1px solid rgba(247, 242, 232, 0.1);
   border-radius: var(--ws-radius-xl);
-  background: var(--ws-ink);
-  color: var(--ws-on-ink);
+  /* The hero is always a dark photographic band, so it carries its own fallback tokens. It must
+     not depend on `.ws-shell` being an ancestor: without the shell, an undefined --ws-ink leaves the
+     background transparent and an undefined --ws-on-ink inherits the page's dark text colour, which
+     painted the headline dark-on-photo under the Emerald Ink theme (measured 1.0:1). */
+  background: var(--ws-ink, #14110f);
+  color: var(--ws-on-ink, #f7f2e8);
   padding: clamp(1.15rem, 3.6vw, 2.5rem);
   box-shadow: var(--ws-elev-3);
 }
-.ws-hero__media { position: absolute; inset: 0; z-index: -2; background: var(--ws-ink); }
+.ws-hero__media { position: absolute; inset: 0; z-index: -2; background: var(--ws-ink, #14110f); }
 .ws-hero__media img {
   width: 100%;
   height: 100%;
@@ -4560,8 +4564,8 @@ button:focus-visible {
      line run to the middle of the card, over the brightest part of the city lights, so the scrim
      has to still be near-opaque there for the body copy to clear AA contrast. */
   background:
-    linear-gradient(96deg, rgba(20, 17, 15, 0.95) 0%, rgba(20, 17, 15, 0.9) 42%, rgba(20, 17, 15, 0.74) 68%, rgba(20, 17, 15, 0.42) 100%),
-    linear-gradient(0deg, rgba(20, 17, 15, 0.7), transparent 62%);
+    linear-gradient(96deg, rgba(20, 17, 15, 0.96) 0%, rgba(20, 17, 15, 0.93) 46%, rgba(20, 17, 15, 0.84) 70%, rgba(20, 17, 15, 0.5) 100%),
+    linear-gradient(0deg, rgba(20, 17, 15, 0.9) 0%, rgba(20, 17, 15, 0.78) 34%, transparent 66%);
 }
 .ws-hero__inner { position: relative; display: grid; gap: 1rem; max-width: 46rem; }
 .ws-hero__title {
@@ -4570,11 +4574,23 @@ button:focus-visible {
   font-weight: 600;
   line-height: 1.06;
   letter-spacing: -0.02em;
-  color: var(--ws-on-ink);
+  color: var(--ws-on-ink, #f7f2e8);
   text-wrap: balance;
 }
-.ws-hero__title em { font-style: italic; color: var(--ws-amber); }
+.ws-hero__title em { font-style: italic; color: var(--ws-amber, #f0a03c); }
 .ws-hero__sub { max-width: 46ch; color: rgba(247, 242, 232, 0.88); font-size: 0.92rem; line-height: 1.6; }
+/* Text-local contrast backing. The photograph's brightest city lights sit behind the subtitle and
+   the meta line; a scrim dark enough to clear AA there would hide the image, so only these two lines
+   get a translucent ink backing. The photo, focal point and every other hero element are unchanged. */
+.ws-hero__sub, .ws-hero__meta {
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(20, 17, 15, 0.8);
+  border-radius: 0.35rem;
+  padding: 0.12rem 0.45rem;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
 .ws-hero__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.2rem; }
 .ws-hero__meta { color: rgba(247, 242, 232, 0.78); font-size: 0.75rem; }
 .ws-hero__stats {
