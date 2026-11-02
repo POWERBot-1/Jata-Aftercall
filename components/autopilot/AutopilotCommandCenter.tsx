@@ -357,6 +357,19 @@ export function AutopilotCommandCenter({
     // in the same task, so a closure check alone lets duplicate requests through. The server is
     // idempotent for approvals, but the UI must not send duplicates.
     if (proposalOpInFlight.current) return;
+    if (
+      operation === "APPROVE_AND_EXECUTE" &&
+      (data.globalKillSwitchActive || data.config.operationalStatus === "PAUSED")
+    ) {
+      // No request is sent while halted; the notice explains why nothing ran.
+      setBannerNotice({
+        tone: "error",
+        text: data.globalKillSwitchActive
+          ? "Approval is blocked: the platform kill switch is active. Nothing was executed."
+          : "Approval is blocked: Autopilot is paused for this business. Nothing was executed.",
+      });
+      return;
+    }
     proposalOpInFlight.current = true;
     setBusy(true);
     setBannerNotice(null);
@@ -541,6 +554,10 @@ export function AutopilotCommandCenter({
   }
 
   const isPaused = data.config.operationalStatus === "PAUSED";
+  // Approvals and new proposals are halted by either the tenant pause or the platform-wide kill
+  // switch. The server enforces both (policy.ts checks the kill switch first); this flag only
+  // disables controls so users are not offered actions the server will refuse.
+  const isHalted = isPaused || data.globalKillSwitchActive;
   const canConfigure = ["OWNER", "ADMIN", "MANAGER"].includes(data.actorRole);
   const canManageBilling = ["OWNER", "ADMIN"].includes(data.actorRole);
   const canManageConsent = ["OWNER", "ADMIN", "MANAGER", "STAFF"].includes(data.actorRole);
@@ -605,7 +622,9 @@ export function AutopilotCommandCenter({
           className="jata-state-enter rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
           <strong>Platform Kill Switch Active:</strong> Autonomous executions are globally paused.
-          Diagnostic metrics and historical audit logs remain available.
+          Approve &amp; Execute and new proposals are disabled here, and the server refuses them.
+          Rejecting proposals, diagnostics and audit logs remain available. Reactivation is an
+          authorised platform action and cannot be made from this screen.
         </div>
       ) : null}
 
@@ -846,7 +865,7 @@ export function AutopilotCommandCenter({
                   </div>
                   <button
                     type="button"
-                    disabled={busy || isPaused || !canConfigure}
+                    disabled={busy || isHalted || !canConfigure}
                     onClick={() => void queueSuggestedProposal(cand)}
                     className="jata-btn jata-btn-primary min-h-[44px] self-start"
                   >
@@ -982,7 +1001,7 @@ export function AutopilotCommandCenter({
                     <>
                       <button
                         type="button"
-                        disabled={busy || isPaused || !canConfigure}
+                        disabled={busy || isHalted || !canConfigure}
                         onClick={() =>
                           void runProposalOperation(prop.id, "APPROVE_AND_EXECUTE")
                         }
@@ -1069,7 +1088,7 @@ export function AutopilotCommandCenter({
           </div>
           <button
             type="submit"
-            disabled={busy || isPaused || !canConfigure || !ingestText.trim()}
+            disabled={busy || isHalted || !canConfigure || !ingestText.trim()}
             className="jata-btn jata-btn-secondary min-h-[44px]"
           >
             <FileSpreadsheet size={14} aria-hidden="true" /> Inspect &amp; Extract Safely
