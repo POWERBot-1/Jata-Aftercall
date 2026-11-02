@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-11-02T13:06:15.885Z",
+  "generatedAt": "2026-11-02T13:22:04.162Z",
   "cap": 50000,
   "readPageSize": 500,
   "timingsMs": {
-    "seed50000Ms": 15430,
+    "seed50000Ms": 14734,
     "walkPages": 100,
-    "maxPageMs": 111,
-    "reconcileUnchangedMs": 1523,
-    "reconcileOver50000Ms": 1431,
-    "reconcileWrite50000Ms": 5590,
-    "readRevision2FirstPageMs": 68
+    "maxPageMs": 171,
+    "reconcileUnchangedMs": 1553,
+    "reconcileOver50000Ms": 1438,
+    "reconcileWrite50000Ms": 5482,
+    "readRevision2FirstPageMs": 69
   }
 }

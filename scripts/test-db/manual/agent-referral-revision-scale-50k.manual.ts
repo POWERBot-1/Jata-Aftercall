@@ -10,15 +10,15 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ session: null as null | { userId: string; role: string; email: string } }));
 
 vi.mock("@/lib/db", async () => {
-  const helper = await import("../helpers/prisma-client");
+  const helper = await import("@/tests/helpers/prisma-client");
   const client = helper.sharedPrisma();
   return { default: client, prisma: client };
 });
 vi.mock("@/lib/auth", () => ({ getSession: async () => mock.session }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimitByIdentity: () => ({ allowed: true }) }));
 
-import { realPrismaConfigured, sharedPrisma } from "../helpers/prisma-client";
-import { uid } from "../helpers/prisma-fixtures";
+import { realPrismaConfigured, sharedPrisma } from "@/tests/helpers/prisma-client";
+import { uid } from "@/tests/helpers/prisma-fixtures";
 import { GET, POST } from "@/app/api/agents/reports/referrals/reconcile/route";
 import { MAX_MEMBERS_PER_REVISION, READ_PAGE_SIZE } from "@/lib/agents/referral-report-bounds";
 
