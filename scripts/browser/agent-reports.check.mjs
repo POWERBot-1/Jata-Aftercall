@@ -156,14 +156,18 @@ async function main() {
       return url.origin === base.origin ? void request.continue().catch(() => {}) : void request.abort().catch(() => {});
     });
     const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(String(error?.message ?? error).slice(0, 200)));
+    page.on("pageerror", (error) => {
+      const frames = String(error?.stack ?? "").split("\n").slice(0, 3).map((l) => l.trim()).join(" <- ");
+      pageErrors.push(`${String(error?.message ?? error).slice(0, 160)} [${new URL(page.url()).pathname}] ${frames}`.replace(/[\r\n]/g, " ").slice(0, 400));
+    });
+    page.on("console", (message) => { if (message.type() === "error") pageErrors.push(`console: ${message.text()}`.slice(0, 300)); });
 
     // 1. Anonymous visitors are sent to sign-in and receive no report data.
     await page.deleteCookie(...(await page.cookies()));
     await page.setViewport({ width: 390, height: 844 });
     await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
     const anonUrl = new URL(page.url());
-    const anonBody = await page.evaluate(() => document.body.innerText);
+    const anonBody = await page.evaluate(() => (document.body?.innerText ?? ""));
     check("anonymous visitor is redirected to sign-in", anonUrl.pathname === "/login", anonUrl.pathname);
     check("anonymous response shows no report data", !anonBody.includes("Referral evidence by completed period") && !anonBody.includes("Load older snapshots"));
 
@@ -175,7 +179,7 @@ async function main() {
         await page.setViewport({ width: w, height: h });
         await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
         const state = await page.evaluate(() => ({
-          text: document.body.innerText,
+          text: (document.body?.innerText ?? ""),
           hasButton: Boolean([...document.querySelectorAll("button")].find((b) => /Load older/.test(b.textContent || ""))),
           hasList: Boolean(document.querySelector("ol[aria-label]")),
           overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -205,7 +209,7 @@ async function main() {
           hasButton: Boolean(button),
           buttonHeight: rect ? Math.round(rect.height) : 0,
           overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-          text: document.body.innerText,
+          text: (document.body?.innerText ?? ""),
         };
       });
       check(`active agent sees the first 100 own snapshots at ${w}x${h}`, first.count === 100 && first.hasButton && !first.overflow, `count=${first.count}`);
@@ -229,7 +233,7 @@ async function main() {
     await page.waitForSelector("ol[aria-label]");
     // The other agent's snapshots are MONTHLY; this agent's are DAILY. Any "Monthly" label or the
     // other agent's name would therefore be a cross-tenant disclosure.
-    const leakText = await page.evaluate(() => document.body.innerText);
+    const leakText = await page.evaluate(() => (document.body?.innerText ?? ""));
     check("another agent's snapshots and name never appear in this page", !leakText.includes("Monthly") && !leakText.includes(`Synthetic other ${runId}`));
 
     // 5. Keyboard: the load control is reachable and operable without a pointer.
@@ -246,7 +250,7 @@ async function main() {
     for (const [w, h] of VIEWPORTS) {
       await page.setViewport({ width: w, height: h });
       await page.goto(new URL("/agents/reports", base).href, { waitUntil: "networkidle0" });
-      const text = await page.evaluate(() => document.body.innerText);
+      const text = await page.evaluate(() => (document.body?.innerText ?? ""));
       check(`empty state shown at ${w}x${h}`, text.includes("No referral report snapshots yet"));
     }
 
@@ -269,7 +273,7 @@ async function main() {
     };
     interceptor("delay");
     const nav = page.goto(new URL("/agents/reports", base).href, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => document.body.innerText.includes("Loading your referral report snapshots"), { timeout: 10000 }).then(() => check("loading state is announced while the API is pending", true)).catch(() => check("loading state is announced while the API is pending", false));
+    await page.waitForFunction(() => (document.body?.innerText ?? "").includes("Loading your referral report snapshots"), { timeout: 10000 }).then(() => check("loading state is announced while the API is pending", true)).catch(() => check("loading state is announced while the API is pending", false));
     await nav;
     await page.waitForSelector("ol[aria-label]", { timeout: 20000 }).catch(() => {});
     interceptor("error");
@@ -278,7 +282,7 @@ async function main() {
     check("error state shows a safe message", errorText.includes("temporarily unavailable"), errorText.slice(0, 80));
 
     // 8. The application's own pages produced no uncaught client error during the journey.
-    check("no uncaught client-side page errors", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));
+    check("no uncaught client-side page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();
   }
