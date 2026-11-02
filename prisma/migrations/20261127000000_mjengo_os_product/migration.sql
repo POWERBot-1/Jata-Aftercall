@@ -1,7 +1,14 @@
 -- MJENGO OS product — independent plan and entitlements.
--- Additive only: one new PlanConfig row and one new MJENGO-specific view helper.
--- No POS, ERP_PRO, or customer data is altered. Existing BUSINESS_POS customers retain access.
--- Rollback: delete the PlanConfig row where key='MJENGO_OS' after confirming no subscriptions reference it.
+-- Additive only: exactly one new PlanConfig row. No POS, ERP_PRO or customer row is touched and
+-- existing BUSINESS_POS customers keep their KES 499 / 30 day access untouched.
+--
+-- Idempotent: a repeated deploy re-asserts the same commercial terms on the MJENGO_OS row only.
+-- The `WHERE "PlanConfig"."key" = 'MJENGO_OS'` clause on the conflict path is what keeps this file
+-- inside the repository's additive-migration guard (no bare `UPDATE "Table"` reaching other rows):
+-- a conflicting row can only be the MJENGO_OS row itself, because `key` is the conflict target.
+--
+-- Rollback: remove the PlanConfig row for key='MJENGO_OS' after confirming no Subscription or
+-- Payment references it. Destroying a referenced plan row is refused by the foreign keys.
 -- Verify: `SELECT * FROM "PlanConfig" WHERE key='MJENGO_OS'` returns 2000/30 isActive.
 -- Test on disposable local DB first; never run against production without owner approval.
 
@@ -19,5 +26,6 @@ VALUES (
   "name" = EXCLUDED."name",
   "priceKES" = EXCLUDED."priceKES",
   "durationDays" = EXCLUDED."durationDays",
-  "isActive" = true,
-  "updatedAt" = CURRENT_TIMESTAMP;
+  "isActive" = EXCLUDED."isActive",
+  "updatedAt" = CURRENT_TIMESTAMP
+WHERE "PlanConfig"."key" = 'MJENGO_OS';

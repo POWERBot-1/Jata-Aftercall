@@ -1,4 +1,5 @@
-import { ERP_MODULES, type ErpRole, moduleHref } from "../erp/navigation";
+import { ERP_MODULES, moduleHref } from "../erp/navigation";
+import type { ErpRole } from "../erp/access";
 
 export const MJENGO_MODULES = [
   { key: "overview", label: "Business dashboard", path: "", glyph: "◈", permission: "WORKSPACE_READ", group: "ops", description: "Today's sales, stock alerts, and tasks." },

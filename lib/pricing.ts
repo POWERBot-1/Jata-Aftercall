@@ -76,7 +76,7 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
  * CTAs; only the presentation rank moves. This exact sequence is the mobile reading order too:
  * the pricing grid is a single column on phones, so DOM order is visual order.
  */
-export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT", "MJENGO_OS"] as const;
+export const HOMEPAGE_PLAN_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT"] as const;
 
 /**
  * The owner-only POS plan the homepage advertises sixth (last card), without ever making it a
@@ -138,14 +138,13 @@ export const ERP_PRO_FALLBACK_CARD: HomepagePlanCard = {
   durationDays: 30,
 };
 
-export const MJENGO_OS_FALLBACK_CARD: HomepagePlanCard = {
-  key: "MJENGO_OS",
-  name: "MJENGO OS",
-  priceKES: 2000,
-  durationDays: 30,
-};
-
-export const HOMEPAGE_MJENGO_OS_PLAN_KEY = "MJENGO_OS";
+/*
+ * MJENGO OS is deliberately absent from the homepage grid. It is a PRIVATE operating-system
+ * product whose marketing surface (if any) is a separate decision; appending it here would change
+ * the owner-mandated seven-card sequence, the /pricing catalogue and the subscription catalogue,
+ * all of which are locked by existing tests and by the owner's 2026-10-29 order. Its price lives in
+ * `FALLBACK_PLANS` and is guarded by `assertMjengoOsPricing` at purchase time.
+ */
 
 /**
  * The seven offers the homepage advertises, in marketing order.
@@ -177,13 +176,10 @@ export function homepagePlanCards(plans: readonly HomepagePlanCard[]): HomepageP
   const autopilot = storedAutopilot ?? FALLBACK_PLANS.find((plan) => plan.key === HOMEPAGE_AUTOPILOT_PLAN_KEY);
   const storedErpPro = plans.find((plan) => plan.key === HOMEPAGE_ERP_PRO_PLAN_KEY);
   const erpPro = storedErpPro ?? ERP_PRO_FALLBACK_CARD;
-  const storedMjengo = plans.find((plan) => plan.key === HOMEPAGE_MJENGO_OS_PLAN_KEY);
-  const mjengo = storedMjengo ?? MJENGO_OS_FALLBACK_CARD;
   const cards: HomepagePlanCard[] = [...listed];
   if (pos && !cards.some((card) => card.key === HOMEPAGE_POS_PLAN_KEY)) cards.push(pos);
   if (erpPro && !cards.some((card) => card.key === HOMEPAGE_ERP_PRO_PLAN_KEY)) cards.push(erpPro);
   if (autopilot && !cards.some((card) => card.key === HOMEPAGE_AUTOPILOT_PLAN_KEY)) cards.push(autopilot);
-  if (mjengo && !cards.some((card) => card.key === HOMEPAGE_MJENGO_OS_PLAN_KEY)) cards.push(mjengo);
   return orderHomepagePlans(cards);
 }
 

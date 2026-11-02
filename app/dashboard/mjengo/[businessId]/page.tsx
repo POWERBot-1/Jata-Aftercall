@@ -6,8 +6,11 @@ import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function MjengoDashboard({ params }: { params: { businessId: string } }) {
-  const businessId = params.businessId?.trim();
+export default async function MjengoDashboard({ params }: { params: Promise<{ businessId: string }> }) {
+  // Next.js 16 delivers route params as a promise; reading it synchronously fails the build's
+  // PageProps check.
+  const { businessId: rawBusinessId } = await params;
+  const businessId = rawBusinessId?.trim();
   if (!businessId) notFound();
   const session = await getSession();
   const gate = await requireMjengoAccess(businessId, session);
@@ -17,7 +20,7 @@ export default async function MjengoDashboard({ params }: { params: { businessId
         <h1 className="text-2xl font-bold">MJENGO OS</h1>
         <p className="mt-2 text-red-600">{gate.error}</p>
         {gate.status === 402 ? (
-          <a className="mt-4 inline-block rounded bg-black px-4 py-2 text-white" href={`/dashboard/mjengo/${encodeURIComponent(businessId)}/billing`}>
+          <a className="mt-4 inline-block rounded-sm bg-black px-4 py-2 text-white" href={`/dashboard/mjengo/${encodeURIComponent(businessId)}/billing`}>
             Add MJENGO OS — KES 2,000/month
           </a>
         ) : null}

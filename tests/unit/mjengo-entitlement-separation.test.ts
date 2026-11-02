@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { deriveMjengoEntitlement, MJENGO_PLAN_KEY, MJENGO_PLAN_PRICE_KES } from "../../lib/mjengo/entitlement";
 import { derivePosEntitlement, POS_PLAN_KEY } from "../../lib/pos/entitlement";
 import { deriveErpEntitlement, ERP_PLAN_KEY } from "../../lib/erp/entitlement";
-import { assertMjengoPricing, PRIVATE_PLAN_KEYS } from "../../lib/pricing";
+import { assertMjengoOsPricing, PRIVATE_PLAN_KEYS } from "../../lib/pricing";
+import { assertMjengoPricing } from "../../lib/mjengo/entitlement";
 
 describe("mjengo: product separation", () => {
   it("BUSINESS_POS does not grant MJENGO_OS", () => {
@@ -26,8 +27,10 @@ describe("mjengo: product separation", () => {
     // POS and MJENGO remain distinct
     const mjengoPlan = { key: "MJENGO_OS", priceKES: 2000, durationDays: 30 } as any;
     expect(assertMjengoPricing(mjengoPlan)).toBe(true);
+    expect(() => assertMjengoOsPricing(mjengoPlan as any)).not.toThrow();
     const posPlanAsMjengo = { key: "BUSINESS_POS", priceKES: 499, durationDays: 30 } as any;
     expect(assertMjengoPricing(posPlanAsMjengo)).toBe(false);
+    expect(() => assertMjengoOsPricing(posPlanAsMjengo as any)).toThrow(/KES 2,000/);
   });
   it("existing POS customer retains access when MJENGO not purchased", () => {
     const posSub = { status: "ACTIVE", planKey: POS_PLAN_KEY, expiresAt: new Date(Date.now() + 86400000), graceUntil: new Date(Date.now() + 86400000 * 3) };

@@ -18,8 +18,11 @@ describe("mjengo: safe text rendering", () => {
       }
       // escapeHtml must neutralize
       const escaped = escapeHtml(p);
-      expect(escaped).not.toContain("<script");
-      expect(escaped).toContain("&lt;");
+      // Escaping is unconditional: no raw angle bracket or quote may survive.
+      expect(escaped).not.toContain("<");
+      expect(escaped).not.toContain(">");
+      if (p.includes("<")) expect(escaped).toContain("&lt;");
+      if (p.includes('"')) expect(escaped).not.toContain('"');
     }
   });
   it("allows plain business names", () => {

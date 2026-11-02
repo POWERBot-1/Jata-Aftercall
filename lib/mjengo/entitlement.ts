@@ -27,7 +27,14 @@ export type MjengoLifecycleStatus =
   | "SUSPENDED"
   | "CANCELLED";
 
-export type MjengoEntitlementStatus = "NONE" | "PENDING" | "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELLED";
+export type MjengoEntitlementStatus =
+  | "NONE"
+  | "PENDING"
+  | "ACTIVE"
+  | "PAST_DUE"
+  | "EXPIRED"
+  | "SUSPENDED"
+  | "CANCELLED";
 
 export type MjengoEntitlementState = {
   entitled: boolean;
