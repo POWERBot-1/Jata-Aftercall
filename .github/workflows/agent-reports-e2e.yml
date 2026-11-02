@@ -82,7 +82,7 @@ jobs:
 
       - name: Agent referral report browser journey over six viewports
         run: |
-          set -uo pipefail
+          set -o pipefail
           # Progress is also published as annotations (never values): a failing step must say where it stopped.
           note() { echo "::notice title=ADMIN-023 journey::$1"; }
           note "step started; node $(node -v); AUTH_SECRET set=$([ -n \"$AUTH_SECRET\" ] && echo yes || echo no); DATABASE_URL set=$([ -n \"$DATABASE_URL\" ] && echo yes || echo no)"
@@ -102,10 +102,17 @@ jobs:
             sleep 1
           done
           note "server answered /login with HTTP $code"
+          # Heartbeats show how long the shell survives; the journey runs as a background job and is awaited.
+          ( for i in 1 2 3 4 5 6 7 8 9; do sleep 45; echo "::notice title=ADMIN-023 journey heartbeat::$i"; done ) &
+          heartbeat=$!
           AGENT_TEST_BASE_URL=http://127.0.0.1:3210 AGENT_REPORT_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts/agent-reports" \
             CHROME_PATH="$CHROME_PATH" AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
-            node scripts/browser/agent-reports.check.mjs > /tmp/step-agent-reports.log 2>&1
+            node scripts/browser/agent-reports.check.mjs > /tmp/step-agent-reports.log 2>&1 &
+          journey=$!
+          note "journey started (pid $journey)"
+          wait "$journey"
           rc=$?
+          kill "$heartbeat" 2>/dev/null || true
           note "journey process exit=$rc; log lines=$(wc -l < /tmp/step-agent-reports.log)"
           grep -E '^(PASS|FAIL|BLOCKED|RESULT|SUMMARY|::error)' /tmp/step-agent-reports.log | head -80 | while IFS= read -r line; do note "$line"; done
           cat /tmp/step-agent-reports.log
