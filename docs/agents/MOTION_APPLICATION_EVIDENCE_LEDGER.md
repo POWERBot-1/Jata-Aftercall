@@ -778,3 +778,15 @@ NOT opened in this turn (remain unreviewed; not claimed as PASS):
 2. Prisma engine egress blocker: unchanged. Database-backed verification BLOCKED.
 3. Resolve the 34 NOT READY records through real evidence. No status upgrade without it.
 4. Confirm CI on the new head (pending at time of writing; see PR comment).
+
+### Screenshot inventory completion (follow-up turn)
+Opened and inspected this turn:
+- `remediation-a90aae3/lime-spark/focus-approve-bare-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` and `focus-reject-bare-*` (12): card-surface-only baselines (button intentionally absent). Consistent with purpose.
+- `remediation-a90aae3/emerald-ink/focus-approve-bare-*` and `focus-reject-bare-*` (12): cream card-surface baselines. Consistent with purpose.
+- `remediation-695a9a3/approval-pending-{320x568,360x800,390x844,430x932,768x1024,1366x768}.png` (6), pre-fix Lime Spark: fixture notice, PROPOSED rows with enabled Approve & Execute, hero legible. Pre-fix focus/hero state; historical.
+- `remediation-695a9a3/approve-success-{360x800,390x844,430x932,768x1024,1366x768}.png` (5), pre-fix: SUCCESS banner visible, one row EXECUTED. PASS as historical evidence.
+- `remediation-695a9a3/approve-success-320x568.png`: the success banner is NOT confirmed inside the captured region on this review. Not claimed as PASS. Re-capture on the current head is the remedy (the current-head regression at 320 shows the banner, `lime-spark-rerun/`).
+
+Inventory status: all bare crops and all `remediation-695a9a3/` PNGs are now opened. The 21 PNG count in that folder is correct (kill-switch 6, kill-switch-alert 1, approval-pending 6, approve-success 6, focus 2).
+
+Verdicts unchanged: Autopilot remediation complete NO; production-ready NO; Phase 7 complete NO; HOLD.
