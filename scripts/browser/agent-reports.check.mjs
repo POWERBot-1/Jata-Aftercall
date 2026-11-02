@@ -23,6 +23,12 @@ import path from "node:path";
 import { SignJWT } from "jose";
 
 const require = createRequire(import.meta.url);
+// Any promise nobody awaited must be reported and fail the run, never end it silently.
+process.on("unhandledRejection", (error) => {
+  console.log(`::error title=ADMIN-023 browser check unhandled error::${String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200)}`);
+  console.log("RESULT: FAIL");
+  process.exit(1);
+});
 // Start-up faults (module load, client construction) must be visible, not a bare exit code.
 function startupFault(error) {
   const line = String(error?.message ?? error).split("\n")[0].replace(/[\r\n]/g, " ").slice(0, 200);
@@ -138,8 +144,8 @@ async function main() {
     await page.setRequestInterception(true);
     page.on("request", (request) => {
       let url;
-      try { url = new URL(request.url()); } catch { return void request.abort(); }
-      return url.origin === base.origin ? void request.continue() : void request.abort();
+      try { url = new URL(request.url()); } catch { return void request.abort().catch(() => {}); }
+      return url.origin === base.origin ? void request.continue().catch(() => {}) : void request.abort().catch(() => {});
     });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(String(error?.message ?? error).slice(0, 200)));
@@ -244,13 +250,13 @@ async function main() {
       page.removeAllListeners("request");
       page.on("request", (request) => {
         let url;
-        try { url = new URL(request.url()); } catch { return void request.abort(); }
-        if (url.origin !== base.origin) return void request.abort();
+        try { url = new URL(request.url()); } catch { return void request.abort().catch(() => {}); }
+        if (url.origin !== base.origin) return void request.abort().catch(() => {});
         if (url.pathname === "/api/agents/reports/referrals") {
-          if (mode === "error") return void request.respond({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Referral report snapshots are unavailable." }) });
+          if (mode === "error") return void request.respond({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Referral report snapshots are unavailable." }) }).catch(() => {});
           if (mode === "delay") return void setTimeout(() => request.continue().catch(() => {}), 1500);
         }
-        return void request.continue();
+        return void request.continue().catch(() => {});
       });
     };
     interceptor("delay");
