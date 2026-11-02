@@ -794,7 +794,7 @@ Verdicts unchanged: Autopilot remediation complete NO; production-ready NO; Phas
 ## Phase 7 — Autopilot database-backed verification (sandbox PostgreSQL 18.6, WASM engine)
 
 Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/db-verification-2026-11-02/`
-- `db-suite-run.log`: verbose output of `npm run test:db:autopilot` (final tree).
+- `db-suite-run.log`: verbose output of `node scripts/test-db/run-db-suite.mjs tests/prisma/autopilot-constraints-and-concurrency.test.ts tests/db/autopilot-safety.test.ts` (final tree).
 - `negative-control-kill-switch-disabled.log`: kill-switch check disabled on purpose; the kill-switch test fails.
 - `wasm-harness-prepare.log`: harness build.
 - `full-vitest-no-database-summary.txt`: default no-database run totals (see below).
@@ -805,7 +805,7 @@ Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/db-ve
 - Path used instead: Prisma's query engine compiled to WebAssembly, shipped inside `@prisma/client` (`query_engine_bg.wasm`), driven through `@prisma/adapter-pg`. The runner labels it `wasm-query-engine+adapter-pg`. It is NOT the pinned native-engine path.
 - Test-only harness, built by `scripts/test-db/prepare-wasm-harness.sh` into `node_modules/.jata-wasm-harness/` (gitignored):
   - Schema: `scripts/test-db/schema.wasm-test.prisma`, a copy of the production schema plus `previewFeatures = ["driverAdapters"]`. The production `prisma/schema.prisma` and production client are unchanged.
-  - Dependencies: `scripts/test-db/harness-package.json` (exact pins: `@prisma/adapter-pg` 5.22.0, `pg` 8.23.1, `embedded-postgres` 18.6.0-beta.19). They install into the harness only. **The product `package.json` and `package-lock.json` are unchanged from `main` except for one script line** (`test:db:autopilot`), so `npm ci`, the reproducibility check and the audit see the same dependency graph as `main`.
+  - Dependencies: `scripts/test-db/harness-package.json` (exact pins: `@prisma/adapter-pg` 5.22.0, `pg` 8.23.1, `embedded-postgres` 18.6.0-beta.19). They install into the harness only. **The product `package.json` and `package-lock.json` are byte-identical to `main`.** `docs/release/EVIDENCE-MANIFEST.sha256` records a hash for `package.json`, so any edit there would fail the Static job, and the manifest was not altered.
   - The generated client's import map points at edge loaders that cannot load `.wasm` under Node. The prepare script swaps in a Node loader that compiles the same bundled file with `WebAssembly.compile`.
   - Native-engine env vars point at a labelled placeholder file, which the WASM client never loads.
 
@@ -814,10 +814,10 @@ Evidence folder: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/db-ve
 - `vitest.db.config.ts`: database-only configuration. It aliases `@prisma/client` to the harness client only when `PRISMA_WASM_HARNESS_DIR` is set, and loads `tests/helpers/db-setup.ts`. The default `vitest.config.ts` is unchanged.
 - `tests/helpers/db-setup.ts`: sets `globalThis.__prisma` (the hook `lib/db.ts` already honours) to the same real test client. Without it, `lib/db.ts` builds its own client through a CommonJS `require`, which vitest's alias does not intercept. Runs only when `PRISMA_TEST_DATABASE_URL` is set.
 - `tests/db/autopilot-safety.test.ts`: 17 DB-backed tests on fictional `@test.invalid` tenants, against the real domain functions in `lib/autopilot/*`.
-- `package.json`: script `test:db:autopilot` only.
+- `package.json`: not changed. There is no npm script; the runner is invoked directly (see the command above).
 
 ### Results (final tree)
-- `npm run test:db:autopilot`: exit 0; **20 of 20 passed**; no unhandled errors.
+- `node scripts/test-db/run-db-suite.mjs <the two files above>`: exit 0; **20 of 20 passed**; no unhandled errors.
   - `tests/prisma/autopilot-constraints-and-concurrency.test.ts`: 3 of 3 (existing: FK and unique constraints, cascade deletes across the 11 Autopilot tables, multi-client budget serialisation).
   - `tests/db/autopilot-safety.test.ts`: 17 of 17 (new).
 - PostgreSQL 18.6. Migrations applied 57 of 57.
@@ -851,7 +851,7 @@ Control coverage (asserted on real rows, exact codes):
 - A local rehearsal PostgreSQL (`127.0.0.1:55445`, disposable, data in /tmp) was started for the rehearsal attempt and stopped afterwards.
 
 ### Not covered (keep BLOCKED or NOT TESTED where they apply)
-- The pinned native-engine path. CI does not yet run `npm run test:db:autopilot`. No workflow was changed. CI on the exact head remains the release evidence for CI.
+- The pinned native-engine path. CI does not yet run this suite. No workflow was changed. CI on the exact head remains the release evidence for CI.
 - Neon pooled endpoints or PgBouncer. Only local PostgreSQL 18.6 was used.
 - AI command-centre turns, ingestion, usage recording through the HTTP routes, and browser journeys on the real database.
 - Production, real customers, real offers or FAQs, real messaging, payments and entitlements. None were touched.
