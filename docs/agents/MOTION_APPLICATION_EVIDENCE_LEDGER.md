@@ -528,3 +528,52 @@ Labels: **FIXTURE** = fictional data, fixture route. **REAL-APP** = authenticate
 Checks on 695a9a3: `vitest` six Autopilot files 119/119 exit 0; ESLint on `components/autopilot` and the new test exit 0; `tsc --noEmit` exit 2 with only the three known Prisma-only errors; `prisma generate` exit 1 (TLS disconnect to `binaries.prisma.sh`, environment).
 
 CI on PR head `e6cf0ae` (before this commit): all required checks pass except `programme-completeness` (fail). CI for `695a9a3` not yet observed at time of writing.
+
+## Phase 7 — Autopilot focus ring, touch targets and inspection (code SHA a90aae3)
+
+Labels: **FIXTURE** = fictional tenants and fixture routes only. **REAL-APP** and **REAL-DB**: none in this section. Evidence: `docs/agents/evidence/fintech-motion-2026-11-01/autopilot/remediation-a90aae3/` (`lime-spark/` full run, `emerald-ink-focus/` focus run, measurement and probe scripts).
+
+### Correction to the previous section
+The earlier "keyboard focus FAIL" (ledger section 695a9a3) was based on crops that a full-page clip had mis-positioned, so byte-identical crops proved nothing. The "12.47:1" figure in that pass was also wrong. Corrected measurement (rendered PNG pixels, all four sides, buttons hidden for the surface reading) found the ring visible in both themes before any change. The previous FAIL is withdrawn.
+
+### Focus indicator (FIXTURE)
+- Before (action-colour ring = theme focus token): Lime Spark ring `182,255,46` on card `35,38,47` = 12.47:1; Emerald Ink ring `6,78,59` on card `255,249,240` = 9.28:1 (ring identical to the action fill in both themes).
+- Change: approval controls use `--jata-ink` (theme text colour) for the ring.
+- After, six widths, Lime Spark: ring `244,246,240` vs card `35,38,47` = **13.88:1** on all four sides, Approve and Reject, 320–1366 px. Ring vs lime fill 1.11:1, separated by the 2px surface gap.
+- After, Emerald Ink (390 and 768 measured): ring `24,53,43` vs card `255,249,240` = **12.67:1**. Ring vs dark-green fill 1.36:1, separated by the surface gap.
+- Keyboard: Tab reaches Approve after 12 stops; Enter×2 sends one PATCH.
+- Status: focus **PASS** against WCAG 2.4.7/1.4.11 (3:1) in both themes, FIXTURE only. Global focus rule for other primary buttons across the app is NOT changed and NOT tested.
+
+### Touch targets (FIXTURE)
+- Identified: 2 elements, `input` 13×13, selector `fieldset.product-theme-options > label.product-theme-option > input`, in the Appearance theme picker (Lime Spark and Emerald Ink radios). Visible only when the `details.product-theme-picker` is open; the label is 323×118–120 px.
+- Corrected: radio sized 24×24 (`.product-theme-option input[type="radio"]`).
+- After (six widths, picker closed and open): 0 visible interactive elements under 24 px. Audit uses `checkVisibility()`, so closed-`<details>` content is excluded from the closed state and included when open.
+- Status: targets **PASS** at 24 px (WCAG 2.5.8 minimum) for the Autopilot page, FIXTURE only. Other pages NOT TESTED.
+
+### Kill switch, approvals and states (FIXTURE, six widths, `lime-spark/report.json`)
+- Kill switch ACTIVE: 1 Approve & Execute control, disabled; 0 requests from blocked synchronous clicks; no success banner; alert text shown.
+- Approve success: triple synchronous click → 1 PATCH at all six widths; success banner `role=status`, `aria-live=polite`.
+- STAFF: 4 approve controls, all disabled. Paused: 2, all disabled. Tenant B: shows tenant B only.
+- Reduced motion: kill-switch alert animation `jata-state-in` (normal) / `none` (reduced).
+- Layout: no horizontal overflow, 0 page errors, 0 hydration warnings at six widths.
+- Contrast (measured): enabled Approve label 12.47:1 (Lime), 9.72:1 (Emerald); proposal title 13.88:1 / 12.67:1.
+- Decide responses: 10–12 HTTP 200 per run. One run (the first Lime run) had one 404 `FIXTURE_SESSION_NOT_FOUND` from the in-memory fixture session store after a dev-server recompile; the Approve at 320 px showed the red error banner (screenshot `approve-success-320x568.png` of that first run). A clean re-run had zero non-200 responses. The dev-only session loss is not a product defect, and the first run is not used as evidence.
+
+### Screenshots inspected in this pass
+- `lime-spark/kill-switch-320x568.png`, `kill-switch-360x800.png`, `kill-switch-390x844.png`, `kill-switch-430x932.png`, `kill-switch-768x1024.png`, `kill-switch-1366x768.png`: alert shown; Approve disabled; Reject enabled. Observation: the "Extend 30 days" label in the entitlement card looks low-contrast; not measured, outside approval scope, NOT TESTED.
+- `kill-switch-alert-390x844.png` (inspected in the 695a9a3 pass): alert text readable.
+- First-run `approve-success-320x568.png` (not the clean run): red session-not-found banner, recorded as the artefact above.
+- **NOT yet inspected in this pass:** `lime-spark/approval-pending-*` (six), `lime-spark/approve-success-*` (six, clean run), `lime-spark/focus-*` crops (24 files), and the emerald focus crops. Their numbers are measured; their visuals are not claimed.
+- Of the 22 PNGs in `…/remediation-695a9a3/`, the pre-existing set was only partially inspected in the 695a9a3 pass (approval-pending, approve-success and most kill-switch widths were not opened). That gap is not closed by this section.
+
+### Checks on a90aae3
+- `vitest`: six Autopilot files 119/119 exit 0; `autopilot-kill-switch-ui` 14/14 exit 0 (new focus-class and radio-size assertions included).
+- ESLint on `components/autopilot` and the test: exit 0.
+- `tsc --noEmit`: not re-run after this commit (last run on 695a9a3: exit 2, only the three known Prisma-only errors).
+- CI on `a90aae3`: not yet observed.
+
+### Blockers and NOT TESTED (not resolved this pass)
+- **REAL-DB (Autopilot controls): BLOCKED.** `prisma generate` previously failed with a TLS disconnect to `binaries.prisma.sh` (ledger 695a9a3). `binaries.prisma.sh` is not on the sandbox's outbound allowlist, so the owner's approval cannot be exercised from this sandbox without an egress-policy change. Not retried this pass. Affected: tenant isolation (DB), consent recording and withdrawal (DB), approval authorisation and expiry (DB), daily spend reservation and concurrency, recipient and action caps, quiet hours on the authoritative clock, global kill switch on the execution path, fail-closed on missing tenant context. The three Prisma-generated `tsc` errors remain BLOCKED.
+- **Programme completeness (34 NOT READY): NOT TESTED this pass.** Individual classifications were not produced.
+- **Production Autopilot: NOT TESTED.** No production request was made.
+- **Phase 7 surfaces beyond Autopilot: NOT TESTED** in this pass.
