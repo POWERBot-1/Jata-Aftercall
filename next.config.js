@@ -38,12 +38,15 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           ...(localArenaPreview
-            ? [{ key: "Content-Security-Policy", value: "frame-ancestors 'self' https://arena.ai https://*.arena.ai" }]
+            ? [{ key: "Content-Security-Policy", value: "frame-ancestors 'self' https://arena.ai https://*.arena.ai; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src 'self' https://*.arena.ai;" }]
             : [{ key: "X-Frame-Options", value: "DENY" }]),
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=()" },
           { key: "X-XSS-Protection", value: "0" },
+          // Defense-in-depth CSP: branding and MJENGO user content must render as text, never executable.
+          // Note: Next.js requires unsafe-inline for hydration; main protection is safe text rendering via textContent.
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" },
         ],
       },
       {
