@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
           note "browser=$CHROME_PATH version=$("$CHROME_PATH" --version 2>/dev/null | head -1)"
-          AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+          AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED=true \
             npx next start -H 127.0.0.1 -p 3210 > /tmp/step-agent-reports-server.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
