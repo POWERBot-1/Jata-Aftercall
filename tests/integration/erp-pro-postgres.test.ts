@@ -145,12 +145,7 @@ describe.skipIf(!enabled)("POS / ERP - PRO against real PostgreSQL", () => {
 
   afterAll(async () => {
     if (!client) return;
-    try {
-      await client.business.deleteMany({ where: { id: { in: [ids.business, ids.otherBusiness].filter(Boolean) } } });
-      await client.user.deleteMany({ where: { id: { in: Object.values(ids).filter((value) => value && value.startsWith("c") && value.length > 20) } } });
-    } finally {
-      await client.$disconnect().catch(() => {});
-    }
+    await client.$disconnect().catch(() => {});
   }, 60_000);
 
   it("persists the onboarding workspace: configuration, chart of accounts, tax rules and wallet", async () => {
