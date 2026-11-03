@@ -41,6 +41,9 @@ async function main() {
     // "JATA BOS PRO — Business Operating System Pro"; the internal key stays ERP_PRO and no
     // stored price or duration is ever migrated by this rename.
     { key: "ERP_PRO", name: "JATA BOS PRO — Business Operating System Pro", priceKES: 3000, durationDays: 30 },
+    // MJENGO OS — independent business-management product (KES 2,000 / 30 days). Separate
+    // subscription, entitlement, and workspace; never grants BUSINESS_POS and never granted by it.
+    { key: "MJENGO_OS", name: "MJENGO OS — Business Management — KES 2,000/month", priceKES: 2000, durationDays: 30 },
   ];
   for (const p of plans) {
     await prisma.planConfig.upsert({ where: { key: p.key }, update: { name: p.name, priceKES: p.priceKES, durationDays: p.durationDays, isActive: true }, create: { ...p, isActive: true } });

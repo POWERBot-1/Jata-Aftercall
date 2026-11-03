@@ -37,9 +37,16 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
+          // Exactly one framing policy per route. A second Content-Security-Policy header would
+          // be intersected by the browser, silently breaking the local Arena preview, so the
+          // framing directive lives only in this branch. MJENGO OS XSS defence is the safe-text
+          // rendering path (textContent only, no dangerouslySetInnerHTML), not a CSP override.
           ...(localArenaPreview
             ? [{ key: "Content-Security-Policy", value: "frame-ancestors 'self' https://arena.ai https://*.arena.ai" }]
-            : [{ key: "X-Frame-Options", value: "DENY" }]),
+            : [
+                { key: "X-Frame-Options", value: "DENY" },
+                { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+              ]),
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=()" },

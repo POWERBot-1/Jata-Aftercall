@@ -53,6 +53,9 @@ export const PRIVATE_PLAN_KEYS = [
   // AFTERCALL subscription payable list merely because an operator (or the seed) has created its
   // PlanConfig row.
   "ERP_PRO",
+  // MJENGO OS — independent business-management product (KES 2,000/30d). Never public; sold only
+  // inside its workspace. PRIVATE so it cannot leak into checkout.
+  "MJENGO_OS",
 ];
 
 export function isPubliclyListedPlan(key: string): boolean {
@@ -134,6 +137,14 @@ export const ERP_PRO_FALLBACK_CARD: HomepagePlanCard = {
   priceKES: 3000,
   durationDays: 30,
 };
+
+/*
+ * MJENGO OS is deliberately absent from the homepage grid. It is a PRIVATE operating-system
+ * product whose marketing surface (if any) is a separate decision; appending it here would change
+ * the owner-mandated seven-card sequence, the /pricing catalogue and the subscription catalogue,
+ * all of which are locked by existing tests and by the owner's 2026-10-29 order. Its price lives in
+ * `FALLBACK_PLANS` and is guarded by `assertMjengoOsPricing` at purchase time.
+ */
 
 /**
  * The seven offers the homepage advertises, in marketing order.
@@ -291,7 +302,22 @@ export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "INTERACTIVE_BUSINESS", name: "Website Studio — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
   // Private plans: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
   { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
+  { key: "MJENGO_OS", name: "MJENGO OS — Business Management — KES 2,000/month", priceKES: 2000, durationDays: 30, isActive: true },
   { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30, isActive: true },
   { key: "JATA_AUTOPILOT_PRO", name: "JATA Autopilot Pro — KES 6,999/month", priceKES: 6999, durationDays: 30, isActive: true },
   { key: "JATA_AUTOPILOT_ENTERPRISE", name: "JATA Autopilot Enterprise — KES 19,999/month", priceKES: 19999, durationDays: 30, isActive: true },
 ];
+
+/**
+ * MJENGO OS package — authoritative server-derived price.
+ * KES 2,000 / 30 days, distinct from BUSINESS_POS (499) and ERP_PRO (3000).
+ */
+export async function getMjengoOsPlan(): Promise<Plan | null> {
+  return getPlanByKey("MJENGO_OS");
+}
+
+export function assertMjengoOsPricing(plan: Plan | null): asserts plan is Plan {
+  if (!plan || plan.priceKES !== 2000 || plan.durationDays !== 30) {
+    throw new Error(`MJENGO OS pricing must resolve to KES 2,000 / 30 days (got ${plan?.priceKES ?? "null"}/${plan?.durationDays ?? "null"})`);
+  }
+}

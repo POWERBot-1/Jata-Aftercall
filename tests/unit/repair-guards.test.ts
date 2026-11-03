@@ -154,6 +154,18 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
+      // MJENGO OS (KES 2,000 / 30 days) is a separate product. Its plan row is one additive
+      // INSERT guarded by key='MJENGO_OS' — keyed conflict target only, so no other plan row can
+      // be touched; the seeded amount is re-asserted, never re-priced to something else.
+      "20261127000000_mjengo_os_product",
+      // Ledger immutability: a CHECK of the DRAFT → POSTED → REVERSED lifecycle at the database
+      // level. Triggers, trigger functions and one read-only view only; no table, column or row is
+      // created, rewritten or removed (no DROP/UPDATE/ALTER anywhere in the file).
+      "20261127000001_ledger_immutability",
+      // Ledger line integrity: one foreign key so a journal line cannot exist without its journal.
+      // Additive and NOT VALID on purpose: new writes are enforced immediately, and an existing
+      // database can be repaired before the constraint is validated instead of failing the deploy.
+      "20261127000002_ledger_line_integrity",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

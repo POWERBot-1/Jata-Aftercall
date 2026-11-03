@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { classifyProviderStatus, isSettleablePaymentStatus, validatePaymentEvidence } from "@/lib/paymentVerification";
 import { getPlanById } from "@/lib/pricing";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
 import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
 import { verifyOrderPayment } from "@/lib/experience/payments";
 
@@ -27,11 +28,18 @@ export async function GET(req: Request) {
   const resolvedPlanKey = await planKeyOf(payment.planId);
   const isPosPayment = resolvedPlanKey === POS_PLAN_KEY;
   const isAutopilotPayment = isAutopilotPlanKey(resolvedPlanKey);
+  // MJENGO OS keeps its own subscription row (ErpSubscription with planKey='MJENGO_OS'). Without
+  // this branch the confirmation for a MJENGO payment read the ordinary AFTERCALL Subscription,
+  // which is always empty for that product — so it would report "no subscription" and re-enter the
+  // repair path on every refresh, and the owner would never be sent to the workspace they paid for.
+  const isMjengoPayment = resolvedPlanKey === MJENGO_PLAN_KEY;
   const posBusinessId = isPosPayment ? payment.businessId ?? null : null;
   const autopilotBusinessId = isAutopilotPayment ? payment.businessId ?? null : null;
+  const mjengoBusinessId = isMjengoPayment ? payment.businessId ?? null : null;
   const posReturn = {
     ...(posBusinessId ? { posBusinessId } : {}),
     ...(autopilotBusinessId ? { autopilotBusinessId } : {}),
+    ...(mjengoBusinessId ? { mjengoBusinessId } : {}),
   };
   if (payment.userId !== session.userId && session.role !== "ADMIN") {
     return NextResponse.json({ error: "You are not authorized to view this payment." }, { status: 403 });
@@ -56,7 +64,14 @@ export async function GET(req: Request) {
         ? await prisma.posSubscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
         : autopilotBusinessId
           ? await prisma.autopilotSubscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
-          : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
+          : mjengoBusinessId
+            // The row is shared 1:1 per business, so the plan key decides whether this payment's
+            // product is actually the one that is live. A different key reports no subscription,
+            // which is truthful and sends the owner to support instead of showing a false ACTIVE.
+            ? await prisma.erpSubscription
+                .findUnique({ where: { businessId: payment.businessId }, select: { status: true, planKey: true } })
+                .then((row) => (row && row.planKey === MJENGO_PLAN_KEY ? row : null))
+            : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
       : null;
     if (payment.businessId && !subscription) {
       try {
