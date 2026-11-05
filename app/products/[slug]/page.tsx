@@ -56,6 +56,13 @@ const PRODUCTS: Record<string, ProductPage> = {
         "Available package tiers and prices are loaded from the active server-side catalogue. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
         "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
       ] },
+      { heading: "Voice receptionist — awaiting provider activation", body: [
+        "Front Desk Voice is the planned telephone receptionist tier: KES 3,999 / 30 days. It is shown for product transparency but is not currently available for checkout or live calls.",
+        "The intended public JATA AFTERCALL number is 0724 317 010 (+254 724 317 010), currently on Safaricom. The integration is designed to preserve this number through an owner-approved forwarding arrangement, subject to Safaricom and Telnyx confirmation.",
+        "The service will answer calls only after a Telnyx inbound number, signed call-control webhooks, persistent two-way audio, speech services, human handoff and usage metering are connected and tested.",
+        "Provider telephony and AI usage charges, if applicable, will be disclosed separately before activation. No customer is charged for Voice while provider activation is pending.",
+        "Current status: Awaiting provider activation. No live call service is available yet.",
+      ] },
       { heading: "Connectivity", body: [
         "AI answers always require a live connection. The installable app never caches AI responses or private business data.",
       ] },
