@@ -1,0 +1,41 @@
+name: Telnyx Voice Foundation Verify
+
+on:
+  pull_request:
+    paths:
+      - "app/api/webhooks/telnyx/voice/**"
+      - "app/api/voice/readiness/**"
+      - "app/products/page.tsx"
+      - "app/products/[slug]/page.tsx"
+      - "app/api/checkout/route.ts"
+      - "lib/telnyx/**"
+      - "lib/pricing.ts"
+      - "tests/unit/telnyx-*.test.ts"
+      - ".github/workflows/telnyx-voice-verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telnyx-voice-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  voice-foundation:
+    name: Voice readiness and webhook unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+      - run: npm ci
+      - name: Verify webhook signatures and replay rejection
+        run: npx vitest run tests/unit/telnyx-webhook-signature.test.ts
+      - name: Verify provider and customer billing gates
+        run: npx vitest run tests/unit/telnyx-voice-readiness.test.ts
+      - name: TypeScript typecheck
+        run: npm run typecheck
