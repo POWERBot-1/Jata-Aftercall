@@ -10,7 +10,8 @@ import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experi
 import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey, assertAutopilotPlanPricing } from "@/lib/autopilot/entitlement";
 import { CHECKOUT_PENDING_WINDOW_MS, checkoutStatusUrl } from "@/lib/checkoutPolicy";
-import { isFrontDeskTierKey, assertFrontDeskTierPricing } from "@/lib/frontDeskTiers";
+import { isFrontDeskTierKey, assertFrontDeskTierPricing, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 
 type PlanRow = {
   id: string;
@@ -85,10 +86,11 @@ export async function POST(req: Request) {
       return fail(400, "PLAN_UNAVAILABLE", "The selected plan is not currently available.");
     }
 
-    // Voice reception is not yet implemented/verified. Refuse direct API checkout as well as
-    // hiding the offer from public catalogue surfaces.
-    if (plan.key === "AI_FRONT_DESK_VOICE") {
-      return fail(409, "PLAN_NOT_READY", "Front Desk Voice is not available yet. No payment has been started.");
+    // Voice checkout is available only after provider configuration, real live-call
+    // verification, runtime call enablement and explicit customer-billing approval.
+    // This check happens before Payment creation and before contacting Paystack.
+    if (plan.key === AI_FRONT_DESK_VOICE_KEY && !getVoiceReadiness().canSell) {
+      return fail(409, "PLAN_NOT_READY", "Front Desk Voice is awaiting provider activation. No payment has been started.");
     }
 
     // A lower Front Desk tier must not replace an active higher tier mid-term. Block before
