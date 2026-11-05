@@ -4,6 +4,9 @@
 -- Target: enrolled production Neon branch (database `neondb`) — same target verified by the
 -- 2026-10-29 owner query (see PLAN_CATALOGUE_AUDIT_2026-10-29.md Part II §12).
 -- Run by the owner/operator; transcribe the full output back as evidence.
+-- VALIDATED 2026-11-05 (see scripts/commercial/README.md): 16/16 statements are SELECT;
+-- zero write/transaction keywords; every table and column cross-checked against
+-- prisma/schema.prisma. Read-only confirmed. Execution instructions: same README.
 -- =============================================================================
 
 -- A. Complete catalogue (authoritative)

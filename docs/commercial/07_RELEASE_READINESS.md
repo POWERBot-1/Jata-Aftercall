@@ -192,8 +192,57 @@ reconciled against actual records before any customer-specific execution is soug
 5. **Starter display-name change** — included inside script `01` (Option A as documented); strike the trailing `UPDATE … name` block if the owner wants zero touch to the Starter row.
 6. **Starter key rename** (`AI_BUSINESS_FRONT_DESK` → `AI_FRONT_DESK_STARTER`) — optional follow-up, **PENDING**, never part of this release.
 7. **Notifications** — E-7 legacy rename notice wording; marketing copy may only claim shipped capability (no WhatsApp/SMS/voice/volume until decided and enforced).
-8. **`programme-completeness` red status** — repo-admin decision (waive/required-context vs completing the unrelated programme rows); not resolvable by this workstream without falsifying statuses.
+8. **`programme-completeness` red status — authorised resolution established (see §7.1).**
 9. **E-5** `ERP_PRO_ENABLED` env value unverified (out of scope, recorded); E-6 WhatsApp/SMS/Voice technical readiness check at implementation of decided cells.
+
+### 7.1 Programme-completeness: investigation result & authorised resolution
+
+**What the check is:** `scripts/admin/check-programme-readiness.mjs` requires every requirement
+header in `docs/ADMIN_BUILDING_INSTRUCTIONS.md` to have `status: "PASS"` in
+`docs/agents/PROGRAMME_READINESS.json` with an acceptance description and existing evidence
+files. It fails while any row is `BLOCKED`/`NOT_TESTED` — by design, it goes green only when the
+**whole** agent programme is complete.
+
+**Findings (verified, not assumed):**
+
+1. The failure is **pre-existing**: identical exit 1 at base `19f11d9` (isolated worktree);
+   34 rows = **28 BLOCKED + 6 NOT_TESTED, zero FAIL** — none belong to this workstream
+   (ADMIN-002…008 owner/production gates; MOTION-003/004/005/009/010 motion directives;
+   ADMIN-023 revision-inspection directive).
+2. It **does not block merges**: PR #78 merged 2026-11-01 with `programme-completeness` itself
+   **failing** on that PR (run 41323324358/job 124897966953) — so it is not an enforced merge
+   requirement; `Release gate (aggregate)` is the green aggregate gate and it passes on PR #81.
+3. It **cannot be legitimately cleared by this workstream**: marking those rows PASS without the
+   underlying work + evidence would fabricate programme evidence, which is prohibited.
+
+**Authorised resolution paths (owner/admin choice — outside this workstream's authority):**
+
+- **(a) Complete the underlying programme directives** through their own gates (the only path the
+  check itself accepts), or
+- **(b) Repo admin adjusts the gate** — remove/repurpose the `programme-completeness` job or its
+  required-context status, recording the decision in the change record, or
+- **(c) Accept it as a permanent red advisory** on PRs (precedent: PR #78 merged in this state).
+
+This workstream executes (c) by default (no action needed for merge) and recommends the owner
+pick (a) or (b) for hygiene. **No status in `PROGRAMME_READINESS.json` will be altered here.**
+
+### 7.2 Decision sheet — safe defaults, nothing invented
+
+Each row: owner answers with an option letter (or "default"); defaults require **no** new policy
+values and keep every undecided capability unmarketed and ungranted (`02_…` §4).
+
+| # | Decision | Options | Safe default |
+|---|---|---|---|
+| D-1 | WhatsApp reception on Starter (does today's package include it?) | (a) confirm included → keep current behaviour · (b) not included → stays unmarketed | (b) unmarketed, behaviour unchanged |
+| D-2 | SMS on Standard/Pro/Voice | (a) include per tier (needs SMS product readiness E-6) · (b) not included | (b) |
+| D-3 | Voice reception on Voice tier (defining capability) | (a) include at launch (needs E-6 readiness) · (b) launch without voice, add later | (b) — tier sells with remaining features only |
+| D-4 | Conversation/token/storage allowances per tier (§3 of `02_…`) | (a) set values per tier · (b) keep unmetered-as-today for all tiers | (b) unmetered, no overage ever auto-charged |
+| D-5 | Overage handling at any future limit | (a) deny + upgrade prompt (spec default) · (b) paid overage (separate approval) | (a) deny + prompt |
+| D-6 | Customer memory / leads / quotations / handoff / booking / analytics / staff / storage / support per tier | (a) assign per tier · (b) none until decided | (b) |
+| D-7 | Upgrade overlap (E-3) | (a) residual absorption · (b) forfeit · (c) credit | needs explicit choice before upgrades ship |
+| D-8 | Downgrade timing (E-4) | (a) end-of-period · (b) immediate | needs explicit choice before upgrades ship |
+| D-9 | Starter display-name change inside script `01` | (a) keep · (b) strike the UPDATE block | (a) keep (Option A as documented) |
+| D-10 | Legacy rename notification (E-7) | (a) send · (b) skip | (b) skip — no price/expiry change |
 
 ---
 

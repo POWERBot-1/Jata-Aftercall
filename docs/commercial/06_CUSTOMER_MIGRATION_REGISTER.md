@@ -8,7 +8,11 @@ accounted for the moment the verified inventory output is supplied.
 ## 1. How the register is populated (no manual data entry, no invention)
 
 1. Owner/operator runs `scripts/commercial/phase0_readonly_inventory.sql` (SELECTs only) on the
-   enrolled production branch and returns the raw output.
+   enrolled production branch and returns the raw output (exact steps:
+   `scripts/commercial/README.md`). **This repository is PUBLIC:** raw output with customer
+   emails never enters it. The register below is populated from that output using pseudonymous
+   `businessId`s and masked emails (`j***@example.com`); full emails remain in the owner's
+   private inventory copy.
 2. Every row of query **E2** (subscriptions) becomes one register line; query **F2**
    (entitlements) and query **C/D** (payments) are joined onto it by `businessId`.
 3. Every row of queries **G1–G4** (anomalies) becomes an exception-register line — never an
