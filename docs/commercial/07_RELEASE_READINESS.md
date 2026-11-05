@@ -12,14 +12,15 @@ and `06_CUSTOMER_MIGRATION_REGISTER.md`.
 | Item | Value (verified read-only 2026-11-05) |
 |---|---|
 | Pull request | #81, OPEN, `arena/0a551243-jata-aftercall` → `main` |
-| Commits (preserved, never rewritten) | `b221cef` design docs · `be2779d` implementation · `1b09879` real-browser check alignment |
+| Commits (preserved, never rewritten) | `b221cef` design docs · `be2779d` implementation · `1b09879` real-browser check alignment · `69c3261` + `c18772a` release runbook & inventory pack (docs-only follow-ups append; nothing is rewritten) |
 | PR diff | 37 files, +1,794 / −93 vs base `19f11d9`; no debug leftovers (scan clean) |
 | Production deployment | `dpl_9XjMnD81yAXWVW3THPS6K95vFA1K` — READY / PROMOTED at base `19f11d9` (PR #78). **Unchanged by this workstream.** |
 | Production aliases | `jataaftercall.co.ke`, `www.jataaftercall.co.ke`, `jata-aftercall.vercel.app` (+ branch aliases) — official domain already bound to the current production deployment |
 | Production DB writes by this workstream | **ZERO** — all SQL in `scripts/commercial/` is PREPARED, NOT EXECUTED |
 | Official domain | https://jataaftercall.co.ke |
 
-**CI evidence (PR #81, head `1b09879`): 18 PASS / 1 FAIL.**
+**CI evidence (PR #81): 18 PASS / 1 FAIL recorded at heads `be2779d`, `1b09879`, `69c3261` and
+`c18772a`; the live head's checks are always visible in the PR checks panel.**
 
 | Check | Result |
 |---|---|
