@@ -84,6 +84,46 @@ export async function POST(req: Request) {
     if (!plan.isActive || !Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || plan.durationDays <= 0) {
       return fail(400, "PLAN_UNAVAILABLE", "The selected plan is not currently available.");
     }
+
+    // Voice reception is not yet implemented/verified. Refuse direct API checkout as well as
+    // hiding the offer from public catalogue surfaces.
+    if (plan.key === "AI_FRONT_DESK_VOICE") {
+      return fail(409, "PLAN_NOT_READY", "Front Desk Voice is not available yet. No payment has been started.");
+    }
+
+    // A lower Front Desk tier must not replace an active higher tier mid-term. Block before
+    // creating a Payment row or contacting Paystack; no charge can be initiated by this path.
+    if (isFrontDeskTierKey(plan.key)) {
+      const currentSubscription = await prisma.subscription.findUnique({
+        where: { businessId },
+        select: { planId: true, status: true, expiresAt: true },
+      });
+      if (
+        currentSubscription?.status === "ACTIVE" &&
+        currentSubscription.expiresAt > new Date()
+      ) {
+        const currentPlan = await prisma.planConfig.findUnique({
+          where: { id: currentSubscription.planId },
+          select: { key: true },
+        });
+        const tierRank: Record<string, number> = {
+          AI_BUSINESS_FRONT_DESK: 1,
+          AI_FRONT_DESK_STANDARD: 2,
+          AI_FRONT_DESK_PRO: 3,
+          AI_FRONT_DESK_VOICE: 4,
+        };
+        const currentRank = currentPlan?.key ? tierRank[currentPlan.key] : undefined;
+        const requestedRank = tierRank[plan.key];
+        if (currentRank !== undefined && requestedRank < currentRank) {
+          return fail(
+            409,
+            "DOWNGRADE_AT_PERIOD_END",
+            "A lower Front Desk tier cannot replace your active paid tier before it expires. Your current access remains unchanged; contact support to arrange a change at renewal.",
+            { currentTier: currentPlan?.key, currentExpiry: currentSubscription.expiresAt.toISOString() },
+          );
+        }
+      }
+    }
     // §49 + §41 — every AI Front Desk tier (Starter/Standard/Pro/Voice) must resolve to its
     // approved price / 30 days server-side. The server never trusts a client-supplied amount.
     if (isFrontDeskTierKey(plan.key) && !assertFrontDeskTierPricing(plan).ok) {
