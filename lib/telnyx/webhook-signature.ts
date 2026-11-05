@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createPublicKey, verify as verifySignature } from "node:crypto";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -20,7 +18,7 @@ export function verifyTelnyxWebhookSignature(input: {
 }): TelnyxSignatureResult {
   const { rawBody, signature, timestamp, publicKey } = input;
   if (!signature || !timestamp || !publicKey) return { valid: false, reason: "MISSING_HEADERS" };
-  if (!/^\d{1,12}$/.test(timestamp)) return { valid: false, reason: "INVALID_TIMESTAMP" };
+  if (!/^\\d{1,12}$/.test(timestamp)) return { valid: false, reason: "INVALID_TIMESTAMP" };
 
   const timestampSeconds = Number(timestamp);
   const nowSeconds = input.nowSeconds ?? Math.floor(Date.now() / 1000);
