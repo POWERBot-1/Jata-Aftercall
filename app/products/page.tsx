@@ -3,6 +3,7 @@ import Link from "next/link";
 import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { formatNumber } from "@/lib/format";
+import { FRONT_DESK_TIER_PRICING, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
@@ -91,6 +92,18 @@ export default async function ProductsPage() {
               </article>
             );
           })}
+          <article className="mk-card" key="AI_FRONT_DESK_VOICE">
+            <h3>AI Front Desk Voice</h3>
+            <p className="mk-card__price">KES {formatNumber(FRONT_DESK_TIER_PRICING[AI_FRONT_DESK_VOICE_KEY].priceKES)} / 30 days</p>
+            <p>A premium AI phone receptionist designed to answer calls to your existing business number, understand customer requests and hand over to your team when needed.</p>
+            <ul className="mk-prose">
+              <li>Designed around your existing business phone identity</li>
+              <li>English and Kiswahili voice experience planned</li>
+              <li>Provider usage charges will be disclosed separately before activation</li>
+            </ul>
+            <p><strong>Awaiting provider activation.</strong> Not yet available for purchase or live calls.</p>
+            <Link href="/products/ai-front-desk#voice">View Voice readiness →</Link>
+          </article>
         </div>
         <div className="mk-btn-row">
           <Link href="/pricing" className="mk-btn">Compare all plans</Link>
