@@ -66,7 +66,12 @@ export function isPubliclyListedPlan(key: string): boolean {
 
 /** Filters a plan list down to what a public/customer-facing surface may show (§67). */
 export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): T[] {
-  return plans.filter((plan) => isPubliclyListedPlan(plan.key));
+  // Front Desk Voice is a commercial tier definition, not proof of a working telephone service.
+  // Keep it out of every public/customer plan list until a real inbound-voice provider adapter,
+  // verified webhook path and end-to-end call test are shipped. Checkout also fails closed below.
+  return plans.filter(
+    (plan) => isPubliclyListedPlan(plan.key) && plan.key !== "AI_FRONT_DESK_VOICE",
+  );
 }
 
 /**
