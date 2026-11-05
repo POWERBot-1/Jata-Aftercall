@@ -3,9 +3,10 @@
 -- Status: PREPARED — NOT EXECUTED. Requires explicit owner approval (§41.11).
 -- Effect: sets isActive=false for exactly AI_FRONT_DESK_STANDARD / _PRO / _VOICE.
 --         Never touches AI_BUSINESS_FRONT_DESK, any other plan, or any customer row.
---         Customers who already purchased a new tier before rollback KEEP their access;
---         their cases go to the exception register for manual handling (never silent revert).
--- Order of operations: run THIS first, then roll back the application deployment.
+--         Tier-aware application code MUST remain deployed while any customer has an active
+--         Standard/Pro entitlement. Do not roll back to pre-tier code until every such paid term
+--         and grace period has expired, or a separately verified compatible build is ready.
+--         This script only closes new sales; it never revokes existing customer access.
 -- =============================================================================
 
 UPDATE "PlanConfig"
