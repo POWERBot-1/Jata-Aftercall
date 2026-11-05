@@ -7,6 +7,7 @@ import { POS_PLAN_KEY } from "./pos/entitlement";
 import { settlePosPayment } from "./pos/settlement";
 import { isAutopilotPlanKey } from "./autopilot/entitlement";
 import { settleAutopilotPayment } from "./autopilot/settlement";
+import { isFrontDeskTierKey } from "./frontDeskTiers";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -216,18 +217,21 @@ export async function activateSubscriptionForPayment(
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });
-    if (plan.key === "AI_BUSINESS_FRONT_DESK") {
+    // AI Front Desk 2.0 (§41): every tier of the family activates the shared Front Desk
+    // entitlement row, stamped with the tier actually purchased (Starter reuses the legacy key,
+    // so existing rows are untouched; a Standard/Pro/Voice purchase records its own key).
+    if (isFrontDeskTierKey(plan.key)) {
       await tx.aIPackageEntitlement?.upsert?.({
         where: { businessId: payment.businessId },
         update: {
-          packageKey: "AI_BUSINESS_FRONT_DESK",
+          packageKey: plan.key,
           status: "ACTIVE",
           activatedAt: startAt,
           expiresAt,
         },
         create: {
           businessId: payment.businessId,
-          packageKey: "AI_BUSINESS_FRONT_DESK",
+          packageKey: plan.key,
           status: "ACTIVE",
           activatedAt: startAt,
           expiresAt,

@@ -8,7 +8,21 @@ export const dynamic = "force-dynamic";
 /** Every AFTERCALL subscription, soonest expiry first, so renewals are worked from the top. */
 export default async function AdminSubscriptions() {
   await requireAdminPage();
-  const subs = await prisma.subscription.findMany({ orderBy: { expiresAt: "asc" }, include: { business: true, plan: true, user: true } });
+  type FrontDeskEntitlementRow = {
+    businessId: string;
+    packageKey: string;
+    status: string;
+    expiresAt: Date | null;
+  };
+  const [subs, entitlements] = await Promise.all([
+    prisma.subscription.findMany({ orderBy: { expiresAt: "asc" }, include: { business: true, plan: true, user: true } }),
+    // §41.10 #12 — administrative entitlement visibility: the Front Desk tier each business
+    // actually holds, read alongside the subscription. One query, no writes.
+    prisma.aIPackageEntitlement.findMany({
+      select: { businessId: true, packageKey: true, status: true, expiresAt: true },
+    }) as Promise<FrontDeskEntitlementRow[]>,
+  ]);
+  const entitlementByBusiness = new Map(entitlements.map((e) => [e.businessId, e]));
   const expiring = subs.filter((s) => s.expiresAt && s.expiresAt.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14).length;
 
   return (
@@ -25,21 +39,28 @@ export default async function AdminSubscriptions() {
             <th scope="col">Business</th>
             <th scope="col">Account</th>
             <th scope="col">Plan</th>
+            <th scope="col">Front Desk entitlement</th>
             <th scope="col">Status</th>
             <th scope="col">Started</th>
             <th scope="col">Expires</th>
           </tr>
         }>
-          {subs.map((s) => (
-            <tr key={s.id}>
-              <td>{s.business.name}</td>
-              <td>{s.user.email}</td>
-              <td>{s.plan.name}</td>
-              <td><AdminStatus value={s.status} /></td>
-              <td>{s.startAt ? formatDate(s.startAt) : "—"}</td>
-              <td>{s.expiresAt ? formatDate(s.expiresAt) : "—"}</td>
-            </tr>
-          ))}
+          {subs.map((s) => {
+            const ent = entitlementByBusiness.get(s.businessId);
+            return (
+              <tr key={s.id}>
+                <td>{s.business.name}</td>
+                <td>{s.user.email}</td>
+                <td>{s.plan.name}</td>
+                <td>
+                  {ent ? `${ent.packageKey} · ${ent.status}${ent.expiresAt ? ` (until ${formatDate(ent.expiresAt)})` : ""}` : "—"}
+                </td>
+                <td><AdminStatus value={s.status} /></td>
+                <td>{s.startAt ? formatDate(s.startAt) : "—"}</td>
+                <td>{s.expiresAt ? formatDate(s.expiresAt) : "—"}</td>
+              </tr>
+            );
+          })}
         </AdminTable>
       )}
     </AdminPage>

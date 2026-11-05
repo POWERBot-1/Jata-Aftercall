@@ -328,9 +328,36 @@ describe("the other products keep their prices and destinations", () => {
   });
 
   it("keeps the page-plan includes and badges free of the separate products", () => {
-    expect(Object.keys(PLAN_INCLUDES)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
-    expect(Object.keys(PLAN_BADGES)).toEqual(["ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
-    expect(Object.keys(PLAN_ICONS)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
+    expect(Object.keys(PLAN_INCLUDES)).toEqual([
+      "MONTHLY",
+      "ANNUAL",
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "AI_FRONT_DESK_VOICE",
+      "INTERACTIVE_BUSINESS",
+    ]);
+    expect(Object.keys(PLAN_BADGES)).toEqual([
+      "ANNUAL",
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "AI_FRONT_DESK_VOICE",
+      "INTERACTIVE_BUSINESS",
+    ]);
+    expect(Object.keys(PLAN_ICONS)).toEqual([
+      "MONTHLY",
+      "ANNUAL",
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "AI_FRONT_DESK_VOICE",
+      "INTERACTIVE_BUSINESS",
+    ]);
+    // The separate products still never appear as page-plan copy.
+    expect(Object.keys(PLAN_INCLUDES)).not.toContain("BUSINESS_POS");
+    expect(Object.keys(PLAN_INCLUDES)).not.toContain("ERP_PRO");
+    expect(Object.keys(PLAN_INCLUDES)).not.toContain("JATA_AUTOPILOT");
   });
 });
 

@@ -51,7 +51,8 @@ const PRODUCTS: Record<string, ProductPage> = {
         "Keeps historical records readable after a plan ends, while live answers require an active entitlement.",
       ] },
       { heading: "Entitlement and price", body: [
-        "AI Business Front Desk — KES 499 / 30 days. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "Four package tiers, each billed for 30 days: Front Desk Starter KES 499, Front Desk Standard KES 999, Front Desk Pro KES 1,999 and Front Desk Voice KES 3,999. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
       ] },
       { heading: "Connectivity", body: [
         "AI answers always require a live connection. The installable app never caches AI responses or private business data.",
@@ -110,7 +111,7 @@ const PRODUCTS: Record<string, ProductPage> = {
       { heading: "How JATA BOS PRO differs from Business POS", body: [
         "The separate Business POS product is the counter till: sales, stock, credit and reports for the front of the business.",
         "JATA BOS PRO runs the records and operations around the counter — the accounts, the buying, the suppliers and the reporting — of which selling at the till is one part.",
-        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the four page plans.",
+        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the public page plans.",
       ] },
       { heading: "Price and billing", body: [
         "KES 3,000 per 30 days, billed per business (plan key ERP_PRO). The workspace shows the amount before any payment starts, and that amount always comes from the stored plan catalogue on the server — never from the browser.",

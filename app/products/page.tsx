@@ -25,6 +25,23 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     blurb: "A published AI assistant that answers customer questions from your own business information.",
     bullets: ["Customer-facing /b/<slug>/ai page", "Grounded in your configured products, services and FAQs", "Live only after the plan is confirmed"],
   },
+  // AI Front Desk 2.0 tiers — same product, four package tiers. Each row must exist or the card
+  // would be dropped from this grid (`if (!detail) return null`), hiding a catalogue offer.
+  AI_FRONT_DESK_STANDARD: {
+    slug: "ai-front-desk",
+    blurb: "The AI front desk on the Front Desk Standard package tier.",
+    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
+  },
+  AI_FRONT_DESK_PRO: {
+    slug: "ai-front-desk",
+    blurb: "The AI front desk on the Front Desk Pro package tier.",
+    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
+  },
+  AI_FRONT_DESK_VOICE: {
+    slug: "ai-front-desk",
+    blurb: "The AI front desk on the Front Desk Voice package tier — the top Front Desk package.",
+    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
+  },
   JATA_AUTOPILOT: {
     slug: "jata-autopilot",
     blurb: "Business-health diagnostics and draft actions for your approval, configured in the workspace.",

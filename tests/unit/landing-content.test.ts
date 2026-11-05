@@ -152,7 +152,15 @@ describe("landing copy makes no unverified claim", () => {
   });
 
   it("never puts the private Business POS into a plan card", () => {
-    expect(Object.keys(PLAN_INCLUDES)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
+    expect(Object.keys(PLAN_INCLUDES)).toEqual([
+      "MONTHLY",
+      "ANNUAL",
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "AI_FRONT_DESK_VOICE",
+      "INTERACTIVE_BUSINESS",
+    ]);
     expect(Object.keys(PLAN_INCLUDES)).not.toContain("BUSINESS_POS");
     expect(Object.values(PLAN_INCLUDES).flat().join(" ")).not.toMatch(/point of sale|point-of-sale|POS/i);
   });
@@ -166,7 +174,15 @@ describe("landing copy makes no unverified claim", () => {
   });
 
   it("gives every advertised plan its established product icon", () => {
-    expect(Object.keys(PLAN_ICONS)).toEqual(["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]);
+    expect(Object.keys(PLAN_ICONS)).toEqual([
+      "MONTHLY",
+      "ANNUAL",
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "AI_FRONT_DESK_VOICE",
+      "INTERACTIVE_BUSINESS",
+    ]);
     // The separate-product cards carry dedicated marks: the storefront, the spark and the ledger.
     expect(POS_PLAN_CARD.icon).toBe("store");
     expect(AUTOPILOT_PLAN_CARD.icon).toBe("spark");
@@ -245,7 +261,7 @@ describe("the owner-only POS stays owner-only", () => {
     expect(POS_PLAN_CARD.fine).toMatch(/switches on only once Paystack confirms the payment/i);
     const faq = LANDING_FAQ.find((item) => item.question.includes("POS"))!;
     expect(faq.answer).toMatch(/separate owner-only point-of-sale/);
-    expect(faq.answer).toMatch(/not included in, and not required for, the four page plans/i);
+    expect(faq.answer).toMatch(/not included in, and not required for, the public page plans/i);
   });
 });
 
@@ -277,7 +293,7 @@ describe("the owner-only JATA Autopilot stays owner-only", () => {
     const faq = LANDING_FAQ.find((item) => item.question.includes("Autopilot"))!;
     expect(faq).toBeTruthy();
     expect(faq.answer).toMatch(/separate owner-only add-on/);
-    expect(faq.answer).toMatch(/not included in, and not required for, the four page plans/i);
+    expect(faq.answer).toMatch(/not included in, and not required for, the public page plans/i);
   });
 });
 

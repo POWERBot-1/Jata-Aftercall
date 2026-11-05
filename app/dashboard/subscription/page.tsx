@@ -47,7 +47,25 @@ const OFFER_COPY: Record<string, SubscriptionOfferCopy> = {
   },
   AI_BUSINESS_FRONT_DESK: {
     kind: "Add-on · ordinary subscription",
-    blurb: "An AI front desk that answers customer questions from your own services and offer.",
+    blurb: "Front Desk Starter — an AI front desk that answers customer questions from your own services and offer.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_STANDARD: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Standard — the AI front desk, on the Standard package tier.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_PRO: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Pro — the AI front desk, on the Pro package tier.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_VOICE: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Voice — the AI front desk, on the top Voice package tier.",
     detailsHref: "/products/ai-front-desk",
     icon: <Bot size={16} aria-hidden="true" />,
   },
@@ -328,9 +346,10 @@ export default async function SubscriptionPage({ searchParams }: Props) {
         />
         <WorkspacePanel>
           <p className="ws-muted ws-small">
-            All seven offers in one list, with prices and billing periods from the same stored plan catalogue checkout
-            uses. Ordinary subscriptions are paid from the plan list above; the separate products are bought inside their
-            own workspaces. Status appears only where your account actually holds a row for the selected business.
+            Every offer in one list, with prices and billing periods from the same stored plan catalogue checkout uses —
+            including all four AI Front Desk tiers when they are present in the catalogue. Ordinary subscriptions are paid
+            from the plan list above; the separate products are bought inside their own workspaces. Status appears only
+            where your account actually holds a row for the selected business.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {catalogue.map((offer) => {

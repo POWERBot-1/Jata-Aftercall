@@ -21,6 +21,9 @@ export type PlanCardData = {
 function planIcon(key: string) {
   if (key === "ANNUAL" || key === "MONTHLY") return <CalendarDays size={18} aria-hidden="true" />;
   if (key === "AI_BUSINESS_FRONT_DESK") return <Bot size={18} aria-hidden="true" />;
+  if (key === "AI_FRONT_DESK_STANDARD" || key === "AI_FRONT_DESK_PRO" || key === "AI_FRONT_DESK_VOICE") {
+    return <Bot size={18} aria-hidden="true" />;
+  }
   if (key === "INTERACTIVE_BUSINESS") return <Wand2 size={18} aria-hidden="true" />;
   if (key === "BUSINESS_POS") return <Store size={18} aria-hidden="true" />;
   return <Sparkles size={18} aria-hidden="true" />;

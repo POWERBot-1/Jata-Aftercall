@@ -10,6 +10,7 @@ import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experi
 import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey, assertAutopilotPlanPricing } from "@/lib/autopilot/entitlement";
 import { CHECKOUT_PENDING_WINDOW_MS, checkoutStatusUrl } from "@/lib/checkoutPolicy";
+import { isFrontDeskTierKey, assertFrontDeskTierPricing } from "@/lib/frontDeskTiers";
 
 type PlanRow = {
   id: string;
@@ -83,10 +84,10 @@ export async function POST(req: Request) {
     if (!plan.isActive || !Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || plan.durationDays <= 0) {
       return fail(400, "PLAN_UNAVAILABLE", "The selected plan is not currently available.");
     }
-    // §49 — AI Business Front Desk package must resolve to KES 499 / 30 days server-side.
-    // The server never trusts a client-supplied amount. This guard ensures the package price is authoritative.
-    if (plan.key === "AI_BUSINESS_FRONT_DESK" && (plan.priceKES !== 499 || plan.durationDays !== 30)) {
-      return fail(500, "PLAN_PRICING_INVALID", "AI Business Front Desk pricing configuration is invalid.");
+    // §49 + §41 — every AI Front Desk tier (Starter/Standard/Pro/Voice) must resolve to its
+    // approved price / 30 days server-side. The server never trusts a client-supplied amount.
+    if (isFrontDeskTierKey(plan.key) && !assertFrontDeskTierPricing(plan).ok) {
+      return fail(500, "PLAN_PRICING_INVALID", "AI Front Desk pricing configuration is invalid.");
     }
     // §26, §59 — the Interactive Business package resolves to KES 999 / 30 days server-side.
     // A client-supplied amount is never used; only the stored plan configures the charge.

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canAccessBusiness } from "@/lib/tenant";
 import { getAIPackageStatus } from "@/lib/ai-entitlement";
 import { getPlanConfig } from "@/lib/pricing";
+import { isFrontDeskTierKey } from "@/lib/frontDeskTiers";
 
 export async function GET(req: Request) {
   try {
@@ -22,13 +23,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }
 
-    const [entitlement, plan] = await Promise.all([
+    const [status, planForTier] = await Promise.all([
       getAIPackageStatus(businessId),
       getPlanConfig("AI_BUSINESS_FRONT_DESK"),
     ]);
+    // Price card for the tier the business actually holds (any of the four Front Desk tiers),
+    // falling back to the Starter row for display when no tier is active yet.
+    const tierKey =
+      status.packageKey && isFrontDeskTierKey(status.packageKey)
+        ? status.packageKey
+        : "AI_BUSINESS_FRONT_DESK";
+    const plan =
+      tierKey === "AI_BUSINESS_FRONT_DESK" && planForTier
+        ? planForTier
+        : (await getPlanConfig(tierKey)) ?? planForTier;
 
     return NextResponse.json({
-      entitlement,
+      entitlement: status,
       plan,
     });
   } catch (err: unknown) {
