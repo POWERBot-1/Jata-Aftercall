@@ -23,7 +23,7 @@ const REQUIRED_PROVIDER_CONFIG = [
   "TELNYX_PHONE_NUMBER", "VOICE_MEDIA_STREAM_URL", "VOICE_AI_PROVIDER",
 ] as const;
 export const JATA_PUBLIC_VOICE_NUMBER = "+254724317010";
-export function getVoiceReadiness(env: VoiceEnvironment = process.env): VoiceReadiness {
+export function getVoiceReadiness(env: VoiceEnvironment = process.env as VoiceEnvironment): VoiceReadiness {
   const missingConfiguration = REQUIRED_PROVIDER_CONFIG.filter((key) => !env[key]?.trim());
   const providerConfigured = missingConfiguration.length === 0;
   const liveVerified = env.TELNYX_VOICE_LIVE_VERIFIED === "true";
