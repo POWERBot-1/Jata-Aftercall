@@ -5,7 +5,7 @@
 --         Never inserts, updates or deletes the existing AI_BUSINESS_FRONT_DESK row:
 --         the guard below REFUSES to run if the Starter row is missing or mispriced.
 --         Touches no Subscription, Payment, AIPackageEntitlement or any other table.
---         Idempotent: safe to re-run; ON CONFLICT never changes an existing id.
+--         Existing tier keys are never overwritten; conflicts must match exact expected rows.
 -- =============================================================================
 
 DO $$
@@ -18,11 +18,28 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'GUARD FAILED: AI_BUSINESS_FRONT_DESK row missing — aborting (nothing written).';
   END IF;
-  IF starter."priceKES" <> 499 OR starter."durationDays" <> 30 THEN
-    RAISE EXCEPTION 'GUARD FAILED: Starter row is %/% (expected 499/30) — aborting (nothing written).',
-      starter."priceKES", starter."durationDays";
+  IF starter."priceKES" <> 499 OR starter."durationDays" <> 30 OR starter."isActive" IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'GUARD FAILED: Starter must be active at 499/30 (got %/% active=%) — aborting (nothing written).',
+      starter."priceKES", starter."durationDays", starter."isActive";
   END IF;
-END $$;
+
+  -- Existing keys are acceptable only when they already match the intended immutable catalogue.
+  IF EXISTS (
+    SELECT 1 FROM "PlanConfig"
+    WHERE key = 'AI_FRONT_DESK_STANDARD'
+      AND ("priceKES" <> 999 OR "durationDays" <> 30 OR "isActive" IS DISTINCT FROM true)
+  ) OR EXISTS (
+    SELECT 1 FROM "PlanConfig"
+    WHERE key = 'AI_FRONT_DESK_PRO'
+      AND ("priceKES" <> 1999 OR "durationDays" <> 30 OR "isActive" IS DISTINCT FROM true)
+  ) OR EXISTS (
+    SELECT 1 FROM "PlanConfig"
+    WHERE key = 'AI_FRONT_DESK_VOICE'
+      AND ("priceKES" <> 3999 OR "durationDays" <> 30 OR "isActive" IS DISTINCT FROM true)
+  ) THEN
+    RAISE EXCEPTION 'GUARD FAILED: an existing Front Desk tier conflicts with the approved catalogue; nothing written.';
+  END IF;
+END $;
 
 INSERT INTO "PlanConfig" (id, key, name, "priceKES", "durationDays", "isActive", "createdAt", "updatedAt") VALUES
   ('plan_ai_front_desk_standard', 'AI_FRONT_DESK_STANDARD',
@@ -31,18 +48,9 @@ INSERT INTO "PlanConfig" (id, key, name, "priceKES", "durationDays", "isActive",
    'Front Desk Pro — KES 1,999/month', 1999, 30, true, now(), now()),
   ('plan_ai_front_desk_voice', 'AI_FRONT_DESK_VOICE',
    'Front Desk Voice — KES 3,999/month', 3999, 30, true, now(), now())
-ON CONFLICT (key) DO UPDATE SET
-  "priceKES" = EXCLUDED."priceKES",
-  "durationDays" = EXCLUDED."durationDays",
-  name = EXCLUDED.name,
-  "isActive" = true,
-  "updatedAt" = now();
+ON CONFLICT (key) DO NOTHING;
 
--- Rename only the display name of the reused Starter row (price/key/id untouched).
-UPDATE "PlanConfig"
-SET name = 'Front Desk Starter — KES 499/month', "updatedAt" = now()
-WHERE key = 'AI_BUSINESS_FRONT_DESK' AND "priceKES" = 499 AND "durationDays" = 30
-  AND name IS DISTINCT FROM 'Front Desk Starter — KES 499/month';
+-- Starter is intentionally left completely untouched.
 
 -- Post-condition verification (expect exactly these four rows; Starter id unchanged)
 SELECT id, key, name, "priceKES", "durationDays", "isActive"
