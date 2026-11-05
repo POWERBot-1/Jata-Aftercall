@@ -1,3 +1,4 @@
+import "server-only";
 import { NextResponse } from "next/server";
 import { verifyTelnyxWebhookSignature } from "@/lib/telnyx/webhook-signature";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     publicKey: process.env.TELNYX_PUBLIC_KEY,
   });
 
-  if (!verification.valid) {
+  if (verification.valid === false) {
     return NextResponse.json(
       { ok: false, error: "INVALID_TELNYX_WEBHOOK", reason: verification.reason },
       { status: 401 },
