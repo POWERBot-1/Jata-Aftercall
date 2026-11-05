@@ -83,7 +83,7 @@ it is a required context; branch protection is not readable from this sandbox).
 | 3 | **Deploy the approved release** (merge of PR #81 → production deploy) | Vercel production deploy from `main` | new deployment READY; `jataaftercall.co.ke` serves new release; **catalogue still 8 rows — tiers not yet listed** | deploy fails → fix forward; no SQL has run, nothing to roll back |
 | 4 | Run the catalogue extension | `scripts/commercial/01_extend_front_desk_catalogue.sql` | guard passes (Starter 499/30 present); 3 rows inserted; R1 post = **11 rows**; Starter **id/key/price/duration unchanged**; Starter display name = "Front Desk Starter — KES 499/month" | guard raises → **nothing written** (script refuses); investigate before retry |
 | 5 | Run reconciliation after | `scripts/commercial/03_reconcile.sql` | **B-2, B-3, B-4 byte-identical to baseline**; R5 exceptions empty/individually listed; R6 spot-check start/expiry unchanged | any B-2…B-4 diff → **STOP, execute rollback (Section 4)** |
-| 6 | Signed-in smoke (Section 6, "smoke" subset) | manual / test accounts | four tiers listed at 499/999/1,999/3,999 × 30d; one dev/mock checkout per tier activates the correct tier key; one legacy subscriber view unchanged; **no production charge completed** | smoke failure → **STOP, rollback (Section 4)** |
+| 6 | Signed-in smoke (Section 6, "smoke" subset) | manual / test accounts | Starter / Standard / Pro listed at 499/999/1,999 × 30d; Voice hidden until inbound voice reception is implemented and verified; one dev/mock checkout per tier activates the correct tier key; one legacy subscriber view unchanged; **no production charge completed** | smoke failure → **STOP, rollback (Section 4)** |
 | 7 | Dispatch approved notifications (`05_…` §4 wording only) | existing email/in-dashboard channels | messages sent, log attached | wording not pre-approved → hold |
 | 8 | Monitor 24 h; publish verification report (Section 6 full checklist + `05_…` §6 matrix update) | webhook/audit streams | zero attributable errors | sustained errors → incident per Section 4 |
 
@@ -92,26 +92,25 @@ it is a required context; branch protection is not readable from this sandbox).
 ## 4. Rollback procedure (prepared, tested-in-rehearsal-only)
 
 **Trigger:** any failure at Steps 4–6, or material error found during the 24 h window.
-**Order is mandatory: SQL first, then code.**
+**Catalogue deactivation stops new sales; it does not revoke existing entitlements.**
 
-1. `scripts/commercial/02_rollback_front_desk_catalogue.sql` — sets `isActive=false` for exactly
-   `AI_FRONT_DESK_STANDARD` / `_PRO` / `_VOICE`. Never touches Starter, other plans, or any
-   customer row. Verify with its trailing SELECT (three deactivated; Starter still 499/30 active).
-2. Roll back the application deployment to the previous production deployment
-   (`dpl_9XjMnD81yAXWVW3THPS6K95vFA1K` lineage) — old code + deactivated rows = pre-migration
-   behaviour. (Deactivate FIRST: old code ignoring unknown keys while they remain active is the
-   unsafe order.)
-3. Re-run `03_reconcile.sql`; confirm B-2…B-4 again identical to baseline.
-4. **No data restore is ever needed under Option A** — both directions write only
-   `PlanConfig.isActive` / three additive rows; subscriptions, entitlements and payments are
-   untouched by migration and rollback alike.
-5. **Customers who purchased a new tier before rollback keep their access** — never silently
-   revert. Each case is entered in the exception register (`05_…` §7) for manual handling;
-   refunds only through the authorised refund process.
+1. `scripts/commercial/02_rollback_front_desk_catalogue.sql` — closes new sales by setting
+   `isActive=false` for the new tier rows. It never touches Starter, other plans, or customer
+   rows. Voice is not advertised or sellable in this release.
+2. **Keep the tier-aware application release deployed. Do not roll back to pre-tier code while
+   any Standard/Pro customer has an unexpired subscription or grace period.** That older code
+   does not recognise the new entitlement keys and would cut off paid access.
+3. If an application rollback is unavoidable, first deploy a separately built and tested
+   compatibility release that retains tier-aware entitlement evaluation and matching customer
+   access paths. If no such release is available, stop and keep the current tier-aware code
+   deployed while sales remain disabled.
+4. Re-run `03_reconcile.sql`; confirm B-2…B-4 again identical to baseline and list any new-tier
+   subscribers for continued access monitoring.
+5. **No data restore is ever needed under Option A** — catalogue deactivation does not delete
+   subscriptions, entitlements or payments. Customers who purchased a tier keep access through
+   their paid term and grace period; never silently revoke or reclassify it.
 6. **Forward recovery:** after the defect is fixed, re-run rehearsal (P-4), re-obtain approval if
-   scope changed, then Steps 3–8 again (script `01` is idempotent — `ON CONFLICT` never changes an
-   existing id).
-
+   scope changed, then re-enable only the approved catalogue rows after verification.
 ---
 
 ## 5. Customer reconciliation report (template)
@@ -162,7 +161,7 @@ reconciled against actual records before any customer-specific execution is soug
 - [ ] `/pricing`: four tiers listed with correct prices/periods; PLAN_KIND/scope copy correct
 - [ ] `/products` + `/products/ai-front-desk`: tier cards present, link to detail, price section lists four tiers
 - [ ] Homepage: ten plan cards render; CTA routes resolve; `data-plan-count="10"` grid centred
-- [ ] Dashboard → Subscription catalogue: four tier offers with stored prices
+- [ ] Dashboard → Subscription catalogue: only active, sellable tier offers with stored prices; Voice remains unavailable
 - [ ] Dashboard → AI: price card shows the held tier (Starter fallback when none)
 - [ ] Admin → Subscriptions: "Front Desk entitlement" column shows packageKey · status · expiry
 
@@ -173,7 +172,7 @@ reconciled against actual records before any customer-specific execution is soug
 - [ ] R4 confirms zero Payment rows created by the migration itself
 
 **Entitlements**
-- [ ] Mock/dev purchase of each tier stamps `packageKey` = purchased tier on `AIPackageEntitlement`
+- [ ] Mock/dev purchase of each sellable tier stamps `packageKey` = purchased tier on `AIPackageEntitlement`; Voice checkout is rejected before payment
 - [ ] Legacy subscriber: entitlement status/expiry byte-identical to baseline; only display name changed
 - [ ] Non-Front-Desk plan holder: Front Desk still denied (no cross-product grant)
 - [ ] Expiry/grace/suspend paths return the same pinned status reasons as before
