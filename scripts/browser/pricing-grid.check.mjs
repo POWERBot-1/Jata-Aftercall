@@ -3,8 +3,8 @@
  * Pricing grid browser check — every catalogue offer in one grid (2026-10-29 owner order with
  * the AI Front Desk 2.0 tiers slotted after Starter: Monthly, Annual, Front Desk
  * Starter/Standard/Pro/Voice, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot).
- * Against a seeded catalogue this is ten cards; against production's pre-migration 8-row
- * catalogue it is the original seven (no tier rows exist there yet).
+ * The check follows the actual active catalogue: Standard/Pro are optional until configured;
+ * Voice is deliberately excluded until inbound voice reception is operational.
  *
  *   CHROME_PATH=/path/to/chromium BASE_URL=http://localhost:3000 npm run test:browser:pricing
  *
@@ -71,7 +71,6 @@ const EXPECTED = [
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
   { key: "AI_FRONT_DESK_STANDARD", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "AI_FRONT_DESK_PRO", price: "KES 1,999", period: "per 30 days", cta: "/register" },
-  { key: "AI_FRONT_DESK_VOICE", price: "KES 3,999", period: "per 30 days", cta: "/register" },
   { key: "INTERACTIVE_BUSINESS", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "BUSINESS_POS", price: "KES 499", period: "per 30 days", cta: "/dashboard/pos" },
   { key: "ERP_PRO", price: "KES 3,000", period: "per 30 days", cta: "/products/erp-pro" },
@@ -152,7 +151,17 @@ for (const viewport of VIEWPORTS) {
   await page.evaluate(() => document.querySelector("#pricing")?.scrollIntoView());
   const f = await facts(page);
 
-  check(`${viewport.label}px: one pricing grid holds exactly the catalogue's plan cards`, f.gridCount === 1 && f.cards.length === EXPECTED.length && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length} expected=${EXPECTED.length}`);
+  const actualKeys = f.cards.map((card) => card.key);
+  const expectedVisible = EXPECTED.filter((expected) => actualKeys.includes(expected.key));
+  const expectedKeys = expectedVisible.map((expected) => expected.key);
+  check(`${viewport.label}px: one pricing grid holds exactly the active supported catalogue cards`,
+    f.gridCount === 1 && f.cards.length === expectedVisible.length &&
+      f.strayCards === 0 && f.cards.every((card) => card.insideGrid) &&
+      actualKeys.every((key) => expectedKeys.includes(key)) &&
+      ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"].every((key) => actualKeys.includes(key)),
+    `grids=${f.gridCount} cards=${f.cards.length} expectedActive=${expectedKeys.length}`);
+  check(`${viewport.label}px: Voice tier is not advertised before voice reception readiness`,
+    !actualKeys.includes("AI_FRONT_DESK_VOICE"));
   check(`${viewport.label}px: every card renders a visible product icon`, f.cards.every((c) => c.iconVisible), f.cards.map((c) => `${c.key}:${c.iconVisible}`).join(" | "));
   check(`${viewport.label}px: no separate POS section`, !f.separatePosSection);
   check(`${viewport.label}px: no horizontal overflow`, f.docScrollWidth <= f.viewport && f.cards.every((c) => c.box.right <= f.viewport + 0.5 && c.box.left >= -0.5), `scrollWidth=${f.docScrollWidth} viewport=${f.viewport}`);
@@ -189,15 +198,15 @@ for (const viewport of VIEWPORTS) {
 
   check(
     `${viewport.label}px: order, prices, periods and CTA destinations are authoritative`,
-    f.cards.length === EXPECTED.length && f.cards.every((card, index) => {
-      const expected = EXPECTED[index];
+    f.cards.length === expectedVisible.length && f.cards.every((card, index) => {
+      const expected = expectedVisible[index];
       return expected && card.key === expected.key && card.price === expected.price && card.period.startsWith(expected.period) && card.ctaHref === expected.cta;
     }),
     f.cards.map((card) => `${card.key}:${card.price}:${card.ctaHref}`).join(" | "),
   );
-  const bosIndex = EXPECTED.findIndex((e) => e.key === "ERP_PRO");
-  const autopilotIndex = EXPECTED.findIndex((e) => e.key === "JATA_AUTOPILOT");
-  const posIndex = EXPECTED.findIndex((e) => e.key === "BUSINESS_POS");
+  const bosIndex = f.cards.findIndex((e) => e.key === "ERP_PRO");
+  const autopilotIndex = f.cards.findIndex((e) => e.key === "JATA_AUTOPILOT");
+  const posIndex = f.cards.findIndex((e) => e.key === "BUSINESS_POS");
   check(`${viewport.label}px: the BOS PRO card is second-to-last and links to its product page`, f.cards[bosIndex]?.key === "ERP_PRO" && f.cards[bosIndex]?.ctaText === "Explore JATA BOS PRO" && f.cards[bosIndex]?.name.includes("JATA BOS PRO") && f.cards[bosIndex]?.ctaHref === "/products/erp-pro", f.cards[bosIndex]?.ctaText ?? "missing");
   check(`${viewport.label}px: the Autopilot card is last and keeps its own CTA`, f.cards[autopilotIndex]?.key === "JATA_AUTOPILOT" && f.cards[autopilotIndex]?.ctaText === "Open JATA Autopilot" && f.cards[autopilotIndex]?.name.includes("JATA Autopilot"), f.cards[autopilotIndex]?.ctaText ?? "missing");
   check(`${viewport.label}px: the POS card keeps its own CTA`, f.cards[posIndex]?.key === "BUSINESS_POS" && f.cards[posIndex]?.ctaText === "Open Business POS", f.cards[posIndex]?.ctaText ?? "missing");
