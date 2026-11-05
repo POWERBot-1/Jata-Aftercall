@@ -57,8 +57,9 @@ it is a required context; branch protection is not readable from this sandbox).
 
 | # | Prerequisite | State |
 |---|---|---|
-| P-1 | **Explicit owner approval (§41.11)** covering: three new catalogue rows, Starter display-name change, code release, scripts, execution window, notification wording | **OPEN — the only genuinely approval-gated item** |
-| P-2 | **Phase 0 customer inventory** — owner/operator runs `scripts/commercial/phase0_readonly_inventory.sql` (SELECTs only) and supplies output; `06_CUSTOMER_MIGRATION_REGISTER.md` populated and every customer reconciled | **BLOCKED** (deliverable #3) |
+| P-1a | **§41.11 approval — MERGE of PR #81** | **GRANTED 2026-11-05 (owner), contingent on P-2/P-7 below completing first** — merge executes only after inventory is supplied and every customer reconciled with zero unexplained discrepancies, with CI green |
+| P-1b | **§41.11 approval — DEPLOY, scripts `01`/`03`, execution window, notification wording** | **OPEN — explicitly HELD for a separate production approval after merge** (owner decision 2026-11-05: "approve merge only; hold deploy/SQL") |
+| P-2 | **Phase 0 customer inventory** — owner runs `scripts/commercial/phase0_readonly_inventory.sql` (validated; SELECTs only) per `scripts/commercial/README.md` and pastes the 16 result grids; register then populated from that verbatim output and every customer reconciled | **OPEN — owner accepted this step 2026-11-05 ("I'll run the SQL and paste the output here"); output not yet supplied** (deliverable #3 still BLOCKED until then) |
 | P-3 | Owner decisions on all **PENDING OWNER DECISION** cells (`02_ENTITLEMENT_MATRIX.md` §2–§3; `05_…` §7 items E-2…E-7), or explicit acceptance that those capabilities stay unmarketed/undecided | **OPEN** |
 | P-4 | Rehearsal evidence: `01 → 03 → 02 → 01` against a non-production dataset with a representative customer slice (§41.9 — legacy access, per-tier checkout, activation, renewal/expiry, duplicate webhook replay, interrupted migration, rollback) | **NOT TESTED** |
 | P-5 | PR #81 merged to `main` by authorised reviewer | NOT DONE (by instruction) |
@@ -186,7 +187,7 @@ reconciled against actual records before any customer-specific execution is soug
 
 ## 7. Outstanding owner decisions (consolidated — nothing here may be assumed)
 
-1. **§41.11 production approval** — scope exactly Section 3's table (rows + name change + deploy + scripts + window + notification wording). Implementation acceptance ≠ production approval.
+1. **§41.11 production approval — partial, recorded 2026-11-05:** MERGE **granted** (contingent on inventory + reconciliation + green CI); **DEPLOY/SQL/window/notifications still OPEN** — the remaining scope is exactly Section 3's table and requires a separate explicit approval after merge.
 2. **Phase 0 inventory run** (P-2 / deliverable #3) — `phase0_readonly_inventory.sql` output supplied; register populated.
 3. **Entitlement & allowance cells** — every `PENDING OWNER DECISION` cell in `02_ENTITLEMENT_MATRIX.md` §2–§3 (conversation capacity, channels, voice, overage; `05_…` E-2).
 4. **Upgrade/downgrade rules** — E-3 residual absorption vs forfeit vs credit; E-4 effective-at-period-end vs immediate.
@@ -249,8 +250,10 @@ values and keep every undecided capability unmarketed and ungranted (`02_…` §
 
 ## 8. Recommended next action
 
-**Owner:** run `scripts/commercial/phase0_readonly_inventory.sql` read-only against production and
-supply the output (unblocks #3), decide the PENDING matrix cells, and book the rehearsal. With
-those in hand, this workstream will present the consolidated §41.11 approval request (this file +
-reconciliation baseline). Only after that approval may PR #81 be merged, the release deployed, and
-scripts `01 → 03` executed in the order of Section 3.
+**Owner (now):** run `scripts/commercial/phase0_readonly_inventory.sql` read-only against
+production per `scripts/commercial/README.md` and paste the 16 result grids here (decision of
+2026-11-05). **This workstream (on receipt):** populate `06_…REGISTER.md` from the verbatim
+output only, reconcile every customer, close or enumerate exceptions, then **execute the granted
+merge of PR #81** and report the merge SHA. **After merge:** book the rehearsal, decide the
+`07_…` §7.2 decision sheet, and return for the **separate explicit DEPLOY/SQL approval** — only
+that second approval unlocks Section 3 Steps 3–8 (deploy → `01` → `03` → smoke → monitor).
