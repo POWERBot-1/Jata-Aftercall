@@ -1,5 +1,6 @@
 import prisma from "./db";
-import { AI_FRONT_DESK_STARTER_KEY, FRONT_DESK_TIER_KEYS } from "./frontDeskTiers";
+import { AI_FRONT_DESK_STARTER_KEY, AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "./frontDeskTiers";
+import { getVoiceReadiness } from "./telnyx/voice-readiness";
 
 // Pricing is DB-driven (§16, §32, §39) — never scattered hardcodes.
 // This helper centralizes plan retrieval so payable amount is always server-derived.
@@ -69,8 +70,9 @@ export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): 
   // Front Desk Voice is a commercial tier definition, not proof of a working telephone service.
   // Keep it out of every public/customer plan list until a real inbound-voice provider adapter,
   // verified webhook path and end-to-end call test are shipped. Checkout also fails closed below.
+  const voiceCanBeSold = getVoiceReadiness().canSell;
   return plans.filter(
-    (plan) => isPubliclyListedPlan(plan.key) && plan.key !== "AI_FRONT_DESK_VOICE",
+    (plan) => isPubliclyListedPlan(plan.key) && (plan.key !== AI_FRONT_DESK_VOICE_KEY || voiceCanBeSold),
   );
 }
 
