@@ -1,0 +1,206 @@
+# 07 — Release Readiness: Production Sequence, Rollback, Reconciliation & Verification
+
+**Status: PREPARED — NOT EXECUTED. Implementation accepted (PR #81); production execution NOT
+authorised (§41.11).** Prepared 2026-11-05. This file is the single consolidated runbook for the
+approval-gated production phase; it references (does not duplicate) `05_REHEARSAL_ROLLBACK_CHECKLIST.md`
+and `06_CUSTOMER_MIGRATION_REGISTER.md`.
+
+---
+
+## 1. Release identity & verified current state
+
+| Item | Value (verified read-only 2026-11-05) |
+|---|---|
+| Pull request | #81, OPEN, `arena/0a551243-jata-aftercall` → `main` |
+| Commits (preserved, never rewritten) | `b221cef` design docs · `be2779d` implementation · `1b09879` real-browser check alignment |
+| PR diff | 37 files, +1,794 / −93 vs base `19f11d9`; no debug leftovers (scan clean) |
+| Production deployment | `dpl_9XjMnD81yAXWVW3THPS6K95vFA1K` — READY / PROMOTED at base `19f11d9` (PR #78). **Unchanged by this workstream.** |
+| Production aliases | `jataaftercall.co.ke`, `www.jataaftercall.co.ke`, `jata-aftercall.vercel.app` (+ branch aliases) — official domain already bound to the current production deployment |
+| Production DB writes by this workstream | **ZERO** — all SQL in `scripts/commercial/` is PREPARED, NOT EXECUTED |
+| Official domain | https://jataaftercall.co.ke |
+
+**CI evidence (PR #81, head `1b09879`): 18 PASS / 1 FAIL.**
+
+| Check | Result |
+|---|---|
+| Static (install, generate, lint, typecheck, audit) | pass |
+| Schema, types, unit suite, build | pass |
+| full-suite | pass |
+| Migrations + schema on PostgreSQL 18 | pass |
+| Migrations and PostgreSQL suite | pass |
+| Production build path on PostgreSQL 18 | pass |
+| Exact candidate applies on disposable PostgreSQL 18 | pass |
+| Schema reconciliation proposal closes the drift | pass |
+| Failure paths actually fail | pass |
+| Journey against a real database | pass |
+| D2 — build, audit and controls on the candidate tree | pass |
+| Migration target guard | pass |
+| Real-Chrome six-viewport capture on a disposable database | pass |
+| capture | pass |
+| Release gate (aggregate) | pass |
+| instruction-integrity | pass |
+| Vercel · Vercel Preview Comments | pass |
+| **programme-completeness** | **FAIL — PRE-EXISTING** |
+
+`programme-completeness` fails identically on the unmodified base `19f11d9` (verified via isolated
+worktree, same exit 1): its 34 rows are **28 BLOCKED + 6 NOT_TESTED, zero FAIL** — all belong to
+other programme directives (ADMIN-002…008 owner/production gates; MOTION-003/004/005/009/010;
+ADMIN-023), none to this workstream's deliverables. It stays red until those programme rows are
+completed through their own gates; **this workstream will not falsify programme statuses to clear
+it.** Observed effect: PR merge state reports BLOCKED while it is red (repo admins decide whether
+it is a required context; branch protection is not readable from this sandbox).
+
+---
+
+## 2. Production migration prerequisites (all must be TRUE before Step 1)
+
+| # | Prerequisite | State |
+|---|---|---|
+| P-1 | **Explicit owner approval (§41.11)** covering: three new catalogue rows, Starter display-name change, code release, scripts, execution window, notification wording | **OPEN — the only genuinely approval-gated item** |
+| P-2 | **Phase 0 customer inventory** — owner/operator runs `scripts/commercial/phase0_readonly_inventory.sql` (SELECTs only) and supplies output; `06_CUSTOMER_MIGRATION_REGISTER.md` populated and every customer reconciled | **BLOCKED** (deliverable #3) |
+| P-3 | Owner decisions on all **PENDING OWNER DECISION** cells (`02_ENTITLEMENT_MATRIX.md` §2–§3; `05_…` §7 items E-2…E-7), or explicit acceptance that those capabilities stay unmarketed/undecided | **OPEN** |
+| P-4 | Rehearsal evidence: `01 → 03 → 02 → 01` against a non-production dataset with a representative customer slice (§41.9 — legacy access, per-tier checkout, activation, renewal/expiry, duplicate webhook replay, interrupted migration, rollback) | **NOT TESTED** |
+| P-5 | PR #81 merged to `main` by authorised reviewer | NOT DONE (by instruction) |
+| P-6 | Deploy freeze agreed for the execution window (no other production deploys) | OPEN |
+| P-7 | Baseline reconciliation captured (Section 5, BEFORE column) | NOT DONE |
+
+---
+
+## 3. Exact production migration sequence (after ALL prerequisites)
+
+> **Order rule (corrected 2026-11-05): code BEFORE rows.** Old code + new tier rows is the one
+> unsafe combination (old entitlement engine denies any key ≠ `AI_BUSINESS_FRONT_DESK`, so a tier
+> could be sold without granting access). New code + no tier rows is safe (tiers simply do not
+> exist: checkout returns `PLAN_NOT_FOUND`).
+
+| Step | Action | Artifact | Expected result | Abort if |
+|---|---|---|---|---|
+| 0 | Re-run read-only inventory; complete register; capture baseline reconciliation | `phase0_readonly_inventory.sql`, `03_reconcile.sql` (BEFORE), `06_…REGISTER.md` | B-1 = **8** `PlanConfig` rows (Oct-29 verified); register fully populated; B-2…B-6 snapshots stored | Inventory cannot be obtained → **STOP (P-2 unmet)** |
+| 1 | Obtain and record explicit §41.11 approval (P-1) covering every change in this table | change record | written approval on file | absent → **STOP** |
+| 2 | Freeze deploys for the window (P-6) | — | freeze confirmed | — |
+| 3 | **Deploy the approved release** (merge of PR #81 → production deploy) | Vercel production deploy from `main` | new deployment READY; `jataaftercall.co.ke` serves new release; **catalogue still 8 rows — tiers not yet listed** | deploy fails → fix forward; no SQL has run, nothing to roll back |
+| 4 | Run the catalogue extension | `scripts/commercial/01_extend_front_desk_catalogue.sql` | guard passes (Starter 499/30 present); 3 rows inserted; R1 post = **11 rows**; Starter **id/key/price/duration unchanged**; Starter display name = "Front Desk Starter — KES 499/month" | guard raises → **nothing written** (script refuses); investigate before retry |
+| 5 | Run reconciliation after | `scripts/commercial/03_reconcile.sql` | **B-2, B-3, B-4 byte-identical to baseline**; R5 exceptions empty/individually listed; R6 spot-check start/expiry unchanged | any B-2…B-4 diff → **STOP, execute rollback (Section 4)** |
+| 6 | Signed-in smoke (Section 6, "smoke" subset) | manual / test accounts | four tiers listed at 499/999/1,999/3,999 × 30d; one dev/mock checkout per tier activates the correct tier key; one legacy subscriber view unchanged; **no production charge completed** | smoke failure → **STOP, rollback (Section 4)** |
+| 7 | Dispatch approved notifications (`05_…` §4 wording only) | existing email/in-dashboard channels | messages sent, log attached | wording not pre-approved → hold |
+| 8 | Monitor 24 h; publish verification report (Section 6 full checklist + `05_…` §6 matrix update) | webhook/audit streams | zero attributable errors | sustained errors → incident per Section 4 |
+
+---
+
+## 4. Rollback procedure (prepared, tested-in-rehearsal-only)
+
+**Trigger:** any failure at Steps 4–6, or material error found during the 24 h window.
+**Order is mandatory: SQL first, then code.**
+
+1. `scripts/commercial/02_rollback_front_desk_catalogue.sql` — sets `isActive=false` for exactly
+   `AI_FRONT_DESK_STANDARD` / `_PRO` / `_VOICE`. Never touches Starter, other plans, or any
+   customer row. Verify with its trailing SELECT (three deactivated; Starter still 499/30 active).
+2. Roll back the application deployment to the previous production deployment
+   (`dpl_9XjMnD81yAXWVW3THPS6K95vFA1K` lineage) — old code + deactivated rows = pre-migration
+   behaviour. (Deactivate FIRST: old code ignoring unknown keys while they remain active is the
+   unsafe order.)
+3. Re-run `03_reconcile.sql`; confirm B-2…B-4 again identical to baseline.
+4. **No data restore is ever needed under Option A** — both directions write only
+   `PlanConfig.isActive` / three additive rows; subscriptions, entitlements and payments are
+   untouched by migration and rollback alike.
+5. **Customers who purchased a new tier before rollback keep their access** — never silently
+   revert. Each case is entered in the exception register (`05_…` §7) for manual handling;
+   refunds only through the authorised refund process.
+6. **Forward recovery:** after the defect is fixed, re-run rehearsal (P-4), re-obtain approval if
+   scope changed, then Steps 3–8 again (script `01` is idempotent — `ON CONFLICT` never changes an
+   existing id).
+
+---
+
+## 5. Customer reconciliation report (template)
+
+**Sources:** BEFORE/AFTER runs of `scripts/commercial/03_reconcile.sql`; population from
+`phase0_readonly_inventory.sql`; per-customer detail in `06_CUSTOMER_MIGRATION_REGISTER.md`
+(population remains **BLOCKED** until P-2).
+
+### 5.1 Population fingerprint (must be byte-identical BEFORE vs AFTER)
+
+| Query | Definition | Baseline expectation | Post expectation |
+|---|---|---|---|
+| B-1 / R1 | `PlanConfig` rows | 8 rows (verified 2026-10-29) | **11 rows** (+Standard, +Pro, +Voice; `ERP_PRO` still absent) |
+| B-2 / R2 | `Subscription` by plan key × status | snapshot | **byte-identical** |
+| B-3 / R3 | `AIPackageEntitlement` by packageKey × status | snapshot | **byte-identical** |
+| B-4 / R4 | `Payment` by status (+ `max(createdAt)`) | snapshot | **byte-identical — zero new Payment rows attributable to migration** |
+| B-5 / R5 | orphan `planId`s / contradictions | enumerated | empty or individually listed with disposition |
+| B-6 / R6 | 5 most recent ACTIVE/EXPIRING Front Desk subscribers | start/expiry/receipt | **unchanged** |
+
+### 5.2 Per-customer section (columns = `06_…REGISTER.md`; fill ONLY from supplied inventory)
+
+| businessId | current plan key | status | startAt | expiresAt | last payment | mapped tier | action | exception ID |
+|---|---|---|---|---|---|---|---|---|
+| _(BLOCKED — no verified inventory)_ | | | | | | | | |
+
+**Rule:** no customer row may be invented, assumed or migrated from inference; every customer is
+reconciled against actual records before any customer-specific execution is sought.
+
+### 5.3 Sign-off
+
+- Prepared by: ____________ (date: ______) — baseline attached
+- Reviewed by: ____________ (date: ______) — B-2…B-4 identical confirmed
+- Exceptions dispositioned: ____________ (register IDs: ______)
+
+---
+
+## 6. Post-deployment verification checklist
+
+**Domain & release**
+- [ ] https://jataaftercall.co.ke serves the new release (alias already bound to production; confirm HTTP status + release SHA after deploy)
+- [ ] `jata-aftercall.vercel.app` serves the same release; no stale alias
+
+**Catalogue (SQL verification)**
+- [ ] R1 = 11 active rows; four Front Desk tiers at 499 / 999 / 1,999 / 3,999, all `durationDays = 30`
+- [ ] Starter row: same `id`, same `key = AI_BUSINESS_FRONT_DESK`, price 499/30 unchanged; display name "Front Desk Starter — KES 499/month"
+
+**Surfaces (signed-in and signed-out)**
+- [ ] `/pricing`: four tiers listed with correct prices/periods; PLAN_KIND/scope copy correct
+- [ ] `/products` + `/products/ai-front-desk`: tier cards present, link to detail, price section lists four tiers
+- [ ] Homepage: ten plan cards render; CTA routes resolve; `data-plan-count="10"` grid centred
+- [ ] Dashboard → Subscription catalogue: four tier offers with stored prices
+- [ ] Dashboard → AI: price card shows the held tier (Starter fallback when none)
+- [ ] Admin → Subscriptions: "Front Desk entitlement" column shows packageKey · status · expiry
+
+**Checkout & payments (mock/dev amounts only — no production charge)**
+- [ ] Per-tier checkout initiation returns server-priced amount (499/999/1,999/3,999)
+- [ ] Tampered price/plan requests rejected (`PLAN_PRICING_INVALID` / `PLAN_NOT_FOUND` / `PLAN_UNAVAILABLE`)
+- [ ] Paystack verification + webhook path unchanged: signature check, amount re-validation, `ProcessedWebhook` idempotency, duplicate charge replay → single activation
+- [ ] R4 confirms zero Payment rows created by the migration itself
+
+**Entitlements**
+- [ ] Mock/dev purchase of each tier stamps `packageKey` = purchased tier on `AIPackageEntitlement`
+- [ ] Legacy subscriber: entitlement status/expiry byte-identical to baseline; only display name changed
+- [ ] Non-Front-Desk plan holder: Front Desk still denied (no cross-product grant)
+- [ ] Expiry/grace/suspend paths return the same pinned status reasons as before
+
+**Monitoring (24 h)**
+- [ ] Webhook error rate, checkout failures, entitlement denials — no attributable regression
+- [ ] Update `05_…` §6 acceptance matrix rows with evidence (a green build alone moves nothing)
+- [ ] Attach this completed checklist to the change record
+
+---
+
+## 7. Outstanding owner decisions (consolidated — nothing here may be assumed)
+
+1. **§41.11 production approval** — scope exactly Section 3's table (rows + name change + deploy + scripts + window + notification wording). Implementation acceptance ≠ production approval.
+2. **Phase 0 inventory run** (P-2 / deliverable #3) — `phase0_readonly_inventory.sql` output supplied; register populated.
+3. **Entitlement & allowance cells** — every `PENDING OWNER DECISION` cell in `02_ENTITLEMENT_MATRIX.md` §2–§3 (conversation capacity, channels, voice, overage; `05_…` E-2).
+4. **Upgrade/downgrade rules** — E-3 residual absorption vs forfeit vs credit; E-4 effective-at-period-end vs immediate.
+5. **Starter display-name change** — included inside script `01` (Option A as documented); strike the trailing `UPDATE … name` block if the owner wants zero touch to the Starter row.
+6. **Starter key rename** (`AI_BUSINESS_FRONT_DESK` → `AI_FRONT_DESK_STARTER`) — optional follow-up, **PENDING**, never part of this release.
+7. **Notifications** — E-7 legacy rename notice wording; marketing copy may only claim shipped capability (no WhatsApp/SMS/voice/volume until decided and enforced).
+8. **`programme-completeness` red status** — repo-admin decision (waive/required-context vs completing the unrelated programme rows); not resolvable by this workstream without falsifying statuses.
+9. **E-5** `ERP_PRO_ENABLED` env value unverified (out of scope, recorded); E-6 WhatsApp/SMS/Voice technical readiness check at implementation of decided cells.
+
+---
+
+## 8. Recommended next action
+
+**Owner:** run `scripts/commercial/phase0_readonly_inventory.sql` read-only against production and
+supply the output (unblocks #3), decide the PENDING matrix cells, and book the rehearsal. With
+those in hand, this workstream will present the consolidated §41.11 approval request (this file +
+reconciliation baseline). Only after that approval may PR #81 be merged, the release deployed, and
+scripts `01 → 03` executed in the order of Section 3.

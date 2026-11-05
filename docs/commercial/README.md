@@ -3,7 +3,9 @@
 **Workstream:** §41 Live commercial catalogue, customer entitlements and production billing migration
 **Branch:** `arena/0a551243-jata-aftercall`
 **Date opened:** 2026-11-05
-**Gate status: PHASE 0 (READ-ONLY AUDIT) COMPLETE → DESIGN SUBMITTED → AWAITING OWNER APPROVAL.**
+**Gate status: PHASE 0 (READ-ONLY AUDIT) COMPLETE → DESIGN SUBMITTED → IMPLEMENTATION ACCEPTED
+(PR #81) → RELEASE RUNBOOK PREPARED (`07_RELEASE_READINESS.md`) → AWAITING OWNER APPROVAL FOR
+PRODUCTION.**
 
 **Nothing in this workstream has been executed against production.** No `PlanConfig` row, no
 subscription, no entitlement, no payment, no environment variable and no deployment has been
@@ -51,6 +53,7 @@ REHEARSE MIGRATION ──► SUBMIT EVIDENCE ──► OBTAIN OWNER APPROVAL ─
 | 14 | Production execution checklist | `05_REHEARSAL_ROLLBACK_CHECKLIST.md` §5 | **PASS (document)** |
 | 15 | Post-migration verification report | `05_REHEARSAL_ROLLBACK_CHECKLIST.md` §6 (acceptance matrix) | **NOT TESTED** — pre-execution statuses recorded |
 | — | Customer-by-customer migration & reconciliation framework | `06_CUSTOMER_MIGRATION_REGISTER.md` | **FRAMEWORK READY** — population BLOCKED on #3 |
+| — | Release readiness: exact production sequence, rollback, reconciliation report, post-deploy verification | `07_RELEASE_READINESS.md` | **PREPARED** — execution gated on §41.11 approval + #3 |
 
 ## Open decisions required from the owner (before any implementation PR merges or any production change)
 
