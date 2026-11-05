@@ -37,11 +37,6 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     blurb: "The AI front desk on the Front Desk Pro package tier.",
     bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
   },
-  AI_FRONT_DESK_VOICE: {
-    slug: "ai-front-desk",
-    blurb: "The AI front desk on the Front Desk Voice package tier — the top Front Desk package.",
-    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
-  },
   JATA_AUTOPILOT: {
     slug: "jata-autopilot",
     blurb: "Business-health diagnostics and draft actions for your approval, configured in the workspace.",
