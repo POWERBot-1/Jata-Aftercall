@@ -19,9 +19,10 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<{ businessId?: string }> };
 
 /**
- * Factual catalogue copy for the complete offer list. The four page plans keep the same wording
- * the payable cards use (`PLAN_INCLUDES`); the three separate products carry their own card copy
- * from `lib/landing.ts`. No price is written here — every price comes from `PlanConfig`.
+ * Factual catalogue copy for the complete offer list. The public page plans (including every AI
+ * Front Desk tier) keep the same wording the payable cards use (`PLAN_INCLUDES`); the three
+ * separate products carry their own card copy from `lib/landing.ts`. No price is written here —
+ * every price comes from `PlanConfig`.
  */
 type SubscriptionOfferCopy = {
   kind: string;

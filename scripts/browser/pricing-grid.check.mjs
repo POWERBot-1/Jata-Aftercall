@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
- * Pricing grid browser check — all seven offers in one grid (2026-10-29 owner order: Monthly,
- * Annual, AI Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot).
+ * Pricing grid browser check — every catalogue offer in one grid (2026-10-29 owner order with
+ * the AI Front Desk 2.0 tiers slotted after Starter: Monthly, Annual, Front Desk
+ * Starter/Standard/Pro/Voice, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot).
+ * Against a seeded catalogue this is ten cards; against production's pre-migration 8-row
+ * catalogue it is the original seven (no tier rows exist there yet).
  *
  *   CHROME_PATH=/path/to/chromium BASE_URL=http://localhost:3000 npm run test:browser:pricing
  *
  * Requires a running server (dev or `next start`). What it proves, in a real browser at the
  * widths the brief names (320, 360, 390, 430, 768, 1366):
- *   1. Exactly seven `.lp-plan` cards, all inside the single `.lp-plans` grid — none rendered
- *      outside it in a separate section.
+ *   1. Exactly the catalogue's `.lp-plan` cards, all inside the single `.lp-plans` grid — none
+ *      rendered outside it in a separate section.
  *   2. No horizontal overflow (`documentElement.scrollWidth` within the viewport) and no card
  *      crossing the viewport edge at any width.
  *   3. The grid resolves to one column on a phone, two on a tablet, and a three-across desktop
@@ -57,12 +60,18 @@ const VIEWPORTS = [
 ];
 
 // The authoritative commercial data this change must not alter. Order is the owner-mandated
-// 2026-10-29 mobile-first homepage sequence: Monthly, Annual, AI Front Desk, Website Studio,
-// Business POS, JATA BOS PRO, JATA Autopilot.
+// 2026-10-29 mobile-first homepage sequence with the AI Front Desk 2.0 tiers directly after the
+// Starter card: Monthly, Annual, Front Desk Starter/Standard/Pro/Voice, Website Studio,
+// Business POS, JATA BOS PRO, JATA Autopilot. The three newer tiers exist only where their
+// stored PlanConfig rows exist (the seeded CI catalogue); production pre-migration renders the
+// original seven cards.
 const EXPECTED = [
   { key: "MONTHLY", price: "KES 149", period: "per 30 days", cta: "/register" },
   { key: "ANNUAL", price: "KES 999", period: "per year", cta: "/register" },
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
+  { key: "AI_FRONT_DESK_STANDARD", price: "KES 999", period: "per 30 days", cta: "/register" },
+  { key: "AI_FRONT_DESK_PRO", price: "KES 1,999", period: "per 30 days", cta: "/register" },
+  { key: "AI_FRONT_DESK_VOICE", price: "KES 3,999", period: "per 30 days", cta: "/register" },
   { key: "INTERACTIVE_BUSINESS", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "BUSINESS_POS", price: "KES 499", period: "per 30 days", cta: "/dashboard/pos" },
   { key: "ERP_PRO", price: "KES 3,000", period: "per 30 days", cta: "/products/erp-pro" },
@@ -143,7 +152,7 @@ for (const viewport of VIEWPORTS) {
   await page.evaluate(() => document.querySelector("#pricing")?.scrollIntoView());
   const f = await facts(page);
 
-  check(`${viewport.label}px: one pricing grid holds exactly seven plan cards`, f.gridCount === 1 && f.cards.length === 7 && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length}`);
+  check(`${viewport.label}px: one pricing grid holds exactly the catalogue's plan cards`, f.gridCount === 1 && f.cards.length === EXPECTED.length && f.strayCards === 0 && f.cards.every((c) => c.insideGrid), `grids=${f.gridCount} cards=${f.cards.length} expected=${EXPECTED.length}`);
   check(`${viewport.label}px: every card renders a visible product icon`, f.cards.every((c) => c.iconVisible), f.cards.map((c) => `${c.key}:${c.iconVisible}`).join(" | "));
   check(`${viewport.label}px: no separate POS section`, !f.separatePosSection);
   check(`${viewport.label}px: no horizontal overflow`, f.docScrollWidth <= f.viewport && f.cards.every((c) => c.box.right <= f.viewport + 0.5 && c.box.left >= -0.5), `scrollWidth=${f.docScrollWidth} viewport=${f.viewport}`);
@@ -180,15 +189,18 @@ for (const viewport of VIEWPORTS) {
 
   check(
     `${viewport.label}px: order, prices, periods and CTA destinations are authoritative`,
-    f.cards.every((card, index) => {
+    f.cards.length === EXPECTED.length && f.cards.every((card, index) => {
       const expected = EXPECTED[index];
-      return card.key === expected.key && card.price === expected.price && card.period.startsWith(expected.period) && card.ctaHref === expected.cta;
+      return expected && card.key === expected.key && card.price === expected.price && card.period.startsWith(expected.period) && card.ctaHref === expected.cta;
     }),
     f.cards.map((card) => `${card.key}:${card.price}:${card.ctaHref}`).join(" | "),
   );
-  check(`${viewport.label}px: the BOS PRO card is sixth and links to its product page`, f.cards[5]?.key === "ERP_PRO" && f.cards[5]?.ctaText === "Explore JATA BOS PRO" && f.cards[5]?.name.includes("JATA BOS PRO") && f.cards[5]?.ctaHref === "/products/erp-pro", f.cards[5]?.ctaText ?? "missing");
-  check(`${viewport.label}px: the Autopilot card is seventh (last) and keeps its own CTA`, f.cards[6]?.key === "JATA_AUTOPILOT" && f.cards[6]?.ctaText === "Open JATA Autopilot" && f.cards[6]?.name.includes("JATA Autopilot"), f.cards[6]?.ctaText ?? "missing");
-  check(`${viewport.label}px: the POS card is fifth and keeps its own CTA`, f.cards[4]?.key === "BUSINESS_POS" && f.cards[4]?.ctaText === "Open Business POS", f.cards[4]?.ctaText ?? "missing");
+  const bosIndex = EXPECTED.findIndex((e) => e.key === "ERP_PRO");
+  const autopilotIndex = EXPECTED.findIndex((e) => e.key === "JATA_AUTOPILOT");
+  const posIndex = EXPECTED.findIndex((e) => e.key === "BUSINESS_POS");
+  check(`${viewport.label}px: the BOS PRO card is second-to-last and links to its product page`, f.cards[bosIndex]?.key === "ERP_PRO" && f.cards[bosIndex]?.ctaText === "Explore JATA BOS PRO" && f.cards[bosIndex]?.name.includes("JATA BOS PRO") && f.cards[bosIndex]?.ctaHref === "/products/erp-pro", f.cards[bosIndex]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the Autopilot card is last and keeps its own CTA`, f.cards[autopilotIndex]?.key === "JATA_AUTOPILOT" && f.cards[autopilotIndex]?.ctaText === "Open JATA Autopilot" && f.cards[autopilotIndex]?.name.includes("JATA Autopilot"), f.cards[autopilotIndex]?.ctaText ?? "missing");
+  check(`${viewport.label}px: the POS card keeps its own CTA`, f.cards[posIndex]?.key === "BUSINESS_POS" && f.cards[posIndex]?.ctaText === "Open Business POS", f.cards[posIndex]?.ctaText ?? "missing");
 
   await shot(page, `pricing-${viewport.label}`);
   await page.close();

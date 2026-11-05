@@ -158,7 +158,8 @@ export const ERP_PRO_FALLBACK_CARD: HomepagePlanCard = {
 /**
  * The seven offers the homepage advertises, in marketing order.
  *
- * The four page plans come from `publiclyListedPlans()` as before; the three owner-only products
+ * The public page plans (including every Front Desk tier) come from `publiclyListedPlans()`
+ * as before; the three owner-only products
  * (Business POS fifth, JATA BOS PRO sixth, JATA Autopilot standard seventh) are appended as
  * presentation cards so a customer can discover the complete catalogue in one grid. This is
  * presentation only:

@@ -11,7 +11,6 @@ import prisma from "./db";
 import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "./team-access";
 import {
   AI_FRONT_DESK_STARTER_KEY,
-  FRONT_DESK_TIER_DURATION_DAYS,
   frontDeskTierPricing,
   isFrontDeskTierKey,
 } from "./frontDeskTiers";
