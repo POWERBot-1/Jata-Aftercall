@@ -32,6 +32,7 @@ import {
   FALLBACK_PLANS,
   HOMEPAGE_PLAN_ORDER,
   PRIVATE_PLAN_KEYS,
+  publiclyListedPlans,
   orderHomepagePlans,
 } from "@/lib/pricing";
 import { deriveAIEntitlement } from "@/lib/ai-entitlement";
@@ -90,6 +91,23 @@ describe("four-tier catalogue (§41.1)", () => {
     for (const key of FRONT_DESK_TIER_KEYS) {
       expect(PRIVATE_PLAN_KEYS, key).not.toContain(key);
     }
+  });
+
+  it("keeps Voice out of public plan lists until inbound reception is genuinely operational", () => {
+    const listed = publiclyListedPlans([
+      { key: "AI_BUSINESS_FRONT_DESK" },
+      { key: "AI_FRONT_DESK_STANDARD" },
+      { key: "AI_FRONT_DESK_PRO" },
+      { key: "AI_FRONT_DESK_VOICE" },
+      { key: "INTERACTIVE_BUSINESS" },
+    ]);
+    expect(listed.map((plan) => plan.key)).toEqual([
+      "AI_BUSINESS_FRONT_DESK",
+      "AI_FRONT_DESK_STANDARD",
+      "AI_FRONT_DESK_PRO",
+      "INTERACTIVE_BUSINESS",
+    ]);
+    expect(read("app/api/checkout/route.ts")).toContain('plan.key === "AI_FRONT_DESK_VOICE"');
   });
 
   it("accepts only family keys", () => {
@@ -160,13 +178,19 @@ describe("marketing order (§41.5 consistency)", () => {
       expect(PLAN_BADGES[key], key).toBeTruthy();
       expect(PLAN_ICONS[key], key).toBe("bot");
       expect(pricing, key).toContain(`${key}:`);
-      expect(products, key).toContain(`${key}:`);
+      if (key === "AI_FRONT_DESK_VOICE") {
+        // Voice remains deliberately absent from customer-facing product cards until the
+        // provider-backed inbound call path is operational; a tier key alone is not a feature.
+        expect(products, key).not.toContain(`${key}: {`);
+      } else {
+        expect(products, key).toContain(`${key}:`);
+      }
       expect(subscription, key).toContain(`${key}:`);
     }
     // The products index drops any card without PRODUCT_DETAIL — the tiers must all have one.
     expect(products).toContain("AI_FRONT_DESK_STANDARD: {");
     expect(products).toContain("AI_FRONT_DESK_PRO: {");
-    expect(products).toContain("AI_FRONT_DESK_VOICE: {");
+    expect(products).not.toContain("AI_FRONT_DESK_VOICE: {");
   });
 });
 
