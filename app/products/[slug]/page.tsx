@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
+import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const dynamic = "force-dynamic";
@@ -186,7 +187,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           ...section,
           body: [
             frontDeskPlans.length
-              ? frontDeskPlans.map((plan) => `${plan.name}: KES ${Number(plan.priceKES).toLocaleString("en-KE")} / ${plan.durationDays} days`).join("; ") + "."
+              ? frontDeskPlans.map((plan) => `${plan.name}: KES ${formatNumber(Number(plan.priceKES))} / ${plan.durationDays} days`).join("; ") + "."
               : "No Front Desk package is currently available for purchase.",
             "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
           ],
