@@ -60,7 +60,6 @@ jobs:
             const v = report.metadata.vulnerabilities;
             console.log(`${label}: total=${v.total}, critical=${v.critical}, high=${v.high}, moderate=${v.moderate}, low=${v.low}, info=${v.info}`);
           }
-          const full = read('artifacts/dependency-audit/full.json');
           const entries = Object.entries(full.vulnerabilities || {});
           for (const [name, item] of entries) {
             console.log(JSON.stringify({
