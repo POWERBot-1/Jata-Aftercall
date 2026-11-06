@@ -242,8 +242,12 @@ describe("public /pricing shows every offer", () => {
     const html = await renderPricing();
     expect(html).not.toContain("mk-table");
     expect(html).toContain('class="mk-grid"');
-    // All seven are mk-card blocks inside the catalogue grid.
-    expect(html.match(/class="mk-card"/g)).toHaveLength(7);
+    // Seven plan cards in the owner grid plus the four AI Front Desk 2.0 tier cards in the
+    // family block (complete package family on every customer surface) — eleven stacked
+    // mk-card blocks in total, never a wide comparison table.
+    expect(html.match(/class="mk-card"/g)).toHaveLength(11);
+    expect(html.match(/data-plan="/g)).toHaveLength(7);
+    expect(html.match(/data-tier="/g)).toHaveLength(4);
   });
 
   it("keeps the catalogue on one authoritative helper shared with the homepage", () => {

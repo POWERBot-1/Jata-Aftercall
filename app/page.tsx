@@ -9,6 +9,9 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { formatNumber } from "@/lib/format";
 import { FALLBACK_PLANS, HOMEPAGE_AUTOPILOT_PLAN_KEY, HOMEPAGE_ERP_PRO_PLAN_KEY, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { LandingIcon } from "@/components/landing/Icons";
 import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
@@ -50,9 +53,21 @@ export default async function HomePage() {
     storedPlans = [];
   }
   // An unreadable or empty plan table falls back to every advertised plan, POS included.
-  // Voice reception is still pending implementation and owner readiness approval; never advertise it.
+  // Voice reception is still pending implementation and owner readiness approval; it never
+  // becomes a payable card in this grid — but the informational family block below always
+  // shows the tier, gated, so the complete approved package family is discoverable here
+  // without visiting /products first (customer-interface completion directive).
   const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
     .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
+
+  // The four AI Front Desk 2.0 tiers, at the approved tier prices, with availability from
+  // the same price-matched catalogue row and Voice provider gate /products uses. The grid
+  // above keeps the owner-mandated seven cards; this family block is presentation only —
+  // it never starts checkout and never grants an entitlement.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
+    frontDeskFamilyCard(key, storedPlans, voiceReadiness.canSell),
+  );
 
   let demoRows: LandingDemoRow[] = [];
   try {
@@ -190,6 +205,45 @@ export default async function HomePage() {
                 );
               })}
             </div>
+
+            {/* The complete AI Front Desk 2.0 family lives inside the pricing experience so
+                the four approved tiers are discoverable on the homepage itself. Light cards
+                on the ink section; availability and prices come from the shared helper. */}
+            <div className="lp-front-desk" id="ai-front-desk-tiers">
+              <p className="lp-kicker lp-kicker--light">AI Front Desk 2.0</p>
+              <h3 className="lp-h2 lp-h2--light">All four front desk packages</h3>
+              <p className="lp-lede lp-lede--light">
+                One AI front desk, four package levels, at the approved package prices. Each card
+                states plainly whether its catalogue and provider gates are satisfied — a card here
+                never starts checkout, and Voice stays pending until provider verification is
+                complete.
+              </p>
+              <div className="mk-grid">
+                {frontDeskFamily.map((tier) => (
+                  <article key={tier.key} className="mk-card" data-tier={tier.key}>
+                    <h3>{tier.name}</h3>
+                    <p className="mk-card__price">KES {formatNumber(tier.priceKES)} / 30 days</p>
+                    <p><strong>{tier.status}</strong></p>
+                    <p>
+                      {tier.available
+                        ? "Catalogue and required readiness checks are satisfied. Access still requires a verified business entitlement."
+                        : "Visible for transparency — not for sale until its catalogue and readiness gates are satisfied."}
+                    </p>
+                    <Link
+                      href={tier.key === AI_FRONT_DESK_VOICE_KEY ? "/products/ai-front-desk#voice" : "/products/ai-front-desk"}
+                    >
+                      {tier.key === AI_FRONT_DESK_VOICE_KEY ? "View Voice readiness →" : "View AI Front Desk details →"}
+                    </Link>
+                  </article>
+                ))}
+              </div>
+              <p className="lp-front-desk__all">
+                <Link href="/products" className="lp-btn lp-btn--outline">
+                  See the complete product catalogue <span aria-hidden="true">→</span>
+                </Link>
+              </p>
+            </div>
+
             <p className="lp-pricing__note">
               Prices are shown in Kenyan shillings. Plans renew for the period you choose and can be changed from your
               dashboard. The separate owner products — Business POS, JATA BOS PRO and JATA Autopilot — are sold per
