@@ -107,7 +107,10 @@ describe("four-tier catalogue (§41.1)", () => {
       "AI_FRONT_DESK_PRO",
       "INTERACTIVE_BUSINESS",
     ]);
-    expect(read("app/api/checkout/route.ts")).toContain('plan.key === "AI_FRONT_DESK_VOICE"');
+    // Checkout refuses Voice until provider + live-verification + billing gates all pass.
+    const checkout = read("app/api/checkout/route.ts");
+    expect(checkout).toContain("AI_FRONT_DESK_VOICE_KEY && !getVoiceReadiness().canSell");
+    expect(checkout).toContain('"PLAN_NOT_READY"');
   });
 
   it("accepts only family keys", () => {

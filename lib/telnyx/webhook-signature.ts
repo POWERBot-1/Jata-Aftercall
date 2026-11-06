@@ -18,7 +18,7 @@ export function verifyTelnyxWebhookSignature(input: {
 }): TelnyxSignatureResult {
   const { rawBody, signature, timestamp, publicKey } = input;
   if (!signature || !timestamp || !publicKey) return { valid: false, reason: "MISSING_HEADERS" };
-  if (!/^\\d{1,12}$/.test(timestamp)) return { valid: false, reason: "INVALID_TIMESTAMP" };
+  if (!/^\d{1,12}$/.test(timestamp)) return { valid: false, reason: "INVALID_TIMESTAMP" };
 
   const timestampSeconds = Number(timestamp);
   const nowSeconds = input.nowSeconds ?? Math.floor(Date.now() / 1000);
