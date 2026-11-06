@@ -412,6 +412,42 @@ jobs:
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated 2>&1 | tee /tmp/step-authenticated-browser.log
 
+      - name: Agent referral revision cursor pagination and tenant isolation
+        run: |
+          set -euo pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — agent referral browser acceptance NOT RUN." >&2
+            exit 1
+          fi
+          AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+          AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED=true \
+          AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" NEXT_TELEMETRY_DISABLED=1 \
+            npx next start -H 127.0.0.1 -p 4110 > /tmp/step-agent-referral-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl -sf -o /dev/null "http://127.0.0.1:4110/login"; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "Agent referral browser server did not become ready." >&2
+            tail -30 /tmp/step-agent-referral-server.log >&2 || true
+            exit 1
+          fi
+          BASE_URL=http://127.0.0.1:4110 AGENT_BROWSER_ISOLATED=1 CHROME_PATH="$CHROME_PATH" \
+          DATABASE_URL="$DATABASE_URL" npm run test:browser:agent-referral-revision 2>&1 | tee /tmp/step-agent-referral-browser.log
+
+      - name: Upload agent referral revision browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-referral-revision-${{ github.sha }}
+          path: artifacts/agent-referral-revision/
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Booking SSR timezone and midnight hydration regression
         run: |
           set -o pipefail
