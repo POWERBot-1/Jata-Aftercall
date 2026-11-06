@@ -268,7 +268,7 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
     "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "testResult": "BLOCKED: Cloudflare R2 preview bucket jata-media-preview is present in WEUR Standard and its r2.dev domain is enabled, but no bucket-scoped S3 access credentials or Vercel preview R2 environment variables are configured; real upload, persistence, provider health and operator controls remain unverified.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
@@ -276,7 +276,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-007",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "blocker": "BLOCKED: the preview bucket's public URL is enabled, but R2 S3 credentials and preview-only Vercel variables are absent; no secured control-plane configuration/change history or complete provider health checks exist. Production R2 remains inactive.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -1105,7 +1105,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — RELEASE-001",
     "verificationCommit": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, durable provider media, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified.",
+    "blocker": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, real durable media upload/persistence, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified. Preview R2 bucket is created and r2.dev enabled, but no S3 credentials or Vercel preview environment is configured.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/**",
@@ -1166,17 +1166,18 @@
     "evidence": [
       "docs/ADMIN_BUILDING_INSTRUCTIONS.md",
       "docs/agents/PROGRAMME_READINESS.json",
-      "docs/release/EVIDENCE-MANIFEST.sha256"
+      "docs/release/EVIDENCE-MANIFEST.sha256",
+      "R2_SETUP.md"
     ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/pull/86"
     ],
     "assessmentReference": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §045 — RELEASE-002",
-    "verificationCommit": "cc579b1ae9ccee991f282fdfa9ab48f7b3737f0f",
+    "verificationCommit": "c47d289ef52b317fb782e21bb7c60a4b38faf0bf",
     "scopeNote": "Authorization is not execution or acceptance; merge/deployment remains gated by the complete programme and production safety checks.",
-    "blocker": "35 pre-existing canonical requirements remain BLOCKED/NOT_TESTED. Cloudflare R2 preview bucket exists, but its r2.dev public domain is disabled; preview object credentials/environment and real upload persistence are not verified. Production media activation and deployment remain separately gated.",
+    "blocker": "35 pre-existing canonical requirements remain BLOCKED/NOT_TESTED. The preview bucket jata-media-preview is WEUR Standard, empty, and its r2.dev public domain is enabled; however no bucket-scoped S3 access credentials or Vercel preview R2 environment variables are configured, so real upload persistence is not verified. Production media activation and deployment remain separately gated.",
     "sourceCommit": "3f78d96e3acf866a1772ff8d07a38fcf58c61b73",
-    "currentAssessmentSourceSha": "cc579b1ae9ccee991f282fdfa9ab48f7b3737f0f",
+    "currentAssessmentSourceSha": "c47d289ef52b317fb782e21bb7c60a4b38faf0bf",
     "currentAssessmentStatus": "BLOCKED"
   }
 }
