@@ -34,7 +34,10 @@ export function validateRegister(text) {
       if (!present) fail(`${id}: missing required field ${field}`);
     }
     const dateStatus = body.match(/\*\*Date \/ approval \/ status:\*\* ([^\n]+)/);
-    if (!dateStatus || !/\b\d{4}-\d{2}-\d{2}\b/.test(dateStatus[1]) || !/\b(PENDING|IN PROGRESS|BLOCKED|IMPLEMENTED|VERIFIED)\b/.test(dateStatus[1])) fail(`${id}: invalid date or status`);
+    const allowedStatus = id === "RELEASE-002"
+      ? /\b(PENDING|IN PROGRESS|BLOCKED|IMPLEMENTED|VERIFIED|AUTHORIZED)\b/
+      : /\b(PENDING|IN PROGRESS|BLOCKED|IMPLEMENTED|VERIFIED)\b/;
+    if (!dateStatus || !/\b\d{4}-\d{2}-\d{2}\b/.test(dateStatus[1]) || !allowedStatus.test(dateStatus[1])) fail(`${id}: invalid date or status`);
     if (!body.includes("Owner instruction") && !body.includes("Original owner instruction")) fail(`${id}: missing owner instruction`);
     // Correction is an appended record: old wording remains intact. Require an earlier ID and
     // explicit change and approval; the script cannot verify the authenticity of that approval.
