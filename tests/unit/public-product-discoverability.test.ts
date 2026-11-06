@@ -18,8 +18,17 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import ProductsPage from "@/app/products/page";
+
+// Deterministic render in BOTH environments: this suite pins the no-catalogue-rows state
+// (approved constants only, everything honestly "not for sale"), while the DB-backed CI
+// jobs exercise the stored-row state on their own. Without this mock the render follows
+// whatever database the runner happens to have.
+vi.mock("@/lib/db", () => ({
+  default: { planConfig: { findMany: async () => [] } },
+  prisma: { planConfig: { findMany: async () => [] } },
+}));
 import {
   buildMarketingCatalogue,
   catalogueCardStatus,
