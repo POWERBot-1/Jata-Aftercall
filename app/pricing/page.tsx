@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
@@ -74,6 +77,16 @@ export default async function PricingPage() {
   }
   const plans = homepagePlanCards(stored.length > 0 ? stored : FALLBACK_PLANS);
 
+  // Every approved package, including Standard, Pro and Voice: the seven marketing cards
+  // above are the owner-order grid, and the family block below always renders all four
+  // AI Front Desk tiers at their approved prices with honest catalogue/provider
+  // availability — even when a stored PlanConfig row is missing or Voice is gated.
+  // Presentation only; nothing here changes checkout, entitlement or Paystack guards.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
+    frontDeskFamilyCard(key, stored, voiceReadiness.canSell),
+  );
+
   return (
     <MarketingLayout
       eyebrow="Pricing"
@@ -115,6 +128,40 @@ export default async function PricingPage() {
         <div className="mk-btn-row">
           <Link href="/register" className="mk-btn">Create an account</Link>
           <Link href="/dashboard/subscription" className="mk-btn mk-btn--ghost">Plans in my dashboard</Link>
+        </div>
+      </MarketingSection>
+
+      <MarketingSection title="AI Front Desk 2.0 — all four packages" id="ai-front-desk">
+        <p className="mk-prose">
+          One AI front desk, four package levels. Prices shown are the approved package prices.
+          A package is purchasable only when its matching active catalogue record and service
+          readiness checks are present — until every one of those conditions is satisfied the
+          card says so plainly. These cards are informational and do not start checkout.
+        </p>
+        <div className="mk-grid">
+          {frontDeskFamily.map((tier) => (
+            <article key={tier.key} className="mk-card" data-tier={tier.key}>
+              <h3>{tier.name}</h3>
+              <p className="mk-card__price">KES {formatNumber(tier.priceKES)} / 30 days</p>
+              <p className="mk-card__scope">AI Front Desk tier · per business</p>
+              <p className="mk-card__kind">
+                {tier.available
+                  ? PLAN_KIND[tier.key] || "Subscription · pay from your dashboard"
+                  : "Not yet for sale — subscription once its catalogue and readiness gates pass"}
+              </p>
+              <p>{PLAN_DESCRIPTIONS[tier.key] || ""}</p>
+              <p><strong>{tier.status}</strong></p>
+              <Link
+                href={
+                  tier.key === AI_FRONT_DESK_VOICE_KEY
+                    ? "/products/ai-front-desk#voice"
+                    : PLAN_ROUTE[tier.key] || "/products/ai-front-desk"
+                }
+              >
+                {tier.key === AI_FRONT_DESK_VOICE_KEY ? "View Voice readiness →" : "What is included →"}
+              </Link>
+            </article>
+          ))}
         </div>
       </MarketingSection>
 
