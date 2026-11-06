@@ -43,3 +43,23 @@ jobs:
           path: ci-logs/full-suite.json
           retention-days: 30
           if-no-files-found: warn
+
+  production-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - name: Install exact lockfile dependencies and generate Prisma Client
+        run: npm ci
+      - name: Verify native Prisma generation and client metadata
+        run: |
+          bash scripts/lib/prisma-generate.sh
+          node scripts/test/check-prisma-client.cjs
+      - name: Build Next.js production application
+        run: npm run build

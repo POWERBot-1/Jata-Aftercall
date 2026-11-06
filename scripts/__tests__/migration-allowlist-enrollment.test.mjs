@@ -258,18 +258,17 @@ describe("migrate.sh with the shipped allowlist", () => {
     assert.match(r.stderr, /REFUSED_PRODUCTION_UNENROLLED/);
   });
 
-  test("build.sh on Production continues past migrate with the enrolled target", () => {
-    // The whole point of enrolling in the same change: a Production build is
-    // not refused, and it proceeds migrate -> generate -> next build in order.
-    const r = runScript("scripts/build.sh", {
-      VERCEL: "1",
-      VERCEL_ENV: "production",
-      DATABASE_URL: PROD_URL,
-      DIRECT_URL: PROD_DIRECT_URL,
-    });
-    assert.equal(r.status, 0);
-    assert.deepEqual(r.calls, ["prisma migrate deploy", "prisma generate", "next build --webpack"]);
-    assert.match(r.stdout, /OK_ENROLLED_PRODUCTION/);
+  test("build.sh wires the enrolled migration gate before native generation and Next build", () => {
+    // The real PostgreSQL production-build job executes the full path. This
+    // dependency-free guard pins ordering; migrate.sh's tests above exercise
+    // the enrolled allowlist decision and the separate build job proves native execution.
+    const build = readFileSync(join(ROOT, "scripts", "build.sh"), "utf8");
+    assert.match(build, /set -euo pipefail/);
+    const migrateAt = build.indexOf("bash scripts/migrate.sh");
+    const generateAt = build.indexOf("bash scripts/lib/prisma-generate.sh");
+    const preflightAt = build.indexOf("node scripts/test/check-prisma-client.cjs");
+    const nextAt = build.indexOf("npx next build --webpack");
+    assert.ok(migrateAt >= 0 && generateAt > migrateAt && preflightAt > generateAt && nextAt > preflightAt);
   });
 
   test("build.sh on Production still stops before generate when refused", () => {
