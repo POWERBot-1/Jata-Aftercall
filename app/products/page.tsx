@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { formatNumber } from "@/lib/format";
 import { FRONT_DESK_TIER_PRICING, FRONT_DESK_TIER_KEYS, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import {
+  buildMarketingCatalogue,
+  catalogueCardStatus,
+  frontDeskTierStatus,
+  isPriceMatchedRow,
+  VOICE_SELLING_CONDITIONS,
+} from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
@@ -44,6 +51,20 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     blurb: "Business-health diagnostics and draft actions for your approval, configured in the workspace.",
     bullets: ["Preview diagnostics without a plan", "Live actions require the standard Autopilot package", "Priced and activated inside the dashboard"],
   },
+  // Approved workspace-only Autopilot tiers. The blurb is copied verbatim from
+  // `AUTOPILOT_PLAN_CATALOG` (lib/autopilot/entitlement.ts); a unit test pins the parity so
+  // the two can never drift. Sales happen only inside the authenticated Autopilot workspace —
+  // these cards never link to a public checkout.
+  JATA_AUTOPILOT_PRO: {
+    slug: "jata-autopilot",
+    blurb: "Higher AI reasoning & multimodal document quotas, supervised/advanced playbooks, and consented follow-up workflows — 30 days.",
+    bullets: ["Everything in the standard JATA Autopilot package", "Offered only inside the authenticated JATA Autopilot workspace", "Preview in your dashboard is free before you pay"],
+  },
+  JATA_AUTOPILOT_ENTERPRISE: {
+    slug: "jata-autopilot",
+    blurb: "Multi-branch executive operations, expanded multimodal & voice allowances, and dedicated governance controls — 30 days.",
+    bullets: ["Everything in the standard JATA Autopilot package", "Offered only inside the authenticated JATA Autopilot workspace", "Preview in your dashboard is free before you pay"],
+  },
   INTERACTIVE_BUSINESS: {
     slug: "website-studio",
     blurb: "A fuller, category-aware website built and previewed in the Website Studio canvas.",
@@ -61,6 +82,21 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
   },
 };
 
+/**
+ * Who each approved Front Desk 2.0 package serves — drawn from the approved tier copy in
+ * PLAN_INCLUDES / the tier pricing names, never from an invented capability.
+ */
+const TIER_SERVES: Record<string, string> = {
+  AI_BUSINESS_FRONT_DESK: "For any business publishing an AI assistant on its own page — answers grounded in your configured products, services and FAQs.",
+  AI_FRONT_DESK_STANDARD: "For busy businesses that need more from their front desk — everything in Starter, on the higher Standard package tier.",
+  AI_FRONT_DESK_PRO: "For multi-product businesses with demanding customer workflows — everything in Starter, on the advanced Pro package tier.",
+  AI_FRONT_DESK_VOICE: "For businesses that want their existing phone number answered — a premium receptionist with English and Kiswahili handling and handoff to your team.",
+};
+
+const TIER_DETAIL_HREF: Record<string, string> = {
+  AI_FRONT_DESK_VOICE: "/products/ai-front-desk#voice",
+};
+
 export default async function ProductsPage() {
   let stored: HomepagePlanCard[] = [];
   try {
@@ -68,28 +104,24 @@ export default async function ProductsPage() {
   } catch {
     stored = [];
   }
-  const plans = homepagePlanCards(stored.length > 0 ? stored : FALLBACK_PLANS);
+  // Approved catalogue constants fill every hole; stored rows (when readable) win their own
+  // slots. A missing PlanConfig row changes a card's availability label — never its visibility.
+  const plans = buildMarketingCatalogue(stored, homepagePlanCards);
+  const storedKeys = new Set(stored.map((row) => row.key));
   const voiceReadiness = getVoiceReadiness();
-  // Show the complete, owner-approved Front Desk 2.0 package family even before the
-  // commercial PlanConfig rows are installed. A package is labelled catalogue-active only
+
+  // The complete, owner-approved Front Desk 2.0 package family, shown even before the
+  // Standard/Pro/Voice PlanConfig rows are installed. A package reads catalogue-active only
   // when its real active row matches the approved price and term; these cards never create
   // checkout links or grant entitlements.
   const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
     const approved = FRONT_DESK_TIER_PRICING[key];
-    const row = stored.find((plan) => plan.key === key);
-    const catalogueMatch = Boolean(
-      row && row.priceKES === approved.priceKES && row.durationDays === approved.durationDays,
-    );
-    const providerReady = key !== AI_FRONT_DESK_VOICE_KEY || voiceReadiness.canSell;
+    const catalogueMatch = isPriceMatchedRow(stored.find((plan) => plan.key === key), key);
+    const available = catalogueMatch && (key !== AI_FRONT_DESK_VOICE_KEY || voiceReadiness.canSell);
     return {
       ...approved,
-      catalogueMatch,
-      available: catalogueMatch && providerReady,
-      status: !catalogueMatch
-        ? "Awaiting catalogue activation — not for sale"
-        : key === AI_FRONT_DESK_VOICE_KEY
-          ? providerReady ? "Provider and commercial gates verified" : "Awaiting provider activation — not for sale"
-          : "Active in the server catalogue",
+      available,
+      status: frontDeskTierStatus({ key, catalogueMatch, voiceCanSell: voiceReadiness.canSell }),
     };
   });
 
@@ -97,33 +129,46 @@ export default async function ProductsPage() {
     <MarketingLayout
       eyebrow="Products"
       title="One account. Every plan and product. One place to pay."
-      intro="JATA AFTERCALL keeps your business details, conversations and sales tools in one workspace. The Front Desk 2.0 family shows the approved package prices and clearly marks which catalogue and provider gates are still pending; an informational card never activates a product or starts checkout."
+      intro="JATA AFTERCALL keeps your business details, conversations and sales tools in one workspace. Every approved package below stays visible even before its server catalogue row is installed — an informational card never activates a product or starts checkout, and only real catalogue and readiness conditions mark a package as available."
     >
       <MarketingSection title="AI Front Desk 2.0 — all four packages" id="ai-front-desk-tiers">
         <p className="mk-prose">
           One AI front desk, four package levels. Prices shown are the approved package prices.
           A package is purchasable only when its matching active catalogue record and service
-          readiness checks are present. These cards are informational and do not start checkout.
+          readiness checks are present — until every one of those conditions is satisfied the
+          card is labelled &ldquo;not for sale&rdquo;. These cards are informational and do not
+          start checkout.
         </p>
         <div className="mk-grid">
           {frontDeskTiers.map((tier) => (
             <article className="mk-card" key={tier.key} data-tier={tier.key}>
               <h3>{tier.name}</h3>
               <p className="mk-card__price">KES {formatNumber(tier.priceKES)} / 30 days</p>
-              <p>{tier.key === "AI_BUSINESS_FRONT_DESK"
-                ? "The essential AI receptionist for customer questions grounded in your business information."
-                : tier.key === "AI_FRONT_DESK_STANDARD"
-                  ? "A higher package level for businesses that need more from their AI front desk."
-                  : tier.key === "AI_FRONT_DESK_PRO"
-                    ? "The advanced AI front desk package for businesses with more demanding customer workflows."
-                    : "A premium phone receptionist for inbound calls, with English and Kiswahili voice handling and human handoff."}</p>
+              <p>{TIER_SERVES[tier.key]}</p>
+              {tier.key === AI_FRONT_DESK_VOICE_KEY ? (
+                <ul className="mk-prose">
+                  <li>Designed around your existing business phone identity</li>
+                  <li>English and Kiswahili voice experience planned</li>
+                  <li>Provider usage charges will be disclosed separately before activation</li>
+                </ul>
+              ) : null}
               <p><strong>{tier.status}</strong></p>
+              {tier.key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell ? (
+                <div className="mk-prose">
+                  <p>Pending before Front Desk Voice can be sold or take live calls:</p>
+                  <ul>
+                    {VOICE_SELLING_CONDITIONS.map((condition) => <li key={condition}>{condition}</li>)}
+                  </ul>
+                </div>
+              ) : null}
               <p className="mk-prose">
                 {tier.available
                   ? "Catalogue and required readiness checks are satisfied. Access still requires a verified business entitlement."
                   : "This package is visible for transparency but cannot be purchased or activated until its catalogue and readiness gates are satisfied."}
               </p>
-              <Link href="/products/ai-front-desk">View AI Front Desk details →</Link>
+              <Link href={TIER_DETAIL_HREF[tier.key] ?? "/products/ai-front-desk"}>
+                {tier.key === AI_FRONT_DESK_VOICE_KEY ? "View Voice readiness →" : "View AI Front Desk details →"}
+              </Link>
             </article>
           ))}
         </div>
@@ -133,6 +178,11 @@ export default async function ProductsPage() {
           {plans.map((plan) => {
             const detail = PRODUCT_DETAIL[plan.key];
             if (!detail) return null;
+            const status = catalogueCardStatus({
+              key: plan.key,
+              hasStoredRow: storedKeys.has(plan.key),
+              voiceCanSell: voiceReadiness.canSell,
+            });
             return (
               <article key={plan.key} className="mk-card">
                 <h3>{planDisplayName(plan)}</h3>
@@ -141,22 +191,11 @@ export default async function ProductsPage() {
                 <ul className="mk-prose">
                   {detail.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}
                 </ul>
+                <p><strong>{status}</strong></p>
                 <Link href={`/products/${detail.slug}`}>See how it works →</Link>
               </article>
             );
           })}
-          <article className="mk-card" key="AI_FRONT_DESK_VOICE">
-            <h3>AI Front Desk Voice</h3>
-            <p className="mk-card__price">KES {formatNumber(FRONT_DESK_TIER_PRICING[AI_FRONT_DESK_VOICE_KEY].priceKES)} / 30 days</p>
-            <p>A premium AI phone receptionist designed to answer calls to your existing business number, understand customer requests and hand over to your team when needed.</p>
-            <ul className="mk-prose">
-              <li>Designed around your existing business phone identity</li>
-              <li>English and Kiswahili voice experience planned</li>
-              <li>Provider usage charges will be disclosed separately before activation</li>
-            </ul>
-            <p><strong>Awaiting provider activation.</strong> Not yet available for purchase or live calls.</p>
-            <Link href="/products/ai-front-desk#voice">View Voice readiness →</Link>
-          </article>
         </div>
         <div className="mk-btn-row">
           <Link href="/pricing" className="mk-btn">Compare all plans</Link>
@@ -166,7 +205,7 @@ export default async function ProductsPage() {
 
       <MarketingSection title="How the products fit together" tone="cream" id="together">
         <div className="mk-prose">
-          <p>Your Business Page is the public link you share with customers. AI Business Front Desk, Website Studio, Business POS and JATA Autopilot are additional products that attach to the same business and account. Each one keeps its own plan key, price and entitlement check; paying for one never silently switches on another.</p>
+          <p>Your Business Page is the public link you share with your customers. AI Business Front Desk, Website Studio, Business POS, JATA BOS PRO and JATA Autopilot are additional products that attach to the same business and account. Each one keeps its own plan key, price and entitlement check; paying for one never silently switches on another.</p>
           <p>Publishing a page or website is gated by a server-verified payment (or a verified JATA Team Free Access entitlement). A browser redirect from Paystack is never treated as proof of payment — the server verifies the transaction and the webhook settles it.</p>
         </div>
       </MarketingSection>

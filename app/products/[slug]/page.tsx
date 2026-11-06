@@ -3,6 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import { formatNumber } from "@/lib/format";
+import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const dynamic = "force-dynamic";
@@ -176,8 +179,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const product = PRODUCTS[slug];
   if (!product) notFound();
 
-  // Advertise only active, configured Front Desk rows. Voice remains withheld until inbound
-  // voice reception is implemented and operationally verified.
+  // Visibility and activation stay separate: every approved Front Desk tier is listed from
+  // the approved tier pricing even when its active `PlanConfig` row is missing, and the line
+  // says so plainly. A tier only reads "in the server catalogue" from its real active row;
+  // Voice additionally never reads sellable until the provider + commercial gates pass.
   const frontDeskPlans = slug === "ai-front-desk"
     ? await prisma.planConfig.findMany({
         where: {
@@ -188,24 +193,58 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         select: { key: true, name: true, priceKES: true, durationDays: true },
       }).catch(() => [])
     : [];
+  const voiceReadiness = getVoiceReadiness();
   const sections = slug === "ai-front-desk"
-    ? product.sections.map((section) => section.heading === "Entitlement and price"
-      ? {
-          ...section,
-          body: [
-            frontDeskPlans.length
-              ? frontDeskPlans.map((plan) => `${plan.name}: KES ${formatNumber(Number(plan.priceKES))} / ${plan.durationDays} days`).join("; ") + "."
-              : "No Front Desk package is currently available for purchase.",
-            "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
-          ],
+    ? product.sections.map((section) => {
+        if (section.heading === "Entitlement and price") {
+          return {
+            ...section,
+            body: [
+              ...FRONT_DESK_TIER_KEYS.map((key) => {
+                const approved = FRONT_DESK_TIER_PRICING[key];
+                const row = frontDeskPlans.find((plan) => plan.key === key);
+                const price = formatNumber(row ? Number(row.priceKES) : approved.priceKES);
+                const duration = row?.durationDays ?? approved.durationDays;
+                const availability =
+                  key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell
+                    ? "awaiting provider activation, not yet for sale"
+                    : row
+                      ? "in the server catalogue"
+                      : "awaiting catalogue activation, not yet for sale";
+                return `${approved.name}: KES ${price} / ${duration} days — ${availability}.`;
+              }),
+              "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
+            ],
+          };
         }
-      : section)
+        if (section.heading.startsWith("Voice receptionist")) {
+          const statusLine = voiceReadiness.canSell
+            ? `Current status: ${voiceReadiness.operatorMessage}`
+            : "Current status: Awaiting provider activation. No live call service is available yet.";
+          return {
+            ...section,
+            body: [
+              ...section.body.filter((paragraph) => !paragraph.startsWith("Current status:")),
+              statusLine,
+              ...(voiceReadiness.canSell ? [] : [
+                `Pending before Voice can be sold: ${VOICE_SELLING_CONDITIONS.join(" · ")}.`,
+              ]),
+            ],
+          };
+        }
+        return section;
+      })
     : product.sections;
 
   return (
     <MarketingLayout eyebrow={product.eyebrow} title={product.title} intro={product.intro}>
       {sections.map((section, index) => (
-        <MarketingSection key={section.heading} id={`section-${index + 1}`} title={section.heading} tone={index % 2 === 0 ? "paper" : "cream"}>
+        <MarketingSection
+          key={section.heading}
+          id={section.heading.startsWith("Voice receptionist") ? "voice" : `section-${index + 1}`}
+          title={section.heading}
+          tone={index % 2 === 0 ? "paper" : "cream"}
+        >
           <div className="mk-prose">
             {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </div>
