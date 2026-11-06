@@ -5,6 +5,9 @@ set -euo pipefail
 # Preserve the existing production migration gate; Prisma generation itself never connects to PostgreSQL.
 echo "[build] Starting JATA AFTERCALL build gate"
 
+# Keep DATABASE_URL/DIRECT_URL semantics identical to the migration path.
+source scripts/lib/prisma-env.sh
+
 # Keep the established migration behaviour unchanged.
 if [ -n "${DATABASE_URL:-}" ]; then
   echo "[build] DATABASE_URL detected — invoking migration gate"
