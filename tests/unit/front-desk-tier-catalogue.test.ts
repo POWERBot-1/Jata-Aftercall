@@ -194,6 +194,14 @@ describe("marketing order (§41.5 consistency)", () => {
     expect(products).toContain("AI_FRONT_DESK_STANDARD: {");
     expect(products).toContain("AI_FRONT_DESK_PRO: {");
     expect(products).not.toContain("AI_FRONT_DESK_VOICE: {");
+    // All four approved packages remain visible on the Products page even when the
+    // Standard/Pro PlanConfig rows have not yet been installed. Visibility is informational;
+    // catalogue and provider gates still control availability and checkout.
+    expect(products).toContain("AI Front Desk 2.0 — all four packages");
+    expect(products).toContain("FRONT_DESK_TIER_KEYS.map");
+    expect(products).toContain("not for sale");
+    const publicNavbar = read("components/Navbar.tsx");
+    expect(publicNavbar).toContain('{ href: "/products", label: "Products" }');
   });
 });
 
