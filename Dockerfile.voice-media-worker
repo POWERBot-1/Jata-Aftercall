@@ -1,0 +1,22 @@
+# JATA AFTERCALL — persistent voice media worker (NOT a Vercel function).
+# Build:  docker build -f Dockerfile.voice-media-worker -t jata-voice-media .
+# Run:    docker run -p 8787:8787 --env-file .env.voice-worker jata-voice-media
+# Health: GET /healthz on the same port (used by the HEALTHCHECK below and by the
+#         deployment platform's readiness probes).
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+
+ENV NODE_ENV=production
+ENV VOICE_MEDIA_PORT=8787
+EXPOSE 8787
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.VOICE_MEDIA_PORT||8787)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["npx", "tsx", "worker/voice-media/index.ts"]

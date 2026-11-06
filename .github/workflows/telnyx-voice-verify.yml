@@ -3,14 +3,25 @@ name: Telnyx Voice Foundation Verify
 on:
   pull_request:
     paths:
-      - "app/api/webhooks/telnyx/voice/**"
-      - "app/api/voice/readiness/**"
+      - "app/api/webhooks/telnyx/**"
+      - "app/api/voice/**"
       - "app/products/page.tsx"
       - "app/products/[slug]/page.tsx"
       - "app/api/checkout/route.ts"
       - "lib/telnyx/**"
+      - "lib/voice/**"
+      - "worker/voice-media/**"
       - "lib/pricing.ts"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/**"
+      - "docs/integrations/telnyx-safaricom-inbound-voice.md"
+      - "docs/integrations/voice-handset-acceptance.md"
+      - "docs/integrations/voice-media-worker-deployment.md"
+      - "Dockerfile.voice-media-worker"
+      - "docker-compose.voice-worker.yml"
       - "tests/unit/telnyx-*.test.ts"
+      - "tests/unit/voice-*.test.ts"
+      - "tests/integration/voice-e2e.test.ts"
       - ".github/workflows/telnyx-voice-verify.yml"
   workflow_dispatch:
 
@@ -23,9 +34,9 @@ concurrency:
 
 jobs:
   voice-foundation:
-    name: Voice readiness and webhook unit tests
+    name: Voice readiness, webhook, pipeline and media worker tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,5 +48,21 @@ jobs:
         run: npx vitest run tests/unit/telnyx-webhook-signature.test.ts
       - name: Verify provider and customer billing gates
         run: npx vitest run tests/unit/telnyx-voice-readiness.test.ts
+      - name: Verify voice webhook route contract (401/400/503/202)
+        run: npx vitest run tests/unit/telnyx-voice-webhook-route.test.ts
+      - name: Verify call-event durability, idempotency and tenant routing
+        run: npx vitest run tests/unit/voice-call-events.test.ts
+      - name: Verify call-control command safety and retries
+        run: npx vitest run tests/unit/voice-call-control.test.ts
+      - name: Verify answer gates, metering and reconciliation
+        run: npx vitest run tests/unit/voice-lifecycle-metering.test.ts
+      - name: Verify handoff failure paths and EN/Swahili speech
+        run: npx vitest run tests/unit/voice-handoff-speech.test.ts
+      - name: Verify audio codec and silence detection
+        run: npx vitest run tests/unit/voice-audio-vad.test.ts
+      - name: Verify media worker WebSocket sessions
+        run: npx vitest run tests/unit/voice-media-server.test.ts
+      - name: Verify full voice journey (integration)
+        run: npx vitest run tests/integration/voice-e2e.test.ts
       - name: TypeScript typecheck
         run: npm run typecheck

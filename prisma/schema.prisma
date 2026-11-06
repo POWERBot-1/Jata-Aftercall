@@ -4024,3 +4024,124 @@ model MsgLedgerEntry {
   @@index([businessId, createdAt])
   @@index([businessId, campaignId])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI FRONT DESK VOICE — durable telephony foundation (Telnyx call-event pipeline).
+// Plain businessId columns (no @relation) keep this migration purely additive with
+// no FK back to Business: tenant isolation is enforced in the service layer and
+// every query filters by businessId, so no existing table or customer row changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Telnyx inbound DID → JATA business routing (tenant-safe call entry point).
+model VoiceInboundNumber {
+  id         String   @id @default(cuid())
+  e164       String   @unique
+  businessId String
+  label      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+/// Every provider webhook event, persisted exactly once (provider event id is unique).
+model VoiceCallEvent {
+  id              String    @id @default(cuid())
+  providerEventId String    @unique
+  eventType       String
+  callControlId   String?
+  callSessionId   String?
+  calledNumber    String?
+  callingNumber   String?
+  businessId      String?
+  status          String    @default("RECEIVED") // RECEIVED | PROCESSED | REJECTED | RETRY
+  rejectReason    String? // UNKNOWN_NUMBER | CROSS_TENANT | UNROUTABLE
+  sequence        Int?
+  attempts        Int       @default(0)
+  payload         String    @db.Text
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  lastError       String?
+
+  @@index([callControlId, receivedAt])
+  @@index([status, receivedAt])
+  @@index([businessId])
+}
+
+/// Durable per-call state. One row per Telnyx call_control_id (tenant-stamped at creation).
+model VoiceCall {
+  id             String    @id @default(cuid())
+  callControlId  String    @unique
+  callSessionId  String?
+  businessId     String
+  direction      String    @default("INBOUND")
+  callerNumber   String
+  calledNumber   String
+  language       String    @default("en") // en | sw — caller-switchable
+  state          String    @default("INITIATED") // INITIATED | RINGING | ANSWERED | IN_CALL | HANDING_OFF | COMPLETED | FAILED
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  hangupCause    String?
+  failoverReason String?
+  handoffTarget  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([state])
+}
+
+/// Outbound Call Control commands with dedupe keys: a command is issued at most once
+/// per dedupe key, retried only under policy, and every attempt is durable.
+model VoiceCallCommand {
+  id              String   @id @default(cuid())
+  callControlId   String
+  command         String
+  dedupeKey       String   @unique
+  status          String   @default("PENDING") // PENDING | SENT | SUCCEEDED | FAILED
+  attempts        Int      @default(0)
+  requestPayload  String?  @db.Text
+  responsePayload String?  @db.Text
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([callControlId, createdAt])
+  @@index([status])
+}
+
+/// One row per completed/answered call — the single metering source for a call.
+/// providerCost stays NULL until the provider reports real usage: never invented.
+model VoiceUsageRecord {
+  id                   String    @id @default(cuid())
+  callId               String    @unique
+  businessId           String
+  startedAt            DateTime
+  answeredAt           DateTime?
+  endedAt              DateTime?
+  durationSeconds      Int       @default(0)
+  providerCostMinor    Int?
+  providerCostCurrency String?
+  status               String    @default("OPEN") // OPEN | FINALIZED | RECONCILED | DISPUTED
+  reconcileBatchId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([businessId, startedAt])
+  @@index([status])
+}
+
+/// Per-business commercial safety policy: hard spend cap, concurrency cap, max call
+/// length and emergency kill switch. Global defaults come from environment variables.
+model VoiceBusinessPolicy {
+  id                   String   @id @default(cuid())
+  businessId           String   @unique
+  dailySpendLimitMinor Int?
+  concurrencyLimit     Int?
+  maxCallSeconds       Int?
+  hardDisabled         Boolean  @default(false)
+  disabledReason       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
