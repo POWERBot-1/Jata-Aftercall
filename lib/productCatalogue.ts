@@ -133,6 +133,23 @@ export function frontDeskFamilyCard(
   };
 }
 
+/**
+ * Display rule for a plan card that shares a page with the AI Front Desk family block: tier
+ * cards always show the approved tier price/term, so the grid and the family can never print
+ * conflicting prices for the same package. A price-matched stored row equals the approved
+ * constants anyway; an out-of-spec stored row must not advertise a price that checkout refuses
+ * (fail-closed `PLAN_PRICING_INVALID`); a missing row already falls back to the same constants.
+ * Non-tier cards keep their stored price untouched — the owner-mandated "stored prices win"
+ * rule for Monthly, Annual, Website Studio, POS, BOS PRO and Autopilot is unchanged.
+ */
+export function displayTierPricing<C extends { key: string; priceKES: number; durationDays: number }>(
+  card: C,
+): C {
+  if (!isFrontDeskTierKey(card.key)) return card;
+  const approved = FRONT_DESK_TIER_PRICING[card.key];
+  return { ...card, priceKES: approved.priceKES, durationDays: approved.durationDays } as C;
+}
+
 function workspacePhrase(key: string): string {
   if (key === "ERP_PRO") return "switched on from the ERP workspace";
   if (key.startsWith("JATA_AUTOPILOT")) return "sold inside the JATA Autopilot workspace";

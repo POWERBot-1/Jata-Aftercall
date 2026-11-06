@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
-import { frontDeskFamilyCard } from "@/lib/productCatalogue";
+import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
@@ -98,7 +98,11 @@ export default async function PricingPage() {
             horizontal scrolling. Each card is one offer in the marketing order from the single
             catalogue helper, so this page can never drift from the homepage grid. */}
         <div className="mk-grid">
-          {plans.map((plan) => (
+          {/* Tier cards display the approved tier price so this grid and the family block
+              below can never disagree; every other card keeps its stored price. */}
+          {plans.map((raw) => {
+            const plan = displayTierPricing(raw);
+            return (
             <article key={plan.key} className="mk-card" data-plan={plan.key} aria-label={planDisplayName(plan)}>
               <h3>{planDisplayName(plan)}</h3>
               <p className="mk-card__price">
@@ -109,7 +113,8 @@ export default async function PricingPage() {
               <p>{PLAN_DESCRIPTIONS[plan.key] || ""}</p>
               <Link href={PLAN_ROUTE[plan.key] || "/products"}>What is included →</Link>
             </article>
-          ))}
+            );
+          })}
         </div>
         <div className="mk-prose">
           <p>
@@ -147,7 +152,7 @@ export default async function PricingPage() {
               <p className="mk-card__kind">
                 {tier.available
                   ? PLAN_KIND[tier.key] || "Subscription · pay from your dashboard"
-                  : "Not yet for sale — subscription once its catalogue and readiness gates pass"}
+                  : "Not yet for sale — listed at the approved price; checkout stays fail-closed until its catalogue and readiness gates pass"}
               </p>
               <p>{PLAN_DESCRIPTIONS[tier.key] || ""}</p>
               <p><strong>{tier.status}</strong></p>

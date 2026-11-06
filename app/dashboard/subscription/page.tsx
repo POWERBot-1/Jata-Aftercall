@@ -6,7 +6,7 @@ import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, publiclyListedPlans, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
-import { frontDeskFamilyCard } from "@/lib/productCatalogue";
+import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { PLAN_BADGES, PLAN_INCLUDES, POS_PLAN_CARD, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD } from "@/lib/landing";
 import { paymentStatusLabel, subscriptionStatusLabel, type StatusLabel } from "@/lib/statusLabels";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -325,7 +325,12 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             ) : (
               <>
                 <div className="ws-plans">
-                  {plansResult.list.map((plan) => (
+                  {/* Tier cards display the approved tier price (displayTierPricing) so the
+                      payable list, the catalogue below and the family block never disagree;
+                      every other plan keeps its stored price. */}
+                  {plansResult.list.map((raw) => {
+                    const plan = displayTierPricing(raw);
+                    return (
                     <PlanCard
                       key={plan.id}
                       plan={{ id: plan.id, key: plan.key, name: planDisplayName(plan), priceKES: plan.priceKES, durationDays: plan.durationDays }}
@@ -335,7 +340,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
                       href={selected ? getCheckoutUrl(selected.id, plan.id) : undefined}
                       current={selected?.subscription?.planId === plan.id}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <MiniNote icon={<Smartphone size={15} />} title="M-Pesa or card" text="Pay on Paystack with the method you already use." />
@@ -368,7 +374,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             where your account actually holds a row for the selected business.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {catalogue.map((offer) => {
+            {catalogue.map((raw) => {
+              const offer = displayTierPricing(raw);
               const copy: SubscriptionOfferCopy = OFFER_COPY[offer.key] ?? {
                 kind: "Subscription",
                 blurb: "",
@@ -443,7 +450,9 @@ export default async function SubscriptionPage({ searchParams }: Props) {
                   <span className="ws-muted">per {tier.durationDays} days</span>
                 </p>
                 <p className="ws-muted ws-tiny">
-                  {tier.available ? "Ordinary subscription · catalogue-ready" : "Not yet for sale"}
+                  {tier.available
+                    ? "Ordinary subscription · catalogue-ready"
+                    : "Not yet for sale — activation stays fail-closed until its catalogue and readiness gates pass"}
                 </p>
                 <p className="text-sm font-semibold">{tier.status}</p>
                 <div className="mt-1">

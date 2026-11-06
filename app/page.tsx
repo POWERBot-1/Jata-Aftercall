@@ -11,7 +11,7 @@ import { formatNumber } from "@/lib/format";
 import { FALLBACK_PLANS, HOMEPAGE_AUTOPILOT_PLAN_KEY, HOMEPAGE_ERP_PRO_PLAN_KEY, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
-import { frontDeskFamilyCard } from "@/lib/productCatalogue";
+import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { LandingIcon } from "@/components/landing/Icons";
 import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
@@ -136,7 +136,11 @@ export default async function HomePage() {
             </div>
 
             <div className="lp-plans" data-plan-count={plans.length}>
-              {plans.map((p) => {
+              {/* Tier cards display the approved tier price (displayTierPricing) so this grid
+                  and the family block below can never disagree; all other cards keep the
+                  stored-price-wins rule. */}
+              {plans.map((raw) => {
+                const p = displayTierPricing(raw);
                 // The POS, JATA BOS PRO and JATA Autopilot are cards in this grid but never
                 // page-plan purchases: each keeps its own copy and CTA, and the four page-plan
                 // maps in lib/landing.ts never mention them.
@@ -227,7 +231,7 @@ export default async function HomePage() {
                     <p>
                       {tier.available
                         ? "Catalogue and required readiness checks are satisfied. Access still requires a verified business entitlement."
-                        : "Visible for transparency — not for sale until its catalogue and readiness gates are satisfied."}
+                        : "Listed at the approved price for transparency — activation is fail-closed until its catalogue record and readiness gates are satisfied, so checkout refuses this tier until then."}
                     </p>
                     <Link
                       href={tier.key === AI_FRONT_DESK_VOICE_KEY ? "/products/ai-front-desk#voice" : "/products/ai-front-desk"}

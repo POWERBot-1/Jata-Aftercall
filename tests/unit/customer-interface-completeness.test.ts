@@ -9,10 +9,12 @@
  *   • `/dashboard/subscription` (authenticated): a top-of-page navigation action jumps to the
  *     complete catalogue, and the catalogue section carries all four tiers.
  *
- * Rendered in all three PlanConfig states — empty (database unreachable), partial (the seven
- * owner rows only) and complete (+ the three missing tier rows) — so visibility never depends
- * on a stored row. Voice must read provider-gated in EVERY state, no surface may render a
- * `/checkout` link from a family card, and every `/products/*` destination must exist.
+ * Rendered in four PlanConfig states — empty (database unreachable), partial (the seven
+ * owner rows only), complete (+ the three missing tier rows) and mismatch (tier rows present
+ * but out of spec, which checkout refuses) — so visibility never depends on a stored row and
+ * no surface ever advertises a price checkout would refuse. Voice must read provider-gated in
+ * EVERY state, no surface may render a `/checkout` link from a family card, and every
+ * `/products/*` destination must exist.
  *
  * Nothing here writes data or starts a payment: presentation contracts only.
  */
@@ -84,7 +86,7 @@ const TIER_APPROVED: Record<string, string> = {
   AI_FRONT_DESK_VOICE: "3,999",
 };
 
-type StateName = "empty" | "partial" | "complete";
+type StateName = "empty" | "partial" | "complete" | "mismatch";
 const applyState = (name: StateName) => {
   if (name === "empty") {
     state.plansFail = true;
@@ -92,6 +94,16 @@ const applyState = (name: StateName) => {
   } else if (name === "partial") {
     state.plansFail = false;
     state.plans = [...OWNER_ROWS];
+  } else if (name === "mismatch") {
+    // Tier rows exist but violate the approved price/term (fail-closed PLAN_PRICING_INVALID):
+    // no surface may advertise the out-of-spec stored price next to the family block.
+    state.plansFail = false;
+    state.plans = [
+      ...OWNER_ROWS,
+      { id: "p8", key: "AI_FRONT_DESK_STANDARD", name: "Front Desk Standard", priceKES: 900, durationDays: 30, isActive: true },
+      { id: "p9", key: "AI_FRONT_DESK_PRO", name: "Front Desk Pro", priceKES: 2500, durationDays: 30, isActive: true },
+      { id: "p10", key: "AI_FRONT_DESK_VOICE", name: "Front Desk Voice", priceKES: 3999, durationDays: 365, isActive: true },
+    ];
   } else {
     state.plansFail = false;
     state.plans = [...OWNER_ROWS, ...TIER_ROWS];
@@ -102,7 +114,7 @@ const applyState = (name: StateName) => {
   state.businesses = [];
   state.payments = [];
 };
-const STATES: StateName[] = ["empty", "partial", "complete"];
+const STATES: StateName[] = ["empty", "partial", "complete", "mismatch"];
 
 /** The authenticated subscription journey: a signed-in owner with one business. */
 const applyOwner = () => {
@@ -131,6 +143,12 @@ const tierCards = (html: string) =>
     key: match[1],
     inner: match[2],
   }));
+
+/** Inner markup of the first plan card (grid/payable/catalogue) carrying `data-plan="key"`. */
+const planCardInner = (html: string, key: string): string | null => {
+  const match = html.match(new RegExp(`<article[^>]*data-plan="${key}"[^>]*>([\\s\\S]*?)<\\/article>`));
+  return match ? match[1] : null;
+};
 
 /** Every /products/* destination used by a rendered page must exist in the detail route. */
 const assertDetailDestinations = (label: string, html: string) => {
@@ -170,6 +188,24 @@ describe("homepage: the four AI Front Desk tiers live in the pricing experience"
       const tierStatus = name === "complete" ? "Active in the server catalogue" : "Awaiting catalogue activation — not for sale";
       expect(standard.inner).toContain(tierStatus);
       expect(pro.inner).toContain(tierStatus);
+
+      // Out-of-spec stored tier rows (fail-closed PLAN_PRICING_INVALID): the grid must show
+      // the approved price, never the refused stored price, so the grid and the family block
+      // on the same page can never print conflicting prices (Codex P2 on PR #88).
+      if (name === "mismatch") {
+        const gridPro = planCardInner(html, "AI_FRONT_DESK_PRO");
+        const gridStandard = planCardInner(html, "AI_FRONT_DESK_STANDARD");
+        expect(gridPro, "grid renders the Pro tier card").not.toBeNull();
+        expect(gridStandard, "grid renders the Standard tier card").not.toBeNull();
+        expect(gridPro!).toContain("KES 1,999");
+        expect(gridStandard!).toContain("KES 999");
+        // The refused stored price must appear on neither the grid card nor the family card
+        // (page-level absence is not asserted: the hero demo carries unrelated sample prices).
+        expect(gridPro!).not.toContain("2,500");
+        expect(pro.inner).not.toContain("2,500");
+        expect(gridStandard!).not.toContain("900");
+        expect(standard.inner).not.toContain("900");
+      }
 
       // Discoverability and safety on the homepage itself.
       expect(html).toContain('href="/products"');
@@ -211,6 +247,18 @@ describe("/pricing: every approved package with authoritative prices and honest 
         expect(standard.inner).toContain("Awaiting catalogue activation — not for sale");
         expect(standard.inner).toContain("Not yet for sale");
         expect(pro.inner).toContain("Awaiting catalogue activation — not for sale");
+      }
+
+      // Out-of-spec stored tier rows: the marketing grid must show the approved price so it
+      // cannot conflict with the family block below (Codex P2 on PR #88).
+      if (name === "mismatch") {
+        const gridPro = planCardInner(html, "AI_FRONT_DESK_PRO");
+        expect(gridPro, "grid renders the Pro tier card").not.toBeNull();
+        expect(gridPro!).toContain("KES 1,999");
+        expect(gridPro!).not.toContain("2,500");
+        expect(pro.inner).not.toContain("2,500");
+        expect(planCardInner(html, "AI_FRONT_DESK_STANDARD")!).not.toContain("900");
+        expect(standard.inner).not.toContain("900");
       }
 
       // The seven marketing cards remain, owner order intact, and the ordinary/separate
@@ -257,10 +305,23 @@ describe("/dashboard/subscription: the complete catalogue is reachable from the 
       for (const card of cards) expect(card.inner, card.key).not.toContain("/checkout");
 
       const standard = cards.find((card) => card.key === "AI_FRONT_DESK_STANDARD")!;
+      const pro = cards.find((card) => card.key === "AI_FRONT_DESK_PRO")!;
       if (name === "complete") {
         expect(standard.inner).toContain("Active in the server catalogue");
       } else {
         expect(standard.inner).toContain("Awaiting catalogue activation — not for sale");
+      }
+
+      // Out-of-spec stored tier rows: neither the payable list nor the catalogue may show a
+      // price checkout refuses while the family block shows the approved one (Codex P2).
+      if (name === "mismatch") {
+        const catPro = planCardInner(html, "AI_FRONT_DESK_PRO");
+        expect(catPro, "catalogue/payable renders the Pro card").not.toBeNull();
+        expect(catPro!).toContain("KES 1,999");
+        expect(catPro!).not.toContain("2,500");
+        expect(pro.inner).not.toContain("2,500");
+        expect(planCardInner(html, "AI_FRONT_DESK_STANDARD")!).not.toContain("900");
+        expect(standard.inner).not.toContain("900");
       }
 
       // Ordinary vs owner-only stays explicit, and owner products never become checkout choices.
@@ -289,10 +350,12 @@ describe("cross-surface contracts", () => {
   it("the family status vocabulary stays single-sourced in lib/productCatalogue", () => {
     const source = read("lib/productCatalogue.ts");
     expect(source).toContain("export function frontDeskFamilyCard");
-    // All three surfaces build their family through the shared helper.
+    // All three surfaces build their family through the shared helper and normalise tier
+    // display prices through the shared rule, so grid and family can never disagree.
     for (const file of ["app/page.tsx", "app/pricing/page.tsx", "app/dashboard/subscription/page.tsx"]) {
       expect(read(file), file).toContain("frontDeskFamilyCard(");
       expect(read(file), file).toContain("FRONT_DESK_TIER_KEYS.map");
+      expect(read(file), file).toContain("displayTierPricing(");
     }
     // Paystack / entitlement protections are untouched by these surfaces.
     expect(read("app/pricing/page.tsx")).not.toMatch(/prisma\.\w+\.(create|update|upsert|delete)/);
