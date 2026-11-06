@@ -1127,25 +1127,33 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §044 (PROGRAMME-001)",
     "implementationLocation": "All paths identified by the 34 pre-existing non-PASS readiness records; dependency workflow and package manifests; release runbook and exact-head CI.",
     "verificationMethod": "Exact-head CI programme-completeness checker, independent full dependency audit, relevant integration/browser/PostgreSQL evidence, external provider/domain evidence and owner-decision review.",
-    "testResult": "Dependency-audit remediation candidate passed production and full-tree npm audits (0 findings each), npm ci, lint, typecheck, no-database tests and Next.js production build on candidate 7aef83250ef58099a185b5fd77bbbf35bc6b5b67. Generated scoped minimatch 11.0.1 lockfile committed as 3ab78550da093bf887a46a8e777a639b22e84fa9. Exact committed-head revalidation is pending. The 34 pre-existing non-PASS criteria remain open; no completeness claim is made.",
+    "testResult": "PASS for dependency remediation and exact-head technical validation; BLOCKED for overall programme closure. On PR head 7286cb818b3000a502cdc31c0aa05c1c7af37a04, exact-head Release Validation run 42224645757 passed all jobs including PostgreSQL 18 migrations, schema reconciliation, production build, committed-lockfile install, Prisma generation, lint, typecheck, production and full-tree npm audit (0 findings each), evidence-manifest verification, and failure-path controls. Candidate migration rehearsal run 42224645690 passed. Interactive Business E2E run 42224645818 passed the PostgreSQL-backed journey, §66, Business POS, authenticated production HTTP and Control deny-path checks; dependency audit job 127914957459 reports production total=0 and full total=0, artifact 13505425879. Full no-database suite run 42224645950, POS/ERP verification run 42224645755, Motion isolated browser evidence run 42224645534 and six-viewport Premium Screenshots run 42224645836 all passed. Admin instruction-integrity passed in run 42224645701; programme-completeness correctly failed with 35 non-PASS records (29 BLOCKED + 6 NOT_TESTED), comprising 34 pre-existing criteria plus this programme-level item. No acceptance statuses were fabricated.",
     "evidence": [
       "docs/ADMIN_BUILDING_INSTRUCTIONS.md",
       ".github/workflows/interactive-business-e2e.yml",
       "docs/agents/PROGRAMME_READINESS.json",
-      "docs/audits/DEPENDENCY_AUDIT_2026-11-06.md"
+      "docs/audits/DEPENDENCY_AUDIT_2026-11-06.md",
+      "package.json",
+      "package-lock.json"
     ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/pull/86",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42218412975/artifacts/13502616440",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42220169508/job/127899932370",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42220169508/artifacts/13503526101"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645701",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645757",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645690",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645755",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645950",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645818",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645534",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645836",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42224645818/artifacts/13505425879"
     ],
     "assessmentReference": "docs/audits/DEPENDENCY_AUDIT_2026-11-06.md and docs/ADMIN_BUILDING_INSTRUCTIONS.md §044",
-    "verificationCommit": "7aef83250ef58099a185b5fd77bbbf35bc6b5b67",
+    "verificationCommit": "7286cb818b3000a502cdc31c0aa05c1c7af37a04",
     "scopeNote": "This record tracks the new programme-remediation mandate; it does not close the 34 prior requirements.",
-    "blocker": "The dependency-audit candidate is remediated and its compatibility run passed, but exact committed-head workflows must be repeated after lockfile commit. The 34 original ADMIN/MOTION/RELEASE criteria remain BLOCKED or NOT_TESTED, including missing owner authorization decisions and external/provider evidence. Production merge/deploy is not yet safe.",
+    "blocker": "Dependency remediation is complete on the exact candidate: committed lockfile is reproducible, Prisma 5.22.0 is retained, and both production and full-tree npm audit report zero findings. Exact-head release, migration, database, POS/ERP, no-database, motion-browser and six-viewport screenshot workflows pass. Overall programme remains BLOCKED by the 34 pre-existing canonical requirements that still lack full-criterion evidence or require explicit owner/provider inputs (including approved Control role/action policy and positive-role test authorization, commission terms, provider sandbox/health/delivery evidence, authoritative DNS/mail confirmation, full Motion route/family/queue and independent visual review, and release evidence). The completeness checker remains fail-closed and must not be weakened.",
     "sourceCommit": "3e0a72c2488ac82765a8f89143b6496853053673",
-    "currentAssessmentSourceSha": "3ab78550da093bf887a46a8e777a639b22e84fa9",
+    "currentAssessmentSourceSha": "7286cb818b3000a502cdc31c0aa05c1c7af37a04",
     "currentAssessmentStatus": "BLOCKED"
   }
 }
