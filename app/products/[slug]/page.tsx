@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import prisma from "@/lib/db";
+import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +53,15 @@ const PRODUCTS: Record<string, ProductPage> = {
         "Keeps historical records readable after a plan ends, while live answers require an active entitlement.",
       ] },
       { heading: "Entitlement and price", body: [
-        "AI Business Front Desk — KES 499 / 30 days. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "Available package tiers and prices are loaded from the active server-side catalogue. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
+      ] },
+      { heading: "Voice receptionist — awaiting provider activation", body: [
+        "Front Desk Voice is the planned telephone receptionist tier: KES 3,999 / 30 days. It is shown for product transparency but is not currently available for checkout or live calls.",
+        "The intended public JATA AFTERCALL number is 0724 317 010 (+254 724 317 010), currently on Safaricom. The integration is designed to preserve this number through an owner-approved forwarding arrangement, subject to Safaricom and Telnyx confirmation.",
+        "The service will answer calls only after a Telnyx inbound number, signed call-control webhooks, persistent two-way audio, speech services, human handoff and usage metering are connected and tested.",
+        "Provider telephony and AI usage charges, if applicable, will be disclosed separately before activation. No customer is charged for Voice while provider activation is pending.",
+        "Current status: Awaiting provider activation. No live call service is available yet.",
       ] },
       { heading: "Connectivity", body: [
         "AI answers always require a live connection. The installable app never caches AI responses or private business data.",
@@ -110,7 +120,7 @@ const PRODUCTS: Record<string, ProductPage> = {
       { heading: "How JATA BOS PRO differs from Business POS", body: [
         "The separate Business POS product is the counter till: sales, stock, credit and reports for the front of the business.",
         "JATA BOS PRO runs the records and operations around the counter — the accounts, the buying, the suppliers and the reporting — of which selling at the till is one part.",
-        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the four page plans.",
+        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the public page plans.",
       ] },
       { heading: "Price and billing", body: [
         "KES 3,000 per 30 days, billed per business (plan key ERP_PRO). The workspace shows the amount before any payment starts, and that amount always comes from the stored plan catalogue on the server — never from the browser.",
@@ -165,9 +175,36 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   const product = PRODUCTS[slug];
   if (!product) notFound();
+
+  // Advertise only active, configured Front Desk rows. Voice remains withheld until inbound
+  // voice reception is implemented and operationally verified.
+  const frontDeskPlans = slug === "ai-front-desk"
+    ? await prisma.planConfig.findMany({
+        where: {
+          isActive: true,
+          key: { in: ["AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_STANDARD", "AI_FRONT_DESK_PRO"] },
+        },
+        orderBy: { priceKES: "asc" },
+        select: { key: true, name: true, priceKES: true, durationDays: true },
+      }).catch(() => [])
+    : [];
+  const sections = slug === "ai-front-desk"
+    ? product.sections.map((section) => section.heading === "Entitlement and price"
+      ? {
+          ...section,
+          body: [
+            frontDeskPlans.length
+              ? frontDeskPlans.map((plan) => `${plan.name}: KES ${formatNumber(Number(plan.priceKES))} / ${plan.durationDays} days`).join("; ") + "."
+              : "No Front Desk package is currently available for purchase.",
+            "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
+          ],
+        }
+      : section)
+    : product.sections;
+
   return (
     <MarketingLayout eyebrow={product.eyebrow} title={product.title} intro={product.intro}>
-      {product.sections.map((section, index) => (
+      {sections.map((section, index) => (
         <MarketingSection key={section.heading} id={`section-${index + 1}`} title={section.heading} tone={index % 2 === 0 ? "paper" : "cream"}>
           <div className="mk-prose">
             {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}

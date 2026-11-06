@@ -113,6 +113,9 @@ describe("original plan-card icon identities and positions", () => {
       MONTHLY: "phone",
       ANNUAL: "calendar",
       AI_BUSINESS_FRONT_DESK: "bot",
+      AI_FRONT_DESK_STANDARD: "bot",
+      AI_FRONT_DESK_PRO: "bot",
+      AI_FRONT_DESK_VOICE: "bot",
       INTERACTIVE_BUSINESS: "wand",
     });
     expect(POS_PLAN_CARD.icon).toBe("store");

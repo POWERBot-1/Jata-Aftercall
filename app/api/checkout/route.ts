@@ -10,6 +10,8 @@ import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experi
 import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey, assertAutopilotPlanPricing } from "@/lib/autopilot/entitlement";
 import { CHECKOUT_PENDING_WINDOW_MS, checkoutStatusUrl } from "@/lib/checkoutPolicy";
+import { isFrontDeskTierKey, assertFrontDeskTierPricing, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 
 type PlanRow = {
   id: string;
@@ -83,10 +85,52 @@ export async function POST(req: Request) {
     if (!plan.isActive || !Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || plan.durationDays <= 0) {
       return fail(400, "PLAN_UNAVAILABLE", "The selected plan is not currently available.");
     }
-    // §49 — AI Business Front Desk package must resolve to KES 499 / 30 days server-side.
-    // The server never trusts a client-supplied amount. This guard ensures the package price is authoritative.
-    if (plan.key === "AI_BUSINESS_FRONT_DESK" && (plan.priceKES !== 499 || plan.durationDays !== 30)) {
-      return fail(500, "PLAN_PRICING_INVALID", "AI Business Front Desk pricing configuration is invalid.");
+
+    // Voice checkout is available only after provider configuration, real live-call
+    // verification, runtime call enablement and explicit customer-billing approval.
+    // This check happens before Payment creation and before contacting Paystack.
+    if (plan.key === AI_FRONT_DESK_VOICE_KEY && !getVoiceReadiness().canSell) {
+      return fail(409, "PLAN_NOT_READY", "Front Desk Voice is awaiting provider activation. No payment has been started.");
+    }
+
+    // A lower Front Desk tier must not replace an active higher tier mid-term. Block before
+    // creating a Payment row or contacting Paystack; no charge can be initiated by this path.
+    if (isFrontDeskTierKey(plan.key)) {
+      const currentSubscription = await prisma.subscription.findUnique({
+        where: { businessId },
+        select: { planId: true, status: true, expiresAt: true },
+      });
+      if (
+        (currentSubscription?.status === "ACTIVE" || currentSubscription?.status === "EXPIRING") &&
+        currentSubscription.expiresAt &&
+        currentSubscription.expiresAt > new Date()
+      ) {
+        const currentPlan = await prisma.planConfig.findUnique({
+          where: { id: currentSubscription.planId },
+          select: { key: true },
+        });
+        const tierRank: Record<string, number> = {
+          AI_BUSINESS_FRONT_DESK: 1,
+          AI_FRONT_DESK_STANDARD: 2,
+          AI_FRONT_DESK_PRO: 3,
+          AI_FRONT_DESK_VOICE: 4,
+        };
+        const currentRank = currentPlan?.key ? tierRank[currentPlan.key] : undefined;
+        const requestedRank = tierRank[plan.key];
+        if (currentRank !== undefined && requestedRank < currentRank) {
+          return fail(
+            409,
+            "DOWNGRADE_AT_PERIOD_END",
+            "A lower Front Desk tier cannot replace your active paid tier before it expires. Your current access remains unchanged; contact support to arrange a change at renewal.",
+            { currentTier: currentPlan?.key, currentExpiry: currentSubscription.expiresAt.toISOString() },
+          );
+        }
+      }
+    }
+    // §49 + §41 — every AI Front Desk tier (Starter/Standard/Pro/Voice) must resolve to its
+    // approved price / 30 days server-side. The server never trusts a client-supplied amount.
+    if (isFrontDeskTierKey(plan.key) && !assertFrontDeskTierPricing(plan).ok) {
+      return fail(500, "PLAN_PRICING_INVALID", "AI Front Desk pricing configuration is invalid.");
     }
     // §26, §59 — the Interactive Business package resolves to KES 999 / 30 days server-side.
     // A client-supplied amount is never used; only the stored plan configures the charge.

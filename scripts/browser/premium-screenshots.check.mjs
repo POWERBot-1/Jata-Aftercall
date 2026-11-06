@@ -80,10 +80,19 @@ const MEMBER_ROUTES = [
 
 // Owner-mandated 2026-10-29 homepage sequence (mobile reading order): Autopilot moved to last
 // and JATA BOS PRO (ERP_PRO) inserted sixth when the full subscription catalogue shipped.
+// The seeded catalogue includes the AI Front Desk 2.0 tiers, but Voice stays out of every
+// customer-facing plan list until inbound voice reception passes its readiness gates
+// (publiclyListedPlans + checkout both fail closed), so the disposable database renders nine
+// homepage cards: the owner's seven-offer sequence with Standard/Pro slotted directly
+// after the Starter (legacy AI_BUSINESS_FRONT_DESK) card — the same order
+// `orderHomepagePlans()` produces in `lib/pricing.ts`. Against production's pre-migration
+// 8-row catalogue the grid still renders exactly the original seven (no tier rows exist yet).
 const EXPECTED_PLAN_ORDER = [
   "MONTHLY",
   "ANNUAL",
   "AI_BUSINESS_FRONT_DESK",
+  "AI_FRONT_DESK_STANDARD",
+  "AI_FRONT_DESK_PRO",
   "INTERACTIVE_BUSINESS",
   "BUSINESS_POS",
   "ERP_PRO",
@@ -801,8 +810,9 @@ for (const width of ["320x568", "390x844"]) {
   }
 }
 
-// Homepage design gates: palette really applies in a real browser, and the seven cards keep the
-// owner-mandated order at a phone width and at desktop width.
+// Homepage design gates: palette really applies in a real browser, and the catalogue cards keep
+// the owner-mandated order (with the Front Desk tiers after Starter) at a phone width and at
+// desktop width.
 for (const width of ["390x844", "1366x768"]) {
   const home = evidence.results.find((r) => r.viewport === width && r.route === "home");
   if (!home) {
@@ -810,9 +820,11 @@ for (const width of ["390x844", "1366x768"]) {
     continue;
   }
   const keys = home.planCards.map((c) => c.key);
-  record(keys.length === 7 && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
-    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk, Website Studio, POS, BOS PRO, Autopilot`,
-    keys.join(" > "));
+  record(
+    keys.length === EXPECTED_PLAN_ORDER.length && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
+    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk Starter/Standard/Pro (Voice gated until operational), Website Studio, POS, BOS PRO, Autopilot`,
+    keys.join(" > "),
+  );
   // Original design tokens, scoped where the original stylesheet declares them.
   record(home.tokens.jataAccent === "#d97706", `root accent is the original amber at ${width}`, String(home.tokens.jataAccent));
   record(home.tokens.lpInk === "#14110f", `landing espresso ink token applies at ${width}`, String(home.tokens.lpInk));

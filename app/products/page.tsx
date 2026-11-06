@@ -3,6 +3,7 @@ import Link from "next/link";
 import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { formatNumber } from "@/lib/format";
+import { FRONT_DESK_TIER_PRICING, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
@@ -24,6 +25,18 @@ const PRODUCT_DETAIL: Record<string, { slug: string; blurb: string; bullets: str
     slug: "ai-front-desk",
     blurb: "A published AI assistant that answers customer questions from your own business information.",
     bullets: ["Customer-facing /b/<slug>/ai page", "Grounded in your configured products, services and FAQs", "Live only after the plan is confirmed"],
+  },
+  // AI Front Desk 2.0 tiers — same product, four package tiers. Each row must exist or the card
+  // would be dropped from this grid (`if (!detail) return null`), hiding a catalogue offer.
+  AI_FRONT_DESK_STANDARD: {
+    slug: "ai-front-desk",
+    blurb: "The AI front desk on the Front Desk Standard package tier.",
+    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
+  },
+  AI_FRONT_DESK_PRO: {
+    slug: "ai-front-desk",
+    blurb: "The AI front desk on the Front Desk Pro package tier.",
+    bullets: ["Everything in Front Desk Starter", "Customer-facing /b/<slug>/ai page", "Live only after the plan is confirmed"],
   },
   JATA_AUTOPILOT: {
     slug: "jata-autopilot",
@@ -79,6 +92,18 @@ export default async function ProductsPage() {
               </article>
             );
           })}
+          <article className="mk-card" key="AI_FRONT_DESK_VOICE">
+            <h3>AI Front Desk Voice</h3>
+            <p className="mk-card__price">KES {formatNumber(FRONT_DESK_TIER_PRICING[AI_FRONT_DESK_VOICE_KEY].priceKES)} / 30 days</p>
+            <p>A premium AI phone receptionist designed to answer calls to your existing business number, understand customer requests and hand over to your team when needed.</p>
+            <ul className="mk-prose">
+              <li>Designed around your existing business phone identity</li>
+              <li>English and Kiswahili voice experience planned</li>
+              <li>Provider usage charges will be disclosed separately before activation</li>
+            </ul>
+            <p><strong>Awaiting provider activation.</strong> Not yet available for purchase or live calls.</p>
+            <Link href="/products/ai-front-desk#voice">View Voice readiness →</Link>
+          </article>
         </div>
         <div className="mk-btn-row">
           <Link href="/pricing" className="mk-btn">Compare all plans</Link>

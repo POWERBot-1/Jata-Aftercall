@@ -50,7 +50,9 @@ export default async function HomePage() {
     storedPlans = [];
   }
   // An unreadable or empty plan table falls back to every advertised plan, POS included.
-  const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS);
+  // Voice reception is still pending implementation and owner readiness approval; never advertise it.
+  const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
+    .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
 
   let demoRows: LandingDemoRow[] = [];
   try {

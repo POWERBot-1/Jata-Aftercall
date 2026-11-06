@@ -1,7 +1,13 @@
 import prisma from "./db";
+import { AI_FRONT_DESK_STARTER_KEY, AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "./frontDeskTiers";
+import { getVoiceReadiness } from "./telnyx/voice-readiness";
 
 // Pricing is DB-driven (§16, §32, §39) — never scattered hardcodes.
 // This helper centralizes plan retrieval so payable amount is always server-derived.
+//
+// AI Front Desk 2.0 (§41): the four-tier family lives in `lib/frontDeskTiers.ts`. The Starter
+// tier reuses the legacy `AI_BUSINESS_FRONT_DESK` key, so extending the catalogue with
+// Standard/Pro/Voice never rewrites an existing customer row.
 
 export type Plan = {
   id: string;
@@ -61,7 +67,13 @@ export function isPubliclyListedPlan(key: string): boolean {
 
 /** Filters a plan list down to what a public/customer-facing surface may show (§67). */
 export function publiclyListedPlans<T extends Record<string, any>>(plans: T[]): T[] {
-  return plans.filter((plan) => isPubliclyListedPlan(plan.key));
+  // Front Desk Voice is a commercial tier definition, not proof of a working telephone service.
+  // Keep it out of every public/customer plan list until a real inbound-voice provider adapter,
+  // verified webhook path and end-to-end call test are shipped. Checkout also fails closed below.
+  const voiceCanBeSold = getVoiceReadiness().canSell;
+  return plans.filter(
+    (plan) => isPubliclyListedPlan(plan.key) && (plan.key !== AI_FRONT_DESK_VOICE_KEY || voiceCanBeSold),
+  );
 }
 
 /**
@@ -105,10 +117,25 @@ export const HOMEPAGE_AUTOPILOT_PLAN_KEY = "JATA_AUTOPILOT";
  */
 export const HOMEPAGE_ERP_PRO_PLAN_KEY = "ERP_PRO";
 
+/**
+ * Marketing order for the whole catalogue, including the AI Front Desk 2.0 tiers.
+ *
+ * The owner's seven-card sequence (`HOMEPAGE_PLAN_ORDER`) is unchanged and keeps its exact
+ * positions. The three newer Front Desk tiers (Standard/Pro/Voice) sort immediately after the
+ * Starter card — the Starter occupies position 2, so the tiers take 2.1/2.2/2.3 and Website
+ * Studio (position 3) still follows the family. Keys in neither list keep their previous
+ * behaviour (ranked after every owner-ordered card).
+ */
 export function orderHomepagePlans<T extends { key: string }>(plans: readonly T[]): T[] {
   const rank = (key: string) => {
     const index = (HOMEPAGE_PLAN_ORDER as readonly string[]).indexOf(key);
-    return index < 0 ? HOMEPAGE_PLAN_ORDER.length : index;
+    if (index >= 0) return index * 10;
+    const tierIndex = (FRONT_DESK_TIER_KEYS as readonly string[]).indexOf(key);
+    if (tierIndex >= 0) {
+      const starterIndex = (HOMEPAGE_PLAN_ORDER as readonly string[]).indexOf(AI_FRONT_DESK_STARTER_KEY);
+      return (starterIndex >= 0 ? starterIndex : 2) * 10 + tierIndex + 1;
+    }
+    return HOMEPAGE_PLAN_ORDER.length * 10;
   };
   return [...plans].sort((a, b) => rank(a.key) - rank(b.key));
 }
@@ -138,7 +165,8 @@ export const ERP_PRO_FALLBACK_CARD: HomepagePlanCard = {
 /**
  * The seven offers the homepage advertises, in marketing order.
  *
- * The four page plans come from `publiclyListedPlans()` as before; the three owner-only products
+ * The public page plans (including every Front Desk tier) come from `publiclyListedPlans()`
+ * as before; the three owner-only products
  * (Business POS fifth, JATA BOS PRO sixth, JATA Autopilot standard seventh) are appended as
  * presentation cards so a customer can discover the complete catalogue in one grid. This is
  * presentation only:
@@ -289,6 +317,12 @@ export const FALLBACK_PLANS: Omit<Plan, "id">[] = [
   { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30, isActive: true },
   { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
   { key: "INTERACTIVE_BUSINESS", name: "Website Studio — KES 999/month", priceKES: 999, durationDays: 30, isActive: true },
+  // AI Front Desk 2.0 tiers (Standard/Pro/Voice) are deliberately NOT in this fallback list.
+  // They are strictly DB-authoritative (§41.5): a tier is advertised, priced and sold only
+  // when its stored `PlanConfig` row exists — a fallback card must never imply a package the
+  // catalogue does not actually hold. Their approved prices live in `FRONT_DESK_TIER_PRICING`
+  // (`lib/frontDeskTiers.ts`) as assertions, and the marketing fallback grid keeps the
+  // owner-mandated seven offers when the database cannot be read.
   // Private plans: never listed publicly (§67) — see PRIVATE_PLAN_KEYS.
   { key: "BUSINESS_POS", name: "JATA AFTERCALL — Business POS — KES 499/month", priceKES: 499, durationDays: 30, isActive: true },
   { key: "JATA_AUTOPILOT", name: "JATA Autopilot — KES 2,499/month", priceKES: 2499, durationDays: 30, isActive: true },

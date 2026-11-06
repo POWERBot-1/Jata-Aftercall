@@ -89,7 +89,10 @@ describe("runtime and schema guards", () => {
     // foreign keys only), and POS / ERP - PRO (38 new tenant-scoped ERP, accounting, messaging and
     // storefront tables that
     // sit beside the existing POS without touching it; every statement is CREATE TABLE, CREATE INDEX
-    // or a guarded foreign key on a table the same migration creates).
+    // or a guarded foreign key on a table the same migration creates), and the Front Desk Voice
+    // call foundation (six additive tenant-scoped Voice* tables keyed by plain businessId columns
+    // plus their unique/index constraints; every statement is CREATE TABLE or CREATE INDEX —
+    // no foreign keys, no ALTERs, no data rewrite).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -154,6 +157,7 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
+      "20261127000000_voice_call_foundation",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -230,6 +234,7 @@ describe("runtime and schema guards", () => {
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
       "20261126000000_control_plane_foundation",
+      "20261127000000_voice_call_foundation",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

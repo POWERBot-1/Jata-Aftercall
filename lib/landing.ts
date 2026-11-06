@@ -103,6 +103,25 @@ export const PLAN_INCLUDES: Record<string, readonly string[]> = {
     "Answers customer questions from your own services and offer",
     "Sees the questions it could not answer, so you can improve the page",
   ],
+  // AI Front Desk 2.0 tiers. These describe shipped capability only: the Starter bullets are
+  // the proven core every tier includes. Tier-specific allowances (conversation capacity,
+  // channels, voice minutes) are PENDING OWNER DECISION in the entitlement matrix and are
+  // deliberately not claimed here until they are decided and enforced server-side.
+  AI_FRONT_DESK_STANDARD: [
+    "Everything in Front Desk Starter",
+    "Front Desk Standard package tier",
+    "Answers customer questions from your own services and offer",
+  ],
+  AI_FRONT_DESK_PRO: [
+    "Everything in Front Desk Starter",
+    "Front Desk Pro package tier",
+    "Answers customer questions from your own services and offer",
+  ],
+  AI_FRONT_DESK_VOICE: [
+    "Everything in Front Desk Starter",
+    "Front Desk Voice package tier — the top Front Desk package",
+    "Answers customer questions from your own services and offer",
+  ],
   INTERACTIVE_BUSINESS: [
     "Website Studio: sections, theme and live preview",
     "Catalogue with prices, stock and orders",
@@ -115,6 +134,9 @@ export const PLAN_INCLUDES: Record<string, readonly string[]> = {
 export const PLAN_BADGES: Record<string, string> = {
   ANNUAL: "One payment a year",
   AI_BUSINESS_FRONT_DESK: "Adds AI answers",
+  AI_FRONT_DESK_STANDARD: "Front Desk Standard",
+  AI_FRONT_DESK_PRO: "Front Desk Pro",
+  AI_FRONT_DESK_VOICE: "Front Desk Voice",
   INTERACTIVE_BUSINESS: "Full website",
 };
 
@@ -133,6 +155,9 @@ export const PLAN_ICONS: Record<string, LandingIconKey> = {
   MONTHLY: "phone",
   ANNUAL: "calendar",
   AI_BUSINESS_FRONT_DESK: "bot",
+  AI_FRONT_DESK_STANDARD: "bot",
+  AI_FRONT_DESK_PRO: "bot",
+  AI_FRONT_DESK_VOICE: "bot",
   INTERACTIVE_BUSINESS: "wand",
 };
 
@@ -260,17 +285,17 @@ export const LANDING_FAQ: readonly LandingFaq[] = [
   {
     question: "Is the Business POS part of these plans?",
     answer:
-      "No. The Business POS is a separate owner-only point-of-sale that is configured and paid for inside your dashboard, per business. It is not included in, and not required for, the four page plans.",
+      "No. The Business POS is a separate owner-only point-of-sale that is configured and paid for inside your dashboard, per business. It is not included in, and not required for, the public page plans.",
   },
   {
     question: "Is JATA Autopilot part of these plans?",
     answer:
-      "No. JATA Autopilot is a separate owner-only add-on that checks your business health and drafts actions for your approval. You can preview it free inside your dashboard; it is paid for per business and live actions start only after Paystack confirms the payment. It is not included in, and not required for, the four page plans.",
+      "No. JATA Autopilot is a separate owner-only add-on that checks your business health and drafts actions for your approval. You can preview it free inside your dashboard; it is paid for per business and live actions start only after Paystack confirms the payment. It is not included in, and not required for, the public page plans.",
   },
   {
     question: "Is JATA BOS PRO part of these plans?",
     answer:
-      "No. JATA BOS PRO — Business Operating System Pro — is a separate per-business product covering accounting, invoicing, inventory and purchasing, alongside the separate Business POS till. You can read what it does on its product page; it switches on only from its own workspace after the server confirms the payment, and it is not included in, and not required for, the four page plans.",
+      "No. JATA BOS PRO — Business Operating System Pro — is a separate per-business product covering accounting, invoicing, inventory and purchasing, alongside the separate Business POS till. You can read what it does on its product page; it switches on only from its own workspace after the server confirms the payment, and it is not included in, and not required for, the public page plans.",
   },
   {
     question: "How do I pay for a plan?",

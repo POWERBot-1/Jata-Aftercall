@@ -3372,14 +3372,16 @@ button:focus-visible {
 }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /*
- * Seven offers, one grid: three across on a desktop in two full rows plus a centred last card
- * (3 + 3 + 1) instead of stretched into six narrow columns. Six equal tracks let every card span
- * two, so all cards stay exactly one third of the row wide — the same card width in every row.
- * The count-7 rule centres the lone seventh card (JATA Autopilot) under the first two rows. The
- * count-5 centring below is kept for the degraded case where stored plan rows are missing and
- * only five cards render: the fourth and fifth then centre under the first row instead of
- * leaving a hole. At every width the DOM order is the mobile reading order — Monthly, Annual,
- * AI Business Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot.
+ * Offers, one grid: three across on a desktop in full rows plus a centred last card (3 + 3 + 1 …)
+ * instead of stretched into six narrow columns. Six equal tracks let every card span two, so all
+ * cards stay exactly one third of the row wide — the same card width in every row.
+ * The count-7 rule centres the lone seventh card (JATA Autopilot) on the seven-offer production
+ * catalogue. The count-10 rule does the same for the seeded catalogue once the AI Front Desk 2.0
+ * tiers exist (3 + 3 + 3 + 1, lone tenth card centred). The count-5 centring below is kept for
+ * the degraded case where stored plan rows are missing and only five cards render: the fourth
+ * and fifth then centre under the first row instead of leaving a hole. At every width the DOM
+ * order is the mobile reading order — Monthly, Annual, the four Front Desk tiers, Website
+ * Studio, Business POS, JATA BOS PRO, JATA Autopilot.
  */
 @media (min-width: 1080px) {
   .lp-pricing .lp-plans { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -3387,6 +3389,7 @@ button:focus-visible {
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(4) { grid-column: 2 / span 2; }
   .lp-pricing .lp-plans[data-plan-count="5"] .lp-plan:nth-child(5) { grid-column: 4 / span 2; }
   .lp-pricing .lp-plans[data-plan-count="7"] .lp-plan:nth-child(7) { grid-column: 3 / span 2; }
+  .lp-pricing .lp-plans[data-plan-count="10"] .lp-plan:nth-child(10) { grid-column: 3 / span 2; }
 }
 
 /*

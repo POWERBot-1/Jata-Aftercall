@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from "vitest";
 import { getAIBusinessFrontDeskPlan, assertAIFrontDeskPricing, FALLBACK_PLANS } from "../../lib/pricing";
+import { assertFrontDeskTierPricing } from "../../lib/frontDeskTiers";
 import { getAIPackageStatus } from "../../lib/ai-entitlement";
 import { getBusinessBrain } from "../../lib/ai-business-brain";
 
@@ -81,9 +82,20 @@ describe("Phase 1 — Security Design Checks", () => {
     expect(forbiddenInCode.length).toBe(0);
   });
 
-  it("checkout enforces server-side AI package price (§49)", () => {
+  it("checkout enforces server-side AI package price for every Front Desk tier (§49, §41)", () => {
     const checkoutSource = require("fs").readFileSync("app/api/checkout/route.ts", "utf8");
-    expect(checkoutSource).toContain('plan.key === "AI_BUSINESS_FRONT_DESK"');
-    expect(checkoutSource).toContain("priceKES !== 499 || plan.durationDays !== 30");
+    // The four-tier guard replaces the old single inline 499/30 comparison: any tier of the
+    // family must resolve to its approved price, otherwise checkout fails closed.
+    expect(checkoutSource).toContain("isFrontDeskTierKey(plan.key)");
+    expect(checkoutSource).toContain("assertFrontDeskTierPricing(plan)");
+    expect(checkoutSource).toContain("PLAN_PRICING_INVALID");
+    // The approved prices themselves live in the authoritative tier map, asserted directly.
+    expect(assertFrontDeskTierPricing({ key: "AI_BUSINESS_FRONT_DESK", priceKES: 499, durationDays: 30 }).ok).toBe(true);
+    expect(assertFrontDeskTierPricing({ key: "AI_BUSINESS_FRONT_DESK", priceKES: 149, durationDays: 30 }).ok).toBe(false);
+    expect(assertFrontDeskTierPricing({ key: "AI_FRONT_DESK_STANDARD", priceKES: 999, durationDays: 30 }).ok).toBe(true);
+    expect(assertFrontDeskTierPricing({ key: "AI_FRONT_DESK_PRO", priceKES: 1999, durationDays: 30 }).ok).toBe(true);
+    expect(assertFrontDeskTierPricing({ key: "AI_FRONT_DESK_VOICE", priceKES: 3999, durationDays: 30 }).ok).toBe(true);
+    expect(assertFrontDeskTierPricing({ key: "AI_FRONT_DESK_PRO", priceKES: 999, durationDays: 30 }).ok).toBe(false);
+    expect(assertFrontDeskTierPricing({ key: "MONTHLY", priceKES: 149, durationDays: 30 }).ok).toBe(false);
   });
 });
