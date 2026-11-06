@@ -85,9 +85,11 @@ export default async function ProductsPage() {
       ...approved,
       catalogueMatch,
       available: catalogueMatch && providerReady,
-      status: key === AI_FRONT_DESK_VOICE_KEY
-        ? providerReady ? "Provider and commercial gates verified" : "Awaiting provider activation — not for sale"
-        : catalogueMatch ? "Active in the server catalogue" : "Awaiting catalogue activation — not for sale",
+      status: !catalogueMatch
+        ? "Awaiting catalogue activation — not for sale"
+        : key === AI_FRONT_DESK_VOICE_KEY
+          ? providerReady ? "Provider and commercial gates verified" : "Awaiting provider activation — not for sale"
+          : "Active in the server catalogue",
     };
   });
 
@@ -95,7 +97,7 @@ export default async function ProductsPage() {
     <MarketingLayout
       eyebrow="Products"
       title="One account. Every plan and product. One place to pay."
-      intro="JATA AFTERCALL keeps your business details, conversations and sales tools on the same Next.js application and the same database. Prices below come from the live plan catalogue; showing a card never activates a product."
+      intro="JATA AFTERCALL keeps your business details, conversations and sales tools in one workspace. The Front Desk 2.0 family shows the approved package prices and clearly marks which catalogue and provider gates are still pending; an informational card never activates a product or starts checkout."
     >
       <MarketingSection title="AI Front Desk 2.0 — all four packages" id="ai-front-desk-tiers">
         <p className="mk-prose">
