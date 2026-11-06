@@ -49,6 +49,7 @@ export function MarketingFooter() {
         </div>
         <nav aria-label="Products">
           <p className="mk-footer__heading">Products</p>
+          <Link href="/products">All products</Link>
           <Link href="/products/business-page">Business Page</Link>
           <Link href="/products/ai-front-desk">AI Business Front Desk</Link>
           <Link href="/products/website-studio">Website Studio</Link>
