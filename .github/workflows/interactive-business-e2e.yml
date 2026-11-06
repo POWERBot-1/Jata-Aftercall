@@ -59,12 +59,14 @@ jobs:
             if (v.total !== 0 || Number(exitCode) !== 0) process.exitCode = 1;
           }
           JS
-      - name: Lint, typecheck, no-database tests and production build
-        run: |
-          npm run lint
-          npm run typecheck
-          npx vitest run
-          npm run build
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: No-database test suite
+        run: npx vitest run
+      - name: Next.js production build
+        run: npm run build
       - name: Commit tested lockfile to the pull request branch
         if: success() && github.event_name == 'pull_request'
         env:
