@@ -3,7 +3,8 @@ import Link from "next/link";
 import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { formatNumber } from "@/lib/format";
-import { FRONT_DESK_TIER_PRICING, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { FRONT_DESK_TIER_PRICING, FRONT_DESK_TIER_KEYS, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
@@ -68,6 +69,27 @@ export default async function ProductsPage() {
     stored = [];
   }
   const plans = homepagePlanCards(stored.length > 0 ? stored : FALLBACK_PLANS);
+  const voiceReadiness = getVoiceReadiness();
+  // Show the complete, owner-approved Front Desk 2.0 package family even before the
+  // commercial PlanConfig rows are installed. A package is labelled catalogue-active only
+  // when its real active row matches the approved price and term; these cards never create
+  // checkout links or grant entitlements.
+  const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
+    const approved = FRONT_DESK_TIER_PRICING[key];
+    const row = stored.find((plan) => plan.key === key);
+    const catalogueMatch = Boolean(
+      row && row.priceKES === approved.priceKES && row.durationDays === approved.durationDays,
+    );
+    const providerReady = key !== AI_FRONT_DESK_VOICE_KEY || voiceReadiness.canSell;
+    return {
+      ...approved,
+      catalogueMatch,
+      available: catalogueMatch && providerReady,
+      status: key === AI_FRONT_DESK_VOICE_KEY
+        ? providerReady ? "Provider and commercial gates verified" : "Awaiting provider activation — not for sale"
+        : catalogueMatch ? "Active in the server catalogue" : "Awaiting catalogue activation — not for sale",
+    };
+  });
 
   return (
     <MarketingLayout
@@ -75,6 +97,35 @@ export default async function ProductsPage() {
       title="One account. Every plan and product. One place to pay."
       intro="JATA AFTERCALL keeps your business details, conversations and sales tools on the same Next.js application and the same database. Prices below come from the live plan catalogue; showing a card never activates a product."
     >
+      <MarketingSection title="AI Front Desk 2.0 — all four packages" id="ai-front-desk-tiers">
+        <p className="mk-prose">
+          One AI front desk, four package levels. Prices shown are the approved package prices.
+          A package is purchasable only when its matching active catalogue record and service
+          readiness checks are present. These cards are informational and do not start checkout.
+        </p>
+        <div className="mk-grid">
+          {frontDeskTiers.map((tier) => (
+            <article className="mk-card" key={tier.key} data-tier={tier.key}>
+              <h3>{tier.name}</h3>
+              <p className="mk-card__price">KES {formatNumber(tier.priceKES)} / 30 days</p>
+              <p>{tier.key === "AI_BUSINESS_FRONT_DESK"
+                ? "The essential AI receptionist for customer questions grounded in your business information."
+                : tier.key === "AI_FRONT_DESK_STANDARD"
+                  ? "A higher package level for businesses that need more from their AI front desk."
+                  : tier.key === "AI_FRONT_DESK_PRO"
+                    ? "The advanced AI front desk package for businesses with more demanding customer workflows."
+                    : "A premium phone receptionist for inbound calls, with English and Kiswahili voice handling and human handoff."}</p>
+              <p><strong>{tier.status}</strong></p>
+              <p className="mk-prose">
+                {tier.available
+                  ? "Catalogue and required readiness checks are satisfied. Access still requires a verified business entitlement."
+                  : "This package is visible for transparency but cannot be purchased or activated until its catalogue and readiness gates are satisfied."}
+              </p>
+              <Link href="/products/ai-front-desk">View AI Front Desk details →</Link>
+            </article>
+          ))}
+        </div>
+      </MarketingSection>
       <MarketingSection title="What you can switch on" id="catalogue">
         <div className="mk-grid">
           {plans.map((plan) => {
