@@ -46,7 +46,7 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     appA = await client.agentApplication.create({ data: applicationData(ownerA.id, "A") });
     appB = await client.agentApplication.create({ data: applicationData(ownerB.id, "B") });
     await client.agentReferralReportSnapshot.create({ data: {
-      applicationId: appA.id, periodKey, periodType: "daily", startInclusive, endExclusive,
+      applicationId: appA.id, periodKey, periodType: "DAILY", startInclusive, endExclusive,
       registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
     } });
     await client.agentReferralReportRevision.create({ data: {
