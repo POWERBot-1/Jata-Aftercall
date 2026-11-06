@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/Button";
  * control are all rendered at every width.
  */
 const SECTIONS = [
+  { href: "/products", label: "Products" },
   { href: "#product", label: "Product" },
   { href: "#benefits", label: "Benefits" },
   { href: "#demo", label: "Demos" },
