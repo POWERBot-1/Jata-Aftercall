@@ -11,12 +11,13 @@
  * provider resources.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { createPrismaVoiceEventStore, type VoiceEventStore } from "@/lib/voice/call-events";
-import { getCallControlClient, type TelnyxCallControlClient } from "@/lib/telnyx/call-control";
+import { getCallControlClient, signMediaStreamToken, type TelnyxCallControlClient } from "@/lib/telnyx/call-control";
 import { attemptHumanHandoff, type HandoffOutcome } from "@/lib/voice/handoff";
 import { resolveSpeechAdapters, type ResolvedSpeech } from "@/lib/voice/speech";
+import { resolveLlmAdapter } from "@/lib/voice/llm";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { VoiceMediaSession, type SessionConfig } from "./session";
 
@@ -26,6 +27,7 @@ export type WorkerDeps = {
   client?: TelnyxCallControlClient | null;
   loadContext?: (businessId: string) => Promise<{ businessName: string; facts: string[]; businessPhone: string | null }>;
   sessionConfig?: Partial<SessionConfig>;
+  llm?: ((input: { system: string; prompt: string; facts: string[] }) => Promise<string | null>) | null;
   env?: Record<string, string | undefined>;
 };
 
@@ -73,7 +75,7 @@ export async function startVoiceMediaWorker(port: number, deps: WorkerDeps = {})
 
   const wss = new WebSocketServer({ server: httpServer, path: "/media" });
 
-  wss.on("connection", (socket: WebSocket) => {
+  wss.on("connection", (socket: WebSocket, request: IncomingMessage) => {
     let session: VoiceMediaSession | null = null;
     let sessionKey = "";
     // Messages are processed strictly in arrival order: `start` performs async tenant
@@ -83,6 +85,27 @@ export async function startVoiceMediaWorker(port: number, deps: WorkerDeps = {})
     const sendJson = (message: unknown) => {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
     };
+
+    // Handshake authentication: every connection must present the per-call HMAC minted by
+    // the webhook under the shared secret. Without the secret (either side) nothing connects
+    // — fail closed, never open the media plane to unauthenticated peers.
+    const secret = env.VOICE_MEDIA_STREAM_TOKEN?.trim();
+    const authedCallId = (() => {
+      if (!secret || !request.url) return null;
+      const url = new URL(request.url, "http://media.invalid");
+      const callId = url.searchParams.get("callControlId");
+      const token = url.searchParams.get("token");
+      if (!callId || !token) return null;
+      const expected = signMediaStreamToken(secret, callId);
+      const a = Buffer.from(token);
+      const b = Buffer.from(expected);
+      return a.length === b.length && timingSafeEqual(a, b) ? callId : null;
+    })();
+    if (!authedCallId) {
+      socket.close(1008, "media handshake not authenticated");
+      return;
+    }
+    const authenticatedCallId = authedCallId;
 
     socket.on("message", (raw: Buffer | string) => {
       queue = queue.then(async () => {
@@ -94,6 +117,12 @@ export async function startVoiceMediaWorker(port: number, deps: WorkerDeps = {})
         }
         const start = message as StartMessage;
         if (!session && start.event === "start" && start.start?.call_control_id) {
+          // The start frame must name exactly the call the handshake was minted for.
+          if (start.start.call_control_id !== authenticatedCallId) {
+            sendJson({ event: "jata.refused", reason: "CALL_ID_MISMATCH" });
+            socket.close(1008, "call id mismatch");
+            return;
+          }
           if (!speech) {
             // No approved speech provider: refuse the media session deterministically.
             sendJson({ event: "jata.refused", reason: "SPEECH_PROVIDER_UNAVAILABLE" });
@@ -106,6 +135,11 @@ export async function startVoiceMediaWorker(port: number, deps: WorkerDeps = {})
           if (!call) {
             sendJson({ event: "jata.refused", reason: "UNKNOWN_CALL" });
             socket.close(1008, "unknown call");
+            return;
+          }
+          if (call.state === "COMPLETED" || call.state === "FAILED") {
+            sendJson({ event: "jata.refused", reason: "CALL_ALREADY_ENDED" });
+            socket.close(1008, "call already ended");
             return;
           }
           sessionKey = `${callControlId}:${randomUUID()}`;
@@ -132,7 +166,7 @@ export async function startVoiceMediaWorker(port: number, deps: WorkerDeps = {})
               const current = await store.findCallByControlId(callControlId);
               if (current) await store.updateCall(current.id, { language });
             },
-            llm: undefined,
+            llm: deps.llm !== undefined ? (deps.llm || undefined) : resolveLlmAdapter(env),
           });
           activeSessions.set(sessionKey, session);
           session.handleMessage(message);

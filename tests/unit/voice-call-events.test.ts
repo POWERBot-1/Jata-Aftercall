@@ -73,10 +73,34 @@ function createMemoryStore(numbers: InboundNumberRow[] = []): VoiceEventStore & 
       calls.set(row.callControlId, created);
       return created;
     },
-    async updateCall(id, patch) {
+    async updateCall(id, patch, options) {
       for (const [key, row] of calls) {
-        if (row.id === id) calls.set(key, { ...row, ...patch, updatedAt: new Date() });
+        if (row.id === id) {
+          if (options?.expectedState && row.state !== options.expectedState) return false;
+          calls.set(key, { ...row, ...patch, updatedAt: new Date() });
+          return true;
+        }
       }
+      return false;
+    },
+    async findBusinessPolicy() {
+      return null;
+    },
+    async countActiveCalls() {
+      return 0;
+    },
+    async todaysSpendMinor() {
+      return 0;
+    },
+    async hasActiveVoiceEntitlement() {
+      return false;
+    },
+    async createUsageIfMissing() {
+      throw new Error("not used");
+    },
+    async updateUsage() {},
+    async findUsageByCallId() {
+      return null;
     },
     async listUnprocessed(limit) {
       return [...events.values()].filter((e) => e.status === "RECEIVED" || e.status === "RETRY").slice(0, limit);
@@ -181,6 +205,23 @@ describe("durable ingest and tenant-safe processing", () => {
     expect(resolved?.businessId).toBe("biz_a");
   });
 
+  it("refuses an ambiguous canonical match that spans two tenants", async () => {
+    // Two active rows, different formats of the same number, different businesses: the
+    // unique index cannot see this, so routing must refuse rather than pick one.
+    const store = createMemoryStore([
+      { e164: "0724317010", businessId: "biz_a" },
+      { e164: "+254724317010", businessId: "biz_b" },
+    ]);
+    const resolved = await resolveTenantForCalledNumber(store, "+254 724 317 010");
+    expect(resolved).toBeNull();
+    const ingested = await ingestVoiceEvent(store, telnyxBody({ to: "+254724317010" }));
+    if (!ingested.stored) throw new Error("expected stored");
+    const outcome = await processVoiceEvent(store, ingested.row);
+    expect(outcome.status).toBe("REJECTED");
+    expect(outcome.rejectReason).toBe("UNKNOWN_NUMBER");
+    expect(store.calls.size).toBe(0);
+  });
+
   it("rejects unknown numbers — never processes an unroutable call", async () => {
     const store = createMemoryStore([{ e164: "+254724317010", businessId: "biz_a" }]);
     const ingested = await ingestVoiceEvent(store, telnyxBody({ to: "+254700000000" }));
@@ -242,6 +283,36 @@ describe("durable ingest and tenant-safe processing", () => {
     if (!replay.stored) throw new Error("expected stored");
     await processVoiceEvent(store, replay.row);
     expect(store.calls.get("cc_a")?.answeredAt?.getTime()).toBe(firstAnsweredAt?.getTime());
+  });
+
+  it("loses the optimistic write gracefully when a concurrent transition wins the race", async () => {
+    const store = createMemoryStore([{ e164: "+254724317010", businessId: "biz_a" }]);
+    const initiated = await ingestVoiceEvent(store, telnyxBody({ id: "c1", call_control_id: "cc_race" }));
+    if (!initiated.stored) throw new Error("expected stored");
+    await processVoiceEvent(store, initiated.row);
+    expect(store.calls.get("cc_race")?.state).toBe("INITIATED");
+
+    // Simulate a hangup landing between this event's read and its write.
+    let raced = false;
+    const baseUpdate = store.updateCall.bind(store);
+    store.updateCall = async (id, patch, options) => {
+      if (!raced && patch.state === "ANSWERED") {
+        raced = true;
+        await baseUpdate(id, { state: "COMPLETED", endedAt: new Date(), hangupCause: "call.hangup" });
+      }
+      return baseUpdate(id, patch, options);
+    };
+
+    const answered = await ingestVoiceEvent(store, telnyxBody({ id: "c2", event_type: "call.answered", call_control_id: "cc_race" }));
+    if (!answered.stored) throw new Error("expected stored");
+    const outcome = await processVoiceEvent(store, answered.row);
+    expect(raced).toBe(true);
+    // The stale ANSWERED write must never overwrite the terminal state; the event still
+    // settles as processed (idempotent, recoverable) with the terminal transition outcome.
+    expect(store.calls.get("cc_race")?.state).toBe("COMPLETED");
+    expect(store.calls.get("cc_race")?.answeredAt).toBeNull();
+    expect(outcome.status).toBe("PROCESSED");
+    expect(outcome.transition).toBe("TERMINAL");
   });
 
   it("recovers RETRY events oldest-first without double side effects", async () => {

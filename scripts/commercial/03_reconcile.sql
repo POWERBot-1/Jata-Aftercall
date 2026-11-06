@@ -3,6 +3,9 @@
 -- Status: PREPARED — NOT EXECUTED. Every statement is a SELECT.
 -- Expected under Option A: R1 baseline = 8 rows (Oct-29 verified); R1 post = 11 rows;
 -- R2/R3/R4 must be BYTE-IDENTICAL before vs after (the migration mutates no customer rows).
+-- Run BOTH captures inside the runbook's frozen-checkout window (deployments and new checkouts
+-- paused for the comparison): otherwise ordinary customer activity shifts R2/R3/R4 and the
+-- byte-identical requirement would report a false failure unrelated to the migration.
 -- =============================================================================
 
 -- R1. Catalogue

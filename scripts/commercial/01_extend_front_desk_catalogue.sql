@@ -2,9 +2,11 @@
 -- 01 — EXTEND FRONT DESK CATALOGUE TO FOUR TIERS (Option A: key reuse)
 -- Status: PREPARED — NOT EXECUTED. Requires explicit owner approval (§41.11).
 -- Effect: adds exactly three rows (Standard 999, Pro 1999, Voice 3999; all 30 days).
---         Never inserts, updates or deletes the existing AI_BUSINESS_FRONT_DESK row:
---         the guard below REFUSES to run if the Starter row is missing or mispriced.
+--         The guard below REFUSES to run if the Starter row is missing or mispriced.
 --         Touches no Subscription, Payment, AIPackageEntitlement or any other table.
+--         The only write against the existing Starter row is its display name (Option A as
+--         documented in runbook 07 §7.2 item 5); id, key, price, duration and active flag
+--         are never modified — strike that trailing UPDATE if the owner wants zero touch.
 --         Existing tier keys are never overwritten; conflicts must match exact expected rows.
 -- =============================================================================
 
@@ -39,7 +41,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'GUARD FAILED: an existing Front Desk tier conflicts with the approved catalogue; nothing written.';
   END IF;
-END $;
+END $$;
 
 INSERT INTO "PlanConfig" (id, key, name, "priceKES", "durationDays", "isActive", "createdAt", "updatedAt") VALUES
   ('plan_ai_front_desk_standard', 'AI_FRONT_DESK_STANDARD',
@@ -50,7 +52,12 @@ INSERT INTO "PlanConfig" (id, key, name, "priceKES", "durationDays", "isActive",
    'Front Desk Voice — KES 3,999/month', 3999, 30, true, now(), now())
 ON CONFLICT (key) DO NOTHING;
 
--- Starter is intentionally left completely untouched.
+-- Display-name alignment (Option A): the Starter row keeps its id, key, price, duration and
+-- active flag; only the customer-facing label moves to the approved Front Desk Starter name.
+UPDATE "PlanConfig"
+SET name = 'Front Desk Starter — KES 499/month', "updatedAt" = now()
+WHERE key = 'AI_BUSINESS_FRONT_DESK'
+  AND name <> 'Front Desk Starter — KES 499/month';
 
 -- Post-condition verification (expect exactly these four rows; Starter id unchanged)
 SELECT id, key, name, "priceKES", "durationDays", "isActive"

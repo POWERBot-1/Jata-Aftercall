@@ -101,7 +101,8 @@ export async function POST(req: Request) {
         select: { planId: true, status: true, expiresAt: true },
       });
       if (
-        currentSubscription?.status === "ACTIVE" &&
+        (currentSubscription?.status === "ACTIVE" || currentSubscription?.status === "EXPIRING") &&
+        currentSubscription.expiresAt &&
         currentSubscription.expiresAt > new Date()
       ) {
         const currentPlan = await prisma.planConfig.findUnique({

@@ -4,7 +4,13 @@
  * Transport is faked; no network and no credentials are used.
  */
 import { describe, expect, it, vi } from "vitest";
-import { TelnyxCallControlClient, getCallControlClient, type TelnyxTransport } from "@/lib/telnyx/call-control";
+import {
+  TelnyxCallControlClient,
+  buildMediaStreamUrl,
+  getCallControlClient,
+  signMediaStreamToken,
+  type TelnyxTransport,
+} from "@/lib/telnyx/call-control";
 import type { VoiceEventStore, InboundNumberRow } from "@/lib/voice";
 import type { VoiceCallCommandRow, VoiceCallEventRow, VoiceCallRow } from "@/lib/voice";
 
@@ -26,7 +32,28 @@ function createMemoryStore(): VoiceEventStore & { commands: Map<string, VoiceCal
     async createCall(): Promise<VoiceCallRow> {
       throw new Error("not used");
     },
-    async updateCall() {},
+    async updateCall() {
+      return true;
+    },
+    async findBusinessPolicy() {
+      return null;
+    },
+    async countActiveCalls() {
+      return 0;
+    },
+    async todaysSpendMinor() {
+      return 0;
+    },
+    async hasActiveVoiceEntitlement() {
+      return false;
+    },
+    async createUsageIfMissing() {
+      throw new Error("not used");
+    },
+    async updateUsage() {},
+    async findUsageByCallId() {
+      return null;
+    },
     async listUnprocessed() {
       return [];
     },
@@ -89,15 +116,42 @@ describe("Telnyx Call Control command safety", () => {
     expect(store.commands.get("answer:cc_1")?.status).toBe("SUCCEEDED");
   });
 
-  it("does not re-send a PENDING/SENT command even before completion is recorded", async () => {
+  it("treats a SENT-but-unconfirmed command as UNCERTAIN — never a silent success, never a blind re-send", async () => {
     const store = createMemoryStore();
     await store.createCommand({ callControlId: "cc_s", command: "answer", dedupeKey: "answer:cc_s", requestPayload: null });
     await store.updateCommand((await store.findCommandByDedupeKey("answer:cc_s"))!.id, { status: "SENT" });
     const { transport, calls } = transportResponding(() => ({ status: 200 }));
     const client = new TelnyxCallControlClient({ apiKey: "tk", transport, retryBaseMs: 1 });
     const outcome = await client.answer(store, "cc_s");
-    expect(outcome.deduped).toBe(true);
+    expect(outcome).toMatchObject({ outcome: "UNCERTAIN", deduped: true, status: null });
     expect(calls).toHaveLength(0);
+    // The uncertain row stays visible for reconciliation instead of being overwritten as success.
+    expect(store.commands.get("answer:cc_s")?.status).toBe("SENT");
+  });
+
+  it("re-issues a PENDING command (created but never sent — no remote effect to double)", async () => {
+    const store = createMemoryStore();
+    await store.createCommand({ callControlId: "cc_p", command: "answer", dedupeKey: "answer:cc_p", requestPayload: null });
+    const { transport, calls } = transportResponding(() => ({ status: 200, json: { data: { ok: true } } }));
+    const client = new TelnyxCallControlClient({ apiKey: "tk", transport, retryBaseMs: 1 });
+    const outcome = await client.answer(store, "cc_p");
+    expect(outcome).toMatchObject({ outcome: "SUCCEEDED", deduped: false });
+    expect(calls).toHaveLength(1);
+    expect(store.commands.get("answer:cc_p")?.status).toBe("SUCCEEDED");
+  });
+
+  it("starts bidirectional media with Telnyx's documented streaming_start shape", async () => {
+    const store = createMemoryStore();
+    const { transport, calls } = transportResponding(() => ({ status: 200, json: { data: { ok: true } } }));
+    const client = new TelnyxCallControlClient({ apiKey: "tk", transport, retryBaseMs: 1 });
+    const outcome = await client.startMediaStream(store, "cc_m", "wss://voice.example/media?callControlId=cc_m&token=t");
+    expect(outcome).toMatchObject({ outcome: "SUCCEEDED" });
+    expect(calls[0].path).toContain("/actions/streaming_start");
+    expect(calls[0].body).toMatchObject({
+      stream_track: "both_tracks",
+      stream_bidirectional_mode: "rtp",
+      stream_url: "wss://voice.example/media?callControlId=cc_m&token=t",
+    });
   });
 
   it("retries 5xx and network failures with backoff, then succeeds", async () => {
@@ -159,5 +213,25 @@ describe("Telnyx Call Control command safety", () => {
     await client.answer(store, "cc_auth");
     expect(seen[0].path).toContain("/v2/calls/cc_auth/actions/answer");
     expect(seen[0].headers.Authorization).toBe("Bearer tk_live_x");
+  });
+
+  it("mints per-call media tokens that bind to the call id and never expose the secret", () => {
+    const tokenA = signMediaStreamToken("shared-secret", "cc_a");
+    const tokenB = signMediaStreamToken("shared-secret", "cc_b");
+    expect(tokenA).toBe(signMediaStreamToken("shared-secret", "cc_a"));
+    expect(tokenA).not.toBe(tokenB);
+    expect(signMediaStreamToken("other-secret", "cc_a")).not.toBe(tokenA);
+    expect(tokenA).not.toContain("shared-secret");
+  });
+
+  it("builds an authenticated stream URL and fails closed without the shared secret", () => {
+    const url = buildMediaStreamUrl("wss://voice.example/media", "cc_1", "shared-secret");
+    expect(url).not.toBeNull();
+    const parsed = new URL(url!);
+    expect(parsed.pathname).toBe("/media");
+    expect(parsed.searchParams.get("callControlId")).toBe("cc_1");
+    expect(parsed.searchParams.get("token")).toBe(signMediaStreamToken("shared-secret", "cc_1"));
+    expect(buildMediaStreamUrl("wss://voice.example/media", "cc_1", undefined)).toBeNull();
+    expect(buildMediaStreamUrl("wss://voice.example/media", "cc_1", "   ")).toBeNull();
   });
 });

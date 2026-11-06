@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { startVoiceMediaWorker, type WorkerHandle, type WorkerDeps } from "@/worker/voice-media/server";
 import { VoiceMediaSession } from "@/worker/voice-media/session";
+import { signMediaStreamToken } from "@/lib/telnyx/call-control";
 import { createLoopbackStt, createLoopbackTts } from "@/lib/voice/speech/loopback";
 import { silenceMuLawFrame, syntheticSpeechFrame } from "@/lib/voice/audio";
 import type { ResolvedSpeech } from "@/lib/voice/speech";
@@ -78,7 +79,7 @@ function fakeStore(call: VoiceCallRow | null = callRow()) {
   };
   return {
     storeObj,
-    deps: { store: storeObj } as WorkerDeps,
+    deps: { store: storeObj } as unknown as WorkerDeps,
     updatesRef: updates,
   };
 }
@@ -109,9 +110,19 @@ function speechBundle(script: string[]): ResolvedSpeech {
   };
 }
 
-function connect(port: number): Promise<WebSocket> {
+/** Shared handshake secret for the worker's per-call media authentication (fixture only). */
+const TEST_MEDIA_SECRET = "media-test-secret";
+
+function mediaUrl(port: number, callControlId: string, token?: string): string {
+  const params = new URLSearchParams({ callControlId });
+  if (token !== undefined) params.set("token", token);
+  return `ws://127.0.0.1:${port}/media?${params.toString()}`;
+}
+
+function connect(port: number, callControlId = "cc_w", token?: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/media`);
+    const url = mediaUrl(port, callControlId, token ?? signMediaStreamToken(TEST_MEDIA_SECRET, callControlId));
+    const socket = new WebSocket(url);
     socket.once("open", () => resolve(socket));
     socket.once("error", reject);
   });
@@ -159,7 +170,7 @@ afterEach(async () => {
 describe("voice media worker transport", () => {
   it("serves /healthz with readiness facts", async () => {
     const fake = fakeStore();
-    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: {} });
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
     const response = await fetch(`http://127.0.0.1:${handle.port}/healthz`);
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -168,7 +179,7 @@ describe("voice media worker transport", () => {
 
   it("refuses sessions when no speech provider is configured (fail closed)", async () => {
     const fake = fakeStore();
-    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: null, client: fakeClient().client, env: {} });
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: null, client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
     const socket = await connect(handle.port);
     const seen = collect(socket);
     const closed = new Promise<{ code: number }>((resolve) => socket.once("close", (code) => resolve({ code })));
@@ -180,14 +191,70 @@ describe("voice media worker transport", () => {
 
   it("refuses media for unknown call ids (tenant binding from durable state)", async () => {
     const fake = fakeStore(null);
-    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: {} });
-    const socket = await connect(handle.port);
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
+    const socket = await connect(handle.port, "cc_unknown");
     const seen = collect(socket);
     const closed = new Promise<{ code: number }>((resolve) => socket.once("close", (code) => resolve({ code })));
     socket.send(JSON.stringify({ event: "start", start: { call_control_id: "cc_unknown" } }));
     const refused = await seen.waitFor((m) => m.event === "jata.refused");
     expect(refused.reason).toBe("UNKNOWN_CALL");
     expect((await closed).code).toBe(1008);
+  });
+
+  it("rejects the WebSocket handshake when the media token is missing or wrong (fail closed)", async () => {
+    const fake = fakeStore();
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
+    for (const url of [
+      mediaUrl(handle.port, "cc_w"), // no token at all
+      mediaUrl(handle.port, "cc_w", "forged-token"),
+      `ws://127.0.0.1:${handle.port}/media`, // neither call id nor token
+    ]) {
+      const socket = new WebSocket(url);
+      const closed = await new Promise<{ code: number }>((resolve, reject) => {
+        socket.once("close", (code) => resolve({ code }));
+        socket.once("error", reject);
+      });
+      expect(closed.code).toBe(1008);
+    }
+    expect(handle.sessions()).toBe(0);
+  });
+
+  it("rejects a start frame naming a different call than the handshake authenticated", async () => {
+    const fake = fakeStore();
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
+    const socket = await connect(handle.port, "cc_w");
+    const seen = collect(socket);
+    const closed = new Promise<{ code: number }>((resolve) => socket.once("close", (code) => resolve({ code })));
+    socket.send(JSON.stringify({ event: "start", start: { call_control_id: "cc_other" } }));
+    const refused = await seen.waitFor((m) => m.event === "jata.refused");
+    expect(refused.reason).toBe("CALL_ID_MISMATCH");
+    expect((await closed).code).toBe(1008);
+    expect(handle.sessions()).toBe(0);
+  });
+
+  it("refuses sessions bound to calls already in a terminal state", async () => {
+    const fake = fakeStore(callRow({ state: "COMPLETED" }));
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET } });
+    const socket = await connect(handle.port, "cc_w");
+    const seen = collect(socket);
+    const closed = new Promise<{ code: number }>((resolve) => socket.once("close", (code) => resolve({ code })));
+    socket.send(JSON.stringify({ event: "start", start: { call_control_id: "cc_w" } }));
+    const refused = await seen.waitFor((m) => m.event === "jata.refused");
+    expect(refused.reason).toBe("CALL_ALREADY_ENDED");
+    expect((await closed).code).toBe(1008);
+    expect(handle.sessions()).toBe(0);
+  });
+
+  it("refuses the handshake when the worker has no media secret configured (fail closed)", async () => {
+    const fake = fakeStore();
+    handle = await startVoiceMediaWorker(0, { ...fake.deps, speech: speechBundle([]), client: fakeClient().client, env: {} });
+    const socket = new WebSocket(mediaUrl(handle.port, "cc_w", signMediaStreamToken("", "cc_w")));
+    const closed = await new Promise<{ code: number }>((resolve, reject) => {
+      socket.once("close", (code) => resolve({ code }));
+      socket.once("error", reject);
+    });
+    expect(closed.code).toBe(1008);
+    expect(handle.sessions()).toBe(0);
   });
 
   it("runs a full call over the socket: utterance → reply audio → stop → hangup", async () => {
@@ -197,7 +264,7 @@ describe("voice media worker transport", () => {
       ...fake.deps,
       speech: speechBundle(["hello there please"]),
       client,
-      env: {},
+      env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET },
       loadContext: async () => ({ businessName: "Test Business", facts: ["Open 8 to 6"], businessPhone: "+254711999888" }),
       sessionConfig: { framePaceMs: 0, idlePromptMs: 60_000 },
     });
@@ -228,7 +295,7 @@ describe("voice media worker transport", () => {
       ...fake.deps,
       speech: speechBundle([]),
       client,
-      env: {},
+      env: { VOICE_MEDIA_STREAM_TOKEN: TEST_MEDIA_SECRET },
       loadContext: async () => ({ businessName: "T", facts: [], businessPhone: null }),
       sessionConfig: { framePaceMs: 0, idlePromptMs: 60_000 },
     });
@@ -296,4 +363,70 @@ describe("session-level barge-in and language switching", () => {
     expect(fake.updatesRef.some((u) => u.language === "sw")).toBe(true);
     await session.stop("done");
   });
+});
+
+describe("speech turn serialization (utterance queue)", () => {
+  it("queues a second utterance while the first is in flight — turns never overlap", async () => {
+    const sent: Array<any> = [];
+    const script = ["what are your opening hours", "and where are you located"];
+    let sttCount = 0;
+    const speech: ResolvedSpeech = {
+      providerId: "loopback",
+      createStt: () => {
+        sttCount += 1;
+        const inner = createLoopbackStt(script);
+        return {
+          ...inner,
+          async finishUtterance() {
+            return inner.finishUtterance();
+          },
+          stop() {
+            inner.stop();
+          },
+        } as ReturnType<ResolvedSpeech["createStt"]>;
+      },
+      tts: createLoopbackTts(),
+    };
+
+    // The first turn's reply is slow: with serialization the second turn cannot begin its
+    // reply until the first has finished; with overlapping turns maxActive would reach 2.
+    let llmCalls = 0;
+    let active = 0;
+    let maxActive = 0;
+    const session = new VoiceMediaSession({
+      callControlId: "cc_q",
+      businessId: "biz_w",
+      transport: { sendJson: (m) => sent.push(m) },
+      speech,
+      loadContext: async () => ({ businessName: "Queue Business", facts: [], businessPhone: null }),
+      onHangup: async () => undefined,
+      llm: async () => {
+        llmCalls += 1;
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((r) => setTimeout(r, llmCalls === 1 ? 500 : 40));
+        active -= 1;
+        return "Sure, we can help with that.";
+      },
+      config: { framePaceMs: 0, idlePromptMs: 60_000 },
+    });
+
+    session.handleMessage({ event: "start", start: { call_control_id: "cc_q" } });
+    const speakUtterance = () => {
+      for (let i = 0; i < 15; i += 1) session.handleMessage({ event: "media", media: { payload: syntheticSpeechFrame(160, i + 1).toString("base64") } });
+      for (let i = 0; i < 35; i += 1) session.handleMessage({ event: "media", media: { payload: silenceMuLawFrame(160).toString("base64") } });
+    };
+
+    speakUtterance(); // turn 1 ends → in flight (slow first reply)
+    await new Promise((r) => setTimeout(r, 20));
+    speakUtterance(); // turn 2 ends while turn 1 is still running → must queue
+    await new Promise((r) => setTimeout(r, 1_200));
+
+    expect(session.metrics.utterances).toBe(2); // neither utterance dropped
+    expect(session.metrics.turns).toBe(2); // both answered
+    expect(llmCalls).toBe(2);
+    expect(maxActive).toBe(1); // replies strictly serialized
+    await session.stop("queue_test_done");
+    expect(session.metrics.endReason).toBe("queue_test_done");
+  }, 15_000);
 });

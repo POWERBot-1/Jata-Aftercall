@@ -6,7 +6,7 @@
  * and a routed call that cannot be served is terminated with a clear cause instead of ringing
  * forever. Every decision is idempotent — provider webhook retries re-run this safely.
  */
-import { callControlMayAnswer, getCallControlClient, type TelnyxCallControlClient } from "@/lib/telnyx/call-control";
+import { buildMediaStreamUrl, callControlMayAnswer, getCallControlClient, type TelnyxCallControlClient } from "@/lib/telnyx/call-control";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import type { VoiceEventStore } from "./call-events";
 import type { VoiceCallRow } from "./types";
@@ -21,7 +21,7 @@ export type VoiceLimitEnvironment = {
 
 export type LimitDecision =
   | { allow: true; reason: "OK" }
-  | { allow: false; reason: "GLOBAL_KILL_SWITCH" | "BUSINESS_DISABLED" | "READINESS_GATED" | "CONCURRENCY_LIMIT" | "SPEND_LIMIT" | "NO_CLIENT" | "NO_POLICY" };
+  | { allow: false; reason: "GLOBAL_KILL_SWITCH" | "BUSINESS_DISABLED" | "READINESS_GATED" | "CONCURRENCY_LIMIT" | "SPEND_LIMIT" | "NO_CLIENT" | "NO_POLICY" | "NOT_ENTITLED" | "MEDIA_AUTH_UNCONFIGURED" };
 
 export function evaluateIncomingCall(params: {
   env?: VoiceLimitEnvironment & Record<string, string | undefined>;
@@ -65,6 +65,12 @@ export async function handleIncomingCall(call: VoiceCallRow, hooks: IncomingCall
   if (call.state === "COMPLETED" || call.state === "FAILED") {
     return { handled: "SKIPPED", reason: "ALREADY_TERMINAL" };
   }
+  if (call.state === "ANSWERED") {
+    // Redelivered call.initiated after the call was already answered: everything below is
+    // side-effectful (answer, stream, answeredAt) — re-running it would move the persisted
+    // start time and shorten later usage finalisation. Answering is idempotent by contract.
+    return { handled: "ANSWERED", reason: "ALREADY_ANSWERED" };
+  }
   const env = hooks.env ?? (process.env as any);
   const policy = (await (hooks.store as any).findBusinessPolicy?.(call.businessId)) ?? null;
   const activeCalls = hooks.countActiveCalls
@@ -77,6 +83,11 @@ export async function handleIncomingCall(call: VoiceCallRow, hooks: IncomingCall
   const decision = evaluateIncomingCall({ env, policy, activeCalls, todaysSpendMinor: spend });
   const client = hooks.client ?? getCallControlClient(env);
 
+  // Paid-feature gate: a business that does not hold an active Voice entitlement must never
+  // receive answered calls. The production store always answers this read; stores without
+  // the method (legacy test doubles) yield null and are governed by the other gates.
+  const entitled = (await hooks.store.hasActiveVoiceEntitlement?.(call.businessId)) ?? null;
+
   if (!decision.allow) {
     if (client) {
       await client.hangup(hooks.store, call.callControlId, `jata:${decision.reason.toLowerCase()}`).catch(() => undefined);
@@ -84,21 +95,49 @@ export async function handleIncomingCall(call: VoiceCallRow, hooks: IncomingCall
     await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: decision.reason, endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
     return { handled: "REFUSED", reason: decision.reason };
   }
+  if (entitled === false) {
+    if (client) {
+      await client.hangup(hooks.store, call.callControlId, "jata:not_entitled").catch(() => undefined);
+    }
+    await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: "NOT_ENTITLED", endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
+    return { handled: "REFUSED", reason: "NOT_ENTITLED" };
+  }
   if (!client) {
     await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: "NO_CLIENT", endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
     return { handled: "REFUSED", reason: "NO_CLIENT" };
   }
 
   const answer = await client.answer(hooks.store, call.callControlId);
-  if (answer.outcome === "FAILED") {
-    await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: "ANSWER_FAILED", endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
-    return { handled: "REFUSED", reason: "ANSWER_FAILED" };
+  if (answer.outcome !== "SUCCEEDED" && answer.outcome !== "NOOP") {
+    // FAILED and UNCERTAIN (sent-but-unconfirmed) both fail safe: never mark a call answered
+    // when the provider was not demonstrably told to answer it.
+    const reason = answer.outcome === "UNCERTAIN" ? "ANSWER_UNCERTAIN" : "ANSWER_FAILED";
+    await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: reason, endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
+    return { handled: "REFUSED", reason };
   }
-  const streamUrl = env.VOICE_MEDIA_STREAM_URL?.trim();
-  if (streamUrl) {
-    await client.startMediaStream(hooks.store, call.callControlId, streamUrl).catch(() => undefined);
+  const streamBase = env.VOICE_MEDIA_STREAM_URL?.trim();
+  if (streamBase) {
+    const streamUrl = buildMediaStreamUrl(streamBase, call.callControlId, env.VOICE_MEDIA_STREAM_TOKEN);
+    if (!streamUrl) {
+      // No shared secret → no authenticated handshake → refuse instead of answering a call
+      // whose media endpoint anyone could join.
+      await client.hangup(hooks.store, call.callControlId, "jata:media_auth_unconfigured").catch(() => undefined);
+      await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: "MEDIA_AUTH_UNCONFIGURED", endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
+      return { handled: "REFUSED", reason: "MEDIA_AUTH_UNCONFIGURED" };
+    }
+    const stream = await client.startMediaStream(hooks.store, call.callControlId, streamUrl).catch(() => null);
+    if (!stream || (stream.outcome !== "SUCCEEDED" && stream.outcome !== "NOOP")) {
+      // A call that is answered but can never stream audio is a dead call — terminate it
+      // clearly rather than leaving the caller with silence.
+      await client.hangup(hooks.store, call.callControlId, "jata:media_stream_failed").catch(() => undefined);
+      await hooks.store.updateCall(call.id, { state: "FAILED", failoverReason: "MEDIA_STREAM_FAILED", endedAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
+      return { handled: "REFUSED", reason: "MEDIA_STREAM_FAILED" };
+    }
   }
-  await hooks.store.updateCall(call.id, { state: "ANSWERED", answeredAt: hooks.now?.() ?? new Date() }).catch(() => undefined);
+  const answeredAt = hooks.now?.() ?? new Date();
+  await hooks.store
+    .updateCall(call.id, { state: "ANSWERED", answeredAt: call.answeredAt ?? answeredAt }, { expectedState: call.state })
+    .catch(() => undefined);
   return { handled: "ANSWERED", reason: "OK" };
 }
 

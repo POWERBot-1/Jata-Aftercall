@@ -179,8 +179,10 @@ export class VoiceActivityDetector {
 
   private append(samples: Int16Array): void {
     for (let i = 0; i < samples.length; i += 1) this.collected.push(samples[i]);
-    // Hard cap (~30 s of audio) so a stuck open utterance cannot exhaust memory.
-    if (this.collected.length > 8000 * 30) this.collected.splice(0, this.collected.length - 8000);
+    // Hard cap (~30 s of audio) so a stuck open utterance cannot exhaust memory — trim to the
+    // CAP, keeping the most recent 30 seconds, never down to a single second.
+    const cap = 8000 * 30;
+    if (this.collected.length > cap) this.collected.splice(0, this.collected.length - cap);
   }
 }
 

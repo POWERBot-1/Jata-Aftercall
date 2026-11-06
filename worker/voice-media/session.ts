@@ -108,6 +108,7 @@ export class VoiceMediaSession {
   private maxTimer: ReturnType<typeof setTimeout> | null = null;
   private promptCount = 0;
   private utteranceInFlight: Promise<void> | null = null;
+  private pendingUtterances: Int16Array[] = [];
 
   constructor(deps: SessionDeps) {
     this.deps = deps;
@@ -172,8 +173,24 @@ export class VoiceMediaSession {
       this.clearIdleTimer();
     } else if (event?.type === "UTTERANCE_END") {
       const pcm = event.pcm;
+      // Serialize utterances: if recognition/reply from a previous utterance is still in
+      // flight, queue this one (bounded) instead of replacing the in-flight turn — two
+      // overlapping replies would race on the shared turn index and language state.
+      if (this.utteranceInFlight) {
+        if (this.pendingUtterances.length < MAX_PENDING_UTTERANCES) this.pendingUtterances.push(pcm);
+        return;
+      }
       const utterance = this.utteranceInFlight = this.handleUtterance(pcm).finally(() => {
-        if (this.utteranceInFlight === utterance) this.utteranceInFlight = null;
+        if (this.utteranceInFlight === utterance) {
+          this.utteranceInFlight = null;
+          const next = this.pendingUtterances.shift();
+          if (next && !this.stopped) {
+            const chained = this.utteranceInFlight = this.handleUtterance(next).finally(() => {
+              if (this.utteranceInFlight === chained) this.utteranceInFlight = null;
+            });
+            void chained.catch(() => undefined);
+          }
+        }
       });
       void utterance.catch(() => undefined);
     }
@@ -355,5 +372,8 @@ function normalizeFrame(frame: Buffer): Buffer {
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/** Bounded queue of completed-but-unprocessed utterances (speech serialization). */
+const MAX_PENDING_UTTERANCES = 2;
 
 export { decodeMuLawByte, encodeMuLawSample };

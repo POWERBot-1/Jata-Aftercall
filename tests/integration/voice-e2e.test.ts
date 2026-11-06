@@ -41,7 +41,7 @@ type UsageExtras = {
   usageRows: VoiceUsageRow[];
 };
 
-function createJourneyStore(numbers: InboundNumberRow[]) {
+function createJourneyStore(numbers: InboundNumberRow[], options: { entitled?: boolean } = {}) {
   const events = new Map<string, VoiceCallEventRow>();
   const calls = new Map<string, VoiceCallRow>();
   const commands = new Map<string, VoiceCallCommandRow>();
@@ -94,8 +94,21 @@ function createJourneyStore(numbers: InboundNumberRow[]) {
       calls.set(row.callControlId, created);
       return created;
     },
-    async updateCall(id, patch) {
-      for (const [k, row] of calls) if (row.id === id) calls.set(k, { ...row, ...patch, updatedAt: new Date() });
+    async updateCall(id, patch, options) {
+      for (const [k, row] of calls) {
+        if (row.id === id) {
+          if (options?.expectedState && row.state !== options.expectedState) return false;
+          calls.set(k, { ...row, ...patch, updatedAt: new Date() });
+          return true;
+        }
+      }
+      return false;
+    },
+    async todaysSpendMinor() {
+      return 0;
+    },
+    async hasActiveVoiceEntitlement() {
+      return options?.entitled ?? true;
     },
     async listUnprocessed(limit) {
       return [...events.values()].filter((e) => e.status === "RECEIVED" || e.status === "RETRY").slice(0, limit);
@@ -234,6 +247,7 @@ describe("voice journey: webhook → tenant → state → commands → session �
       TELNYX_CONNECTION_ID: "conn",
       TELNYX_PHONE_NUMBER: DID,
       VOICE_MEDIA_STREAM_URL: "wss://voice.jataaftercall.co.ke/media",
+      VOICE_MEDIA_STREAM_TOKEN: "e2e-secret",
       VOICE_AI_PROVIDER: "loopback",
       TELNYX_VOICE_LIVE_VERIFIED: "true",
       VOICE_CALLS_ENABLED: "true",
@@ -258,7 +272,7 @@ describe("voice journey: webhook → tenant → state → commands → session �
     expect(answerResult).toEqual({ handled: "ANSWERED", reason: "OK" });
     expect(transportCalls.map((c) => c.path)).toEqual([
       `https://api.telnyx.com/v2/calls/cc_j/actions/answer`,
-      `https://api.telnyx.com/v2/calls/cc_j/actions/media_stream_start`,
+      `https://api.telnyx.com/v2/calls/cc_j/actions/streaming_start`,
     ]);
 
     // Redelivered call.initiated: answer command is deduplicated (never issued twice).
@@ -363,5 +377,58 @@ describe("voice journey: webhook → tenant → state → commands → session �
       todaysSpendMinor: 0,
     });
     expect(killed).toEqual({ allow: false, reason: "GLOBAL_KILL_SWITCH" });
+  }, 20_000);
+
+  it("refuses to answer a business without a Voice entitlement and keeps tenant isolation", async () => {
+    const DID = "+254724317010";
+    const { store, calls } = createJourneyStore(
+      [
+        { e164: DID, businessId: "biz_free" },
+        { e164: "+254700000001", businessId: "biz_other" },
+      ],
+      { entitled: false },
+    );
+
+    const body = signedWebhookBody({ id: "ne1", event_type: "call.initiated", call_control_id: "cc_ne" });
+    const row = await mustIngest(store, body.body);
+    const processed = await processVoiceEvent(store, row);
+    expect(processed.status).toBe("PROCESSED");
+    expect(calls.get("cc_ne")?.businessId).toBe("biz_free");
+
+    const env: Record<string, string | undefined> = {
+      TELNYX_PUBLIC_KEY: "pk",
+      TELNYX_API_KEY: "tk",
+      TELNYX_CONNECTION_ID: "conn",
+      TELNYX_PHONE_NUMBER: DID,
+      VOICE_MEDIA_STREAM_URL: "wss://voice.example/media",
+      VOICE_MEDIA_STREAM_TOKEN: "e2e-secret",
+      VOICE_AI_PROVIDER: "loopback",
+      TELNYX_VOICE_LIVE_VERIFIED: "true",
+      VOICE_CALLS_ENABLED: "true",
+    };
+    const transportPaths: string[] = [];
+    const client = new TelnyxCallControlClient({
+      apiKey: "tk",
+      transport: async (_m, path) => {
+        transportPaths.push(path);
+        return { status: 200, json: async () => ({}) };
+      },
+      retryBaseMs: 1,
+    });
+
+    const result = await handleIncomingCall(calls.get("cc_ne")!, { store, client, env });
+    expect(result).toEqual({ handled: "REFUSED", reason: "NOT_ENTITLED" });
+    // Only the terminating hangup was ever issued — the call was never answered.
+    expect(transportPaths.map((p) => p.split("/").pop())).toEqual(["hangup"]);
+    expect(calls.get("cc_ne")?.state).toBe("FAILED");
+    expect(calls.get("cc_ne")?.failoverReason).toBe("NOT_ENTITLED");
+
+    // Tenant isolation end to end: an event claiming a number this business does not own
+    // is rejected outright and never touches the existing call row.
+    const spoof = signedWebhookBody({ id: "ne2", event_type: "call.answered", call_control_id: "cc_ne", to: "+254700000099" });
+    const spoofRow = await mustIngest(store, spoof.body);
+    const outcome = await processVoiceEvent(store, spoofRow);
+    expect(outcome).toMatchObject({ status: "REJECTED", rejectReason: "UNKNOWN_NUMBER" });
+    expect(calls.get("cc_ne")?.failoverReason).toBe("NOT_ENTITLED");
   }, 20_000);
 });

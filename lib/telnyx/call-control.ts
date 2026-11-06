@@ -10,6 +10,7 @@
  * constructed from injected configuration, and `getCallControlClient()` returns null whenever
  * the deployment lacks approved credentials — every caller must handle null and fail closed.
  */
+import { createHmac } from "node:crypto";
 import { getVoiceReadiness } from "./voice-readiness";
 import type { VoiceEventStore } from "@/lib/voice/call-events";
 
@@ -31,7 +32,13 @@ export type CallControlConfig = {
 export type CommandOutcome =
   | { outcome: "SUCCEEDED"; status: number; deduped: boolean; response: unknown }
   | { outcome: "NOOP"; status: number; deduped: boolean; response: unknown }
-  | { outcome: "FAILED"; status: number | null; deduped: boolean; error: string; response: unknown };
+  | { outcome: "FAILED"; status: number | null; deduped: boolean; error: string; response: unknown }
+  /**
+   * The command was recorded SENT but its provider response was never captured (crash or
+   * crash-like interruption mid-flight). Its remote effect is unknown, so it must never be
+   * reported as success: callers fail safe instead of acting on an assumption.
+   */
+  | { outcome: "UNCERTAIN"; status: null; deduped: true; error: string; response: unknown };
 
 const defaultTransport: TelnyxTransport = async (method, path, body, headers) => {
   const response = await fetch(path, {
@@ -84,8 +91,8 @@ export class TelnyxCallControlClient {
     retryBaseMs?: number;
   }): Promise<CommandOutcome> {
     const existing = await store.findCommandByDedupeKey(params.dedupeKey);
-    if (existing && existing.status !== "FAILED") {
-      // PENDING/SENT/SUCCEEDED all mean "already issued" — never issue twice.
+    if (existing && existing.status === "SUCCEEDED") {
+      // Confirmed success — never issue the logical command twice.
       return {
         outcome: "SUCCEEDED",
         status: 200,
@@ -93,6 +100,20 @@ export class TelnyxCallControlClient {
         response: { dedupeKey: params.dedupeKey, priorStatus: existing.status },
       };
     }
+    if (existing && existing.status === "SENT") {
+      // Recorded as sent but never confirmed: the provider may or may not have executed it.
+      // Re-sending could double-execute (transfer/hangup) and reporting success would be a
+      // lie — surface UNCERTAIN and let the caller fail safe.
+      return {
+        outcome: "UNCERTAIN",
+        status: null,
+        deduped: true,
+        error: "command was sent but never confirmed — remote state unknown",
+        response: { dedupeKey: params.dedupeKey, priorStatus: existing.status },
+      };
+    }
+    // PENDING (never sent) and FAILED (confirmed rejected) both fall through to a real
+    // (re-)issue below; a crash before the network call leaves no remote effect to protect.
     const command = existing ?? (await store.createCommand({
       callControlId: params.callControlId,
       command: params.command,
@@ -161,21 +182,57 @@ export class TelnyxCallControlClient {
   }
 
   startMediaStream(store: VoiceEventStore, callControlId: string, streamUrl: string) {
+    // Telnyx's bidirectional media-streaming action is `streaming_start` with
+    // `stream_track: "both_tracks"` and `stream_bidirectional_mode: "rtp"` (see the
+    // Telnyx media-streaming docs referenced in the PR review). Exact parameter
+    // confirmation remains a provider-acceptance verification item; the command name and
+    // payload here follow the documented shape rather than the unsupported
+    // `media_stream_start`/`both_track` combination.
     return this.sendCommand(store, {
       callControlId,
-      command: "media_stream_start",
+      command: "streaming_start",
       dedupeKey: `media_stream:${callControlId}`,
-      payload: { stream_url: streamUrl, stream_track: "both_track", audio_encoding: "mulaw", sample_rate: 8000 },
+      payload: {
+        stream_url: streamUrl,
+        stream_track: "both_tracks",
+        stream_bidirectional_mode: "rtp",
+        audio_encoding: "mulaw",
+        sample_rate: 8000,
+      },
     });
   }
 
   stopMediaStream(store: VoiceEventStore, callControlId: string) {
     return this.sendCommand(store, {
       callControlId,
-      command: "media_stream_stop",
+      command: "streaming_stop",
       dedupeKey: `media_stream_stop:${callControlId}`,
     });
   }
+}
+
+/**
+ * Per-call authentication token for the media-worker WebSocket handshake: an HMAC of the
+ * call control id under the shared `VOICE_MEDIA_STREAM_TOKEN` secret. The raw secret never
+ * leaves the deployment; a token is only valid for the exact call it was minted for, and the
+ * worker recomputes and compares it in constant time before any session starts.
+ */
+export function signMediaStreamToken(secret: string, callControlId: string): string {
+  return createHmac("sha256", secret).update(callControlId).digest("base64url");
+}
+
+/**
+ * Build the authenticated stream URL handed to the provider for one call. Fails closed:
+ * without the shared secret there is no safe URL to dial, so the caller must refuse the call
+ * rather than expose an unauthenticated media endpoint.
+ */
+export function buildMediaStreamUrl(baseUrl: string, callControlId: string, secret: string | undefined): string | null {
+  const trimmedSecret = secret?.trim();
+  if (!trimmedSecret) return null;
+  const url = new URL(baseUrl);
+  url.searchParams.set("callControlId", callControlId);
+  url.searchParams.set("token", signMediaStreamToken(trimmedSecret, callControlId));
+  return url.toString();
 }
 
 /** Whether an answer-type action may be issued at all for this deployment. */
@@ -197,7 +254,8 @@ function isAlreadyInState(json: any, command: string): boolean {
   const detail = `${extractError(json)} ${JSON.stringify(json)}`.toLowerCase();
   if (command === "answer") return detail.includes("already answered") || detail.includes("call is already in the answered state");
   if (command === "hangup") return detail.includes("call is already hung up") || detail.includes("call has already ended");
-  if (command === "media_stream_stop") return detail.includes("not streaming") || detail.includes("no media stream");
+  if (command === "streaming_stop" || command === "media_stream_stop") return detail.includes("not streaming") || detail.includes("no media stream");
+  if (command === "streaming_start") return detail.includes("already streaming") || detail.includes("media stream already");
   return false;
 }
 

@@ -26,6 +26,7 @@ const READY_ENV: Record<string, string | undefined> = {
   TELNYX_CONNECTION_ID: "conn_test",
   TELNYX_PHONE_NUMBER: "+254724317010",
   VOICE_MEDIA_STREAM_URL: "wss://voice.example/media",
+  VOICE_MEDIA_STREAM_TOKEN: "lifecycle-secret",
   VOICE_AI_PROVIDER: "loopback",
   TELNYX_VOICE_LIVE_VERIFIED: "true",
   VOICE_CALLS_ENABLED: "true",
@@ -146,35 +147,45 @@ describe("answer gates (deterministic ordering, fail-safe)", () => {
 });
 
 describe("answer/refuse side effects", () => {
-  function recordingClient(behaviour: { answer?: "ok" | "fail" } = {}) {
+  function recordingClient(behaviour: { answer?: "ok" | "fail" | "uncertain"; stream?: "ok" | "fail" } = {}) {
     const sent: Array<{ command: string; callControlId: string; detail?: string }> = [];
     const client = {
       answer: async (_s: VoiceEventStore, callControlId: string) => {
         sent.push({ command: "answer", callControlId });
-        return behaviour.answer === "fail"
-          ? ({ outcome: "FAILED", status: 409, deduped: false, error: "line busy", response: null } as const)
-          : ({ outcome: "SUCCEEDED", status: 200, deduped: false, response: {} } as const);
+        if (behaviour.answer === "fail") {
+          return { outcome: "FAILED" as const, status: 409, deduped: false, error: "line busy", response: null };
+        }
+        if (behaviour.answer === "uncertain") {
+          return { outcome: "UNCERTAIN" as const, status: null, deduped: true, error: "sent but unconfirmed", response: null };
+        }
+        return { outcome: "SUCCEEDED" as const, status: 200, deduped: false, response: {} };
       },
       hangup: async (_s: VoiceEventStore, callControlId: string, cause?: string) => {
         sent.push({ command: "hangup", callControlId, detail: cause });
-        return { outcome: "SUCCEEDED", status: 200, deduped: false, response: {} } as const;
+        return { outcome: "SUCCEEDED" as const, status: 200, deduped: false, response: {} } as const;
       },
       startMediaStream: async (_s: VoiceEventStore, callControlId: string, url: string) => {
-        sent.push({ command: "media_stream_start", callControlId, detail: url });
-        return { outcome: "SUCCEEDED", status: 200, deduped: false, response: {} } as const;
+        sent.push({ command: "streaming_start", callControlId, detail: url });
+        return behaviour.stream === "fail"
+          ? { outcome: "FAILED" as const, status: 422, deduped: false, error: "stream rejected", response: null }
+          : { outcome: "SUCCEEDED" as const, status: 200, deduped: false, response: {} };
       },
     };
     return { client: client as unknown as TelnyxCallControlClient, sent };
   }
 
-  function recordingStore(call: VoiceCallRow) {
+  function recordingStore(call: VoiceCallRow, options: { entitled?: boolean } = {}) {
     const updates: Array<Record<string, unknown>> = [];
     const store = {
       async updateCall(_id: string, patch: Record<string, unknown>) {
         updates.push(patch);
+        return true;
       },
       async findCallByControlId() {
         return call;
+      },
+      async hasActiveVoiceEntitlement() {
+        return options.entitled ?? true;
       },
     } as unknown as VoiceEventStore;
     return { updates, store };
@@ -186,10 +197,66 @@ describe("answer/refuse side effects", () => {
     const { store, updates } = recordingStore(call);
     const result = await handleIncomingCall(call, { store, client, env: READY_ENV });
     expect(result).toEqual({ handled: "ANSWERED", reason: "OK" });
-    expect(sent.map((s) => s.command)).toEqual(["answer", "media_stream_start"]);
-    expect(sent[1].detail).toBe("wss://voice.example/media");
+    expect(sent.map((s) => s.command)).toEqual(["answer", "streaming_start"]);
+    expect(sent[1].detail).toContain("callControlId=cc_1");
+    expect(sent[1].detail).toContain("token=");
     expect(updates[0]).toMatchObject({ state: "ANSWERED" });
     expect(updates[0].answeredAt).toBeInstanceOf(Date);
+  });
+
+  it("skips a redelivered call.initiated after answer (answeredAt never moves)", async () => {
+    const answeredAt = new Date("2026-01-05T10:00:00Z");
+    const call = baseCall({ state: "ANSWERED", answeredAt });
+    const { client, sent } = recordingClient();
+    const { store, updates } = recordingStore(call);
+    const result = await handleIncomingCall(call, { store, client, env: READY_ENV });
+    expect(result).toEqual({ handled: "ANSWERED", reason: "ALREADY_ANSWERED" });
+    expect(sent).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("refuses a business without an active Voice entitlement before answering", async () => {
+    const call = baseCall();
+    const { client, sent } = recordingClient();
+    const { store, updates } = recordingStore(call, { entitled: false });
+    const result = await handleIncomingCall(call, { store, client, env: READY_ENV });
+    expect(result).toEqual({ handled: "REFUSED", reason: "NOT_ENTITLED" });
+    expect(sent.map((s) => s.detail)).toEqual(["jata:not_entitled"]);
+    expect(updates[0]).toMatchObject({ state: "FAILED", failoverReason: "NOT_ENTITLED" });
+  });
+
+  it("refuses to answer when the media handshake secret is not configured", async () => {
+    const call = baseCall();
+    const { client, sent } = recordingClient();
+    const { store, updates } = recordingStore(call);
+    // VOICE_MEDIA_STREAM_TOKEN is required configuration: readiness refuses the call before
+    // any answer/stream work (the lifecycle's own media-auth guard behind it is defence in
+    // depth for any future readiness change). Either way the call is never answered.
+    const { VOICE_MEDIA_STREAM_TOKEN: _omitted, ...envWithoutSecret } = READY_ENV;
+    const result = await handleIncomingCall(call, { store, client, env: envWithoutSecret });
+    expect(result).toEqual({ handled: "REFUSED", reason: "READINESS_GATED" });
+    expect(sent.map((s) => s.detail)).toEqual(["jata:readiness_gated"]);
+    expect(updates[0]).toMatchObject({ state: "FAILED", failoverReason: "READINESS_GATED" });
+  });
+
+  it("fails safe when the answer command's status is uncertain (never marks answered)", async () => {
+    const call = baseCall();
+    const { client, sent } = recordingClient({ answer: "uncertain" });
+    const { store, updates } = recordingStore(call);
+    const result = await handleIncomingCall(call, { store, client, env: READY_ENV });
+    expect(result).toEqual({ handled: "REFUSED", reason: "ANSWER_UNCERTAIN" });
+    expect(sent.map((s) => s.command)).toEqual(["answer"]);
+    expect(updates[0]).toMatchObject({ state: "FAILED", failoverReason: "ANSWER_UNCERTAIN" });
+  });
+
+  it("terminates the call when the media stream command fails (no answered-but-deaf call)", async () => {
+    const call = baseCall();
+    const { client, sent } = recordingClient({ stream: "fail" });
+    const { store, updates } = recordingStore(call);
+    const result = await handleIncomingCall(call, { store, client, env: READY_ENV });
+    expect(result).toEqual({ handled: "REFUSED", reason: "MEDIA_STREAM_FAILED" });
+    expect(sent.map((s) => s.detail)).toContain("jata:media_stream_failed");
+    expect(updates[0]).toMatchObject({ state: "FAILED", failoverReason: "MEDIA_STREAM_FAILED" });
   });
 
   it("refuses with an explicit jata: cause and FAILED state (no silent drop)", async () => {

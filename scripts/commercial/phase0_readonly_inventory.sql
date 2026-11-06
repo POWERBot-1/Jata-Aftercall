@@ -98,14 +98,17 @@ WHERE p.status = 'PAID' AND p.purpose = 'SUBSCRIPTION'
   AND p."businessId" IS NOT NULL AND s.id IS NULL;
 
 -- H. PROTECTED / OUT-OF-SCOPE populations (must be byte-identical after migration)
-SELECT 'page_plans' AS family, pc.key, s.status, count(*)
+-- Note: Subscription.status is an enum while POS/Autopilot statuses are text; PostgreSQL
+-- cannot resolve a UNION across type categories, so every status expression is cast to text
+-- explicitly (output shape is unchanged).
+SELECT 'page_plans' AS family, pc.key, s.status::text, count(*)
 FROM "Subscription" s JOIN "PlanConfig" pc ON pc.id = s."planId"
 WHERE pc.key IN ('MONTHLY','ANNUAL','INTERACTIVE_BUSINESS')
-GROUP BY pc.key, s.status
+GROUP BY pc.key, s.status::text
 UNION ALL
-SELECT 'other_products', 'POS', "status", count(*) FROM "PosSubscription" GROUP BY "status"
+SELECT 'other_products', 'POS', "status"::text, count(*) FROM "PosSubscription" GROUP BY "status"::text
 UNION ALL
-SELECT 'other_products', 'AUTOPILOT', "status", count(*) FROM "AutopilotSubscription" GROUP BY "status"
+SELECT 'other_products', 'AUTOPILOT', "status"::text, count(*) FROM "AutopilotSubscription" GROUP BY "status"::text
 ORDER BY family, key, status;
 
 -- I. Duplicate-charge canary: same business with >1 PAID payment in 24h for the same plan

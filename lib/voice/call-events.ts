@@ -28,6 +28,12 @@ import {
 
 export type InboundNumberRow = { e164: string; businessId: string };
 
+export type VoiceBusinessPolicyRow = {
+  hardDisabled: boolean;
+  concurrencyLimit: number | null;
+  dailySpendLimitMinor: number | null;
+};
+
 export type VoiceEventStore = {
   insertEvent(
     row: Pick<VoiceCallEventRow, "providerEventId" | "eventType" | "callControlId" | "callSessionId" | "calledNumber" | "callingNumber" | "payload">,
@@ -46,10 +52,17 @@ export type VoiceEventStore = {
     calledNumber: string;
     state: string;
   }): Promise<VoiceCallRow>;
+  /**
+   * Apply a state/stamp patch. When `options.expectedState` is supplied the write is
+   * conditional on the row still being in that state (optimistic concurrency): the promise
+   * resolves `false` when another transition won the race, and the caller re-reads instead of
+   * overwriting a newer state. Stores without conflict information resolve `true`.
+   */
   updateCall(
     id: string,
     patch: Partial<Pick<VoiceCallRow, "state" | "language" | "answeredAt" | "endedAt" | "hangupCause" | "failoverReason" | "handoffTarget" | "callSessionId">>,
-  ): Promise<void>;
+    options?: { expectedState?: string },
+  ): Promise<boolean>;
   listUnprocessed(limit: number): Promise<VoiceCallEventRow[]>;
   findCommandByDedupeKey(dedupeKey: string): Promise<VoiceCallCommandRow | null>;
   createCommand(row: {
@@ -62,6 +75,25 @@ export type VoiceEventStore = {
     id: string,
     patch: Partial<Pick<VoiceCallCommandRow, "status" | "attempts" | "lastError" | "responsePayload">>,
   ): Promise<void>;
+  /** Per-business commercial safety policy (kill switch / caps) — production MUST read it. */
+  findBusinessPolicy(businessId: string): Promise<VoiceBusinessPolicyRow | null>;
+  /** Currently non-terminal calls for a business (concurrency caps). */
+  countActiveCalls(businessId: string): Promise<number>;
+  /** Provider-reported spend for this business since local midnight (spend caps). */
+  todaysSpendMinor(businessId: string, now?: Date): Promise<number>;
+  /** True only when the business holds an active, unexpired Front Desk Voice entitlement. */
+  hasActiveVoiceEntitlement(businessId: string): Promise<boolean>;
+  /** Metering row CRUD (callId unique → duplicate billing structurally impossible). */
+  createUsageIfMissing(row: {
+    callId: string;
+    businessId: string;
+    startedAt: Date;
+    answeredAt: Date | null;
+    endedAt: Date;
+    durationSeconds: number;
+  }): Promise<import("./metering").VoiceUsageRow>;
+  updateUsage(id: string, patch: Record<string, unknown>): Promise<void>;
+  findUsageByCallId(callId: string): Promise<import("./metering").VoiceUsageRow | null>;
 };
 
 /** Prisma-backed store used by the webhook route and workers. */
@@ -100,8 +132,16 @@ export function createPrismaVoiceEventStore(): VoiceEventStore {
         throw error;
       }
     },
-    async updateCall(id, patch) {
+    async updateCall(id, patch, options) {
+      if (options?.expectedState) {
+        const result = await db.voiceCall.updateMany({
+          where: { id, state: options.expectedState },
+          data: patch,
+        });
+        return result.count === 1;
+      }
       await db.voiceCall.update({ where: { id }, data: patch });
+      return true;
     },
     async listUnprocessed(limit) {
       return (await db.voiceCallEvent.findMany({
@@ -126,6 +166,73 @@ export function createPrismaVoiceEventStore(): VoiceEventStore {
     },
     async updateCommand(id, patch) {
       await db.voiceCallCommand.update({ where: { id }, data: patch });
+    },
+    async findBusinessPolicy(businessId) {
+      const row = await db.voiceBusinessPolicy.findUnique({ where: { businessId } });
+      if (!row) return null;
+      return {
+        hardDisabled: Boolean(row.hardDisabled),
+        concurrencyLimit: row.concurrencyLimit ?? null,
+        dailySpendLimitMinor: row.dailySpendLimitMinor ?? null,
+      };
+    },
+    async countActiveCalls(businessId) {
+      return db.voiceCall.count({
+        where: { businessId, state: { notIn: ["COMPLETED", "FAILED"] } },
+      });
+    },
+    async todaysSpendMinor(businessId, now = new Date()) {
+      const startOfDay = new Date(now);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const aggregate = await db.voiceUsageRecord.aggregate({
+        where: {
+          businessId,
+          startedAt: { gte: startOfDay },
+          providerCostMinor: { not: null },
+        },
+        _sum: { providerCostMinor: true },
+      });
+      return aggregate?._sum?.providerCostMinor ?? 0;
+    },
+    async hasActiveVoiceEntitlement(businessId) {
+      const now = new Date();
+      const entitlement = await db.aIPackageEntitlement.findUnique({ where: { businessId } });
+      if (
+        entitlement &&
+        entitlement.packageKey === "AI_FRONT_DESK_VOICE" &&
+        entitlement.status === "ACTIVE" &&
+        (entitlement.expiresAt === null || entitlement.expiresAt > now)
+      ) {
+        return true;
+      }
+      const subscription = await db.subscription.findUnique({
+        where: { businessId },
+        include: { plan: { select: { key: true } } },
+      });
+      return Boolean(
+        subscription &&
+          subscription.plan?.key === "AI_FRONT_DESK_VOICE" &&
+          (subscription.status === "ACTIVE" || subscription.status === "EXPIRING") &&
+          subscription.expiresAt &&
+          subscription.expiresAt > now,
+      );
+    },
+    async createUsageIfMissing(row) {
+      try {
+        return await db.voiceUsageRecord.create({ data: row });
+      } catch (error: any) {
+        if (isUniqueViolation(error)) {
+          const existing = await db.voiceUsageRecord.findUnique({ where: { callId: row.callId } });
+          if (existing) return existing;
+        }
+        throw error;
+      }
+    },
+    async updateUsage(id, patch) {
+      await db.voiceUsageRecord.update({ where: { id }, data: patch });
+    },
+    async findUsageByCallId(callId) {
+      return (await db.voiceUsageRecord.findUnique({ where: { callId } })) as import("./metering").VoiceUsageRow | null;
     },
   };
 }
@@ -180,7 +287,14 @@ export async function resolveTenantForCalledNumber(
   const canonical = normalizeKenyaE164(calledNumber);
   if (!canonical) return null;
   const rows = await store.findActiveInboundNumbers();
-  return rows.find((row) => normalizeKenyaE164(row.e164) === canonical) ?? null;
+  const matches = rows.filter((row) => normalizeKenyaE164(row.e164) === canonical);
+  if (matches.length === 0) return null;
+  // Ambiguous canonical match across tenants (two active rows, different formats of the
+  // same number, different businesses): refuse to guess — an unroutable call is safe, a
+  // cross-tenant answer never is.
+  const businesses = new Set(matches.map((row) => row.businessId));
+  if (businesses.size > 1) return null;
+  return matches[0];
 }
 
 export type ProcessOutcome = {
@@ -240,13 +354,27 @@ export async function processVoiceEvent(store: VoiceEventStore, event: VoiceCall
     const result = transitionCallState(call.state, target);
     transition = result.reason;
     if (result.applied) {
-      const patch: Record<string, unknown> = { state: result.next };
-      if (result.next === "ANSWERED" && !call.answeredAt) patch.answeredAt = new Date();
-      if (result.next === "COMPLETED" || result.next === "FAILED") {
-        patch.endedAt = new Date();
-        patch.hangupCause = event.eventType;
+      const applied = await store.updateCall(
+        call.id,
+        buildTransitionPatch(call, result.next, event.eventType),
+        { expectedState: call.state },
+      );
+      if (applied === false) {
+        // A concurrent transition (e.g. hangup processed while this answer was in flight)
+        // won the race. Re-read and re-evaluate once against the fresh state so a terminal
+        // row is never overwritten by this stale write.
+        const fresh = event.callControlId ? await store.findCallByControlId(event.callControlId) : null;
+        if (fresh) {
+          call = fresh;
+          const retry = transitionCallState(call.state, target);
+          transition = retry.reason;
+          if (retry.applied) {
+            await store.updateCall(call.id, buildTransitionPatch(call, retry.next, event.eventType), {
+              expectedState: call.state,
+            });
+          }
+        }
       }
-      await store.updateCall(call.id, patch as any);
     }
   }
 
@@ -258,6 +386,17 @@ export async function processVoiceEvent(store: VoiceEventStore, event: VoiceCall
   });
 
   return { status: "PROCESSED", rejectReason: null, call, transition, error: null };
+}
+
+/** State transition write for one applied transition (stamps derived from the state being left). */
+function buildTransitionPatch(call: VoiceCallRow, next: string, eventType: string): Record<string, unknown> {
+  const patch: Record<string, unknown> = { state: next };
+  if (next === "ANSWERED" && !call.answeredAt) patch.answeredAt = new Date();
+  if (next === "COMPLETED" || next === "FAILED") {
+    patch.endedAt = new Date();
+    patch.hangupCause = eventType;
+  }
+  return patch;
 }
 
 /**

@@ -125,4 +125,17 @@ describe("voice activity detection", () => {
     expect(vad.isOpen()).toBe(false);
     expect(vad.finish()).toBeNull();
   });
+
+  it("retains the full 30-second window on a long utterance (cap trims to 30s, not 1s)", () => {
+    const vad = new VoiceActivityDetector();
+    for (let i = 0; i < 12; i += 1) vad.push(muLawToPcm16(speech())); // open
+    // ~32 s of continuous voiced audio: 1600 frames × 20 ms × 160 samples = 256,000 samples.
+    for (let i = 0; i < 1600; i += 1) vad.push(muLawToPcm16(speech()));
+    let end: ReturnType<VoiceActivityDetector["push"]> = null;
+    for (let i = 0; i < 35 && !end; i += 1) end = vad.push(muLawToPcm16(silence()));
+    expect(end?.type).toBe("UTTERANCE_END");
+    if (end?.type !== "UTTERANCE_END") throw new Error("expected UTTERANCE_END");
+    // The hard cap keeps the most recent 30 seconds — never a single second of tail.
+    expect(end.pcm.length).toBe(8000 * 30);
+  });
 });

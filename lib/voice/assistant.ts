@@ -70,30 +70,62 @@ export async function runAssistantTurn(input: AssistantTurnInput): Promise<Assis
     };
   }
 
-  // 4. First turn: greeting regardless of content.
+  // 4. First turn: greet, and never discard what the caller said. The greeting leads, then
+  //    the transcript is handled as the question it is (handoff above already won if it was
+  //    one), so a caller who opens with "how late are you open?" is answered, not made to
+  //    repeat themselves.
   if (input.turnIndex === 0) {
+    const greeting = language === "sw" ? GREETING_SW(input.businessName) : GREETING_EN(input.businessName);
+    if (GREETING_PATTERN.test(transcript)) {
+      return {
+        language,
+        languageSwitched: switched !== null,
+        intent: "ANSWER",
+        reply: greeting,
+      };
+    }
+    const answer = await generateReply({ ...input, language, transcript });
     return {
       language,
       languageSwitched: switched !== null,
-      intent: "ANSWER",
-      reply: language === "sw" ? GREETING_SW(input.businessName) : GREETING_EN(input.businessName),
+      intent: answer.intent,
+      reply: `${greeting} ${answer.reply}`.trim(),
     };
   }
 
   // 5. Reply: LLM port when injected, otherwise a deterministic fallback that never invents
   //    business facts (it defers to the owner-provided facts list).
+  const reply = await generateReply({ ...input, language, transcript });
+  return {
+    language,
+    languageSwitched: switched !== null,
+    intent: reply.intent,
+    reply: reply.reply,
+  };
+}
+
+const GREETING_PATTERN = /^(hello|hi|hey|good (morning|afternoon|evening)|habari|habari za|sasa|niaje|shikamoo|hujambo)\b[\s!.,?]*$/i;
+
+type ReplySource = {
+  transcript: string;
+  language: VoiceLanguage;
+  facts?: string[];
+  llm?: (input: { system: string; prompt: string; facts: string[] }) => Promise<string | null>;
+};
+
+async function generateReply(input: ReplySource): Promise<{ intent: AssistantIntent; reply: string }> {
   if (input.llm) {
     try {
       const generated = await input.llm({
         system:
-          language === "sw"
+          input.language === "sw"
             ? "You are the telephone front desk for a Kenyan business. Answer ONLY from the provided facts. Reply in Kiswahili. Keep it under 60 words. If the answer is not in the facts, offer to connect a human."
             : "You are the telephone front desk for a Kenyan business. Answer ONLY from the provided facts. Reply in English. Keep it under 60 words. If the answer is not in the facts, offer to connect a human.",
-        prompt: transcript,
+        prompt: input.transcript,
         facts: input.facts ?? [],
       });
       if (generated && generated.trim()) {
-        return { language, languageSwitched: switched !== null, intent: "ANSWER", reply: generated.trim().slice(0, 600) };
+        return { intent: "ANSWER", reply: generated.trim().slice(0, 600) };
       }
     } catch {
       // Fall through to the deterministic reply — speech failure must not drop the caller.
@@ -102,11 +134,11 @@ export async function runAssistantTurn(input: AssistantTurnInput): Promise<Assis
 
   const factsLine = (input.facts ?? []).slice(0, 2).join(" ");
   const fallback =
-    language === "sw"
+    input.language === "sw"
       ? `Nimesikia swali lako kuhusu ${"mambo ya biashara"}. ${factsLine || "Maelezo yanatoka kwa mmiliki wa biashara."} Ukitaka mtu wa kawaida, sema "mtu".`
       : `I understand your question. ${factsLine || "Details come from the business owner's own information."} If you would like a person, just say "agent".`;
 
-  return { language, languageSwitched: switched !== null, intent: "ANSWER", reply: fallback };
+  return { intent: "ANSWER", reply: fallback };
 }
 
 /** Bundle the owner-controlled facts a voice turn may cite (injected by the worker). */
