@@ -51,7 +51,15 @@ try {
     const response=await page.goto(new URL(target.route,base).href,{waitUntil:'domcontentloaded',timeout:45000});
     row.status=response?.status() ?? null;
     if(target.selector && row.status===200) await page.waitForFunction(sel => Boolean(document.querySelector(sel)?.dataset.renderMode),{timeout:10000},target.selector).catch(()=>{});
-    await page.evaluate(async()=>{await document.fonts.ready; await new Promise(r=>setTimeout(r,700)); window.scrollTo(0,Math.min(500,document.documentElement.scrollHeight-innerHeight)); await new Promise(r=>setTimeout(r,800)); window.scrollTo(0,0); await new Promise(r=>setTimeout(r,350));});
+    await page.evaluate(async()=>{
+      await document.fonts.ready;
+      // Exercise every real target, not an arbitrary 500px scroll that can miss lower sections.
+      const targets=[...document.querySelectorAll('[data-motion-recipe]')];
+      for(const target of targets){target.scrollIntoView({block:'center',behavior:'instant'});await new Promise(r=>setTimeout(r,180));}
+      await new Promise(r=>setTimeout(r,700));
+      window.scrollTo(0,0);
+      await new Promise(r=>setTimeout(r,350));
+    });
     row.observation=await page.evaluate((selector)=>{
       const scope=selector?document.querySelector(selector):null;
       const targets=scope?[...scope.querySelectorAll('[data-motion-recipe]')]:[];
@@ -73,7 +81,12 @@ try {
       if(chunks.length<=20) for(let i=0;i<chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${chunks.length}::${chunks[i]}`);
     }
     if(recorder) await recorder.stop();
-    row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector) && row.video && existsSync(path.join(out,row.video)) && statSync(path.join(out,row.video)).size > 0)?'OBSERVED':'FAIL';
+    const scopeValid=!target.selector||row.observation.probes===1;
+    const motionRequired=Boolean(target.selector&&!reduced&&row.observation.renderMode==='motion'&&row.observation.targets>0);
+    const motionObserved=!motionRequired||row.observation.played>0;
+    const reducedSafe=!reduced||!target.selector||(row.observation.renderMode==='lite'&&row.observation.active===0&&row.observation.played===0);
+    const noOverflow=!target.selector||row.observation.overflow===0;
+    row.result=(row.status===(target.expected||200)&&scopeValid&&motionObserved&&reducedSafe&&noOverflow&&row.video&&existsSync(path.join(out,row.video))&&statSync(path.join(out,row.video)).size>0)?'OBSERVED':'FAIL';
   } catch(error) { row.result='ERROR'; row.error=String(error?.stack||error).slice(0,800); }
   results.push(row); writeFileSync(path.join(out,'observations.json'),JSON.stringify({commit:sha,browser:browserVersion,results},null,2));
   console.log(`${row.result} ${target.name} ${row.viewport} reduced=${reduced} status=${row.status}`);
