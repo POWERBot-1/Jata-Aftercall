@@ -49,3 +49,5 @@ Every assignment remains NOT_TESTED until independent acceptance is recorded. Ea
 | RELEASE-001 | NOT_TESTED | Trace each finding from the ten `docs/audits/` reports to affected source/API/model/integration; reproduce, fix root cause and add focused tests; validate domain/email, durable media, financial lifecycle, tenant isolation, journeys, controls, accessibility/motion and all six viewports on approved isolated fixtures; inspect real exact-head browser artifacts; preserve owner/provider blockers and the fail-closed completeness gate; do not use production data/configuration or weaken assertions. |
 
 | PROGRAMME-001 | BLOCKED | Close the 34 pre-existing non-PASS criteria with criterion-specific implementation, owner decisions or independently inspectable evidence; clear full npm audit findings; retain exact-head evidence; preserve fail-closed security and release gates. |
+
+| RELEASE-002 | BLOCKED | Verify all canonical programme criteria, exact-head workflows, release manifest, production migration safety, merge metadata and promoted production HTTP response; authorization is recorded but not executed. |
