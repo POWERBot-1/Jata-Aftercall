@@ -101,10 +101,11 @@ function workspacePhrase(key: string): string {
 }
 
 /**
- * Availability label for a main-grid card. Grid cards display the stored price when a row
- * exists (and the approved canonical fallback when it does not), so a row's presence is the
- * activation signal; private workspace products state their real sales channel instead of
- * implying a public checkout.
+ * Availability label for a main-grid card. Grid cards display the stored price when a
+ * price-matched row exists (and the approved canonical fallback when it does not), so a
+ * usable row's presence is the activation signal — the caller passes
+ * `priceMatchedGridKeys(...)` membership, never a raw row lookup; private workspace
+ * products state their real sales channel instead of implying a public checkout.
  */
 export function catalogueCardStatus(input: {
   key: string;
@@ -130,8 +131,11 @@ export function catalogueCardStatus(input: {
  * Resilience guarantee: the output ALWAYS contains the seven owner-ordered offers plus the
  * two workspace-only Autopilot tiers — for empty input, partial input, or full production
  * input — so an approved product can never silently disappear when its row is missing.
- * A stored row always wins its own price/name slot; the canonical fallback is only used
- * when the row is genuinely unavailable, and it never rewrites anything stored.
+ * A stored row wins its own price/name slot only while its price and term equal the
+ * approved public constants — the same rule checkout enforces server-side
+ * (`PLAN_PRICING_INVALID`); an out-of-spec row never leaks its amount onto a public card
+ * and never reads as "in the server catalogue". The canonical fallback covers every hole
+ * and never rewrites anything stored that is actually sellable.
  *
  * The three Front Desk family tiers (Standard/Pro/Voice) are excluded from the grid on
  * purpose — the `/products` family section renders them from `FRONT_DESK_TIER_KEYS`.
@@ -142,6 +146,40 @@ export function buildMarketingCatalogue(
   // imported `homepagePlanCards` so the "one helper shared with the homepage" contract
   // remains visible at the call site). Defaults to the same function for unit tests.
   assemble: (rows: readonly HomepagePlanCard[]) => HomepagePlanCard[] = homepagePlanCards,
+): HomepagePlanCard[] {
+  return assembleCards(priceMatchedStoredRows(stored, assemble), assemble);
+}
+
+/**
+ * Stored rows keyed into the public grid, filtered to the ones whose price and term equal
+ * the approved constants rendered for that key (baseline computed through the very same
+ * assembly path, so every grid slot — including the ERP workspace card — is covered).
+ * Checkout rejects a mismatched row with `PLAN_PRICING_INVALID`; the public page must
+ * therefore neither display the out-of-spec amount nor label such a row as active.
+ */
+function priceMatchedStoredRows(
+  stored: readonly HomepagePlanCard[],
+  assemble: (rows: readonly HomepagePlanCard[]) => HomepagePlanCard[] = homepagePlanCards,
+): HomepagePlanCard[] {
+  const baseline = new Map(assembleCards([], assemble).map((card) => [card.key, card]));
+  return stored.filter((row) => {
+    const approved = baseline.get(row.key);
+    if (!approved) return true; // family/unknown keys: validated on their own surface
+    return row.priceKES === approved.priceKES && row.durationDays === approved.durationDays;
+  });
+}
+
+/** Keys of stored rows the `/products` grid may count as catalogue-present (price-matched). */
+export function priceMatchedGridKeys(
+  stored: readonly HomepagePlanCard[],
+  assemble: (rows: readonly HomepagePlanCard[]) => HomepagePlanCard[] = homepagePlanCards,
+): Set<string> {
+  return new Set(priceMatchedStoredRows(stored, assemble).map((row) => row.key));
+}
+
+function assembleCards(
+  stored: readonly HomepagePlanCard[],
+  assemble: (rows: readonly HomepagePlanCard[]) => HomepagePlanCard[],
 ): HomepagePlanCard[] {
   const storedByKey = new Map(stored.map((row) => [row.key, row]));
 

@@ -34,6 +34,7 @@ import {
   catalogueCardStatus,
   frontDeskTierStatus,
   isPriceMatchedRow,
+  priceMatchedGridKeys,
   CATALOGUE_STATUS,
   VOICE_SELLING_CONDITIONS,
 } from "@/lib/productCatalogue";
@@ -91,12 +92,40 @@ describe("catalogue visibility survives missing PlanConfig rows", () => {
       ["JATA_AUTOPILOT_ENTERPRISE", 19999, 30],
     ]);
 
-    const repriced = buildMarketingCatalogue([
+    // A price-matched stored row wins its own slot — the operator's label lands on the card
+    // while the approved amount stays authoritative.
+    const matchedRows = [
+      row("ERP_PRO", "Operator label", 3000, 30),
+      row("MONTHLY", "Monthly — KES 149/month", 149, 30),
+    ];
+    const matched = buildMarketingCatalogue(matchedRows);
+    expect(matched.find((card) => card.key === "ERP_PRO")).toMatchObject({
+      priceKES: 3000,
+      name: "Operator label",
+    });
+    expect([...priceMatchedGridKeys(matchedRows)].sort()).toEqual(["ERP_PRO", "MONTHLY"]);
+
+    // An out-of-spec amount never reaches the public grid: checkout would refuse that row
+    // with PLAN_PRICING_INVALID, so the approved constants win, the card keeps rendering
+    // (visibility never depends on a row), and the key stops counting as catalogue-present.
+    const mismatchedRows = [
       row("ERP_PRO", "Operator label", 2500, 30),
       row("MONTHLY", "Monthly — KES 159/month", 159, 30),
-    ]);
-    expect(repriced.find((card) => card.key === "ERP_PRO")).toMatchObject({ priceKES: 2500 });
-    expect(repriced.find((card) => card.key === "MONTHLY")).toMatchObject({ priceKES: 159 });
+      row("ANNUAL", "Annual — KES 999/year", 999, 30),
+    ];
+    const mismatched = buildMarketingCatalogue(mismatchedRows);
+    expect(mismatched.find((card) => card.key === "ERP_PRO")).toMatchObject({ priceKES: 3000 });
+    expect(mismatched.find((card) => card.key === "MONTHLY")).toMatchObject({ priceKES: 149, durationDays: 30 });
+    expect(mismatched.find((card) => card.key === "ANNUAL")).toMatchObject({ priceKES: 999, durationDays: 365 });
+    expect(priceMatchedGridKeys(mismatchedRows).size).toBe(0);
+    // End-to-end status: the page feeds those keys straight into the shared label function.
+    expect(
+      catalogueCardStatus({
+        key: "ERP_PRO",
+        hasStoredRow: priceMatchedGridKeys(mismatchedRows).has("ERP_PRO"),
+        voiceCanSell: false,
+      }),
+    ).toBe("Approved package — switched on from the ERP workspace");
   });
 
   it("keeps the Standard/Pro/Voice family tiers out of the grid even when their rows exist", () => {
@@ -192,6 +221,11 @@ describe("/products page wiring", () => {
   it("assembles the grid through the one authoritative helper shared with the homepage", () => {
     expect(page).toContain("homepagePlanCards");
     expect(page).toContain("buildMarketingCatalogue(stored, homepagePlanCards)");
+    // Review follow-up: only price-matched rows feed the status signal, and the detail page
+    // applies checkout's fail-closed pricing assertion and fetches the Voice row too.
+    expect(page).toContain("priceMatchedGridKeys(stored, homepagePlanCards)");
+    expect(detail).toContain("assertFrontDeskTierPricing(row).ok");
+    expect(detail).toContain('"AI_FRONT_DESK_VOICE"');
   });
 
   it("renders availability from the shared status functions for both sections", () => {

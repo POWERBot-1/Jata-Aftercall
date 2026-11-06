@@ -10,6 +10,7 @@ import {
   catalogueCardStatus,
   frontDeskTierStatus,
   isPriceMatchedRow,
+  priceMatchedGridKeys,
   VOICE_SELLING_CONDITIONS,
 } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
@@ -107,7 +108,10 @@ export default async function ProductsPage() {
   // Approved catalogue constants fill every hole; stored rows (when readable) win their own
   // slots. A missing PlanConfig row changes a card's availability label — never its visibility.
   const plans = buildMarketingCatalogue(stored, homepagePlanCards);
-  const storedKeys = new Set(stored.map((row) => row.key));
+  // Only a price-matched row counts as catalogue-present: a stored row whose price/term
+  // drift from the approved constants would be rejected by checkout, so it must not read
+  // as "in the server catalogue" (or display its amount) on the public grid either.
+  const storedKeys = priceMatchedGridKeys(stored, homepagePlanCards);
   const voiceReadiness = getVoiceReadiness();
 
   // The complete, owner-approved Front Desk 2.0 package family, shown even before the

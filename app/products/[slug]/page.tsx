@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import { formatNumber } from "@/lib/format";
-import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING } from "@/lib/frontDeskTiers";
+import { AI_FRONT_DESK_VOICE_KEY, assertFrontDeskTierPricing, FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
@@ -181,13 +181,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   // Visibility and activation stay separate: every approved Front Desk tier is listed from
   // the approved tier pricing even when its active `PlanConfig` row is missing, and the line
-  // says so plainly. A tier only reads "in the server catalogue" from its real active row;
-  // Voice additionally never reads sellable until the provider + commercial gates pass.
+  // says so plainly. A tier only reads "in the server catalogue" from its real active row
+  // whose price/term also match the approved values (checkout rejects anything else with
+  // PLAN_PRICING_INVALID, so showing it as active would mislead); Voice additionally never
+  // reads sellable until the provider + commercial gates pass. The Voice row is fetched too,
+  // so its catalogue state matches `/products` the moment the gates open.
   const frontDeskPlans = slug === "ai-front-desk"
     ? await prisma.planConfig.findMany({
         where: {
           isActive: true,
-          key: { in: ["AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_STANDARD", "AI_FRONT_DESK_PRO"] },
+          key: { in: ["AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_STANDARD", "AI_FRONT_DESK_PRO", "AI_FRONT_DESK_VOICE"] },
         },
         orderBy: { priceKES: "asc" },
         select: { key: true, name: true, priceKES: true, durationDays: true },
@@ -203,12 +206,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               ...FRONT_DESK_TIER_KEYS.map((key) => {
                 const approved = FRONT_DESK_TIER_PRICING[key];
                 const row = frontDeskPlans.find((plan) => plan.key === key);
-                const price = formatNumber(row ? Number(row.priceKES) : approved.priceKES);
-                const duration = row?.durationDays ?? approved.durationDays;
+                // Same fail-closed rule as checkout: a row whose stored price/term differ
+                // from the approved tier values is not sellable (PLAN_PRICING_INVALID), so
+                // the detail page shows the approved amount and the pending status instead
+                // of advertising an unusable price as active.
+                const usableRow = row && assertFrontDeskTierPricing(row).ok ? row : undefined;
+                const price = formatNumber(usableRow ? Number(usableRow.priceKES) : approved.priceKES);
+                const duration = usableRow?.durationDays ?? approved.durationDays;
                 const availability =
                   key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell
                     ? "awaiting provider activation, not yet for sale"
-                    : row
+                    : usableRow
                       ? "in the server catalogue"
                       : "awaiting catalogue activation, not yet for sale";
                 return `${approved.name}: KES ${price} / ${duration} days — ${availability}.`;
