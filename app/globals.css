@@ -3370,6 +3370,16 @@ button:focus-visible {
   line-height: 1.6;
   text-align: center;
 }
+/* AI Front Desk 2.0 family block inside the ink pricing section: the four approved tiers as
+   light marketing cards (the shared .mk-card style) so the homepage shows the complete package
+   family without a second navigation. */
+.lp-front-desk {
+  margin-top: 2.25rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid rgba(247, 242, 232, 0.16);
+}
+.lp-front-desk .mk-grid { margin-top: 1rem; }
+.lp-front-desk__all { margin-top: 1.25rem; }
 @media (min-width: 620px) { .lp-pricing .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /*
  * Offers, one grid: three across on a desktop in full rows plus a centred last card (3 + 3 + 1 …)

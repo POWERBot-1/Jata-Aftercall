@@ -93,6 +93,63 @@ export function frontDeskTierStatus(input: {
   return catalogueMatch ? CATALOGUE_STATUS.active : CATALOGUE_STATUS.awaiting;
 }
 
+/**
+ * Display facts for one AI Front Desk 2.0 tier on ANY customer surface — homepage,
+ * `/pricing`, `/dashboard/subscription` and `/products` all build their family cards
+ * through this helper so the four surfaces can never disagree:
+ *
+ *   • The card always shows the approved tier price/term from `FRONT_DESK_TIER_PRICING`
+ *     (the authoritative constants checkout validates against).
+ *   • `status`/`available` come from the same price-matched stored row and Voice
+ *     provider gate every other surface uses — a missing row reads "awaiting", an
+ *     out-of-spec row reads "awaiting", and Voice never reads sellable without
+ *     `voiceCanSell`.
+ *
+ * Presentation only: this grants nothing and starts no checkout.
+ */
+export function frontDeskFamilyCard(
+  key: FrontDeskTierKey,
+  stored: readonly Pick<HomepagePlanCard, "key" | "priceKES" | "durationDays">[],
+  voiceCanSell: boolean,
+): {
+  key: FrontDeskTierKey;
+  name: string;
+  priceKES: number;
+  durationDays: number;
+  catalogueMatch: boolean;
+  status: string;
+  available: boolean;
+} {
+  const approved = FRONT_DESK_TIER_PRICING[key];
+  const catalogueMatch = isPriceMatchedRow(
+    stored.find((row) => row.key === key),
+    key,
+  );
+  return {
+    ...approved,
+    catalogueMatch,
+    status: frontDeskTierStatus({ key, catalogueMatch, voiceCanSell }),
+    available: catalogueMatch && (key !== AI_FRONT_DESK_VOICE_KEY || voiceCanSell),
+  };
+}
+
+/**
+ * Display rule for a plan card that shares a page with the AI Front Desk family block: tier
+ * cards always show the approved tier price/term, so the grid and the family can never print
+ * conflicting prices for the same package. A price-matched stored row equals the approved
+ * constants anyway; an out-of-spec stored row must not advertise a price that checkout refuses
+ * (fail-closed `PLAN_PRICING_INVALID`); a missing row already falls back to the same constants.
+ * Non-tier cards keep their stored price untouched — the owner-mandated "stored prices win"
+ * rule for Monthly, Annual, Website Studio, POS, BOS PRO and Autopilot is unchanged.
+ */
+export function displayTierPricing<C extends { key: string; priceKES: number; durationDays: number }>(
+  card: C,
+): C {
+  if (!isFrontDeskTierKey(card.key)) return card;
+  const approved = FRONT_DESK_TIER_PRICING[card.key];
+  return { ...card, priceKES: approved.priceKES, durationDays: approved.durationDays } as C;
+}
+
 function workspacePhrase(key: string): string {
   if (key === "ERP_PRO") return "switched on from the ERP workspace";
   if (key.startsWith("JATA_AUTOPILOT")) return "sold inside the JATA Autopilot workspace";
