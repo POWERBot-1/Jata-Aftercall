@@ -1,48 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# JATA AFTERCALL — Isolated build gate (Option I, fresh)
-# Production: DATABASE_URL present → migrate → generate (fail the build if generate fails) → next build
-# Preview/offline: DATABASE_URL absent → skip migrate → generate with fallback → next build
+echo "[build] Starting JATA AFTERCALL build gate"
 
-echo "[build] Starting JATA AFTERCALL build gate (Option I)"
-
-# `prisma generate` reads the datasource, and a declared-but-unset `directUrl` is a hard P1012. This
-# defaults DIRECT_URL to DATABASE_URL when unset so no environment has to add a second variable to
-# build; the guard in migrate.sh refuses the one case where that default would be unsafe.
-# shellcheck source=scripts/lib/prisma-env.sh
-. "$(dirname "$0")/lib/prisma-env.sh"
-
-# Step 1: Migration gate (isolated)
-if [ -n "${DATABASE_URL:-}" ]; then
-  echo "[build] DATABASE_URL detected — invoking migration gate"
-  bash scripts/migrate.sh
-  # If migrate.sh fails, set -e will prevent next build
-else
-  echo "[build] DATABASE_URL not set — skipping migration gate (preview/offline)"
+# Production migrations remain an explicit separate gate; a build must never migrate.
+if [[ -n "${DATABASE_URL:-}" && "${RUN_MIGRATIONS_DURING_BUILD:-}" == "true" ]]; then
+  echo "BLOCKED: migrations are not part of the build. Run the approved migration workflow separately." >&2
+  exit 1
 fi
 
-# Step 2: Prisma generate
-# When DATABASE_URL is configured, generate failure is a production build gate.
-# Do not continue into a stub client in that case.
-echo "[build] Running prisma generate..."
-if [ -n "${DATABASE_URL:-}" ]; then
-  echo "[build] DATABASE_URL detected — prisma generate failure fails the build"
-  npx prisma generate
-else
-  if ! npx prisma generate; then
-    echo "[build] prisma generate failed (offline) — continuing with fallback"
-  fi
-fi
+echo "[build] Generating Prisma Client (fail-closed)"
+bash scripts/lib/prisma-generate.sh
+node scripts/test/check-prisma-client.cjs
 
-# Step 3: Next.js build
-# `--webpack` is deliberate for the Next 16 stage: Turbopack (the 16 default) does not emit
-# app-build-manifest.json / react-loadable-manifest.json, names chunks by hash only, and extracts
-# no .next/static/css, which the release verification stack depends on (bundle evidence, the
-# storefront Motion mini-chunk check, the #418 throw diagnostic). Keeping one variable changed —
-# the framework and its vendored React — is what makes this upgrade reviewable. Turbopack adoption
-# is a separate follow-up with its own re-baselining; see RELEASE_REPORT_2026-10-13.md §N.
-echo "[build] Running next build (webpack)..."
+echo "[build] Running Next.js production build"
 npx next build --webpack
-
 echo "[build] Build completed successfully"
