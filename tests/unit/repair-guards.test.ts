@@ -50,12 +50,14 @@ describe("runtime and schema guards", () => {
   it("keeps prisma generate as a production build gate", () => {
     const build = readFileSync(path.join(root, "scripts/build.sh"), "utf8");
     expect(build).toContain('if [ -n "${DATABASE_URL:-}" ]; then');
-    expect(build).toContain("npx prisma generate");
+    expect(build).toContain("bash scripts/lib/prisma-generate.sh");
+    expect(build).toContain("node scripts/test/check-prisma-client.cjs");
     expect(build).not.toContain("prisma migrate reset");
     expect(build).not.toContain("prisma db push");
-    const productionBranch = build.split("DATABASE_URL detected — prisma generate failure fails the build")[1]?.split("else")[0] || "";
-    expect(productionBranch).toContain("npx prisma generate");
-    expect(productionBranch).not.toContain("continuing with fallback");
+    const generationGate = build.slice(build.indexOf('echo "[build] Generating Prisma Client (fail-closed)"'));
+    expect(generationGate).toContain("bash scripts/lib/prisma-generate.sh");
+    expect(generationGate).toContain("node scripts/test/check-prisma-client.cjs");
+    expect(generationGate).not.toContain("continuing with fallback");
   });
 
   it("admits only authorized additive Prisma schema and migration changes", () => {
