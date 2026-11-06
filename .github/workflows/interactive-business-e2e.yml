@@ -38,17 +38,25 @@ jobs:
       - name: Require zero production and full-tree audit findings
         shell: bash
         run: |
-          set -euo pipefail
-          npm audit --omit=dev --json > /tmp/minimatch11-production.json
-          npm audit --json > /tmp/minimatch11-full.json
-          node <<'JS'
+          set -uo pipefail
+          mkdir -p artifacts/minimatch11-audit
+          set +e
+          npm audit --omit=dev --json > artifacts/minimatch11-audit/production.json
+          production_status=$?
+          npm audit --json > artifacts/minimatch11-audit/full.json
+          full_status=$?
+          set -e
+          PRODUCTION_AUDIT_STATUS="$production_status" FULL_AUDIT_STATUS="$full_status" node <<'JS'
           const fs = require('node:fs');
-          for (const [label, path] of [['production','/tmp/minimatch11-production.json'],['full','/tmp/minimatch11-full.json']]) {
+          for (const [label, path, exitCode] of [
+            ['production','artifacts/minimatch11-audit/production.json',process.env.PRODUCTION_AUDIT_STATUS],
+            ['full','artifacts/minimatch11-audit/full.json',process.env.FULL_AUDIT_STATUS]
+          ]) {
             const report = JSON.parse(fs.readFileSync(path, 'utf8'));
             if (report.error || !report.metadata?.vulnerabilities) throw new Error(`Invalid ${label} audit report`);
             const v = report.metadata.vulnerabilities;
-            console.log(`${label}: ${v.total} findings (critical=${v.critical}, high=${v.high}, moderate=${v.moderate}, low=${v.low})`);
-            if (v.total !== 0) process.exitCode = 1;
+            console.log(`${label}: ${v.total} findings (critical=${v.critical}, high=${v.high}, moderate=${v.moderate}, low=${v.low}); npm exit=${exitCode}`);
+            if (v.total !== 0 || Number(exitCode) !== 0) process.exitCode = 1;
           }
           JS
       - name: Lint, typecheck, no-database tests and production build
@@ -62,7 +70,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: minimatch11-lock-${{ github.sha }}
-          path: package-lock.json
+          path: |
+            package-lock.json
+            artifacts/minimatch11-audit/
           if-no-files-found: error
           retention-days: 30
 
