@@ -52,3 +52,8 @@ All remaining cells in the 15 × 6 matrix are DENY. In particular: businesses.su
 **Runtime:** CONTROL_ROLE_POLICY_APPROVED=true and CONTROL_ROLE_ACCESS_ENABLED=true. The second value only opens the grant-evaluation path; it does not grant access. Every request still requires a valid current session, an active database grant containing the exact policy-approved permission, explicit business scope for tenant-keyed data, live grant recheck, and verified short-lived MFA. No owner identity, ControlRoleGrant or production permission was provisioned by this change. An account with no grant continues to receive CONTROL_ACCESS_REQUIRED.
 
 **Acceptance boundary:** this policy and its unit tests do not constitute positive authenticated browser acceptance, grant-expiry proof, MFA recovery proof, PostgreSQL append-only audit acceptance, or independent six-viewport visual review. Those remain blocked until exact-head tests and evidence pass.
+
+
+## Grant expiry — 2026-11-07
+
+An active grant must have `revokedAt IS NULL` and `expiresAt > current server time`. NULL expiry is legacy/invalid and fails closed. Grant expiry is persisted and protected by the PostgreSQL append-only trigger; revocation cannot rewrite the original expiry. The grant path is enabled, but this change does not create a grant or provision an owner identity.
