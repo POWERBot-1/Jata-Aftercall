@@ -78,22 +78,13 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
   }, 60_000);
 
   afterAll(async () => {
-    if (!client) return;
-    try {
-      if (appA?.id) {
-        await client.agentReferralAttribution.deleteMany({ where: { referrerApplicationId: appA.id } });
-        await client.agentReferralReportMember.deleteMany({ where: { applicationId: appA.id } });
-        await client.agentReferralReportRevision.deleteMany({ where: { applicationId: appA.id } });
-        await client.agentReferralReportSnapshot.deleteMany({ where: { applicationId: appA.id } });
-      }
-      if (linkId) await client.agentReferralLink.deleteMany({ where: { id: linkId } });
-      await client.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id, ...referredApplicationIds].filter(Boolean) } } });
-      await client.user.deleteMany({ where: { id: { in: [ownerA?.id, ownerB?.id, ...referredUserIds].filter(Boolean) } } });
-    } finally {
-      state.userId = "";
-      state.client = null;
-      await client.$disconnect?.();
-    }
+    // This suite runs only against a disposable CI/test database that is discarded after
+    // the job. Referral report snapshots, revisions and members are deliberately immutable;
+    // attempting to delete the synthetic baseline would violate the production write fence.
+    // Retain the isolated fixture and close the connection.
+    state.userId = "";
+    state.client = null;
+    await client?.$disconnect?.();
   }, 60_000);
 
   it("returns two bounded cursor pages from the database-generated baseline", async () => {
