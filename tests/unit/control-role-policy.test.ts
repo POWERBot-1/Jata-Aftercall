@@ -49,11 +49,12 @@ describe("Control role/action matrix", () => {
         const filtered = filterControlRolePermissions(role, [permission]);
         const allowed = isControlCapabilityAllowed(role, permission);
         expect(filtered, `${role} × ${permission} filtered grant`).toEqual(allowed ? [permission] : []);
+        const globalPermission = permission === "system.health.read";
         const candidateGrant: ControlGrant = {
-          id: `non-persistent-test-${role}-${permission}`, role, permissionKeys: filtered, scopeBusinessId: "tenant-a",
+          id: `non-persistent-test-${role}-${permission}`, role, permissionKeys: filtered, scopeBusinessId: globalPermission ? null : "tenant-a",
         };
-        expect(hasControlPermission([candidateGrant], permission, "tenant-a")).toBe(allowed);
-        expect(hasControlPermission([candidateGrant], permission, "tenant-b")).toBe(false);
+        expect(hasControlPermission([candidateGrant], permission, globalPermission ? undefined : "tenant-a")).toBe(allowed);
+        if (!globalPermission) expect(hasControlPermission([candidateGrant], permission, "tenant-b")).toBe(false);
       }
     }
   });
