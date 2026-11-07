@@ -4219,7 +4219,10 @@ model OrderRequestItem {
   id               String       @id @default(cuid())
   orderRequestId   String
   orderRequest     OrderRequest @relation(fields: [orderRequestId], references: [id], onDelete: Cascade)
+  /// Denormalised tenant key for direct, request-independent queries. It is a real
+  /// relation so the database — not only the application — enforces tenant integrity.
   businessId       String
+  business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   productId        String?
   /// Authoritative snapshot at request time: the owner's catalogue may change afterwards.
   name             String
