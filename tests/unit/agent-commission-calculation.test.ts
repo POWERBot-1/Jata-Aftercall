@@ -2,14 +2,23 @@ import { describe, expect, it } from "vitest";
 import { evaluateCommission, type CommissionPolicySnapshot, type CommissionPaymentSnapshot, type CommissionAttributionSnapshot } from "@/lib/agents/commission-calculation";
 
 // Test-only hypothetical values; these are not a JATA commission policy.
-const policy: CommissionPolicySnapshot = { id: "policy-test", version: "v1", approval: "APPROVED", effectiveFrom: new Date("2026-01-01Z"), effectiveUntil: null, currency: "KES", eligiblePlanIds: ["plan-1"], eligibleEvents: ["NEW_SALE"], basis: "GROSS", rule: { kind: "PERCENTAGE", basisPoints: 1250, rounding: "HALF_UP" } };
+const policy: CommissionPolicySnapshot = { id: "policy-test", version: "v1", approval: "APPROVED", effectiveFrom: new Date("2026-01-01Z"), effectiveUntil: null, currency: "KES", eligiblePlanIds: ["plan-1"], eligibleEvents: ["NEW_SALE"], basis: "GROSS", rule: { kind: "PERCENTAGE", basisPoints: 4000, rounding: "HALF_UP" } };
 const payment: CommissionPaymentSnapshot = { id: "payment-1", reference: "sandbox-reference", status: "PAID", purpose: "SUBSCRIPTION", paystackId: "sandbox-transaction", currency: "KES", amountMinor: 10000, businessId: "business-1", customerId: "customer-1", planId: "plan-1", verifiedAt: new Date("2026-02-01Z"), event: "NEW_SALE" };
 const attribution: CommissionAttributionSnapshot = { agentId: "agent-1", agentUserId: "agent-user-1", agentStatus: "ACTIVE", businessId: "business-1", customerId: "customer-1", validFrom: new Date("2026-01-01Z"), validUntil: null };
-const evaluate = (overrides: Partial<Parameters<typeof evaluateCommission>[0]> = {}) => evaluateCommission({ policy, payment, attribution, eligibleMinor: 10000, ...overrides });
+const evaluate = (overrides: Partial<Parameters<typeof evaluateCommission>[0]> = {}) => evaluateCommission({ policy, payment, attribution, eligibleMinor: 10000, monthlyQualifyingSales: 1, ...overrides });
 
 describe("commission policy evaluation (hypothetical fixtures only)", () => {
   it("calculates direct sales without requiring agent recruitment", () => {
-    expect(evaluate()).toMatchObject({ eligible: true, commissionMinor: 1250, paymentId: "payment-1", policyVersion: "v1", agentId: "agent-1" });
+    expect(evaluate()).toMatchObject({ eligible: true, commissionMinor: 4000, paymentId: "payment-1", policyVersion: "v1", agentId: "agent-1" });
+  });
+  it("accrues 40 percent on each verified sale but only marks payout eligible after ten sales in the month", () => {
+    expect(evaluate({ monthlyQualifyingSales: 9 })).toMatchObject({ eligible: true, commissionMinor: 4000, payoutEligible: false, monthlyQualifyingSales: 9, minimumMonthlySales: 10 });
+    expect(evaluate({ monthlyQualifyingSales: 10 })).toMatchObject({ eligible: true, commissionMinor: 4000, payoutEligible: true, monthlyQualifyingSales: 10, minimumMonthlySales: 10 });
+    expect(evaluate({ monthlyQualifyingSales: 11 })).toMatchObject({ eligible: true, payoutEligible: true });
+  });
+  it("rejects an invalid monthly qualifying-sales count", () => {
+    expect(evaluate({ monthlyQualifyingSales: 0 })).toMatchObject({ eligible: false, reason: "PAYMENT_INVALID" });
+    expect(evaluate({ monthlyQualifyingSales: 1.5 })).toMatchObject({ eligible: false, reason: "PAYMENT_INVALID" });
   });
   it("blocks absent, draft, revoked and out-of-period policies", () => {
     expect(evaluate({ policy: null })).toMatchObject({ reason: "POLICY_NOT_APPROVED" });
