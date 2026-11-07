@@ -39,15 +39,17 @@ describe("own-agent referral report reconciliation", () => {
   });
   it("paginates large retained revisions only within the authenticated agent", async () => {
     m.query.mockReset(); m.query.mockResolvedValueOnce([{ id: "own-app" }]).mockResolvedValueOnce([{ status: "MATCHED" }]);
-    const members = Array.from({ length: 5001 }, (_, i) => ({ eventId: `event-${String(i).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: date }));
+    const members = Array.from({ length: 2501 }, (_, i) => ({ eventId: `event-${String(i + 1).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: date }));
     m.one.mockResolvedValueOnce({ ...prior, members, kind: "BASELINE", createdAt: date, addedCount: 0, removedCount: 0, changedCount: 0 });
     const response = await GET(new Request("https://agent.test/api/agents/reports/referrals/reconcile?periodKey=daily%3A2026-01-01&revision=1&after=event-00000"));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.members).toHaveLength(5000);
-    expect(body.nextCursor).toBe("event-04999");
+    expect(body.members).toHaveLength(2500);
+    expect(body.members[0].eventId).toBe("event-00001");
+    expect(body.members[2499].eventId).toBe("event-02500");
+    expect(body.nextCursor).toBe("event-02500");
     expect(body.sales).toBe("NOT_CHECKED");
-    expect(m.one.mock.calls[0][0]).toMatchObject({ where: { applicationId_periodKey_revision: { applicationId: "own-app" } }, include: { members: { where: { eventId: { gt: "event-00000" } }, take: 5001 } } });
+    expect(m.one.mock.calls[0][0]).toMatchObject({ where: { applicationId_periodKey_revision: { applicationId: "own-app" } }, include: { members: { where: { eventId: { gt: "event-00000" } }, take: 2501 } } });
   });
   it("rejects duplicate, malformed or cross-tenant pagination parameters", async () => {
     const base = "https://agent.test/api/agents/reports/referrals/reconcile?periodKey=daily%3A2026-01-01&revision=1";
