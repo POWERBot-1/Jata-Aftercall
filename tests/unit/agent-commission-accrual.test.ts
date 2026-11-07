@@ -10,8 +10,8 @@ function makeTx(overrides: Record<string, unknown> = {}) {
   const tx: any = {
     payment: { findUnique: vi.fn(async () => payment), count: vi.fn(async () => 10) },
     referral: {
-      findFirst: vi.fn(async () => ({ referrerUserId: "agent-user-1", referredUserId: "customer-1", convertedAt: new Date("2026-01-01Z") })),
-      findMany: vi.fn(async () => [{ referredUserId: "customer-1" }, { referredUserId: "customer-2" }]),
+      findFirst: vi.fn(async () => ({ referrerUserId: "agent-user-1", referredUserId: "customer-1", referredBusinessId: "business-1", convertedAt: new Date("2026-01-01Z") })),
+      findMany: vi.fn(async () => [{ referredUserId: "customer-1", referredBusinessId: "business-1" }, { referredUserId: "customer-2", referredBusinessId: "business-2" }]),
     },
     agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-application-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date("2026-01-01Z") })) },
     planConfig: { findUnique: vi.fn(async () => ({ id: "plan-1", priceKES: 1000, key: "BUSINESS_PAGE" })) },
@@ -120,7 +120,7 @@ describe("monthly commission payout eligibility reconciliation", () => {
   it("recomputes qualifying sales and net accrued liability after reversals", async () => {
     const tx: any = {
       agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-1", userId: "agent-user-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date("2026-01-01Z") })) },
-      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1" }]) },
+      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1", referredBusinessId: "business-1" }]) },
       payment: { count: vi.fn(async () => 10) },
       agentCommissionLedgerEntry: {
         findMany: vi.fn()
