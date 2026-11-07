@@ -42,3 +42,23 @@ The owner-approved all-DENY decision is now recorded. Until any future ALLOW dec
 The exact-head CI deny-path journey used one temporary synthetic ordinary session in the disposable database, with no Control grant, called the built application over HTTP, attempted a business status mutation, checked persisted business/audit state and captured `/control` denial screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. The owner explicitly authorized this narrow test-only fixture; it proves only denial behavior and responsive layout of the access-disabled shell, not positive role authorization, enabled-console UI, MFA success/recovery, grant expiry, successful persisted audit events or production behavior. No Control grant, role assignment, permission or production identity was created.
 
 A full role-positive, tenant isolation, MFA/revocation, exact-grant/expiry, persisted audit and authenticated enabled-console acceptance remains **BLOCKED** until the owner supplies exact ALLOW decisions and required policy details. No acceptance is claimed from pure helper tests, mocked routes, unrelated green CI or denial-state screenshots.
+
+
+## Owner authorization update — 2026-11-07 (supersedes the 2026-11-01 all-DENY operational decision)
+
+The owner, GITANYA KARIUKI, expressly authorized the platform to select the least-privilege role decisions and proceed with Control role access. The previous all-DENY matrix remains preserved as historical decision context, but it is superseded by this bounded read-only policy. This authorization does **not** delegate financial mutation, payout, provider-secret, user/grant administration, emergency or other write authority.
+
+| Role | ALLOW capabilities | Required scope |
+|---|---|---|
+| SUPER_ADMIN | businesses.read, subscriptions.read, payments.read, commissions.read, audit.read, system.health.read | Business, subscription, payment, commission and audit reads require exact business scope; only minimal system health is platform-wide |
+| PLATFORM_ADMIN | businesses.read, subscriptions.read, system.health.read | Business/subscription reads require exact business scope; minimal system health is platform-wide |
+| FINANCE_ADMIN | subscriptions.read, payments.read, commissions.read | Exact business scope only |
+| SUPPORT_ADMIN | businesses.read, subscriptions.read | Exact business scope only |
+| SECURITY_ADMIN | audit.read, system.health.read | Audit reads require exact business scope; minimal system health is platform-wide |
+| READ_ONLY_AUDITOR | audit.read | Exact business scope only |
+
+All remaining cells in the 15 × 6 matrix are DENY. In particular: businesses.suspend, businesses.reinstate, agents.manage, communications.recover, providers.configure remain DENY for every role. agents.read, communications.read, providers.read and exceptions.read remain DENY because their present data sources are not proven safe for the delegated tenant scope or have no implemented authoritative provider query.
+
+**Runtime:** CONTROL_ROLE_POLICY_APPROVED=true and CONTROL_ROLE_ACCESS_ENABLED=true. The second value only opens the grant-evaluation path; it does not grant access. Every request still requires a valid current session, an active database grant containing the exact policy-approved permission, explicit business scope for tenant-keyed data, live grant recheck, and verified short-lived MFA. No owner identity, ControlRoleGrant or production permission was provisioned by this change. An account with no grant continues to receive CONTROL_ACCESS_REQUIRED.
+
+**Acceptance boundary:** this policy and its unit tests do not constitute positive authenticated browser acceptance, grant-expiry proof, MFA recovery proof, PostgreSQL append-only audit acceptance, or independent six-viewport visual review. Those remain blocked until exact-head tests and evidence pass.
