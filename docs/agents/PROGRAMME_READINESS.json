@@ -87,7 +87,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-003",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: owner authorized a least-privilege read-only matrix and the runtime grant gate is enabled. No owner account grant was provisioned. Positive authenticated role journeys, tenant isolation, MFA recovery/revocation, grant expiry and enabled-console visual acceptance remain unverified.",
+    "blocker": "BLOCKED: least-privilege role policy is enabled. Exact-head positive authenticated browser/API journeys for each approved role, tenant isolation, forged-role rejection, CSRF and session revocation have not all been independently verified.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -154,7 +154,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-004",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: least-privilege read-only roles are now defined in code, but there is no verified owner identity-to-role grant and no authenticated positive journey. No role grant or production identity was created.",
+    "blocker": "BLOCKED: source policy and unit tests exist, but exact-head PostgreSQL and browser evidence for role escalation, MFA, session/grant revocation, grant expiry and immutable persisted audit remains incomplete.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "lib/control/permissions.ts",
@@ -217,7 +217,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-005",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: read-only policy is implemented, but owner identity grant, authenticated scoped access, live audit read, role-positive API/browser journey and independent visual evidence are not yet established.",
+    "blocker": "BLOCKED: read-only scoped policy is implemented; positive scoped reads from authoritative business/payment/audit sources and independent six-viewport enabled-console review remain unverified.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
@@ -257,7 +257,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-006",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: owner-approved 40% gross commission rate and 10 qualifying subscription plan sales per Africa/Nairobi calendar month are now recorded. Transactional idempotent accrual and provider-verified full-refund reversal code is integrated into standard, POS and Autopilot settlement paths. Full payout destination verification, transfer execution, end-to-end reconciliation and exact-head database evidence remain incomplete.",
+    "blocker": "BLOCKED: 40% gross commission and 10 qualifying plan sales per Africa/Nairobi calendar month are owner-authorized. Transactional idempotent accrual, monthly eligibility recomputation and provider-verified full-refund reversal are implemented. Payout destination verification, transfer execution, end-to-end reconciliation and exact-head database/browser evidence remain incomplete.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -355,7 +355,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-010",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner has explicitly approved all 90 DENY cells on 2026-11-01; `CONTROL_ROLE_POLICY_APPROVED=true` records that documented decision only, while `CONTROL_ROLE_ACCESS_ENABLED=false` remains the runtime fail-closed gate. No ALLOW, grant, permission or operational identity is approved. Positive role/tenant journeys, Control MFA and recovery, session/grant revocation and grant expiry, successful persisted application audit, and enabled-console visual evidence are not established. Control denial screenshots are uploaded but not independently inspected. Programme-completeness fails with 34 requirements outside PASS; no requirement status will be fabricated to clear the gate.",
+    "blocker": "BLOCKED: the owner-authorized least-privilege read-only matrix is implemented and CONTROL_ROLE_ACCESS_ENABLED is true. The grant gate does not provision an owner identity or grant. Positive role/tenant journeys, MFA recovery/revocation/expiry, persisted application audit and independent enabled-console visual acceptance remain incomplete.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -478,7 +478,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-012",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: owner-authorized least-privilege read matrix and operational grant gate are implemented, but positive authenticated role/tenant journeys, exact grant expiry, MFA recovery, session/grant revocation race proof, persisted success audit and six-view enabled-console evidence are not yet complete.",
+    "blocker": "BLOCKED: the owner-authorized 90-cell least-privilege read matrix is implemented. Exact-head authenticated positive/negative journeys, tenant isolation, MFA recovery, session/grant revocation, grant expiry and six-view evidence remain incomplete.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -518,7 +518,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-013",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: 40% commission and 10-sale monthly payout eligibility policy is approved and the transactional accrual/full-refund reversal path is implemented. Complete agent phone ownership → referral attribution → verified plan payment → accrual → monthly payout review → reversal/reconciliation browser and PostgreSQL acceptance is not yet proven. External payout execution remains unimplemented pending verified payee destination and transfer controls.",
+    "blocker": "BLOCKED: 40% commission and the 10-sale monthly threshold are owner-authorized. Accrual and full-refund reversal paths are integrated into subscription settlement. Complete agent-to-payment-to-ledger-to-payout-review PostgreSQL/browser acceptance and external payout controls remain incomplete; no payout is initiated.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
