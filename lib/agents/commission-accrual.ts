@@ -58,10 +58,8 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     return { recorded: false, agentApplicationId: agent?.id ?? null, commissionMinor: BigInt(0), monthlyPlanSales: 0, payoutEligible: false };
   }
 
-  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, priceKES: true, key: true } });
-  if (!plan || !Number.isSafeInteger(plan.priceKES) || payment.amount !== plan.priceKES * 100) {
-    throw new Error("COMMISSION_PLAN_AMOUNT_MISMATCH");
-  }
+  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, key: true } });
+  if (!plan) throw new Error("COMMISSION_PLAN_NOT_FOUND");
 
   const paidAt = payment.updatedAt instanceof Date ? payment.updatedAt : new Date(payment.updatedAt);
   const month = nairobiMonthBounds(paidAt);
