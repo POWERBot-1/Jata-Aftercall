@@ -34,6 +34,7 @@ describe("owner-approved least-privilege Control access", () => {
     const result = await getControlIdentity();
     expect(result.ok).toBe(true);
     expect(fixtures.grants).toHaveBeenCalledTimes(1);
+    expect(fixtures.grants).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "fixture-user", revokedAt: null, expiresAt: { gt: expect.any(Date) } } }));
   });
 
   it("requires verified MFA after matching the explicit role grant", async () => {
@@ -42,6 +43,16 @@ describe("owner-approved least-privilege Control access", () => {
     expect(result).toEqual({ ok: false, status: 403, code: "MFA_REQUIRED" });
     expect(fixtures.grants).toHaveBeenCalledTimes(1);
     expect(fixtures.credential).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when a grant is absent, legacy non-expiring, or expired", async () => {
+    fixtures.grants.mockResolvedValueOnce([]);
+    const result = await getControlIdentity();
+    expect(result).toEqual({ ok: false, status: 403, code: "CONTROL_ACCESS_REQUIRED" });
+    expect(fixtures.credential).not.toHaveBeenCalled();
+    expect(fixtures.grants).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "fixture-user", revokedAt: null, expiresAt: { gt: expect.any(Date) } },
+    }));
   });
 
   it("preserves unauthenticated denial before reporting the policy state", async () => {
