@@ -644,7 +644,7 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       const application = await p.agentApplication.create({
         data: {
           userId: user.id, fullName: "Synthetic Large Report", phoneE164: "+254700000099",
-          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), agentStatus: "ACTIVE",
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), verifiedPhoneE164: "+254700000099", agentStatus: "ACTIVE",
         },
       });
       const periodKey = "daily:2026-11-01";
