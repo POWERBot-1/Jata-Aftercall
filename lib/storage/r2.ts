@@ -24,7 +24,7 @@
  * configuration: without a durable URL for browsers, this provider is not considered usable.
  */
 
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { MAX_BYTES_BY_KIND, objectKeyFor } from "./keys";
 import {
   StorageCapabilityError,
@@ -56,7 +56,7 @@ export type R2Config = {
 
 /** The slice of an S3 client this adapter needs, injectable for tests. */
 export type R2ObjectClient = {
-  send(command: PutObjectCommand | DeleteObjectCommand, options?: { abortSignal?: AbortSignal }): Promise<unknown>;
+  send(command: PutObjectCommand | DeleteObjectCommand | HeadObjectCommand, options?: { abortSignal?: AbortSignal }): Promise<unknown>;
 };
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -106,7 +106,7 @@ async function sendWithTimeout(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    await client.send(command, { abortSignal: controller.signal });
+    return await client.send(command, { abortSignal: controller.signal });
   } catch {
     // Deliberately generic: SDK errors can embed endpoints and request metadata. Callers map
     // this to their honest, owner-facing failure responses; nothing is logged here.
@@ -154,6 +154,26 @@ export function createR2Storage(
           CacheControl: "public, max-age=31536000, immutable",
         }),
       );
+
+      // A successful PUT response is not enough to establish durable persistence. Confirm the
+      // exact object is readable from the configured bucket before returning a durable reference.
+      // If verification fails, make a best-effort cleanup and return an honest unavailable result.
+      try {
+        const metadata = await sendWithTimeout(client, new HeadObjectCommand({ Bucket: config.bucket, Key: key })) as {
+          ContentLength?: number;
+          ContentType?: string;
+        };
+        if (metadata?.ContentLength !== input.body.length || metadata?.ContentType !== input.contentType) {
+          throw new Error("Stored object metadata did not match the upload.");
+        }
+      } catch {
+        try {
+          await sendWithTimeout(client, new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+        } catch {
+          // Cleanup is best-effort; never turn an unverified write into a successful reference.
+        }
+        throw new Error("Durable media storage verification failed.");
+      }
       return {
         provider: R2_PROVIDER_ID,
         key,
