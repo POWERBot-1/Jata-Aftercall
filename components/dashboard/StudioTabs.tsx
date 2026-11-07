@@ -6,15 +6,19 @@ import {
   BarChart3,
   CalendarCheck,
   Eye,
+  Gift,
   Home,
   Image as ImageIcon,
   LayoutTemplate,
+  Megaphone,
   Package,
   Palette,
   PanelsTopLeft,
+  QrCode,
   Receipt,
   Settings2,
   UploadCloud,
+  Users,
   Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
@@ -49,6 +53,13 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
       : []),
     ...(capabilities.includes("booking") ? [{ href: `${base}/bookings`, label: "Bookings", icon: CalendarCheck }] : []),
     { href: `${base}/insights`, label: "Analytics", icon: BarChart3 },
+    // Business Hub: customer conversion and retention on the KES149 / KES999 Business Page.
+    // These four are available to every business — they do not depend on an Interactive Business
+    // experience, because the Business Page subscription is what they extend.
+    { href: `${base}/customers`, label: "Customers", icon: Users },
+    { href: `${base}/promotions`, label: "Promotions", icon: Megaphone },
+    { href: `${base}/loyalty`, label: "Loyalty", icon: Gift },
+    { href: `${base}/qr`, label: "QR code", icon: QrCode },
     { href: `${base}/preview`, label: "Preview", icon: Eye },
     { href: `${base}#publish`, label: "Publish", icon: UploadCloud },
   ];
