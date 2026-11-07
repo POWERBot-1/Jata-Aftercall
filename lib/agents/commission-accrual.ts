@@ -58,8 +58,13 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     return { recorded: false, agentApplicationId: agent?.id ?? null, commissionMinor: BigInt(0), monthlyPlanSales: 0, payoutEligible: false };
   }
 
-  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, key: true } });
+  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, key: true, priceKES: true } });
   if (!plan) throw new Error("COMMISSION_PLAN_NOT_FOUND");
+  // PlanConfig.priceKES is the authoritative catalogue price in KES; Payment.amount is Paystack minor units.
+  // A verified payment for a stale or manipulated amount must never create an agent liability.
+  if (!Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || BigInt(payment.amount) !== BigInt(plan.priceKES) * BigInt(100)) {
+    throw new Error("COMMISSION_PLAN_PRICE_MISMATCH");
+  }
 
   const paidAt = payment.updatedAt instanceof Date ? payment.updatedAt : new Date(payment.updatedAt);
   const month = nairobiMonthBounds(paidAt);
