@@ -215,17 +215,17 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
       planId: { not: null }, businessId: { in: referredBusinessIds }, paystackId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
     },
   }) : 0;
-  const accruals = await tx.agentCommissionLedgerEntry.findMany({
+  const accruals: Array<{ id: string; amountMinor: bigint }> = await tx.agentCommissionLedgerEntry.findMany({
     where: { agentApplicationId, entryType: "ACCRUAL", createdAt: { gte: month.start, lt: month.end } },
     select: { id: true, amountMinor: true },
   });
   const accrualIds = accruals.map((entry: { id: string }) => entry.id);
-  const reversals = accrualIds.length ? await tx.agentCommissionLedgerEntry.findMany({
+  const reversals: Array<{ amountMinor: bigint }> = accrualIds.length ? await tx.agentCommissionLedgerEntry.findMany({
     where: { agentApplicationId, entryType: "REVERSAL", originalEntryId: { in: accrualIds } },
     select: { amountMinor: true },
   }) : [];
-  const accruedMinor = accruals.reduce<bigint>((sum, entry: { amountMinor: bigint }) => sum + BigInt(entry.amountMinor), BigInt(0));
-  const reversedMinor = reversals.reduce<bigint>((sum, entry: { amountMinor: bigint }) => { const amount = BigInt(entry.amountMinor); return sum + (amount < BigInt(0) ? -amount : BigInt(0)); }, BigInt(0));
+  const accruedMinor: bigint = accruals.reduce((sum, entry) => sum + BigInt(entry.amountMinor), BigInt(0));
+  const reversedMinor: bigint = reversals.reduce((sum, entry) => { const amount = BigInt(entry.amountMinor); return sum + (amount < BigInt(0) ? -amount : BigInt(0)); }, BigInt(0));
   const payableMinor = accruedMinor > reversedMinor ? accruedMinor - reversedMinor : BigInt(0);
   return {
     eligible: qualifyingPlanSales >= MINIMUM_MONTHLY_PLAN_SALES && payableMinor > BigInt(0),
