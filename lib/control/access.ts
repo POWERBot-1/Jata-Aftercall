@@ -31,7 +31,7 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
   if (!CONTROL_ROLE_ACCESS_ENABLED) return { ok: false, status: 403, code: "POLICY_PENDING" };
   try {
     const rows = await prisma.controlRoleGrant.findMany({
-      where: { userId: session.userId, revokedAt: null },
+      where: { userId: session.userId, revokedAt: null, expiresAt: { gt: new Date() } },
       select: { id: true, role: true, permissionKeys: true, scopeBusinessId: true },
       orderBy: { createdAt: "desc" },
     });
