@@ -26,10 +26,12 @@ describe("control-plane authorization boundaries", () => {
     expect(isControlPermission("SUPER_ADMIN")).toBe(false);
   });
 
-  it("applies the same explicit action rules to every canonical role without inferring role defaults", () => {
+  it("applies the explicit least-privilege policy to each role without inferring role defaults", () => {
+    const auditRoles = new Set(["SUPER_ADMIN", "SECURITY_ADMIN", "READ_ONLY_AUDITOR"]);
     for (const role of CONTROL_ROLE_NAMES) {
       const grant: ControlGrant = { id: `matrix-${role}`, role, permissionKeys: ["audit.read"], scopeBusinessId: "business-fixture" };
-      expect(hasControlPermission([grant], "audit.read", "business-fixture")).toBe(true);
+      const allowed = auditRoles.has(role);
+      expect(hasControlPermission([grant], "audit.read", "business-fixture")).toBe(allowed);
       expect(hasControlPermission([grant], "businesses.read", "business-fixture")).toBe(false);
       expect(hasControlPermission([grant], "audit.read", "another-business")).toBe(false);
     }
@@ -38,13 +40,15 @@ describe("control-plane authorization boundaries", () => {
   it("covers every canonical role × capability pair with no implicit grant and exact tenant boundaries", () => {
     for (const role of CONTROL_ROLE_NAMES) {
       for (const permission of CONTROL_PERMISSIONS) {
+        const allowed = isControlCapabilityAllowed(role, permission);
         const roleOnly: ControlGrant = { id: `role-only-${role}`, role, permissionKeys: [], scopeBusinessId: null };
         expect(hasControlPermission([roleOnly], permission, "tenant-a")).toBe(false);
-        const scoped: ControlGrant = { id: `matrix-${role}-${permission}`, role, permissionKeys: [permission], scopeBusinessId: "tenant-a" };
-        expect(hasControlPermission([scoped], permission, "tenant-a")).toBe(true);
-        expect(hasControlPermission([scoped], permission, "tenant-b")).toBe(false);
-        for (const denied of CONTROL_PERMISSIONS.filter((candidate) => candidate !== permission)) {
-          expect(hasControlPermission([scoped], denied, "tenant-a")).toBe(false);
+        const globalPermission = permission === "system.health.read";
+        const scoped: ControlGrant = { id: `matrix-${role}-${permission}`, role, permissionKeys: [permission], scopeBusinessId: globalPermission ? null : "tenant-a" };
+        expect(hasControlPermission([scoped], permission, globalPermission ? undefined : "tenant-a")).toBe(allowed);
+        if (!globalPermission) expect(hasControlPermission([scoped], permission, "tenant-b")).toBe(false);
+        for (const denied of CONTROL_PERMISSIONS.filter((candidate) => candidate !== permission || !allowed)) {
+          expect(hasControlPermission([scoped], denied, globalPermission ? undefined : "tenant-a")).toBe(false);
         }
       }
     }
@@ -56,9 +60,12 @@ describe("control-plane authorization boundaries", () => {
     expect(hasControlPermission([scoped], "businesses.read", "business-b")).toBe(false);
     expect(hasControlPermission([scoped], "businesses.reinstate", "business-a")).toBe(false);
     expect(scopedBusinessIds([scoped], "businesses.read")).toEqual({ allowed: true, global: false, ids: ["business-a"] });
-    const global: ControlGrant = { id: "grant-global", role: "READ_ONLY_AUDITOR", permissionKeys: ["audit.read"], scopeBusinessId: null };
-    expect(hasControlPermission([global], "audit.read", "any-business")).toBe(true);
-    expect(scopedBusinessIds([global], "audit.read")).toEqual({ allowed: true, global: true, ids: [] });
+    const global: ControlGrant = { id: "grant-global", role: "SUPER_ADMIN", permissionKeys: ["system.health.read"], scopeBusinessId: null };
+    expect(hasControlPermission([global], "system.health.read")).toBe(true);
+    expect(scopedBusinessIds([global], "system.health.read")).toEqual({ allowed: true, global: true, ids: [] });
+    const unscopedAudit: ControlGrant = { id: "audit-global", role: "READ_ONLY_AUDITOR", permissionKeys: ["audit.read"], scopeBusinessId: null };
+    expect(hasControlPermission([unscopedAudit], "audit.read", "any-business")).toBe(false);
+    expect(scopedBusinessIds([unscopedAudit], "audit.read")).toEqual({ allowed: false, global: false, ids: [] });
   });
 });
 
