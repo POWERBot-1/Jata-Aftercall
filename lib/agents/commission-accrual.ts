@@ -1,14 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { isProviderTransactionId } from "@/lib/paymentVerification";
 
-const COMMISSION_BASIS_POINTS = 4_000;
-const MINIMUM_MONTHLY_PLAN_SALES = 10;
-const POLICY_VERSION = "JATA-COMMISSION-2026-11-07-v1";
+export const AGENT_COMMISSION_POLICY = Object.freeze({
+  version: "JATA-COMMISSION-2026-11-07-v1",
+  currency: "KES",
+  basisPoints: 4_000,
+  minimumMonthlyPlanSales: 10,
+  periodTimeZone: "Africa/Nairobi",
+} as const);
+const COMMISSION_BASIS_POINTS = AGENT_COMMISSION_POLICY.basisPoints;
+const MINIMUM_MONTHLY_PLAN_SALES = AGENT_COMMISSION_POLICY.minimumMonthlyPlanSales;
+const POLICY_VERSION = AGENT_COMMISSION_POLICY.version;
 
 function nairobiMonthBounds(instant: Date): { start: Date; end: Date; key: string } {
   if (!(instant instanceof Date) || !Number.isFinite(instant.getTime())) throw new Error("COMMISSION_DATE_INVALID");
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit",
+    timeZone: AGENT_COMMISSION_POLICY.periodTimeZone, year: "numeric", month: "2-digit",
   }).formatToParts(instant);
   const year = Number(parts.find((part) => part.type === "year")?.value);
   const month = Number(parts.find((part) => part.type === "month")?.value);
