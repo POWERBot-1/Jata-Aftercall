@@ -63,3 +63,20 @@ The policy unit test iterates every role and canonical capability, asserts every
 The owner has decided DENY for all 90 cells. Any future request to change a cell to ALLOW requires exact role duties/separation, route/action, field/data minimum, tenant/resource scope, side effects, financial/PII visibility, MFA freshness/recovery, session/grant expiry and revocation, emergency access, audit-read/retention and a separate non-production test authorization. No Control capability grant is created. The separately authorized synthetic CI `User` carried no Control grant/role and existed only in the disposable test database; no operational or production identity/grant was provisioned by this decision.
 
 A complete six-role acceptance must later prove, for approved roles only: positive/negative direct API and browser actions; tenant isolation; valid/expired/revoked grant, session and MFA behavior; persisted application audit outcomes; rollback/integrity; authenticated enabled-console journeys; and independently reviewed `/control` screenshots at all required viewports. No acceptance is claimed from helper tests, mocked routes, this pending-policy UI, or unrelated green workflows.
+
+
+## Superseding owner authorization — 2026-11-07
+
+The preceding all-DENY matrix and denial-only acceptance notes are historical. GITANYA KARIUKI has authorized the platform to choose least-privilege decisions. The effective policy is now the bounded read-only 90-cell matrix in `lib/control/role-policy.ts` and `docs/agents/CONTROL_ROLE_ACTION_MATRIX.md`:
+
+- SUPER_ADMIN: businesses.read, subscriptions.read, payments.read, commissions.read, audit.read, system.health.read.
+- PLATFORM_ADMIN: businesses.read, subscriptions.read, system.health.read.
+- FINANCE_ADMIN: subscriptions.read, payments.read, commissions.read.
+- SUPPORT_ADMIN: businesses.read, subscriptions.read.
+- SECURITY_ADMIN: audit.read, system.health.read.
+- READ_ONLY_AUDITOR: audit.read.
+- All remaining cells DENY. All writes, financial adjustments, refunds, payouts, grant/identity administration, provider configuration, communications recovery and emergency access remain denied.
+- Tenant-keyed reads require exact business scope. Null/global grants do not authorize tenant-keyed reads. Minimal system-health read is the only global-scope exception.
+- Access requires a current authenticated session, active exact-key DB grant, live grant recheck and verified short-lived MFA. No grant is seeded or provisioned by the policy change.
+
+The latest implementation corrects a stale fail-closed test suite that still asserted the superseded all-DENY behavior. Exact-head PostgreSQL and authenticated browser positive-role acceptance, grant expiry, MFA recovery/revocation race, persisted success audit and independent six-viewport visual inspection remain separate evidence requirements. Do not mark them PASS until those exact-head checks pass.
