@@ -44,9 +44,9 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
 
   const referral = await tx.referral.findFirst({
     where: { referredUserId: payment.userId, status: "CONVERTED", convertedAt: { not: null } },
-    select: { referrerUserId: true, referredUserId: true, convertedAt: true },
+    select: { referrerUserId: true, referredUserId: true, referredBusinessId: true, convertedAt: true },
   });
-  if (!referral?.referrerUserId || !referral.referredUserId) {
+  if (!referral?.referrerUserId || !referral.referredUserId || !referral.referredBusinessId || referral.referredBusinessId !== payment.businessId || referral.referrerUserId === payment.userId) {
     return { recorded: false, agentApplicationId: null, commissionMinor: BigInt(0), monthlyPlanSales: 0, payoutEligible: false };
   }
 
@@ -65,10 +65,11 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
   const month = nairobiMonthBounds(paidAt);
   const referrals = await tx.referral.findMany({
     where: { referrerUserId: referral.referrerUserId, status: "CONVERTED", referredUserId: { not: null } },
-    select: { referredUserId: true },
+    select: { referredUserId: true, referredBusinessId: true },
   });
   const referredUserIds = [...new Set(referrals.map((row: { referredUserId: string | null }) => row.referredUserId).filter((id: string | null): id is string => Boolean(id)))];
-  if (!referredUserIds.includes(payment.userId)) throw new Error("COMMISSION_ATTRIBUTION_CHANGED");
+  const referredBusinessIds = [...new Set(referrals.map((row: { referredBusinessId: string | null }) => row.referredBusinessId).filter((id: string | null): id is string => Boolean(id)))];
+  if (!referredUserIds.includes(payment.userId) || !referredBusinessIds.includes(payment.businessId)) throw new Error("COMMISSION_ATTRIBUTION_CHANGED");
 
   const monthlyPlanSales = await tx.payment.count({
     where: {
@@ -76,7 +77,8 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
       status: "PAID",
       purpose: "SUBSCRIPTION",
       planId: { not: null },
-      businessId: { not: null },
+      businessId: { in: referredBusinessIds },
+      paystackId: { not: null },
       updatedAt: { gte: month.start, lt: month.end },
     },
   });
@@ -114,7 +116,7 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
   if (result.count === 1) {
     await tx.auditEvent.create({
       data: {
-        actorId: payment.userId,
+        actorId: null,
         action: "AGENT_COMMISSION_ACCRUED",
         targetType: "AGENT_COMMISSION_LEDGER",
         targetId: sourceEventId,
@@ -195,14 +197,15 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
   }
   const month = nairobiMonthBounds(instant);
   const referrals = await tx.referral.findMany({
-    where: { referrerUserId: agent.userId, status: "CONVERTED", referredUserId: { not: null } },
-    select: { referredUserId: true },
+    where: { referrerUserId: agent.userId, status: "CONVERTED", referredUserId: { not: null }, referredBusinessId: { not: null } },
+    select: { referredUserId: true, referredBusinessId: true },
   });
   const referredUserIds = [...new Set(referrals.map((row: { referredUserId: string | null }) => row.referredUserId).filter((id: string | null): id is string => Boolean(id)))];
-  const qualifyingPlanSales = referredUserIds.length ? await tx.payment.count({
+  const referredBusinessIds = [...new Set(referrals.map((row: { referredBusinessId: string | null }) => row.referredBusinessId).filter((id: string | null): id is string => Boolean(id)))];
+  const qualifyingPlanSales = referredUserIds.length && referredBusinessIds.length ? await tx.payment.count({
     where: {
       userId: { in: referredUserIds }, status: "PAID", purpose: "SUBSCRIPTION",
-      planId: { not: null }, businessId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
+      planId: { not: null }, businessId: { in: referredBusinessIds }, paystackId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
     },
   }) : 0;
   const accruals = await tx.agentCommissionLedgerEntry.findMany({
