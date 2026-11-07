@@ -30,7 +30,7 @@ const FULL_ENV = {
   R2_PUBLIC_BASE_URL: "https://pub-test.r2.dev/",
 } as unknown as NodeJS.ProcessEnv;
 
-function fakeClient(fail = false) {
+function fakeClient(fail = false, headResult: Record<string, unknown> = { ContentLength: 4, ContentType: "image/jpeg" }) {
   const sent: Array<{ name: string; input: Record<string, unknown> }> = [];
   const client: R2ObjectClient = {
     async send(command) {
@@ -117,6 +117,18 @@ describe("R2 adapter behaviour (fake S3 client)", () => {
       CacheControl: "public, max-age=31536000, immutable",
     });
     expect(provider.capabilities).toMatchObject({ durable: true, derivatives: true, models: false });
+  });
+
+  it("cleans up an object when read-after-write verification does not match", async () => {
+    const { client, sent } = fakeClient(false, { ContentLength: 99, ContentType: "application/octet-stream" });
+    const provider = createR2Storage(FULL_ENV, () => client);
+
+    await expect(provider.put(PUT)).rejects.toThrow("Durable media storage verification failed.");
+    expect(sent.map((entry) => entry.name)).toEqual(["PutObjectCommand", "HeadObjectCommand", "DeleteObjectCommand"]);
+    expect(sent[2].input).toMatchObject({
+      Bucket: "jata-media-test",
+      Key: "tenants/business-a/image-original/upload-1234.jpg",
+    });
   });
 
   it("rejects traversal and mismatched file types before anything is sent", async () => {
