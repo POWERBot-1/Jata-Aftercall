@@ -620,6 +620,11 @@ model Business {
   loyaltyCards       LoyaltyCard[]
   loyaltyStampEvents LoyaltyStampEvent[]
   loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyPointsProgramme LoyaltyPointsProgramme?
+  loyaltyPointsAccounts  LoyaltyPointsAccount[]
+  loyaltyPointsLedger    LoyaltyPointsLedger[]
+  loyaltyRewards         LoyaltyReward[]
+  loyaltyRewardRedemptions LoyaltyRewardRedemption[]
   hubActivities      BusinessHubActivity[]
 
   @@index([ownerId])
@@ -4345,6 +4350,9 @@ model LoyaltyCard {
 
   stampEvents LoyaltyStampEvent[]
   redemptions LoyaltyRedemption[]
+  /// The customer's points wallet, if they have been enrolled in the points programme. Stamps and
+  /// points are separate records with separate balances; the card is what identifies the customer.
+  pointsAccount LoyaltyPointsAccount?
 
   @@index([businessId, contactValue])
   @@index([businessId, createdAt])
@@ -4387,6 +4395,260 @@ model LoyaltyRedemption {
 
   @@unique([cardId, cycleIndex])
   @@index([businessId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// Loyalty 2.0 — configurable points and rewards (Business Hub, additive to the stamp card).
+//
+// The stamp card above is untouched. Points are a SECOND, independent mechanism: their own
+// programme, their own account per customer, their own ledger and their own redemptions. Nothing
+// here reads or writes LoyaltyCard.stampsEarned / stampsRedeemed, so a business can run either
+// mechanism, or both, and the two balances are never combined.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/// What happened to a points balance. Every movement in `LoyaltyPointsLedger` carries one of these.
+enum PointsTransactionType {
+  EARNED
+  REDEEMED
+  EXPIRED
+  REVERSED
+  MANUAL_ADJUSTMENT
+}
+
+/// Whether a ledger entry adds to the balance or takes from it. Stored alongside the magnitude so
+/// the ledger stays additive: a correction is a new entry, never an edit of an old one.
+enum PointsDirection {
+  CREDIT
+  DEBIT
+}
+
+/// Where the instruction came from. `OWNER_VERIFIED` is a human confirming a purchase in the hub;
+/// `PAYMENT_PROVIDER` is reserved for authoritative payment verification, which is NOT implemented
+/// in this release — no code path may claim it.
+enum PointsSource {
+  OWNER_VERIFIED
+  PAYMENT_PROVIDER
+  CUSTOMER_REDEMPTION
+  SYSTEM_EXPIRY
+  OWNER_ADJUSTMENT
+  REVERSAL
+}
+
+/// What a reward is worth when it is redeemed.
+enum RewardKind {
+  FIXED_POINTS
+  DISCOUNT
+  PRODUCT
+  SERVICE
+}
+
+/// Life cycle of one redemption. A redemption is `PENDING` until the business hands over the
+/// reward; cancelling it returns the points through a compensating ledger entry.
+enum RedemptionStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
+/// One business's points configuration.
+///
+/// Earning is OFF until an owner configures it: `isActive` defaults to false, and the activation
+/// validator refuses to turn it on while the earning rate is unset. No default earning rate,
+/// redemption rate, expiry period or reward value is invented anywhere in this system.
+model LoyaltyPointsProgramme {
+  id        String   @id @default(cuid())
+  businessId String  @unique
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Off until the owner configures and activates the programme.
+  isActive  Boolean  @default(false)
+
+  /// Earning rule: `pointsPerUnit` points for every whole `kesPerPoint` KES of eligible spend.
+  /// Both are NULL until the owner sets them, and activation is refused while either is NULL.
+  kesPerPoint   Int?
+  pointsPerUnit Int?
+  /// A purchase below this amount earns nothing. Zero means every qualifying purchase earns.
+  minPurchaseKES Int @default(0)
+  /// Optional ceiling per transaction. NULL means no cap.
+  maxPointsPerTransaction Int?
+
+  /// A customer may only redeem once their available balance reaches this figure.
+  minRedeemPoints Int @default(0)
+  /// What one point is worth, when the owner chooses to state it. Display and discount maths only —
+  /// points are never cash and are never paid out.
+  pointValueKES Int?
+  /// NULL = points never expire. Otherwise whole months from the earning date.
+  expiryMonths Int?
+  /// Whether a reversal may take the balance below zero when the points were already spent.
+  /// Off by default: the safe behaviour is to reverse only the unspent portion and report the rest.
+  allowNegativeBalanceOnReversal Boolean @default(false)
+
+  /// Customer-facing copy. `terms` and `redemptionRules` are shown in the wallet.
+  description     String? @db.Text
+  terms           String? @db.Text
+  redemptionRules String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts      LoyaltyPointsAccount[]
+  rewards       LoyaltyReward[]
+  eligibleItems LoyaltyPointsEligibleItem[]
+}
+
+/// Products and services that earn points. An empty list means every qualifying purchase earns;
+/// a non-empty list restricts earning to the listed items only.
+model LoyaltyPointsEligibleItem {
+  id          String @id @default(cuid())
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  /// PRODUCT | SERVICE — a plain column rather than a foreign key, so a catalogue row can be
+  /// withdrawn without rewriting loyalty history.
+  itemKind    String
+  itemId      String
+  createdAt   DateTime @default(now())
+
+  @@unique([programmeId, itemKind, itemId])
+  @@index([programmeId])
+}
+
+/// One customer's points wallet. Separate from the stamp card it belongs to: the card identifies
+/// the customer, the account holds the points.
+model LoyaltyPointsAccount {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  /// One wallet per stamp card, so the customer's code works for both mechanisms.
+  cardId      String   @unique
+  card        LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  /// Cached balance. It is always reconcilable with the ledger: sum(CREDIT) - sum(DEBIT).
+  availablePoints  Int @default(0)
+  lifetimeEarned   Int @default(0)
+  lifetimeRedeemed Int @default(0)
+  lifetimeExpired  Int @default(0)
+  pointsPending    Int @default(0)
+  /// ACTIVE | BLOCKED. A blocked wallet can neither earn nor redeem.
+  status      String   @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledger      LoyaltyPointsLedger[]
+  redemptions LoyaltyRewardRedemption[]
+
+  @@index([businessId, availablePoints])
+  @@index([businessId, status])
+}
+
+/// Append-only points ledger. Rows are never updated except to consume an EARNED lot's remaining
+/// points, and never deleted. A correction is a new compensating row.
+model LoyaltyPointsLedger {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     LoyaltyPointsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  type        PointsTransactionType
+  direction   PointsDirection
+  /// Magnitude, always positive. The direction field carries the sign.
+  points      Int
+  /// Balance snapshot after this entry, for audit.
+  balanceAfter Int     @default(0)
+
+  reference      String @unique
+  /// The replay guard. One idempotency key per business can only ever produce one entry, so a
+  /// retried request, a double tap or a replayed payment event cannot award points twice.
+  idempotencyKey String
+  source         PointsSource
+  /// The business's own transaction reference (receipt, order or date) for an earning entry.
+  sourceReference String?
+  /// Set on EARNED rows by an EXPIRED or REVERSED row that consumes them.
+  reversalOfId  String?
+  reversalOf    LoyaltyPointsLedger?  @relation("PointsReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy    LoyaltyPointsLedger[] @relation("PointsReversal")
+
+  explanation   String? @db.Text
+  actorUserId   String?
+  actorLabel    String?
+
+  /// Earning lots. `expiresAt` is set only when the programme has expiry enabled at the time of
+  /// the award; `remainingPoints` is the unused portion, consumed by redemptions and expiry.
+  expiresAt       DateTime?
+  remainingPoints Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([businessId, idempotencyKey])
+  @@index([accountId, createdAt])
+  @@index([businessId, type, createdAt])
+  @@index([businessId, expiresAt])
+  @@index([businessId, sourceReference])
+}
+
+/// A reward the business offers in exchange for points.
+model LoyaltyReward {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?  @db.Text
+  kind        RewardKind @default(FIXED_POINTS)
+  pointsCost  Int
+  /// DISCOUNT rewards: the value taken off, in KES.
+  discountKES Int?
+  /// PRODUCT / SERVICE rewards: what is handed over. Plain columns, not foreign keys.
+  itemKind    String?
+  itemId      String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions LoyaltyRewardRedemption[]
+
+  @@unique([businessId, title])
+  @@index([programmeId, isActive, sortOrder])
+}
+
+/// One redemption. `reference` is quoted to the customer; `idempotencyKey` makes a double tap safe.
+model LoyaltyRewardRedemption {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     LoyaltyPointsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  rewardId    String
+  reward      LoyaltyReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  pointsSpent Int
+  status      RedemptionStatus @default(PENDING)
+  reference   String @unique
+  idempotencyKey String
+
+  rewardTitleSnapshot  String
+  rewardKindSnapshot   String
+  channel              String @default("CUSTOMER") // CUSTOMER | OWNER_ASSISTED
+
+  customerNote     String? @db.Text
+  fulfilledByUserId String?
+  fulfilledByLabel String?
+  cancelledAt      DateTime?
+  cancelReason     String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([accountId, createdAt])
 }
 
 /// Shared activity/audit trail for the Business Hub: order requests, enquiries, promotions and

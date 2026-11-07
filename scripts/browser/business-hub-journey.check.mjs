@@ -9,10 +9,11 @@
  *
  * It walks the capabilities the way they are used, in a real browser:
  *
- *   customer  public page → basket → order request → confirmation
- *   owner     Customers · Promotions · Loyalty · QR, through the dashboard navigation
+ *   customer  public page → basket → order request → confirmation → points wallet → redeem
+ *   owner     Customers · Promotions · Loyalty · Points · QR, through the dashboard navigation
+ *   owner     points: record a verified purchase for a customer and watch the wallet update
  *   guards    another business's Customers page is refused
- *   layout    the public page at six viewports, each screenshot saved
+ *   layout    the public page at six viewports, and the points dashboard at the same six
  *
  * EXIT CODES
  *   0  every check passed
@@ -159,6 +160,15 @@ if (process.exitCode !== 2) {
     }
     if (prisma) {
       for (const businessId of [created.businessId, created.otherBusinessId].filter(Boolean)) {
+        // Loyalty 2.0 rows: children before parents, so the cascades never leave debris behind.
+        await prisma.loyaltyRewardRedemption.deleteMany({ where: { businessId } }).catch(() => undefined);
+        await prisma.loyaltyPointsLedger.deleteMany({ where: { businessId } }).catch(() => undefined);
+        await prisma.loyaltyPointsAccount.deleteMany({ where: { businessId } }).catch(() => undefined);
+        await prisma.loyaltyReward.deleteMany({ where: { businessId } }).catch(() => undefined);
+        await prisma.loyaltyPointsEligibleItem
+          .deleteMany({ where: { programme: { businessId } } })
+          .catch(() => undefined);
+        await prisma.loyaltyPointsProgramme.deleteMany({ where: { businessId } }).catch(() => undefined);
         await prisma.orderRequest.deleteMany({ where: { businessId } }).catch(() => undefined);
         await prisma.customerEnquiry.deleteMany({ where: { businessId } }).catch(() => undefined);
         await prisma.promotion.deleteMany({ where: { businessId } }).catch(() => undefined);
@@ -257,8 +267,46 @@ if (process.exitCode !== 2) {
         ctaKind: "NONE",
       },
     });
-    await prisma.loyaltyProgram.create({
+    const stampProgram = await prisma.loyaltyProgram.create({
       data: { businessId: business.id, isEnabled: true, stampGoal: 4, rewardDescription: "Free pilau combo" },
+    });
+
+    // ── Loyalty 2.0 fixtures ──────────────────────────────────────────────────────────────────
+    // A SECOND programme beside the stamp card above: its own configuration, its own wallet, its
+    // own ledger. It is created ACTIVE here because the browser journey is about the screens an
+    // owner sees after switching points on — the "off by default" path is covered by the unit
+    // suite. The wallet starts at zero: the points below are earned through the owner's own screen.
+    const pointsProgramme = await prisma.loyaltyPointsProgramme.create({
+      data: {
+        businessId: business.id,
+        isActive: true,
+        kesPerPoint: 100,
+        pointsPerUnit: 1,
+        description: "Earn while you eat.",
+        terms: "Points are added after we verify your purchase.",
+        redemptionRules: "Collect in store.",
+      },
+    });
+    const pointsReward = await prisma.loyaltyReward.create({
+      data: {
+        businessId: business.id,
+        programmeId: pointsProgramme.id,
+        title: "Free pilau combo",
+        kind: "FIXED_POINTS",
+        pointsCost: 10,
+        isActive: true,
+      },
+    });
+    const pointsCard = await prisma.loyaltyCard.create({
+      data: {
+        businessId: business.id,
+        programId: stampProgram.id,
+        code: `HUBPTS${runId.slice(0, 6).toUpperCase()}`,
+        customerName: "Jane Wanjiku",
+        contactMethod: "PHONE",
+        contactValue: "0712345678",
+        status: "ACTIVE",
+      },
     });
 
     const otherOwner = await prisma.user.create({
@@ -393,6 +441,115 @@ if (process.exitCode !== 2) {
       await ownerPage.screenshot({ path: path.join(evidenceDir, `owner-1366-${pathname}.png`), fullPage: true });
     }
 
+    // ── owner: the points programme (Loyalty 2.0) ─────────────────────────────────────────────
+    // Awarded through the owner's own screen, so the browser exercises the real route, the real
+    // validation and the real ledger — not a row this script inserted.
+    const pointsUrl = `${baseUrl}/dashboard/businesses/${business.id}/loyalty/points`;
+    const pointsResponse = await ownerPage.goto(pointsUrl, { waitUntil: "networkidle2", timeout: 60_000 });
+    let pointsText = await ownerPage.evaluate(
+      () =>
+        `${document.body.innerText}\n${[...document.querySelectorAll("input")].map((input) => input.value).join("\n")}`,
+    );
+    check("owner: the Points screen opens", pointsResponse?.status() === 200, `HTTP ${pointsResponse?.status()}`);
+    check(
+      "owner: the Points screen says the programme is live and names its rate",
+      /points are live/i.test(pointsText) && /kes 100/i.test(pointsText),
+    );
+    check(
+      "owner: the reward catalogue is managed here",
+      pointsText.includes("Free pilau combo") && /reward catalogue/i.test(pointsText),
+    );
+    check(
+      "owner: the points dashboard keeps the stamp card's own tab",
+      /stamp card/i.test(pointsText) || /loyalty/i.test(pointsText),
+    );
+
+    await clickByText(ownerPage, "Record a purchase");
+    await ownerPage.waitForSelector('[id^="earn-amount-"]', { timeout: 10_000 });
+    await ownerPage.type('[id^="earn-amount-"]', "1200");
+    await ownerPage.type('[id^="earn-ref-"]', "JATA-BROWSER-1");
+    await clickByText(ownerPage, "Award points");
+    await ownerPage.waitForFunction(() => /points awarded|already recorded|switched off/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    pointsText = await ownerPage.evaluate(() => document.body.innerText);
+
+    const accountAfterAward = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } });
+    check(
+      "owner: recording a verified purchase awards the configured rate (KES 1,200 → 12 points)",
+      accountAfterAward?.availablePoints === 12,
+      `wallet holds ${accountAfterAward?.availablePoints ?? "no wallet"}`,
+    );
+    check(
+      "owner: the award is written to the ledger as an owner-verified earning",
+      (await prisma.loyaltyPointsLedger.count({ where: { businessId: business.id, type: "EARNED" } })) === 1,
+    );
+
+    // A second award with the same reference must not mint points twice. The form closes after
+    // each award, so the row is reopened first.
+    await clickByText(ownerPage, "Record a purchase");
+    await ownerPage.waitForSelector('[id^="earn-amount-"]', { timeout: 10_000 });
+    await ownerPage.type('[id^="earn-amount-"]', "1200");
+    await ownerPage.type('[id^="earn-ref-"]', "JATA-BROWSER-1");
+    await clickByText(ownerPage, "Award points");
+    await ownerPage.waitForFunction(() => /already recorded|points awarded/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    const accountAfterReplay = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } });
+    check(
+      "owner: replaying the same purchase reference awards nothing a second time",
+      accountAfterReplay?.availablePoints === 12,
+      `wallet holds ${accountAfterReplay?.availablePoints ?? "no wallet"}`,
+    );
+    await ownerPage.screenshot({ path: path.join(evidenceDir, "owner-1366-loyalty-points.png"), fullPage: true });
+
+    // ── customer: the points wallet, in a real browser ─────────────────────────────────────────
+    const walletContext = await browser.createBrowserContext();
+    const walletPage = await walletContext.newPage();
+    const walletErrors = [];
+    walletPage.on("pageerror", (error) => walletErrors.push(String(error?.message ?? error)));
+    await walletPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await walletPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
+    await walletPage.type("#loyalty-code", pointsCard.code);
+    await clickByText(walletPage, "Check my card");
+    await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
+    let walletText = await walletPage.evaluate(() => document.body.innerText);
+
+    check("customer: the points wallet opens from the loyalty card code", /points wallet/i.test(walletText));
+    check(
+      "customer: the balance is shown separately from the stamp progress",
+      /available points/i.test(walletText) && /12/.test(walletText) && /stamps?/i.test(walletText),
+    );
+    check(
+      "customer: the wallet explains how points are earned",
+      /how you earn/i.test(walletText) && /kes 100/i.test(walletText),
+    );
+    check("customer: the reward the business published is offered", /free pilau combo/i.test(walletText));
+    check(
+      "customer: the wallet never shows the card's contact details",
+      !walletText.includes("0712345678"),
+    );
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-wallet.png"), fullPage: true });
+
+    await clickByText(walletPage, "Redeem");
+    await walletPage.waitForFunction(() => /JATA-RWD-\d{8}-/.test(document.body.innerText), { timeout: 30_000 });
+    walletText = await walletPage.evaluate(() => document.body.innerText);
+    const redemptionReference = (walletText.match(/JATA-RWD-\d{8}-[A-Z0-9]{6}/) || [null])[0];
+    check("customer: redeeming returns a redemption reference", Boolean(redemptionReference), redemptionReference ?? "none");
+    check(
+      "customer: the confirmation says no money moved",
+      /show the business your redemption reference|collect/i.test(walletText) && !/cash out|paid out|bank transfer|money sent/i.test(walletText),
+    );
+    const accountAfterRedeem = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } });
+    check(
+      "customer: redeeming deducts the reward's cost exactly once (12 − 10 = 2)",
+      accountAfterRedeem?.availablePoints === 2,
+      `wallet holds ${accountAfterRedeem?.availablePoints ?? "no wallet"}`,
+    );
+    check("customer: no uncaught page error in the wallet", walletErrors.length === 0, walletErrors.slice(0, 2).join(" | "));
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-redeemed.png"), fullPage: true });
+    await walletContext.close();
+
     // ── guards ────────────────────────────────────────────────────────────────────────────────
     const foreign = await ownerPage.goto(`${baseUrl}/dashboard/businesses/${otherBusiness.id}/customers`, {
       waitUntil: "networkidle2",
@@ -452,6 +609,24 @@ if (process.exitCode !== 2) {
       await viewportContext.close();
     }
 
+    // The points dashboard at the same six widths: it is an owner screen with a long form, so the
+    // layout is checked in a real browser rather than asserted from the markup.
+    for (const [width, height] of viewportCases) {
+      const pointsViewportContext = await browser.createBrowserContext();
+      const pointsViewportPage = await pointsViewportContext.newPage();
+      await pointsViewportPage.setViewport({ width, height, deviceScaleFactor: 1 });
+      await pointsViewportPage.setCookie(await cookieFor(owner));
+      await pointsViewportPage.goto(pointsUrl, { waitUntil: "networkidle2", timeout: 60_000 });
+      const layout = await pointsViewportPage.evaluate(() => ({
+        overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+        settings: /points settings/i.test(document.body.innerText),
+      }));
+      check(`${width}×${height}: the points dashboard fits the viewport`, layout.overflow <= 1, `overflow ${layout.overflow}px`);
+      check(`${width}×${height}: the points settings are reachable`, layout.settings);
+      await pointsViewportPage.screenshot({ path: path.join(evidenceDir, `owner-${width}-loyalty-points.png`), fullPage: false });
+      await pointsViewportContext.close();
+    }
+
     await writeFile(
       path.join(evidenceDir, "business-hub-journey.json"),
       JSON.stringify(
@@ -460,6 +635,12 @@ if (process.exitCode !== 2) {
           runId,
           business: { id: business.id, slug: business.slug, name: business.name },
           reference,
+          points: {
+            cardCode: pointsCard.code,
+            redemptionReference,
+            availableAfterAward: accountAfterAward?.availablePoints ?? null,
+            availableAfterRedeem: accountAfterRedeem?.availablePoints ?? null,
+          },
           checks: results,
           failures: failed,
         },

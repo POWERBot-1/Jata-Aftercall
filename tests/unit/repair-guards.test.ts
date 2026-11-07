@@ -165,6 +165,10 @@ describe("runtime and schema guards", () => {
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
       "20261128000000_business_hub_conversion",
+      // Loyalty 2.0: six NEW tables and five NEW enum types for the points programme. Additive
+      // only — no existing table (including the four stamp-card tables) is altered, read or
+      // rewritten, and no column is added to one.
+      "20261129000000_loyalty_points_rewards",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -243,6 +247,7 @@ describe("runtime and schema guards", () => {
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
       "20261128000000_business_hub_conversion",
+      "20261129000000_loyalty_points_rewards",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

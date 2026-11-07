@@ -78,6 +78,14 @@ export function businessHubSeed(): BusinessHubSeed {
     loyaltyCard: [],
     loyaltyStampEvent: [],
     loyaltyRedemption: [],
+    // Loyalty 2.0 — points and rewards. Empty by default: a programme that has never been
+    // configured must behave as if points do not exist.
+    loyaltyPointsProgramme: [],
+    loyaltyPointsEligibleItem: [],
+    loyaltyPointsAccount: [],
+    loyaltyPointsLedger: [],
+    loyaltyReward: [],
+    loyaltyRewardRedemption: [],
     businessHubActivity: [],
     analyticsEvent: [],
     auditEvent: [],
@@ -95,6 +103,14 @@ const HUB_UNIQUE_INDEXES: Record<string, string[][]> = {
   loyaltyCard: [["code"]],
   loyaltyStampEvent: [["businessId", "transactionRef"]],
   loyaltyRedemption: [["cardId", "cycleIndex"]],
+  // Loyalty 2.0 guards: one programme per business, one wallet per card, one ledger row per
+  // idempotency key and per reference, one reward title per business, one redemption per key.
+  loyaltyPointsProgramme: [["businessId"]],
+  loyaltyPointsEligibleItem: [["programmeId", "itemKind", "itemId"]],
+  loyaltyPointsAccount: [["cardId"]],
+  loyaltyPointsLedger: [["reference"], ["businessId", "idempotencyKey"]],
+  loyaltyReward: [["businessId", "title"]],
+  loyaltyRewardRedemption: [["reference"], ["businessId", "idempotencyKey"]],
 };
 
 /**
@@ -175,6 +191,12 @@ const HUB_MODELS = [
   "loyaltyCard",
   "loyaltyStampEvent",
   "loyaltyRedemption",
+  "loyaltyPointsProgramme",
+  "loyaltyPointsEligibleItem",
+  "loyaltyPointsAccount",
+  "loyaltyPointsLedger",
+  "loyaltyReward",
+  "loyaltyRewardRedemption",
   "businessHubActivity",
 ];
 
