@@ -125,6 +125,27 @@ const UNIQUE_INDEXES: Record<string, string[][]> = {
   msgLedgerEntry: [["businessId", "idempotencyKey"]],
 };
 
+/**
+ * Registers compound unique indexes for models beyond the POS.
+ *
+ * The table above is module-private on purpose: a test that needs a new guard (the Business Hub's
+ * "one stamp per transaction reference", for example) declares it here instead of editing this
+ * file, and PostgreSQL's `P2002` behaviour then applies to it too.
+ */
+export function registerUniqueIndexes(indexes: Record<string, string[][]>): void {
+  for (const [model, list] of Object.entries(indexes)) {
+    const existing = UNIQUE_INDEXES[model] ?? [];
+    const merged = [...existing];
+    for (const fields of list) {
+      const already = merged.some(
+        (entry) => entry.length === fields.length && entry.every((field, index) => field === fields[index]),
+      );
+      if (!already) merged.push(fields);
+    }
+    UNIQUE_INDEXES[model] = merged;
+  }
+}
+
 export type FakeDb = {
   db: any;
   state: Record<string, Row[]>;

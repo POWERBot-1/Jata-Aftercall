@@ -7,6 +7,12 @@ import { formatOpeningHours } from "@/lib/openingHours";
 import { formatNumber } from "@/lib/dateFormat";
 import { ContactActions } from "@/components/storefront/ContactActions";
 import { RenderModeProbe } from "@/components/storefront/RenderModeProbe";
+import { OrderRequestPanel, type OrderRequestProduct } from "@/components/business-hub/OrderRequestPanel";
+import { PromotionSpotlight } from "@/components/business-hub/PromotionSpotlight";
+import { LoyaltyCardPanel } from "@/components/business-hub/LoyaltyCardPanel";
+import { EnquiryPanel } from "@/components/business-hub/EnquiryPanel";
+import { QrIdentityBlock } from "@/components/business-hub/QrIdentityBlock";
+import type { PromotionView } from "@/lib/business-hub/promotions";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -49,6 +55,10 @@ export default function BusinessPage({
   referralHref = null,
   aiFrontDeskLive = false,
   demoPage = false,
+  products = [],
+  promotions = [],
+  loyaltyEnabled = false,
+  enquiryEnabled = true,
 }: {
   business: Business;
   services: Service[];
@@ -64,6 +74,14 @@ export default function BusinessPage({
   aiFrontDeskLive?: boolean;
   /** Whether this page contains only fictional demonstration content. */
   demoPage?: boolean;
+  /** Catalogue shown in the Instant Order Request basket (server-priced, active rows only). */
+  products?: OrderRequestProduct[];
+  /** Live promotions only — an expired promotion is never passed to this component. */
+  promotions?: PromotionView[];
+  /** True once the owner has enabled their loyalty programme in the dashboard. */
+  loyaltyEnabled?: boolean;
+  /** The enquiry form is on by default; it is hidden only where the owner turned it off. */
+  enquiryEnabled?: boolean;
 }) {
   useEffect(() => {
     track(business.id, "PAGE_VIEW");
@@ -189,6 +207,13 @@ export default function BusinessPage({
           </div>
         )}
 
+        {/* Promotional Spotlight (Business Hub §C) — live promotions only. Expired rows are
+            filtered out server-side, so an expired offer is absent from the HTML rather than
+            merely hidden by a client-side rule. */}
+        <div className="mt-4">
+          <PromotionSpotlight promotions={promotions} slug={business.slug} demoPage={demoPage} />
+        </div>
+
         {/* Services */}
         <section id="services" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Services and products</h2>
@@ -212,6 +237,59 @@ export default function BusinessPage({
             </ul>
           )}
         </section>
+
+        {/* Featured products from the catalogue — the same rows the order basket is priced from. */}
+        {products.length > 0 ? (
+          <section aria-labelledby="featured-products-title" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
+            <h2 id="featured-products-title" className="text-sm font-bold">Featured products</h2>
+            <ul className="mt-3 grid grid-cols-2 gap-3">
+              {products.slice(0, 6).map((product) => (
+                <li key={product.id} className={`overflow-hidden rounded-xl border ${t.colors.border} ${t.colors.surfaceMuted}`}>
+                  {product.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.imageUrl} alt="" className="h-24 w-full object-cover" loading="lazy" decoding="async" />
+                  ) : null}
+                  <div className="p-2">
+                    <p className="truncate text-xs font-semibold">{product.name}</p>
+                    <p className="mt-0.5 text-xs font-bold">
+                      {product.priceKES === null ? (
+                        <span className={t.colors.muted}>Price on request</span>
+                      ) : (
+                        <>
+                          KES {formatNumber(product.priceKES)}
+                          {product.wasPriceKES ? (
+                            <span className={`ml-1 font-normal line-through ${t.colors.muted}`}>KES {formatNumber(product.wasPriceKES)}</span>
+                          ) : null}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {/* Instant order requests (Business Hub §A) */}
+        {products.length > 0 ? (
+          <div className="mt-4">
+            <OrderRequestPanel slug={business.slug} businessName={business.name} products={products} />
+          </div>
+        ) : null}
+
+        {/* A recorded customer enquiry (Business Hub §B) */}
+        {enquiryEnabled ? (
+          <div className="mt-4">
+            <EnquiryPanel slug={business.slug} businessName={business.name} />
+          </div>
+        ) : null}
+
+        {/* Digital loyalty card (Business Hub §D) — shown once the owner enables their programme */}
+        {loyaltyEnabled ? (
+          <div className="mt-4">
+            <LoyaltyCardPanel businessName={business.name} />
+          </div>
+        ) : null}
 
         {/* About */}
         <section id="info" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
@@ -314,6 +392,12 @@ export default function BusinessPage({
             </Link>
           </section>
         )}
+
+        {/* Business QR identity (Business Hub §E) — always the canonical public page URL, derived
+            from the slug, so editing the profile can never repoint a code that is already printed. */}
+        <div className="mt-4">
+          <QrIdentityBlock slug={business.slug} businessName={business.name} />
+        </div>
 
         <p className={`mt-6 text-center text-xs ${t.colors.muted}`}>Powered by JATA AFTERCALL • <Link href="/" className="underline">Create your page</Link></p>
       </main>

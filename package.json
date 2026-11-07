@@ -50,7 +50,8 @@
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
-    "test:browser:agents": "node scripts/browser/agent-status.check.mjs"
+    "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
+    "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -81,11 +82,13 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
     "jsdom": "^26.1.0",
+    "jsqr": "^1.4.0",
     "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
     "prisma": "^5.22.0",
     "puppeteer-core": "^25.13.0",
+    "qrcode": "^1.5.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4",

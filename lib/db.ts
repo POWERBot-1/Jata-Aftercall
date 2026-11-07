@@ -673,6 +673,20 @@ function createFallbackPrisma(): any {
     msgMessageEvent: emptyModel(),
     msgWallet: emptyModel(),
     msgLedgerEntry: emptyModel(),
+    // JATA Business Hub (instant order requests, enquiries, promotions, loyalty, QR identity).
+    // Same contract as every other model above: reads answer empty so a page renders, and every
+    // write refuses rather than reporting a record that was never stored. The hub's own routes
+    // never reach this fallback — `hasDurableDatabase()` closes them with a 503 first — but the
+    // public Business Page must still render if the hub tables are momentarily unavailable.
+    orderRequest: emptyModel(),
+    orderRequestItem: emptyModel(),
+    customerEnquiry: emptyModel(),
+    promotion: emptyModel(),
+    loyaltyProgram: emptyModel(),
+    loyaltyCard: emptyModel(),
+    loyaltyStampEvent: emptyModel(),
+    loyaltyRedemption: emptyModel(),
+    businessHubActivity: emptyModel(),
   };
   return stub;
 }
