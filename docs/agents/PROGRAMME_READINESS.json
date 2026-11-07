@@ -25,7 +25,7 @@
     "acceptance": "explicit evidence per criterion on final candidate; no claim based on unrelated green CI.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §002 (ADMIN-002)",
     "implementationLocation": "PR #77, agent, financial, notification, reporting, shared design, `/control`, Vercel, Neon and Paystack. No automatic cron activation.",
-    "verificationMethod": "Counted and matched all 43 headings in docs/ADMIN_BUILDING_INSTRUCTIONS.md to all 43 manifest keys. Corrected the erroneous 45-item assertion in the independent release inventory guard and its tests. The completeness gate remains fail-closed on non-PASS criteria.",
+    "verificationMethod": "Counted and matched all 43 headings in docs/ADMIN_BUILDING_INSTRUCTIONS.md to all 43 manifest keys. The source register and manifest agree at 43; the prior 45 count was not supported by the canonical source. The completeness gate remains fail-closed on every BLOCKED/NOT_TESTED criterion and requires evidence for each PASS.",
     "testResult": "BLOCKED: exact-head programme completeness fails on 34 non-PASS rows (28 BLOCKED + 6 NOT_TESTED). Inventory reconciliation confirms 43 source headings and 43 manifest entries; no 45th requirement is present in the canonical source.",
     "evidence": [
       ".github/workflows/admin-instructions.yml",
@@ -110,7 +110,7 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "ADMIN-004": {
     "status": "BLOCKED",
@@ -178,7 +178,7 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "ADMIN-005": {
     "status": "BLOCKED",
@@ -244,7 +244,7 @@
   },
   "ADMIN-006": {
     "status": "BLOCKED",
-    "acceptance": "authenticated synthetic event → authoritative attribution → idempotent accrual → reversal → reconciliation → scoped dashboard; duplicate/out-of-order and unauthorized-action tests. **Dependencies/conflicts:** owner states relevant decisions approved, but exact commission terms were not located in repository/PR/Drive; do not invent. Technical test fixtures must be explicitly labelled and cannot activate production.",
+    "acceptance": "authenticated synthetic event → authoritative attribution → idempotent accrual → reversal → reconciliation → scoped dashboard; duplicate/out-of-order and unauthorized-action tests. **Owner authorization:** GITANYA KARIUKI explicitly approved 40% of each paid subscription plan sale and payment eligibility after 10 qualifying plan sales in the same Africa/Nairobi calendar month. Technical test fixtures must be explicitly labelled and cannot activate production.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §006 (ADMIN-006)",
     "implementationLocation": "`app/api/paystack/**`, `lib/agents/**`, agent/admin routes, payment, subscription, attribution and ledger models; existing pricing baselines: monthly KES 149, annual KES 999, AI Front Desk KES 499/month, Website Studio KES 999/month, Business POS KES 499/month, Autopilot KES 2,499/6,999/19,999. Inspect actual production configuration before presenting or changing prices; no production access authorized as part of implementation.",
     "verificationMethod": "New unit tests cover 40% integer calculation, 9/10 threshold, attribution/agent eligibility, idempotency, plan-price mismatch, full refund reversal and monthly net accrual. CI and disposable PostgreSQL verification must pass before acceptance.",
@@ -378,7 +378,7 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "MOTION-001": {
     "status": "BLOCKED",
