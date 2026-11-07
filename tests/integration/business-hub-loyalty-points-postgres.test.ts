@@ -231,8 +231,17 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: businessA, account: { cardId: cardA } } })).toBe(1);
     expect((await accountFor(cardA))?.availablePoints).toBe(10);
 
-    // The raw constraint is what makes that true, and it survives a direct double insert.
+    // The raw constraint is what makes that true, and it survives a direct double insert. The key
+    // is copied from the row the engine actually wrote rather than rebuilt here: the engine stores
+    // the normalised (upper-case) form, so a hand-typed key would not collide and this would
+    // silently assert nothing. A distinct `reference` keeps the proof on the idempotency key —
+    // the reference constraint is not what is being exercised.
     const account = await accountFor(cardA);
+    const [awarded] = await prisma.loyaltyPointsLedger.findMany({
+      where: { businessId: businessA, account: { cardId: cardA } },
+      take: 1,
+    });
+    expect(awarded?.idempotencyKey).toBe(`EARN:${reference.toUpperCase()}`);
     await expect(
       prisma.loyaltyPointsLedger.create({
         data: {
@@ -242,7 +251,7 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
           direction: "CREDIT",
           points: 1,
           reference: `JATA-PTS-CONFLICT-${stamp}`,
-          idempotencyKey: `EARN:${reference}`,
+          idempotencyKey: awarded.idempotencyKey,
           source: "OWNER_VERIFIED",
         },
       }),
@@ -314,6 +323,16 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
 
     const ledger = await prisma.loyaltyPointsLedger.findMany({ where: { account: { cardId: cardA } } });
     expect(ledger.map((row: any) => row.type).sort()).toEqual(["EARNED", "REDEEMED"]);
+
+    // The same key on a second tap returns that same redemption and spends nothing more.
+    const repeat = await redeemPoints({ businessId: businessA, cardId: cardA, rewardId: rewardRow.id, idempotencyKey: `pg-tap-1-${stamp}` });
+    expect(repeat.ok).toBe(true);
+    if (repeat.ok) {
+      expect(repeat.duplicate).toBe(true);
+      expect(repeat.redemption.id).toBe(result.redemption.id);
+    }
+    expect((await accountFor(cardA))?.availablePoints).toBe(4);
+    expect(await prisma.loyaltyRewardRedemption.count({ where: { businessId: businessA, account: { cardId: cardA } } })).toBe(1);
   });
 
   it("8 · a redemption the balance cannot cover is refused with nothing written", async () => {
