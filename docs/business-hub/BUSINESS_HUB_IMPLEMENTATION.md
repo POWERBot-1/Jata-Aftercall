@@ -426,3 +426,115 @@ commit (run `42386795179`, job `128445775928`).
 **Added (49)** — 15 API routes, 4 dashboard pages, 10 hub/QR library modules, 10 React
 components, 5 test suites + 2 test helpers, 1 browser check script, 1 migration, and this
 document. No unrelated file is touched.
+
+---
+
+## 10. Post-merge production acceptance, and the one defect it found
+
+PR #91 merged as `8791eb04b511a8d45390c2abb1d5c0c2fb0e70b3` and was serving production
+(Vercel deployment `dpl_2WdzxDGeV5svwMunTwSP6PRrJk4S`). Reading the live site back found that
+**capability B — order requests — was not reachable by any customer on an ordinary Business Page.**
+
+### What production actually served
+
+Read-only `GET`s of the live pages, no writes of any kind:
+
+| Page | What the served HTML contained |
+|---|---|
+| `/b/nyumbani-kitchen` | services and products, enquiry panel, opening hours, contact links, QR block |
+| `/b/kamau-auto-care` | the same — a second, different category (Mechanic) |
+| `/dashboard/businesses/<id>/customers` (no session) | redirect to `/login` — the owner route is deployed and refuses anonymous callers |
+
+Services, enquiries and QR were live. The order-request basket, the featured catalogue strip,
+promotions and loyalty were **absent**, because each is conditional on data the page did not load.
+
+### Root cause
+
+The public loader built the basket from the **`Product`** catalogue alone. The page, however, lists a
+business's **`Service`** rows under *Services and products* — and that is what an ordinary KES149
+Business Page has. The `Product` catalogue belongs to the Interactive Business experience, and
+`lib/demoData.ts` seeds every demo business with services only. So `products.length > 0` was false
+on every such page and the section never rendered. The feature was complete, correct and invisible.
+
+### The fix (five files)
+
+| File | Change |
+|---|---|
+| `lib/business-hub/catalogue.ts` | new `CatalogueKind`, `SERVICE_SELECT`, `priceLabelToKES`, `loadPublicServices`, `loadRequestableCatalogue`; `loadCatalogueForPricing` now returns products **and** services |
+| `lib/business-hub/orderRequests.ts` | validation accepts either kind; a service line is stored with `productId: null` rather than borrowing a product id |
+| `app/b/[slug]/page.tsx` | feeds the merged, requestable catalogue to the page |
+| `components/BusinessPage.tsx` | the basket renders from the merged list; the featured strip stays with catalogue products |
+| `components/business-hub/OrderRequestPanel.tsx` | `kind` carried through to the line item |
+
+A service is priced from `priceFrom`, else the amount written in its `priceLabel`, else nothing: a
+`QUOTE` service contributes **0** and is labelled `AVAILABLE_ON_REQUEST` — the basket never invents a
+price. Withdrawn and foreign-tenant services are refused exactly like products. No schema change, no
+migration, no change to pricing, plans, entitlements or commissions.
+
+### Evidence on the candidate
+
+| Check | Result | Where |
+|---|---|---|
+| Full offline suite | 4 226 passed, 317 skipped, 1 pre-existing failure (§5) | this workspace, `./node_modules/.bin/vitest run` |
+| Unit + integration + security against disposable PostgreSQL | **4 479 passed / 395 files** | run `42408108446`, job *Journey against a real database*, step 12 |
+| Business Hub journey, 14 steps, real PostgreSQL | success | run `42408108446`, step 15 |
+| Business Hub journey, real Chrome, six viewports | success | run `42408108446`, step 18 |
+| Control denial (authenticated browser + API) | success | run `42408108446`, step 17 |
+| ERP authorisation and tenant isolation over real HTTP | success | run `42408108446`, steps 22–23 |
+| Candidate migration rehearsal | success | run `42408148657` |
+| Full no-database suite | success | run `42408108427` |
+| Release Validation (aggregate) | success | run `42408108528` |
+| Admin instruction integrity | **failure** — `programme-completeness` only | run `42408108463`; pre-existing on `main`, see below |
+
+New tests: 5 route-level cases for service lines (priced service, quote-only line, withdrawn service,
+another business's service, a services-only business) in `tests/integration/business-hub-journey.test.ts`
+(suite now 30/30); 9 loader cases in `tests/unit/business-hub-catalogue.test.ts`; 14 steps in
+`tests/e2e/business-hub-journey.test.ts`, which **refuses to skip** — it self-skips without
+`DATABASE_URL` and the CI step fails the job if the output contains "skipped" or no "N passed".
+
+### Defects the first real browser run found — all in the check, none in the product
+
+Honest record: the browser journey failed four times before it passed, and every cause was a fault in
+the new check, not in the hub.
+
+1. Synthetic `User` fixtures omitted the `NOT NULL` `passwordHash` column, so the fixtures could not
+   be created and no check ran at all (`d5c3f56`).
+2. The anonymous-visitor check shared the owner's browser context, so it could have travelled with the
+   owner's cookie and passed for the wrong reason. It now runs in its own context and asserts the
+   visitor does not reach the hub screen (`94e1d20`).
+3. The Loyalty screen keeps its reward text in an `<input>`; `innerText` never carries input values,
+   so a populated screen read as empty (`94e1d20`).
+4. `innerText` returns *rendered* text, and section titles are uppercased by CSS: the page said
+   `REQUEST AN ORDER` while the check looked for `Request an order`. The basket had priced the
+   selection and accepted the submission all along — only the assertion was wrong (`e3ed0be`).
+   The same flaw was in the six-viewport reachability check.
+
+Each viewport is now measured in a fresh context, and Chrome gets a 180 s protocol timeout, because a
+full-page capture on a shared runner exceeds the 30 s default and a screenshot timeout is not a layout
+failure.
+
+### Capability acceptance after the fix
+
+| Capability | Verdict | Evidence |
+|---|---|---|
+| Customer hub and enquiry management | **PASS** | hub journey steps B (API) and owner *Customers* screen (browser); enquiry captured against the right business, anonymous and cross-tenant callers refused |
+| Public catalogue and service listings | **PASS** | hub journey step A; six viewports; production read of two demo pages |
+| Order requests (customer → owner) | **PASS** | hub journey steps A + B; browser basket → send → reference `JATA-REQ-…` with "no payment has been taken"; quote-only and withdrawn lines refused |
+| Loyalty: enrol, stamp, redeem | **PASS** | hub journey steps D; duplicate stamp refused, redemption before a full card refused, second redemption refused, public code-only read exposes no contact details |
+| Promotions: create, publish, expire, deactivate | **PASS** | hub journey steps C; expired promotion absent from the page; another business's promotion cannot be touched |
+| QR identity, resolution, PNG download | **PASS** | hub journey step E (svg/png/poster, URL decodes to `/b/<slug>`); browser download of real PNG bytes. **NOT TESTED:** a physical camera scan |
+| Owner dashboard navigation and permissions | **PASS** | browser journey walks Customers / Promotions / Loyalty / QR through the dashboard nav; anonymous callers redirected; foreign business refused |
+| Tenant isolation | **PASS** | API: 403/404 with nothing written; browser: another owner's screen refused |
+| Mobile UX (320/360/390/430/768/1366) | **PASS** | per-viewport checks in the browser journey; the captured images were not reviewed by hand — the artifact download is blocked from this workspace, so this is the check's verdict |
+
+### Outstanding, and why
+
+- **`programme-completeness` remains NOT READY (24 records).** It is a pre-existing, owner-owned gate
+  that also fails on `main`. Every record was reconciled against the implementation, the tests and the
+  owner's decisions in `docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md`: 10 moved to PASS on
+  evidence, 16 remain BLOCKED and 8 NOT_TESTED because they depend on owner decisions (control
+  provisioning, financial and PII policy), on production-boundary checks that must not be run from a
+  sandbox, or on independent inspection of browser recordings that no reachable channel provides. The
+  checker was not modified and no count was manipulated.
+- **No full screen-reader pass.** Forms are labelled and announce errors and confirmations, but an
+  assistive-technology review remains NOT TESTED.

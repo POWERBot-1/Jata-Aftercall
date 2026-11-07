@@ -226,18 +226,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # TEMPORARY DIAGNOSTIC — surfaces the journeys' own output on the pull request, because
-      # this workspace cannot read Actions logs. Remove before merge.
-      - name: Publish the Business Hub journey output
-        if: always() && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set +e
-          { echo "### Business Hub journeys — output"; echo; echo '```'; tail -c 5000 /tmp/step-hub-journey.log 2>/dev/null; echo '```'; echo; echo "### Business Hub browser journey — output"; echo; echo '```'; tail -c 5000 /tmp/step-hub-browser.log 2>/dev/null; echo '```'; } > /tmp/hub-comment.md
-          gh pr comment "$PR_NUMBER" --body-file /tmp/hub-comment.md || true
-
       - name: Upload Control denial screenshots and sanitized result
         if: always()
         uses: actions/upload-artifact@v4
