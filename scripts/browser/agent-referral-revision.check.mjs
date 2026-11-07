@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-/** Real-browser, real-PostgreSQL own-agent revision pagination check.
- * Uses only synthetic rows in the disposable jata_e2e database. No payments or messages.
+/** Real-browser, real-PostgreSQL own-agent referral pagination check.
+ * Uses synthetic consented attribution rows in the disposable jata_e2e database only.
+ * 2,501 rows cross the 2,500-row API page boundary while remaining below the 5,000-row
+ * report safety limit. No payments or messages are created.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -27,10 +29,13 @@ const stamp = randomUUID();
 const periodKey = "daily:2026-01-01";
 const startInclusive = new Date("2026-01-01T00:00:00.000Z");
 const endExclusive = new Date("2026-01-02T00:00:00.000Z");
+const memberCount = 2501;
 const emails = [`ref-revision-a-${stamp}@test.invalid`, `ref-revision-b-${stamp}@test.invalid`];
 const userIds = [];
+const referredApplicationIds = [];
 let appA;
 let appB;
+let linkId;
 let browser;
 try {
   const passwordHash = await bcrypt.hash(password, 10);
@@ -47,19 +52,40 @@ try {
   });
   appA = await prisma.agentApplication.create({ data: appData(users[0].id, "A") });
   appB = await prisma.agentApplication.create({ data: appData(users[1].id, "B") });
+
+  const link = await prisma.agentReferralLink.create({ data: {
+    referrerApplicationId: appA.id, tokenHash: `ref-browser-link-${stamp}`, expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+  } });
+  linkId = link.id;
+  const referredUsers = await prisma.user.createManyAndReturn({
+    data: Array.from({ length: memberCount }, (_, index) => ({
+      email: `ref-revision-member-${index}-${stamp}@test.invalid`, passwordHash, role: "CUSTOMER", name: "Synthetic Referred User",
+    })),
+    select: { id: true },
+  });
+  userIds.push(...referredUsers.map((user) => user.id));
+  const referredApps = await prisma.agentApplication.createManyAndReturn({
+    data: referredUsers.map((user, index) => ({
+      userId: user.id, fullName: `Synthetic Referred Member ${index}`,
+      phoneE164: `+254700${String(index + 200000).padStart(6, "0")}`,
+      privacyAcknowledgedAt: startInclusive, status: "PENDING", agentStatus: "INACTIVE",
+      createdAt: startInclusive, updatedAt: startInclusive,
+    })),
+    select: { id: true },
+  });
+  referredApplicationIds.push(...referredApps.map((application) => application.id));
+  await prisma.agentReferralAttribution.createMany({
+    data: referredApps.map((application) => ({
+      referrerApplicationId: appA.id, referredApplicationId: application.id, linkId: link.id,
+      consentedAt: startInclusive, source: "REGISTRATION", createdAt: startInclusive,
+    })),
+  });
+
+  // The database trigger creates the baseline revision and immutable member set.
   await prisma.agentReferralReportSnapshot.create({ data: {
-    applicationId: appA.id, periodKey, periodType: "daily", startInclusive, endExclusive,
-    registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+    applicationId: appA.id, periodKey, periodType: "DAILY", startInclusive, endExclusive,
+    registrationCount: BigInt(memberCount), existingApplicationCount: BigInt(0),
   } });
-  await prisma.agentReferralReportRevision.create({ data: {
-    applicationId: appA.id, periodKey, revision: 1, kind: "BASELINE", actorId: users[0].id,
-    registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
-    addedCount: 0, removedCount: 0, changedCount: 0,
-  } });
-  await prisma.agentReferralReportMember.createMany({ data: Array.from({ length: 5001 }, (_, index) => ({
-    applicationId: appA.id, periodKey, revision: 1,
-    eventId: `event-${String(index).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: startInclusive,
-  })) });
 
   browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   async function openPage() {
@@ -92,12 +118,14 @@ try {
   const first = await openPage();
   await login(first.page, emails[0]);
   const pageOne = await fetchRevision(first.page);
-  if (pageOne.status !== 200 || pageOne.body.members?.length !== 5000 || pageOne.body.nextCursor !== "event-04999" ||
-      pageOne.body.sales !== "NOT_CHECKED" || pageOne.body.commission !== "NOT_CHECKED") {
-    throw new Error("First authenticated cursor page failed its bounded/financial-scope contract");
+  if (pageOne.status !== 200 || pageOne.body.members?.length !== 2500 ||
+      typeof pageOne.body.nextCursor !== "string" || pageOne.body.sales !== "NOT_CHECKED" ||
+      pageOne.body.commission !== "NOT_CHECKED") {
+    throw new Error("First authenticated cursor page failed its 2,500-row bounded/financial-scope contract");
   }
-  const pageTwo = await fetchRevision(first.page, "&after=event-04999");
-  if (pageTwo.status !== 200 || pageTwo.body.members?.length !== 1 || pageTwo.body.members[0]?.eventId !== "event-05000" ||
+  const pageTwo = await fetchRevision(first.page, `&after=${encodeURIComponent(pageOne.body.nextCursor)}`);
+  if (pageTwo.status !== 200 || pageTwo.body.members?.length !== 1 ||
+      pageTwo.body.members[0]?.eventId === pageOne.body.members[0]?.eventId ||
       pageTwo.body.nextCursor !== null) throw new Error("Second cursor page failed");
 
   const invalidSelector = await fetchRevision(first.page, `&applicationId=${encodeURIComponent(appA.id)}`);
@@ -110,7 +138,8 @@ try {
 
   const evidence = {
     result: "PASS",
-    scope: "synthetic disposable PostgreSQL + authenticated real-browser HTTP",
+    scope: "synthetic consented attribution rows in disposable PostgreSQL + authenticated real-browser HTTP",
+    memberCount,
     firstPage: { status: pageOne.status, count: pageOne.body.members.length, nextCursor: pageOne.body.nextCursor },
     secondPage: { status: pageTwo.status, count: pageTwo.body.members.length, nextCursor: pageTwo.body.nextCursor },
     invalidTenantSelectorStatus: invalidSelector.status,
@@ -122,15 +151,18 @@ try {
   await writeFile(path.join(output, "result.json"), JSON.stringify(evidence, null, 2) + "\n");
   await second.context.close();
   await first.context.close();
-  console.log("PASS: authenticated own-agent 5,001-row cursor pagination, cross-agent isolation and non-financial labels");
+  console.log("PASS: authenticated own-agent 2,501-row cursor pagination, cross-agent isolation and non-financial labels");
 } finally {
   if (browser) await browser.close();
   if (appA?.id) {
+    await prisma.agentReferralAttribution.deleteMany({ where: { referrerApplicationId: appA.id } });
     await prisma.agentReferralReportMember.deleteMany({ where: { applicationId: appA.id } });
     await prisma.agentReferralReportRevision.deleteMany({ where: { applicationId: appA.id } });
     await prisma.agentReferralReportSnapshot.deleteMany({ where: { applicationId: appA.id } });
   }
-  await prisma.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id].filter(Boolean) } } });
+  if (linkId) await prisma.agentReferralLink.deleteMany({ where: { id: linkId } });
+  if (referredApplicationIds.length) await prisma.agentApplication.deleteMany({ where: { id: { in: referredApplicationIds } } });
+  if (appA?.id || appB?.id) await prisma.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id].filter(Boolean) } } });
   if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
   await prisma.$disconnect();
 }
