@@ -647,25 +647,23 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
           privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), agentStatus: "ACTIVE",
         },
       });
-      const periodKey = `daily:${new Date().toISOString().slice(0, 10)}`;
+      const periodKey = "daily:2026-11-01";
       const startInclusive = new Date("2026-11-01T00:00:00.000Z");
       const endExclusive = new Date("2026-11-02T00:00:00.000Z");
       await p.agentReferralReportSnapshot.create({
         data: { applicationId: application.id, periodKey, periodType: "DAILY", startInclusive, endExclusive, registrationCount: BigInt(5001), existingApplicationCount: BigInt(0) },
       });
-      await p.agentReferralReportRevision.create({
-        data: { applicationId: application.id, periodKey, revision: 1, kind: "CAPTURED", actorId: user.id, registrationCount: BigInt(5001), existingApplicationCount: BigInt(0) },
-      });
-      await p.agentReferralReportMember.createMany({
-        data: Array.from({ length: 5001 }, (_, index) => ({
-          applicationId: application.id,
-          periodKey,
-          revision: 1,
-          eventId: `event-${String(index + 1).padStart(5, "0")}`,
-          source: "REGISTRATION",
-          eventCreatedAt: new Date(startInclusive.getTime() + index),
-        })),
-      });
+      await p.$transaction(async (tx) => tx.agentReferralReportRevision.create({
+        data: {
+          applicationId: application.id, periodKey, revision: 1, kind: "CAPTURED", actorId: user.id,
+          registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+          members: { createMany: { data: Array.from({ length: 5001 }, (_, index) => ({
+            eventId: `event-${String(index + 1).padStart(5, "0")}`,
+            source: "REGISTRATION",
+            eventCreatedAt: new Date(startInclusive.getTime() + index),
+          })) } },
+        },
+      }));
       mock.session = { userId: user.id, email: user.email, role: "CUSTOMER" };
       const url = `https://agent.test/api/agents/reports/referrals/reconcile?periodKey=${periodKey}&revision=1`;
       const first = await inspectReportRevision(new Request(url));
