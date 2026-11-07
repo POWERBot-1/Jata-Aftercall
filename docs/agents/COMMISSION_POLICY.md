@@ -5,7 +5,7 @@
 ## Effective implementation interpretation
 
 - Currency: KES.
-- Commission basis: the actual gross subscription amount successfully charged and verified by Paystack, stored as integer KES minor units. The amount must match the authoritative active plan catalogue price.
+- Commission basis: the actual gross subscription amount successfully charged and verified by Paystack, stored as integer KES minor units. The verified amount actually charged is authoritative; later changes to the catalogue price do not rewrite the historical sale value.
 - Rate: 4,000 basis points (40%), calculated with integer arithmetic and half-up rounding at the KES minor-unit precision.
 - Qualifying sale: one distinct Payment with purpose=SUBSCRIPTION, status=PAID, a valid Paystack transaction ID, a non-null business and plan, and a first-touch converted referral attribution to the agent.
 - Agent condition: the referrer must have an AgentApplication with agentStatus=ACTIVE and a verified phone.
