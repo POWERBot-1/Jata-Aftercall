@@ -76,6 +76,8 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
       userId: { in: referredUserIds },
       status: "PAID",
       purpose: "SUBSCRIPTION",
+      currency: "KES",
+      amount: { gt: 0 },
       planId: { not: null },
       businessId: { in: referredBusinessIds },
       paystackId: { not: null },
@@ -204,7 +206,7 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
   const referredBusinessIds = [...new Set(referrals.map((row: { referredBusinessId: string | null }) => row.referredBusinessId).filter((id: string | null): id is string => Boolean(id)))];
   const qualifyingPlanSales = referredUserIds.length && referredBusinessIds.length ? await tx.payment.count({
     where: {
-      userId: { in: referredUserIds }, status: "PAID", purpose: "SUBSCRIPTION",
+      userId: { in: referredUserIds }, status: "PAID", purpose: "SUBSCRIPTION", currency: "KES", amount: { gt: 0 },
       planId: { not: null }, businessId: { in: referredBusinessIds }, paystackId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
     },
   }) : 0;
