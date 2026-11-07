@@ -27,8 +27,8 @@ let ownerB: any;
 let appA: any;
 let appB: any;
 let linkId: string | undefined;
-const referredApplicationIds: string[] = [];
-const referredUserIds: string[] = [];
+const referredApplicationIds = Array.from({ length: 5000 }, (_, index) => `ref-app-${stamp}-${index}`);
+const referredUserIds = Array.from({ length: 5000 }, (_, index) => `ref-user-${stamp}-${index}`);
 
 function request(query = "") {
   return GET(new Request(`https://agent.test/api/agents/reports/referrals/reconcile?periodKey=${encodeURIComponent(periodKey)}&revision=1${query}`));
@@ -53,19 +53,19 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
       referrerApplicationId: appA.id, tokenHash: `ref-revision-link-${stamp}`, expiresAt: new Date("2027-01-01T00:00:00.000Z"),
     } });
     linkId = link.id;
-    const referredUsers = await Promise.all([0, 1].map((index) => client.user.create({
-      data: { email: `ref-revision-member-${index}-${stamp}@example.test`, passwordHash: "not-a-login", role: "CUSTOMER" },
-    })));
-    referredUserIds.push(...referredUsers.map((user: any) => user.id));
-    const referredApps = await Promise.all(referredUsers.map((user: any, index: number) => client.agentApplication.create({
-      data: {
-        userId: user.id, fullName: `Synthetic Referred Member ${index}`, phoneE164: `+25470000000${index + 3}`,
-        privacyAcknowledgedAt: startInclusive, status: "PENDING", agentStatus: "INACTIVE",
-      },
-    })));
-    referredApplicationIds.push(...referredApps.map((application: any) => application.id));
-    await client.agentReferralAttribution.createMany({ data: referredApps.map((application: any) => ({
-      referrerApplicationId: appA.id, referredApplicationId: application.id, linkId: link.id,
+    // Use a realistic 5,000-member synthetic referral set so both cursor pages are
+    // exercised against the database-generated immutable baseline.
+    await client.user.createMany({ data: referredUserIds.map((id, index) => ({
+      id, email: `ref-revision-member-${index}-${stamp}@example.test`, passwordHash: "not-a-login", role: "CUSTOMER",
+    })) });
+    await client.agentApplication.createMany({ data: referredApplicationIds.map((id, index) => ({
+      id, userId: referredUserIds[index], fullName: `Synthetic Referred Member ${index}`,
+      phoneE164: `+2547${String(index).padStart(8, "0")}`,
+      privacyAcknowledgedAt: startInclusive, status: "PENDING", agentStatus: "INACTIVE",
+    })) });
+    await client.agentReferralAttribution.createMany({ data: referredApplicationIds.map((referredApplicationId, index) => ({
+      id: `event-${String(index).padStart(5, "0")}`,
+      referrerApplicationId: appA.id, referredApplicationId, linkId: link.id,
       consentedAt: startInclusive, source: "REGISTRATION", createdAt: startInclusive,
     })) });
 
@@ -73,7 +73,7 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     // the actual consented attribution rows. The fixture must not fabricate count-only evidence.
     await client.agentReferralReportSnapshot.create({ data: {
       applicationId: appA.id, periodKey, periodType: "DAILY", startInclusive, endExclusive,
-      registrationCount: BigInt(2), existingApplicationCount: BigInt(0),
+      registrationCount: BigInt(5000), existingApplicationCount: BigInt(0),
     } });
   }, 60_000);
 
@@ -96,19 +96,30 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     }
   }, 60_000);
 
-  it("reads the database-generated baseline from real attribution evidence", async () => {
+  it("returns two bounded cursor pages from the database-generated baseline", async () => {
     state.userId = ownerA.id;
-    const response = await request();
-    const body = await response.json();
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(body).toMatchObject({
+    const first = await request();
+    const firstBody = await first.json();
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toContain("no-store");
+    expect(firstBody).toMatchObject({
       scope: "OWN_REFERRAL_EVIDENCE_ONLY", members: expect.any(Array),
       sales: "NOT_CHECKED", commission: "NOT_CHECKED",
     });
-    expect(body.members).toHaveLength(2);
-    expect(body.members.every((member: any) => member.source === "REGISTRATION")).toBe(true);
-    expect(body.nextCursor).toBeNull();
+    expect(firstBody.members).toHaveLength(2500);
+    expect(firstBody.members[0].eventId).toBe("event-00000");
+    expect(firstBody.members[2499].eventId).toBe("event-02499");
+    expect(firstBody.members.every((member: any) => member.source === "REGISTRATION")).toBe(true);
+    expect(firstBody.nextCursor).toBe("event-02499");
+
+    const second = await request("&after=event-02499");
+    const secondBody = await second.json();
+    expect(second.status).toBe(200);
+    expect(secondBody.members).toHaveLength(2500);
+    expect(secondBody.members[0].eventId).toBe("event-02500");
+    expect(secondBody.members[2499].eventId).toBe("event-04999");
+    expect(secondBody.nextCursor).toBeNull();
+    expect(secondBody.commission).toBe("NOT_CHECKED");
   });
 
   it("cannot select another agent or read that agent's revision", async () => {
