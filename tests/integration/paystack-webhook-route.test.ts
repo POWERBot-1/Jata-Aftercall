@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   activate: vi.fn(),
   audit: vi.fn(),
   processedCheck: vi.fn(),
+  commissionFindFirst: vi.fn(),
+  commissionCreateMany: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -108,7 +110,7 @@ function installAtomicWebhookStore(barrierEventId?: string) {
         },
       },
       payment: { updateMany: mocks.paymentUpdateMany, findUnique: vi.fn(async () => ({ id: "pay-a", status: "REFUNDED", userId: "user-a" })) },
-      agentCommissionLedgerEntry: { findFirst: vi.fn(async () => null), createMany: vi.fn(async () => ({ count: 0 })) },
+      agentCommissionLedgerEntry: { findFirst: mocks.commissionFindFirst, createMany: mocks.commissionCreateMany },
       subscription: { updateMany: mocks.subscriptionUpdateMany },
     };
 
@@ -151,6 +153,8 @@ describe("Paystack webhook", () => {
     mocks.paymentUpdateMany.mockResolvedValue({ count: 1 });
     mocks.subscriptionUpdateMany.mockResolvedValue({ count: 1 });
     mocks.auditCreate.mockResolvedValue({});
+    mocks.commissionFindFirst.mockResolvedValue(null);
+    mocks.commissionCreateMany.mockResolvedValue({ count: 0 });
     mocks.transaction.mockImplementation(async (work: (tx: any) => Promise<unknown>) => work({
       processedWebhook: { create: mocks.webhookCreate },
       auditEvent: { create: mocks.auditCreate },
@@ -204,11 +208,16 @@ describe("Paystack webhook", () => {
     expect(mocks.activate).not.toHaveBeenCalled();
   });
 
-  it("processes a full refund and preserves the paid-state and subscription transition", async () => {
+  it("processes a full refund and reverses the immutable commission accrual in the same transaction", async () => {
     mocks.paymentFind.mockResolvedValue({
-      id: "pay-a", reference: "jata-ref", userId: "user-a", businessId: "business-a",
+      id: "pay-a", reference: "jata-ref", userId: "user-a", businessId: "business-a", planId: null,
       amount: 99900, currency: "KES", status: "PAID",
     });
+    mocks.commissionFindFirst.mockResolvedValue({
+      id: "accrual-a", agentApplicationId: "agent-a", currency: "KES", amountMinor: BigInt(39960),
+      policyVersion: "JATA-COMMISSION-2026-11-07-v1", policySnapshot: { basisPoints: 4000 },
+    });
+    mocks.commissionCreateMany.mockResolvedValue({ count: 1 });
     const refund = { ...partialRefund, data: { ...partialRefund.data, amount: 99900 } };
 
     const response = await POST(request(refund));
@@ -217,6 +226,12 @@ describe("Paystack webhook", () => {
     expect(mocks.transaction).toHaveBeenCalledOnce();
     expect(mocks.webhookCreate).toHaveBeenCalledWith({ data: { id: "1234" } });
     expect(mocks.paymentUpdateMany).toHaveBeenCalledWith({ where: { id: "pay-a", status: "PAID" }, data: { status: "REFUNDED" } });
+    expect(mocks.commissionFindFirst).toHaveBeenCalledWith({ where: { paymentId: "pay-a", entryType: "ACCRUAL" }, orderBy: { createdAt: "asc" } });
+    expect(mocks.commissionCreateMany).toHaveBeenCalledWith(expect.objectContaining({
+      skipDuplicates: true,
+      data: [expect.objectContaining({ paymentId: "pay-a", entryType: "REVERSAL", amountMinor: BigInt(-39960), originalEntryId: "accrual-a", sourceEventId: "subscription-refund:pay-a" })],
+    }));
+    expect(mocks.auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "AGENT_COMMISSION_REVERSED", targetId: "subscription-refund:pay-a" }) }));
     expect(mocks.subscriptionUpdateMany).toHaveBeenCalledWith({ where: { businessId: "business-a" }, data: { status: "SUSPENDED" } });
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "WEBHOOK_REFUND_PROCESSED", targetId: "pay-a" }));
   });
