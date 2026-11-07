@@ -58,7 +58,14 @@ describe("Control role/action matrix", () => {
     }
   });
 
-  it("rejects null/global grants for tenant-keyed reads while permitting only explicit global grants for global capabilities", () => {\n    const globalGrant: ControlGrant = { id: "global", role: "SUPER_ADMIN", permissionKeys: ["businesses.read", "system.health.read"], scopeBusinessId: null };\n    expect(hasControlPermission([globalGrant], "businesses.read", "tenant-a")).toBe(false);\n    expect(hasControlPermission([globalGrant], "system.health.read")).toBe(true);\n    expect(scopedBusinessIds([globalGrant], "businesses.read")).toEqual({ allowed: true, global: true, ids: [] });\n  });\n\n  it("keeps unknown roles, capabilities and wildcard-like grants denied", () => {
+  it("rejects null/global grants for tenant-keyed reads while permitting only explicit global grants for global capabilities", () => {
+    const globalGrant: ControlGrant = { id: "global", role: "SUPER_ADMIN", permissionKeys: ["businesses.read", "system.health.read"], scopeBusinessId: null };
+    expect(hasControlPermission([globalGrant], "businesses.read", "tenant-a")).toBe(false);
+    expect(hasControlPermission([globalGrant], "system.health.read")).toBe(true);
+    expect(scopedBusinessIds([globalGrant], "businesses.read")).toEqual({ allowed: true, global: true, ids: [] });
+  });
+
+  it("keeps unknown roles, capabilities and wildcard-like grants denied", () => {
     expect(isControlCapabilityAllowed("PLATFORM_OWNER", "businesses.read")).toBe(false);
     expect(isControlCapabilityAllowed("SUPER_ADMIN", "*" )).toBe(false);
     expect(isControlCapabilityAllowed("SUPER_ADMIN", "businesses.*")).toBe(false);
