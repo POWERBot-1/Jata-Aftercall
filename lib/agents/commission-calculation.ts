@@ -3,7 +3,7 @@
  * ledgers, send messages, or initiate payouts. Its input must eventually be assembled exclusively
  * from authoritative server-side records; a browser-supplied snapshot is never payment evidence.
  *
- * The owner-approved commercial terms are 40% of each verified new subscription sale, with
+ * The owner-approved commercial terms are 40% of each verified subscription plan sale, with
  * monthly payout eligibility after at least ten qualifying sales. This pure evaluator still does
  * not itself load provider evidence, write ledger rows, or initiate payouts.
  */
@@ -70,7 +70,7 @@ export function evaluateCommission(input: {
   payment: CommissionPaymentSnapshot;
   attribution: CommissionAttributionSnapshot | null;
   eligibleMinor: number;
-  /** Distinct verified NEW_SALE subscription payments attributed to this agent in this Nairobi month, including this payment. */
+  /** Distinct verified paid subscription plan payments attributed to this agent in this Nairobi month, including this payment. */
   monthlyQualifyingSales: number;
 }): CommissionEvaluation {
   const { policy, payment, attribution, eligibleMinor, monthlyQualifyingSales } = input;
