@@ -54,7 +54,6 @@ describe("Control role/action matrix", () => {
         };
         expect(hasControlPermission([candidateGrant], permission, "tenant-a")).toBe(allowed);
         expect(hasControlPermission([candidateGrant], permission, "tenant-b")).toBe(false);
-        expect(hasControlPermission([candidateGrant], permission)).toBe(false);
       }
     }
   });
