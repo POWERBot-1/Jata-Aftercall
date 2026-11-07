@@ -70,8 +70,10 @@ export function evaluateCommission(input: {
   payment: CommissionPaymentSnapshot;
   attribution: CommissionAttributionSnapshot | null;
   eligibleMinor: number;
+  /** Distinct verified NEW_SALE subscription payments attributed to this agent in this Nairobi month, including this payment. */
+  monthlyQualifyingSales: number;
 }): CommissionEvaluation {
-  const { policy, payment, attribution, eligibleMinor } = input;
+  const { policy, payment, attribution, eligibleMinor, monthlyQualifyingSales } = input;
   if (!policy || policy.approval !== "APPROVED") return { eligible: false, reason: "POLICY_NOT_APPROVED" };
   if (!nonempty(policy.id) || !nonempty(policy.version) || !validDate(policy.effectiveFrom) ||
       (policy.effectiveUntil !== null && (!validDate(policy.effectiveUntil) || policy.effectiveUntil <= policy.effectiveFrom)) ||
@@ -80,7 +82,7 @@ export function evaluateCommission(input: {
   }
   if (!nonempty(payment.id) || !nonempty(payment.reference) || !nonempty(payment.customerId) ||
       !nonempty(payment.businessId) || !nonempty(payment.planId) || !validDate(payment.verifiedAt) ||
-      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor)) {
+      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor) || !Number.isSafeInteger(monthlyQualifyingSales) || monthlyQualifyingSales < 1) {
     return { eligible: false, reason: "PAYMENT_INVALID" };
   }
   if (payment.status !== "PAID" || payment.purpose !== "SUBSCRIPTION" || !isProviderTransactionId(payment.paystackId)) {
@@ -121,5 +123,6 @@ export function evaluateCommission(input: {
     policyVersion: policy.version, agentId: attribution.agentId, businessId: payment.businessId,
     customerId: payment.customerId, planId: payment.planId, currency: "KES", paymentMinor: payment.amountMinor,
     eligibleMinor, commissionMinor: Number(commission), calculation: { ...rule },
+    payoutEligible: monthlyQualifyingSales >= 10, monthlyQualifyingSales, minimumMonthlySales: 10,
   };
 }
