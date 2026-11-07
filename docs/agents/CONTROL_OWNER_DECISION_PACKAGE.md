@@ -246,3 +246,12 @@ The owner decision on 2026-11-01 records DENY for all 90 current cells. For any 
 - Non-production provisioning authority and isolated test procedure.
 
 The all-DENY policy is owner-approved and `CONTROL_ROLE_POLICY_APPROVED` is true. `CONTROL_ROLE_ACCESS_ENABLED` remains false, all 90 capabilities remain denied, protected Control routes return `POLICY_PENDING`, and no positive or six-role authenticated acceptance is claimed. Approval of these denials does not waive the remaining acceptance evidence.
+
+
+## Owner authorization update — 2026-11-07
+
+GITANYA KARIUKI has now expressly authorized the platform to select and implement the role decisions it deems suitable in the platform owner's interest, and to proceed with Control role access. This supersedes the 2026-11-01 all-DENY operational policy. The implementation selects only narrowly scoped read capabilities; all write, approval, financial mutation, provider configuration, identity/grant administration, and emergency access remain denied.
+
+The exact effective matrix is documented in CONTROL_ROLE_ACTION_MATRIX.md and implemented in lib/control/role-policy.ts. The independent runtime gate is enabled, but no grant is automatically created. The grant table must still contain an active exact-key grant, the tenant-keyed operation must have an explicit business scope, and each protected request must pass current-session, live-grant and MFA checks. No owner identity or production grant was provisioned.
+
+This does not retroactively authorize or mutate existing accounts, businesses, payments, commission balances or provider configuration. Positive browser, MFA recovery, expiry, database audit and six-viewport acceptance remain evidence requirements.
