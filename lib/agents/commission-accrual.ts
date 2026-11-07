@@ -58,13 +58,10 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     return { recorded: false, agentApplicationId: agent?.id ?? null, commissionMinor: BigInt(0), monthlyPlanSales: 0, payoutEligible: false };
   }
 
-  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, key: true, priceKES: true } });
+  const plan = await tx.planConfig.findUnique({ where: { id: payment.planId }, select: { id: true, key: true } });
   if (!plan) throw new Error("COMMISSION_PLAN_NOT_FOUND");
-  // PlanConfig.priceKES is the authoritative catalogue price in KES; Payment.amount is Paystack minor units.
-  // A verified payment for a stale or manipulated amount must never create an agent liability.
-  if (!Number.isSafeInteger(plan.priceKES) || plan.priceKES <= 0 || BigInt(payment.amount) !== BigInt(plan.priceKES) * BigInt(100)) {
-    throw new Error("COMMISSION_PLAN_PRICE_MISMATCH");
-  }
+  // Payment.amount is the amount stored at checkout and matched against Paystack verification.
+  // A later catalogue price edit must not rewrite the value of an already-sold plan.
 
   const paidAt = payment.updatedAt instanceof Date ? payment.updatedAt : new Date(payment.updatedAt);
   const month = nairobiMonthBounds(paidAt);
@@ -72,23 +69,23 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     where: { referrerUserId: referral.referrerUserId, status: "CONVERTED", referredUserId: { not: null } },
     select: { referredUserId: true, referredBusinessId: true },
   });
-  const referredUserIds = [...new Set(referrals.map((row: { referredUserId: string | null }) => row.referredUserId).filter((id: string | null): id is string => Boolean(id)))];
-  const referredBusinessIds = [...new Set(referrals.map((row: { referredBusinessId: string | null }) => row.referredBusinessId).filter((id: string | null): id is string => Boolean(id)))];
-  if (!referredUserIds.includes(payment.userId) || !referredBusinessIds.includes(payment.businessId)) throw new Error("COMMISSION_ATTRIBUTION_CHANGED");
+  const referralPairs = [...new Map(referrals
+    .filter((row: { referredUserId: string | null; referredBusinessId: string | null }) => Boolean(row.referredUserId && row.referredBusinessId))
+    .map((row: { referredUserId: string; referredBusinessId: string }) => [`${row.referredUserId}:${row.referredBusinessId}`, { userId: row.referredUserId, businessId: row.referredBusinessId }] as const)).values()];
+  if (!referralPairs.some((pair) => pair.userId === payment.userId && pair.businessId === payment.businessId)) throw new Error("COMMISSION_ATTRIBUTION_CHANGED");
 
-  const monthlyPlanSales = await tx.payment.count({
+  const monthlyPlanSales = referralPairs.length ? await tx.payment.count({
     where: {
-      userId: { in: referredUserIds },
+      OR: referralPairs.map((pair) => ({ userId: pair.userId, businessId: pair.businessId })),
       status: "PAID",
       purpose: "SUBSCRIPTION",
       currency: "KES",
       amount: { gt: 0 },
       planId: { not: null },
-      businessId: { in: referredBusinessIds },
       paystackId: { not: null },
       updatedAt: { gte: month.start, lt: month.end },
     },
-  });
+  }) : 0;
   const grossMinor = BigInt(payment.amount);
   const commissionMinor = (grossMinor * BigInt(COMMISSION_BASIS_POINTS) + BigInt(5_000)) / BigInt(10_000);
   if (commissionMinor <= BigInt(0)) throw new Error("COMMISSION_AMOUNT_INVALID");
@@ -207,12 +204,14 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
     where: { referrerUserId: agent.userId, status: "CONVERTED", referredUserId: { not: null }, referredBusinessId: { not: null } },
     select: { referredUserId: true, referredBusinessId: true },
   });
-  const referredUserIds = [...new Set(referrals.map((row: { referredUserId: string | null }) => row.referredUserId).filter((id: string | null): id is string => Boolean(id)))];
-  const referredBusinessIds = [...new Set(referrals.map((row: { referredBusinessId: string | null }) => row.referredBusinessId).filter((id: string | null): id is string => Boolean(id)))];
-  const qualifyingPlanSales = referredUserIds.length && referredBusinessIds.length ? await tx.payment.count({
+  const referralPairs = [...new Map(referrals
+    .filter((row: { referredUserId: string | null; referredBusinessId: string | null }) => Boolean(row.referredUserId && row.referredBusinessId))
+    .map((row: { referredUserId: string; referredBusinessId: string }) => [`${row.referredUserId}:${row.referredBusinessId}`, { userId: row.referredUserId, businessId: row.referredBusinessId }] as const)).values()];
+  const qualifyingPlanSales = referralPairs.length ? await tx.payment.count({
     where: {
-      userId: { in: referredUserIds }, status: "PAID", purpose: "SUBSCRIPTION", currency: "KES", amount: { gt: 0 },
-      planId: { not: null }, businessId: { in: referredBusinessIds }, paystackId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
+      OR: referralPairs.map((pair) => ({ userId: pair.userId, businessId: pair.businessId })),
+      status: "PAID", purpose: "SUBSCRIPTION", currency: "KES", amount: { gt: 0 },
+      planId: { not: null }, paystackId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
     },
   }) : 0;
   const accruals: Array<{ id: string; amountMinor: bigint }> = await tx.agentCommissionLedgerEntry.findMany({
