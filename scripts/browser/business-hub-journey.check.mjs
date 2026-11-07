@@ -305,10 +305,12 @@ if (process.exitCode !== 2) {
     check("customer: the page names the business", text.includes("Hub Journey Foods"));
 
     // B · the catalogue the page lists is requestable — the capability that was missing.
+    // `innerText` returns the rendered text, and the section titles are uppercased by CSS, so
+    // these are matched without case.
     check(
       "customer: the services the page lists can be added to a request",
-      text.includes("Pilau Combo") && text.includes("Request an order"),
-      text.includes("Request an order") ? "basket present" : "no order-request section rendered",
+      /pilau combo/i.test(text) && /request an order/i.test(text),
+      /request an order/i.test(text) ? "basket present" : "no order-request section rendered",
     );
 
     const addPilau = await customerPage.$(`[aria-label="Add one Pilau Combo"]`);
@@ -441,7 +443,7 @@ if (process.exitCode !== 2) {
       await viewportPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
       const layout = await viewportPage.evaluate(() => ({
         overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-        basket: /Request an order/.test(document.body.innerText),
+        basket: /request an order/i.test(document.body.innerText),
         seen: document.body.innerText.replace(/\s+/g, " ").slice(0, 110),
       }));
       check(`${width}×${height}: the page fits the viewport`, layout.overflow <= 1, `overflow ${layout.overflow}px`);
