@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { recordCommissionAccrualForPaidPlan, recordCommissionReversalForFullRefund } from "@/lib/agents/commission-accrual";
+import { recordCommissionAccrualForPaidPlan, recordCommissionReversalForFullRefund, getAgentMonthlyCommissionEligibility } from "@/lib/agents/commission-accrual";
 
 function makeTx(overrides: Record<string, unknown> = {}) {
   const payment = {
@@ -113,5 +113,36 @@ describe("commission full-refund reversal", () => {
     };
     await expect(recordCommissionReversalForFullRefund(tx, "payment-1")).resolves.toBe(false);
     expect(tx.agentCommissionLedgerEntry.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("monthly commission payout eligibility reconciliation", () => {
+  it("recomputes qualifying sales and net accrued liability after reversals", async () => {
+    const tx: any = {
+      agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-1", userId: "agent-user-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date("2026-01-01Z") })) },
+      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1" }]) },
+      payment: { count: vi.fn(async () => 10) },
+      agentCommissionLedgerEntry: {
+        findMany: vi.fn()
+          .mockResolvedValueOnce([{ id: "accrual-1", amountMinor: BigInt(40_000) }])
+          .mockResolvedValueOnce([{ amountMinor: BigInt(-10_000) }]),
+      },
+    };
+    const result = await getAgentMonthlyCommissionEligibility(tx, "agent-1", new Date("2026-11-07T10:00:00Z"));
+    expect(result).toMatchObject({
+      eligible: true, month: "2026-11", qualifyingPlanSales: 10, minimumMonthlyPlanSales: 10,
+      accruedMinor: BigInt(40_000), reversedMinor: BigInt(10_000), payableMinor: BigInt(30_000),
+    });
+  });
+
+  it("keeps payout ineligible below the monthly threshold even when an accrual exists", async () => {
+    const tx: any = {
+      agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-1", userId: "agent-user-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date() })) },
+      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1" }]) },
+      payment: { count: vi.fn(async () => 9) },
+      agentCommissionLedgerEntry: { findMany: vi.fn(async () => [{ id: "accrual-1", amountMinor: BigInt(40_000) }]) },
+    };
+    const result = await getAgentMonthlyCommissionEligibility(tx, "agent-1", new Date("2026-11-07T10:00:00Z"));
+    expect(result).toMatchObject({ eligible: false, qualifyingPlanSales: 9, payableMinor: BigInt(40_000) });
   });
 });
