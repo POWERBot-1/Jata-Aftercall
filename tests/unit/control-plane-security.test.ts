@@ -3,6 +3,7 @@ import { hasControlPermission, scopedBusinessIds, type ControlGrant } from "@/li
 import { CONTROL_PERMISSIONS, CONTROL_ROLE_NAMES, isControlPermission } from "@/lib/control/permissions";
 import { createControlMfaSession, decryptTotpSecret, encryptTotpSecret, matchingTotpStep, verifyControlMfaSession } from "@/lib/control/mfa";
 import { getCorrelationId, hasSameOrigin } from "@/lib/control/security";
+import { isControlCapabilityAllowed } from "@/lib/control/role-policy";
 
 const baselineEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
 
