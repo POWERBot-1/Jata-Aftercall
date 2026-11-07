@@ -15,7 +15,7 @@ import { checkProgramme } from "../admin/check-programme-readiness.mjs";
 export const EXPECTED_CANONICAL_REQUIREMENTS = 45;
 const REGISTER_PATH = "docs/ADMIN_BUILDING_INSTRUCTIONS.md";
 const MANIFEST_PATH = "docs/agents/PROGRAMME_READINESS.json";
-const ID_PATTERN = /^#{2,3} \d{3} — ([A-Z]+-\\d{3}):/gm;
+const ID_PATTERN = /^#{2,3} \d{3} — ([A-Z]+-\d{3}):/gm;
 const ALLOWED_STATES = new Set(["PASS", "FAIL", "BLOCKED", "NOT_TESTED", "NOT_APPLICABLE"]);
 
 export function inspectProgramme(register, records, root = process.cwd()) {
