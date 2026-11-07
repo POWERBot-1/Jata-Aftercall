@@ -108,7 +108,7 @@ describe("owner-approved least-privilege Control access", () => {
     });
     const response = await patchControlBusiness(request);
     expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({ code: "POLICY_PENDING" });
+    expect(await response.json()).toMatchObject({ code: "CONTROL_ACCESS_REQUIRED" });
     expect(fixtures.grants).toHaveBeenCalledTimes(1);
     expect(fixtures.credential).not.toHaveBeenCalled();
     expect(fixtures.transaction).not.toHaveBeenCalled();
