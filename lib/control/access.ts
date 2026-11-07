@@ -58,7 +58,7 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
 
 export function hasControlPermission(grants: ControlGrant[], permission: ControlPermission, businessId?: string): boolean {
   return grants.some((grant) => grant.permissionKeys.includes(permission)
-    && (businessId === undefined || grant.scopeBusinessId === null || grant.scopeBusinessId === businessId));
+    && (businessId === undefined ? grant.scopeBusinessId === null : grant.scopeBusinessId === businessId));
 }
 
 export function scopedBusinessIds(grants: ControlGrant[], permission: ControlPermission): { allowed: boolean; global: boolean; ids: string[] } {
@@ -117,7 +117,7 @@ export async function requireAnyControlPermission(permissions: readonly ControlP
 export function controlAccessError(result: Extract<ControlAccessResult, { ok: false }>): { error: string; code: string } {
   const messages = {
     UNAUTHENTICATED: "Sign in to continue.",
-    POLICY_PENDING: "Control access remains disabled. The owner-approved policy denies all 90 role/capability combinations.",
+    POLICY_PENDING: "Control access remains disabled pending owner-approved policy activation.",
     CONTROL_ACCESS_REQUIRED: "No active control-plane permission grants this operation.",
     MFA_REQUIRED: "Verify your control-plane MFA to continue.",
     ACCESS_UNAVAILABLE: "Control access could not be verified. No action was performed.",
