@@ -42,7 +42,7 @@ export function filterControlRolePermissions(role: unknown, permissionKeys: unkn
 }
 
 export const CONTROL_ROLE_POLICY_COLUMNS = [
-  { label: "Read", value: "Only explicit read capabilities in the six-role matrix; tenant-keyed sources require an exact business scope." },
+  { label: "Read", value: "Read-only: only explicit read capabilities in the six-role matrix; tenant-keyed sources require an exact business scope." },
   { label: "Write", value: "DENY for all six roles: no suspension, reinstatement, agent management, communications recovery or financial mutation." },
   { label: "Approval", value: "DENY. No financial, provider, identity, grant or dual-control approval authority is delegated." },
   { label: "Financial", value: "FINANCE_ADMIN and SUPER_ADMIN receive scoped payment and immutable-ledger reads only; no amounts may be changed and no payout is authorized." },
