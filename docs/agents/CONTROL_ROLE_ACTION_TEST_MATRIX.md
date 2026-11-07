@@ -1,8 +1,8 @@
 # Control authorization acceptance test matrix
 
-**Owner-approved effective policy: DENY all 90 role × capability cells** (decision recorded 2026-11-01). `CONTROL_ROLE_POLICY_APPROVED = true` records approval of the denial document only; `CONTROL_ROLE_ACCESS_ENABLED = false` remains the separate fail-closed runtime gate. No ALLOW, Control grant, role assignment, permission, operational identity or operational access is authorized. A separate narrow owner authorization permits one temporary synthetic ordinary CI `User` solely in PR #78's disposable database; it receives no Control grant or role and is discarded with that database. This document describes evidence boundaries; it is not a provisioning instruction.
+**Effective owner-authorized policy (2026-11-07): least-privilege read-only access across the 90 role × capability cells.** The earlier all-DENY decision recorded 2026-11-01 is retained as historical context and superseded. `CONTROL_ROLE_POLICY_APPROVED = true` and `CONTROL_ROLE_ACCESS_ENABLED = true` enable policy evaluation, not automatic account access. A protected request still requires a current session, an active exact-key database grant, tenant scope, live grant recheck and verified short-lived MFA. No owner identity or production grant is provisioned by this policy change.
 
-The complete matrix, capability semantics, read/write classification, scope/data restrictions and owner questions are in `docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md`.
+The effective matrix, capability semantics, read/write classification, scope/data restrictions and remaining acceptance requirements are in `docs/agents/CONTROL_ROLE_ACTION_MATRIX.md` and `docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md`.
 
 ## Exact-head evidence and result
 
@@ -21,39 +21,39 @@ The latest `/control` denial screenshots were uploaded, but independent visual i
 
 | Capability | `SUPER_ADMIN` | `PLATFORM_ADMIN` | `FINANCE_ADMIN` | `SUPPORT_ADMIN` | `SECURITY_ADMIN` | `READ_ONLY_AUDITOR` |
 |---|---|---|---|---|---|---|
-| `businesses.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `businesses.read` | ALLOW | ALLOW | DENY | ALLOW | DENY | DENY |
 | `businesses.suspend` | DENY | DENY | DENY | DENY | DENY | DENY |
 | `businesses.reinstate` | DENY | DENY | DENY | DENY | DENY | DENY |
-| `subscriptions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
-| `payments.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `subscriptions.read` | ALLOW | ALLOW | ALLOW | ALLOW | DENY | DENY |
+| `payments.read` | ALLOW | DENY | ALLOW | DENY | DENY | DENY |
 | `agents.read` | DENY | DENY | DENY | DENY | DENY | DENY |
 | `agents.manage` | DENY | DENY | DENY | DENY | DENY | DENY |
-| `commissions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `commissions.read` | ALLOW | DENY | ALLOW | DENY | DENY | DENY |
 | `communications.read` | DENY | DENY | DENY | DENY | DENY | DENY |
 | `communications.recover` | DENY | DENY | DENY | DENY | DENY | DENY |
 | `providers.read` | DENY | DENY | DENY | DENY | DENY | DENY |
 | `providers.configure` | DENY | DENY | DENY | DENY | DENY | DENY |
-| `audit.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `audit.read` | ALLOW | DENY | DENY | DENY | ALLOW | ALLOW |
 | `exceptions.read` | DENY | DENY | DENY | DENY | DENY | DENY |
-| `system.health.read` | DENY | DENY | DENY | DENY | DENY | DENY |
+| `system.health.read` | ALLOW | ALLOW | DENY | DENY | ALLOW | DENY |
 
-The policy unit test iterates every role and canonical capability, asserts every matrix cell is `DENY`, rejects unknown roles/capabilities and wildcard-like values, and verifies no database grant can add a role permission. `hasControlPermission`/`scopedBusinessIds` helper tests use in-memory fixture objects only to exercise exact-key and tenant-scope primitives; they do **not** represent a persisted/effective grant or prove an API allows access. `getControlIdentity()` checks `CONTROL_ROLE_ACCESS_ENABLED=false` before grant lookup, and `lib/control/access.ts` filters any future database grant through the approved all-DENY role matrix.
+The policy unit test iterates every role and canonical capability, asserts the exact owner-authorized ALLOW/DENY matrix, rejects unknown roles/capabilities and wildcard-like values, and verifies no database grant can add a role permission. `hasControlPermission`/`scopedBusinessIds` helper tests use in-memory fixture objects only to exercise exact-key and tenant-scope primitives; they do **not** represent a persisted/effective grant or prove an API allows access. `getControlIdentity()` checks the independent runtime gate and filters each database grant through the effective role matrix; null/global grants cannot authorize tenant-keyed data.
 
 ## Route and session contract
 
 | Surface | Effective behavior now | Required acceptance / limitation |
 |---|---|---|
-| `/control` | Anonymous request redirects to sign-in; an authenticated ordinary synthetic session sees only the `POLICY_PENDING` shell. | Current browser journey checks no operational data, no horizontal overflow and screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. These are denial-state screenshots, not enabled-console acceptance. |
-| `/api/control/overview`, `/api/control/businesses` GET | Anonymous: `UNAUTHENTICATED`; authenticated: `POLICY_PENDING`. | Real HTTP browser/API CI check verifies exact responses; no Control grant is provisioned. |
-| `/api/control/businesses` PATCH | A syntactically valid same-origin suspension request returns `POLICY_PENDING` before transaction/business write/audit. | Disposable PostgreSQL fixture asserts business status remains unchanged, no grant is created and no misleading success audit event persists. |
-| All other protected Control APIs | Pending policy denies before grant/MFA/data access. Unsupported operations have no enabling route. | Exact positive capability behavior, tenant-authorized browser flow and persisted success audit through an enabled API remain BLOCKED. |
-| Session/MFA | Ordinary session validation uses current user, base role and `sessionVersion`; protected Control MFA is checked only after the global policy gate. | No positive MFA, recovery, step-up or grant-revocation application path is exercised in this denial journey. |
+| `/control` | Anonymous request redirects to sign-in; an authenticated session without an explicit active grant receives `CONTROL_ACCESS_REQUIRED`; no owner grant is provisioned. | Current browser journey checks no operational data, no horizontal overflow and screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768. These are denial-state screenshots, not enabled-console acceptance. |
+| `/api/control/overview`, `/api/control/businesses` GET | Anonymous: `UNAUTHENTICATED`; authenticated without an explicit grant: `CONTROL_ACCESS_REQUIRED`; with a valid scoped grant, MFA and permission checks apply. | Real HTTP browser/API CI check verifies exact responses; no Control grant is provisioned. |
+| `/api/control/businesses` PATCH | A syntactically valid same-origin suspension request returns `CONTROL_ACCESS_REQUIRED` before transaction/business write/audit when no exact scoped grant exists. | Disposable PostgreSQL fixture asserts business status remains unchanged, no grant is created and no misleading success audit event persists. |
+| All other protected Control APIs | Each route requires its exact policy-approved read capability, active database grant, explicit scope and MFA. Unsupported operations remain denied. | Exact positive capability behavior, tenant-authorized browser flow and persisted success audit through an enabled API remain BLOCKED. |
+| Session/MFA | Ordinary session validation uses current user, base role and `sessionVersion`; protected Control MFA is checked after a valid grant and permission are established. | No positive MFA, recovery, step-up or grant-revocation application path is exercised in this denial journey. |
 | Grant expiry | `ControlRoleGrant` has `revokedAt` but no expiry field. | BLOCKED pending owner design/schema decision; no client-only expiry simulation. |
 
 ## Scope, audit, rollback and unsupported actions
 
 - Unknown roles, missing/empty grants, unknown capabilities, wildcards, invalid/expired sessions, pending policy, missing/invalid MFA, revoked grants and unsupported operations fail closed.
-- No null/global scope or cross-tenant access is enabled. Agent, communications, provider, exception, audit and health sources without a proven tenant relationship remain denied.
+- Null/global grants cannot read tenant-keyed data. Minimal system-health reads are the only global-scope exception. Agent, communications, provider and exception sources remain denied; audit reads require exact business scope.
 - Sensitive data (PII, payment amounts/references, provider credentials, commission amounts/eligibility and broad audit data) remains unavailable. Financial changes, agent management, communications recovery, provider configuration, grant administration, other-user session revocation and break-glass remain unsupported/denied.
 - The isolated denial journey checks persistence before/after the attempted business mutation and actor audit count. It does not test a successful application-generated Control audit event. Existing PostgreSQL foundation tests cover append-only trigger resistance and rollback/reapply, but are not proof of complete application audit payloads.
 - Any future enabled mutation must persist its business effect and truthful outcome audit atomically where required. Failed/denied actions must not leave a success response/event. Migration rollback/integrity still needs exact-head current run evidence.
