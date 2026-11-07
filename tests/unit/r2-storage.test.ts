@@ -36,6 +36,7 @@ function fakeClient(fail = false, headResult: Record<string, unknown> = { Conten
     async send(command) {
       sent.push({ name: command.constructor.name, input: (command as unknown as { input: Record<string, unknown> }).input });
       if (fail) throw new Error("simulated provider outage at https://acct-123.example with key-abc");
+      if (command.constructor.name === "HeadObjectCommand") return headResult;
       return {};
     },
   };
