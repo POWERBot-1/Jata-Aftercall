@@ -91,8 +91,9 @@ export async function GET(req: Request) {
       const evidenceStatus = await inspectReferralEvidenceDrift(tx, applications[0].id, periodKey, revision);
       return { kind: "ok" as const, report, evidenceStatus };
     });
-    if (result.kind === "forbidden") return message("An active agent account is required.", 403);
-    if (result.kind === "missing") return message("Report revision not found.", 404);
+    // Conceal report existence from accounts that do not own an active agent profile.
+    // A uniform 404 prevents cross-account report enumeration while preserving fail-closed access.
+    if (result.kind === "forbidden" || result.kind === "missing") return message("Report revision not found.", 404);
     const row = result.report;
     const page = row.members.slice(0, MAX_MEMBERS);
     const nextCursor = row.members.length > MAX_MEMBERS ? page[page.length - 1].eventId : null;

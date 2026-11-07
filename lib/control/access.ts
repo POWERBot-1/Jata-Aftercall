@@ -3,7 +3,7 @@ import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { verifyControlMfaSession } from "./mfa";
 import { isControlRole, type ControlPermission, type ControlRoleName } from "./permissions";
-import { CONTROL_ROLE_ACCESS_ENABLED, filterControlRolePermissions } from "./role-policy";
+import { CONTROL_ROLE_ACCESS_ENABLED, filterControlRolePermissions, isControlCapabilityAllowed } from "./role-policy";
 
 export const CONTROL_MFA_COOKIE = "jata_control_mfa";
 
@@ -27,11 +27,11 @@ export type ControlAccessResult =
 export async function getControlIdentity(): Promise<ControlAccessResult> {
   const session = await getSession();
   if (!session) return { ok: false, status: 401, code: "UNAUTHENTICATED" };
-  // Policy-document approval is not an access grant. Keep the independent operational gate closed.
+  // The owner-approved matrix opens only the grant-evaluation path; it never creates a grant.
   if (!CONTROL_ROLE_ACCESS_ENABLED) return { ok: false, status: 403, code: "POLICY_PENDING" };
   try {
     const rows = await prisma.controlRoleGrant.findMany({
-      where: { userId: session.userId, revokedAt: null },
+      where: { userId: session.userId, revokedAt: null, expiresAt: { gt: new Date() } },
       select: { id: true, role: true, permissionKeys: true, scopeBusinessId: true },
       orderBy: { createdAt: "desc" },
     });
@@ -57,14 +57,20 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
 }
 
 export function hasControlPermission(grants: ControlGrant[], permission: ControlPermission, businessId?: string): boolean {
-  return grants.some((grant) => grant.permissionKeys.includes(permission)
-    && (businessId === undefined || grant.scopeBusinessId === null || grant.scopeBusinessId === businessId));
+  return grants.some((grant) => isControlCapabilityAllowed(grant.role, permission)
+    && grant.permissionKeys.includes(permission)
+    && (permission === "system.health.read"
+      ? grant.scopeBusinessId === null
+      : businessId === undefined ? grant.scopeBusinessId !== null : grant.scopeBusinessId === businessId));
+
 }
 
 export function scopedBusinessIds(grants: ControlGrant[], permission: ControlPermission): { allowed: boolean; global: boolean; ids: string[] } {
-  const matching = grants.filter((grant) => grant.permissionKeys.includes(permission));
+  const matching = grants.filter((grant) => isControlCapabilityAllowed(grant.role, permission)
+    && grant.permissionKeys.includes(permission)
+    && (permission === "system.health.read" ? grant.scopeBusinessId === null : grant.scopeBusinessId !== null));
   if (!matching.length) return { allowed: false, global: false, ids: [] };
-  const global = matching.some((grant) => grant.scopeBusinessId === null);
+  const global = permission === "system.health.read" && matching.some((grant) => grant.scopeBusinessId === null);
   return { allowed: true, global, ids: [...new Set(matching.map((grant) => grant.scopeBusinessId).filter((id): id is string => Boolean(id)))].sort() };
 }
 
@@ -117,7 +123,7 @@ export async function requireAnyControlPermission(permissions: readonly ControlP
 export function controlAccessError(result: Extract<ControlAccessResult, { ok: false }>): { error: string; code: string } {
   const messages = {
     UNAUTHENTICATED: "Sign in to continue.",
-    POLICY_PENDING: "Control access remains disabled. The owner-approved policy denies all 90 role/capability combinations.",
+    POLICY_PENDING: "Control access remains disabled pending owner-approved policy activation.",
     CONTROL_ACCESS_REQUIRED: "No active control-plane permission grants this operation.",
     MFA_REQUIRED: "Verify your control-plane MFA to continue.",
     ACCESS_UNAVAILABLE: "Control access could not be verified. No action was performed.",

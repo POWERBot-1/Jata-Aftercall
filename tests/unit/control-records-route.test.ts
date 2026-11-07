@@ -51,6 +51,8 @@ describe("Control operational record views", () => {
     fixtures.tx.subscription.findMany.mockResolvedValue([record]);
     const response = await call("subscriptions");
     expect(response.status).toBe(200);
+    const liveGrantSql = fixtures.tx.$queryRaw.mock.calls[0][0].join(" ");
+    expect(liveGrantSql).toContain('"expiresAt" > CURRENT_TIMESTAMP');
     const body = await response.json();
     expect(body.items).toEqual([{ ...record, createdAt: "2026-10-01T00:00:00.000Z" }]);
     expect(fixtures.tx.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({

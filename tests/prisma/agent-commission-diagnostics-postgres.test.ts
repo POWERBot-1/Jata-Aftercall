@@ -31,13 +31,37 @@ describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated Pos
     pool = new Pool({ connectionString: PRISMA_TEST_DATABASE_URL, options: `-c search_path=${schema}` });
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query(`CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PAID', 'FAILED', 'REFUNDED', 'EXPIRED', 'CANCELLED');
-      CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL);
-      CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY, "reference" TEXT NOT NULL, "status" "PaymentStatus" NOT NULL, "currency" TEXT NOT NULL, "amount" INTEGER NOT NULL);
-      CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY, "userId" TEXT UNIQUE NOT NULL, "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL);`);
+      CREATE TYPE "ReferralStatus" AS ENUM ('PENDING', 'CONVERTED', 'REJECTED', 'EXPIRED');
+      CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL, "email" TEXT UNIQUE, "passwordHash" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE "Payment" (
+        "id" TEXT PRIMARY KEY, "reference" TEXT NOT NULL, "status" "PaymentStatus" NOT NULL,
+        "currency" TEXT NOT NULL, "amount" INTEGER NOT NULL, "businessId" TEXT, "userId" TEXT,
+        "planId" TEXT, "paystackId" TEXT, "purpose" TEXT NOT NULL DEFAULT 'SUBSCRIPTION',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE "AgentApplication" (
+        "id" TEXT PRIMARY KEY, "userId" TEXT UNIQUE NOT NULL, "fullName" TEXT NOT NULL DEFAULT 'Synthetic',
+        "phoneE164" TEXT NOT NULL DEFAULT '+254700000000', "verifiedPhoneE164" TEXT UNIQUE,
+        "phoneVerifiedAt" TIMESTAMP(3), "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL,
+        "privacyAcknowledgedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE "Referral" (
+        "id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "referrerUserId" TEXT NOT NULL,
+        "referrerBusinessId" TEXT, "referredUserId" TEXT UNIQUE, "referredBusinessId" TEXT,
+        "status" "ReferralStatus" NOT NULL, "tokenHash" TEXT UNIQUE NOT NULL,
+        "rejectReason" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "expiresAt" TIMESTAMP(3) NOT NULL, "convertedAt" TIMESTAMP(3)
+      );`);
     await pool.query(readFileSync("prisma/migrations/20261111000000_agent_commission_ledger/migration.sql", "utf8"));
     await pool.query(`INSERT INTO "User" VALUES ('admin-1', 'ADMIN'), ('former-admin', 'CUSTOMER');
       INSERT INTO "Payment" VALUES ('payment-1', 'private-reference', 'REFUNDED', 'KES', 10000), ('payment-2', 'other-reference', 'PAID', 'KES', 20000), ('payment-3', 'third-reference', 'PAID', 'KES', 30000);
-      INSERT INTO "AgentApplication" VALUES ('agent-1', 'user-1', 'PENDING', 'ACTIVE'), ('agent-2', 'user-2', 'PENDING', 'ACTIVE'), ('agent-3', 'user-3', 'PENDING', 'SUSPENDED');
+      INSERT INTO "AgentApplication" ("id", "userId", "status", "agentStatus", "phoneVerifiedAt") VALUES
+      ('agent-1', 'user-1', 'PENDING', 'ACTIVE', CURRENT_TIMESTAMP),
+      ('agent-2', 'user-2', 'PENDING', 'ACTIVE', CURRENT_TIMESTAMP),
+      ('agent-3', 'user-3', 'PENDING', 'SUSPENDED', CURRENT_TIMESTAMP);
       INSERT INTO "AgentCommissionLedgerEntry" ("id", "paymentId", "agentApplicationId", "entryType", "currency", "amountMinor", "sourceEventId", "policyVersion", "policySnapshot") VALUES
       ('entry-1', 'payment-1', 'agent-1', 'ACCRUAL', 'KES', 1000, 'fixture-event', 'fixture-v1', '{"fixture":true}'),
       ('entry-2', 'payment-2', 'agent-2', 'ACCRUAL', 'KES', 700, 'fixture-event-2', 'fixture-v1', '{"fixture":true}'),
@@ -93,7 +117,15 @@ describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated Pos
     mocks.session.mockResolvedValueOnce({ userId: "user-1", role: "CUSTOMER" });
     const own = await ownSummary();
     expect(own.status).toBe(200);
-    expect(await own.json()).toMatchObject({ scope: "OWN_LEDGER_STORAGE_ONLY", entryCount: "3", accrualMinor: "9007199254741993", reversalMinor: "-2000", netMinor: "9007199254739993", entitlement: "NOT_DETERMINED", payout: "NOT_AVAILABLE" });
+    expect(await own.json()).toMatchObject({
+      scope: "OWN_AGENT_LEDGER", currency: "KES", entryCount: "3",
+      accrualMinor: "9007199254741993", reversalMinor: "-2000", netMinor: "9007199254739993",
+      qualifyingPlanSales: 0, minimumMonthlyPlanSales: 10, eligibleForPayment: false,
+      monthlyAccruedMinor: "9007199254741993", monthlyReversedMinor: "2000",
+      monthlyNetAccruedMinor: "9007199254739993", payoutEligibleMinor: "0",
+      verification: "LOCAL_PROVIDER_VERIFIED_SETTLEMENT_RECORDS",
+      payout: "NOT_AVAILABLE_NO_TRANSFER_EXECUTED",
+    });
     mocks.session.mockResolvedValueOnce({ userId: "user-2", role: "CUSTOMER" });
     const other = await ownSummary();
     expect(await other.json()).toMatchObject({ entryCount: "1", accrualMinor: "700", reversalMinor: "0", netMinor: "700" });

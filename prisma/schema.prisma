@@ -386,10 +386,12 @@ model ControlRoleGrant {
   createdBy User @relation("ControlRoleGrantProvisioner", fields: [createdById], references: [id], onDelete: Restrict)
   reason String @db.Text
   revokedAt DateTime?
+  expiresAt DateTime?
   revocationReason String? @db.Text
   createdAt DateTime @default(now())
 
   @@index([userId, revokedAt])
+  @@index([userId, revokedAt, expiresAt])
   @@index([role, revokedAt])
   @@index([scopeBusinessId, revokedAt])
 }

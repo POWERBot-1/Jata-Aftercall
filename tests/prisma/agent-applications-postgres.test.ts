@@ -633,4 +633,91 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     mock.session = { userId: app.userId, email: "applicant@test.invalid", role: "CUSTOMER" };
     expect(await (await GET()).json()).toMatchObject({ applied: true, status: "REJECTED" });
   });
+  it("reads the maximum 5,000-member immutable revision and rejects over-limit baselines", async () => {
+    const oldSnapshots = process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED;
+    const oldReconciliation = process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED;
+    try {
+      process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = "true";
+      process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = "true";
+      const user = await p.user.create({ data: { email: `large-report-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(user.id);
+      const verifiedPhoneE164 = `+2547${String(parseInt(uid().slice(-6), 36) % 100000000).padStart(8, "0")}`;
+      const application = await p.agentApplication.create({
+        data: {
+          userId: user.id, fullName: "Synthetic Large Report", phoneE164: verifiedPhoneE164,
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), verifiedPhoneE164, agentStatus: "ACTIVE",
+        },
+      });
+      const periodKey = "daily:2026-11-01";
+      const startInclusive = new Date("2026-11-01T00:00:00.000Z");
+      const endExclusive = new Date("2026-11-02T00:00:00.000Z");
+      const referredUsers = Array.from({ length: 5000 }, (_, index) => ({
+        id: `large-report-user-${uid()}-${index}`,
+        email: `large-report-referred-${uid()}-${index}@test.invalid`,
+        passwordHash: "test-only",
+        role: "CUSTOMER" as const,
+      }));
+      users.push(...referredUsers.map((referred) => referred.id));
+      const referredApplicationIds = referredUsers.map((_, index) => `large-report-app-${uid()}-${index}`);
+      const referralLink = await p.agentReferralLink.create({
+        data: { referrerApplicationId: application.id, tokenHash: `large-report-link-${uid()}`, expiresAt: new Date("2027-01-01T00:00:00.000Z") },
+      });
+      await p.$transaction(async (tx) => {
+        await tx.user.createMany({ data: referredUsers });
+        await tx.agentApplication.createMany({
+          data: referredUsers.map((referred, index) => ({
+            id: referredApplicationIds[index], userId: referred.id,
+            fullName: `Synthetic Referred ${index + 1}`,
+            phoneE164: `+2547${String(index + 1).padStart(8, "0")}`,
+            privacyAcknowledgedAt: new Date(),
+          })),
+        });
+        await tx.agentReferralAttribution.createMany({
+          data: referredApplicationIds.map((referredApplicationId, index) => ({
+            id: `large-report-attribution-${String(index + 1).padStart(5, "0")}`,
+            referrerApplicationId: application.id,
+            referredApplicationId,
+            linkId: referralLink.id,
+            consentedAt: new Date(startInclusive.getTime() + index),
+            source: "REGISTRATION",
+            createdAt: new Date(startInclusive.getTime() + index),
+          })),
+        });
+      });
+      await p.agentReferralReportSnapshot.create({
+        data: { applicationId: application.id, periodKey, periodType: "DAILY", startInclusive, endExclusive, registrationCount: BigInt(5000), existingApplicationCount: BigInt(0) },
+      });
+      mock.session = { userId: user.id, email: user.email, role: "CUSTOMER" };
+      const url = `https://agent.test/api/agents/reports/referrals/reconcile?periodKey=${periodKey}&revision=1`;
+      const first = await inspectReportRevision(new Request(url));
+      expect(first.status).toBe(200);
+      const firstPage = await first.json();
+      expect(firstPage.members).toHaveLength(5000);
+      expect(firstPage.nextCursor).toBeNull();
+      expect(firstPage.members[0].eventId).toBe("large-report-attribution-00001");
+      expect(firstPage.members[4999].eventId).toBe("large-report-attribution-05000");
+      expect((await inspectReportRevision(new Request(`${url}&after=bad%20cursor`))).status).toBe(400);
+      expect((await inspectReportRevision(new Request(`${url}&after=event-00001&after=event-00002`))).status).toBe(400);
+      await expect(p.agentReferralReportSnapshot.create({
+        data: {
+          applicationId: application.id, periodKey: "daily:2026-11-02", periodType: "DAILY",
+          startInclusive: endExclusive, endExclusive: new Date("2026-11-03T00:00:00.000Z"),
+          registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+        },
+      })).rejects.toThrow(/baseline exceeds membership limit/);
+      const other = await p.user.create({ data: { email: `large-report-other-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(other.id);
+      await p.agentApplication.create({
+        data: { userId: other.id, fullName: "Synthetic Other Agent", phoneE164: "+254700009998", privacyAcknowledgedAt: new Date() },
+      });
+      mock.session = { userId: other.id, email: other.email, role: "CUSTOMER" };
+      expect((await inspectReportRevision(new Request(url))).status).toBe(404);
+      expect(await p.agentReferralReportMember.count({ where: { applicationId: application.id, periodKey, revision: 1 } })).toBe(5000);
+    } finally {
+      if (oldSnapshots === undefined) delete process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED; else process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = oldSnapshots;
+      if (oldReconciliation === undefined) delete process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED; else process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = oldReconciliation;
+      mock.session = null;
+    }
+  });
+
 });

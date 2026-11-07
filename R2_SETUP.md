@@ -79,16 +79,25 @@ build setting without explicit owner approval.
    Public object URLs are deliberately publicly readable and are not private access controls.
 5. Check R2 metrics and billing alerts. Do not infer a spending cap from the free allowance.
 
-## Step 4 — Production (SEPARATE owner approval, later)
+## Step 4 — Production (owner approval recorded 2026-11-07; activation still gated)
 
-Production activation is **not** part of the preview steps and needs its own explicit
-approval after preview evidence is reviewed:
+The owner authorized Production R2 remediation on 2026-11-07. The dedicated bucket
+`jata-media-production` now exists, and Production `R2_ACCOUNT_ID` and `R2_BUCKET` are set.
+The following steps remain before activation:
 
-1. Create a separate bucket `jata-media-production` (+ preferably a **custom domain**
-   instead of r2.dev) and a separate API token scoped to only that bucket.
-2. Add the same six variables to **Production** with the production values.
-3. Redeploy production; repeat the Step 3 checks on the production URL.
-4. Rollback = remove `JATA_STORAGE_PROVIDER` (or the R2 variables) from Production and
+1. Create a separate R2 API token scoped only to `jata-media-production`; copy the Access Key ID
+   and Secret Access Key directly into Vercel's encrypted Production environment variables.
+   The existing Production Access Key ID is present but has not been authenticated; the
+   Production secret access key is absent.
+2. Configure a production-grade public asset domain. The Cloudflare account currently has no
+   `jataaftercall.co.ke` zone, so a custom domain cannot yet be attached from this account.
+   Do not use the Preview bucket or silently substitute its `r2.dev` hostname. A Production
+   `r2.dev` endpoint is not accepted as a production-grade custom-domain substitute.
+3. Set `R2_PUBLIC_BASE_URL` to the verified Production domain and set
+   `JATA_STORAGE_PROVIDER=cloudflare-r2` only after all required variables are present.
+4. Redeploy Production, then run authenticated isolated upload, HEAD/retrieval, deletion,
+   tenant-boundary and customer-journey acceptance. Do not delete customer objects.
+5. Rollback = remove `JATA_STORAGE_PROVIDER` (or the R2 variables) from Production and
    redeploy: the app returns to fail-closed honest "unavailable" states; existing media rows
    and category imagery keep working, and objects already in R2 are simply no longer written.
 

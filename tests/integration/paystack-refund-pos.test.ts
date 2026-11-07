@@ -31,7 +31,8 @@ vi.mock("@/lib/db", () => ({
     $transaction: async (work: (tx: any) => Promise<unknown>) => work({
       processedWebhook: { create: mocks.webhookCreate },
       auditEvent: { create: vi.fn() },
-      payment: { updateMany: mocks.paymentUpdateMany },
+      payment: { updateMany: mocks.paymentUpdateMany, findUnique: vi.fn(async () => ({ id: "pay-1", status: "REFUNDED", userId: "user-1" })) },
+      agentCommissionLedgerEntry: { findFirst: vi.fn(async () => null), createMany: vi.fn(async () => ({ count: 0 })) },
       subscription: { updateMany: mocks.subscriptionUpdateMany },
       aIPackageEntitlement: { updateMany: mocks.aiUpdateMany },
       posSubscription: { updateMany: mocks.posSubUpdateMany },
