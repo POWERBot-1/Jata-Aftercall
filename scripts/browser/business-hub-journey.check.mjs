@@ -202,7 +202,13 @@ if (process.exitCode !== 2) {
 
     // ── fixtures ──────────────────────────────────────────────────────────────────────────────
     const owner = await prisma.user.create({
-      data: { email: `hub-owner-${runId}@example.test`, name: "Hub Owner", role: "CUSTOMER", sessionVersion: 0 },
+      data: {
+        email: `hub-owner-${runId}@example.test`,
+        name: "Hub Owner",
+        role: "CUSTOMER",
+        passwordHash: `synthetic-unusable-${runId}`,
+        sessionVersion: 0,
+      },
     });
     created.userId = owner.id;
 
@@ -256,7 +262,13 @@ if (process.exitCode !== 2) {
     });
 
     const otherOwner = await prisma.user.create({
-      data: { email: `hub-other-${runId}@example.test`, name: "Other Owner", role: "CUSTOMER", sessionVersion: 0 },
+      data: {
+        email: `hub-other-${runId}@example.test`,
+        name: "Other Owner",
+        role: "CUSTOMER",
+        passwordHash: `synthetic-unusable-${runId}`,
+        sessionVersion: 0,
+      },
     });
     created.otherUserId = otherOwner.id;
     const otherBusiness = await prisma.business.create({
