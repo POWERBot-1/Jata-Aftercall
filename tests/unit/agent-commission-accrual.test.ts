@@ -1,0 +1,83 @@
+import { describe, expect, it, vi } from "vitest";
+import { recordCommissionAccrualForPaidPlan } from "@/lib/agents/commission-accrual";
+
+function makeTx(overrides: Record<string, unknown> = {}) {
+  const payment = {
+    id: "payment-1", userId: "customer-1", businessId: "business-1", planId: "plan-1",
+    status: "PAID", purpose: "SUBSCRIPTION", currency: "KES", amount: 100_000,
+    paystackId: "123456789", updatedAt: new Date("2026-11-07T10:00:00.000Z"),
+  };
+  const tx: any = {
+    payment: { findUnique: vi.fn(async () => payment), count: vi.fn(async () => 10) },
+    referral: {
+      findFirst: vi.fn(async () => ({ referrerUserId: "agent-user-1", referredUserId: "customer-1", convertedAt: new Date("2026-01-01Z") })),
+      findMany: vi.fn(async () => [{ referredUserId: "customer-1" }, { referredUserId: "customer-2" }]),
+    },
+    agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-application-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date("2026-01-01Z") })) },
+    planConfig: { findUnique: vi.fn(async () => ({ id: "plan-1", priceKES: 1000, key: "BUSINESS_PAGE" })) },
+    agentCommissionLedgerEntry: { createMany: vi.fn(async () => ({ count: 1 })) },
+    auditEvent: { create: vi.fn(async () => ({})) },
+  };
+  Object.assign(tx, overrides);
+  return tx;
+}
+
+describe("transactional commission accrual", () => {
+  it("records 40 percent of a verified subscription plan sale and qualifies at ten monthly sales", async () => {
+    const tx = makeTx();
+    const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
+    expect(result).toMatchObject({ recorded: true, agentApplicationId: "agent-application-1", commissionMinor: BigInt(40_000), monthlyPlanSales: 10, payoutEligible: true });
+    expect(tx.agentCommissionLedgerEntry.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      skipDuplicates: true,
+      data: [expect.objectContaining({
+        paymentId: "payment-1", entryType: "ACCRUAL", amountMinor: BigInt(40_000),
+        sourceEventId: "subscription-sale:payment-1",
+        policySnapshot: expect.objectContaining({ basisPoints: 4000, minimumMonthlyPlanSales: 10, payoutEligibleAtEvaluation: true }),
+      })],
+    }));
+    expect(tx.auditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not record payout eligibility below ten qualifying plan sales", async () => {
+    const tx = makeTx();
+    tx.payment.count.mockResolvedValue(9);
+    const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
+    expect(result).toMatchObject({ recorded: true, monthlyPlanSales: 9, payoutEligible: false });
+  });
+
+  it("does not accrue for unpaid, non-subscription, missing-provider or invalid-amount records", async () => {
+    for (const payment of [
+      { status: "PENDING" }, { purpose: "ORDER" }, { paystackId: null }, { amount: 0 },
+    ]) {
+      const tx = makeTx({ payment: { findUnique: vi.fn(async () => ({ ...{
+        id: "payment-1", userId: "customer-1", businessId: "business-1", planId: "plan-1", status: "PAID",
+        purpose: "SUBSCRIPTION", currency: "KES", amount: 100_000, paystackId: "123456789",
+        updatedAt: new Date("2026-11-07T10:00:00.000Z"),
+      }, ...payment })) } });
+      const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
+      expect(result.recorded).toBe(false);
+      expect(tx.agentCommissionLedgerEntry.createMany).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not accrue for missing referral or inactive/unverified agents", async () => {
+    const noReferral = makeTx({ referral: { findFirst: vi.fn(async () => null) } });
+    expect((await recordCommissionAccrualForPaidPlan(noReferral, "payment-1")).recorded).toBe(false);
+    const inactive = makeTx({ agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-application-1", agentStatus: "SUSPENDED", phoneVerifiedAt: new Date() })) } });
+    expect((await recordCommissionAccrualForPaidPlan(inactive, "payment-1")).recorded).toBe(false);
+  });
+
+  it("rejects a plan amount that does not match the authoritative catalogue price", async () => {
+    const tx = makeTx({ planConfig: { findUnique: vi.fn(async () => ({ id: "plan-1", priceKES: 2000, key: "BUSINESS_PAGE" })) } });
+    await expect(recordCommissionAccrualForPaidPlan(tx, "payment-1")).rejects.toThrow("COMMISSION_PLAN_AMOUNT_MISMATCH");
+    expect(tx.agentCommissionLedgerEntry.createMany).not.toHaveBeenCalled();
+  });
+
+  it("uses idempotent createMany semantics when the payment event is replayed", async () => {
+    const tx = makeTx();
+    tx.agentCommissionLedgerEntry.createMany.mockResolvedValue({ count: 0 });
+    const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
+    expect(result.recorded).toBe(false);
+    expect(tx.auditEvent.create).not.toHaveBeenCalled();
+  });
+});
