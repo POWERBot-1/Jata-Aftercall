@@ -11,6 +11,7 @@ const headers = { "Cache-Control": "private, no-store" };
 const message = (error: string, status: number) => NextResponse.json({ error }, { status, headers });
 const unavailable = () => message("Report reconciliation is unavailable.", 503);
 const MAX_MEMBERS = 5000;
+const MEMBER_PAGE_SIZE = 2500;
 type Member = { eventId: string; source: string; eventCreatedAt: Date };
 
 /** Manual, own-agent reconciliation of referral evidence only. No payment or delivery claims. */
@@ -83,7 +84,7 @@ export async function GET(req: Request) {
     const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const applications: Array<{ id: string }> = await tx.$queryRaw`SELECT "id" FROM "AgentApplication" WHERE "userId" = ${session.userId} AND "status" = 'PENDING' AND "agentStatus" = 'ACTIVE' FOR SHARE`;
       if (applications.length !== 1) return { kind: "forbidden" as const };
-      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { ...(after ? { where: { eventId: { gt: after } } } : {}), orderBy: { eventId: "asc" }, take: MAX_MEMBERS + 1 } } });
+      const report = await tx.agentReferralReportRevision.findUnique({ where: { applicationId_periodKey_revision: { applicationId: applications[0].id, periodKey, revision } }, include: { members: { ...(after ? { where: { eventId: { gt: after } } } : {}), orderBy: { eventId: "asc" }, take: MEMBER_PAGE_SIZE + 1 } } });
       if (!report) return { kind: "missing" as const };
       // A historical revision can differ from current evidence even when its own data is intact.
       // Inspection is bounded by database timeouts and never silently changes the revision.
@@ -94,8 +95,8 @@ export async function GET(req: Request) {
     if (result.kind === "forbidden") return message("An active agent account is required.", 403);
     if (result.kind === "missing") return message("Report revision not found.", 404);
     const row = result.report;
-    const page = row.members.slice(0, MAX_MEMBERS);
-    const nextCursor = row.members.length > MAX_MEMBERS ? page[page.length - 1].eventId : null;
+    const page = row.members.slice(0, MEMBER_PAGE_SIZE);
+    const nextCursor = row.members.length > MEMBER_PAGE_SIZE ? page[page.length - 1].eventId : null;
     return NextResponse.json({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", periodKey, revision: row.revision, kind: row.kind, createdAt: row.createdAt, registrationCount: row.registrationCount.toString(), existingApplicationCount: row.existingApplicationCount.toString(), added: row.addedCount, removed: row.removedCount, changed: row.changedCount, evidenceStatus: result.evidenceStatus, nextCursor, members: page.map((member: Member) => ({ eventId: member.eventId, source: member.source, eventCreatedAt: member.eventCreatedAt })), sales: "NOT_CHECKED", commission: "NOT_CHECKED" }, { headers });
   } catch { return unavailable(); }
 }
