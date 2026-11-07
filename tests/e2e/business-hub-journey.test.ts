@@ -319,7 +319,7 @@ describe.skipIf(!enabled)("Business Hub against a real database", () => {
     };
     const listed = await call(orderRequestsGet, `${ORIGIN}/api/business/${ctx.owner.businessId}/order-requests`, {}, { businessId: ctx.owner.businessId });
     expect(listed.status).toBe(200);
-    const requestId = listed.body.orderRequests.find((entry: any) => entry.reference === ctx.reference)?.id;
+    const requestId = listed.body.requests.find((entry: any) => entry.reference === ctx.reference)?.id;
     expect(requestId).toBeTruthy();
 
     const illegal = await call(
@@ -509,10 +509,16 @@ describe.skipIf(!enabled)("Business Hub against a real database", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.body.stampsEarned).toBe(2);
+    // The public read exposes the balance, not the ledger: two stamps were earned and one reward
+    // was paid out, so the live balance is zero and the payout is counted.
+    expect(response.body.stamps).toBe(0);
+    expect(response.body.goal).toBe(2);
+    expect(response.body.rewardsRedeemed).toBe(1);
+    expect(response.body.customerName).toBe("Grace Muthoni");
     const serialised = JSON.stringify(response.body);
     expect(serialised).not.toMatch(/0711 555 111/);
     expect(serialised).not.toMatch(/ownerNotes/i);
+    expect(serialised).not.toMatch(/stampsEarned|stampsRedeemed/i);
   });
 
   it("E · the QR endpoint serves the page URL in every format", async () => {
