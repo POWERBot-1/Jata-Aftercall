@@ -59,7 +59,7 @@ export async function PATCH(request: Request) {
   try {
     const result = await prisma.$transaction(async (tx) => {
       const candidateGrantIds = access.identity.grants.filter((candidate) => candidate.permissionKeys.includes(permission)
-        && (candidate.scopeBusinessId === null || candidate.scopeBusinessId === businessId)).map((candidate) => candidate.id);
+        && (candidate.scopeBusinessId !== null && candidate.scopeBusinessId === businessId)).map((candidate) => candidate.id);
       if (!candidateGrantIds.length) return { error: "DENIED" as const };
       const liveGrants = await tx.$queryRaw<ControlGrant[]>`
         SELECT "id", "role", "permissionKeys", "scopeBusinessId"
@@ -68,7 +68,7 @@ export async function PATCH(request: Request) {
           AND "userId" = ${access.identity.session.userId}
           AND "revokedAt" IS NULL
           AND "permissionKeys" @> ARRAY[${permission}]::text[]
-          AND ("scopeBusinessId" IS NULL OR "scopeBusinessId" = ${businessId})
+          AND "scopeBusinessId" = ${businessId}
         ORDER BY "createdAt" DESC
         LIMIT 1
         FOR SHARE

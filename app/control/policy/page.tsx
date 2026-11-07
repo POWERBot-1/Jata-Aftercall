@@ -9,17 +9,17 @@ export default function ControlPolicyPage() {
   return (
     <WorkspaceSetupShell
       title="Control role and permission matrix"
-      subtitle="The owner approved DENY for all 90 role/capability combinations. This approval is not an ALLOW, grant, or provisioning instruction."
+      subtitle="The owner authorized a least-privilege read-only matrix. All 90 decisions are explicit; write, approval and high-impact actions remain denied."
       backHref="/control/sign-in"
       backLabel="Control sign in"
       width="xwide"
-      meta={<span className="ws-pill" data-tone="draft">ALL 90 DENIED · OPERATIONAL ACCESS DISABLED</span>}
+      meta={<span className="ws-pill" data-tone="draft">READ-ONLY GRANTS · MFA REQUIRED</span>}
     >
       <div className="ws-stack">
         <section className="ws-panel" aria-labelledby="matrix-title">
-          <p className="ws-kicker">Six canonical roles · deny by default</p>
+          <p className="ws-kicker">Six canonical roles · explicit least privilege</p>
           <h2 id="matrix-title" className="ws-panel__title">Role / action review matrix</h2>
-          <p className="ws-muted">Descriptions below are tentative role labels, not assigned responsibilities. No permission is derived from the role name. The database currently has no seeded role grants, and this page cannot create, change or approve a grant.</p>
+          <p className="ws-muted">Role capabilities are explicit in the server-side matrix. A role assignment alone is insufficient: each request requires an active database grant, exact tenant scope and verified MFA. This page cannot create or change grants.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {CONTROL_ROLE_POLICY.map(({ role, responsibility }) => (
               <article key={role} className="rounded-xl border border-[color:var(--ws-border)] p-4">
@@ -48,11 +48,11 @@ export default function ControlPolicyPage() {
         ))}
         <section className="ws-panel" aria-labelledby="capabilities-title">
           <p className="ws-kicker">Exact capability vocabulary · 90 effective decisions</p>
-          <h2 id="capabilities-title" className="ws-panel__title">Every role/capability cell is denied</h2>
-          <p className="ws-muted">The owner approved all 90 DENY decisions. `CONTROL_ROLE_POLICY_APPROVED` records that document decision only; the separate `CONTROL_ROLE_ACCESS_ENABLED` gate remains false. This display does not create identities, permissions or grants, and does not enable any route.</p>
-          <div className="mt-4 overflow-x-auto rounded-lg border border-[color:var(--ws-border)]" tabIndex={0} aria-label="Scrollable six-role capability denial matrix">
+          <h2 id="capabilities-title" className="ws-panel__title">Explicit role/capability decisions</h2>
+          <p className="ws-muted">The owner authorized the platform-owner-selected least-privilege matrix. The 90 cells remain explicit ALLOW/DENY decisions. ALLOW is limited to listed read operations; no database grant or identity is created by this page.</p>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-[color:var(--ws-border)]" tabIndex={0} aria-label="Scrollable six-role capability authorization matrix">
             <table className="w-full min-w-[900px] border-collapse text-left text-xs">
-              <caption className="sr-only">All 90 role by capability policy decisions are deny.</caption>
+              <caption className="sr-only">All 90 role by capability policy decisions are explicit; only least-privilege reads are allowed.</caption>
               <thead>
                 <tr className="border-b border-[color:var(--ws-border)]">
                   <th scope="col" className="p-3">Capability</th>
@@ -64,14 +64,14 @@ export default function ControlPolicyPage() {
                   <tr key={permission} className="border-b border-[color:var(--ws-border)] last:border-0">
                     <th scope="row" className="p-3 font-mono"><code>{permission}</code></th>
                     {CONTROL_ROLE_NAMES.map((role) => (
-                      <td key={role} className="p-3"><span className="ws-pill" data-tone="draft">{CONTROL_ROLE_CAPABILITY_POLICY[role][permission]}</span></td>
+                      <td key={role} className="p-3"><span className="ws-pill" data-tone={CONTROL_ROLE_CAPABILITY_POLICY[role][permission] === "ALLOW" ? "success" : "draft"}>{CONTROL_ROLE_CAPABILITY_POLICY[role][permission]}</span></td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="ws-tiny mt-3">Owner decision record: <code>docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md</code>. No production account, grant, or provisioning action has been performed.</p>
+          <p className="ws-tiny mt-3">Owner decision record: <code>docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md</code>. No account or database grant has been provisioned. Access remains contingent on an explicit active grant and MFA.</p>
         </section>
         <p className="ws-tiny"><Link className="underline" href="/control">Return to Control</Link></p>
       </div>

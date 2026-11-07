@@ -633,4 +633,68 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
     mock.session = { userId: app.userId, email: "applicant@test.invalid", role: "CUSTOMER" };
     expect(await (await GET()).json()).toMatchObject({ applied: true, status: "REJECTED" });
   });
+  it("reads a 5,001-member immutable revision in bounded 5,000 + 1 PostgreSQL pages", async () => {
+    const oldSnapshots = process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED;
+    const oldReconciliation = process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED;
+    try {
+      process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = "true";
+      process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = "true";
+      const user = await p.user.create({ data: { email: `large-report-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(user.id);
+      const application = await p.agentApplication.create({
+        data: {
+          userId: user.id, fullName: "Synthetic Large Report", phoneE164: "+254700000099",
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), verifiedPhoneE164: "+254700000099", agentStatus: "ACTIVE",
+        },
+      });
+      const periodKey = "daily:2026-11-01";
+      const startInclusive = new Date("2026-11-01T00:00:00.000Z");
+      const endExclusive = new Date("2026-11-02T00:00:00.000Z");
+      await p.agentReferralReportSnapshot.create({
+        data: { applicationId: application.id, periodKey, periodType: "DAILY", startInclusive, endExclusive, registrationCount: BigInt(5001), existingApplicationCount: BigInt(0) },
+      });
+      await p.$transaction(async (tx) => tx.agentReferralReportRevision.create({
+        data: {
+          applicationId: application.id, periodKey, revision: 1, kind: "CAPTURED", actorId: user.id,
+          registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+          members: { createMany: { data: Array.from({ length: 5001 }, (_, index) => ({
+            eventId: `event-${String(index + 1).padStart(5, "0")}`,
+            source: "REGISTRATION",
+            eventCreatedAt: new Date(startInclusive.getTime() + index),
+          })) } },
+        },
+      }));
+      mock.session = { userId: user.id, email: user.email, role: "CUSTOMER" };
+      const url = `https://agent.test/api/agents/reports/referrals/reconcile?periodKey=${periodKey}&revision=1`;
+      const first = await inspectReportRevision(new Request(url));
+      expect(first.status).toBe(200);
+      const firstPage = await first.json();
+      expect(firstPage.members).toHaveLength(5000);
+      expect(firstPage.nextCursor).toBe("event-05000");
+      const second = await inspectReportRevision(new Request(`${url}&after=${encodeURIComponent(firstPage.nextCursor)}`));
+      expect(second.status).toBe(200);
+      const secondPage = await second.json();
+      expect(secondPage.members).toHaveLength(1);
+      expect(secondPage.members[0].eventId).toBe("event-05001");
+      expect(secondPage.nextCursor).toBeNull();
+      expect((await inspectReportRevision(new Request(`${url}&after=bad%20cursor`))).status).toBe(400);
+      expect((await inspectReportRevision(new Request(`${url}&after=event-00001&after=event-00002`))).status).toBe(400);
+      const other = await p.user.create({ data: { email: `large-report-other-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
+      users.push(other.id);
+      await p.agentApplication.create({
+        data: {
+          userId: other.id, fullName: "Synthetic Other Agent", phoneE164: "+254700000098",
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), agentStatus: "ACTIVE",
+        },
+      });
+      mock.session = { userId: other.id, email: other.email, role: "CUSTOMER" };
+      expect((await inspectReportRevision(new Request(url))).status).toBe(404);
+      expect(await p.agentReferralReportMember.count({ where: { applicationId: application.id, periodKey, revision: 1 } })).toBe(5001);
+    } finally {
+      if (oldSnapshots === undefined) delete process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED; else process.env.AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED = oldSnapshots;
+      if (oldReconciliation === undefined) delete process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED; else process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = oldReconciliation;
+      mock.session = null;
+    }
+  });
+
 });

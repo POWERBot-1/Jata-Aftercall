@@ -169,6 +169,12 @@ jobs:
           node scripts/ci/check-workflow-expressions.mjs .github/workflows/*.yml \
             2>&1 | tee /tmp/step-workflow-expressions.log
 
+      - name: Canonical programme inventory and evidence gate
+        run: |
+          set -o pipefail
+          node --test scripts/release/tests/verify-programme.test.mjs 2>&1 | tee /tmp/step-programme-tests.log
+          node scripts/release/verify-programme.mjs 2>&1 | tee /tmp/step-programme.log
+
       - name: Gate self-tests (failure logic)
         run: |
           set -o pipefail

@@ -2,7 +2,7 @@
   "ADMIN-001": {
     "status": "PASS",
     "acceptance": "a later instruction is appended without modifying prior entries; correction includes source ID, previous decision, change and authorization; review required on conflict. Verify original instructions and evidence links against their sources.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7001 (ADMIN-001)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §001 (ADMIN-001)",
     "implementationLocation": "this document; release/status documents; all future affected code, routes, models, integrations and tests. Existing Vercel/Neon architecture and product boundaries remain intact.",
     "verificationMethod": "Full-history instruction-integrity Git fixtures and exact-head instruction-integrity workflow on the current candidate; reviewed all 43 canonical entries and their traceability map.",
     "testResult": "The cumulative register contains 43 sequential IDs; exact-head instruction-integrity CI and isolated append/rewrite/correction fixtures pass. This verifies register mechanics, not source authenticity for every historical owner statement.",
@@ -13,7 +13,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-001",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-001",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -23,10 +23,10 @@
   "ADMIN-002": {
     "status": "BLOCKED",
     "acceptance": "explicit evidence per criterion on final candidate; no claim based on unrelated green CI.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7002 (ADMIN-002)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §002 (ADMIN-002)",
     "implementationLocation": "PR #77, agent, financial, notification, reporting, shared design, `/control`, Vercel, Neon and Paystack. No automatic cron activation.",
-    "verificationMethod": "Exact-head Admin instruction workflow 41321876626 (implementation head `0b665e5719935966de76c0e3f42b23c2dcad4872`; PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`) passed `Test completeness gate` and `instruction-integrity`, then failed `Require verified programme acceptance`. The workflow runs `node scripts/admin/check-programme-readiness.mjs`, which requires every canonical requirement to be status PASS and every PASS row to cite existing evidence. Exact checker output remains `NOT READY (34)`: ADMIN-002, ADMIN-003, ADMIN-004, ADMIN-005, ADMIN-006, ADMIN-007, ADMIN-008, ADMIN-009, ADMIN-010, MOTION-001, MOTION-002, MOTION-003, ADMIN-012, ADMIN-013, ADMIN-014, ADMIN-015, MOTION-004, ADMIN-022, MOTION-005, ADMIN-023, MOTION-006, MOTION-007, MOTION-008, MOTION-009, MOTION-010, MOTION-011, MOTION-012, MOTION-013, MOTION-014, MOTION-015, MOTION-016, MOTION-017, MOTION-018 and RELEASE-001. The gate correctly fails closed; do not change statuses or weaken the checker.",
-    "testResult": "FAIL (programme-completeness gate), BLOCKED (overall release acceptance): current run 41321876626 reported NOT READY (34) because the same 34 canonical requirement rows remain BLOCKED or NOT_TESTED. The test-completeness unit tests and instruction-integrity job passed. The checker requires PASS plus existing evidence files for every criterion. Missing/uncompleted acceptance evidence remains the cause; this is intentional fail-closed behavior, not a checker bug. Do not label unsupported requirements PASS or bypass the gate.",
+    "verificationMethod": "Counted and matched all 43 headings in docs/ADMIN_BUILDING_INSTRUCTIONS.md to all 43 manifest keys. The source register and manifest agree at 43; the prior 45 count was not supported by the canonical source. The completeness gate remains fail-closed on every BLOCKED/NOT_TESTED criterion and requires evidence for each PASS.",
+    "testResult": "BLOCKED: exact-head programme completeness fails on 34 non-PASS rows (28 BLOCKED + 6 NOT_TESTED). Inventory reconciliation confirms 43 source headings and 43 manifest entries; no 45th requirement is present in the canonical source.",
     "evidence": [
       ".github/workflows/admin-instructions.yml",
       "scripts/admin/check-programme-readiness.mjs",
@@ -40,10 +40,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41317961063",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876626"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-002",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-002",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "34 readiness records remain BLOCKED/NOT_TESTED, as enumerated in the exact-head run 41317961063 and this record. Root cause is uncompleted programme acceptance evidence, including the Control owner decisions/positive journeys, broad Motion evidence and release criteria. Only evidence-backed implementation and owner-approved decisions can clear individual records; no gate bypass or fabricated PASS.",
+    "blocker": "BLOCKED: the verified append-only source register and readiness manifest contain 43 canonical requirement IDs. The strict completeness gate correctly rejects any missing, duplicate, blocked or untested requirement. 28 requirements remain BLOCKED and 6 remain NOT_TESTED; their acceptance evidence is not yet complete.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
@@ -52,10 +52,10 @@
   "ADMIN-003": {
     "status": "BLOCKED",
     "acceptance": "Anonymous users, merchants and agents are denied both `/control` and its APIs; explicitly authorized roles are allowed; forged-role, CSRF and session-revocation tests pass; verify canonical HTTPS/domain without production changes.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7003 (ADMIN-003)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §003 (ADMIN-003)",
     "implementationLocation": "`app/control/page.tsx`, `app/control/sign-in/page.tsx`, `components/control/ControlConsole.tsx`, `components/LoginForm.tsx`, `app/login/page.tsx`, `lib/control/access.ts`, `app/api/control/**`.",
-    "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run\u2019s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "BLOCKED: implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` passed the current deny-path verification. Interactive Business E2E run 41321876592 passed, including the authenticated Control browser/API denial and screenshot upload; the owner-authorized synthetic ordinary test User existed only in that run\u2019s disposable PostgreSQL database. No Control grant, role assignment, permission, ALLOW, production identity, or production access was created. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS / ERP verification 41321876611 passed. Instruction integrity passed, while programme-completeness failed because 34 requirements remain BLOCKED or NOT_TESTED. The all-DENY decision does not establish positive role/tenant authorization, MFA/recovery/revocation/expiry, successful persisted application audit, or independent visual inspection of the /control screenshots; status remains BLOCKED.",
+    "verificationMethod": "Policy source and unit tests updated for all 90 ALLOW/DENY cells and tenant-scope behavior. Do not count as acceptance until exact-head unit, PostgreSQL and authenticated browser tests pass.",
+    "testResult": "IMPLEMENTATION ADDED: six-role 90-cell explicit policy now grants only selected read capabilities; all write, approval, provider configuration, identity/grant administration, agent management and recovery actions remain denied. Active database grants, exact tenant scope and MFA are still mandatory. Exact-head positive browser acceptance pending.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
@@ -84,10 +84,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876611",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876626"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-003",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-003",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner has explicitly approved all 90 DENY cells on 2026-11-01; `CONTROL_ROLE_POLICY_APPROVED=true` records that documented decision only, while `CONTROL_ROLE_ACCESS_ENABLED=false` remains the runtime fail-closed gate. No ALLOW, grant, permission or operational identity is approved. Positive role/tenant journeys, Control MFA and recovery, session/grant revocation and grant expiry, successful persisted application audit, and enabled-console visual evidence are not established. Control denial screenshots are uploaded but not independently inspected. Programme-completeness fails with 34 requirements outside PASS; no requirement status will be fabricated to clear the gate.",
+    "blocker": "BLOCKED: least-privilege role policy is enabled. Exact-head positive authenticated browser/API journeys for each approved role, tenant isolation, forged-role rejection, CSRF and session revocation have not all been independently verified.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -110,15 +110,15 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "ADMIN-004": {
     "status": "BLOCKED",
     "acceptance": "Test horizontal/vertical escalation, forged roles, direct API, unauthenticated requests, CSRF, session revocation, MFA and immutable audit; unauthorized financial/configuration changes must be impossible.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7004 (ADMIN-004)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §004 (ADMIN-004)",
     "implementationLocation": "`prisma/schema.prisma`, `prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `lib/control/**`, `app/api/control/**`, `tests/unit/control-plane-*`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `tests/security/auth-session-revocation.test.ts`.",
-    "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run\u2019s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "BLOCKED: implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` passed the current deny-path verification. Interactive Business E2E run 41321876592 passed, including the authenticated Control browser/API denial and screenshot upload; the owner-authorized synthetic ordinary test User existed only in that run\u2019s disposable PostgreSQL database. No Control grant, role assignment, permission, ALLOW, production identity, or production access was created. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS / ERP verification 41321876611 passed. Instruction integrity passed, while programme-completeness failed because 34 requirements remain BLOCKED or NOT_TESTED. The all-DENY decision does not establish positive role/tenant authorization, MFA/recovery/revocation/expiry, successful persisted application audit, or independent visual inspection of the /control screenshots; status remains BLOCKED.",
+    "verificationMethod": "Exact 90-cell policy matrix and unit assertions added; database-backed and browser acceptance pending.",
+    "testResult": "IMPLEMENTATION ADDED: role permissions are explicit, deny-by-default and restricted to scoped reads. MFA remains required. Grant provisioning, positive role journeys and six-viewport screenshots remain unverified.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -151,10 +151,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876611",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876626"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-004",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-004",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner has explicitly approved all 90 DENY cells on 2026-11-01; `CONTROL_ROLE_POLICY_APPROVED=true` records that documented decision only, while `CONTROL_ROLE_ACCESS_ENABLED=false` remains the runtime fail-closed gate. No ALLOW, grant, permission or operational identity is approved. Positive role/tenant journeys, Control MFA and recovery, session/grant revocation and grant expiry, successful persisted application audit, and enabled-console visual evidence are not established. Control denial screenshots are uploaded but not independently inspected. Programme-completeness fails with 34 requirements outside PASS; no requirement status will be fabricated to clear the gate.",
+    "blocker": "BLOCKED: source policy and unit tests exist, but exact-head PostgreSQL and browser evidence for role escalation, MFA, session/grant revocation, grant expiry and immutable persisted audit remains incomplete.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "lib/control/permissions.ts",
@@ -178,15 +178,15 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "ADMIN-005": {
     "status": "BLOCKED",
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7005 (ADMIN-005)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §005 (ADMIN-005)",
     "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
-    "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run\u2019s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "BLOCKED: implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` passed the current deny-path verification. Interactive Business E2E run 41321876592 passed, including the authenticated Control browser/API denial and screenshot upload; the owner-authorized synthetic ordinary test User existed only in that run\u2019s disposable PostgreSQL database. No Control grant, role assignment, permission, ALLOW, production identity, or production access was created. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS / ERP verification 41321876611 passed. Instruction integrity passed, while programme-completeness failed because 34 requirements remain BLOCKED or NOT_TESTED. The all-DENY decision does not establish positive role/tenant authorization, MFA/recovery/revocation/expiry, successful persisted application audit, or independent visual inspection of the /control screenshots; status remains BLOCKED.",
+    "verificationMethod": "Source policy and unit coverage added. Exact-head PostgreSQL/browser evidence required.",
+    "testResult": "IMPLEMENTATION ADDED: read-only capabilities now have bounded role assignments; no grant or identity provisioned. Positive acceptance remains pending.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
@@ -214,10 +214,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876611",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876626"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-005",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-005",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner has explicitly approved all 90 DENY cells on 2026-11-01; `CONTROL_ROLE_POLICY_APPROVED=true` records that documented decision only, while `CONTROL_ROLE_ACCESS_ENABLED=false` remains the runtime fail-closed gate. No ALLOW, grant, permission or operational identity is approved. Positive role/tenant journeys, Control MFA and recovery, session/grant revocation and grant expiry, successful persisted application audit, and enabled-console visual evidence are not established. Control denial screenshots are uploaded but not independently inspected. Programme-completeness fails with 34 requirements outside PASS; no requirement status will be fabricated to clear the gate.",
+    "blocker": "BLOCKED: read-only scoped policy is implemented; positive scoped reads from authoritative business/payment/audit sources and independent six-viewport enabled-console review remain unverified.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
@@ -244,20 +244,20 @@
   },
   "ADMIN-006": {
     "status": "BLOCKED",
-    "acceptance": "authenticated synthetic event \u2192 authoritative attribution \u2192 idempotent accrual \u2192 reversal \u2192 reconciliation \u2192 scoped dashboard; duplicate/out-of-order and unauthorized-action tests. **Dependencies/conflicts:** owner states relevant decisions approved, but exact commission terms were not located in repository/PR/Drive; do not invent. Technical test fixtures must be explicitly labelled and cannot activate production.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7006 (ADMIN-006)",
+    "acceptance": "authenticated synthetic event → authoritative attribution → idempotent accrual → reversal → reconciliation → scoped dashboard; duplicate/out-of-order and unauthorized-action tests. **Owner authorization:** GITANYA KARIUKI explicitly approved 40% of each paid subscription plan sale and payment eligibility after 10 qualifying plan sales in the same Africa/Nairobi calendar month. Technical test fixtures must be explicitly labelled and cannot activate production.",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §006 (ADMIN-006)",
     "implementationLocation": "`app/api/paystack/**`, `lib/agents/**`, agent/admin routes, payment, subscription, attribution and ledger models; existing pricing baselines: monthly KES 149, annual KES 999, AI Front Desk KES 499/month, Website Studio KES 999/month, Business POS KES 499/month, Autopilot KES 2,499/6,999/19,999. Inspect actual production configuration before presenting or changing prices; no production access authorized as part of implementation.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled.",
+    "verificationMethod": "New unit tests cover 40% integer calculation, 9/10 threshold, attribution/agent eligibility, idempotency, plan-price mismatch, full refund reversal and monthly net accrual. CI and disposable PostgreSQL verification must pass before acceptance.",
+    "testResult": "IMPLEMENTATION ADDED: 40% of verified paid plan amount is accrued for active, phone-verified agents with a converted first-touch referral; idempotent source event, immutable ledger entry and audit event are written transactionally. Monthly eligibility is recomputed from distinct paid subscription payments; full refunds append a negative reversal; partial refunds remain review-required. No payout transfer is sent. Exact-head tests pending.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-006",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-006",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: synthetic full ledger/commission lifecycle is not established, and approved qualifying events/rates/reversal terms were not found. No accrual/payout was enabled.",
+    "blocker": "BLOCKED: 40% gross commission and 10 qualifying plan sales per Africa/Nairobi calendar month are owner-authorized. Transactional idempotent accrual, monthly eligibility recomputation and provider-verified full-refund reversal are implemented. Payout destination verification, transfer execution, end-to-end reconciliation and exact-head database/browser evidence remain incomplete.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -265,37 +265,50 @@
   "ADMIN-007": {
     "status": "BLOCKED",
     "acceptance": "server-side module/action authorization, confirmation/change-history tests, cross-tenant tests, kill-switch scope, health-source provenance and last-check verification.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7007 (ADMIN-007)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
     "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "verificationMethod": "Inspected Cloudflare bucket inventory and confirmed creation of the dedicated jata-media-production bucket; read back bucket metadata. Inspected Vercel Production environment keys with secret values redacted and confirmed R2_ACCOUNT_ID and R2_BUCKET were added; R2_ACCESS_KEY_ID exists but has not been authenticated. Inspected Cloudflare zones and R2 domains; no jataaftercall.co.ke zone or Production custom domain is configured. Authenticated S3 upload/HEAD/delete remains NOT TESTED.",
+    "testResult": "BLOCKED: the dedicated Production bucket exists and Production R2_ACCOUNT_ID and R2_BUCKET variables are set. R2_ACCESS_KEY_ID is present but unverified; R2_SECRET_ACCESS_KEY and R2_PUBLIC_BASE_URL are absent; JATA_STORAGE_PROVIDER is not activated. No authenticated S3 upload, HEAD/retrieval, deletion, or tenant-isolation acceptance has been executed.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-007",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-007",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "blocker": "BLOCKED: bucket and non-secret Production variables are now configured. A scoped Production R2 secret access key and production-grade public asset domain remain unavailable. The Cloudflare account has no jataaftercall.co.ke zone; no r2.dev substitute was enabled. Authenticated S3 operations and provider health/configuration acceptance remain untested.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentStatus": "BLOCKED",
+    "productionConfigurationAudit": {
+      "bucket": "PASS",
+      "accountIdVariable": "PASS",
+      "bucketVariable": "PASS",
+      "accessKeyId": "NOT TESTED",
+      "secretAccessKey": "FAIL",
+      "publicBaseUrl": "FAIL",
+      "providerActivation": "NOT TESTED",
+      "authenticatedUpload": "NOT TESTED",
+      "retrieval": "NOT TESTED",
+      "deletion": "NOT TESTED",
+      "tenantIsolation": "NOT TESTED"
+    }
   },
   "ADMIN-008": {
     "status": "BLOCKED",
     "acceptance": "synthetic provider lifecycle with callback authentication/deduplication, safe retry, dead-letter, operator recovery, concurrent/crash and uncertain-outcome tests; actual delivery claims need provider evidence.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7008 (ADMIN-008)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §008 (ADMIN-008)",
     "implementationLocation": "existing `lib/agents/admin-notification-*`, worker/callback/replay/admin routes, scheduler and integration adapters.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
+    "verificationMethod": "Source configuration contract plus Vercel environment inventory. Requires approved provider, secure env configuration, signed callback tests, delivery evidence and replay/recovery acceptance.",
+    "testResult": "Inspected the application-required SMTP/SMS variable names in lib/autopilot/channels.ts and compared against Vercel environment keys (secret values redacted). None of the five required SMTP/SMS keys was present. No live email or SMS sent.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-008",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-008",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
+    "blocker": "BLOCKED: live communications provider delivery and recovery are not configured or proven. Vercel environment inventory did not contain SMTP_HOST, SMTP_USER, SMTP_PASS, SMS_API_KEY or SMS_API_URL. Full outbox/dead-letter/recovery browser journey and provider callback verification remain untested.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -303,13 +316,13 @@
   "ADMIN-009": {
     "status": "BLOCKED",
     "acceptance": "independent HTTPS checks, authorized access and unauthorized denials on exact official URL, plus canonical redirect and cookie tests.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7009 (ADMIN-009)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §009 (ADMIN-009)",
     "implementationLocation": "Vercel domains and routing, Next.js routes, auth/cookies. No new domain added or changed.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: authoritative HOSTAFRICA zone export, current DNS/TLS/canonical redirects, exact mail records and successful delivery are not independently verified. No DNS/env change made.",
     "evidence": [],
     "evidenceLinks": [],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-009",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-009",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: authoritative HOSTAFRICA zone export, current DNS/TLS/canonical redirects, exact mail records and successful delivery are not independently verified. No DNS/env change made.",
@@ -319,11 +332,11 @@
   },
   "ADMIN-010": {
     "status": "BLOCKED",
-    "acceptance": "Deliver a functional, non-mocked console with real data, audited changes, all modules and security tests; independently inspect real screenshots at 320\u00d7568, 360\u00d7800, 390\u00d7844, 430\u00d7932, 768\u00d71024 and 1366\u00d7768; report status, recovery, exact branch/SHA/PR and production verification separately.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7010 (ADMIN-010)",
+    "acceptance": "Deliver a functional, non-mocked console with real data, audited changes, all modules and security tests; independently inspect real screenshots at 320×568, 360×800, 390×844, 430×932, 768×1024 and 1366×768; report status, recovery, exact branch/SHA/PR and production verification separately.",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §010 (ADMIN-010)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `prisma/**`, `lib/control/**`, control route/security/PostgreSQL test paths, and `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run\u2019s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "BLOCKED: implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` passed the current deny-path verification. Interactive Business E2E run 41321876592 passed, including the authenticated Control browser/API denial and screenshot upload; the owner-authorized synthetic ordinary test User existed only in that run\u2019s disposable PostgreSQL database. No Control grant, role assignment, permission, ALLOW, production identity, or production access was created. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS / ERP verification 41321876611 passed. Instruction integrity passed, while programme-completeness failed because 34 requirements remain BLOCKED or NOT_TESTED. The all-DENY decision does not establish positive role/tenant authorization, MFA/recovery/revocation/expiry, successful persisted application audit, or independent visual inspection of the /control screenshots; status remains BLOCKED.",
+    "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run’s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
+    "testResult": "BLOCKED: implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` passed the current deny-path verification. Interactive Business E2E run 41321876592 passed, including the authenticated Control browser/API denial and screenshot upload; the owner-authorized synthetic ordinary test User existed only in that run’s disposable PostgreSQL database. No Control grant, role assignment, permission, ALLOW, production identity, or production access was created. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS / ERP verification 41321876611 passed. Instruction integrity passed, while programme-completeness failed because 34 requirements remain BLOCKED or NOT_TESTED. The all-DENY decision does not establish positive role/tenant authorization, MFA/recovery/revocation/expiry, successful persisted application audit, or independent visual inspection of the /control screenshots; status remains BLOCKED.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
@@ -352,10 +365,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876611",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41321876626"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-010",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-010",
     "verificationCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner has explicitly approved all 90 DENY cells on 2026-11-01; `CONTROL_ROLE_POLICY_APPROVED=true` records that documented decision only, while `CONTROL_ROLE_ACCESS_ENABLED=false` remains the runtime fail-closed gate. No ALLOW, grant, permission or operational identity is approved. Positive role/tenant journeys, Control MFA and recovery, session/grant revocation and grant expiry, successful persisted application audit, and enabled-console visual evidence are not established. Control denial screenshots are uploaded but not independently inspected. Programme-completeness fails with 34 requirements outside PASS; no requirement status will be fabricated to clear the gate.",
+    "blocker": "BLOCKED: the owner-authorized least-privilege read-only matrix is implemented and CONTROL_ROLE_ACCESS_ENABLED is true. The grant gate does not provision an owner identity or grant. Positive role/tenant journeys, MFA recovery/revocation/expiry, persisted application audit and independent enabled-console visual acceptance remain incomplete.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -378,12 +391,12 @@
     "currentAssessmentSourceSha": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "currentAssessmentStatus": "BLOCKED",
     "testedPullRequestMergeSha": "4f88e7aeda8d62f5b427ff14b8e652e30e07939f",
-    "ownerPolicyDecision": "Owner approved DENY for all 90 role/capability combinations on 2026-11-01. This approves no ALLOW and does not close positive-role acceptance."
+    "ownerPolicyDecision": "Owner authorization superseded the 2026-11-01 all-DENY operational decision on 2026-11-07. GITANYA KARIUKI authorized platform-selected least-privilege Control access. Current matrix permits only explicit tenant-scoped read capabilities; all write, approval, payout, provider, identity/grant administration and emergency capabilities remain DENY. No production identity or grant is created by this policy."
   },
   "MOTION-001": {
     "status": "BLOCKED",
     "acceptance": "inspect existing design system, use existing primitives, test reduced-motion, keyboard, responsive and actual interaction recordings; verify no layout shifts and accurate numerical/transaction states. **Dependencies/conflicts:** console's requested graphite/white/lime design applies to a new independent console; existing surfaces remain visually unchanged. No schema/migration changes for the motion task without separate approval. **Evidence/commit:** architecture audit only; no universal engine or UI verification claimed.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7011 (MOTION-001)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §011 (MOTION-001)",
     "implementationLocation": "shared UI/motion primitives, supported existing product modules, `motion` dependency already in package, accessibility and browser tests. Existing design tokens include graphite `#16181d` and lime `#b6ff2e` where currently used, not a mandate to recolour other surfaces.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete.",
@@ -393,7 +406,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-001",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-001",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: only selected motion surfaces and routes have browser evidence; app-wide interaction, keyboard, layout and independently inspected before/after acceptance remain incomplete.",
@@ -404,7 +417,7 @@
   "MOTION-002": {
     "status": "BLOCKED",
     "acceptance": "test each supported family through actual generate/preview/publish without production publication; verify new/future inheritance, existing-site update mechanism, per-tenant isolation, brand preservation, desktop/mobile, forms/transactions, reduced-motion/off and screenshots/recordings. Any untested family is explicitly NOT TESTED. **Dependencies/conflicts:** detailed template and pipeline inventory, approved compatibility design, fixed session branch/PR.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7012 (MOTION-002)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §012 (MOTION-002)",
     "implementationLocation": "`lib/experience/{motionPolicy,motionRecipes,motionRuntime,renderMode,templateFamilies,workspace,document}.ts`, Studio preview/publish routes, generated-site renderer, templates, tests and documentation. Existing Lite/HTML and `motion` modes must remain functional; do not presume every template is already covered.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable.",
@@ -414,7 +427,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-002",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-002",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: no evidence covers every Studio family through actual generation, preview and publication; durable media/provider acceptance remains unavailable.",
@@ -425,7 +438,7 @@
   "MOTION-003": {
     "status": "NOT_TESTED",
     "acceptance": "complete generation-path inventory, representative baseline screenshots, reuse plan, performance/reduced-motion tests and explicit NOT TESTED list. **Dependencies/conflicts:** existing open PRs #41/#42 and fixed PR #77 branch; no design changes or production publication authorized.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7013 (MOTION-003)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §013 (MOTION-003)",
     "implementationLocation": "`docs/agents/CONTROL_AND_MOTION_AUDIT.md`, Studio render/preview/publish paths, existing motion helpers and browser test infrastructure. No schema changes for motion without separate authorization.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: static inventories exist, but a complete live route/control inventory and independently reviewed baselines were not produced.",
@@ -433,7 +446,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-003",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-003",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -444,7 +457,7 @@
   "ADMIN-011": {
     "status": "PASS",
     "acceptance": "full-history CI, valid append, attempted rewrite/restoration, malformed IDs/fields, invalid correction and uncommitted or shallow-history failure tests. **Dependencies/conflicts:** full Git history is required; Git cannot prove that a recorded instruction or approval faithfully represents the owner.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7014 (ADMIN-011)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §014 (ADMIN-011)",
     "implementationLocation": "register, `.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`.",
     "verificationMethod": "Isolated Node test suite for append/rewrite/correction/shallow-history cases plus exact-head full-history CI.",
     "testResult": "PASS: exact-head full-history instruction-integrity CI passed on the current candidate; isolated fixtures cover committed append, rewrite/restoration, malformed fields/IDs, invalid correction and shallow/uncommitted failures.",
@@ -455,7 +468,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-011",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-011",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -465,20 +478,20 @@
   "ADMIN-012": {
     "status": "BLOCKED",
     "acceptance": "Implement secure `/control` using existing identity, session/revocation, server-side resource permissions and tenant isolation; support the six requested roles only after precise permissions are confirmed. Pass real authorized/denied sessions, security and route tests, and six-view genuine screenshots.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7015 (ADMIN-012)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §015 (ADMIN-012)",
     "implementationLocation": "`app/control/**`, `app/api/control/**`, `components/control/ControlConsole.tsx`, `lib/control/**`, `prisma/schema.prisma`, control migration and tests.",
-    "verificationMethod": "Exact candidate `0560ac24467e0f7125b4b6dedbacf23f4080a292` focused route/security suite and full local suite; role \u00d7 capability matrix checks all six role labels against all 15 keys; record API holds and rechecks live grant rows, constrains tenant queries and audits successful list reads after policy enablement. Current global gate denies every protected request before grant lookup/MFA. Database trigger tests are present but skipped in local no-DATABASE_URL run.",
-    "testResult": "BLOCKED: exact-key/scope/MFA implementation, revocation race denial, no-grant behavior, cursor isolation, direct/cross-tenant route fixtures, reasoned business transitions, audit display, and the `POLICY_PENDING` access gate are covered on `0560ac24467e0f7125b4b6dedbacf23f4080a292`. Full local suite passes with DB-dependent tests skipped. No owner-approved role mapping, provisioning process, authenticated browser journey, or visual artifact inspection.",
+    "verificationMethod": "Unit tests added for every role/capability cell and tenant boundary. Exact-head PostgreSQL and real authenticated browser journeys still required.",
+    "testResult": "IMPLEMENTATION ADDED: 90 explicit role/capability decisions now allow only scoped read operations. No mutation, provider configuration, identity administration, refund, adjustment or payout capability is allowed. No grant was provisioned.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-012",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-012",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No owner-approved role/action mapping and no approved non-production provisioning procedure. The global policy guard remains closed. Authenticated allowed/denied sessions for each role, current exact-candidate PostgreSQL audit rewrite/delete proof, and six-view browser acceptance are outstanding.",
+    "blocker": "BLOCKED: the owner-authorized 90-cell least-privilege read matrix is implemented. Exact-head authenticated positive/negative journeys, tenant isolation, MFA recovery, session/grant revocation, grant expiry and six-view evidence remain incomplete.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -507,18 +520,18 @@
   "ADMIN-013": {
     "status": "BLOCKED",
     "acceptance": "complete authenticated route E2E, duplicate/out-of-order/reversal/recovery tests and bounded large-report verification. **Dependencies/conflicts:** exact approved rates, events, attribution and reversal terms not located; do not invent or enable accrual/payouts. **Evidence/commit:** `docs/agents/RELEASE_GATE_AND_RUNBOOK.md`; connected journey remains incomplete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7016 (ADMIN-013)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §016 (ADMIN-013)",
     "implementationLocation": "`app/api/agents/**`, `app/api/paystack/**`, `lib/agents/**`, existing ledger, referral, report, scheduler and notification models and tests.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: end-to-end phone ownership \u2192 eligibility \u2192 verified payment \u2192 accrual \u2192 reversal/report is not proven; approved financial terms remain unavailable. No real financial activity.",
+    "verificationMethod": "New unit tests cover calculation, attribution, monthly threshold, idempotency and full reversal. Exact-head full test, PostgreSQL and browser evidence pending.",
+    "testResult": "IMPLEMENTATION ADDED: standard, POS and Autopilot subscription settlement invoke the commission accrual helper in the same transaction; verified full refund events append an idempotent negative reversal. Monthly eligibility is recalculated from paid plan sales and net ledger entries. No payout is initiated.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-013",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-013",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: end-to-end phone ownership \u2192 eligibility \u2192 verified payment \u2192 accrual \u2192 reversal/report is not proven; approved financial terms remain unavailable. No real financial activity.",
+    "blocker": "BLOCKED: 40% commission and the 10-sale monthly threshold are owner-authorized. Accrual and full-refund reversal paths are integrated into subscription settlement. Complete agent-to-payment-to-ledger-to-payout-review PostgreSQL/browser acceptance and external payout controls remain incomplete; no payout is initiated.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -526,7 +539,7 @@
   "ADMIN-014": {
     "status": "BLOCKED",
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7017 (ADMIN-014)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
     "verificationMethod": "Exact-head native Prisma/PostgreSQL 18 release, clean-install/upgrade/rollback/recovery and control-plane disposable-schema migration tests; candidate migration rehearsal and catalog comparison. No production database was touched.",
     "testResult": "BLOCKED: exact-head CI passed native PostgreSQL migration/schema validation, clean install and upgrade path, candidate seed/catalog comparison, disposable control-plane append-only grant/audit trigger tests, and rollback/reapply. Full canonical proof still lacks demonstrated backup/restore and independent acceptance of every requested recovery phase; production migration/recovery was intentionally not attempted.",
@@ -536,7 +549,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-014",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-014",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "Backup/restore and independent end-to-end acceptance of every requested recovery phase remain unproven; only disposable CI databases were used, and production migration was not authorized.",
@@ -552,7 +565,7 @@
   "ADMIN-015": {
     "status": "BLOCKED",
     "acceptance": "six-view actual authenticated evidence and independent findings for each applicable surface. **Dependencies/conflicts:** the Control route now exists, but authenticated role journeys and the complete connected journey remain unverified. **Evidence/commit:** existing general screenshots do not satisfy this requirement; Control-specific evidence remains outstanding.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7018 (ADMIN-015)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §018 (ADMIN-015)",
     "implementationLocation": "browser E2E scripts, actual app routes, screenshot artifacts and release documentation.",
     "verificationMethod": "Exact-head real-Chrome six-viewport screenshot/browser workflow passed for existing product journeys; the recorded tasks cover POS/onboarding/agent/ERP, not `/control`. Artifact inspection and authorized/denied Control, registration, agent, finance and motion coverage at each owner-specified viewport remain outstanding.",
     "testResult": "BLOCKED: real Chrome screenshot/browser workflow passed its recorded non-Control journeys (595 checks, 0 failures) and uploaded artifacts; it did not capture authorized/unauthorized `/control` sessions or the full requested module matrix. This session could not independently inspect the uploaded images. Control-specific six-view responsiveness, accessibility and security acceptance remains unverified.",
@@ -561,7 +574,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-015",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-015",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No authenticated/unauthorized Control and full owner-specified module screenshot matrix, no independent artifact inspection or accessibility findings; existing general screenshots do not satisfy this criterion.",
@@ -571,8 +584,8 @@
   },
   "MOTION-004": {
     "status": "NOT_TESTED",
-    "acceptance": "behavior and inheritance tests for every applicable surface and supported template family, genuine browser evidence and no static visual regressions. **Dependencies/conflicts:** `MOTION-001`\u2013`MOTION-003`; no universal inheritance or full coverage claimed until verified. **Evidence/commit:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md`; implementation not started for this directive.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7019 (MOTION-004)",
+    "acceptance": "behavior and inheritance tests for every applicable surface and supported template family, genuine browser evidence and no static visual regressions. **Dependencies/conflicts:** `MOTION-001`–`MOTION-003`; no universal inheritance or full coverage claimed until verified. **Evidence/commit:** `docs/agents/CONTROL_AND_MOTION_AUDIT.md`; implementation not started for this directive.",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §019 (MOTION-004)",
     "implementationLocation": "existing `lib/experience/motion*`, `components/storefront/**`, shared interaction components and actual Studio publishing paths; open PRs #41/#42 require overlap review.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: shared primitives and scoped runtime tests exist, but universal applicable-surface/family behavior and financial-state acceptance are not established.",
@@ -581,7 +594,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-004",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-004",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -592,7 +605,7 @@
   "ADMIN-016": {
     "status": "PASS",
     "acceptance": "node test suite passes in isolated Git fixtures; full-history CI checks exact committed state and reports first introduction; review original owner text manually. **Dependencies/conflicts:** full Git history; append-only correction does not permit destructive edits, preserving ADMIN-001.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7020 (ADMIN-016)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §020 (ADMIN-016)",
     "implementationLocation": "`.github/workflows/admin-instructions.yml`, `scripts/admin/check-building-instructions.mjs`, `tests/admin/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.",
     "verificationMethod": "Isolated Git history fixture suite plus exact-head instruction-integrity workflow; manual review against the canonical instruction file.",
     "testResult": "PASS: exact-head full-history checker and isolated Git fixture tests pass on the current candidate; canonical requirement text was reviewed as repository source. Git cannot authenticate owner provenance beyond preserved repository history.",
@@ -603,7 +616,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-016",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-016",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -613,7 +626,7 @@
   "ADMIN-017": {
     "status": "PASS",
     "acceptance": "standalone tests, test-collection guard and all final-head CI pass. **Dependencies/conflicts:** the original ADMIN-011 and ADMIN-016 paths remain in historical entries; this appended update documents the move.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7021 (ADMIN-017)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §021 (ADMIN-017)",
     "implementationLocation": "`.github/workflows/admin-instructions.yml`, `scripts/admin/tests/instruction-integrity.test.mjs`, `docs/ADMIN_INSTRUCTION_WORKFLOW.md`.",
     "verificationMethod": "Exact-head standalone instruction-integrity workflow and full no-database suite; test placement verified by repository workflow configuration.",
     "testResult": "PASS: standalone integrity tests remain outside the Vitest collection tree; exact-head integrity CI and full no-database suite pass.",
@@ -625,7 +638,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-017",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-017",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -635,7 +648,7 @@
   "ADMIN-018": {
     "status": "PASS",
     "acceptance": "Reject sessions with stale sessionVersion, deleted users, database errors or role claims mismatched against the current database role; require a fresh session after role changes.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7022 (ADMIN-018)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §022 (ADMIN-018)",
     "implementationLocation": "`lib/auth.ts`, `tests/security/auth-session-revocation.test.ts`, and the control self-revocation route `app/api/control/session/revoke/route.ts`.",
     "verificationMethod": "Exact-head full suite plus disposable PostgreSQL integration/security suite; focused tests cover expiration, stale/mismatched role/session version, and current-account all-session revocation/cookie clearing.",
     "testResult": "The narrow current-role/session-revocation criterion passes on the exact candidate: unit/session fixtures and DB-backed security suite passed; all-device revocation increments the session version and clears cookies. This does not prove six-role Control browser acceptance.",
@@ -648,7 +661,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516408",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-018",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-018",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -664,7 +677,7 @@
   "ADMIN-019": {
     "status": "PASS",
     "acceptance": "real HTTP ERP checks and exact-head CI pass with current-role enforcement. **Dependencies/conflicts:** ADMIN-018 remains in force; no production operations.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7023 (ADMIN-019)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §023 (ADMIN-019)",
     "implementationLocation": "`scripts/erp/erp-pages.check.mjs`, `scripts/erp/tasks-page.check.mjs`, `scripts/erp/erp-visual.check.mjs`.",
     "verificationMethod": "Exact-head disposable-database real-HTTP ERP page and task-board authorization/tenant-isolation journeys.",
     "testResult": "PASS: exact-head disposable-database workflow passed authenticated ERP page and task-board real-HTTP authorization/tenant/refusal journeys.",
@@ -676,7 +689,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-019",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-019",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -686,7 +699,7 @@
   "ADMIN-020": {
     "status": "PASS",
     "acceptance": "PostgreSQL tests cover demotion, restoration, explicit increments, ordinary updates, rollback, saturation and rejection of version decreases; native migration and final-head CI must pass. **Dependencies/conflicts:** trigger cannot prevent a database superuser from bypassing it; controlled deployment and migration recovery remain required. Never run this migration against production under this directive.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7024 (ADMIN-020)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §024 (ADMIN-020)",
     "implementationLocation": "`prisma/migrations/20261124000000_user_role_session_revocation/migration.sql`, `tests/prisma/user-role-revocation-postgres.test.ts`, existing `lib/auth.ts` verification.",
     "verificationMethod": "Exact-head isolated PostgreSQL migration integration suite and database-backed journey workflow.",
     "testResult": "PASS: exact-head database suite applied the role-revocation migration and exercised demotion/restoration, explicit increments, ordinary update, rollback and overflow/decrease refusal in a disposable schema.",
@@ -699,7 +712,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418364"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-020",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-020",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -709,7 +722,7 @@
   "ADMIN-021": {
     "status": "PASS",
     "acceptance": "explicit allowlist and destructive scans pass, with final-head native migration and security tests. **Dependencies/conflicts:** ADMIN-020 remains in force.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7025 (ADMIN-021)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §025 (ADMIN-021)",
     "implementationLocation": "`tests/unit/repair-guards.test.ts`.",
     "verificationMethod": "Exact-head release validation static allowlist/destructive-SQL checks plus candidate PostgreSQL rehearsal and DB suite.",
     "testResult": "PASS: migration allowlist/destructive-SQL guards and exact-head PostgreSQL migration/security suites passed; no production migration occurred.",
@@ -722,7 +735,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418478",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-021",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-021",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -732,7 +745,7 @@
   "ADMIN-022": {
     "status": "BLOCKED",
     "acceptance": "retain original instruction IDs, test both failure directions and recovery failure; complete all workstreams with actual evidence. **Dependencies/conflicts:** fixed Arena PR branch; six-role permissions and precise approved financial terms remain unverified; `/control`, lifecycle, migration recovery and authentic six-viewport journeys remain incomplete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7026 (ADMIN-022)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §026 (ADMIN-022)",
     "implementationLocation": "`docs/agents/REQUIREMENTS_MATRIX.md`, `app/api/cron/agent-referral-reports/route.ts`, `tests/security/agent-report-scheduler.test.ts`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off.",
@@ -740,7 +753,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-022",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-022",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: individual scheduler/report safety tests exist, but complete workstream integration, approval policy and all concurrent programme acceptance are not complete; scheduler remains default-off.",
@@ -751,7 +764,7 @@
   "MOTION-005": {
     "status": "NOT_TESTED",
     "acceptance": "shared token and reduced-motion tests pass; inspect actual keyboard, mobile and desktop behavior; complete remaining page, chart, loading, transaction and Website Studio family coverage before claiming universal motion. **Dependencies/conflicts:** no motion-related schema migration or production republish.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7027 (MOTION-005)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §027 (MOTION-005)",
     "implementationLocation": "`app/globals.css`, `tests/unit/motion-system.test.ts`, existing workspace navigation and status components.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: source/token and reduced-motion unit checks pass, but actual workspace keyboard/mobile/status interaction inspection is not complete.",
@@ -760,7 +773,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418566",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-005",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-005",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -771,7 +784,7 @@
   "ADMIN-023": {
     "status": "NOT_TESTED",
     "acceptance": "own-agent cursor pagination, malformed/cross-tenant rejection and regression tests, plus actual PostgreSQL and browser evidence. **Dependencies/conflicts:** the existing 5,000-member write/reconciliation and baseline trigger limits remain; this only adds paginated reads, not large-report generation or reconciliation. Instruction completeness release gate, control, motion, notification recovery, native DB recovery and genuine six-viewport evidence remain incomplete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7028 (ADMIN-023)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §028 (ADMIN-023)",
     "implementationLocation": "`app/api/agents/reports/referrals/reconcile/route.ts`, `tests/security/agent-referral-report-reconciliation.test.ts`.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: cursor/tenant rejection source tests exist; a dedicated exact browser journey for own-agent pagination and >5,000-member report generation/reconciliation is not established.",
@@ -779,7 +792,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-023",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-023",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -790,7 +803,7 @@
   "MOTION-006": {
     "status": "BLOCKED",
     "acceptance": "real authenticated before/after recordings, six responsive viewport screenshots, reduced-motion interaction and authoritative state verification; all surfaces and Studio families must be tested before declaring universal coverage. **Dependencies/conflicts:** no concurrent worker available in this session; local disposable DB and browser needed for actual authenticated evidence.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7029 (MOTION-006)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §029 (MOTION-006)",
     "implementationLocation": "`components/DashboardClient.tsx`, `app/agents/dashboard/page.tsx`, `components/ui/AnalyticsChart.tsx`, `app/globals.css`, `docs/agents/MOTION_PRODUCT_AUDIT.md`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance.",
@@ -800,7 +813,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-006",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-006",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: selected browser observations do not supply authenticated app-wide before/after recordings, six-view independent review, or authoritative financial-state acceptance.",
@@ -811,7 +824,7 @@
   "ADMIN-024": {
     "status": "PASS",
     "acceptance": "gate fails for missing IDs, blocked/untested status, missing acceptance or absent evidence; tests demonstrate failures and CI reports NOT READY until genuine evidence exists. **Dependencies/conflicts:** the register is append-only; readiness manifest must be kept current whenever instructions change and independently reviewed.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7030 (ADMIN-024)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §030 (ADMIN-024)",
     "implementationLocation": "`scripts/admin/check-programme-readiness.mjs`, `scripts/admin/tests/programme-readiness.test.mjs`, `docs/agents/PROGRAMME_READINESS.json`, `.github/workflows/admin-instructions.yml`.",
     "verificationMethod": "Local `node --test scripts/admin/tests/programme-readiness.test.mjs scripts/admin/tests/instruction-integrity.test.mjs`; direct readiness-checker invocation; exact-head admin CI result is recorded separately.",
     "testResult": "PASS: local readiness/integrity tests and exact-head instruction-integrity CI pass; the completeness-test self-test passes; the required acceptance step exits 1 and reports 34 genuine non-PASS requirements, as intended. The gate remains fail-closed; this is not programme completion.",
@@ -823,7 +836,7 @@
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516453"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 ADMIN-024",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-024",
     "verificationCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
@@ -833,27 +846,27 @@
   "MOTION-007": {
     "status": "BLOCKED",
     "acceptance": "every item in the quoted instruction, including actual before/after browser recording, six viewports and each template family; no universal claim before all evidence. **Dependencies/conflicts:** the referenced separate detailed specification is not independently recoverable from visible conversation; no independent coding worker is available here.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7031 (MOTION-007)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §031 (MOTION-007)",
     "implementationLocation": "`lib/experience/motionRuntime.ts`, `tests/unit/storefront-motion.test.ts`, existing shared application motion and Studio pipelines.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original \u201cdetailed spec immediately above\u201d provenance remains ambiguous and must not be invented.",
+    "testResult": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-007",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-007",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original \u201cdetailed spec immediately above\u201d provenance remains ambiguous and must not be invented.",
+    "blocker": "BLOCKED: full requested cross-product motion engine and universal acceptance are not proven; original “detailed spec immediately above” provenance remains ambiguous and must not be invented.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
   },
   "MOTION-008": {
     "status": "BLOCKED",
-    "acceptance": "all acceptance criteria and definition of done in sections 12\u201315 above. **Dependencies/conflicts:** fixed Arena branch and existing open draft PR #77 supersede a separate branch/new PR; the official canonical domain instruction in ADMIN-003 is retained and the Vercel URL above is infrastructure. Existing per-site Lite/none settings and OS reduced motion must remain effective.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7032 (MOTION-008)",
+    "acceptance": "all acceptance criteria and definition of done in sections 12–15 above. **Dependencies/conflicts:** fixed Arena branch and existing open draft PR #77 supersede a separate branch/new PR; the official canonical domain instruction in ADMIN-003 is retained and the Vercel URL above is infrastructure. Existing per-site Lite/none settings and OS reduced motion must remain effective.",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §032 (MOTION-008)",
     "implementationLocation": "shared motion, existing modules, Website Studio generation/render/publish, tests and browser evidence; exact implementation paths are recorded in later append-only updates.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial.",
@@ -863,7 +876,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-008",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-008",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: owner specification spans all product modules, families, exact static identity, behaviors and six-view recordings; current browser coverage is partial.",
@@ -874,7 +887,7 @@
   "MOTION-009": {
     "status": "NOT_TESTED",
     "acceptance": "bounded concurrency, queue drain, off-screen removal, preference change and unmount tests; actual application, complete template generation/publishing paths, six viewports and before/after recordings remain required by MOTION-008. **Dependencies/conflicts:** other storefront routes and classic fallback do not use `ExperienceSite`'s controller; owner Lite/none and OS reduced motion override decoration; no new branch can be created in this session.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7033 (MOTION-009)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §033 (MOTION-009)",
     "implementationLocation": "`lib/experience/motionRuntime.ts`, `tests/unit/storefront-motion.test.ts`, `docs/agents/MOTION_INHERITANCE_AUDIT_20261031.md`.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: unit tests cover bounded queue, off-screen removal and preference changes, and live reduced-motion passes; real queue saturation/order/re-entry/route disposal remain unproven.",
@@ -883,7 +896,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-009",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-009",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -894,7 +907,7 @@
   "MOTION-010": {
     "status": "NOT_TESTED",
     "acceptance": "every actual supported route, classic fallback and every family has real preview/publication browser evidence, six independently inspected viewport screenshots, motion recordings, disabled/reduced-motion and concurrency/re-entry tests, and exact-head workflow results. **Dependencies/conflicts:** the `/b/[slug]/ai` route uses its own separately entitled renderer and remains an explicitly identified non-inheriting exception; this cycle has no independently running coding workers, local PostgreSQL or installed Chromium. Source/SSR tests do not establish genuine visual or authorization behavior.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7034 (MOTION-010)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §034 (MOTION-010)",
     "implementationLocation": "`components/storefront/StorefrontShell.tsx`, `components/storefront/ExperienceSite.tsx`, `components/storefront/RenderModeProbe.tsx`, `components/BusinessPage.tsx`, `lib/experience/motionRuntime.ts`, `app/b/[slug]/**`, `app/globals.css`, `tests/unit/storefront-motion-inheritance.test.ts`, `tests/unit/storefront-motion.test.ts`.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "NOT_TESTED: current Chrome route evidence passes storefront/shop/item/checkout/AI preview and reduced/Lite checks, but other routes, fallbacks, publication states and independent visual review remain uncovered.",
@@ -904,7 +917,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-010",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-010",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "No complete acceptance test was run for the full criterion; see result and source section.",
@@ -915,7 +928,7 @@
   "MOTION-011": {
     "status": "BLOCKED",
     "acceptance": "real browser coverage and independent six-viewport review of every family, route, preview/published/fallback, queue/reduced/disabled behavior and recordings, exact-head workflows, plus genuine programme acceptance without gate weakening. **Dependencies/conflicts:** no local browser or disposable PostgreSQL; no independent coding workers; existing readiness failures are unevidenced programme obligations rather than checker bugs.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7035 (MOTION-011)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §035 (MOTION-011)",
     "implementationLocation": "`app/b/[slug]/ai/page.tsx`, `components/AIFrontDeskCustomerClient.tsx`, `components/storefront/RenderModeProbe.tsx`, `lib/experience/motionRuntime.ts`, `app/globals.css`, `tests/unit/storefront-motion-inheritance.test.ts`, `tests/unit/ai-front-desk-customer-default-state.test.ts`, `docs/agents/MOTION_011_COVERAGE_MATRIX.md`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete.",
@@ -925,7 +938,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-011",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-011",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head reduced-motion evidence passes, but universal family/route/publish, accessibility and strict programme acceptance remain incomplete.",
@@ -936,7 +949,7 @@
   "MOTION-012": {
     "status": "BLOCKED",
     "acceptance": "every family and applicable route through actual generation and publishing, before/after recordings and independently reviewed six-view screenshots, queue/re-entry/cleanup, disabled/reduced and exact-head workflow results. **Dependencies/conflicts:** CI can run real Chrome and PostgreSQL, but this initial read-only harness only exercises seeded classic/AI preview/denial/not-found; it does not cover generated Studio families or actual AI publication. Before/after build comparison and independent inspection remain incomplete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7036 (MOTION-012)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §036 (MOTION-012)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/disposable-browser-evidence.mjs`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing.",
@@ -946,7 +959,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-012",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-012",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head Chrome captures exist, but full route/family generation-publication matrix, before/after recordings and independent six-view image review are missing.",
@@ -957,7 +970,7 @@
   "MOTION-013": {
     "status": "BLOCKED",
     "acceptance": "independent visual evidence across every supported real generation/publishing route/family, six viewports, correct motion/disabled/reduced/queue behavior and exact-head workflow results. **Dependencies/conflicts:** 9acb1d8 browser run failed 48/48 due to absent recordings; sandbox cannot access redirected artifact blob; the 20-family matrix and before/after independent review are not complete.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7037 (MOTION-013)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §037 (MOTION-013)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/disposable-browser-evidence.mjs`, `docs/agents/MOTION_013_EVIDENCE.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete.",
@@ -967,7 +980,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-013",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-013",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: exact-head capture/CI runs pass, but universal routes/families, complete browser behavior and independently inspectable visual review are not complete.",
@@ -978,7 +991,7 @@
   "MOTION-014": {
     "status": "BLOCKED",
     "acceptance": "real independently inspected baseline and after captures and recordings across all families, routes and states, real queue/re-entry/cleanup and accessibility checks, and exact-head results. **Dependencies/conflicts:** new harness results pending; annotations cover only a small safe public fixture and do not constitute universal visual review; broader completeness requirements are still unmet.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7038 (MOTION-014)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §038 (MOTION-014)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/generated-family-evidence.mjs`, `scripts/motion/disposable-browser-evidence.mjs`, `docs/agents/MOTION_014_EVIDENCE.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance.",
@@ -988,7 +1001,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-014",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-014",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: generated-family observations pass for 480 rows, but this is not complete independently inspected baseline/after evidence or queue/accessibility acceptance.",
@@ -999,7 +1012,7 @@
   "MOTION-015": {
     "status": "BLOCKED",
     "acceptance": "actual route and behavioural evidence, before/after baselines and independently inspected six-view artifacts, plus all exact-head workflows; every previously registered programme requirement still needs its own acceptance. **Dependencies/conflicts:** separate workers unavailable; API storage egress blocks image retrieval here; browser queue stress, published AI, true previous-build baseline, recordings and independent review are not yet implemented by this partial harness.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7039 (MOTION-015)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §039 (MOTION-015)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing.",
@@ -1009,7 +1022,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-015",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-015",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: reduced-motion event-level journey passes; queue saturation/order, historical baseline, published AI, commerce, artifact inspection and full programme evidence remain missing.",
@@ -1020,20 +1033,20 @@
   "MOTION-016": {
     "status": "BLOCKED",
     "acceptance": "all six acceptance areas plus independently inspected six-viewport before/after screenshots and recordings, complete evidenced programme gate and exact-head workflow results. **Dependencies/conflicts:** independent coding workers unavailable; artifact blob host blocked by sandbox egress; no real-browser queue stress, full commerce, published AI or historical baseline yet.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7040 (MOTION-016)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §040 (MOTION-016)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/generated-family-evidence.mjs`, `scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: targeted preference cancellation passes; the other six broad gaps\u2014queue, history, routes, AI, commerce, independent visual review\u2014and programme gate remain open.",
+    "testResult": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-016",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-016",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: targeted preference cancellation passes; the other six broad gaps\u2014queue, history, routes, AI, commerce, independent visual review\u2014and programme gate remain open.",
+    "blocker": "BLOCKED: targeted preference cancellation passes; the other six broad gaps—queue, history, routes, AI, commerce, independent visual review—and programme gate remain open.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -1041,7 +1054,7 @@
   "MOTION-017": {
     "status": "BLOCKED",
     "acceptance": "every preceding criterion, independent evidence inspection, all 40 prior requirements and strict gate must pass on the integrated exact head. **Dependencies/conflicts:** full artifact egress blocked; historical same-fixture captures and recordings not obtained; independent coding workers unavailable.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7041 (MOTION-017)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §041 (MOTION-017)",
     "implementationLocation": "`scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion.",
@@ -1052,7 +1065,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-017",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-017",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: all six live preference transitions pass, but the instruction expressly requires prior criteria, independent artifacts, queue/route cleanup and gate completion.",
@@ -1063,7 +1076,7 @@
   "MOTION-018": {
     "status": "BLOCKED",
     "acceptance": "all owner criteria, independent evidence and exact-head gate must pass. **Dependencies/conflicts:** sandbox egress blocks official Prisma engine download and artifact blob host; historic matching captures unavailable; independent workers unavailable.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7042 (MOTION-018)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §042 (MOTION-018)",
     "implementationLocation": "`package.json`, `scripts/test/check-prisma-client.cjs`, `.github/workflows/full-local-suite.yml`, `docs/agents/LOCAL_TEST_ENVIRONMENT.md`, `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet.",
@@ -1074,7 +1087,7 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 MOTION-018",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — MOTION-018",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
     "blocker": "BLOCKED: full no-database and database suites pass, but queue/lifecycle behavior, historical baseline, complete AI/commerce journeys, visual inspection and readiness gate remain unmet.",
@@ -1085,10 +1098,10 @@
   "RELEASE-001": {
     "status": "BLOCKED",
     "acceptance": "each remediation ID has a root-cause trace and appropriate independent evidence; every visual claim has genuine browser evidence; every tenant/payment claim has the relevant isolated integration proof; no finding is VERIFIED from code inspection or a unit test alone where integration/browser proof is required. Use finding statuses PENDING / IN PROGRESS / BLOCKED / IMPLEMENTED / VERIFIED and evidence labels PASS / FAIL / BLOCKED / NOT TESTED; keep these separate. Release remains NOT READY until all mandatory gates pass. Never weaken `programme-completeness` or any security/release gate to obtain green CI.",
-    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md \u00a7043 (RELEASE-001)",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §043 (RELEASE-001)",
     "implementationLocation": "all routes/components/services/models/integrations enumerated in `docs/audits/`; `docs/audits/REMEDIATION_REGISTER.md`; tests and disposable CI; this instruction file. Primary P0 areas: `lib/url.ts`, `lib/payments/**`, `app/api/paystack/**`, `app/api/checkout/**`, `app/api/media/**`, `lib/storage/**`, tenant/session guards and product journeys. The exact affected paths must be recorded per finding after source tracing, not inferred from roadmap names.",
-    "verificationMethod": "Current PR head d842777bc3e4a3cd15a9f8dec0c15a1210a1764c: Release Validation run 41304813296 passed, including migration/schema reconciliation, seed, typecheck, static checks, failure controls, production build, and reconciled-datamodel application suites (4,222 passed, 0 failed, 0 skipped across 373 files). Full no-database run 41304813357 passed (1,244 suites; 3,972 passed; 301 pending); candidate migration rehearsal 41304813354 passed. The earlier failure on 8a90bb0689e54dff4d4e3d92dae3497fabf4b62c remains unexplained because its artifact/log host returned EOF; it was not reproduced by app-suite runs 41304504330 and 41304813296. No root cause is claimed. programme-completeness still fails with 34 non-PASS records.",
-    "testResult": "BLOCKED: Release Validation is PASS on exact head d842777bc3e4a3cd15a9f8dec0c15a1210a1764c (run 41304813296; reconciled suite 4,222 passed, 0 failed, 0 skipped), and the full no-database suite passes (run 41304813357; 3,972 passed, 0 failed, 301 pending). The original run 41300707535 application-suite failure cannot be assigned a root cause: direct job-log and artifact API retrieval returned EOF from the Actions artifact host; the failure was not reproduced on later heads. The programme remains BLOCKED by 28 BLOCKED + 6 NOT_TESTED criteria, owner decisions, missing authenticated Control journeys and independently inspected visual/browser evidence. No gate was weakened.",
+    "verificationMethod": "Matched 43 canonical source headings to 43 manifest keys; corrected and unit-tested the inventory guard. Programme completeness remains blocked by 28 BLOCKED and 6 NOT_TESTED criteria and outstanding exact-head CI/operational evidence.",
+    "testResult": "IMPLEMENTATION ADDED: exact source/manifest inventory is 43 canonical requirements; strict checker baseline corrected to 43. Latest exact-head CI must still pass, and 34 non-PASS criteria remain. No merge/deployment performed.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
@@ -1102,10 +1115,10 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813354",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813520"
     ],
-    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md \u2014 RELEASE-001",
+    "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — RELEASE-001",
     "verificationCommit": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: findings are traceable and candidate CI passes, but domain/email, durable provider media, financial policy/lifecycle, admin console, full browser acceptance and programme-completeness remain unverified.",
+    "blocker": "BLOCKED: partial remediation is implemented (R2 read-after-write verification, least-privilege Control policy, 40% commission accrual, monthly eligibility and full-refund reversal). Mandatory release acceptance remains open: 28 BLOCKED/6 NOT_TESTED requirements, payout destination/transfer lifecycle, domain/email proof, live R2 provider verification, backup/restore, full browser/visual acceptance and CI completion.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/**",

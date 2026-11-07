@@ -8,6 +8,7 @@ import { settlePosPayment } from "./pos/settlement";
 import { isAutopilotPlanKey } from "./autopilot/entitlement";
 import { settleAutopilotPayment } from "./autopilot/settlement";
 import { isFrontDeskTierKey } from "./frontDeskTiers";
+import { recordCommissionAccrualForPaidPlan } from "./agents/commission-accrual";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -243,6 +244,7 @@ export async function activateSubscriptionForPayment(
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });
+    await recordCommissionAccrualForPaidPlan(tx, payment.id);
     // AI Front Desk 2.0 (§41): every tier of the family activates the shared Front Desk
     // entitlement row, stamped with the tier actually purchased (Starter reuses the legacy key,
     // so existing rows are untouched; a Standard/Pro/Voice purchase records its own key).

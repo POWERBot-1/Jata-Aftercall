@@ -1,13 +1,14 @@
 # `/control` owner decision package
 
-**Purpose:** record the conservative effective policy and its owner decision without enabling any capability. On 2026-11-01 the owner approved DENY for all 90 cells only. The owner approved no ALLOW, Control grant, role assignment, permission or operational/production identity. Separately, the owner explicitly authorized a temporary synthetic ordinary `User` solely inside the isolated disposable PostgreSQL database used by PR #78 CI; that fixture has no Control grant or role and is discarded with the database. This narrow test-only authorization does not enable production access or any Control capability.
+**Current owner decision — 2026-11-07:** GITANYA KARIUKI authorized the platform to select and implement the least-privilege role decisions in the platform owner's interest and proceed with Control role access. This supersedes the 2026-11-01 all-DENY operational decision. The historical matrix remains below for audit traceability, not as the current policy.
 
-**Repository / PR:** `POWERBot-1/Jata-Aftercall`, PR #78, branch `arena/115a62e1-jata-aftercall`  
-**Baseline reviewed:** `34283dff5aa13579931cbed7dc62c497cec8e753`
+**Current effective policy:** scoped read-only access only. SUPER_ADMIN: businesses.read, subscriptions.read, payments.read, commissions.read, audit.read and minimal system.health.read. PLATFORM_ADMIN: businesses.read, subscriptions.read and minimal system.health.read. FINANCE_ADMIN: subscriptions.read, payments.read and commissions.read. SUPPORT_ADMIN: businesses.read and subscriptions.read. SECURITY_ADMIN: audit.read and minimal system.health.read. READ_ONLY_AUDITOR: audit.read. All tenant data requires an exact business scope; only minimal system health may be platform-wide. All 90 role/capability cells are explicit; all other capabilities are DENY.
 
-**Owner decision recorded:** On 2026-11-01, the owner explicitly approved DENY for every one of the 90 canonical role × capability cells listed below. This is approval of the documented all-DENY policy only; it approves no ALLOW, Control grant, role assignment, permission, operational identity, provisioning, or operational Control access. The separately authorized disposable CI test `User` is an ordinary synthetic account and receives no Control role or grant.
+**Runtime:** `CONTROL_ROLE_POLICY_APPROVED=true` and `CONTROL_ROLE_ACCESS_ENABLED=true`. The access gate only opens grant evaluation; it does not provision identities or grants. Each request requires a valid current session, an active exact-key database grant, exact tenant scope, live grant recheck and verified short-lived MFA. No write, approval, payout, refund, provider-secret, identity/grant-administration or emergency authority is delegated.
 
-**Implementation semantics:** `CONTROL_ROLE_POLICY_APPROVED = true` records that owner decision only. The independent runtime kill switch `CONTROL_ROLE_ACCESS_ENABLED = false` remains closed, so protected routes continue to fail closed. The approved decision does not create any grant or identity and does not enable any route.
+**Implementation boundary:** no owner identity or production grant has been provisioned. Positive authenticated browser/API, PostgreSQL audit, MFA recovery, revocation/expiry, tenant-isolation and six-viewport enabled-console acceptance remains required before release.
+
+## Historical decision protocol (2026-11-01)
 
 ## Decision protocol
 
@@ -246,3 +247,17 @@ The owner decision on 2026-11-01 records DENY for all 90 current cells. For any 
 - Non-production provisioning authority and isolated test procedure.
 
 The all-DENY policy is owner-approved and `CONTROL_ROLE_POLICY_APPROVED` is true. `CONTROL_ROLE_ACCESS_ENABLED` remains false, all 90 capabilities remain denied, protected Control routes return `POLICY_PENDING`, and no positive or six-role authenticated acceptance is claimed. Approval of these denials does not waive the remaining acceptance evidence.
+
+
+## Owner authorization update — 2026-11-07
+
+GITANYA KARIUKI has now expressly authorized the platform to select and implement the role decisions it deems suitable in the platform owner's interest, and to proceed with Control role access. This supersedes the 2026-11-01 all-DENY operational policy. The implementation selects only narrowly scoped read capabilities; all write, approval, financial mutation, provider configuration, identity/grant administration, and emergency access remain denied.
+
+The exact effective matrix is documented in CONTROL_ROLE_ACTION_MATRIX.md and implemented in lib/control/role-policy.ts. The independent runtime gate is enabled, but no grant is automatically created. The grant table must still contain an active exact-key grant, the tenant-keyed operation must have an explicit business scope, and each protected request must pass current-session, live-grant and MFA checks. No owner identity or production grant was provisioned.
+
+This does not retroactively authorize or mutate existing accounts, businesses, payments, commission balances or provider configuration. Positive browser, MFA recovery, expiry, database audit and six-viewport acceptance remain evidence requirements.
+
+
+## Grant expiry implementation — 2026-11-07
+
+The owner-authorized least-privilege matrix is enabled in code, but a role label or policy approval alone never grants access. Every persisted ControlRoleGrant must now carry an explicit future `expiresAt`; `getControlIdentity()` selects only non-revoked grants whose expiry is later than the current server time. Legacy rows with NULL expiry are denied. The additive PostgreSQL migration `20261128000000_control_role_grant_expiry` adds the field/index and extends the append-only trigger so expiry cannot be edited, including during one-time revocation. A grant may be revoked once without changing its original expiry. No grant or production identity was created.
