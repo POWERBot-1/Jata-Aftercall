@@ -92,7 +92,13 @@ describe("runtime and schema guards", () => {
     // or a guarded foreign key on a table the same migration creates), and the Front Desk Voice
     // call foundation (six additive tenant-scoped Voice* tables keyed by plain businessId columns
     // plus their unique/index constraints; every statement is CREATE TABLE or CREATE INDEX —
-    // no foreign keys, no ALTERs, no data rewrite).
+    // no foreign keys, no ALTERs, no data rewrite), and the JATA Business Hub (nine additive
+    // tenant-scoped tables — OrderRequest, OrderRequestItem, CustomerEnquiry, Promotion,
+    // LoyaltyProgram, LoyaltyCard, LoyaltyStampEvent, LoyaltyRedemption, BusinessHubActivity —
+    // two enum types, their indexes and guarded foreign keys; it is the customer-conversion
+    // half of the EXISTING KES149 / KES999 Business Page subscription, so no pricing, plan,
+    // subscription, payment or entitlement table is touched and no existing row is read or
+    // rewritten).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -158,6 +164,7 @@ describe("runtime and schema guards", () => {
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
+      "20261128000000_business_hub_conversion",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -235,6 +242,7 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
+      "20261128000000_business_hub_conversion",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
