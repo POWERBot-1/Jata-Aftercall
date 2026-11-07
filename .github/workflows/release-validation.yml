@@ -172,6 +172,7 @@ jobs:
       - name: Canonical programme inventory and evidence gate
         run: |
           set -o pipefail
+          node --test scripts/release/tests/verify-programme.test.mjs 2>&1 | tee /tmp/step-programme-tests.log
           node scripts/release/verify-programme.mjs 2>&1 | tee /tmp/step-programme.log
 
       - name: Gate self-tests (failure logic)
