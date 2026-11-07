@@ -12,8 +12,8 @@ const isUnsignedInteger = (value: unknown): value is string => typeof value === 
 const isNonPositiveInteger = (value: unknown): value is string => typeof value === "string" && /^(0|-[1-9]\d{0,99})$/.test(value);
 
 /**
- * Storage totals for the authenticated active account only, NOT verified commission or a
- * payable balance. Attribution, provider settlement, financial policy and payouts are absent.
+ * Read-only own-agent summary from provider-verified local settlement records. Monthly
+ * attribution and payment eligibility are recomputed; no external transfer is initiated.
  */
 export async function GET() {
   const session = await getSession();
