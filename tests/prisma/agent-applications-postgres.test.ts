@@ -718,6 +718,6 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       if (oldReconciliation === undefined) delete process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED; else process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = oldReconciliation;
       mock.session = null;
     }
-  });;
+  });
 
 });
