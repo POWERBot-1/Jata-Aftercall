@@ -328,7 +328,9 @@ describe.skipIf(!enabled)("Business Hub against a real database", () => {
       { method: "PATCH", body: { status: "COMPLETED" } },
       { businessId: ctx.owner.businessId, requestId },
     );
-    expect(illegal.status).toBe(400);
+    // 409 Conflict: "A new request cannot move to completed." The status must not move.
+    expect(illegal.status).toBe(409);
+    expect((await prisma.orderRequest.findUniqueOrThrow({ where: { id: requestId } })).status).toBe("NEW");
 
     const reviewing = await call(
       orderRequestPatch,

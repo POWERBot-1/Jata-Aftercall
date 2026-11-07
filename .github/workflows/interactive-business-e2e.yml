@@ -195,7 +195,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set +e
-          { echo "### Business Hub journey — output"; echo; echo '```'; tail -c 6000 /tmp/step-hub-journey.log 2>/dev/null; echo '```'; } > /tmp/hub-comment.md
+          { echo "### Business Hub journey — output"; echo; echo '```'; tail -c 4000 /tmp/step-hub-journey.log 2>/dev/null; echo '```'; echo; echo "### Business Hub browser journey — output"; echo; echo '```'; tail -c 4000 /tmp/step-hub-browser.log 2>/dev/null; echo '```'; } > /tmp/hub-comment.md
           if [ -n "$PR_NUMBER" ]; then
             gh pr comment "$PR_NUMBER" --body-file /tmp/hub-comment.md || true
           fi
