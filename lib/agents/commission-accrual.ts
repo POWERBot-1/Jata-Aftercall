@@ -175,3 +175,50 @@ export async function recordCommissionReversalForFullRefund(tx: any, paymentId: 
   }
   return result.count === 1;
 }
+
+/** Recompute month-level eligibility at payout-review time; this is read-only and never transfers funds. */
+export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplicationId: string, instant: Date = new Date()): Promise<{
+  eligible: boolean; month: string; qualifyingPlanSales: number; minimumMonthlyPlanSales: number; accruedMinor: bigint; reversedMinor: bigint; payableMinor: bigint;
+}> {
+  if (typeof agentApplicationId !== "string" || !agentApplicationId.trim()) throw new Error("COMMISSION_AGENT_REQUIRED");
+  const agent = await tx.agentApplication.findUnique({
+    where: { id: agentApplicationId },
+    select: { id: true, userId: true, agentStatus: true, phoneVerifiedAt: true },
+  });
+  if (!agent || agent.agentStatus !== "ACTIVE" || !agent.phoneVerifiedAt) {
+    return { eligible: false, month: nairobiMonthBounds(instant).key, qualifyingPlanSales: 0, minimumMonthlyPlanSales: MINIMUM_MONTHLY_PLAN_SALES, accruedMinor: BigInt(0), reversedMinor: BigInt(0), payableMinor: BigInt(0) };
+  }
+  const month = nairobiMonthBounds(instant);
+  const referrals = await tx.referral.findMany({
+    where: { referrerUserId: agent.userId, status: "CONVERTED", referredUserId: { not: null } },
+    select: { referredUserId: true },
+  });
+  const referredUserIds = [...new Set(referrals.map((row: { referredUserId: string | null }) => row.referredUserId).filter((id: string | null): id is string => Boolean(id)))];
+  const qualifyingPlanSales = referredUserIds.length ? await tx.payment.count({
+    where: {
+      userId: { in: referredUserIds }, status: "PAID", purpose: "SUBSCRIPTION",
+      planId: { not: null }, businessId: { not: null }, updatedAt: { gte: month.start, lt: month.end },
+    },
+  }) : 0;
+  const accruals = await tx.agentCommissionLedgerEntry.findMany({
+    where: { agentApplicationId, entryType: "ACCRUAL", createdAt: { gte: month.start, lt: month.end } },
+    select: { id: true, amountMinor: true },
+  });
+  const accrualIds = accruals.map((entry: { id: string }) => entry.id);
+  const reversals = accrualIds.length ? await tx.agentCommissionLedgerEntry.findMany({
+    where: { agentApplicationId, entryType: "REVERSAL", originalEntryId: { in: accrualIds } },
+    select: { amountMinor: true },
+  }) : [];
+  const accruedMinor = accruals.reduce((sum: bigint, entry: { amountMinor: bigint }) => sum + entry.amountMinor, BigInt(0));
+  const reversedMinor = reversals.reduce((sum: bigint, entry: { amountMinor: bigint }) => sum + (entry.amountMinor < BigInt(0) ? -entry.amountMinor : BigInt(0)), BigInt(0));
+  const payableMinor = accruedMinor > reversedMinor ? accruedMinor - reversedMinor : BigInt(0);
+  return {
+    eligible: qualifyingPlanSales >= MINIMUM_MONTHLY_PLAN_SALES && payableMinor > BigInt(0),
+    month: month.key,
+    qualifyingPlanSales,
+    minimumMonthlyPlanSales: MINIMUM_MONTHLY_PLAN_SALES,
+    accruedMinor,
+    reversedMinor,
+    payableMinor,
+  };
+}
