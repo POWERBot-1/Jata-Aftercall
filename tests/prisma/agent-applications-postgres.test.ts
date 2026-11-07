@@ -641,10 +641,11 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       process.env.AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED = "true";
       const user = await p.user.create({ data: { email: `large-report-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
       users.push(user.id);
+      const verifiedPhoneE164 = `+2547${String(parseInt(uid().slice(-6), 36) % 100000000).padStart(8, "0")}`;
       const application = await p.agentApplication.create({
         data: {
-          userId: user.id, fullName: "Synthetic Large Report", phoneE164: "+254700000099",
-          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), verifiedPhoneE164: "+254700000099", agentStatus: "ACTIVE",
+          userId: user.id, fullName: "Synthetic Large Report", phoneE164: verifiedPhoneE164,
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), verifiedPhoneE164, agentStatus: "ACTIVE",
         },
       });
       const periodKey = "daily:2026-11-01";
