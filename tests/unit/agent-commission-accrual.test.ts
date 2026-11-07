@@ -36,6 +36,16 @@ describe("transactional commission accrual", () => {
       })],
     }));
     expect(tx.auditEvent.create).toHaveBeenCalledTimes(1);
+    expect(tx.payment.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        status: "PAID",
+        purpose: "SUBSCRIPTION",
+        currency: "KES",
+        amount: { gt: 0 },
+        paystackId: { not: null },
+        businessId: { in: ["business-1", "business-2"] },
+      }),
+    }));
   });
 
   it("does not record payout eligibility below ten qualifying plan sales", async () => {
@@ -138,7 +148,7 @@ describe("monthly commission payout eligibility reconciliation", () => {
   it("keeps payout ineligible below the monthly threshold even when an accrual exists", async () => {
     const tx: any = {
       agentApplication: { findUnique: vi.fn(async () => ({ id: "agent-1", userId: "agent-user-1", agentStatus: "ACTIVE", phoneVerifiedAt: new Date() })) },
-      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1" }]) },
+      referral: { findMany: vi.fn(async () => [{ referredUserId: "customer-1", referredBusinessId: "business-1" }]) },
       payment: { count: vi.fn(async () => 9) },
       agentCommissionLedgerEntry: { findMany: vi.fn(async () => [{ id: "accrual-1", amountMinor: BigInt(40_000) }]) },
     };
