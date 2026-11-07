@@ -267,8 +267,8 @@
     "acceptance": "server-side module/action authorization, confirmation/change-history tests, cross-tenant tests, kill-switch scope, health-source provenance and last-check verification.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
     "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "verificationMethod": "Vercel project environment inventory (decrypt=false); exact key names and targets only. Do not infer secret values from redacted output. Requires isolated Preview R2 put/head/delete and Production owner-approved configuration.",
+    "testResult": "Vercel environment inventory checked with secret values redacted. R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID, R2_BUCKET and R2_PUBLIC_BASE_URL are Preview-scoped; R2_ACCESS_KEY_ID exists in Preview and Production. No Production R2 secret/bucket/account/public URL set was verified. No provider activation or Production configuration change performed.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
@@ -276,7 +276,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-007",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: no secured control-plane configuration/change history or owner-approved provider configuration/health checks; no provider was activated.",
+    "blocker": "BLOCKED: Preview R2 variables are present, but a real upload/HEAD/delete test has not been proven and the Production R2 set is incomplete (the inspected Production environment exposed only R2_ACCESS_KEY_ID; no Production R2_SECRET_ACCESS_KEY, bucket, account ID or public base URL was present). Provider health/configuration audit and owner-controlled change history remain incomplete.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
@@ -286,8 +286,8 @@
     "acceptance": "synthetic provider lifecycle with callback authentication/deduplication, safe retry, dead-letter, operator recovery, concurrent/crash and uncertain-outcome tests; actual delivery claims need provider evidence.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §008 (ADMIN-008)",
     "implementationLocation": "existing `lib/agents/admin-notification-*`, worker/callback/replay/admin routes, scheduler and integration adapters.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
+    "verificationMethod": "Source configuration contract plus Vercel environment inventory. Requires approved provider, secure env configuration, signed callback tests, delivery evidence and replay/recovery acceptance.",
+    "testResult": "Inspected the application-required SMTP/SMS variable names in lib/autopilot/channels.ts and compared against Vercel environment keys (secret values redacted). None of the five required SMTP/SMS keys was present. No live email or SMS sent.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418407"
@@ -295,7 +295,7 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-008",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: full communications console/dead-letter/recovery journey and provider-authorized delivery are unverified; no real messages were sent.",
+    "blocker": "BLOCKED: live communications provider delivery and recovery are not configured or proven. Vercel environment inventory did not contain SMTP_HOST, SMTP_USER, SMTP_PASS, SMS_API_KEY or SMS_API_URL. Full outbox/dead-letter/recovery browser journey and provider callback verification remain untested.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
     "currentAssessmentStatus": "BLOCKED"
