@@ -251,6 +251,10 @@ export function PointsWallet({ code, businessName }: { code: string; businessNam
                     type="button"
                     className="jata-btn jata-btn-primary mt-2 w-full justify-center sm:w-auto"
                     style={{ backgroundColor: "#b6ff2e", color: "#16181d" }}
+                    // Exposed so the browser journey can assert the guard itself: a reward the
+                    // balance cannot cover is disabled and says how many points are short.
+                    data-reward-id={reward.id}
+                    data-affordable={affordable ? "yes" : "no"}
                     disabled={!affordable || busyReward === reward.id}
                     onClick={() => redeem(reward.id)}
                   >

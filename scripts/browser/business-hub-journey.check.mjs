@@ -297,6 +297,18 @@ if (process.exitCode !== 2) {
         isActive: true,
       },
     });
+    // Dearer than the wallet will hold after the redemption below, so the browser can prove the
+    // insufficient-balance guard rather than only the happy path.
+    const pointsRewardTooDear = await prisma.loyaltyReward.create({
+      data: {
+        businessId: business.id,
+        programmeId: pointsProgramme.id,
+        title: "Free dessert platter",
+        kind: "FIXED_POINTS",
+        pointsCost: 5,
+        isActive: true,
+      },
+    });
     const pointsCard = await prisma.loyaltyCard.create({
       data: {
         businessId: business.id,
@@ -545,6 +557,24 @@ if (process.exitCode !== 2) {
       "customer: redeeming deducts the reward's cost exactly once (12 − 10 = 2)",
       accountAfterRedeem?.availablePoints === 2,
       `wallet holds ${accountAfterRedeem?.availablePoints ?? "no wallet"}`,
+    );
+    const tooDear = await walletPage.$(
+      `[data-reward-id="${pointsRewardTooDear.id}"][data-affordable="no"][disabled]`,
+    );
+    check(
+      "customer: a reward the balance cannot cover is disabled, not silently spendable",
+      Boolean(tooDear),
+      tooDear ? "the button is disabled" : "the button was clickable",
+    );
+    check(
+      "customer: the wallet says how many points are short instead of hinting at money",
+      /need 3 more/i.test(walletText) && !/cash out|paid out|bank transfer|money sent/i.test(walletText),
+    );
+    const accountAfterRefusal = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } });
+    check(
+      "customer: the refused reward costs nothing (the balance is unchanged)",
+      accountAfterRefusal?.availablePoints === 2,
+      `wallet holds ${accountAfterRefusal?.availablePoints ?? "no wallet"}`,
     );
     check("customer: no uncaught page error in the wallet", walletErrors.length === 0, walletErrors.slice(0, 2).join(" | "));
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-redeemed.png"), fullPage: true });
