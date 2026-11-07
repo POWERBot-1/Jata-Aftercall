@@ -30,7 +30,7 @@ describe("own agent commission summary", () => {
     }]);
     mocks.monthly.mockResolvedValue({
       eligible: true, month: "2026-11", qualifyingPlanSales: 10, minimumMonthlyPlanSales: 10,
-      accruedMinor: accrualMinor, reversedMinor, payableMinor: netMinor,
+      accruedMinor: accrualMinor, reversedMinor: reversalMinor, payableMinor: netMinor,
     });
     mocks.transaction.mockImplementation(async (work: (tx: any) => Promise<unknown>) => work({
       agentApplication: { findUnique: mocks.agentFind },
