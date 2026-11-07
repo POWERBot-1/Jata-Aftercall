@@ -287,6 +287,7 @@ if (process.exitCode !== 2) {
     browser = await puppeteer.launch({
       executablePath: chrome,
       headless: true,
+      protocolTimeout: 180_000,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
 
@@ -371,12 +372,17 @@ if (process.exitCode !== 2) {
 
     for (const [label, pathname, marker] of [
       ["Promotions", "promotions", "Lunch combo"],
+      // The Loyalty screen keeps its reward text in a form field, which `innerText` never carries,
+      // so that one is read out of the input itself.
       ["Loyalty", "loyalty", "Free pilau combo"],
       ["QR", "qr", `/b/${business.slug}`],
     ]) {
       const target = `${baseUrl}/dashboard/businesses/${business.id}/${pathname}`;
       const pageResponse = await ownerPage.goto(target, { waitUntil: "networkidle2", timeout: 60_000 });
-      const body = await ownerPage.evaluate(() => document.body.innerText);
+      const body = await ownerPage.evaluate(
+        () =>
+          `${document.body.innerText}\n${[...document.querySelectorAll("input")].map((input) => input.value).join("\n")}`,
+      );
       check(
         `owner: the ${label} screen opens and shows its own content`,
         pageResponse?.status() === 200 && body.includes(marker),
@@ -397,15 +403,20 @@ if (process.exitCode !== 2) {
       `HTTP ${foreign?.status()}`,
     );
 
-    const anonymous = await browser.newPage();
+    // A separate browser context, so no cookie from the owner's page can travel with the request.
+    const anonymousContext = await browser.createBrowserContext();
+    const anonymous = await anonymousContext.newPage();
     const anonymousResponse = await anonymous.goto(customersUrl, { waitUntil: "networkidle2", timeout: 60_000 });
     const anonymousText = await anonymous.evaluate(() => document.body.innerText);
+    const anonymousUrl = anonymous.url();
     check(
       "authorization: the hub is not reachable without a session",
-      anonymousResponse?.status() >= 400 || /sign in/i.test(anonymousText),
-      `HTTP ${anonymousResponse?.status()}`,
+      anonymousResponse?.status() >= 400 ||
+        !anonymousUrl.includes("/customers") ||
+        (/sign in/i.test(anonymousText) && !anonymousText.includes("Hub Journey Foods")),
+      `HTTP ${anonymousResponse?.status()}, landed on ${anonymousUrl.replace(baseUrl, "")}`,
     );
-    await anonymous.close();
+    await anonymousContext.close();
 
     // ── the QR download ───────────────────────────────────────────────────────────────────────
     const qrPng = await fetch(`${baseUrl}/api/business/${business.id}/qr?format=png`, {
@@ -424,15 +435,19 @@ if (process.exitCode !== 2) {
 
     // ── six viewports ─────────────────────────────────────────────────────────────────────────
     for (const [width, height] of viewportCases) {
-      await customerPage.setViewport({ width, height, deviceScaleFactor: 1 });
-      await customerPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
-      const layout = await customerPage.evaluate(() => ({
+      const viewportContext = await browser.createBrowserContext();
+      const viewportPage = await viewportContext.newPage();
+      await viewportPage.setViewport({ width, height, deviceScaleFactor: 1 });
+      await viewportPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
+      const layout = await viewportPage.evaluate(() => ({
         overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
         basket: /Request an order/.test(document.body.innerText),
+        seen: document.body.innerText.replace(/\s+/g, " ").slice(0, 110),
       }));
       check(`${width}×${height}: the page fits the viewport`, layout.overflow <= 1, `overflow ${layout.overflow}px`);
-      check(`${width}×${height}: the order basket is reachable`, layout.basket);
-      await customerPage.screenshot({ path: path.join(evidenceDir, `customer-${width}.png`), fullPage: false });
+      check(`${width}×${height}: the order basket is reachable`, layout.basket, layout.seen);
+      await viewportPage.screenshot({ path: path.join(evidenceDir, `customer-${width}.png`), fullPage: false });
+      await viewportContext.close();
     }
 
     await writeFile(
