@@ -12,6 +12,20 @@ const COMMISSION_BASIS_POINTS = AGENT_COMMISSION_POLICY.basisPoints;
 const MINIMUM_MONTHLY_PLAN_SALES = AGENT_COMMISSION_POLICY.minimumMonthlyPlanSales;
 const POLICY_VERSION = AGENT_COMMISSION_POLICY.version;
 
+type ReferralBusinessPair = { userId: string; businessId: string };
+function uniqueReferralBusinessPairs(rows: Array<{ referredUserId: string | null; referredBusinessId: string | null }>): ReferralBusinessPair[] {
+  const pairs = new Map<string, ReferralBusinessPair>();
+  for (const row of rows) {
+    if (typeof row.referredUserId !== "string" || !row.referredUserId ||
+        typeof row.referredBusinessId !== "string" || !row.referredBusinessId) continue;
+    pairs.set(`${row.referredUserId}:${row.referredBusinessId}`, {
+      userId: row.referredUserId,
+      businessId: row.referredBusinessId,
+    });
+  }
+  return [...pairs.values()];
+}
+
 function nairobiMonthBounds(instant: Date): { start: Date; end: Date; key: string } {
   if (!(instant instanceof Date) || !Number.isFinite(instant.getTime())) throw new Error("COMMISSION_DATE_INVALID");
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -69,9 +83,7 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     where: { referrerUserId: referral.referrerUserId, status: "CONVERTED", referredUserId: { not: null } },
     select: { referredUserId: true, referredBusinessId: true },
   });
-  const referralPairs = [...new Map(referrals
-    .filter((row: { referredUserId: string | null; referredBusinessId: string | null }) => Boolean(row.referredUserId && row.referredBusinessId))
-    .map((row: { referredUserId: string; referredBusinessId: string }) => [`${row.referredUserId}:${row.referredBusinessId}`, { userId: row.referredUserId, businessId: row.referredBusinessId }] as const)).values()];
+  const referralPairs = uniqueReferralBusinessPairs(referrals as Array<{ referredUserId: string | null; referredBusinessId: string | null }>);
   if (!referralPairs.some((pair) => pair.userId === payment.userId && pair.businessId === payment.businessId)) throw new Error("COMMISSION_ATTRIBUTION_CHANGED");
 
   const monthlyPlanSales = referralPairs.length ? await tx.payment.count({
@@ -204,9 +216,7 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
     where: { referrerUserId: agent.userId, status: "CONVERTED", referredUserId: { not: null }, referredBusinessId: { not: null } },
     select: { referredUserId: true, referredBusinessId: true },
   });
-  const referralPairs = [...new Map(referrals
-    .filter((row: { referredUserId: string | null; referredBusinessId: string | null }) => Boolean(row.referredUserId && row.referredBusinessId))
-    .map((row: { referredUserId: string; referredBusinessId: string }) => [`${row.referredUserId}:${row.referredBusinessId}`, { userId: row.referredUserId, businessId: row.referredBusinessId }] as const)).values()];
+  const referralPairs = uniqueReferralBusinessPairs(referrals as Array<{ referredUserId: string | null; referredBusinessId: string | null }>);
   const qualifyingPlanSales = referralPairs.length ? await tx.payment.count({
     where: {
       OR: referralPairs.map((pair) => ({ userId: pair.userId, businessId: pair.businessId })),
