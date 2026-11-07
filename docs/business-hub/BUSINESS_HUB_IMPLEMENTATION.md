@@ -56,7 +56,7 @@ Schema: the *JATA Business Hub* block in `prisma/schema.prisma`.
 | `CREATE TYPE` | 2 |
 | `CREATE TABLE` | 9 |
 | `CREATE INDEX` / `CREATE UNIQUE INDEX` | 25 |
-| `ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY` | 12 |
+| `ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY` | 13 |
 
 | Table | Purpose |
 |---|---|
@@ -114,12 +114,12 @@ compatible with Prisma?
    calendar.
 5. The migration has never been applied anywhere: it exists only on this unmerged branch.
 
-### Schema ⇄ SQL parity (BLOCKED tool substituted)
+### Schema ⇄ SQL parity (BLOCKED locally; the real tools passed in CI)
 
 `prisma migrate diff`, `prisma validate` and `prisma migrate deploy` all need the schema-engine
-binary, which cannot be downloaded here (`binaries.prisma.sh` is unreachable), so they are
-**BLOCKED**. In their place, `tests/prisma/business-hub-migration-parity.test.ts` (10 checks, all
-passing) parses `schema.prisma` and the SQL and asserts, for all nine models:
+binary, which cannot be downloaded here (`binaries.prisma.sh` is unreachable), so in this
+workspace they are **BLOCKED**. In their place, `tests/prisma/business-hub-migration-parity.test.ts`
+(10 checks, all passing) parses `schema.prisma` and the SQL and asserts, for all nine models:
 
 - every table and both enum types exist, with exactly the documented enum values;
 - every scalar column exists with the SQL type Prisma emits (`String→TEXT`, `Int→INTEGER`,
@@ -130,6 +130,47 @@ passing) parses `schema.prisma` and the SQL and asserts, for all nine models:
 - every relation has a cascading foreign key to the parent's `id`;
 - the migration creates **only** hub tables, alters **only** hub tables, and contains no
   destructive statement (`DROP `, `TRUNCATE`, `ALTER COLUMN`, `DELETE FROM`, `UPDATE "`).
+
+In CI, where the engines are available, the tools this substitutes for ran for real and passed:
+**Migrations + schema on PostgreSQL 18** (asserts the server really is PostgreSQL 18, applies the
+complete migration history, checks `migrate status` reports nothing pending or failed, bounds
+schema drift against the recorded baseline, then re-runs `migrate deploy` as a no-op) and **Exact
+candidate applies on disposable PostgreSQL 18**. Run identifiers in §4.
+
+### Defect found in review: `P1012` on `Business.orderRequestItems`
+
+The first push put the whole branch in this state:
+
+```
+Error: Prisma schema validation - (get-dmmf wasm)
+Error code: P1012
+error: Error validating field `orderRequestItems` in model `Business`: The
+       relation field `orderRequestItems` on model `Business` is missing an
+       opposite relation field on the model `OrderRequestItem`.
+  --> prisma/schema.prisma:616
+Validation Error Count: 1
+```
+
+- **Root cause.** `Business` declared the back-relation `orderRequestItems OrderRequestItem[]`,
+  but `OrderRequestItem` carried `businessId` only as a bare scalar — it related to
+  `OrderRequest`, not to `Business`. Prisma requires both sides of a relation. Every other hub
+  model pairs its `businessId` with a `business Business @relation(...)`, which is why this was
+  the only one.
+- **Why it was not caught in this workspace.** `prisma validate` and `prisma generate` need the
+  schema engine, so neither can run here; without a generated client every Prisma model type
+  resolves to `any`, and TypeScript cannot see the missing side either. It surfaced as CI's
+  *"Validate Prisma schema and generate the client"* step failing, which skips lint, typecheck,
+  audit, migrations and everything downstream — so every check on the branch reported failure.
+- **Correction.** `OrderRequestItem.businessId` was promoted to a real relation
+  (`business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)`,
+  commit `e34b7d8`) and the matching foreign key was added to the migration — the 13th, cascading,
+  like every other hub table. No call site changes: `createOrderRequest` already writes
+  `businessId` on every line item. It is also the better model, because the database — not only
+  the application — now enforces that a line item belongs to the business that owns its request.
+- **Verified.** `prisma validate`, `prisma generate`, lint, typecheck and the production
+  dependency audit all pass in CI on the corrected commit; the parity suite derives the 13th
+  foreign key from the schema itself and finds it in the SQL (10/10); the migration applied
+  cleanly to a real PostgreSQL 18 server.
 
 ### Rollback
 
@@ -199,6 +240,34 @@ cause of every non-passing item below.
 | 5 | `npx next build --webpack` with `typescript.ignoreBuildErrors` temporarily set (config reverted afterwards) | **exit 0** — compiles, lints and prerenders; all 15 new routes emitted (list below) |
 | 6 | `node -e "…Prisma.dmmf"` | `undefined` — proves the client is not generated here, and that checks 2 and 4 are environmental |
 
+### Continuous integration — the checks this workspace cannot run
+
+All of the following are GitHub Actions runs on commit `9fa1cf9` of this branch — the head at the
+time they ran — taken from the pull request's own check list. Commit `9fa1cf9` is the head of the
+code; the commit that adds this document changes nothing executable. Every identifier below is
+the run and job that produced the result, so each can be opened and read.
+
+| Check | Result | Run / job |
+|---|---|---|
+| Static (install, generate, lint, typecheck, audit) | **PASS** | run `42386795130`, job `128445776094` — `prisma validate` + `prisma generate` step passes, then lint, typecheck and the production dependency audit |
+| Schema, types, unit suite, build | **PASS** | run `42386795114`, job `128445826326` |
+| full-suite | **PASS** | run `42386795179`, job `128445775928` — the same vitest suite that reports 1 failure here (§5); with a generated Prisma client it is green |
+| Migrations + schema on PostgreSQL 18 | **PASS** | run `42386795130`, job `128445776033` — applies the complete history on a real PostgreSQL 18 server, then re-runs `migrate deploy` as a no-op |
+| Exact candidate applies on disposable PostgreSQL 18 | **PASS** | run `42386795143`, job `128445776260` — the candidate migration rehearsed against a throwaway database |
+| Migration target guard | **PASS** | run `42386795125`, job `128445775623` |
+| Migrations and PostgreSQL suite | **PASS** | run `42386795114`, job `128446530918` |
+| Schema reconciliation proposal closes the drift | **PASS** | run `42386795130`, job `128445775791` |
+| Journey against a real database | **PASS** | run `42386795125`, job `128445775916` — 13m38s, applications against a real database |
+| Production build path on PostgreSQL 18 | **PASS** | run `42386795130`, job `128445776091` — the production build, against a real database |
+| Real-Chrome six-viewport capture on a disposable database | **PASS** | run `42386795221`, job `128446635466` — 8m26s, real Chrome at six viewports |
+| capture | **PASS** | run `42386795164`, job `128445775789` |
+| Failure paths actually fail | **PASS** | run `42386795130`, job `128445776069` |
+| D2 — build, audit and controls on the candidate tree | **PASS** | run `42386795143`, job `128445775941` |
+| Voice readiness, webhook, pipeline and media worker tests | **PASS** | run `42386795138`, job `128445775808` — pre-existing suite, unchanged by this branch |
+| Release gate (aggregate) | **PASS** | run `42386795130`, job `128446461906` |
+| Vercel (preview build of this branch) | **PASS** | deployment `2FXbXwcg1CQh9aYRBj1MnWyvDzrw` |
+| **programme-completeness** | **FAIL** | run `42386795190`, job `128445776035` — **pre-existing and unrelated**: it also fails on the unrelated branch `arena/full-remediation-20261107` (pull request #90, run `42386461310`). Locally `node scripts/admin/check-programme-readiness.mjs` reports a platform-wide inventory of BLOCKED / NOT_TESTED programme requirements that this pull request does not own and must not sign off on. |
+
 Routes emitted by the successful build (from `.next/server/app-paths-manifest.json`):
 `/dashboard/businesses/[id]/{customers,promotions,loyalty,qr}/page`,
 `/api/public/{order-request,enquiry,loyalty/[code]}/route`,
@@ -232,7 +301,7 @@ Routes emitted by the successful build (from `.next/server/app-paths-manifest.js
 | 12 | Business A cannot access Business B's records | **PASS** |
 | 13 | KES149 / KES999 entitlements intact | **PASS** |
 | 14 | Existing Business Pages still work | **PASS** (full regression suite + rendered markup) |
-| 15 | Mobile / desktop / accessibility / error handling in a browser | **NOT TESTED** — no browser or database in this workspace (§7) |
+| 15 | Mobile / desktop / accessibility / error handling in a browser | **PASS** — real Chrome at six viewports against a disposable database in CI: *Real-Chrome six-viewport capture on a disposable database* (run `42386795221`, job `128446635466`) and *capture* (run `42386795164`, job `128445775789`). The images themselves were not inspected by hand: the artifact download is blocked from this workspace, so this is the check's verdict, not a visual review. Owner screens are outside the capture's scope — see §8 |
 
 Security and abuse checks covered by the journey suite: anonymous caller refused (401), staff
 member allowed, cross-tenant read/update/create/QR refused (403/404) with nothing written,
@@ -252,7 +321,8 @@ and public reads that never expose contact values or owner notes.
 Evidence that it is unrelated to this work: the file is untouched by this branch
 (`git status` shows no modification), and `node -e "const {Prisma}=require('@prisma/client'); …"`
 prints `dmmf is undefined`. The same cause produces the 3 `tsc` errors and the build's type-check
-step. It is expected to pass in CI, where `prisma generate` runs.
+step. It does pass in CI, where `prisma generate` runs: the *full-suite* check is green on the final
+commit (run `42386795179`, job `128445775928`).
 
 ---
 
@@ -299,15 +369,21 @@ step. It is expected to pass in CI, where `prisma generate` runs.
 
 ## 8. Known limitations and outstanding work
 
-1. **No browser or database in this workspace** → no screenshots, no camera scan, no device
-   matrix. Server-rendered markup tests stand in for the customer view. A ready-to-run browser
-   check is provided: `scripts/browser/business-hub.check.mjs`
+1. **No browser or database in this workspace** → no screenshots inspected here, no camera scan.
+   Server-rendered markup tests stand in for the customer view, and CI covers the rest: the
+   six-viewport real-Chrome capture (run `42386795221`) and the journey against a real database
+   (run `42386795125`) both pass on commit `9fa1cf9`. The capture's own images were **not**
+   downloaded and reviewed by hand — the artifact download is blocked from this workspace — so
+   the browser evidence is the check's verdict plus the rendered-markup suite, not a visual
+   review. A ready-to-run browser check is also provided:
+   `scripts/browser/business-hub.check.mjs`
    (`CHROME_PATH=… BASE_URL=… SLUG=… SHOT_DIR=… npm run test:browser:business-hub`), which follows
    the repository's `puppeteer-core` convention and **exits 2 with "NOT RUN" when Chrome is
    absent**, so a run without a browser can never be mistaken for a pass. Owner screens inside it
    are skipped (reported NOT RUN) unless `HUB_SESSION_COOKIE` and `BUSINESS_ID` are supplied.
-2. **Prisma CLI is unavailable offline**, so `prisma migrate diff` / `validate` / `deploy` have
-   not run; the parity suite substitutes for `migrate diff`. Confirm both green in CI.
+2. **Prisma CLI is unavailable offline**, so `prisma migrate diff` / `validate` / `deploy` were
+   never run here; the parity suite substitutes for `migrate diff`. In CI all three ran against a
+   real PostgreSQL 18 server and passed (runs `42386795130`, `42386795143`, `42386795125`).
 3. **Loyalty is owner-verified only** — by design for this release. Nothing automatically detects
    a purchase, visit or location, and the UI says so.
 4. **Rate limits are per instance, in memory.** Behind several instances the effective limit
@@ -331,7 +407,7 @@ step. It is expected to pass in CI, where `prisma generate` runs.
 
 ## 9. Changed files
 
-**Modified (10)** — each change is the minimum the hub needs:
+**Modified (11)** — each change is the minimum the hub needs:
 
 | File | Change |
 |---|---|
@@ -341,10 +417,11 @@ step. It is expected to pass in CI, where `prisma generate` runs.
 | `lib/db.ts` | hub models added to the offline stub: reads empty, writes refuse |
 | `package.json` | `jsqr` + `qrcode` as devDependencies; `test:browser:business-hub` script |
 | `package-lock.json` | lockfile for the two devDependencies |
-| `prisma/schema.prisma` | nine hub models, two enums, back-relations on `Business` |
+| `prisma/schema.prisma` | nine hub models, two enums, back-relations on `Business`, and the `OrderRequestItem → Business` relation that fixed the P1012 (§2) |
 | `vitest.config.ts` | `*.test.tsx` added to the test include list (component render tests) |
 | `tests/helpers/posFakeDb.ts` | exported `registerUniqueIndexes` so a suite can declare the hub's unique indexes |
 | `tests/unit/repair-guards.test.ts` | the new migration added to the authorised-migration allowlist with its rationale |
+| `docs/release/EVIDENCE-MANIFEST.sha256` | regenerated with the repository's own generator because the manifest covers `package.json`, which this branch edits — one digest line moved, the other 67 are unchanged |
 
 **Added (49)** — 15 API routes, 4 dashboard pages, 10 hub/QR library modules, 10 React
 components, 5 test suites + 2 test helpers, 1 browser check script, 1 migration, and this
