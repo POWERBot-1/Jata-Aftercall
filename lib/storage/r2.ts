@@ -102,7 +102,7 @@ function defaultClient(config: R2Config): R2ObjectClient {
 async function sendWithTimeout(
   client: R2ObjectClient,
   command: PutObjectCommand | DeleteObjectCommand,
-): Promise<void> {
+): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
