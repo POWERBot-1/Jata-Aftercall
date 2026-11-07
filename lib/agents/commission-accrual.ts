@@ -188,11 +188,11 @@ export async function recordCommissionReversalForFullRefund(tx: any, paymentId: 
   if (result.count === 1) {
     await tx.auditEvent.create({
       data: {
-        actorId: payment.userId,
+        actorId: null,
         action: "AGENT_COMMISSION_REVERSED",
         targetType: "AGENT_COMMISSION_LEDGER",
         targetId: sourceEventId,
-        metadata: JSON.stringify({ paymentId, originalEntryId: accrual.id, reversedMinor: accrual.amountMinor.toString() }),
+        metadata: JSON.stringify({ paymentId, originalEntryId: accrual.id, reversedMinor: accrual.amountMinor.toString(), source: "PAYSTACK_SIGNED_REFUND_WEBHOOK" }),
       },
     });
   }
