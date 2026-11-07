@@ -538,3 +538,49 @@ failure.
   checker was not modified and no count was manipulated.
 - **No full screen-reader pass.** Forms are labelled and announce errors and confirmations, but an
   assistive-technology review remains NOT TESTED.
+
+---
+
+## 11. Production verification after the release
+
+Merged to `main` as **49916010f67921b470424c25e6e14d3c4d6d63d7** (PR #92). Vercel built that exact
+commit as production deployment **dpl_HWGVEqBBZBFiNCfAYrVcmH2f54GJ** — `READY`, substate `PROMOTED`,
+aliases assigned, serving `https://jataaftercall.co.ke` and `https://www.jataaftercall.co.ke`.
+
+### The migration, from the production build log
+
+```
+[build] DATABASE_URL detected — invoking migration gate
+[migrate] checking the migration connection (pooled vs direct)...
+[direct-url] OK (OK_DIRECT_URL_READY) — runtime uses the pooled URL; migrations use the direct URL
+[migrate] checking migration target...
+[migration-guard] OK_ENROLLED_PRODUCTION env=production mode=enforce
+[migrate] DATABASE_URL set — running prisma migrate deploy...
+Datasource "db": PostgreSQL database "neondb", schema "public"
+59 migrations found in prisma/migrations
+No pending migrations to apply.
+[migrate] Migrations deployed successfully
+```
+
+`20261128000000_business_hub_conversion` was already applied by the PR #91 deployment; this run
+confirms the ledger is complete and clean on production, not that a migration was skipped.
+
+### Read-only checks against the live site (no writes of any kind)
+
+| Check | Result |
+|---|---|
+| `/b/nyumbani-kitchen` (Restaurant) | **PASS** — "Request an order … No payment is taken on this page" with Pilau Combo KES 650, Nyama Choma KES 900, Chapati (2 pcs) KES 100, each with a quantity control; services, enquiry, hours, contacts, QR and the fictional-demo labelling all unchanged |
+| `/b/kamau-auto-care` (Mechanic) | **PASS** — Diagnostics KES 1 500, Oil Change KES 2 999, Brake Pads KES 4 500 |
+| `/b/john-kamau-properties` (Real estate) | **PASS** — 1BR Rentals KES 25 000, 2BR Rentals KES 35 000, Land Sale KES 1 200 000, parsed from "From KES 1.2M" without inventing a figure |
+| `/dashboard/businesses/<id>/customers` and `…/loyalty`, no session | **PASS** — redirect to `/login`; the owner routes are deployed and refuse anonymous callers |
+
+A "From KES 900" service is priced at 900 and a `QUOTE` service carries no price: the basket never
+invents a figure the business did not publish.
+
+### Deliberately not done in production
+
+- No order request, enquiry, promotion, loyalty card or any other record was created, and no
+  destructive SQL was run: the acceptance rules forbid writing test data to production.
+- The owner-facing hub screens were not exercised against production data, because that needs a real
+  business owner's session.
+- No physical camera scan of a printed QR code.
