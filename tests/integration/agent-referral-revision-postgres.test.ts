@@ -111,7 +111,7 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     expect(secondBody.members[2499].eventId).toBe("event-04999");
     expect(secondBody.nextCursor).toBeNull();
     expect(secondBody.commission).toBe("NOT_CHECKED");
-  });
+  }, 30_000);
 
   it("cannot select another agent or read that agent's revision", async () => {
     state.userId = ownerB.id;
@@ -119,5 +119,5 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     expect(foreign.status).toBe(404);
     const selector = await request(`&applicationId=${encodeURIComponent(appA.id)}`);
     expect(selector.status).toBe(400);
-  });
+  }, 15_000);
 });
