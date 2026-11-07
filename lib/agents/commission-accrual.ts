@@ -132,3 +132,46 @@ export async function recordCommissionAccrualForPaidPlan(tx: any, paymentId: str
     payoutEligible: monthlyPlanSales >= MINIMUM_MONTHLY_PLAN_SALES,
   };
 }
+
+/** Append a full reversal only after the signed Paystack refund event matched the entire payment. */
+export async function recordCommissionReversalForFullRefund(tx: any, paymentId: string): Promise<boolean> {
+  const payment = await tx.payment.findUnique({ where: { id: paymentId } });
+  if (!payment || payment.status !== "REFUNDED") return false;
+  const accrual = await tx.agentCommissionLedgerEntry.findFirst({
+    where: { paymentId, entryType: "ACCRUAL" },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!accrual || typeof accrual.amountMinor !== "bigint" || accrual.amountMinor <= BigInt(0)) return false;
+  const sourceEventId = `subscription-refund:${paymentId}`;
+  const result = await tx.agentCommissionLedgerEntry.createMany({
+    data: [{
+      id: randomUUID(),
+      paymentId,
+      agentApplicationId: accrual.agentApplicationId,
+      entryType: "REVERSAL",
+      currency: accrual.currency,
+      amountMinor: -accrual.amountMinor,
+      sourceEventId,
+      originalEntryId: accrual.id,
+      policyVersion: accrual.policyVersion,
+      policySnapshot: {
+        ...(typeof accrual.policySnapshot === "object" && accrual.policySnapshot !== null ? accrual.policySnapshot : {}),
+        reversal: "FULL_PROVIDER_VERIFIED_REFUND",
+        originalEntryId: accrual.id,
+      },
+    }],
+    skipDuplicates: true,
+  });
+  if (result.count === 1) {
+    await tx.auditEvent.create({
+      data: {
+        actorId: payment.userId,
+        action: "AGENT_COMMISSION_REVERSED",
+        targetType: "AGENT_COMMISSION_LEDGER",
+        targetId: sourceEventId,
+        metadata: JSON.stringify({ paymentId, originalEntryId: accrual.id, reversedMinor: accrual.amountMinor.toString() }),
+      },
+    });
+  }
+  return result.count === 1;
+}
