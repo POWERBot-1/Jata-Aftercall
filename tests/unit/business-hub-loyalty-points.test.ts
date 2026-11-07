@@ -28,6 +28,7 @@ import {
   awardPoints,
   calculatePoints,
   eligibleAmount,
+  getOrCreateAccount,
   getOrCreateProgramme,
   listAccounts,
   listLedger,
@@ -745,6 +746,74 @@ describe("the customer's own view", () => {
     if (!result.ok) throw new Error("redemption should succeed");
     expect(result.redemption.pointsSpent).toBe(7); // the catalogue's cost, not a number from the caller
     expect(result.account.availablePoints).toBe(3);
+  });
+});
+
+
+describe("a customer's first award can arrive twice at once", () => {
+  /**
+   * Two requests recording the same first purchase race on the unique index over
+   * `LoyaltyPointsAccount.cardId`. Only one insert can win. The loser must adopt the wallet the
+   * winner committed — reporting the customer as "not part of the programme" would drop a real
+   * award with no error anyone would notice. The ledger's idempotency key still decides the points,
+   * so adopting the wallet cannot double-award.
+   */
+  function raceTheWalletIntoExistence(): () => void {
+    const accountModel = (fake().db as any).loyaltyPointsAccount;
+    const realCreate = accountModel.create;
+    let raced = false;
+    accountModel.create = async (args: any) => {
+      if (!raced) {
+        raced = true;
+        // The other request commits this wallet, and only then does this insert lose the race —
+        // exactly the ordering PostgreSQL produces for a blocked unique-index insert.
+        await realCreate(args);
+        throw Object.assign(new Error("Unique constraint failed on the fields: (`cardId`)"), { code: "P2002" });
+      }
+      return realCreate(args);
+    };
+    return () => {
+      accountModel.create = realCreate;
+    };
+  }
+
+  it("adopts the wallet the other request committed instead of reporting the customer as missing", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Raced Customer");
+    const restore = raceTheWalletIntoExistence();
+
+    try {
+      const account = await getOrCreateAccount(BIZ_A, card.id);
+      expect(account).not.toBeNull();
+      expect(account?.cardId).toBe(card.id);
+      expect(account?.availablePoints).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("still records exactly one lot of points when the wallet was created by the other request", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Raced Twice");
+    const restore = raceTheWalletIntoExistence();
+
+    try {
+      const first = await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "RACE-1", amountKES: 1000 });
+      const second = await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "race-1", amountKES: 1000 });
+
+      expect(first.ok).toBe(true);
+      expect(second.ok).toBe(true);
+      if (second.ok) expect(second.duplicate).toBe(true);
+      expect(fake().rows("loyaltyPointsLedger").filter((row: any) => row.sourceReference === "RACE-1")).toHaveLength(1);
+      expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.availablePoints).toBe(10);
+    } finally {
+      restore();
+    }
+  });
+
+  it("reports a genuine stranger as missing — the race only ever returns a real wallet", async () => {
+    await activateProgramme();
+    expect(await getOrCreateAccount(BIZ_A, "card-that-does-not-exist")).toBeNull();
   });
 });
 

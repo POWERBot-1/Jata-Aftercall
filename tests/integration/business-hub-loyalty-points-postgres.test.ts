@@ -222,7 +222,11 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     const third = await awardPoints({ businessId: businessA, cardId: cardA, transactionRef: reference.toLowerCase(), amountKES: 1000 });
 
     const duplicates = [first, second, third].filter((entry) => entry.ok && entry.duplicate).length;
-    expect([first, second, third].every((entry) => entry.ok)).toBe(true);
+    // Every call must be answered, and two of them must be recognised as the same purchase. A
+    // refusal is reported with its status and message, so a failure here names its own cause.
+    expect(
+      [first, second, third].filter((entry) => !entry.ok).map((entry) => (entry.ok ? "" : `${entry.status} — ${entry.error}`)),
+    ).toEqual([]);
     expect(duplicates).toBe(2);
     expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: businessA, account: { cardId: cardA } } })).toBe(1);
     expect((await accountFor(cardA))?.availablePoints).toBe(10);

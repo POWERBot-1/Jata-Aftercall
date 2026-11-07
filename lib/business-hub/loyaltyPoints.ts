@@ -115,7 +115,12 @@ export const DEFAULT_POINTS_PROGRAMME: Omit<PointsProgrammeConfig, "id" | "eligi
 export async function getOrCreateProgramme(businessId: string): Promise<PointsProgrammeConfig> {
   const existing = await prisma.loyaltyPointsProgramme.findUnique({ where: { businessId } }).catch(() => null);
   if (existing) return toProgrammeConfig(existing, await eligibleItemsFor(existing.id));
-  const created = await prisma.loyaltyPointsProgramme.create({ data: { businessId } }).catch(() => null);
+  // As with the wallet below: if another request created the programme a moment earlier, this call
+  // must read that row back. Returning an empty id here would send every later write to a foreign
+  // key that does not exist.
+  const created = await prisma.loyaltyPointsProgramme
+    .create({ data: { businessId } })
+    .catch(() => prisma.loyaltyPointsProgramme.findUnique({ where: { businessId } }).catch(() => null));
   if (!created) return { id: "", ...DEFAULT_POINTS_PROGRAMME, eligibleItems: [] };
   return toProgrammeConfig(created, []);
 }
@@ -324,8 +329,8 @@ export async function getOrCreateAccount(businessId: string, cardId: string): Pr
   const existing = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId } }).catch(() => null);
   if (existing) return existing;
   const programme = await getOrCreateProgramme(businessId);
-  return prisma.loyaltyPointsAccount
-    .create({
+  try {
+    return await prisma.loyaltyPointsAccount.create({
       data: {
         businessId,
         programmeId: programme.id,
@@ -340,8 +345,17 @@ export async function getOrCreateAccount(businessId: string, cardId: string): Pr
         pointsPending: 0,
         status: "ACTIVE",
       },
-    })
-    .catch(() => null);
+    });
+  } catch (error) {
+    // A customer's FIRST award can arrive twice at once — a double tap, a retried request, two
+    // tills recording the same purchase. Only one `create` can win the unique index on `cardId`.
+    // Reporting the loser as "not part of the programme" would silently drop a real award, so the
+    // loser reads back the wallet the winner committed and carries on: the idempotency key on the
+    // ledger is what then decides the award itself.
+    const raced = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId } }).catch(() => null);
+    if (raced) return raced;
+    return null;
+  }
 }
 
 export async function findAccount(businessId: string, cardId: string): Promise<any | null> {
