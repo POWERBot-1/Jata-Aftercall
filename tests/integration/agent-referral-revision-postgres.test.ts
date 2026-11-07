@@ -47,14 +47,14 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     appB = await client.agentApplication.create({ data: applicationData(ownerB.id, "B") });
     await client.agentReferralReportSnapshot.create({ data: {
       applicationId: appA.id, periodKey, periodType: "DAILY", startInclusive, endExclusive,
-      registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+      registrationCount: BigInt(5000), existingApplicationCount: BigInt(0),
     } });
     await client.agentReferralReportRevision.create({ data: {
       applicationId: appA.id, periodKey, revision: 1, kind: "BASELINE", actorId: ownerA.id,
-      registrationCount: BigInt(5001), existingApplicationCount: BigInt(0),
+      registrationCount: BigInt(5000), existingApplicationCount: BigInt(0),
       addedCount: 0, removedCount: 0, changedCount: 0,
     } });
-    await client.agentReferralReportMember.createMany({ data: Array.from({ length: 5001 }, (_, index) => ({
+    await client.agentReferralReportMember.createMany({ data: Array.from({ length: 5000 }, (_, index) => ({
       applicationId: appA.id, periodKey, revision: 1,
       eventId: `event-${String(index).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: startInclusive,
     })) });
@@ -84,16 +84,17 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     expect(first.status).toBe(200);
     expect(first.headers.get("cache-control")).toContain("no-store");
     expect(firstBody).toMatchObject({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", members: expect.any(Array), sales: "NOT_CHECKED", commission: "NOT_CHECKED" });
-    expect(firstBody.members).toHaveLength(5000);
+    expect(firstBody.members).toHaveLength(2500);
     expect(firstBody.members[0].eventId).toBe("event-00000");
-    expect(firstBody.members[4999].eventId).toBe("event-04999");
-    expect(firstBody.nextCursor).toBe("event-04999");
+    expect(firstBody.members[2499].eventId).toBe("event-02499");
+    expect(firstBody.nextCursor).toBe("event-02499");
 
-    const second = await request("&after=event-04999");
+    const second = await request("&after=event-02499");
     const secondBody = await second.json();
     expect(second.status).toBe(200);
-    expect(secondBody.members).toHaveLength(1);
-    expect(secondBody.members[0].eventId).toBe("event-05000");
+    expect(secondBody.members).toHaveLength(2500);
+    expect(secondBody.members[0].eventId).toBe("event-02500");
+    expect(secondBody.members[2499].eventId).toBe("event-04999");
     expect(secondBody.nextCursor).toBeNull();
     expect(secondBody.commission).toBe("NOT_CHECKED");
   });
