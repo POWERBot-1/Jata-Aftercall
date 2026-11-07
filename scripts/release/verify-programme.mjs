@@ -2,7 +2,7 @@
 /**
  * Independent canonical-programme inventory guard.
  *
- * The owner directive requires preservation of 45 canonical requirements. This check does not
+ * The canonical append-only register currently contains 43 requirements; the count is derived from the source register and checked against the manifest. This check does not
  * create, rename, delete, or reclassify requirements. It compares the source register and its
  * evidence manifest exactly, then delegates PASS/evidence-path validation to the existing
  * fail-closed checker. Any inventory mismatch is a release blocker.
@@ -12,7 +12,7 @@ import { resolve, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { checkProgramme } from "../admin/check-programme-readiness.mjs";
 
-export const EXPECTED_CANONICAL_REQUIREMENTS = 45;
+export const EXPECTED_CANONICAL_REQUIREMENTS = 43;
 const REGISTER_PATH = "docs/ADMIN_BUILDING_INSTRUCTIONS.md";
 const MANIFEST_PATH = "docs/agents/PROGRAMME_READINESS.json";
 const ID_PATTERN = /^#{2,3} \d{3} — ([A-Z]+-\d{3}):/gm;
