@@ -1,0 +1,107 @@
+name: TEMP — Loyalty 2.0 diagnostic (delete before merge)
+
+# TEMPORARY. Added only because the sandbox this branch is developed in cannot download GitHub
+# Actions logs or artifacts, and the release/PostgreSQL jobs need their real output inspected.
+# It runs ONLY on manual dispatch, writes nothing to production, uses a disposable database, and
+# posts its output as a PR comment so the failure text can be read back through the API.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  diagnose:
+    name: Diagnose migration, drift and the points PostgreSQL suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_debug
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_debug?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate native Prisma client
+        run: bash scripts/lib/prisma-generate.sh
+
+      - name: Collect diagnostics
+        id: collect
+        run: |
+          set +e
+          mkdir -p /tmp/diag
+          {
+            echo "## 1. prisma migrate deploy"
+            bash scripts/lib/prisma-cli.sh migrate deploy 2>&1
+            echo "exit=$?"
+            echo
+            echo "## 2. prisma migrate status"
+            bash scripts/lib/prisma-cli.sh migrate status 2>&1
+            echo "exit=$?"
+            echo
+            echo "## 3. prisma migrate diff (datasource -> datamodel)"
+            bash scripts/lib/prisma-cli.sh migrate diff \
+              --from-schema-datasource prisma/schema.prisma \
+              --to-schema-datamodel prisma/schema.prisma \
+              --exit-code 2>&1
+            echo "exit=$?"
+          } > /tmp/diag/step-migrate.txt
+
+          cp /tmp/diag/step-migrate.txt /tmp/diag/step-drift-input.txt
+          {
+            echo "## 4. check-schema-drift"
+            node scripts/ci/check-schema-drift.mjs /tmp/diag/step-drift-input.txt 2>&1
+            echo "exit=$?"
+            echo
+            echo "## 5. verify-migrations"
+            node scripts/ci/verify-migrations.mjs 2>&1
+            echo "exit=$?"
+          } > /tmp/diag/step-verify.txt
+
+          {
+            echo "## 6. points PostgreSQL suite"
+            npx vitest run tests/integration/business-hub-loyalty-points-postgres.test.ts --reporter=basic 2>&1 | tail -120
+            echo "exit=$?"
+          } > /tmp/diag/step-suite.txt
+          exit 0
+
+      - name: Post the output as a PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          {
+            echo "### TEMP diagnostic — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            for part in step-migrate step-verify step-suite; do
+              echo "#### $part"
+              echo '```'
+              tail -c 18000 "/tmp/diag/$part.txt"
+              echo '```'
+              echo
+            done
+          } > /tmp/diag/comment.md
+          gh pr comment 94 --repo POWERBot-1/Jata-Aftercall --body-file /tmp/diag/comment.md
