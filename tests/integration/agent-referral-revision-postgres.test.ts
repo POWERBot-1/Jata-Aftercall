@@ -26,6 +26,9 @@ let ownerA: any;
 let ownerB: any;
 let appA: any;
 let appB: any;
+let linkId: string | undefined;
+const referredApplicationIds: string[] = [];
+const referredUserIds: string[] = [];
 
 function request(query = "") {
   return GET(new Request(`https://agent.test/api/agents/reports/referrals/reconcile?periodKey=${encodeURIComponent(periodKey)}&revision=1${query}`));
@@ -45,31 +48,47 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     });
     appA = await client.agentApplication.create({ data: applicationData(ownerA.id, "A") });
     appB = await client.agentApplication.create({ data: applicationData(ownerB.id, "B") });
+
+    const link = await client.agentReferralLink.create({ data: {
+      referrerApplicationId: appA.id, tokenHash: `ref-revision-link-${stamp}`, expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+    } });
+    linkId = link.id;
+    const referredUsers = await Promise.all([0, 1].map((index) => client.user.create({
+      data: { email: `ref-revision-member-${index}-${stamp}@example.test`, passwordHash: "not-a-login", role: "CUSTOMER" },
+    })));
+    referredUserIds.push(...referredUsers.map((user: any) => user.id));
+    const referredApps = await Promise.all(referredUsers.map((user: any, index: number) => client.agentApplication.create({
+      data: {
+        userId: user.id, fullName: `Synthetic Referred Member ${index}`, phoneE164: `+25470000000${index + 3}`,
+        privacyAcknowledgedAt: startInclusive, status: "PENDING", agentStatus: "INACTIVE",
+      },
+    })));
+    referredApplicationIds.push(...referredApps.map((application: any) => application.id));
+    await client.agentReferralAttribution.createMany({ data: referredApps.map((application: any) => ({
+      referrerApplicationId: appA.id, referredApplicationId: application.id, linkId: link.id,
+      consentedAt: startInclusive, source: "REGISTRATION", createdAt: startInclusive,
+    })) });
+
+    // The snapshot trigger creates the immutable baseline revision and its members from
+    // the actual consented attribution rows. The fixture must not fabricate count-only evidence.
     await client.agentReferralReportSnapshot.create({ data: {
       applicationId: appA.id, periodKey, periodType: "DAILY", startInclusive, endExclusive,
-      registrationCount: BigInt(5000), existingApplicationCount: BigInt(0),
+      registrationCount: BigInt(2), existingApplicationCount: BigInt(0),
     } });
-    await client.agentReferralReportRevision.create({ data: {
-      applicationId: appA.id, periodKey, revision: 1, kind: "BASELINE", actorId: ownerA.id,
-      registrationCount: BigInt(5000), existingApplicationCount: BigInt(0),
-      addedCount: 0, removedCount: 0, changedCount: 0,
-    } });
-    await client.agentReferralReportMember.createMany({ data: Array.from({ length: 5000 }, (_, index) => ({
-      applicationId: appA.id, periodKey, revision: 1,
-      eventId: `event-${String(index).padStart(5, "0")}`, source: "REGISTRATION", eventCreatedAt: startInclusive,
-    })) });
   }, 60_000);
 
   afterAll(async () => {
     if (!client) return;
     try {
       if (appA?.id) {
+        await client.agentReferralAttribution.deleteMany({ where: { referrerApplicationId: appA.id } });
         await client.agentReferralReportMember.deleteMany({ where: { applicationId: appA.id } });
         await client.agentReferralReportRevision.deleteMany({ where: { applicationId: appA.id } });
         await client.agentReferralReportSnapshot.deleteMany({ where: { applicationId: appA.id } });
       }
-      await client.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id].filter(Boolean) } } });
-      await client.user.deleteMany({ where: { id: { in: [ownerA?.id, ownerB?.id].filter(Boolean) } } });
+      if (linkId) await client.agentReferralLink.deleteMany({ where: { id: linkId } });
+      await client.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id, ...referredApplicationIds].filter(Boolean) } } });
+      await client.user.deleteMany({ where: { id: { in: [ownerA?.id, ownerB?.id, ...referredUserIds].filter(Boolean) } } });
     } finally {
       state.userId = "";
       state.client = null;
@@ -77,26 +96,19 @@ describe.skipIf(!enabled)("agent referral revision pagination against real Postg
     }
   }, 60_000);
 
-  it("returns bounded cursor pages and keeps financial claims explicitly unchecked", async () => {
+  it("reads the database-generated baseline from real attribution evidence", async () => {
     state.userId = ownerA.id;
-    const first = await request();
-    const firstBody = await first.json();
-    expect(first.status).toBe(200);
-    expect(first.headers.get("cache-control")).toContain("no-store");
-    expect(firstBody).toMatchObject({ scope: "OWN_REFERRAL_EVIDENCE_ONLY", members: expect.any(Array), sales: "NOT_CHECKED", commission: "NOT_CHECKED" });
-    expect(firstBody.members).toHaveLength(2500);
-    expect(firstBody.members[0].eventId).toBe("event-00000");
-    expect(firstBody.members[2499].eventId).toBe("event-02499");
-    expect(firstBody.nextCursor).toBe("event-02499");
-
-    const second = await request("&after=event-02499");
-    const secondBody = await second.json();
-    expect(second.status).toBe(200);
-    expect(secondBody.members).toHaveLength(2500);
-    expect(secondBody.members[0].eventId).toBe("event-02500");
-    expect(secondBody.members[2499].eventId).toBe("event-04999");
-    expect(secondBody.nextCursor).toBeNull();
-    expect(secondBody.commission).toBe("NOT_CHECKED");
+    const response = await request();
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(body).toMatchObject({
+      scope: "OWN_REFERRAL_EVIDENCE_ONLY", members: expect.any(Array),
+      sales: "NOT_CHECKED", commission: "NOT_CHECKED",
+    });
+    expect(body.members).toHaveLength(2);
+    expect(body.members.every((member: any) => member.source === "REGISTRATION")).toBe(true);
+    expect(body.nextCursor).toBeNull();
   });
 
   it("cannot select another agent or read that agent's revision", async () => {
