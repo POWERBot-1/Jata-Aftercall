@@ -335,7 +335,7 @@ describe.skipIf(!enabled)("Business Hub against a real database", () => {
     const reviewing = await call(
       orderRequestPatch,
       `${ORIGIN}/api/business/${ctx.owner.businessId}/order-requests/${requestId}`,
-      { method: "PATCH", body: { status: "REVIEWING", ownerNotes: "Called the customer." } },
+      { method: "PATCH", body: { status: "REVIEWING", notes: "Called the customer." } },
       { businessId: ctx.owner.businessId, requestId },
     );
     expect(reviewing.status).toBe(200);
