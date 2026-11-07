@@ -13,7 +13,10 @@ const schema = `control_test_${randomUUID().replace(/-/g, "")}`;
 const require = createRequire(import.meta.url);
 let pool: Pool;
 let prisma: any;
-const migration = readFileSync("prisma/migrations/20261126000000_control_plane_foundation/migration.sql", "utf8");
+const migration = [
+  "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
+  "prisma/migrations/20261128000000_control_role_grant_expiry/migration.sql",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 
 describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated PostgreSQL", () => {
   beforeAll(async () => {
@@ -56,6 +59,27 @@ describe.skipIf(!realPrismaConfigured)("control-plane migration on isolated Post
     await expect(pool.query('UPDATE "ControlAuditEvent" SET "outcome" = \'FAILED\' WHERE "id" = \'fixture-audit\'')).rejects.toThrow(/append-only/);
     await expect(pool.query('DELETE FROM "ControlAuditEvent" WHERE "id" = \'fixture-audit\'')).rejects.toThrow(/append-only/);
     expect((await pool.query('SELECT "outcome" FROM "ControlAuditEvent" WHERE "id" = \'fixture-audit\'')).rows[0].outcome).toBe("SUCCESS");
+  });
+
+  it("requires expiring grants and makes expiry immutable even during one-time revocation", async () => {
+    const expiry = new Date(Date.now() + 60 * 60_000);
+    await pool.query(
+      `INSERT INTO "ControlRoleGrant" ("id", "userId", "role", "permissionKeys", "scopeBusinessId", "createdById", "reason", "expiresAt")
+       VALUES ('fixture-expiring-grant', 'fixture-actor', 'READ_ONLY_AUDITOR', ARRAY['audit.read']::TEXT[], 'fixture-business', 'fixture-actor', 'Synthetic bounded test grant', $1)`,
+      [expiry],
+    );
+    const stored = (await pool.query('SELECT "expiresAt" FROM "ControlRoleGrant" WHERE "id" = $1', ["fixture-expiring-grant"])).rows[0];
+    expect(new Date(stored.expiresAt).getTime()).toBe(expiry.getTime());
+    await expect(pool.query(
+      'UPDATE "ControlRoleGrant" SET "revokedAt" = CURRENT_TIMESTAMP, "revocationReason" = \'fixture revoke\', "expiresAt" = CURRENT_TIMESTAMP WHERE "id" = $1',
+      ["fixture-expiring-grant"],
+    )).rejects.toThrow(/may only be revoked once/);
+    await pool.query(
+      'UPDATE "ControlRoleGrant" SET "revokedAt" = CURRENT_TIMESTAMP, "revocationReason" = \'fixture revoke\' WHERE "id" = $1',
+      ["fixture-expiring-grant"],
+    );
+    await expect(pool.query('DELETE FROM "ControlRoleGrant" WHERE "id" = $1', ["fixture-expiring-grant"])).rejects.toThrow(/append-only/);
+    expect((await pool.query('SELECT "revokedAt" FROM "ControlRoleGrant" WHERE "id" = $1', ["fixture-expiring-grant"])).rows[0].revokedAt).not.toBeNull();
   });
 
   it("persists an event through the application audit helper and protects that row", async () => {

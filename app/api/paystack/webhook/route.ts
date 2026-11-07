@@ -6,6 +6,7 @@ import { validatePaymentEvidence } from "@/lib/paymentVerification";
 import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
+import { recordCommissionReversalForFullRefund } from "@/lib/agents/commission-accrual";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
       await prisma.$transaction(async (tx) => {
         await tx.processedWebhook.create({ data: { id: eventId } });
         const changed = await tx.payment.updateMany({ where: { id: refundPayment.id, status: "PAID" }, data: { status: "REFUNDED" } });
+        if (changed.count > 0) await recordCommissionReversalForFullRefund(tx, refundPayment.id);
         if (changed.count && refundPayment.businessId && refundPlanKey === POS_PLAN_KEY) {
           await tx.posSubscription.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });
           await tx.posEntitlement.updateMany({ where: { businessId: refundPayment.businessId }, data: { status: "SUSPENDED" } });

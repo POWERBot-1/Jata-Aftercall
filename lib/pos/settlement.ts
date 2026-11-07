@@ -15,6 +15,7 @@ import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from 
 import { provisionAfterPayment } from "./provisioning";
 import { recordPosPublicationResolution } from "./publication-policy";
 import { POS_PLAN_KEY } from "./entitlement";
+import { recordCommissionAccrualForPaidPlan } from "../agents/commission-accrual";
 
 export type PosSettlementResult = {
   subscription: unknown;
@@ -152,6 +153,8 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
   });
 
   if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
+
+  await recordCommissionAccrualForPaidPlan(tx, payment.id);
 
   await tx.posAuditEvent.create({
     data: {

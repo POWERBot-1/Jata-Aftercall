@@ -27,7 +27,7 @@ function scopedWhere(kind: RecordKind, global: boolean, ids: string[]) {
 
 function selectGrantForScope(grants: ControlGrant[], permission: ControlPermission, businessId?: string): ControlGrant | undefined {
   return grants.find((grant) => grant.permissionKeys.includes(permission)
-    && (businessId === undefined ? grant.scopeBusinessId === null : grant.scopeBusinessId === businessId || grant.scopeBusinessId === null));
+    && (permission === "system.health.read" ? grant.scopeBusinessId === null : businessId === undefined ? grant.scopeBusinessId !== null : grant.scopeBusinessId === businessId));
 }
 
 export async function GET(request: Request) {

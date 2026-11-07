@@ -11,6 +11,7 @@ import {
   serializeJsonWithoutInlineImageData,
 } from "@/lib/media/persistence-policy";
 import { isProviderTransactionId } from "@/lib/paymentVerification";
+import { recordCommissionAccrualForPaidPlan } from "@/lib/agents/commission-accrual";
 import {
   AUTOPILOT_GRACE_DAYS,
   assertAutopilotPlanPricing,
@@ -211,6 +212,8 @@ export async function settleAutopilotPayment(
       }),
     },
   });
+
+  await recordCommissionAccrualForPaidPlan(tx, payment.id);
 
   await tx.autopilotAuditEvent.create({
     data: {
