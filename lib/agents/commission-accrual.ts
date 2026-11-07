@@ -214,8 +214,8 @@ export async function getAgentMonthlyCommissionEligibility(tx: any, agentApplica
     where: { agentApplicationId, entryType: "REVERSAL", originalEntryId: { in: accrualIds } },
     select: { amountMinor: true },
   }) : [];
-  const accruedMinor = accruals.reduce((sum: bigint, entry: { amountMinor: bigint }) => sum + entry.amountMinor, BigInt(0));
-  const reversedMinor = reversals.reduce((sum: bigint, entry: { amountMinor: bigint }) => sum + (entry.amountMinor < BigInt(0) ? -entry.amountMinor : BigInt(0)), BigInt(0));
+  const accruedMinor = accruals.reduce<bigint>((sum, entry: { amountMinor: bigint }) => sum + BigInt(entry.amountMinor), BigInt(0));
+  const reversedMinor = reversals.reduce<bigint>((sum, entry: { amountMinor: bigint }) => { const amount = BigInt(entry.amountMinor); return sum + (amount < BigInt(0) ? -amount : BigInt(0)); }, BigInt(0));
   const payableMinor = accruedMinor > reversedMinor ? accruedMinor - reversedMinor : BigInt(0);
   return {
     eligible: qualifyingPlanSales >= MINIMUM_MONTHLY_PLAN_SALES && payableMinor > BigInt(0),
