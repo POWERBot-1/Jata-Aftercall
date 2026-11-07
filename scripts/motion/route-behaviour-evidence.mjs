@@ -45,7 +45,11 @@ try {
    }catch(error){emit('media-query-instrumentation-error',{message:String(error)});}
    return media;
   };
-  try{const observer=new MutationObserver(records=>{for(const record of records){if(record.target.matches?.('.eb-scope'))emit('scope-state-mutation',{attribute:record.attributeName,oldValue:record.oldValue,state:scopeState()});}});observer.observe(document.documentElement,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['data-render-mode','data-motion-reason','data-motion-engine']});}catch(error){emit('scope-observer-instrumentation-error',{message:String(error)});}
+  try{
+    const observer=new MutationObserver(records=>{for(const record of records){if(record.target.matches?.('.eb-scope'))emit('scope-state-mutation',{attribute:record.attributeName,oldValue:record.oldValue,state:scopeState()});}});
+    const attach=()=>{if(!document.documentElement)return false;observer.observe(document.documentElement,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['data-render-mode','data-motion-reason','data-motion-engine']});emit('scope-observer-attached');return true;};
+    if(!attach())document.addEventListener('DOMContentLoaded',()=>attach(),{once:true});
+  }catch(error){emit('scope-observer-instrumentation-error',{message:String(error)});}
   const Native=window.IntersectionObserver;
   window.IntersectionObserver=class extends Native {constructor(cb,opts){const owned=opts?.threshold===0.08;super((entries,obs)=>{if(owned)for(const e of entries)emit('intersection',{in:e.isIntersecting,recipe:e.target.dataset.motionRecipe});cb(entries,obs)},opts);if(owned)emit('observer-create');this.__owned=owned;}observe(el){if(this.__owned)emit('observe',{recipe:el.dataset.motionRecipe});return super.observe(el)}unobserve(el){if(this.__owned)emit('unobserve',{recipe:el.dataset.motionRecipe});return super.unobserve(el)}disconnect(){if(this.__owned)emit('observer-disconnect',{scope:scopeState()});return super.disconnect()}};
   const original=Element.prototype.animate;Element.prototype.animate=function(...args){const anim=original.apply(this,args);if(this.matches('[data-motion-recipe]')){emit('animate-start',{recipe:this.dataset.motionRecipe});anim.addEventListener('finish',()=>emit('animate-finish'));anim.addEventListener('cancel',()=>emit('active-reveal-cancelled',{recipe:this.dataset.motionRecipe}));}return anim;};

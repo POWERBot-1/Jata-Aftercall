@@ -19,6 +19,159 @@ on:
     branches: [main]
 
 jobs:
+  minimatch11-compatibility:
+    name: Verify scoped minimatch 11.0.1 remediation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: minimatch11-lock-${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Regenerate lockfile from reviewed scoped override
+        run: npm install --package-lock-only --ignore-scripts --no-audit
+      - name: Install regenerated lockfile
+        run: npm ci
+      - name: Require zero production and full-tree audit findings
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/minimatch11-audit
+          set +e
+          npm audit --omit=dev --json > artifacts/minimatch11-audit/production.json
+          production_status=$?
+          npm audit --json > artifacts/minimatch11-audit/full.json
+          full_status=$?
+          set -e
+          PRODUCTION_AUDIT_STATUS="$production_status" FULL_AUDIT_STATUS="$full_status" node <<'JS'
+          const fs = require('node:fs');
+          for (const [label, path, exitCode] of [
+            ['production','artifacts/minimatch11-audit/production.json',process.env.PRODUCTION_AUDIT_STATUS],
+            ['full','artifacts/minimatch11-audit/full.json',process.env.FULL_AUDIT_STATUS]
+          ]) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (report.error || !report.metadata?.vulnerabilities) throw new Error(`Invalid ${label} audit report`);
+            const v = report.metadata.vulnerabilities;
+            console.log(`${label}: ${v.total} findings (critical=${v.critical}, high=${v.high}, moderate=${v.moderate}, low=${v.low}); npm exit=${exitCode}`);
+            if (v.total !== 0 || Number(exitCode) !== 0) process.exitCode = 1;
+          }
+          JS
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: No-database test suite
+        run: npx vitest run
+      - name: Next.js production build
+        run: npm run build
+      - name: Commit tested lockfile to the pull request branch
+        if: success() && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile is already current; no commit required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "deps: lock tested minimatch 11.0.1 override"
+          git fetch origin "${GITHUB_HEAD_REF}"
+          git rebase "origin/${GITHUB_HEAD_REF}"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
+      - name: Upload generated lockfile for exact commit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimatch11-lock-${{ github.sha }}
+          path: |
+            package-lock.json
+            artifacts/minimatch11-audit/
+          if-no-files-found: error
+          retention-days: 30
+
+  dependency-audit:
+    name: Full dependency security audit (production and development)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact lockfile dependencies
+        run: npm ci
+      - name: Capture and enforce complete npm audit
+        id: audit
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/dependency-audit
+          set +e
+          npm audit --omit=dev --json > artifacts/dependency-audit/production.json
+          production_status=$?
+          npm audit --json > artifacts/dependency-audit/full.json
+          full_status=$?
+          set -e
+          PRODUCTION_AUDIT_STATUS="$production_status" FULL_AUDIT_STATUS="$full_status" node <<'JS'
+          const fs = require('node:fs');
+          const read = (path) => {
+            try { return JSON.parse(fs.readFileSync(path, 'utf8')); }
+            catch (error) { throw new Error(`Invalid or unavailable npm audit JSON at ${path}: ${error.message}`); }
+          };
+          const production = read('artifacts/dependency-audit/production.json');
+          const full = read('artifacts/dependency-audit/full.json');
+          for (const [label, report] of [['production', production], ['full', full]]) {
+            if (report.error || !report.metadata?.vulnerabilities) {
+              throw new Error(`${label} audit did not return a valid advisory report`);
+            }
+            const v = report.metadata.vulnerabilities;
+            console.log(`${label}: total=${v.total}, critical=${v.critical}, high=${v.high}, moderate=${v.moderate}, low=${v.low}, info=${v.info}`);
+          }
+          const entries = Object.entries(full.vulnerabilities || {});
+          for (const [name, item] of entries) {
+            console.log(JSON.stringify({
+              package: name,
+              severity: item.severity,
+              direct: item.isDirect,
+              range: item.range,
+              fixAvailable: item.fixAvailable,
+              advisories: (item.via || []).map(v => typeof v === 'string' ? v : ({
+                title: v.title, url: v.url, range: v.range, severity: v.severity
+              }))
+            }));
+          }
+          const p = production.metadata.vulnerabilities.total;
+          const f = full.metadata.vulnerabilities.total;
+          if (p !== 0 || f !== 0) {
+            console.error('FAIL: dependency security gate requires zero production and zero full-tree findings.');
+            process.exit(1);
+          }
+          console.log('PASS: production and full dependency audits have zero findings.');
+          JS
+      - name: Upload complete audit evidence (including failed reports)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-${{ github.sha }}
+          path: artifacts/dependency-audit/
+          if-no-files-found: error
+          retention-days: 90
+
   e2e:
     name: Journey against a real database
     runs-on: ubuntu-latest
@@ -258,6 +411,42 @@ jobs:
           set -o pipefail
           export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
           STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated 2>&1 | tee /tmp/step-authenticated-browser.log
+
+      - name: Agent referral revision cursor pagination and tenant isolation
+        run: |
+          set -euo pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — agent referral browser acceptance NOT RUN." >&2
+            exit 1
+          fi
+          AGENT_REFERRAL_REPORT_SNAPSHOTS_ENABLED=true \
+          AGENT_REFERRAL_REPORT_RECONCILIATION_ENABLED=true \
+          AUTH_SECRET="$AUTH_SECRET" DATABASE_URL="$DATABASE_URL" NEXT_TELEMETRY_DISABLED=1 \
+            npx next start -H 127.0.0.1 -p 4110 > /tmp/step-agent-referral-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl -sf -o /dev/null "http://127.0.0.1:4110/login"; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "Agent referral browser server did not become ready." >&2
+            tail -30 /tmp/step-agent-referral-server.log >&2 || true
+            exit 1
+          fi
+          BASE_URL=http://127.0.0.1:4110 AGENT_BROWSER_ISOLATED=1 CHROME_PATH="$CHROME_PATH" \
+          DATABASE_URL="$DATABASE_URL" npm run test:browser:agent-referral-revision 2>&1 | tee /tmp/step-agent-referral-browser.log
+
+      - name: Upload agent referral revision browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-referral-revision-${{ github.sha }}
+          path: artifacts/agent-referral-revision/
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Booking SSR timezone and midnight hydration regression
         run: |

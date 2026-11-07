@@ -50,7 +50,8 @@
     "test:browser:premium-screenshots": "node scripts/browser/premium-screenshots.check.mjs",
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
-    "test:browser:agents": "node scripts/browser/agent-status.check.mjs"
+    "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
+    "test:browser:agent-referral-revision": "node scripts/browser/agent-referral-revision.check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -100,6 +101,9 @@
     "source-map-js": "1.2.2",
     "brace-expansion@1": "1.1.21",
     "brace-expansion@5": "5.0.12",
-    "postcss-selector-parser": "7.1.6"
+    "postcss-selector-parser": "7.1.6",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
   }
 }

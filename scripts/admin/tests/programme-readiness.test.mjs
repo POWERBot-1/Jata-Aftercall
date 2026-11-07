@@ -17,3 +17,12 @@ test("requires every ID, a PASS status, acceptance and existing evidence", () =>
   const empty = valid(); empty[ids[0]].evidence = []; assert.match(checkProgramme(register, empty).join(" "), /missing evidence/);
   const unknown = valid(); unknown["ADMIN-999"] = {}; assert.match(checkProgramme(register, unknown).join(" "), /unknown requirement/);
 });
+
+test("accepts the RELEASE-002 security-boundary field without weakening other entries", () => {
+  assert.deepEqual(checkProgramme(register, valid()), []);
+  const altered = register.replace("**Security / operational boundaries:**", "**Other:**");
+  assert.throws(() => {
+    // checkProgramme validates the register before considering evidence rows.
+    checkProgramme(altered, valid());
+  }, /RELEASE-002: missing required field Security\/privacy \/ UX/);
+});

@@ -101,3 +101,12 @@ approval after preview evidence is reviewed:
 
 The offline `npm run release:acceptance` inventory does not connect to R2 and must not
 be used as evidence of durable object storage, deletion or cross-session persistence.
+
+
+## Observed preview pilot state — 2026-11-06 (read-only verification after setup)
+
+- Cloudflare account connection is authenticated; the account contains bucket `jata-media-preview`.
+- Bucket location: `WEUR`; storage class: `Standard`; jurisdiction: `default`.
+- The bucket was empty when checked. The managed `r2.dev` public domain is now enabled for this **preview-only** bucket: `https://pub-1f9deae847f14589b1e8fcec981fdf5b.r2.dev`.
+- The Vercel `jata-aftercall` project currently has no `R2_*` or `JATA_STORAGE_PROVIDER` environment variables. No R2 S3 access key/secret was supplied by the Cloudflare API connection; Cloudflare dashboard R2 S3 credentials are separate from the Cloudflare account API connection.
+- Therefore, **real upload/persistence remains NOT VERIFIED**. Do not configure Production. The remaining preview steps are to create a bucket-scoped Object Read & Write R2 S3 token, add all six variables to Vercel **Preview only**, and run the actual upload/reload/cross-tenant tests. Preview build execution also remains subject to the existing Vercel ignored-build-step policy.
