@@ -158,6 +158,7 @@ describe("runtime and schema guards", () => {
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
+      "20261128000000_control_role_grant_expiry",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -235,6 +236,7 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261126000000_control_plane_foundation",
       "20261127000000_voice_call_foundation",
+      "20261128000000_control_role_grant_expiry",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {
@@ -274,6 +276,10 @@ describe("runtime and schema guards", () => {
     expect(controlPlane).toContain('"ControlAuditEvent_scopeBusinessId_fkey"');
     expect(controlPlane).not.toMatch(/INSERT\s+INTO\s+\"ControlRoleGrant\"/i);
     expect(controlPlane).not.toMatch(/UPDATE\s+\"User\"|UPDATE\s+\"Business\"/i);
+    const controlGrantExpiry = readFileSync(path.join(root, "prisma/migrations/20261128000000_control_role_grant_expiry/migration.sql"), "utf8");
+    expect(controlGrantExpiry).toContain('ADD COLUMN "expiresAt" TIMESTAMP(3)');
+    expect(controlGrantExpiry).toContain('CREATE INDEX "ControlRoleGrant_userId_revokedAt_expiresAt_idx"');
+    expect(controlGrantExpiry).toContain('NEW."expiresAt" IS DISTINCT FROM OLD."expiresAt"');
     const activationReview = readFileSync(path.join(root, "prisma/migrations/20261107000000_agent_activation_review/migration.sql"), "utf8");
     expect(activationReview).toContain(`CHECK ("agentStatus" IN ('INACTIVE', 'ACTIVE', 'SUSPENDED'))`);
     expect(activationReview).toContain(`ADD COLUMN "agentStatus" TEXT NOT NULL DEFAULT 'INACTIVE'`);
