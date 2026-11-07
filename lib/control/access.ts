@@ -58,13 +58,17 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
 
 export function hasControlPermission(grants: ControlGrant[], permission: ControlPermission, businessId?: string): boolean {
   return grants.some((grant) => grant.permissionKeys.includes(permission)
-    && (businessId === undefined ? grant.scopeBusinessId === null : grant.scopeBusinessId === businessId));
+    && (permission === "system.health.read"
+      ? grant.scopeBusinessId === null
+      : businessId === undefined ? grant.scopeBusinessId !== null : grant.scopeBusinessId === businessId));
+
 }
 
 export function scopedBusinessIds(grants: ControlGrant[], permission: ControlPermission): { allowed: boolean; global: boolean; ids: string[] } {
-  const matching = grants.filter((grant) => grant.permissionKeys.includes(permission));
+  const matching = grants.filter((grant) => grant.permissionKeys.includes(permission)
+    && (permission === "system.health.read" ? grant.scopeBusinessId === null : grant.scopeBusinessId !== null));
   if (!matching.length) return { allowed: false, global: false, ids: [] };
-  const global = matching.some((grant) => grant.scopeBusinessId === null);
+  const global = permission === "system.health.read" && matching.some((grant) => grant.scopeBusinessId === null);
   return { allowed: true, global, ids: [...new Set(matching.map((grant) => grant.scopeBusinessId).filter((id): id is string => Boolean(id)))].sort() };
 }
 
