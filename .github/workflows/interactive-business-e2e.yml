@@ -168,6 +168,24 @@ jobs:
             exit 1
           fi
 
+      # The Business Hub journey (capabilities A–F) runs against the same migrated, seeded
+      # database. It is the database-backed counterpart of the offline hub suite: the cascades,
+      # the unique indexes that stop a double stamp and a double redemption, and the enum values
+      # only exist for real here.
+      - name: Run the Business Hub journey
+        run: |
+          set -o pipefail
+          npm run test:e2e:hub 2>&1 | tee /tmp/step-hub-journey.log
+          plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-hub-journey.log)
+          if printf '%s' "$plain" | grep -q "skipped"; then
+            echo "The Business Hub journey skipped — DATABASE_URL did not reach vitest." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE "[0-9]+ passed"; then
+            echo "The Business Hub journey reported no passing steps." >&2
+            exit 1
+          fi
+
       - name: Production build against the isolated test database
         run: |
           set -o pipefail
@@ -183,6 +201,30 @@ jobs:
           fi
           CONTROL_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts/control-denial" \
             npm run test:browser:control-deny 2>&1 | tee /tmp/step-control-denial.log
+
+      # The Business Hub in a real browser: the customer's public page (basket, promotion,
+      # loyalty, QR), the owner's four hub screens through the dashboard navigation, the
+      # cross-tenant refusal, and the public page at six viewports. Everything is synthetic and
+      # disposable; the script refuses to run against anything but a local disposable database.
+      - name: Business Hub journey in a real browser
+        run: |
+          set -o pipefail
+          export CHROME_PATH=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome binary missing — Business Hub browser journey NOT RUN, not passed." >&2
+            exit 1
+          fi
+          BUSINESS_HUB_EVIDENCE_DIR="$GITHUB_WORKSPACE/artifacts/business-hub-journey" \
+            npm run test:browser:hub-journey 2>&1 | tee /tmp/step-hub-browser.log
+
+      - name: Upload Business Hub journey screenshots and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-hub-journey-${{ github.sha }}
+          path: artifacts/business-hub-journey
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload Control denial screenshots and sanitized result
         if: always()

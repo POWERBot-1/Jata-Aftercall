@@ -238,12 +238,13 @@ export default function BusinessPage({
           )}
         </section>
 
-        {/* Featured products from the catalogue — the same rows the order basket is priced from. */}
-        {products.length > 0 ? (
+        {/* Featured catalogue products — the same rows the order basket is priced from. The page
+            already lists the business's services above, so they are not repeated here. */}
+        {products.some((product) => product.kind !== "SERVICE") ? (
           <section aria-labelledby="featured-products-title" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
             <h2 id="featured-products-title" className="text-sm font-bold">Featured products</h2>
             <ul className="mt-3 grid grid-cols-2 gap-3">
-              {products.slice(0, 6).map((product) => (
+              {products.filter((product) => product.kind !== "SERVICE").slice(0, 6).map((product) => (
                 <li key={product.id} className={`overflow-hidden rounded-xl border ${t.colors.border} ${t.colors.surfaceMuted}`}>
                   {product.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -270,7 +271,8 @@ export default function BusinessPage({
           </section>
         ) : null}
 
-        {/* Instant order requests (Business Hub §A) */}
+        {/* Instant order requests (Business Hub §A) — everything the page offers, catalogue
+            products and the page's own services alike. */}
         {products.length > 0 ? (
           <div className="mt-4">
             <OrderRequestPanel slug={business.slug} businessName={business.name} products={products} />

@@ -76,6 +76,8 @@ export function isValidOrderRequestTransition(from: string, to: string): boolean
 
 export type CatalogueProduct = {
   id: string;
+  /** PRODUCT rows are priced by `effectiveUnitPrice`; SERVICE rows arrive already priced. */
+  kind?: "PRODUCT" | "SERVICE";
   name: string;
   description?: string | null;
   imageUrl?: string | null;
@@ -86,10 +88,13 @@ export type CatalogueProduct = {
   salePriceEndsAt?: Date | string | null;
   isActive?: boolean | null;
   stockStatus?: string | null;
+  /** Set for services: the price the page quoted, or null for a quote-only service. */
+  unitPriceKES?: number | null;
 };
 
 export type ValidatedOrderRequestItem = {
-  productId: string;
+  /** Null for a service line: the item is a snapshot of what the customer asked for. */
+  productId: string | null;
   name: string;
   imageUrl: string | null;
   quantity: number;
@@ -131,8 +136,8 @@ export function validateOrderRequestInput(
   if (!contact.ok) return { ok: false, error: contact.error };
 
   const rawItems = Array.isArray(body.items) ? body.items : [];
-  if (rawItems.length === 0) return { ok: false, error: "Add at least one product to your request." };
-  if (rawItems.length > MAX_ITEMS) return { ok: false, error: `Add up to ${MAX_ITEMS} products in one request.` };
+  if (rawItems.length === 0) return { ok: false, error: "Add at least one item to your request." };
+  if (rawItems.length > MAX_ITEMS) return { ok: false, error: `Add up to ${MAX_ITEMS} items in one request.` };
 
   const byId = new Map(products.filter((product) => product.isActive !== false).map((product) => [product.id, product]));
   const merged = new Map<string, ValidatedOrderRequestItem>();
@@ -141,24 +146,29 @@ export function validateOrderRequestInput(
     const item = (entry && typeof entry === "object" ? entry : {}) as Record<string, unknown>;
     const productId = typeof item.productId === "string" ? item.productId.trim().slice(0, 64) : "";
     const product = byId.get(productId);
-    // A product id from another business (or a deleted one) simply does not exist here.
-    if (!product) return { ok: false, error: "One of the products is no longer available. Please refresh and try again." };
+    // A product or service id from another business (or a deleted one) simply does not exist here.
+    if (!product) return { ok: false, error: "One of the items is no longer available. Please refresh and try again." };
 
     const quantity = Math.round(Number(item.quantity));
     if (!Number.isFinite(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
-      return { ok: false, error: `Choose between 1 and ${MAX_QUANTITY} of each product.` };
+      return { ok: false, error: `Choose between 1 and ${MAX_QUANTITY} of each item.` };
     }
 
-    const price = effectiveUnitPrice(product, now);
+    // Products keep the platform's pricing rule (sale windows included). A service carries the
+    // price the page already quoted, and a quote-only service stays at 0 with no price claimed.
+    const unitPriceKES =
+      product.kind === "SERVICE"
+        ? Math.max(0, Math.round(Number(product.unitPriceKES ?? 0)))
+        : effectiveUnitPrice(product, now).unitPriceKES;
     const existing = merged.get(productId);
     const nextQuantity = Math.min(MAX_QUANTITY, (existing?.quantity ?? 0) + quantity);
     merged.set(productId, {
-      productId,
+      productId: product.kind === "SERVICE" ? null : productId,
       name: product.name,
       imageUrl: product.imageUrl ?? null,
       quantity: nextQuantity,
-      unitPriceKES: price.unitPriceKES,
-      lineTotalKES: price.unitPriceKES * nextQuantity,
+      unitPriceKES,
+      lineTotalKES: unitPriceKES * nextQuantity,
     });
   }
 
