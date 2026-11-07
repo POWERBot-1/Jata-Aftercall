@@ -159,7 +159,7 @@ describe("Paystack webhook", () => {
       processedWebhook: { create: mocks.webhookCreate },
       auditEvent: { create: mocks.auditCreate },
       payment: { updateMany: mocks.paymentUpdateMany, findUnique: vi.fn(async () => ({ id: "pay-a", status: "REFUNDED", userId: "user-a" })) },
-      agentCommissionLedgerEntry: { findFirst: vi.fn(async () => null), createMany: vi.fn(async () => ({ count: 0 })) },
+      agentCommissionLedgerEntry: { findFirst: mocks.commissionFindFirst, createMany: mocks.commissionCreateMany },
       subscription: { updateMany: mocks.subscriptionUpdateMany },
     }));
     mocks.processedCheck.mockImplementation(async () => mocks.alreadyProcessed);
