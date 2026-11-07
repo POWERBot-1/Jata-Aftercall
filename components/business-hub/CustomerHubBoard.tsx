@@ -328,7 +328,7 @@ export function CustomerHubBoard({
           <div className="jata-empty">
             <p className="text-sm font-semibold">No order requests yet</p>
             <p className="mt-1 text-sm text-zinc-600">
-              Customers can send requests from your published page as soon as you have products in your catalogue.
+              Customers can send requests from your published page as soon as it lists products or services.
             </p>
           </div>
         ) : (
