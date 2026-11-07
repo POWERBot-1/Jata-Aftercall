@@ -3,8 +3,9 @@
  * ledgers, send messages, or initiate payouts. Its input must eventually be assembled exclusively
  * from authoritative server-side records; a browser-supplied snapshot is never payment evidence.
  *
- * No policy or rate is shipped with the product. No production integration currently invokes
- * this evaluator. Tests use explicit hypothetical rules, not approved financial terms.
+ * The owner-approved commercial terms are 40% of each verified new subscription sale, with
+ * monthly payout eligibility after at least ten qualifying sales. This pure evaluator still does
+ * not itself load provider evidence, write ledger rows, or initiate payouts.
  */
 import { isProviderTransactionId } from "@/lib/paymentVerification";
 
@@ -48,7 +49,7 @@ export type CommissionAttributionSnapshot = {
 
 export type CommissionEvaluation =
   | { eligible: false; reason: string }
-  | { eligible: true; paymentId: string; paymentReference: string; policyId: string; policyVersion: string; agentId: string; businessId: string; customerId: string; planId: string; currency: "KES"; paymentMinor: number; eligibleMinor: number; commissionMinor: number; calculation: CommissionPolicySnapshot["rule"] };
+  | { eligible: true; paymentId: string; paymentReference: string; policyId: string; policyVersion: string; agentId: string; businessId: string; customerId: string; planId: string; currency: "KES"; paymentMinor: number; eligibleMinor: number; commissionMinor: number; calculation: CommissionPolicySnapshot["rule"]; payoutEligible: boolean; monthlyQualifyingSales: number; minimumMonthlySales: 10 };
 
 function validDate(value: unknown): value is Date {
   return value instanceof Date && Number.isFinite(value.getTime());
@@ -61,9 +62,8 @@ function nonempty(value: unknown): value is string {
 }
 
 /**
- * `eligibleMinor` is the approved gross/net base already derived from verified evidence. NET
- * treatment of taxes, fees, discounts and refunds has not been defined by the owner. Until it is,
- * callers must not invent a value or call this function for production commission creation.
+ * The approved calculation basis is the gross plan amount actually charged and independently
+ * verified in KES. Refund reversals must be separately provider-verified before ledger mutation.
  */
 export function evaluateCommission(input: {
   policy: CommissionPolicySnapshot | null;
