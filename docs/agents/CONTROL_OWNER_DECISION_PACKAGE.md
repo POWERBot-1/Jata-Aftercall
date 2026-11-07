@@ -256,3 +256,8 @@ GITANYA KARIUKI has now expressly authorized the platform to select and implemen
 The exact effective matrix is documented in CONTROL_ROLE_ACTION_MATRIX.md and implemented in lib/control/role-policy.ts. The independent runtime gate is enabled, but no grant is automatically created. The grant table must still contain an active exact-key grant, the tenant-keyed operation must have an explicit business scope, and each protected request must pass current-session, live-grant and MFA checks. No owner identity or production grant was provisioned.
 
 This does not retroactively authorize or mutate existing accounts, businesses, payments, commission balances or provider configuration. Positive browser, MFA recovery, expiry, database audit and six-viewport acceptance remain evidence requirements.
+
+
+## Grant expiry implementation — 2026-11-07
+
+The owner-authorized least-privilege matrix is enabled in code, but a role label or policy approval alone never grants access. Every persisted ControlRoleGrant must now carry an explicit future `expiresAt`; `getControlIdentity()` selects only non-revoked grants whose expiry is later than the current server time. Legacy rows with NULL expiry are denied. The additive PostgreSQL migration `20261128000000_control_role_grant_expiry` adds the field/index and extends the append-only trigger so expiry cannot be edited, including during one-time revocation. A grant may be revoked once without changing its original expiry. No grant or production identity was created.
