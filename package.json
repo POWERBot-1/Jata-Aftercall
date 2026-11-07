@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
     "test:e2e:pos": "vitest run tests/e2e/business-pos-journey.test.ts",
+    "test:e2e:hub": "vitest run tests/e2e/business-hub-journey.test.ts",
     "test:db:migrations": "node scripts/test-local-postgres-migrations.mjs",
     "seed": "tsx prisma/seed.ts",
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
@@ -51,7 +52,8 @@
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
     "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
-    "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs"
+    "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs",
+    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

@@ -127,8 +127,8 @@ describe("public page section order", () => {
       return index;
     };
     expect(at("<PromotionSpotlight")).toBeLessThan(at("{/* Services */}"));
-    expect(at("{/* Services */}")).toBeLessThan(at("{/* Featured products"));
-    expect(at("{/* Featured products")).toBeLessThan(at("<OrderRequestPanel"));
+    expect(at("{/* Services */}")).toBeLessThan(at("{/* Featured catalogue products"));
+    expect(at("{/* Featured catalogue products")).toBeLessThan(at("<OrderRequestPanel"));
     expect(at("<OrderRequestPanel")).toBeLessThan(at("<EnquiryPanel"));
     expect(at("<EnquiryPanel")).toBeLessThan(at("<LoyaltyCardPanel"));
     expect(at("<LoyaltyCardPanel")).toBeLessThan(at("{/* About */}"));

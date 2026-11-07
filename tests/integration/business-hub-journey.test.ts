@@ -247,6 +247,140 @@ describe("instant order requests", () => {
   });
 });
 
+// ── A2. Services: the catalogue an ordinary Business Page actually lists ──────────────────────
+//
+// The public page shows a business's `Service` rows under "Services and products", and that is
+// the only catalogue most KES149 Business Page owners have — the `Product` catalogue belongs to
+// the Interactive Business experience. Before this change a business with services but no
+// products could not take an order request at all, so the capability was invisible in production.
+
+describe("order requests for the services the page lists", () => {
+  it("accepts a service line, priced from the service row, inventing no product id", async () => {
+    const response = await createOrderRequest(
+      pageRequest(
+        {
+          slug: "nyumbani-kitchen",
+          requestKey: "key-service-1",
+          customerName: "Peter Otieno",
+          contactMethod: "PHONE",
+          contactValue: "0712 999 111",
+          items: [{ productId: "svc_a1", quantity: 2 }],
+        },
+        { ip: nextIp() },
+      ),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    // 2 x 650, taken from the service row the page quoted — never from the client.
+    expect(data.estimatedTotalKES).toBe(1300);
+
+    const stored = rows("orderRequest").find((row: any) => row.reference === data.reference);
+    const items = rows("orderRequestItem").filter((row: any) => row.orderRequestId === stored.id);
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe("Pilau Combo");
+    expect(items[0].unitPriceKES).toBe(650);
+    expect(items[0].lineTotalKES).toBe(1300);
+    // A service is not a catalogue product: the line stores no product id rather than borrowing one.
+    expect(items[0].productId).toBeNull();
+    expect(items[0].businessId).toBe("bizA");
+  });
+
+  it("accepts a quote-only service without claiming a price", async () => {
+    const response = await createOrderRequest(
+      pageRequest(
+        {
+          slug: "nyumbani-kitchen",
+          requestKey: "key-service-2",
+          customerName: "Grace Muthoni",
+          contactMethod: "EMAIL",
+          contactValue: "grace@example.com",
+          items: [{ productId: "svc_a2", quantity: 1 }],
+        },
+        { ip: nextIp() },
+      ),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.estimatedTotalKES).toBe(0);
+
+    const stored = rows("orderRequest").find((row: any) => row.reference === data.reference);
+    const items = rows("orderRequestItem").filter((row: any) => row.orderRequestId === stored.id);
+    expect(items[0].name).toBe("Event catering");
+    expect(items[0].unitPriceKES).toBe(0);
+  });
+
+  it("refuses a service the business has withdrawn, and writes nothing", async () => {
+    const before = rows("orderRequest").length;
+    const response = await createOrderRequest(
+      pageRequest(
+        {
+          slug: "nyumbani-kitchen",
+          requestKey: "key-service-3",
+          customerName: "Samuel Kiptoo",
+          contactMethod: "PHONE",
+          contactValue: "0711 222 333",
+          items: [{ productId: "svc_a3", quantity: 1 }],
+        },
+        { ip: nextIp() },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/no longer available/i);
+    expect(rows("orderRequest")).toHaveLength(before);
+  });
+
+  it("refuses another business's service — a service id is not a key into someone else's page", async () => {
+    const before = rows("orderRequest").length;
+    const response = await createOrderRequest(
+      pageRequest(
+        {
+          slug: "nyumbani-kitchen",
+          requestKey: "key-service-4",
+          customerName: "Amina Hassan",
+          contactMethod: "PHONE",
+          contactValue: "0710 111 222",
+          items: [{ productId: "svc_b1", quantity: 1 }],
+        },
+        { ip: nextIp() },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/no longer available/i);
+    expect(rows("orderRequest")).toHaveLength(before);
+  });
+
+  it("serves a business that has services but no catalogue products at all", async () => {
+    const response = await createOrderRequest(
+      pageRequest(
+        {
+          slug: "kibera-barbers",
+          requestKey: "key-service-5",
+          customerName: "Brian Kimani",
+          contactMethod: "WHATSAPP",
+          contactValue: "0722 333 444",
+          // 300 from `priceFrom`, 200 parsed from the free-text "From KES 200" label.
+          items: [
+            { productId: "svc_c1", quantity: 1 },
+            { productId: "svc_c2", quantity: 2 },
+          ],
+        },
+        { ip: nextIp() },
+      ),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.estimatedTotalKES).toBe(700);
+
+    const stored = rows("orderRequest").find((row: any) => row.reference === data.reference);
+    expect(stored.businessId).toBe("bizC");
+  });
+});
+
 // ── B. Smart Customer Hub ────────────────────────────────────────────────────────────────────
 
 describe("smart customer hub", () => {

@@ -17,6 +17,8 @@ import { formatKES } from "@/lib/format";
 
 export type OrderRequestProduct = {
   id: string;
+  /** PRODUCT rows are catalogue items; SERVICE rows are the services listed on the page. */
+  kind?: "PRODUCT" | "SERVICE";
   name: string;
   description: string | null;
   imageUrl: string | null;

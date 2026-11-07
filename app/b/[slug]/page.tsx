@@ -16,7 +16,7 @@ import { buildDemoShowcase } from "@/lib/demoShowcase";
 import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
 import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
-import { loadPublicCatalogue } from "@/lib/business-hub/catalogue";
+import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
 import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
 
@@ -94,14 +94,15 @@ const classicPageExtras = requestCache(async (businessId: string) => {
  * `generateMetadata` and the body.
  *
  * Every call is scoped by the business id and returns only public data:
- *   • the catalogue (active products, priced by the platform's own pricing rule),
+ *   • the catalogue a customer may request from — the product catalogue plus the services the
+ *     page itself lists, priced by the platform's own pricing rule,
  *   • LIVE promotions only — an expired promotion never reaches this page,
  *   • whether the owner has enabled loyalty (a read; nothing is created by a page view).
  * A failure here degrades the page to its previous behaviour rather than blanking it.
  */
 const businessHubExtras = requestCache(async (businessId: string) => {
   const [products, promotions, loyaltyEnabled] = await Promise.all([
-    loadPublicCatalogue(businessId, { take: 24 }).catch(() => []),
+    loadRequestableCatalogue(businessId, { take: 24 }).catch(() => []),
     listLivePromotions(businessId).catch(() => []),
     isLoyaltyEnabled(businessId).catch(() => false),
   ]);
