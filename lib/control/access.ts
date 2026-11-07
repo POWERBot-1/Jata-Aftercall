@@ -3,7 +3,7 @@ import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { verifyControlMfaSession } from "./mfa";
 import { isControlRole, type ControlPermission, type ControlRoleName } from "./permissions";
-import { CONTROL_ROLE_ACCESS_ENABLED, filterControlRolePermissions } from "./role-policy";
+import { CONTROL_ROLE_ACCESS_ENABLED, filterControlRolePermissions, isControlCapabilityAllowed } from "./role-policy";
 
 export const CONTROL_MFA_COOKIE = "jata_control_mfa";
 
@@ -27,7 +27,7 @@ export type ControlAccessResult =
 export async function getControlIdentity(): Promise<ControlAccessResult> {
   const session = await getSession();
   if (!session) return { ok: false, status: 401, code: "UNAUTHENTICATED" };
-  // Policy-document approval is not an access grant. Keep the independent operational gate closed.
+  // The owner-approved matrix opens only the grant-evaluation path; it never creates a grant.
   if (!CONTROL_ROLE_ACCESS_ENABLED) return { ok: false, status: 403, code: "POLICY_PENDING" };
   try {
     const rows = await prisma.controlRoleGrant.findMany({
@@ -57,7 +57,8 @@ export async function getControlIdentity(): Promise<ControlAccessResult> {
 }
 
 export function hasControlPermission(grants: ControlGrant[], permission: ControlPermission, businessId?: string): boolean {
-  return grants.some((grant) => grant.permissionKeys.includes(permission)
+  return grants.some((grant) => isControlCapabilityAllowed(grant.role, permission)
+    && grant.permissionKeys.includes(permission)
     && (permission === "system.health.read"
       ? grant.scopeBusinessId === null
       : businessId === undefined ? grant.scopeBusinessId !== null : grant.scopeBusinessId === businessId));
@@ -65,7 +66,8 @@ export function hasControlPermission(grants: ControlGrant[], permission: Control
 }
 
 export function scopedBusinessIds(grants: ControlGrant[], permission: ControlPermission): { allowed: boolean; global: boolean; ids: string[] } {
-  const matching = grants.filter((grant) => grant.permissionKeys.includes(permission)
+  const matching = grants.filter((grant) => isControlCapabilityAllowed(grant.role, permission)
+    && grant.permissionKeys.includes(permission)
     && (permission === "system.health.read" ? grant.scopeBusinessId === null : grant.scopeBusinessId !== null));
   if (!matching.length) return { allowed: false, global: false, ids: [] };
   const global = permission === "system.health.read" && matching.some((grant) => grant.scopeBusinessId === null);
