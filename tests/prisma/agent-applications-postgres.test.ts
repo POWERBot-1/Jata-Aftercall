@@ -681,6 +681,12 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: agent application and a
       expect((await inspectReportRevision(new Request(`${url}&after=event-00001&after=event-00002`))).status).toBe(400);
       const other = await p.user.create({ data: { email: `large-report-other-${uid()}@test.invalid`, passwordHash: "test-only", role: "CUSTOMER" } });
       users.push(other.id);
+      await p.agentApplication.create({
+        data: {
+          userId: other.id, fullName: "Synthetic Other Agent", phoneE164: "+254700000098",
+          privacyAcknowledgedAt: new Date(), phoneVerifiedAt: new Date(), agentStatus: "ACTIVE",
+        },
+      });
       mock.session = { userId: other.id, email: other.email, role: "CUSTOMER" };
       expect((await inspectReportRevision(new Request(url))).status).toBe(404);
       expect(await p.agentReferralReportMember.count({ where: { applicationId: application.id, periodKey, revision: 1 } })).toBe(5001);
