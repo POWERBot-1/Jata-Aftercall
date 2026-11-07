@@ -750,6 +750,42 @@ describe("the customer's own view", () => {
 });
 
 
+describe("a reward can only be edited by the business that owns it", () => {
+  it("refuses another business's reward id and leaves their reward untouched", async () => {
+    await activateProgramme(BIZ_A);
+    await activateProgramme(BIZ_B);
+    const theirReward = await makeReward(BIZ_B, { title: "Their wash", pointsCost: 5 });
+    const before = fake().rows("loyaltyReward").find((row: any) => row.id === theirReward.id);
+
+    // An owner of BIZ_A posting BIZ_B's reward id. The payload carries businessId, so an
+    // unscoped update would not just edit it — it would take ownership of it.
+    const parsed = validateRewardInput({ title: "Stolen wash", pointsCost: 1 });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const stolen = await saveReward({ businessId: BIZ_A, rewardId: theirReward.id, input: parsed.value });
+
+    expect(stolen).toBeNull();
+    const after = fake().rows("loyaltyReward").find((row: any) => row.id === theirReward.id);
+    expect(after.businessId).toBe(BIZ_B);
+    expect(after.title).toBe(before.title);
+    expect(after.pointsCost).toBe(before.pointsCost);
+  });
+
+  it("still edits the reward when the id belongs to the calling business", async () => {
+    await activateProgramme(BIZ_A);
+    const mine = await makeReward(BIZ_A, { title: "My wash", pointsCost: 5 });
+
+    const parsed = validateRewardInput({ title: "My wash (revised)", pointsCost: 7 });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const saved = await saveReward({ businessId: BIZ_A, rewardId: mine.id, input: parsed.value });
+
+    expect(saved).not.toBeNull();
+    expect(saved?.title).toBe("My wash (revised)");
+    expect(saved?.pointsCost).toBe(7);
+  });
+});
+
 describe("a customer's first award can arrive twice at once", () => {
   /**
    * Two requests recording the same first purchase race on the unique index over

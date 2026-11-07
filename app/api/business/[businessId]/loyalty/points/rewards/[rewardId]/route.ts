@@ -56,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ busine
       actorId: auth.actor.userId,
       actorLabel: auth.actor.label,
     });
+    if (!reward) return reply({ error: "That reward is not part of your programme." }, 404);
     await logAudit({
       actorId: auth.actor.userId,
       action: "BUSINESS_HUB_POINTS_REWARD_UPDATED",

@@ -45,6 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ busines
       actorId: auth.actor.userId,
       actorLabel: auth.actor.label,
     });
+    if (!reward) return reply({ error: "We couldn't add that reward. Please try again." }, 503);
     await logAudit({
       actorId: auth.actor.userId,
       action: "BUSINESS_HUB_POINTS_REWARD_CREATED",

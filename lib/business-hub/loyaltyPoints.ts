@@ -905,7 +905,7 @@ export async function saveReward(params: {
   input: RewardInput;
   actorId?: string | null;
   actorLabel?: string | null;
-}) {
+}): Promise<any | null> {
   const programme = await getOrCreateProgramme(params.businessId);
   const data = {
     businessId: params.businessId,
@@ -920,8 +920,17 @@ export async function saveReward(params: {
     isActive: params.input.isActive,
     sortOrder: params.input.sortOrder,
   };
-  const row = params.rewardId
-    ? await prisma.loyaltyReward.update({ where: { id: params.rewardId }, data })
+  // The id comes from the caller, so the edit is scoped to this business before anything is
+  // written. Updating on the id alone would let one business pass another business's reward id and
+  // rewrite it — the payload even carries `businessId`, so it would take ownership of it.
+  const existing = params.rewardId
+    ? await prisma.loyaltyReward
+        .findFirst({ where: { id: params.rewardId, businessId: params.businessId } })
+        .catch(() => null)
+    : null;
+  if (params.rewardId && !existing) return null;
+  const row = existing
+    ? await prisma.loyaltyReward.update({ where: { id: existing.id }, data })
     : await prisma.loyaltyReward.create({ data });
   await recordHubActivity(prisma, {
     businessId: params.businessId,
