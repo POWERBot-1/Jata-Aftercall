@@ -107,7 +107,8 @@ function installAtomicWebhookStore(barrierEventId?: string) {
           return result;
         },
       },
-      payment: { updateMany: mocks.paymentUpdateMany },
+      payment: { updateMany: mocks.paymentUpdateMany, findUnique: vi.fn(async () => ({ id: "pay-a", status: "REFUNDED", userId: "user-a" })) },
+      agentCommissionLedgerEntry: { findFirst: vi.fn(async () => null), createMany: vi.fn(async () => ({ count: 0 })) },
       subscription: { updateMany: mocks.subscriptionUpdateMany },
     };
 
@@ -153,7 +154,8 @@ describe("Paystack webhook", () => {
     mocks.transaction.mockImplementation(async (work: (tx: any) => Promise<unknown>) => work({
       processedWebhook: { create: mocks.webhookCreate },
       auditEvent: { create: mocks.auditCreate },
-      payment: { updateMany: mocks.paymentUpdateMany },
+      payment: { updateMany: mocks.paymentUpdateMany, findUnique: vi.fn(async () => ({ id: "pay-a", status: "REFUNDED", userId: "user-a" })) },
+      agentCommissionLedgerEntry: { findFirst: vi.fn(async () => null), createMany: vi.fn(async () => ({ count: 0 })) },
       subscription: { updateMany: mocks.subscriptionUpdateMany },
     }));
     mocks.processedCheck.mockImplementation(async () => mocks.alreadyProcessed);
