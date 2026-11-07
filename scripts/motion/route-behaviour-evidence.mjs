@@ -15,8 +15,8 @@ const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new P
 const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,limitations:['No published AI fixture','No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
 try {
- const business=await db.business.findUniqueOrThrow({where:{slug:'marys-beauty-studio'},select:{id:true,slug:true}});
- const product=await db.product.findFirstOrThrow({where:{businessId:business.id,isActive:true},select:{id:true}});
+ const product=await db.product.findFirstOrThrow({where:{isActive:true},orderBy:{createdAt:'asc'},select:{id:true,businessId:true}});
+ const business=await db.business.findUniqueOrThrow({where:{id:product.businessId},select:{id:true,slug:true}});
  browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,protocolTimeout:120000,args:['--no-sandbox','--disable-dev-shm-usage']});browserVersion=await browser.version();
  const owner=await browser.newPage();await owner.goto(new URL('/login',base).href,{waitUntil:'domcontentloaded'});
  const login=await owner.evaluate(async(password)=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password})});return r.status;},demoFixturePassword);if(login!==200) throw Error(`fixture login ${login}`);
