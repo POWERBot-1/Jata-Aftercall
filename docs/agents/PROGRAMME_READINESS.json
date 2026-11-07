@@ -267,8 +267,8 @@
     "acceptance": "server-side module/action authorization, confirmation/change-history tests, cross-tenant tests, kill-switch scope, health-source provenance and last-check verification.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
     "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
-    "verificationMethod": "Vercel project environment inventory (decrypt=false); exact key names and targets only. Do not infer secret values from redacted output. Requires isolated Preview R2 put/head/delete and Production owner-approved configuration.",
-    "testResult": "Vercel environment inventory checked with secret values redacted. R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID, R2_BUCKET and R2_PUBLIC_BASE_URL are Preview-scoped; R2_ACCESS_KEY_ID exists in Preview and Production. No Production R2 secret/bucket/account/public URL set was verified. No provider activation or Production configuration change performed.",
+    "verificationMethod": "Inspected Cloudflare bucket inventory and confirmed creation of the dedicated jata-media-production bucket; read back bucket metadata. Inspected Vercel Production environment keys with secret values redacted and confirmed R2_ACCOUNT_ID and R2_BUCKET were added; R2_ACCESS_KEY_ID exists but has not been authenticated. Inspected Cloudflare zones and R2 domains; no jataaftercall.co.ke zone or Production custom domain is configured. Authenticated S3 upload/HEAD/delete remains NOT TESTED.",
+    "testResult": "BLOCKED: the dedicated Production bucket exists and Production R2_ACCOUNT_ID and R2_BUCKET variables are set. R2_ACCESS_KEY_ID is present but unverified; R2_SECRET_ACCESS_KEY and R2_PUBLIC_BASE_URL are absent; JATA_STORAGE_PROVIDER is not activated. No authenticated S3 upload, HEAD/retrieval, deletion, or tenant-isolation acceptance has been executed.",
     "evidence": [],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
@@ -276,10 +276,23 @@
     "assessmentReference": "docs/audits/REQUIREMENT_TRACEABILITY_43.md — ADMIN-007",
     "verificationCommit": "84dde9b4aadd7068fca7f95b99c4756c1bee18e0",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "BLOCKED: Preview R2 variables are present, but a real upload/HEAD/delete test has not been proven and the Production R2 set is incomplete (the inspected Production environment exposed only R2_ACCESS_KEY_ID; no Production R2_SECRET_ACCESS_KEY, bucket, account ID or public base URL was present). Provider health/configuration audit and owner-controlled change history remain incomplete.",
+    "blocker": "BLOCKED: bucket and non-secret Production variables are now configured. A scoped Production R2 secret access key and production-grade public asset domain remain unavailable. The Cloudflare account has no jataaftercall.co.ke zone; no r2.dev substitute was enabled. Authenticated S3 operations and provider health/configuration acceptance remain untested.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d842777bc3e4a3cd15a9f8dec0c15a1210a1764c",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentStatus": "BLOCKED",
+    "productionConfigurationAudit": {
+      "bucket": "PASS",
+      "accountIdVariable": "PASS",
+      "bucketVariable": "PASS",
+      "accessKeyId": "NOT TESTED",
+      "secretAccessKey": "FAIL",
+      "publicBaseUrl": "FAIL",
+      "providerActivation": "NOT TESTED",
+      "authenticatedUpload": "NOT TESTED",
+      "retrieval": "NOT TESTED",
+      "deletion": "NOT TESTED",
+      "tenantIsolation": "NOT TESTED"
+    }
   },
   "ADMIN-008": {
     "status": "BLOCKED",
