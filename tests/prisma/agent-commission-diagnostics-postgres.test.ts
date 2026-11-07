@@ -32,10 +32,29 @@ describe.skipIf(!realPrismaConfigured)("commission diagnostics with isolated Pos
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query(`CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PAID', 'FAILED', 'REFUNDED', 'EXPIRED', 'CANCELLED');
       CREATE TYPE "ReferralStatus" AS ENUM ('PENDING', 'CONVERTED', 'REJECTED', 'EXPIRED');
-      CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL);
-      CREATE TABLE "Payment" ("id" TEXT PRIMARY KEY, "reference" TEXT NOT NULL, "status" "PaymentStatus" NOT NULL, "currency" TEXT NOT NULL, "amount" INTEGER NOT NULL);
-      CREATE TABLE "AgentApplication" ("id" TEXT PRIMARY KEY, "userId" TEXT UNIQUE NOT NULL, "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL, "phoneVerifiedAt" TIMESTAMP(3));
-      CREATE TABLE "Referral" ("id" TEXT PRIMARY KEY, "referrerUserId" TEXT NOT NULL, "referredUserId" TEXT UNIQUE, "referredBusinessId" TEXT, "status" "ReferralStatus" NOT NULL);`);
+      CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "role" TEXT NOT NULL, "email" TEXT UNIQUE, "passwordHash" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE "Payment" (
+        "id" TEXT PRIMARY KEY, "reference" TEXT NOT NULL, "status" "PaymentStatus" NOT NULL,
+        "currency" TEXT NOT NULL, "amount" INTEGER NOT NULL, "businessId" TEXT, "userId" TEXT,
+        "planId" TEXT, "paystackId" TEXT, "purpose" TEXT NOT NULL DEFAULT 'SUBSCRIPTION',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE "AgentApplication" (
+        "id" TEXT PRIMARY KEY, "userId" TEXT UNIQUE NOT NULL, "fullName" TEXT NOT NULL DEFAULT 'Synthetic',
+        "phoneE164" TEXT NOT NULL DEFAULT '+254700000000', "verifiedPhoneE164" TEXT UNIQUE,
+        "phoneVerifiedAt" TIMESTAMP(3), "status" TEXT NOT NULL, "agentStatus" TEXT NOT NULL,
+        "privacyAcknowledgedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE "Referral" (
+        "id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "referrerUserId" TEXT NOT NULL,
+        "referrerBusinessId" TEXT, "referredUserId" TEXT UNIQUE, "referredBusinessId" TEXT,
+        "status" "ReferralStatus" NOT NULL, "tokenHash" TEXT UNIQUE NOT NULL,
+        "rejectReason" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "expiresAt" TIMESTAMP(3) NOT NULL, "convertedAt" TIMESTAMP(3)
+      );`);
     await pool.query(readFileSync("prisma/migrations/20261111000000_agent_commission_ledger/migration.sql", "utf8"));
     await pool.query(`INSERT INTO "User" VALUES ('admin-1', 'ADMIN'), ('former-admin', 'CUSTOMER');
       INSERT INTO "Payment" VALUES ('payment-1', 'private-reference', 'REFUNDED', 'KES', 10000), ('payment-2', 'other-reference', 'PAID', 'KES', 20000), ('payment-3', 'third-reference', 'PAID', 'KES', 30000);
