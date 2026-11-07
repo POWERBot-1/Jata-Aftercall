@@ -62,7 +62,8 @@ describe("Control role/action matrix", () => {
     const globalGrant: ControlGrant = { id: "global", role: "SUPER_ADMIN", permissionKeys: ["businesses.read", "system.health.read"], scopeBusinessId: null };
     expect(hasControlPermission([globalGrant], "businesses.read", "tenant-a")).toBe(false);
     expect(hasControlPermission([globalGrant], "system.health.read")).toBe(true);
-    expect(scopedBusinessIds([globalGrant], "businesses.read")).toEqual({ allowed: true, global: true, ids: [] });
+    expect(scopedBusinessIds([globalGrant], "businesses.read")).toEqual({ allowed: false, global: false, ids: [] });
+    expect(scopedBusinessIds([globalGrant], "system.health.read")).toEqual({ allowed: true, global: true, ids: [] });
   });
 
   it("keeps unknown roles, capabilities and wildcard-like grants denied", () => {
