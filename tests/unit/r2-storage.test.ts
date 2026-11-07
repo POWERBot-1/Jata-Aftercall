@@ -108,8 +108,10 @@ describe("R2 adapter behaviour (fake S3 client)", () => {
       bytes: 4,
       contentType: "image/jpeg",
     });
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
     expect(sent[0].name).toBe("PutObjectCommand");
+    expect(sent[1].name).toBe("HeadObjectCommand");
+    expect(sent[1].input).toMatchObject({ Bucket: "jata-media-test", Key: "tenants/business-a/image-original/upload-1234.jpg" });
     expect(sent[0].input).toMatchObject({
       Bucket: "jata-media-test",
       Key: "tenants/business-a/image-original/upload-1234.jpg",
