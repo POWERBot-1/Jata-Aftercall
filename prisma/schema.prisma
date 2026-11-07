@@ -387,9 +387,12 @@ model ControlRoleGrant {
   reason String @db.Text
   revokedAt DateTime?
   revocationReason String? @db.Text
+  // Every new grant must carry an explicit expiry. Legacy NULL rows fail closed in access.ts.
+  expiresAt DateTime?
   createdAt DateTime @default(now())
 
   @@index([userId, revokedAt])
+  @@index([userId, revokedAt, expiresAt])
   @@index([role, revokedAt])
   @@index([scopeBusinessId, revokedAt])
 }
