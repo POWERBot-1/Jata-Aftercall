@@ -60,6 +60,7 @@ export async function GET(request: Request) {
         WHERE "id" = ANY(${candidateGrantIds}::text[])
           AND "userId" = ${access.identity.session.userId}
           AND "revokedAt" IS NULL
+          AND "expiresAt" > CURRENT_TIMESTAMP
           AND "permissionKeys" @> ARRAY[${permission}]::text[]
         ORDER BY "createdAt" DESC
         FOR SHARE
