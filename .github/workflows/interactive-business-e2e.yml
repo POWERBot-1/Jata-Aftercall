@@ -186,20 +186,6 @@ jobs:
             exit 1
           fi
 
-      # TEMPORARY DIAGNOSTIC — surfaces the journey's own output on the pull request, because
-      # this workspace cannot read Actions logs. Remove before merge.
-      - name: Publish the Business Hub journey output
-        if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set +e
-          { echo "### Business Hub journey — output"; echo; echo '```'; tail -c 4000 /tmp/step-hub-journey.log 2>/dev/null; echo '```'; echo; echo "### Business Hub browser journey — output"; echo; echo '```'; tail -c 4000 /tmp/step-hub-browser.log 2>/dev/null; echo '```'; } > /tmp/hub-comment.md
-          if [ -n "$PR_NUMBER" ]; then
-            gh pr comment "$PR_NUMBER" --body-file /tmp/hub-comment.md || true
-          fi
-
       - name: Production build against the isolated test database
         run: |
           set -o pipefail
@@ -239,6 +225,18 @@ jobs:
           path: artifacts/business-hub-journey
           if-no-files-found: warn
           retention-days: 14
+
+      # TEMPORARY DIAGNOSTIC — surfaces the journeys' own output on the pull request, because
+      # this workspace cannot read Actions logs. Remove before merge.
+      - name: Publish the Business Hub journey output
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          { echo "### Business Hub journeys — output"; echo; echo '```'; tail -c 5000 /tmp/step-hub-journey.log 2>/dev/null; echo '```'; echo; echo "### Business Hub browser journey — output"; echo; echo '```'; tail -c 5000 /tmp/step-hub-browser.log 2>/dev/null; echo '```'; } > /tmp/hub-comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/hub-comment.md || true
 
       - name: Upload Control denial screenshots and sanitized result
         if: always()
