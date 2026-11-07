@@ -80,3 +80,10 @@ The preceding all-DENY matrix and denial-only acceptance notes are historical. G
 - Access requires a current authenticated session, active exact-key DB grant, live grant recheck and verified short-lived MFA. No grant is seeded or provisioned by the policy change.
 
 The latest implementation corrects a stale fail-closed test suite that still asserted the superseded all-DENY behavior. Exact-head PostgreSQL and authenticated browser positive-role acceptance, grant expiry, MFA recovery/revocation race, persisted success audit and independent six-viewport visual inspection remain separate evidence requirements. Do not mark them PASS until those exact-head checks pass.
+
+
+## 2026-11-07 owner-authorized matrix supersession
+
+The historical all-DENY matrix above is superseded by the owner-approved least-privilege matrix in `lib/control/role-policy.ts` and `docs/agents/CONTROL_ROLE_ACTION_MATRIX.md`. The six roles × 15 capabilities are now asserted as explicit ALLOW/DENY cells. Only selected tenant-scoped reads and minimal global system-health reads are allowed. All writes, approvals, provider configuration, identity/grant administration, financial mutations and payouts remain DENY. Null/global grants cannot read tenant-keyed data.
+
+The operational access gate is enabled, but a grant is not created by policy approval. A live grant must be active, exact-key, tenant-scoped where required, and have `expiresAt > now`; NULL/expired/revoked grants are rejected. MFA remains mandatory on protected reads. Exact-head PostgreSQL migration and authenticated positive browser journeys are separate acceptance requirements.
