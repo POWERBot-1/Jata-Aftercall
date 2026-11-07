@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { recordCommissionAccrualForPaidPlan } from "@/lib/agents/commission-accrual";
+import { recordCommissionAccrualForPaidPlan, recordCommissionReversalForFullRefund } from "@/lib/agents/commission-accrual";
 
 function makeTx(overrides: Record<string, unknown> = {}) {
   const payment = {
@@ -79,5 +79,39 @@ describe("transactional commission accrual", () => {
     const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
     expect(result.recorded).toBe(false);
     expect(tx.auditEvent.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("commission full-refund reversal", () => {
+  it("appends one negative immutable reversal linked to the original accrual", async () => {
+    const accrual = { id: "accrual-1", agentApplicationId: "agent-application-1", currency: "KES", amountMinor: BigInt(40_000), policyVersion: "v1", policySnapshot: { basisPoints: 4000 } };
+    const tx: any = {
+      payment: { findUnique: vi.fn(async () => ({ id: "payment-1", status: "REFUNDED", userId: "customer-1" })) },
+      agentCommissionLedgerEntry: {
+        findFirst: vi.fn(async () => accrual),
+        createMany: vi.fn(async () => ({ count: 1 })),
+      },
+      auditEvent: { create: vi.fn(async () => ({})) },
+    };
+    await expect(recordCommissionReversalForFullRefund(tx, "payment-1")).resolves.toBe(true);
+    expect(tx.agentCommissionLedgerEntry.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      skipDuplicates: true,
+      data: [expect.objectContaining({
+        paymentId: "payment-1", entryType: "REVERSAL", amountMinor: BigInt(-40_000),
+        agentApplicationId: "agent-application-1", originalEntryId: "accrual-1",
+        sourceEventId: "subscription-refund:payment-1",
+      })],
+    }));
+    expect(tx.auditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reverse an unrefunded payment or create a duplicate reversal", async () => {
+    const tx: any = {
+      payment: { findUnique: vi.fn(async () => ({ id: "payment-1", status: "PAID", userId: "customer-1" })) },
+      agentCommissionLedgerEntry: { findFirst: vi.fn(), createMany: vi.fn() },
+      auditEvent: { create: vi.fn() },
+    };
+    await expect(recordCommissionReversalForFullRefund(tx, "payment-1")).resolves.toBe(false);
+    expect(tx.agentCommissionLedgerEntry.createMany).not.toHaveBeenCalled();
   });
 });
