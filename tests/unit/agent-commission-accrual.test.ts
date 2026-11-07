@@ -43,7 +43,7 @@ describe("transactional commission accrual", () => {
         currency: "KES",
         amount: { gt: 0 },
         paystackId: { not: null },
-        businessId: { in: ["business-1", "business-2"] },
+        OR: [{ userId: "customer-1", businessId: "business-1" }, { userId: "customer-2", businessId: "business-2" }],
       }),
     }));
   });
@@ -77,13 +77,11 @@ describe("transactional commission accrual", () => {
     expect((await recordCommissionAccrualForPaidPlan(inactive, "payment-1")).recorded).toBe(false);
   });
 
-  it("requires the verified charged amount to equal the authoritative plan catalogue price", async () => {
-    const tx = makeTx();
+  it("uses the verified charged amount even if the catalogue price later changes", async () => {
+    const tx = makeTx({ planConfig: { findUnique: vi.fn(async () => ({ id: "plan-1", key: "BUSINESS_PAGE", priceKES: 999 })) } });
     const result = await recordCommissionAccrualForPaidPlan(tx, "payment-1");
     expect(result).toMatchObject({ recorded: true, commissionMinor: BigInt(40_000) });
-    const mismatch = makeTx({ planConfig: { findUnique: vi.fn(async () => ({ id: "plan-1", key: "BUSINESS_PAGE", priceKES: 999 })) } });
-    await expect(recordCommissionAccrualForPaidPlan(mismatch, "payment-1")).rejects.toThrow("COMMISSION_PLAN_PRICE_MISMATCH");
-    expect(mismatch.agentCommissionLedgerEntry.createMany).not.toHaveBeenCalled();
+    expect(tx.agentCommissionLedgerEntry.createMany).toHaveBeenCalledTimes(1);
   });
 
   it("uses idempotent createMany semantics when the payment event is replayed", async () => {
