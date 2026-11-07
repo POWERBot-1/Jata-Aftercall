@@ -58,6 +58,14 @@ describe("Control role/action matrix", () => {
     }
   });
 
+  it("rejects a database grant that attempts to exceed its role's policy, including during live rechecks", () => {
+    const forged: ControlGrant = { id: "forged", role: "SUPPORT_ADMIN", permissionKeys: ["payments.read", "providers.configure", "businesses.read"], scopeBusinessId: "tenant-a" };
+    expect(hasControlPermission([forged], "payments.read", "tenant-a")).toBe(false);
+    expect(hasControlPermission([forged], "providers.configure", "tenant-a")).toBe(false);
+    expect(hasControlPermission([forged], "businesses.read", "tenant-a")).toBe(true);
+    expect(scopedBusinessIds([forged], "payments.read")).toEqual({ allowed: false, global: false, ids: [] });
+  });
+
   it("rejects null/global grants for tenant-keyed reads while permitting only explicit global grants for global capabilities", () => {
     const globalGrant: ControlGrant = { id: "global", role: "SUPER_ADMIN", permissionKeys: ["businesses.read", "system.health.read"], scopeBusinessId: null };
     expect(hasControlPermission([globalGrant], "businesses.read", "tenant-a")).toBe(false);
