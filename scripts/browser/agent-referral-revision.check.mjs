@@ -154,15 +154,8 @@ try {
   console.log("PASS: authenticated own-agent 2,501-row cursor pagination, cross-agent isolation and non-financial labels");
 } finally {
   if (browser) await browser.close();
-  if (appA?.id) {
-    await prisma.agentReferralAttribution.deleteMany({ where: { referrerApplicationId: appA.id } });
-    await prisma.agentReferralReportMember.deleteMany({ where: { applicationId: appA.id } });
-    await prisma.agentReferralReportRevision.deleteMany({ where: { applicationId: appA.id } });
-    await prisma.agentReferralReportSnapshot.deleteMany({ where: { applicationId: appA.id } });
-  }
-  if (linkId) await prisma.agentReferralLink.deleteMany({ where: { id: linkId } });
-  if (referredApplicationIds.length) await prisma.agentApplication.deleteMany({ where: { id: { in: referredApplicationIds } } });
-  if (appA?.id || appB?.id) await prisma.agentApplication.deleteMany({ where: { id: { in: [appA?.id, appB?.id].filter(Boolean) } } });
-  if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  // The dedicated jata_e2e database is disposable and destroyed with this CI job.
+  // Referral snapshots, revisions and members are append-only by database trigger;
+  // do not attempt to delete the synthetic evidence or bypass that invariant.
   await prisma.$disconnect();
 }
