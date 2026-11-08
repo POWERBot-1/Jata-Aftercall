@@ -750,6 +750,51 @@ describe("the customer's own view", () => {
 });
 
 
+describe("a repeated tap is a replay, not a second attempt to spend", () => {
+  it("returns the same redemption when the retry arrives after the balance has already been spent", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Retrying Customer");
+    const reward = await makeReward(BIZ_A, { title: "Free coffee", pointsCost: 6 });
+    await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "R-1", amountKES: 1000 });
+
+    const first = await redeemPoints({ businessId: BIZ_A, cardId: card.id, rewardId: reward.id, idempotencyKey: "tap-retry-1" });
+    expect(first.ok).toBe(true);
+    const firstId = first.ok ? first.redemption.id : null;
+
+    // The wallet now holds 4 — below this reward's cost. A tap whose response was lost arrives
+    // again here: it must get its own redemption back, not "you cannot afford this".
+    const repeat = await redeemPoints({ businessId: BIZ_A, cardId: card.id, rewardId: reward.id, idempotencyKey: "tap-retry-1" });
+    expect(repeat.ok).toBe(true);
+    if (repeat.ok) {
+      expect(repeat.duplicate).toBe(true);
+      expect(repeat.redemption.id).toBe(firstId);
+    }
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.availablePoints).toBe(4);
+    expect(fake().rows("loyaltyRewardRedemption")).toHaveLength(1);
+  });
+
+  it("does not hand one customer's redemption to another customer who reuses the key", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Retrying Customer");
+    const other = await enrol(BIZ_A, "Different Customer");
+    const reward = await makeReward(BIZ_A, { title: "Free coffee", pointsCost: 6 });
+    await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "R-1", amountKES: 1000 });
+    await awardPoints({ businessId: BIZ_A, cardId: other.id, transactionRef: "R-2", amountKES: 1000 });
+
+    await redeemPoints({ businessId: BIZ_A, cardId: card.id, rewardId: reward.id, idempotencyKey: "tap-retry-1" });
+    const theirs = await redeemPoints({ businessId: BIZ_A, cardId: other.id, rewardId: reward.id, idempotencyKey: "tap-retry-1" });
+
+    expect(theirs.ok).toBe(true);
+    if (theirs.ok) {
+      expect(theirs.duplicate).toBeFalsy();
+      expect(theirs.redemption.accountId).not.toBe(
+        fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.id,
+      );
+    }
+    expect(fake().rows("loyaltyRewardRedemption")).toHaveLength(2);
+  });
+});
+
 describe("a reward can only be edited by the business that owns it", () => {
   it("refuses another business's reward id and leaves their reward untouched", async () => {
     await activateProgramme(BIZ_A);

@@ -1005,6 +1005,23 @@ export async function redeemPoints(params: {
   if (!account) return { ok: false, status: 404, error: "That customer does not have a points wallet yet." };
   if (account.status !== "ACTIVE") return { ok: false, status: 409, error: "This wallet is blocked and cannot redeem." };
 
+  // The replay check comes BEFORE the balance checks, because a replay is not a new attempt to
+  // spend: the wallet has already paid for this redemption. A tap whose response was lost arrives
+  // again with the same key, by which time the balance is legitimately lower — refusing it there
+  // would tell a customer they cannot afford the reward they are holding, and would invite a
+  // second hand-over of the same reward.
+  //
+  // The stored key is namespaced by wallet. The database enforces one key per BUSINESS, not per
+  // wallet, so two customers who happened to use the same key would collide — and the loser of
+  // that collision would be handed the other customer's redemption. The keys the wallet sends are
+  // random, which makes that vanishingly unlikely; namespacing it makes it impossible.
+  const clientKey = cleanText(params.idempotencyKey, 120) || randomCode(12);
+  const idempotencyKey = `REDEEM:${account.id}:${clientKey}`;
+  const existing = await prisma.loyaltyRewardRedemption
+    .findFirst({ where: { businessId: params.businessId, accountId: account.id, idempotencyKey } })
+    .catch(() => null);
+  if (existing) return { ok: true, redemption: existing, account, entry: null, duplicate: true };
+
   const cost = Math.max(0, Math.round(Number(reward.pointsCost ?? 0)));
   const available = Number(account.availablePoints ?? 0);
   if (programme.minRedeemPoints > 0 && available < programme.minRedeemPoints) {
@@ -1021,12 +1038,6 @@ export async function redeemPoints(params: {
       error: `This reward costs ${cost} points and the wallet holds ${available}.`,
     };
   }
-
-  const idempotencyKey = cleanText(params.idempotencyKey, 120) || `REDEEM:${randomCode(12)}`;
-  const existing = await prisma.loyaltyRewardRedemption
-    .findFirst({ where: { businessId: params.businessId, idempotencyKey } })
-    .catch(() => null);
-  if (existing) return { ok: true, redemption: existing, account, entry: null, duplicate: true };
 
   try {
     const result = await prisma.$transaction(async (tx: any) => {
@@ -1105,8 +1116,10 @@ export async function redeemPoints(params: {
     return { ok: true, redemption: result.redemption, entry: result.entry, account: updated ?? account };
   } catch (error) {
     if (isUniqueViolation(error)) {
+      // Scoped to this wallet as well: a collision must never hand one customer another
+      // customer's redemption, whatever the key turns out to be.
       const original = await prisma.loyaltyRewardRedemption
-        .findFirst({ where: { businessId: params.businessId, idempotencyKey } })
+        .findFirst({ where: { businessId: params.businessId, accountId: account.id, idempotencyKey } })
         .catch(() => null);
       if (original) return { ok: true, redemption: original, account, entry: null, duplicate: true };
       return { ok: false, status: 409, error: "That redemption has already been recorded." };
