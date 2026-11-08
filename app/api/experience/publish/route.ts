@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, assertBusinessRole } from "@/lib/tenant";
+import { assertDefaultStudioWebsiteAccess } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
   // resolved fail-closed (unknown role, failed lookup, or cross-tenant → no role → 403), so
   // neither direction mutates protected state without ADMIN/OWNER-level rights.
   try {
-    await assertBusinessRole(businessId, session, "publish");
+    await assertDefaultStudioWebsiteAccess(businessId, session, "publish");
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -247,7 +247,7 @@ export async function GET(req: Request) {
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
   try {
-    await assertBusinessOwnership(businessId, session);
+    await assertDefaultStudioWebsiteAccess(businessId, session, "read");
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
