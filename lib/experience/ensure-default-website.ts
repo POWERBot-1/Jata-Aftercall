@@ -110,7 +110,7 @@ export async function ensureDefaultStudioWebsite(
         role,
         status: "ACTIVE",
       },
-      update: { role, status: "ACTIVE" },
+      update: { role },
     });
   }
 
