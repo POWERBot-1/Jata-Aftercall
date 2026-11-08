@@ -41,6 +41,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
       NODE_ENV: test
       AUTH_SECRET: website-studio-ci-only-not-a-production-secret
       NEXTAUTH_SECRET: website-studio-ci-only-not-a-production-secret
