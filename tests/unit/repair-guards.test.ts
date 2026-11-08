@@ -98,7 +98,7 @@ describe("runtime and schema guards", () => {
     // two enum types, their indexes and guarded foreign keys; it is the customer-conversion
     // half of the EXISTING KES149 / KES999 Business Page subscription, so no pricing, plan,
     // subscription, payment or entitlement table is touched and no existing row is read or
-    // rewritten).
+    // rewritten), and Website Studio 2.0 (workspace/site tenant foundation plus independent per-site content and history; additive tables, indexes, composite foreign keys and a bounded default-site backfill only; no payment, subscription, POS or non-Studio plan rows are changed).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -146,6 +146,7 @@ describe("runtime and schema guards", () => {
       "20261107000000_agent_activation_review",
       "20261108000000_agent_referral_registration",
       "20261108010000_website_studio_2_0_workspace_foundation",
+      "20261108020000_website_studio_2_0_multi_site_content",
       "20261109000000_agent_referral_source",
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",

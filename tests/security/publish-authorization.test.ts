@@ -83,6 +83,23 @@ vi.mock("@/lib/auth", () => ({
   ),
 }));
 
+vi.mock("@/lib/experience/ensure-default-website", async () => {
+  const tenant = await import("@/lib/tenant");
+  return {
+    assertDefaultStudioWebsiteAccess: vi.fn(async (businessId: string, session: any, action: string) => {
+      const decision = await tenant.assertBusinessRole({
+        userId: session.userId,
+        businessId,
+        userRole: session.role,
+        action: action as any,
+      });
+      if (!decision.allowed) {
+        throw Object.assign(new Error("Insufficient Studio website permission"), { status: 403 });
+      }
+      return decision;
+    }),
+  };
+});
 vi.mock("@/lib/audit", () => ({ logAudit: st.logAudit }));
 
 vi.mock("@/lib/ai-readiness", () => ({ publishAIBusinessFrontDesk: st.publishAI }));

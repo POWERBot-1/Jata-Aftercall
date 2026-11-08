@@ -11,7 +11,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessRole } from "@/lib/tenant";
 import { assertDefaultStudioWebsiteAccess } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
@@ -73,7 +72,6 @@ export async function POST(req: Request) {
   // resolved fail-closed (unknown role, failed lookup, or cross-tenant → no role → 403), so
   // neither direction mutates protected state without ADMIN/OWNER-level rights.
   try {
-    await assertBusinessRole(businessId, session, "publish");
     await assertDefaultStudioWebsiteAccess(businessId, session, "publish");
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);

@@ -27,6 +27,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { guardTenantMutation } from "@/lib/tenant";
 import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { sanitizeText } from "@/lib/validation";
@@ -461,7 +462,7 @@ export async function DELETE(req: Request) {
       select: { id: true, businessId: true, storageProvider: true, storageKey: true },
     });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardStudioWebsiteMutation(session, asset.businessId, "edit");
+    const guard = await guardTenantMutation(session, asset.businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     if (!(await removeStoredObject(asset))) {
       return NextResponse.json(

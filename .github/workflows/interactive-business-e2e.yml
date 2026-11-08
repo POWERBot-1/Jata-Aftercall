@@ -14,7 +14,9 @@ name: Interactive Business E2E
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - arena/website-studio-2-0-p1-tenant-foundation
   push:
     branches: [main]
 

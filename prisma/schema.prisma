@@ -4735,6 +4735,9 @@ model StudioWebsite {
   isDefault   Boolean  @default(false)
   workspaceBusiness StudioWorkspaceBusiness @relation(fields: [workspaceId, businessId], references: [workspaceId, businessId], onDelete: Cascade)
   members     StudioWebsiteMember[]
+  content     StudioWebsiteContent?
+  versions    StudioWebsiteVersion[]
+  draftRevisions StudioWebsiteDraftRevision[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -4742,6 +4745,58 @@ model StudioWebsite {
   @@index([workspaceId, updatedAt])
   @@index([businessId, isDefault])
   @@index([businessId, status])
+}
+
+
+/// Independent per-site content state. Draft and published snapshots are never conflated.
+model StudioWebsiteContent {
+  id               String   @id @default(cuid())
+  websiteId        String   @unique
+  website          StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  draftJson        String?  @db.Text
+  publishedJson    String?  @db.Text
+  draftVersion     Int      @default(0)
+  historyCursor    Int      @default(0)
+  publishedVersion Int      @default(0)
+  publishedAt      DateTime?
+  publishedById    String?
+  updatedAt        DateTime @updatedAt
+
+  @@index([websiteId, updatedAt])
+}
+
+/// Immutable per-website publication history. A site can roll back without affecting siblings.
+model StudioWebsiteVersion {
+  id          String   @id @default(cuid())
+  websiteId   String
+  website     StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshotJson String  @db.Text
+  themeKey    String?
+  categoryKey String?
+  note        String?
+  publishedById String?
+  publishedAt DateTime @default(now())
+
+  @@unique([websiteId, version])
+  @@index([websiteId, publishedAt])
+}
+
+
+/// Recoverable draft snapshots, isolated per website.
+model StudioWebsiteDraftRevision {
+  id           String   @id @default(cuid())
+  websiteId    String
+  website      StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  draftVersion Int
+  source       String   @default("EDIT")
+  label        String?
+  snapshotJson String   @db.Text
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([websiteId, draftVersion])
+  @@index([websiteId, createdAt])
 }
 
 model StudioWebsiteMember {
