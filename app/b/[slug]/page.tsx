@@ -19,6 +19,7 @@ import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
 import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
 import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
+import { findProgramme } from "@/lib/business-hub/loyaltyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -101,12 +102,13 @@ const classicPageExtras = requestCache(async (businessId: string) => {
  * A failure here degrades the page to its previous behaviour rather than blanking it.
  */
 const businessHubExtras = requestCache(async (businessId: string) => {
-  const [products, promotions, loyaltyEnabled] = await Promise.all([
+  const [products, promotions, loyaltyEnabled, pointsEnabled] = await Promise.all([
     loadRequestableCatalogue(businessId, { take: 24 }).catch(() => []),
     listLivePromotions(businessId).catch(() => []),
     isLoyaltyEnabled(businessId).catch(() => false),
+    findProgramme(businessId).then((programme) => programme?.isActive === true).catch(() => false),
   ]);
-  return { products, promotions, loyaltyEnabled };
+  return { products, promotions, loyaltyEnabled, pointsEnabled };
 });
 
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
@@ -328,6 +330,7 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
         products={hub.products}
         promotions={hub.promotions}
         loyaltyEnabled={hub.loyaltyEnabled}
+        pointsEnabled={hub.pointsEnabled}
       />
     </>
   );
