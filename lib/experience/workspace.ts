@@ -9,7 +9,7 @@
 import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { requestCache } from "@/lib/request-cache";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { ensureDefaultStudioWebsite } from "./ensure-default-website";
 import { createExperienceDocument, normalizeExperienceDocument } from "./document";
 import { getExperienceProfile } from "./categories";
 import type { ExperienceProfile } from "./types";
@@ -92,7 +92,7 @@ async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> 
   const session = await getSession();
   if (!session) return null;
   try {
-    await assertBusinessOwnership(businessId, session);
+    await ensureDefaultStudioWebsite(businessId, session);
   } catch {
     return null;
   }
