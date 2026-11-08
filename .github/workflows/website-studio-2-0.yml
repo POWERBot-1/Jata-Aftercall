@@ -1,0 +1,68 @@
+name: Website Studio 2.0 — tenant and content acceptance
+
+on:
+  pull_request:
+    branches:
+      - main
+      - arena/website-studio-2-0-p1-tenant-foundation
+    paths:
+      - "app/api/studio/websites/**"
+      - "lib/experience/**"
+      - "lib/db.ts"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/**"
+      - "tests/integration/website-studio-*.test.ts"
+      - "tests/unit/website-studio-*.test.ts"
+      - "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+      - ".github/workflows/website-studio-2-0.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  website-studio-2-0:
+    name: Prisma, tenant tests, typecheck and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jata_studio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d jata_studio_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
+      NODE_ENV: test
+      AUTH_SECRET: website-studio-ci-only-not-a-production-secret
+      NEXTAUTH_SECRET: website-studio-ci-only-not-a-production-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations to disposable PostgreSQL
+        run: npx prisma migrate deploy
+      - name: Seed disposable test database
+        run: npm run seed
+      - name: Run full no-database and database-backed test suite
+        run: npx vitest run --exclude tests/e2e
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
