@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { loadWorkspace } from "@/lib/experience/workspace";
 import { loadStudioIntelligence } from "@/lib/studio/studioData";
 import { healthSummaryLine } from "@/lib/studio/health";
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   // authenticate, then check the caller owns this business, before reading anything.
   const session = await getSession();
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
-  const guard = await guardTenantMutation(session, businessId, "read");
+  const guard = await guardStudioWebsiteMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const workspace = await loadWorkspace(businessId);
