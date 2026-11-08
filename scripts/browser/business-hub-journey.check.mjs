@@ -79,6 +79,16 @@ if (process.exitCode !== 2) {
     results.push({ name, status: ok ? "PASS" : "FAIL", detail });
     if (!ok) failed += 1;
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+    if (!ok) {
+      // A failing check is also raised as an Actions annotation. The runner log is not always
+      // retrievable after the fact, and a browser journey that only prints to stdout is a journey
+      // nobody can audit from the checks API.
+      const message = `${name}${detail ? ` — ${detail}` : ""}`
+        .replace(/%/g, "%25")
+        .replace(/\r/g, "%0D")
+        .replace(/\n/g, "%0A");
+      console.log(`::error::${message}`);
+    }
   }
 
   function makePrisma(connectionString) {
