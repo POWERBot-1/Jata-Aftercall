@@ -293,6 +293,9 @@ function createFallbackPrisma(): any {
     studioWorkspaceMember: emptyModel(),
     studioWorkspaceBusiness: emptyModel(),
     studioWebsite: emptyModel(),
+    studioWebsiteContent: emptyModel(),
+    studioWebsiteVersion: emptyModel(),
+    studioWebsiteDraftRevision: emptyModel(),
     studioWebsiteMember: emptyModel(),
     experienceVersion: {
       findMany: async () => [],

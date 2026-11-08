@@ -315,8 +315,7 @@ async function publicState(page, fixture, marker, visible, suffix = "") {
 }
 async function cleanup() {
   for (const fixture of created) {
-    // Remove only this run's Studio tenant graph before its business and owner.
-    // P1 adds these control-plane rows as a side effect of the real Studio API journey.
+    // Exact run-owned tenant graph only. Delete Studio dependants before the business/owner.
     const link = await prisma.studioWorkspaceBusiness.findUnique({
       where: { businessId: fixture.id },
       select: { workspaceId: true },
@@ -327,13 +326,19 @@ async function cleanup() {
     });
     const websiteIds = websites.map((website) => website.id);
     if (websiteIds.length) {
+      await prisma.studioWebsiteDraftRevision.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteVersion.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteContent.deleteMany({ where: { websiteId: { in: websiteIds } } });
       await prisma.studioWebsiteMember.deleteMany({ where: { websiteId: { in: websiteIds } } });
       await prisma.studioWebsite.deleteMany({ where: { id: { in: websiteIds }, businessId: fixture.id } });
     }
     await prisma.studioWorkspaceBusiness.deleteMany({ where: { businessId: fixture.id } });
     if (link?.workspaceId) {
-      await prisma.studioWorkspaceMember.deleteMany({ where: { workspaceId: link.workspaceId } });
-      await prisma.studioWorkspace.deleteMany({ where: { id: link.workspaceId, ownerUserId: fixture.ownerId } });
+      const remainingLinks = await prisma.studioWorkspaceBusiness.count({ where: { workspaceId: link.workspaceId } });
+      if (remainingLinks === 0) {
+        await prisma.studioWorkspaceMember.deleteMany({ where: { workspaceId: link.workspaceId } });
+        await prisma.studioWorkspace.deleteMany({ where: { id: link.workspaceId, ownerUserId: fixture.ownerId } });
+      }
     }
     await prisma.payment.deleteMany({ where: { businessId: fixture.id } });
     await prisma.business.deleteMany({ where: { id: fixture.id, ownerId: fixture.ownerId } });

@@ -1,11 +1,14 @@
 import { vi } from "vitest";
 import type { RolePermissionLevel } from "@/lib/tenant";
 
+// Vitest runs server modules in Node; Next's marker package must not throw during test imports.
+vi.mock("server-only", () => ({}));
+
 /**
  * Legacy Studio route suites mock the business-level tenant guard and use an in-memory
  * Prisma surface. Delegate the new site guard to that same mock in those tests. The
- * dedicated Website Studio PostgreSQL tenant suite explicitly un-mocks this module and
- * exercises the real workspace/site authorization path.
+ * dedicated Website Studio PostgreSQL tenant suite explicitly exercises the real workspace/site
+ * authorization path through its own database client.
  */
 vi.mock("@/lib/experience/ensure-default-website", async () => {
   const tenant = await import("@/lib/tenant");

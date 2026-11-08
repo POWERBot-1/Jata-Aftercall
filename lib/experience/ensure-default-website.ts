@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import type { SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";

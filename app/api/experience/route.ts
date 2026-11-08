@@ -11,7 +11,7 @@ import { historyBasisFor, seedNewDocument } from "@/lib/experience/variant";
 import { diversityReport } from "@/lib/experience/diversity";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { TenantError } from "@/lib/tenant";
+import { TenantError, guardTenantMutation } from "@/lib/tenant";
 import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
@@ -307,7 +307,7 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
+    const guard = await guardTenantMutation(session, businessId);
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const experience = await prisma.businessExperience.findUnique({ where: { businessId } });

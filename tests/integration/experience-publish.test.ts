@@ -45,6 +45,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
+vi.mock("@/lib/experience/ensure-default-website", () => ({
+  assertDefaultStudioWebsiteAccess: vi.fn(async () => {
+    if (mocks.roleError) throw mocks.roleError;
+  }),
+}));
 vi.mock("@/lib/tenant", () => ({
   TenantError: class TenantError extends Error { status = 403; },
   assertBusinessOwnership: vi.fn(async () => {
@@ -234,15 +239,16 @@ describe("POST /api/experience/publish", () => {
     mocks.business.isPublished = true;
     const publishCall = await POST(request({ businessId: "business-a", expectedDraftVersion: 3 }));
     expect(publishCall.status).toBe(200);
-    expect(vi.mocked(await import("@/lib/tenant")).assertBusinessRole).toHaveBeenCalledWith(
+    const studioAccess = vi.mocked((await import("@/lib/experience/ensure-default-website")).assertDefaultStudioWebsiteAccess);
+    expect(studioAccess).toHaveBeenCalledWith(
       "business-a",
       expect.objectContaining({ userId: "user-a" }),
       "publish",
     );
-    vi.mocked((await import("@/lib/tenant")).assertBusinessRole).mockClear();
+    studioAccess.mockClear();
     const unpublishCall = await POST(request({ businessId: "business-a", action: "unpublish" }));
     expect(unpublishCall.status).toBe(200);
-    expect(vi.mocked((await import("@/lib/tenant")).assertBusinessRole).mock.calls.at(-1)?.[2]).toBe("publish");
+    expect(studioAccess.mock.calls.at(-1)?.[2]).toBe("publish");
   });
 
   // Stale-tab concurrency: a publish is a write of the draft it was built from. It must name that version and
