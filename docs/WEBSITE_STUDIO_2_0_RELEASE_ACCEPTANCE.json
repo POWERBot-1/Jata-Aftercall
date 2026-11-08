@@ -11,48 +11,68 @@
       {
         "id": "tenant-foundation",
         "severity": "critical",
-        "status": "NOT TESTED",
+        "status": "PASS",
         "implementation": [
           "prisma/schema.prisma",
           "lib/experience/tenant.ts"
         ],
         "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
-        "evidence": [],
-        "reason": "Fresh exact-head tenant acceptance is still running."
+        "evidence": [
+          {
+            "workflowRunId": 42512747695,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
       },
       {
         "id": "authorization",
         "severity": "critical",
-        "status": "NOT TESTED",
+        "status": "PASS",
         "implementation": [
           "lib/experience/tenant.ts",
           "app/api/experience/route.ts"
         ],
         "acceptanceTest": "tests/unit/repair-guards.test.ts",
-        "evidence": [],
-        "reason": "Fresh exact-head authorization evidence is still running."
+        "evidence": [
+          {
+            "workflowRunId": 42512747695,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
       },
       {
         "id": "public-business-regression",
         "severity": "high",
-        "status": "NOT TESTED",
+        "status": "PASS",
         "implementation": [
           "scripts/browser/studio-authenticated.check.mjs"
         ],
         "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
-        "evidence": [],
-        "reason": "Fresh exact-head real-browser regression is still running."
+        "evidence": [
+          {
+            "workflowRunId": 42512747557,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Interactive Business E2E"
+          }
+        ]
       },
       {
         "id": "migration",
         "severity": "critical",
-        "status": "NOT TESTED",
+        "status": "PASS",
         "implementation": [
           "prisma/migrations"
         ],
         "acceptanceTest": "scripts/ci/rehearse-candidate-migrations.mjs",
-        "evidence": [],
-        "reason": "Fresh exact-head migration evidence is still running."
+        "evidence": [
+          {
+            "workflowRunId": 42512747513,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Candidate migration rehearsal"
+          }
+        ]
       }
     ],
     "p2": [
