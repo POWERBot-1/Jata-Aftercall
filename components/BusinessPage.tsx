@@ -10,6 +10,7 @@ import { RenderModeProbe } from "@/components/storefront/RenderModeProbe";
 import { OrderRequestPanel, type OrderRequestProduct } from "@/components/business-hub/OrderRequestPanel";
 import { PromotionSpotlight } from "@/components/business-hub/PromotionSpotlight";
 import { LoyaltyCardPanel } from "@/components/business-hub/LoyaltyCardPanel";
+import { PointsWalletLookup } from "@/components/business-hub/PointsWalletLookup";
 import { EnquiryPanel } from "@/components/business-hub/EnquiryPanel";
 import { QrIdentityBlock } from "@/components/business-hub/QrIdentityBlock";
 import type { PromotionView } from "@/lib/business-hub/promotions";
@@ -58,6 +59,7 @@ export default function BusinessPage({
   products = [],
   promotions = [],
   loyaltyEnabled = false,
+  pointsEnabled = false,
   enquiryEnabled = true,
 }: {
   business: Business;
@@ -80,6 +82,8 @@ export default function BusinessPage({
   promotions?: PromotionView[];
   /** True once the owner has enabled their loyalty programme in the dashboard. */
   loyaltyEnabled?: boolean;
+  /** True only when the independent points programme is active for this business. */
+  pointsEnabled?: boolean;
   /** The enquiry form is on by default; it is hidden only where the owner turned it off. */
   enquiryEnabled?: boolean;
 }) {
@@ -290,6 +294,13 @@ export default function BusinessPage({
         {loyaltyEnabled ? (
           <div className="mt-4">
             <LoyaltyCardPanel businessName={business.name} />
+          </div>
+        ) : null}
+
+        {/* Loyalty 2.0 is independently visible; it does not depend on stamp-card activation. */}
+        {pointsEnabled ? (
+          <div className="mt-4">
+            <PointsWalletLookup businessName={business.name} />
           </div>
         ) : null}
 
