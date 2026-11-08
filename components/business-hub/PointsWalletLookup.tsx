@@ -1,18 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Coins, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { PointsWallet } from "./PointsWallet";
 import { normaliseCardCode } from "@/lib/business-hub/cardCode";
 
 /** Shortest code the lookup will take. Real codes are longer; this only stops a stray tap. */
 const MIN_CODE_LENGTH = 4;
 
+const FIELD =
+  "w-full rounded-2xl border border-white/20 bg-black/40 px-3 py-2.5 text-[0.95rem] text-zinc-100 placeholder:text-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b6ff2e]";
+const BUTTON =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-extrabold transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+
 /**
  * Independent customer entry point for Loyalty 2.0.
  *
  * The public page renders this only when the business points programme is active, and it does not
- * depend on the stamp-card programme in any way: it is a separate section with its own form, so a
+ * depend on the stamp-card programme in any way: it is a separate control with its own form, so a
  * business that runs points but not stamps still offers points here, and a stamp customer never has
  * to look up their stamp card first to reach their points.
  *
@@ -43,17 +48,24 @@ export function PointsWalletLookup({
   }
 
   return (
-    <section id="points-rewards" className="jata-card" aria-labelledby="points-rewards-title">
-      <h2 id="points-rewards-title" className="jata-section-title flex items-center gap-2">
-        <Coins size={18} aria-hidden="true" />
-        Points &amp; rewards
-      </h2>
+    <div
+      id="points-rewards"
+      aria-labelledby="points-rewards-title"
+      className="mt-4 rounded-2xl border border-[#b6ff2e]/20 bg-[#b6ff2e]/[0.06] p-3.5"
+    >
+      <h3
+        id="points-rewards-title"
+        className="flex items-center gap-2 text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-white"
+      >
+        <Search size={15} aria-hidden="true" className="shrink-0 text-[#b6ff2e]" />
+        Check your points
+      </h3>
       {lookupCode ? (
         <>
           <PointsWallet code={lookupCode} businessName={businessName} businessSlug={businessSlug} />
           <button
             type="button"
-            className="jata-btn jata-btn-secondary mt-3"
+            className={`${BUTTON} mt-3 w-full border border-white/20 bg-transparent text-zinc-200 hover:bg-white/10 sm:w-auto`}
             onClick={() => {
               setLookupCode("");
               setCode("");
@@ -64,18 +76,18 @@ export function PointsWalletLookup({
           </button>
         </>
       ) : (
-        <form onSubmit={submit} className="mt-3 space-y-3">
-          <p className="jata-hint">
+        <form onSubmit={submit} className="mt-3 grid gap-3">
+          <p className="text-[0.78rem] leading-5 text-zinc-300">
             Enter the code on your loyalty card to view your points balance and available rewards. Points are separate
             from stamps.
           </p>
-          <div className="jata-field">
-            <label className="jata-label" htmlFor="points-card-code">
+          <div className="grid gap-1.5">
+            <label className="text-[0.78rem] font-semibold text-zinc-200" htmlFor="points-card-code">
               Loyalty card code
             </label>
             <input
               id="points-card-code"
-              className="jata-input w-full font-mono uppercase tracking-wider"
+              className={`${FIELD} font-mono uppercase tracking-wider`}
               value={code}
               onChange={(event) => {
                 setCode(event.target.value.toUpperCase());
@@ -88,21 +100,21 @@ export function PointsWalletLookup({
               required
             />
             {rejected ? (
-              <p id="points-card-code-hint" className="jata-hint mt-1" role="alert">
+              <p id="points-card-code-hint" className="text-[0.78rem] leading-5 text-[#b6ff2e]" role="alert">
                 That code is too short. Check the code printed on your card.
               </p>
             ) : null}
           </div>
           <button
             type="submit"
-            className="jata-btn jata-btn-primary w-full justify-center sm:w-auto"
+            className={`${BUTTON} w-full bg-[#b6ff2e] text-[#16181d] hover:bg-[#c8ff5c] sm:w-auto`}
             disabled={code.trim().length < MIN_CODE_LENGTH}
           >
             <Search size={16} aria-hidden="true" /> View points
           </button>
         </form>
       )}
-    </section>
+    </div>
   );
 }
 

@@ -19,7 +19,7 @@ import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
 import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
 import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
-import { publicPointsEnabled } from "@/lib/business-hub/loyaltyPoints";
+import { publicLoyaltyRewards } from "@/lib/business-hub/loyaltyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -102,14 +102,17 @@ const classicPageExtras = requestCache(async (businessId: string) => {
  * A failure here degrades the page to its previous behaviour rather than blanking it.
  */
 const businessHubExtras = requestCache(async (businessId: string) => {
-  const [products, promotions, loyaltyEnabled, pointsEnabled] = await Promise.all([
+  const [products, promotions, loyaltyEnabled, points] = await Promise.all([
     loadRequestableCatalogue(businessId, { take: 24 }).catch(() => []),
     listLivePromotions(businessId).catch(() => []),
     isLoyaltyEnabled(businessId).catch(() => false),
-    // Fails closed: no programme, an inactive programme or a lookup failure all mean no section.
-    publicPointsEnabled(businessId),
+    // The Loyalty Rewards section is rendered in every state, so this returns the STATE rather
+    // than a boolean: `active` publishes the configured programme, `inactive` announces that
+    // points are not available yet, and `unknown` — a lookup that failed — keeps the section with
+    // a neutral message. It fails closed: only `active` offers a customer the card-code lookup.
+    publicLoyaltyRewards(businessId),
   ]);
-  return { products, promotions, loyaltyEnabled, pointsEnabled };
+  return { products, promotions, loyaltyEnabled, points };
 });
 
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
@@ -331,7 +334,8 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
         products={hub.products}
         promotions={hub.promotions}
         loyaltyEnabled={hub.loyaltyEnabled}
-        pointsEnabled={hub.pointsEnabled}
+        pointsEnabled={hub.points.status === "active"}
+        loyaltyRewards={hub.points}
       />
     </>
   );

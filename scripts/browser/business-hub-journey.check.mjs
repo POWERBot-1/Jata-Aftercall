@@ -371,6 +371,24 @@ if (process.exitCode !== 2) {
       },
     });
 
+/** The Loyalty Rewards band as the browser renders it: state, copy and whether the lookup is in it. */
+async function loyaltyBand(page) {
+  return page.evaluate(() => {
+    const band = document.querySelector("#loyalty-rewards");
+    const text = band ? band.innerText.replace(/\s+/g, " ").trim() : "";
+    return {
+      present: Boolean(band),
+      state: band ? band.getAttribute("data-loyalty-state") : null,
+      title: band?.querySelector("#loyalty-rewards-title")?.textContent?.trim() ?? "",
+      subtitle: band?.querySelector("#loyalty-rewards-subtitle")?.textContent?.trim() ?? "",
+      copy: text,
+      lookup: Boolean(document.querySelector("#points-rewards")),
+      codeField: Boolean(document.querySelector("#points-card-code")),
+      viewButton: /view points/i.test(text),
+    };
+  });
+}
+
     browser = await puppeteer.launch({
       executablePath: chrome,
       headless: true,
@@ -558,6 +576,38 @@ if (process.exitCode !== 2) {
     }));
     check("customer: Points & rewards remains visible when stamp cards are off", independentSections.points);
     check("customer: the stamp-card section is independently hidden", !independentSections.stamps);
+
+    // ── the Loyalty Rewards section, as a customer meets it before typing anything ──────────────
+    // The section is on the page in every programme state; with the programme live it publishes the
+    // values the fixture business configured (and nothing else).
+    const liveBand = await loyaltyBand(walletPage);
+    check(
+      "customer: the Loyalty Rewards section is named and subtitled on the public page",
+      liveBand.present && /loyalty rewards/i.test(liveBand.title) && /shop\. earn\. enjoy rewards\./i.test(liveBand.subtitle),
+      liveBand.present ? `title="${liveBand.title}" subtitle="${liveBand.subtitle}"` : "no #loyalty-rewards section",
+    );
+    check(
+      "customer: the live programme's earning rule is published on the page",
+      /points rewards are live/i.test(liveBand.copy) && /earn 1 point for every kes 100/i.test(liveBand.copy),
+      liveBand.copy.slice(0, 160),
+    );
+    check(
+      "customer: the reward the business published is listed with its points cost",
+      /free pilau combo/i.test(liveBand.copy) && /10 points/i.test(liveBand.copy),
+      liveBand.copy.slice(0, 160),
+    );
+    check(
+      "customer: the redemption information the business configured is published",
+      /collect in store/i.test(liveBand.copy) && /points are not cash/i.test(liveBand.copy),
+      liveBand.copy.slice(0, 160),
+    );
+    check(
+      "customer: the card-code lookup is offered in the live state",
+      liveBand.lookup && liveBand.codeField && liveBand.viewButton,
+      `lookup=${liveBand.lookup} field=${liveBand.codeField}`,
+    );
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-loyalty-rewards-live.png"), fullPage: true });
+
     await walletPage.type("#points-card-code", pointsCard.code);
     await clickByText(walletPage, "View points");
     await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
@@ -679,16 +729,28 @@ if (process.exitCode !== 2) {
       await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: false } });
       await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: false } });
       await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
-      return walletPage.evaluate(() => ({
-        points: Boolean(document.querySelector("#points-rewards")),
-        stamps: Boolean(document.querySelector("#loyalty")),
-      }));
+      return { ...(await loyaltyBand(walletPage)), stamps: Boolean(await walletPage.$("#loyalty")) };
     })();
     check(
-      "customer: stamps off / points off shows neither section",
-      !stampOffPointsOff.points && !stampOffPointsOff.stamps,
-      `points=${stampOffPointsOff.points} stamps=${stampOffPointsOff.stamps}`,
+      "customer: stamps off / points off keeps Loyalty Rewards on the page, with no lookup",
+      stampOffPointsOff.present &&
+        stampOffPointsOff.state === "inactive" &&
+        !stampOffPointsOff.lookup &&
+        !stampOffPointsOff.stamps,
+      `state=${stampOffPointsOff.state} lookup=${stampOffPointsOff.lookup} stamps=${stampOffPointsOff.stamps}`,
     );
+    check(
+      "customer: the points-off section says rewards are coming soon",
+      /points rewards coming soon/i.test(stampOffPointsOff.copy),
+      stampOffPointsOff.copy.slice(0, 160),
+    );
+    const inactiveFigures = stampOffPointsOff.copy.replace(/loyalty\s*2\.0/gi, "");
+    check(
+      "customer: the points-off section invents no rate, reward, balance or expiry",
+      !/\d/.test(inactiveFigures) && !/available points/i.test(inactiveFigures),
+      /\d/.test(inactiveFigures) ? `figures present: ${inactiveFigures.slice(0, 160)}` : "no figures at all",
+    );
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-loyalty-rewards-inactive.png"), fullPage: true });
 
     await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: true } });
     await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
@@ -705,27 +767,30 @@ if (process.exitCode !== 2) {
     await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: true } });
     await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: false } });
     await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
-    const stampsOnPointsOff = await walletPage.evaluate(() => ({
-      points: Boolean(document.querySelector("#points-rewards")),
-      stamps: Boolean(document.querySelector("#loyalty")),
-    }));
+    const stampsOnPointsOff = await (async () => ({
+      ...(await loyaltyBand(walletPage)),
+      stamps: Boolean(await walletPage.$("#loyalty")),
+    }))();
     check(
-      "customer: stamps on / points off shows the stamp card only",
-      stampsOnPointsOff.stamps && !stampsOnPointsOff.points,
-      `points=${stampsOnPointsOff.points} stamps=${stampsOnPointsOff.stamps}`,
+      "customer: stamps on / points off shows the stamp card beside an announced Loyalty Rewards section",
+      stampsOnPointsOff.stamps &&
+        stampsOnPointsOff.present &&
+        stampsOnPointsOff.state === "inactive" &&
+        !stampsOnPointsOff.lookup,
+      `stamps=${stampsOnPointsOff.stamps} state=${stampsOnPointsOff.state} lookup=${stampsOnPointsOff.lookup}`,
     );
 
     // Both on again, and the stamp card's own lookup still works beside the points section.
     await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: true } });
     await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
-    const bothOn = await walletPage.evaluate(() => ({
-      points: Boolean(document.querySelector("#points-rewards")),
-      stamps: Boolean(document.querySelector("#loyalty")),
-    }));
+    const bothOn = await (async () => ({
+      ...(await loyaltyBand(walletPage)),
+      stamps: Boolean(await walletPage.$("#loyalty")),
+    }))();
     check(
       "customer: both programmes are visible side by side",
-      bothOn.points && bothOn.stamps,
-      `points=${bothOn.points} stamps=${bothOn.stamps}`,
+      bothOn.state === "active" && bothOn.lookup && bothOn.stamps,
+      `state=${bothOn.state} lookup=${bothOn.lookup} stamps=${bothOn.stamps}`,
     );
     await walletPage.type("#loyalty-code", pointsCard.code);
     await clickByText(walletPage, "Check my card");
@@ -736,7 +801,7 @@ if (process.exitCode !== 2) {
     const stampRegression = await walletPage.evaluate(() => document.body.innerText);
     check(
       "customer: the existing stamp-card lookup still works with points switched on",
-      /points & rewards/i.test(stampRegression) && !/points wallet/i.test(stampRegression),
+      /loyalty rewards/i.test(stampRegression) && !/points wallet/i.test(stampRegression),
       "the stamp card answered without opening the points wallet",
     );
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-both-programmes.png"), fullPage: true });
@@ -744,17 +809,27 @@ if (process.exitCode !== 2) {
     // ── a second public business with no points programme ──────────────────────────────────────
     const otherPageUrl = `${baseUrl}/b/${otherBusiness.slug}`;
     const otherResponse = await walletPage.goto(otherPageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
-    const otherSections = await walletPage.evaluate(() => ({
-      points: Boolean(document.querySelector("#points-rewards")),
-      stamps: Boolean(document.querySelector("#loyalty")),
-    }));
+    const otherSections = await (async () => ({
+      ...(await loyaltyBand(walletPage)),
+      stamps: Boolean(await walletPage.$("#loyalty")),
+    }))();
     // This fixture business runs a stamp card of its own (the cross-tenant refusal needs a card
-    // from somewhere else), so its stamp section legitimately shows. What must NOT appear is the
-    // points section: it has no points programme, and a second public slug must prove that.
+    // from somewhere else), so its stamp section legitimately shows. It has no points programme,
+    // so the Loyalty Rewards section must be present but MUST NOT offer a lookup or publish
+    // anything: a second public slug is what proves the state is per business, not global.
     check(
-      "customer: a second public business with no points programme shows no points section",
-      otherResponse?.status() === 200 && !otherSections.points,
-      `HTTP ${otherResponse?.status()}, points=${otherSections.points} (its own stamp card: ${otherSections.stamps})`,
+      "customer: a second public business with no points programme still shows Loyalty Rewards",
+      otherResponse?.status() === 200 && otherSections.present && otherSections.state === "inactive",
+      `HTTP ${otherResponse?.status()}, state=${otherSections.state} (its own stamp card: ${otherSections.stamps})`,
+    );
+    const otherFigures = otherSections.copy.replace(/loyalty\s*2\.0/gi, "");
+    check(
+      "customer: that business's section offers no lookup and publishes nothing",
+      !otherSections.lookup &&
+        !otherSections.codeField &&
+        /points rewards coming soon/i.test(otherSections.copy) &&
+        !/\d/.test(otherFigures),
+      otherSections.copy.slice(0, 160),
     );
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-other-business.png"), fullPage: true });
 
@@ -815,7 +890,28 @@ if (process.exitCode !== 2) {
       }));
       check(`${width}×${height}: the page fits the viewport`, layout.overflow <= 1, `overflow ${layout.overflow}px`);
       check(`${width}×${height}: the order basket is reachable`, layout.basket, layout.seen);
+      // The Loyalty Rewards band at the same widths: a premium band that breaks out of a phone
+      // viewport would be worse than the section it replaced, so it is measured in real Chrome.
+      const bandBox = await viewportPage.evaluate(() => {
+        const band = document.querySelector("#loyalty-rewards");
+        if (!band) return null;
+        const box = band.getBoundingClientRect();
+        return {
+          overflow: Math.max(0, Math.round(box.right - window.innerWidth)) + Math.max(0, Math.round(0 - box.left)),
+          width: Math.round(box.width),
+          title: band.querySelector("#loyalty-rewards-title")?.textContent?.trim() ?? "",
+        };
+      });
+      check(
+        `${width}×${height}: the Loyalty Rewards band fits the viewport`,
+        Boolean(bandBox) && bandBox.overflow <= 1 && /loyalty rewards/i.test(bandBox.title),
+        bandBox ? `overflow ${bandBox.overflow}px width ${bandBox.width}px title "${bandBox.title}"` : "band missing",
+      );
       await viewportPage.screenshot({ path: path.join(evidenceDir, `customer-${width}.png`), fullPage: false });
+      if (bandBox) {
+        const band = await viewportPage.$("#loyalty-rewards");
+        await band.screenshot({ path: path.join(evidenceDir, `customer-${width}-loyalty-rewards.png`) });
+      }
       await viewportContext.close();
     }
 

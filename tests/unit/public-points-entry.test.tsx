@@ -67,34 +67,40 @@ function render(flags: { loyaltyEnabled?: boolean; pointsEnabled?: boolean }, bi
 
 const POINTS_SECTION = 'id="points-rewards"';
 const STAMP_SECTION = 'id="loyalty"';
+// The Loyalty Rewards band is part of the page in EVERY programme state; only the lookup inside it
+// is gated on the programme being active.
+const LOYALTY_SECTION = 'id="loyalty-rewards"';
 
-/** The markup of the points section alone — from its opening tag to its closing tag. */
-function pointsSection(html: string): string {
-  const start = html.indexOf(POINTS_SECTION);
-  expect(start, "the points section is rendered").toBeGreaterThan(-1);
+/** The markup of the loyalty band alone — from its opening tag to its closing tag. The band holds
+ *  no nested <section>, so the first closing tag after it is the band's own. */
+function loyaltySection(html: string): string {
+  const start = html.indexOf(LOYALTY_SECTION);
+  expect(start, "the Loyalty Rewards section is rendered").toBeGreaterThan(-1);
   const end = html.indexOf("</section>", start);
   return html.slice(start, end === -1 ? html.length : end);
 }
 
 describe("the four programme combinations on a public Business Page", () => {
-  it("stamps off and points off shows neither section", () => {
+  it("stamps off and points off still shows Loyalty Rewards, with no lookup and no stamp card", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: false });
+    expect(html).toContain(LOYALTY_SECTION);
+    // The section is present but the programme is not, so nothing offers a balance.
     expect(html).not.toContain(POINTS_SECTION);
     expect(html).not.toContain(STAMP_SECTION);
-    expect(html).not.toContain("Points &amp; rewards");
   });
 
-  it("stamps on and points off shows the stamp card only", () => {
+  it("stamps on and points off shows the stamp card beside an announced Loyalty Rewards section", () => {
     const html = render({ loyaltyEnabled: true, pointsEnabled: false });
     expect(html).toContain(STAMP_SECTION);
     expect(html).toContain('id="loyalty-code"');
     expect(html).toContain("Check my card");
+    expect(html).toContain(LOYALTY_SECTION);
     expect(html).not.toContain(POINTS_SECTION);
-    expect(html).not.toContain("Points &amp; rewards");
   });
 
-  it("stamps off and points on shows the points section only", () => {
+  it("stamps off and points on shows the points lookup only", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: true });
+    expect(html).toContain(LOYALTY_SECTION);
     expect(html).toContain(POINTS_SECTION);
     expect(html).toContain('id="points-card-code"');
     expect(html).toContain("View points");
@@ -106,15 +112,17 @@ describe("the four programme combinations on a public Business Page", () => {
   it("stamps on and points on shows both, as independent sections", () => {
     const html = render({ loyaltyEnabled: true, pointsEnabled: true });
     expect(html).toContain(STAMP_SECTION);
+    expect(html).toContain(LOYALTY_SECTION);
     expect(html).toContain(POINTS_SECTION);
-    // The points section is a sibling of the stamp card, never a child of it: the points lookup
-    // does not live inside the stamp form, so it cannot disappear when the stamp card is switched
-    // off, and a stamp lookup is not a precondition for reaching points.
+    // Neither section contains the other: the points lookup does not live inside the stamp form,
+    // so it cannot disappear when the stamp card is switched off, and a stamp lookup is not a
+    // precondition for reaching points.
     const stampAt = html.indexOf(STAMP_SECTION);
-    const pointsAt = html.indexOf(POINTS_SECTION);
+    const loyaltyAt = html.indexOf(LOYALTY_SECTION);
     expect(stampAt).toBeGreaterThan(-1);
-    expect(pointsAt).toBeGreaterThan(-1);
-    expect(html.slice(stampAt, pointsAt)).toContain("</section>");
+    expect(loyaltyAt).toBeGreaterThan(-1);
+    const between = html.slice(Math.min(stampAt, loyaltyAt), Math.max(stampAt, loyaltyAt));
+    expect(between).toContain("</section>");
     expect(html).toContain('id="loyalty-code"');
     expect(html).toContain('id="points-card-code"');
   });
@@ -123,7 +131,8 @@ describe("the four programme combinations on a public Business Page", () => {
 describe("what the points section offers a customer", () => {
   it("names itself, asks for a card code, and says points are separate from stamps", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: true });
-    expect(html).toContain("Points &amp; rewards");
+    expect(html).toContain("Loyalty Rewards");
+    expect(html).toContain("Shop. Earn. Enjoy rewards.");
     expect(html).toContain("<label");
     expect(html).toContain("Loyalty card code");
     expect(html).toContain("View points");
@@ -140,11 +149,11 @@ describe("what the points section offers a customer", () => {
     expect(label).toMatch(/for="points-card-code"/);
   });
 
-  it("is laid out with the page's own card and responsive controls", () => {
+  it("is laid out with the loyalty band's own styling and responsive controls", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: true });
-    const section = html.slice(html.indexOf(POINTS_SECTION));
-    expect(section).toContain("jata-card");
-    expect(section).toContain("jata-section-title");
+    const section = loyaltySection(html);
+    expect(section).toContain("bg-[#16181d]");
+    expect(section).toContain("text-[#b6ff2e]");
     // Full width on a phone, auto width from the small breakpoint up.
     expect(section).toContain("w-full");
     expect(section).toContain("sm:w-auto");
@@ -154,7 +163,7 @@ describe("what the points section offers a customer", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: true }, business());
     // Scoped to the points section: the page as a whole legitimately publishes the business's own
     // phone number in its Contact block. Nothing private may ride along with the points form.
-    const section = pointsSection(html);
+    const section = loyaltySection(html);
     expect(section).not.toContain("0712000000");
     expect(section).not.toContain("254712000000");
     // Internal identifiers and model names are not part of the customer-facing markup.
@@ -174,25 +183,34 @@ describe("the gate is per business, not global", () => {
     whatsapp: "0723000000",
   });
 
-  it("shows the section on the points business and hides it on the other", () => {
+  it("offers the lookup on the points business and only announces rewards on the other", () => {
     expect(render({ loyaltyEnabled: true, pointsEnabled: true }, withPoints)).toContain(POINTS_SECTION);
     const other = render({ loyaltyEnabled: true, pointsEnabled: false }, withoutPoints);
+    expect(other).toContain(LOYALTY_SECTION);
     expect(other).not.toContain(POINTS_SECTION);
     expect(other).toContain("Mwangi Hardware");
   });
 
-  it("never renders a points balance or an activation nudge for a business with points off", () => {
+  it("renders no balance, no wallet and no lookup for a business with points off", () => {
     const html = render({ loyaltyEnabled: true, pointsEnabled: false }, withoutPoints);
-    expect(html).not.toContain("Available points");
-    expect(html).not.toContain("Points wallet");
-    expect(html).not.toContain("switched on points");
+    const section = loyaltySection(html);
+    expect(section).not.toContain("Available points");
+    expect(section).not.toContain("Points wallet");
+    expect(section).not.toContain("View points");
+    expect(section).not.toContain('id="points-card-code"');
+    // It says what IS true instead: the programme is not available to customers yet.
+    expect(section).toContain("Points rewards coming soon");
+    expect(section).toContain("Mwangi Hardware");
   });
 });
 
 describe("the stamp card is unchanged by points", () => {
   it("keeps its own section, form and wording when both programmes are on", () => {
     const html = render({ loyaltyEnabled: true, pointsEnabled: true });
-    const stampSection = html.slice(html.indexOf(STAMP_SECTION), html.indexOf(POINTS_SECTION));
+    // The stamp card keeps its own section wherever it sits on the page; slice it by its own
+    // closing tag rather than by the position of another section.
+    const stampStart = html.indexOf(STAMP_SECTION);
+    const stampSection = html.slice(stampStart, html.indexOf("</section>", stampStart));
     expect(stampSection).toContain("Loyalty card");
     expect(stampSection).toContain('id="loyalty-code"');
     expect(stampSection).toContain("Check my card");

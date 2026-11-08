@@ -257,7 +257,13 @@ function measureFacts() {
     tel: Array.from(document.querySelectorAll('a[href^="tel:"]')).map((a) => a.getAttribute("href")),
     directions: Array.from(document.querySelectorAll('a[href*="google.com/maps"]')).map((a) => a.getAttribute("href")),
     hasShare: Array.from(document.querySelectorAll("button")).some((b) => (b.textContent || "").trim() === "Share"),
-    comingSoon: Boolean(Array.from(document.querySelectorAll("p")).find((p) => (p.textContent || "").includes("coming soon"))),
+    // The CONTACT block's honest fallback, "Contact details for this business are coming soon." —
+    // a demo page with real WhatsApp and Call actions must never show it. The test is scoped to
+    // that wording: a different section may legitimately announce a feature that this business has
+    // not switched on (the Loyalty Rewards "coming soon" state), which is not a contact fallback.
+    contactComingSoon: Boolean(
+      Array.from(document.querySelectorAll("p")).find((p) => /contact details[\s\S]{0,60}coming soon/i.test(p.textContent || "")),
+    ),
   };
   // Image health for every RENDERED image (hidden panels have zero-size boxes and are skipped).
   // A blank/broken photograph reports naturalWidth 0 or complete=false after the scroll pass.
@@ -865,9 +871,9 @@ for (const width of ["390x844", "1366x768"]) {
     `demo page renders only valid Google Maps Directions links at ${width}`,
     `${c.directions.length} link(s): ${c.directions.join(" | ")}`,
   );
-  record(c.hasShare && !c.comingSoon,
-    `demo page shows Share and no "coming soon" placeholder at ${width}`,
-    `share=${c.hasShare} comingSoon=${c.comingSoon}`);
+  record(c.hasShare && !c.contactComingSoon,
+    `demo page shows Share and no contact "coming soon" placeholder at ${width}`,
+    `share=${c.hasShare} contactComingSoon=${c.contactComingSoon}`);
 }
 
 writeFileSync(`${shotDir}/evidence.json`, JSON.stringify(evidence, null, 2));

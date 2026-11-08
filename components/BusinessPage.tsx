@@ -10,10 +10,11 @@ import { RenderModeProbe } from "@/components/storefront/RenderModeProbe";
 import { OrderRequestPanel, type OrderRequestProduct } from "@/components/business-hub/OrderRequestPanel";
 import { PromotionSpotlight } from "@/components/business-hub/PromotionSpotlight";
 import { LoyaltyCardPanel } from "@/components/business-hub/LoyaltyCardPanel";
-import { PointsWalletLookup } from "@/components/business-hub/PointsWalletLookup";
+import { LoyaltyRewardsSection } from "@/components/business-hub/LoyaltyRewardsSection";
 import { EnquiryPanel } from "@/components/business-hub/EnquiryPanel";
 import { QrIdentityBlock } from "@/components/business-hub/QrIdentityBlock";
 import type { PromotionView } from "@/lib/business-hub/promotions";
+import type { PublicLoyaltyRewards } from "@/lib/business-hub/loyaltyPoints";
 
 type Service = { id: string; title: string; description?: string | null; priceLabel?: string | null; priceFrom?: number | null };
 type Offer = { title: string; subtitle?: string | null } | null;
@@ -60,6 +61,7 @@ export default function BusinessPage({
   promotions = [],
   loyaltyEnabled = false,
   pointsEnabled = false,
+  loyaltyRewards = null,
   enquiryEnabled = true,
 }: {
   business: Business;
@@ -84,6 +86,13 @@ export default function BusinessPage({
   loyaltyEnabled?: boolean;
   /** True only when the independent points programme is active for this business. */
   pointsEnabled?: boolean;
+  /**
+   * The Loyalty Rewards section the customer sees: the programme's state plus, when it is active,
+   * the earning rules, rewards and redemption information the owner actually configured. The
+   * section is rendered in every state — an inactive or unreadable programme is announced, never
+   * silently removed from the page.
+   */
+  loyaltyRewards?: PublicLoyaltyRewards | null;
   /** The enquiry form is on by default; it is hidden only where the owner turned it off. */
   enquiryEnabled?: boolean;
 }) {
@@ -109,6 +118,12 @@ export default function BusinessPage({
   // Request Quote fallback: WhatsApp -> tel: -> #quote
   const quoteHref = waQuoteLink || telLinkNormalized || "#quote";
   const quoteActionEvent = waQuoteLink ? "WHATSAPP_CLICK" : telLinkNormalized ? "CALL_CLICK" : null;
+
+  // The Loyalty Rewards section is part of the page in every state. `loyaltyRewards` is the
+  // server's verdict; when a caller passes only the legacy boolean, that boolean is the state.
+  const rewards: PublicLoyaltyRewards =
+    loyaltyRewards ??
+    { status: pointsEnabled ? "active" : "inactive", earning: null, redemption: null, rewards: [] };
 
   const t = theme;
   const hours = formatOpeningHours(business.openingHours);
@@ -218,6 +233,12 @@ export default function BusinessPage({
           <PromotionSpotlight promotions={promotions} slug={business.slug} demoPage={demoPage} />
         </div>
 
+        {/* Loyalty Rewards (Loyalty 2.0) — placed with the page's headline content so a customer
+            meets it without scrolling past everything else. It is rendered in every state: an
+            inactive or unreadable programme is announced here, never silently removed, and it is
+            independent of the stamp card, which keeps its own section further down. */}
+        <LoyaltyRewardsSection businessName={business.name} businessSlug={business.slug} rewards={rewards} />
+
         {/* Services */}
         <section id="services" data-motion-recipe="fade" className={`mt-4 rounded-2xl border ${t.colors.border} ${t.colors.card} p-5`}>
           <h2 className="text-sm font-bold">Services and products</h2>
@@ -294,13 +315,6 @@ export default function BusinessPage({
         {loyaltyEnabled ? (
           <div className="mt-4">
             <LoyaltyCardPanel businessName={business.name} />
-          </div>
-        ) : null}
-
-        {/* Loyalty 2.0 is independently visible; it does not depend on stamp-card activation. */}
-        {pointsEnabled ? (
-          <div className="mt-4">
-            <PointsWalletLookup businessName={business.name} businessSlug={business.slug} />
           </div>
         ) : null}
 
