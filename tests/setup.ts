@@ -33,10 +33,7 @@ vi.mock("@/lib/experience/ensure-default-website", async () => {
     session: unknown,
     action = "read",
   ) => {
-    if (action === "publish" && typeof tenant.assertBusinessRole === "function") {
-      await tenant.assertBusinessRole(businessId, session as any, "publish");
-    }
-    if (typeof tenant.assertBusinessOwnership === "function") {
+    if (action === "read" && typeof tenant.assertBusinessOwnership === "function") {
       await tenant.assertBusinessOwnership(businessId, session as any);
     }
     return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
