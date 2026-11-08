@@ -288,6 +288,12 @@ function createFallbackPrisma(): any {
       update: async () => { throw new Error("DB not available"); },
       upsert: async () => { throw new Error("DB not available"); },
     },
+    // Website Studio 2.0 workspace/site control plane. Offline reads are empty and writes refuse.
+    studioWorkspace: emptyModel(),
+    studioWorkspaceMember: emptyModel(),
+    studioWorkspaceBusiness: emptyModel(),
+    studioWebsite: emptyModel(),
+    studioWebsiteMember: emptyModel(),
     experienceVersion: {
       findMany: async () => [],
       findUnique: async () => null,
