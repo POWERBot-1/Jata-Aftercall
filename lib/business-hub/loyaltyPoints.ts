@@ -1419,11 +1419,33 @@ export async function reconcileAccount(businessId: string, accountId: string) {
 }
 
 /** The wallet a customer sees. Card-code only: no contact values, no owner notes, no ids. */
-export async function walletForCardCode(code: string) {
-  const card = await prisma.loyaltyCard.findUnique({ where: { code } }).catch(() => null);
+/**
+ * The stored form of a card code: no spaces, upper case.
+ *
+ * A customer types theirs by hand, pastes it from a message, or follows a link, so the same code
+ * arrives as `jata-4f9k-2q7m`, ` JATA 4F9K 2Q7M ` or `Jata-4F9K-2Q7M`. Every public lookup has to
+ * resolve all of them to the one row, and the lookup has to fail closed on an empty value rather
+ * than matching whatever the database happens to hold under `""`.
+ */
+export function normaliseCardCode(value: unknown): string {
+  return cleanText(value, 60).replace(/\s+/g, "").toUpperCase();
+}
+
+/**
+ * @param options.businessSlug  the business whose page the customer is standing on. A card issued
+ *   by a different business is refused here, so one business's page can never open another
+ *   business's wallet.
+ */
+export async function walletForCardCode(code: string, options: { businessSlug?: string } = {}) {
+  const cardCode = normaliseCardCode(code);
+  if (!cardCode) return null;
+  const card = await prisma.loyaltyCard.findUnique({ where: { code: cardCode } }).catch(() => null);
   if (!card) return null;
   const business = await prisma.business.findUnique({ where: { id: card.businessId } }).catch(() => null);
   if (!business) return null;
+  // Cross-tenant refusal. The answer is the same as for a code that does not exist, so this never
+  // confirms that the code belongs to somebody else.
+  if (options.businessSlug && business.slug !== options.businessSlug) return null;
   const programme = await findProgramme(card.businessId);
   if (!programme || !programme.isActive) {
     return { businessName: business.name, businessSlug: business.slug, active: false as const };

@@ -12,6 +12,10 @@ const noStore = { "cache-control": "private, no-store" };
  * record. It returns that wallet's own balance, history and the rewards it can afford — never a
  * contact value, never an owner note, never another customer's wallet, and nothing at all when the
  * business has not switched its points programme on.
+ *
+ * The code is normalised (trimmed, de-spaced, upper-cased) before the lookup, because a customer
+ * types it by hand; and `?business=<slug>` scopes the answer to the business whose page asked, so a
+ * code issued elsewhere is refused with the same 404 as a code that does not exist.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ code: string }> }) {
   const limit = rateLimit(req, { key: "hub-points-wallet", max: 30, windowMs: 60_000 });
@@ -20,7 +24,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
   }
 
   const { code } = await params;
-  const wallet = await walletForCardCode(code);
+  // `business` is the slug of the page the customer is looking at. The wallet is refused when the
+  // card belongs to a different business, so one business's page cannot open another's wallet.
+  const expectedSlug = new URL(req.url).searchParams.get("business");
+  const wallet = await walletForCardCode(code, { businessSlug: expectedSlug ?? undefined });
   if (!wallet) {
     return NextResponse.json(
       { error: "We couldn't find that loyalty card. Check the code on your card and try again." },

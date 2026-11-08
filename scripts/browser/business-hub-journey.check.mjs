@@ -354,6 +354,23 @@ if (process.exitCode !== 2) {
     });
     created.otherBusinessId = otherBusiness.id;
 
+    // A card issued by the OTHER business. The public page must refuse it: one business's page can
+    // never open another business's wallet. Synthetic and disposable, like everything else here.
+    const otherStampProgram = await prisma.loyaltyProgram.create({
+      data: { businessId: otherBusiness.id, isEnabled: true, stampGoal: 4, rewardDescription: "Other reward" },
+    });
+    const foreignCard = await prisma.loyaltyCard.create({
+      data: {
+        businessId: otherBusiness.id,
+        programId: otherStampProgram.id,
+        code: `HUBX${runId.slice(0, 6).toUpperCase()}`,
+        customerName: "Foreign Fixture Card",
+        contactMethod: "PHONE",
+        contactValue: "0700000009",
+        status: "ACTIVE",
+      },
+    });
+
     browser = await puppeteer.launch({
       executablePath: chrome,
       headless: true,
@@ -598,6 +615,58 @@ if (process.exitCode !== 2) {
       accountAfterRefusal?.availablePoints === 2,
       `wallet holds ${accountAfterRefusal?.availablePoints ?? "no wallet"}`,
     );
+    // ── the same entry point, when the code is wrong, foreign, or typed badly ───────────────────
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    check("customer: checking another card returns to the code form", true, "the form is back");
+
+    await walletPage.type("#points-card-code", "NOT-A-REAL-CODE");
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /couldn't find that loyalty card/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    const unknownCodeText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: an unknown card code says so, instead of leaving an empty wallet",
+      /couldn't find that loyalty card/i.test(unknownCodeText) && !/available points/i.test(unknownCodeText),
+      "no balance is shown for a code that does not exist",
+    );
+
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    await walletPage.type("#points-card-code", foreignCard.code);
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /couldn't find that loyalty card/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    const foreignCodeText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: another business's card code is refused on this page",
+      /couldn't find that loyalty card/i.test(foreignCodeText) &&
+        !/Other Business/.test(foreignCodeText) &&
+        !/available points/i.test(foreignCodeText),
+      "the refusal names no other business and shows no balance",
+    );
+
+    // The same code typed the way a person types it — lower case, with spaces. It has to resolve to
+    // the one row the business issued.
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    await walletPage.type("#points-card-code", ` ${pointsCard.code.toLowerCase().split("").join(" ")} `);
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
+    const normalisedText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: a code typed lower-case with spaces still opens the wallet",
+      /points wallet/i.test(normalisedText) && /available points/i.test(normalisedText),
+      "the code is normalised before the lookup",
+    );
+    check(
+      "customer: the refused foreign code left this wallet untouched (2 points)",
+      (await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } }))?.availablePoints === 2,
+      `wallet holds ${(await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } }))?.availablePoints ?? "no wallet"}`,
+    );
+
     check("customer: no uncaught page error in the wallet", walletErrors.length === 0, walletErrors.slice(0, 2).join(" | "));
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-redeemed.png"), fullPage: true });
     await walletContext.close();

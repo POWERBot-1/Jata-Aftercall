@@ -49,6 +49,8 @@ let ownerB = "";
 let cardA = "";
 let cardACode = "";
 let cardB = "";
+let slugA = "";
+let slugB = "";
 
 async function activate(businessId: string, overrides: Record<string, unknown> = {}) {
   const parsed = validateProgrammeInput({ isActive: true, kesPerPoint: 100, pointsPerUnit: 1, ...overrides });
@@ -104,6 +106,8 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     });
     businessA = businessARow.id;
     businessB = businessBRow.id;
+    slugA = businessARow.slug;
+    slugB = businessBRow.slug;
 
     // The stamp programme exists first, so the regression check below is a real before/after.
     await saveProgram({
@@ -655,5 +659,42 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: throwaway.id } })).toBe(0);
     expect(await prisma.loyaltyPointsAccount.count({ where: { businessId: throwaway.id } })).toBe(0);
     expect(await prisma.loyaltyPointsProgramme.count({ where: { businessId: throwaway.id } })).toBe(0);
+  });
+
+  it("18 · a card code is normalised, and only opens the wallet of the business whose page asked", async () => {
+    await resetWallet(cardA);
+    await activate(businessA);
+    await awardPoints({ businessId: businessA, cardId: cardA, transactionRef: `NORM-${stamp}`, amountKES: 1000 });
+
+    // Typed the way a person types it: lower case, with spaces, wrapped in whitespace.
+    const spaced = ` ${cardACode.toLowerCase().split("").join(" ")} `;
+    for (const typed of [cardACode, cardACode.toLowerCase(), spaced]) {
+      const wallet = await walletForCardCode(typed);
+      expect(wallet, typed).toBeTruthy();
+      if (!wallet || !("availablePoints" in wallet)) continue;
+      expect(wallet.availablePoints).toBe(10);
+    }
+
+    // Empty and unknown codes resolve to nothing, never to a row the database happens to hold.
+    expect(await walletForCardCode("")).toBeNull();
+    expect(await walletForCardCode("   ")).toBeNull();
+    expect(await walletForCardCode(`no-such-code-${stamp}`)).toBeNull();
+
+    // Page scoping: this business's card opens on this business's page and nowhere else.
+    const onItsOwnPage = await walletForCardCode(cardACode, { businessSlug: slugA });
+    expect(onItsOwnPage?.active).toBe(true);
+    expect(await walletForCardCode(cardACode, { businessSlug: slugB })).toBeNull();
+
+    // And another business's card is refused here, with no hint that it exists elsewhere.
+    const otherCard = await prisma.loyaltyCard.findUnique({ where: { id: cardB } });
+    expect(otherCard).toBeTruthy();
+    expect(await walletForCardCode(otherCard!.code, { businessSlug: slugA })).toBeNull();
+    expect((await walletForCardCode(otherCard!.code, { businessSlug: slugB }))?.active).toBe(false);
+
+    // The refusal is not a wallet with a balance in it, and never carries a contact value.
+    const serialised = JSON.stringify(await walletForCardCode(cardACode, { businessSlug: slugA }));
+    expect(serialised).not.toContain("0712345678");
+    expect(serialised).not.toContain("accountId");
+    expect(serialised).not.toContain("businessId");
   });
 });

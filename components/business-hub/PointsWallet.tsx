@@ -78,9 +78,21 @@ function newRequestKey(): string {
 const money = (value: number) => `KES ${formatNumber(Math.round(value))}`;
 const pointsLabel = (value: number) => `${formatNumber(value)} ${value === 1 ? "point" : "points"}`;
 
-export function PointsWallet({ code, businessName }: { code: string; businessName: string }) {
+export function PointsWallet({
+  code,
+  businessName,
+  businessSlug,
+}: {
+  code: string;
+  businessName: string;
+  /** The business whose page this wallet is being shown on; the lookup refuses another business's card. */
+  businessSlug: string;
+}) {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Why the wallet could not be shown at all (wrong code, other business, service down). */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Why an action inside a wallet that IS shown failed (a refused redemption). */
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyReward, setBusyReward] = useState<string | null>(null);
@@ -90,21 +102,44 @@ export function PointsWallet({ code, businessName }: { code: string; businessNam
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
-      const response = await fetch(`/api/public/loyalty-points/${encodeURIComponent(code)}`);
+      const query = new URLSearchParams({ business: businessSlug });
+      const response = await fetch(
+        `/api/public/loyalty-points/${encodeURIComponent(code)}?${query.toString()}`,
+      );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        // A wrong code, a card from another business, and a service that cannot answer all arrive
+        // here. Each has to say so: silently rendering nothing leaves the customer staring at an
+        // empty card-sized hole where their points should be.
         setWallet(null);
+        setLoadError(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : "We couldn't load that points wallet. Please try again.",
+        );
         return;
       }
-      setWallet(data.active ? (data as Wallet) : null);
+      if (data.active !== true) {
+        // The programme was switched off (or is not on) — say that plainly, and never show a
+        // balance that is not really there.
+        setWallet(null);
+        setLoadError(
+          typeof data.message === "string" && data.message
+            ? data.message
+            : "This business has not switched on points yet.",
+        );
+        return;
+      }
+      setWallet(data as Wallet);
     } catch {
       setWallet(null);
+      setLoadError("We couldn't reach the server. Your points are safe — please check your connection and try again.");
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, businessSlug]);
 
   useEffect(() => {
     void load();
@@ -120,7 +155,7 @@ export function PointsWallet({ code, businessName }: { code: string; businessNam
       const response = await fetch(`/api/public/loyalty-points/${encodeURIComponent(code)}/redeem`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rewardId, requestKey: key }),
+        body: JSON.stringify({ rewardId, requestKey: key, business: businessSlug }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -148,7 +183,22 @@ export function PointsWallet({ code, businessName }: { code: string; businessNam
       </div>
     );
   }
-  if (!wallet) return null;
+  if (loadError) {
+    return (
+      <div className="mt-4 rounded-2xl border border-zinc-200 p-4" aria-live="polite">
+        <p className="jata-hint" role="alert">
+          {loadError}
+        </p>
+      </div>
+    );
+  }
+  if (!wallet) {
+    return (
+      <div className="mt-4 rounded-2xl border border-zinc-200 p-4" aria-live="polite">
+        <p className="jata-hint">This business has not switched on points yet, so there is no balance to show.</p>
+      </div>
+    );
+  }
 
   const { earning } = wallet;
   const canRedeem = wallet.status === "ACTIVE" && wallet.availablePoints >= (earning.minRedeemPoints || 0);
