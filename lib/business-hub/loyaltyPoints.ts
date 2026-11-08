@@ -764,9 +764,11 @@ export async function adjustPoints(params: {
 
   const magnitude = Math.abs(points);
   const direction = points > 0 ? "CREDIT" : "DEBIT";
-  const idempotencyKey = cleanText(params.idempotencyKey, 120) || `ADJUST:${randomCode(12)}`;
+  // Namespaced by wallet, for the same reason as a redemption key: the ledger's unique index is
+  // (businessId, idempotencyKey), so one wallet's key must not be able to answer for another's.
+  const idempotencyKey = `ADJUST:${account.id}:${cleanText(params.idempotencyKey, 120) || randomCode(12)}`;
   const existing = await prisma.loyaltyPointsLedger
-    .findFirst({ where: { businessId: params.businessId, idempotencyKey } })
+    .findFirst({ where: { businessId: params.businessId, accountId: account.id, idempotencyKey } })
     .catch(() => null);
   if (existing) return { ok: true, entry: existing, account, duplicate: true };
 

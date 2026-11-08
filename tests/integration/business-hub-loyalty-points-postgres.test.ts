@@ -381,12 +381,39 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     await activate(businessA);
     const rewardRow = await reward(businessA, `Rollback reward ${stamp}`, 5);
     await awardPoints({ businessId: businessA, cardId: cardA, transactionRef: `RB-${stamp}`, amountKES: 1000 });
-    const account = await accountFor(cardA);
-    const before = account!.availablePoints;
 
-    // Occupy the ledger idempotency key the redemption is about to use. The redemption row would
-    // succeed, and the deduction would succeed — only the ledger write fails, so the transaction
-    // is the only thing standing between the customer and a spend with no history.
+    // The ledger key a redemption writes is namespaced by wallet, so it is LEARNED from a
+    // redemption the database itself wrote rather than spelled out here — this test is about the
+    // rollback, not about the key's format.
+    const probeKey = `pg-probe-${stamp}`;
+    const probe = await redeemPoints({ businessId: businessA, cardId: cardA, rewardId: rewardRow.id, idempotencyKey: probeKey });
+    expect(probe.ok).toBe(true);
+    const probeLedger = await prisma.loyaltyPointsLedger.findFirst({
+      where: { account: { cardId: cardA }, type: "REDEEMED" },
+    });
+    const blockedClientKey = `pg-blocked-${stamp}`;
+    const blockedLedgerKey = String(probeLedger?.idempotencyKey ?? "").replace(probeKey, blockedClientKey);
+    expect(blockedLedgerKey).not.toBe("");
+
+    // Undo the probe: the wallet is back to ten points with its earning lot intact.
+    await prisma.loyaltyRewardRedemption.deleteMany({ where: { account: { cardId: cardA } } });
+    await prisma.loyaltyPointsLedger.deleteMany({ where: { account: { cardId: cardA }, type: "REDEEMED" } });
+    const earnedLotBefore = await prisma.loyaltyPointsLedger.findFirst({
+      where: { account: { cardId: cardA }, type: "EARNED" },
+    });
+    await prisma.loyaltyPointsLedger.update({
+      where: { id: earnedLotBefore!.id },
+      data: { remainingPoints: earnedLotBefore!.points },
+    });
+    const account = await accountFor(cardA);
+    await prisma.loyaltyPointsAccount.update({
+      where: { id: account!.id },
+      data: { availablePoints: 10, lifetimeRedeemed: 0 },
+    });
+
+    // Occupy that key. The redemption row would succeed and the deduction would succeed — only
+    // the ledger write fails, so the transaction is the only thing standing between the customer
+    // and a spend with no history.
     await prisma.loyaltyPointsLedger.create({
       data: {
         businessId: businessA,
@@ -395,19 +422,24 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
         direction: "CREDIT",
         points: 1,
         reference: `JATA-PTS-RB-${stamp}`,
-        idempotencyKey: `LEDGER:pg-rollback-${stamp}`,
+        idempotencyKey: blockedLedgerKey,
         source: "OWNER_ADJUSTMENT",
         explanation: "occupies the key so the redemption's ledger write fails",
       },
     });
 
-    const result = await redeemPoints({ businessId: businessA, cardId: cardA, rewardId: rewardRow.id, idempotencyKey: `pg-rollback-${stamp}` });
+    const result = await redeemPoints({ businessId: businessA, cardId: cardA, rewardId: rewardRow.id, idempotencyKey: blockedClientKey });
     expect(result.ok).toBe(false);
 
-    // Nothing was left behind: no redemption, no deduction, no partial history.
-    expect((await accountFor(cardA))?.availablePoints).toBe(before);
-    expect(await prisma.loyaltyRewardRedemption.count({ where: { businessId: businessA, idempotencyKey: `pg-rollback-${stamp}` } })).toBe(0);
+    // Nothing was left behind: no redemption, no deduction, no partial history. The earning lot
+    // the redemption consumed inside the failed transaction is back to its full value too.
+    expect((await accountFor(cardA))?.availablePoints).toBe(10);
+    expect(await prisma.loyaltyRewardRedemption.count({ where: { businessId: businessA, account: { cardId: cardA } } })).toBe(0);
     expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: businessA, type: "REDEEMED" } })).toBe(0);
+    const earnedLotAfter = await prisma.loyaltyPointsLedger.findFirst({
+      where: { account: { cardId: cardA }, type: "EARNED" },
+    });
+    expect(earnedLotAfter?.remainingPoints).toBe(10);
   });
 
   it("11 · a refund reverses once, keeps the original entry, and reports a shortfall it cannot claw back", async () => {

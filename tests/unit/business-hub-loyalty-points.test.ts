@@ -750,6 +750,47 @@ describe("the customer's own view", () => {
 });
 
 
+describe("one wallet's idempotency key never answers for another's", () => {
+  /**
+   * The ledger's and the redemption table's unique indexes are (businessId, idempotencyKey), so a
+   * key is only unique per BUSINESS. Un-namespaced, the loser of a collision is handed the other
+   * wallet's row. Both writes namespace the key by wallet; these tests hold that line.
+   */
+  it("does not mistake another customer's adjustment for a replay of this one", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Adjusted Customer");
+    const other = await enrol(BIZ_A, "Also Adjusted");
+    await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "R-1", amountKES: 1000 });
+    await awardPoints({ businessId: BIZ_A, cardId: other.id, transactionRef: "R-2", amountKES: 1000 });
+
+    const mine = await adjustPoints({ businessId: BIZ_A, cardId: card.id, points: 2, reason: "Goodwill gesture", idempotencyKey: "shared-key" });
+    const theirs = await adjustPoints({ businessId: BIZ_A, cardId: other.id, points: 3, reason: "Goodwill gesture", idempotencyKey: "shared-key" });
+
+    expect(mine.ok).toBe(true);
+    expect(theirs.ok).toBe(true);
+    if (theirs.ok) {
+      expect(theirs.duplicate).toBeFalsy();
+      expect(theirs.entry?.accountId).not.toBe(mine.ok ? mine.entry?.accountId : "same");
+      expect(theirs.entry?.points).toBe(3);
+    }
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === other.id)?.availablePoints).toBe(13);
+  });
+
+  it("still treats the same wallet's same key as a replay", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Replayed Adjustment");
+    await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "R-1", amountKES: 1000 });
+
+    const first = await adjustPoints({ businessId: BIZ_A, cardId: card.id, points: 2, reason: "Goodwill gesture", idempotencyKey: "shared-key" });
+    const second = await adjustPoints({ businessId: BIZ_A, cardId: card.id, points: 2, reason: "Goodwill gesture", idempotencyKey: "shared-key" });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.duplicate).toBe(true);
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.availablePoints).toBe(12);
+  });
+});
+
 describe("a repeated tap is a replay, not a second attempt to spend", () => {
   it("returns the same redemption when the retry arrives after the balance has already been spent", async () => {
     await activateProgramme();
