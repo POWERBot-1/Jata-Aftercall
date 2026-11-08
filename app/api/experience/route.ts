@@ -11,7 +11,8 @@ import { historyBasisFor, seedNewDocument } from "@/lib/experience/variant";
 import { diversityReport } from "@/lib/experience/diversity";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
+import { TenantError } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { getExperienceProfile, isCategoryKey } from "@/lib/experience/categories";
@@ -64,7 +65,8 @@ export async function GET(req: Request) {
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
 
   try {
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "read");
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -153,7 +155,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const categoryKey = isCategoryKey(body?.categoryKey) ? body.categoryKey : null;
