@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+vi.unmock("@/lib/experience/ensure-default-website");
+
 const holder = vi.hoisted(() => ({ client: null as any }));
 vi.mock("@/lib/db", () => ({
   get default() { return holder.client; },
