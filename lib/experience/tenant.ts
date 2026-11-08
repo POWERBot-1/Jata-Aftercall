@@ -78,12 +78,12 @@ export async function assertStudioWebsiteAccess(
 
   const platformAdmin = session.role === "ADMIN" && businessRole === "ADMIN";
   const workspaceRole = platformAdmin
-    ? "ADMIN"
+    ? "OWNER"
     : workspace.ownerUserId === session.userId
       ? "OWNER"
       : workspace.members[0]?.role;
   const websiteRole = platformAdmin
-    ? "ADMIN"
+    ? "OWNER"
     : workspace.ownerUserId === session.userId
       ? "OWNER"
       : website.members[0]?.role;
