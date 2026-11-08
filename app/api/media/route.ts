@@ -27,7 +27,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { sanitizeText } from "@/lib/validation";
 import { logAudit } from "@/lib/audit";
@@ -131,7 +131,8 @@ export async function GET(req: Request) {
   const businessId = params.get("businessId")?.trim() || "";
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
   try {
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "read");
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -178,7 +179,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId, "configure");
+    const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const kind = normalizeKind(body?.kind);
@@ -329,7 +330,7 @@ export async function PATCH(req: Request) {
       select: { id: true, businessId: true, version: true },
     });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, asset.businessId, "configure");
+    const guard = await guardStudioWebsiteMutation(session, asset.businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     // Authorization intentionally precedes version validation so unauthorized callers do not
@@ -437,7 +438,7 @@ export async function DELETE(req: Request) {
       });
       const first = rows[0];
       if (!first) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-      const guard = await guardTenantMutation(session, first.businessId, "configure");
+      const guard = await guardStudioWebsiteMutation(session, first.businessId, "edit");
       if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
       if (rows.some((row) => row.businessId !== first.businessId)) {
         return NextResponse.json({ error: SAFE_ERRORS.saveFailed }, { status: 500 });
