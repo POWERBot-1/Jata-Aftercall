@@ -6,7 +6,7 @@ export type StudioAction = "read" | "edit" | "publish" | "manage_workspace";
 
 const STUDIO_PERMISSIONS: Record<StudioRole, readonly StudioAction[]> = {
   OWNER: ["read", "edit", "publish", "manage_workspace"],
-  ADMIN: ["read", "edit", "publish", "manage_workspace"],
+  ADMIN: ["read", "edit", "publish"],
   EDITOR: ["read", "edit"],
   PUBLISHER: ["read", "publish"],
   VIEWER: ["read"],
