@@ -8,7 +8,12 @@ import { vi } from "vitest";
  */
 vi.mock("@/lib/experience/ensure-default-website", async () => {
   const tenant = await import("@/lib/tenant");
-  const mapAction = (action: string) => action === "edit" ? "configure" : action;
+  const mapAction = (action: string): "read" | "configure" | "publish" | "manage_settings" => {
+    if (action === "edit") return "configure";
+    if (action === "publish") return "publish";
+    if (action === "manage_workspace") return "manage_settings";
+    return "read";
+  };
   const guardStudioWebsiteMutation = vi.fn(async (
     session: unknown,
     businessId: string | null | undefined,
