@@ -82,7 +82,7 @@ export function PointsWalletLookup({
                 setRejected(false);
               }}
               placeholder="JATA-4F9K-2Q7M"
-              maxLength={20}
+              maxLength={60}
               autoComplete="off"
               aria-describedby={rejected ? "points-card-code-hint" : undefined}
               required
