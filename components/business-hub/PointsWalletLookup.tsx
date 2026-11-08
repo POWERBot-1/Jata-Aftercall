@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Coins, Search } from "lucide-react";
 import { PointsWallet } from "./PointsWallet";
+import { normaliseCardCode } from "@/lib/business-hub/cardCode";
 
 /** Shortest code the lookup will take. Real codes are longer; this only stops a stray tap. */
 const MIN_CODE_LENGTH = 4;
@@ -31,7 +32,7 @@ export function PointsWalletLookup({
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalized = code.trim().replace(/\s+/g, "").toUpperCase();
+    const normalized = normaliseCardCode(code);
     if (normalized.length < MIN_CODE_LENGTH) {
       // The button is disabled below this length; this is the keyboard-submit path.
       setRejected(true);

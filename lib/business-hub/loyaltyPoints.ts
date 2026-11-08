@@ -41,6 +41,7 @@
 
 import prisma from "../db";
 import { formatKes, formatNumber } from "../dateFormat";
+import { normaliseCardCode } from "./cardCode";
 import {
   HUB_SUBJECTS,
   ValidationResult,
@@ -130,6 +131,21 @@ export async function findProgramme(businessId: string): Promise<PointsProgramme
   const existing = await prisma.loyaltyPointsProgramme.findUnique({ where: { businessId } }).catch(() => null);
   if (!existing) return null;
   return toProgrammeConfig(existing, await eligibleItemsFor(existing.id));
+}
+
+/**
+ * Whether a public page may show the Points & rewards section for this business.
+ *
+ * `findProgramme`, never `getOrCreateProgramme`: a public page must never create a programme as a
+ * side effect of being looked at. Everything here fails CLOSED — a page that cannot prove the
+ * programme is active shows no points section at all, rather than an empty or misleading one.
+ *
+ * It is independent of the stamp card on purpose: `isLoyaltyEnabled` (the stamp programme) is a
+ * different flag on a different table, and neither programme's state affects the other.
+ */
+export async function publicPointsEnabled(businessId: string): Promise<boolean> {
+  const programme = await findProgramme(businessId).catch(() => null);
+  return programme?.isActive === true;
 }
 
 async function eligibleItemsFor(programmeId: string) {
@@ -485,6 +501,12 @@ function earnIdempotencyKey(accountId: string, transactionRef: string) {
 export function normaliseTransactionRef(value: unknown): string {
   return cleanText(value, 80).trim().toUpperCase();
 }
+
+/**
+ * Card-code normalisation lives in `./cardCode` so the browser form and the server lookup cannot
+ * drift apart. Re-exported here because the server-side wallet entry points are its main users.
+ */
+export { normaliseCardCode } from "./cardCode";
 
 /**
  * Awards points for one verified purchase.
@@ -1420,18 +1442,6 @@ export async function reconcileAccount(businessId: string, accountId: string) {
 
 /** The wallet a customer sees. Card-code only: no contact values, no owner notes, no ids. */
 /**
- * The stored form of a card code: no spaces, upper case.
- *
- * A customer types theirs by hand, pastes it from a message, or follows a link, so the same code
- * arrives as `jata-4f9k-2q7m`, ` JATA 4F9K 2Q7M ` or `Jata-4F9K-2Q7M`. Every public lookup has to
- * resolve all of them to the one row, and the lookup has to fail closed on an empty value rather
- * than matching whatever the database happens to hold under `""`.
- */
-export function normaliseCardCode(value: unknown): string {
-  return cleanText(value, 60).replace(/\s+/g, "").toUpperCase();
-}
-
-/**
  * @param options.businessSlug  the business whose page the customer is standing on. A card issued
  *   by a different business is refused here, so one business's page can never open another
  *   business's wallet.
@@ -1509,7 +1519,9 @@ export async function walletForCardCode(code: string, options: { businessSlug?: 
         type: row.type,
         direction: row.direction,
         points: Number(row.points ?? 0),
-        explanation: row.explanation ?? null,
+        // The ledger's `explanation` is the business's own wording — the note it typed when it
+        // recorded the purchase. The customer is not its audience, so the public wallet shows the
+        // reference instead and leaves that text on the business's side of the boundary.
         reference: row.reference,
         source: row.source,
         expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null,

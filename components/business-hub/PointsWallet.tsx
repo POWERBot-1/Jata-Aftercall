@@ -53,7 +53,7 @@ type Wallet = {
     type: string;
     direction: string;
     points: number;
-    explanation: string | null;
+    // No `explanation`: that is the business's own wording, and the customer is not its audience.
     reference: string;
     source: string;
     expiresAt: string | null;
@@ -354,7 +354,7 @@ export function PointsWallet({
                     {entry.direction === "CREDIT" ? "+" : "−"}
                     {formatNumber(entry.points)} · {entry.type.toLowerCase().replace("_", " ")}
                   </p>
-                  <p className="jata-hint">{entry.explanation ?? entry.reference}</p>
+                  <p className="jata-hint">{entry.reference}</p>
                 </div>
                 <p className="jata-hint">{formatDateTime(entry.createdAt)}</p>
               </li>
