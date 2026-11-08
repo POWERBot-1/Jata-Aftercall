@@ -748,10 +748,13 @@ if (process.exitCode !== 2) {
       points: Boolean(document.querySelector("#points-rewards")),
       stamps: Boolean(document.querySelector("#loyalty")),
     }));
+    // This fixture business runs a stamp card of its own (the cross-tenant refusal needs a card
+    // from somewhere else), so its stamp section legitimately shows. What must NOT appear is the
+    // points section: it has no points programme, and a second public slug must prove that.
     check(
-      "customer: a second business with no programmes configured shows no points section",
-      otherResponse?.status() === 200 && !otherSections.points && !otherSections.stamps,
-      `HTTP ${otherResponse?.status()}, points=${otherSections.points} stamps=${otherSections.stamps}`,
+      "customer: a second public business with no points programme shows no points section",
+      otherResponse?.status() === 200 && !otherSections.points,
+      `HTTP ${otherResponse?.status()}, points=${otherSections.points} (its own stamp card: ${otherSections.stamps})`,
     );
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-other-business.png"), fullPage: true });
 
