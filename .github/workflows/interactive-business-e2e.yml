@@ -109,7 +109,7 @@ jobs:
         run: |
           fixture_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
           echo "::add-mask::$fixture_password"
-          printf 'DEMO_FIXTURE_PASSWORD=%s\\n' "$fixture_password" >> "$GITHUB_ENV"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$fixture_password" >> "$GITHUB_ENV"
 
       - name: Seed plans
         env:
