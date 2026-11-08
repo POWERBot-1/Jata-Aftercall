@@ -4,27 +4,20 @@ export const STUDIO_ROLES = ["OWNER", "ADMIN", "EDITOR", "PUBLISHER", "VIEWER"] 
 export type StudioRole = (typeof STUDIO_ROLES)[number];
 export type StudioAction = "read" | "edit" | "publish" | "manage_workspace";
 
-const ROLE_WEIGHT: Record<StudioRole, number> = {
-  VIEWER: 10,
-  PUBLISHER: 15,
-  EDITOR: 20,
-  ADMIN: 30,
-  OWNER: 40,
+const STUDIO_PERMISSIONS: Record<StudioRole, readonly StudioAction[]> = {
+  OWNER: ["read", "edit", "publish", "manage_workspace"],
+  ADMIN: ["read", "edit", "publish", "manage_workspace"],
+  EDITOR: ["read", "edit"],
+  PUBLISHER: ["read", "publish"],
+  VIEWER: ["read"],
 };
 
-const ACTION_WEIGHT: Record<StudioAction, number> = {
-  read: 10,
-  edit: 20,
-  publish: 15,
-  manage_workspace: 30,
-};
-
-const BUSINESS_CAP: Record<BusinessRole, number> = {
-  VIEWER: 10,
-  STAFF: 10,
-  MANAGER: 20,
-  ADMIN: 40,
-  OWNER: 40,
+const BUSINESS_PERMISSIONS: Record<BusinessRole, readonly StudioAction[]> = {
+  OWNER: ["read", "edit", "publish", "manage_workspace"],
+  ADMIN: ["read", "edit", "publish", "manage_workspace"],
+  MANAGER: ["read", "edit"],
+  STAFF: ["read"],
+  VIEWER: ["read"],
 };
 
 export function normalizeStudioRole(value: unknown): StudioRole | null {
@@ -33,11 +26,7 @@ export function normalizeStudioRole(value: unknown): StudioRole | null {
   return (STUDIO_ROLES as readonly string[]).includes(role) ? (role as StudioRole) : null;
 }
 
-/**
- * Workspace/site roles can only narrow the user's existing business permission.
- * In particular, a workspace PUBLISHER cannot publish if their BusinessMember
- * role does not already carry the existing publish permission.
- */
+/** Every layer must independently grant the action; unknown and missing roles deny. */
 export function canStudioRolePerform(input: {
   workspaceRole: unknown;
   websiteRole: unknown;
@@ -48,9 +37,7 @@ export function canStudioRolePerform(input: {
   const websiteRole = normalizeStudioRole(input.websiteRole);
   if (!workspaceRole || !websiteRole || !input.businessRole) return false;
 
-  const studioWeight = Math.min(ROLE_WEIGHT[workspaceRole], ROLE_WEIGHT[websiteRole]);
-  const businessWeight = BUSINESS_CAP[input.businessRole];
-  const actionWeight = ACTION_WEIGHT[input.action];
-
-  return studioWeight >= actionWeight && businessWeight >= actionWeight;
+  return STUDIO_PERMISSIONS[workspaceRole].includes(input.action)
+    && STUDIO_PERMISSIONS[websiteRole].includes(input.action)
+    && BUSINESS_PERMISSIONS[input.businessRole].includes(input.action);
 }
