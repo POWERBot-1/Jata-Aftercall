@@ -76,12 +76,15 @@ export async function assertStudioWebsiteAccess(
     throw new TenantError("Studio website access denied", 403);
   }
 
-  const workspaceRole =
-    workspace.ownerUserId === session.userId
+  const platformAdmin = session.role === "ADMIN" && businessRole === "ADMIN";
+  const workspaceRole = platformAdmin
+    ? "ADMIN"
+    : workspace.ownerUserId === session.userId
       ? "OWNER"
       : workspace.members[0]?.role;
-  const websiteRole =
-    workspace.ownerUserId === session.userId
+  const websiteRole = platformAdmin
+    ? "ADMIN"
+    : workspace.ownerUserId === session.userId
       ? "OWNER"
       : website.members[0]?.role;
 
