@@ -535,9 +535,12 @@ if (process.exitCode !== 2) {
     // loading the public page. No production or customer data is involved in this fixture.
     await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: false } });
     await walletPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
-    const independentPageText = await walletPage.evaluate(() => document.body.innerText);
-    check("customer: Points & rewards remains visible when stamp cards are off", /points & rewards/i.test(independentPageText));
-    check("customer: the stamp-card section is independently hidden", !/loyalty card/i.test(independentPageText));
+    const independentSections = await walletPage.evaluate(() => ({
+      points: Boolean(document.querySelector("#points-rewards")),
+      stamps: Boolean(document.querySelector("#loyalty")),
+    }));
+    check("customer: Points & rewards remains visible when stamp cards are off", independentSections.points);
+    check("customer: the stamp-card section is independently hidden", !independentSections.stamps);
     await walletPage.type("#points-card-code", pointsCard.code);
     await clickByText(walletPage, "View points");
     await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
