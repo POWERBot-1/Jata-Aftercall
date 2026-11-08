@@ -108,7 +108,7 @@ DO $$ BEGIN
     FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  ALTER TABLE "StudioWebsite" ADD CONSTRAINT "StudioWebsite_workspaceBusiness_fkey"
+  ALTER TABLE "StudioWebsite" ADD CONSTRAINT "StudioWebsite_workspaceId_businessId_fkey"
     FOREIGN KEY ("workspaceId", "businessId")
     REFERENCES "StudioWorkspaceBusiness"("workspaceId", "businessId")
     ON DELETE CASCADE ON UPDATE CASCADE;
