@@ -21,7 +21,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { rateLimit } from "@/lib/rate-limit";
 import { parseCreativeInstruction, type CreativeMediaType } from "@/lib/creative/intent";
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardStudioWebsiteMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   // Booleans and owner-facing sentences only — no keys, endpoints or account details.
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   }
 
   const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-  const guard = await guardTenantMutation(session, businessId, "configure");
+  const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const instruction = typeof body?.instruction === "string" ? body.instruction.slice(0, 600) : "";
