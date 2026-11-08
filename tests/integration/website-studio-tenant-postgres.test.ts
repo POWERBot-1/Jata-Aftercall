@@ -132,7 +132,12 @@ describe.skipIf(!enabled)("Website Studio workspace and website tenant isolation
       where: { workspaceId_userId: { workspaceId: site!.workspaceId, userId: ids.managerA } },
       select: { status: true },
     });
+    const websiteMember = await client.studioWebsiteMember.findUnique({
+      where: { websiteId_userId: { websiteId: site!.websiteId, userId: ids.managerA } },
+      select: { status: true },
+    });
     expect(member?.status).toBe("SUSPENDED");
+    expect(websiteMember?.status).toBe("SUSPENDED");
     await expect(assertStudioWebsiteAccess(site!.websiteId, session(ids.managerA), "read")).rejects.toThrow();
   });
 });
