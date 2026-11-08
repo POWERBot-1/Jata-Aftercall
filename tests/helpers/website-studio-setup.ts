@@ -42,8 +42,9 @@ vi.mock("@/lib/experience/ensure-default-website", async () => {
     session: unknown,
     action = "read",
   ) => {
-    if (action === "read" && typeof tenant.assertBusinessOwnership === "function") {
-      await tenant.assertBusinessOwnership(businessId, session as any);
+    const guard = await guardStudioWebsiteMutation(session, businessId, action as any);
+    if (!guard.ok) {
+      throw Object.assign(new Error(guard.error), { status: guard.status });
     }
     return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
   });
