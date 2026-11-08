@@ -461,7 +461,7 @@ export async function DELETE(req: Request) {
       select: { id: true, businessId: true, storageProvider: true, storageKey: true },
     });
     if (!asset) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, asset.businessId, "configure");
+    const guard = await guardStudioWebsiteMutation(session, asset.businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     if (!(await removeStoredObject(asset))) {
       return NextResponse.json(
