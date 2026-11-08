@@ -531,9 +531,15 @@ if (process.exitCode !== 2) {
     const walletErrors = [];
     walletPage.on("pageerror", (error) => walletErrors.push(String(error?.message ?? error)));
     await walletPage.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    // Prove the points entry point is independent: turn off the synthetic stamp programme before
+    // loading the public page. No production or customer data is involved in this fixture.
+    await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: false } });
     await walletPage.goto(pageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
-    await walletPage.type("#loyalty-code", pointsCard.code);
-    await clickByText(walletPage, "Check my card");
+    const independentPageText = await walletPage.evaluate(() => document.body.innerText);
+    check("customer: Points & rewards remains visible when stamp cards are off", /points & rewards/i.test(independentPageText));
+    check("customer: the stamp-card section is independently hidden", !/loyalty card/i.test(independentPageText));
+    await walletPage.type("#points-card-code", pointsCard.code);
+    await clickByText(walletPage, "View points");
     await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
     let walletText = await walletPage.evaluate(() => document.body.innerText);
 
