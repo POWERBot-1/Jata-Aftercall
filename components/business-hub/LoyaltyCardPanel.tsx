@@ -63,7 +63,6 @@ export function LoyaltyCardPanel({ businessName }: { businessName: string }) {
         Loyalty card
       </h2>
 
-
       {progress ? (
         <div className="mt-3">
           <p className="text-sm">

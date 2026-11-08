@@ -241,7 +241,7 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
       where: { businessId: businessA, account: { cardId: cardA } },
       take: 1,
     });
-    expect(awarded?.idempotencyKey).toBe(`EARN:${reference.toUpperCase()}`);
+    expect(awarded?.idempotencyKey).toBe(`EARN:${account!.id}:${reference.toUpperCase()}`);
     await expect(
       prisma.loyaltyPointsLedger.create({
         data: {
@@ -256,6 +256,42 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("4b · the same receipt number on another customer's card is their own purchase", async () => {
+    /**
+     * The replay guard is per wallet, not per business. Two customers can be handed the same
+     * receipt number — a till that restarts its numbering, a short reference like "CASH" — and the
+     * second award must earn on its own wallet instead of coming back as a replay of the first
+     * customer's entry.
+     */
+    await resetWallet(cardA);
+    await activate(businessA);
+    const reference = `SHARED-${stamp}`;
+    const other = await freshCard("Shared Receipt", businessA);
+
+    try {
+      const mine = await awardPoints({ businessId: businessA, cardId: cardA, transactionRef: reference, amountKES: 1000 });
+      const theirs = await awardPoints({ businessId: businessA, cardId: other.id, transactionRef: reference, amountKES: 1000 });
+
+      expect(mine.ok).toBe(true);
+      expect(theirs.ok).toBe(true);
+      if (!theirs.ok) return;
+      expect(theirs.duplicate).toBeFalsy();
+      expect(theirs.entry?.id).not.toBe(mine.ok ? mine.entry?.id : "same");
+      expect(theirs.entry?.points).toBe(10);
+
+      // Two ledger rows, one per wallet, each credited exactly once.
+      expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: businessA, account: { cardId: cardA } } })).toBe(1);
+      expect(await prisma.loyaltyPointsLedger.count({ where: { businessId: businessA, account: { cardId: other.id } } })).toBe(1);
+      expect((await accountFor(cardA))?.availablePoints).toBe(10);
+      expect((await accountFor(other.id))?.availablePoints).toBe(10);
+    } finally {
+      // This card exists only for this test, so it does not disturb the counts the others assert.
+      await prisma.loyaltyPointsLedger.deleteMany({ where: { account: { cardId: other.id } } }).catch(() => undefined);
+      await prisma.loyaltyPointsAccount.deleteMany({ where: { cardId: other.id } }).catch(() => undefined);
+      await prisma.loyaltyCard.delete({ where: { id: other.id } }).catch(() => undefined);
+    }
   });
 
   it("5 · an order request earns nothing, and an unverified payment event is refused", async () => {

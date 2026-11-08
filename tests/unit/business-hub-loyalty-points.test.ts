@@ -776,6 +776,45 @@ describe("one wallet's idempotency key never answers for another's", () => {
     expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === other.id)?.availablePoints).toBe(13);
   });
 
+  it("does not mistake another customer's purchase reference for a replay of this one", async () => {
+    /**
+     * Two customers can be handed the same receipt number — a till that restarts its numbering, a
+     * short reference like "CASH". The second award must earn on its own wallet, not come back as
+     * a duplicate of the first customer's entry.
+     */
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Receipt Holder");
+    const other = await enrol(BIZ_A, "Same Receipt Number");
+
+    const mine = await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "RCPT-77", amountKES: 1000 });
+    const theirs = await awardPoints({ businessId: BIZ_A, cardId: other.id, transactionRef: "RCPT-77", amountKES: 1000 });
+
+    expect(mine.ok).toBe(true);
+    expect(theirs.ok).toBe(true);
+    if (theirs.ok) {
+      expect(theirs.duplicate).toBeFalsy();
+      expect(theirs.entry?.id).not.toBe(mine.ok ? mine.entry?.id : "same");
+      expect(theirs.entry?.points).toBe(10);
+    }
+    // Two ledger rows, one per wallet, and each wallet credited exactly once.
+    expect(fake().rows("loyaltyPointsLedger")).toHaveLength(2);
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.availablePoints).toBe(10);
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === other.id)?.availablePoints).toBe(10);
+  });
+
+  it("still treats the same wallet's same purchase reference as a replay", async () => {
+    await activateProgramme();
+    const card = await enrol(BIZ_A, "Repeat Purchase");
+    const first = await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "RCPT-88", amountKES: 1000 });
+    const second = await awardPoints({ businessId: BIZ_A, cardId: card.id, transactionRef: "rcpt-88", amountKES: 1000 });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.duplicate).toBe(true);
+    expect(fake().rows("loyaltyPointsLedger")).toHaveLength(1);
+    expect(fake().rows("loyaltyPointsAccount").find((row: any) => row.cardId === card.id)?.availablePoints).toBe(10);
+  });
+
   it("still treats the same wallet's same key as a replay", async () => {
     await activateProgramme();
     const card = await enrol(BIZ_A, "Replayed Adjustment");

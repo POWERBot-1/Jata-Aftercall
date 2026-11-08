@@ -206,7 +206,7 @@ needs to keep its history. The stamp-card tables (`LoyaltyProgram`, `LoyaltyCard
 
 | Suite | File |
 |---|---|
-| Rules, refusals, stamp non-regression (42 tests, offline) | `tests/unit/business-hub-loyalty-points.test.ts` |
+| Rules, refusals, stamp non-regression (51 tests, offline) | `tests/unit/business-hub-loyalty-points.test.ts` |
 | Schema ⇄ migration parity (12 tests, offline) | `tests/prisma/loyalty-points-migration-parity.test.ts` |
 | Real PostgreSQL: rollback, concurrency, unique indexes | `tests/integration/business-hub-loyalty-points-postgres.test.ts` |
 | Real Chrome: owner configuration, purchase, wallet, redemption, six viewports | `scripts/browser/business-hub-journey.check.mjs` |

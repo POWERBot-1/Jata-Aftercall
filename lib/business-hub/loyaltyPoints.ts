@@ -469,8 +469,17 @@ export function eligibleAmount(
   return { eligibleKES: total > 0 ? total : purchase.amountKES, ineligible: false };
 }
 
-function earnIdempotencyKey(transactionRef: string) {
-  return `EARN:${transactionRef}`;
+/**
+ * The key that makes one purchase award once.
+ *
+ * It is namespaced by wallet for the same reason a redemption key is: the ledger's unique index is
+ * (businessId, idempotencyKey), so a bare reference is unique per BUSINESS, not per customer. Two
+ * customers who were given the same receipt number — a till that restarts its numbering, a short
+ * reference like "CASH" — would otherwise collide, and the second customer's award would be
+ * answered with the first customer's ledger entry instead of their own points.
+ */
+function earnIdempotencyKey(accountId: string, transactionRef: string) {
+  return `EARN:${accountId}:${transactionRef}`;
 }
 
 export function normaliseTransactionRef(value: unknown): string {
@@ -480,9 +489,11 @@ export function normaliseTransactionRef(value: unknown): string {
 /**
  * Awards points for one verified purchase.
  *
- * Duplicate protection is the unique index on (businessId, idempotencyKey): replaying the same
- * transaction reference — deliberately, or by two people verifying the same receipt at once —
- * returns the ORIGINAL entry with `duplicate: true` and writes nothing new.
+ * Duplicate protection is the unique index on (businessId, idempotencyKey), and the key is
+ * namespaced by wallet: replaying the same transaction reference for the same customer —
+ * deliberately, or by two people verifying the same receipt at once — returns the ORIGINAL entry
+ * with `duplicate: true` and writes nothing new. Another customer's reference is their own
+ * purchase, not a replay of this one, so it earns independently.
  */
 export async function awardPoints(params: {
   businessId: string;
@@ -541,9 +552,9 @@ export async function awardPoints(params: {
     };
   }
 
-  const idempotencyKey = earnIdempotencyKey(transactionRef);
+  const idempotencyKey = earnIdempotencyKey(account.id, transactionRef);
   const existing = await prisma.loyaltyPointsLedger
-    .findFirst({ where: { businessId: params.businessId, idempotencyKey } })
+    .findFirst({ where: { businessId: params.businessId, accountId: account.id, idempotencyKey } })
     .catch(() => null);
   if (existing) return { ok: true, entry: existing, account, duplicate: true };
 
@@ -596,8 +607,10 @@ export async function awardPoints(params: {
     return { ok: true, entry, account: updated ?? account };
   } catch (error) {
     if (isUniqueViolation(error)) {
+      // Scoped to this wallet too: a collision must never answer one customer's award with
+      // another customer's ledger entry.
       const original = await prisma.loyaltyPointsLedger
-        .findFirst({ where: { businessId: params.businessId, idempotencyKey } })
+        .findFirst({ where: { businessId: params.businessId, accountId: account.id, idempotencyKey } })
         .catch(() => null);
       if (original) return { ok: true, entry: original, account, duplicate: true };
       return { ok: false, status: 409, error: "That purchase has already earned points." };
