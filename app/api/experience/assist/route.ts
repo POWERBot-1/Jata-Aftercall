@@ -13,7 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { isCategoryKey } from "@/lib/experience/categories";
 import {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardStudioWebsiteMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   if (!body?.kind || !ASSIST_KINDS.includes(body.kind as AssistKind)) {
