@@ -5,11 +5,14 @@ on:
     branches: [main]
 permissions:
   contents: read
+  actions: read
 jobs:
   instruction-integrity:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v4
@@ -44,4 +47,6 @@ jobs:
         run: node scripts/admin/check-programme-readiness.mjs
       - name: Require verified Website Studio acceptance
         if: steps.scope.outputs.phase != 'global'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/admin/check-website-studio-readiness.mjs --phase=${{ steps.scope.outputs.phase }}
