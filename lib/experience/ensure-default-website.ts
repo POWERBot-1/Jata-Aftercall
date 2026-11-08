@@ -69,26 +69,34 @@ export async function ensureDefaultStudioWebsite(
     select: { id: true },
   });
 
-  const businessMembers = await prisma.businessMember.findMany({
-    where: { businessId },
-    select: { userId: true, role: true },
+  const [businessMembers, workspace] = await Promise.all([
+    prisma.businessMember.findMany({
+      where: { businessId },
+      select: { userId: true, role: true },
+    }),
+    prisma.studioWorkspace.findUnique({
+      where: { id: link.workspaceId },
+      select: { ownerUserId: true },
+    }),
+  ]);
+  if (!workspace) throw new TenantError("Studio workspace not found", 404);
+  const memberRoles = new Map<string, { workspaceRole: string; websiteRole: string }>();
+  memberRoles.set(business.ownerId, {
+    workspaceRole: workspace.ownerUserId === business.ownerId ? "OWNER" : "ADMIN",
+    websiteRole: "OWNER",
   });
-  const memberRoles = new Map<string, string>();
-  memberRoles.set(business.ownerId, "OWNER");
   for (const member of businessMembers) {
     if (member.userId === business.ownerId) continue;
     const role = String(member.role ?? "VIEWER").toUpperCase();
-    memberRoles.set(
-      member.userId,
-      role === "ADMIN" || role === "OWNER"
-        ? "ADMIN"
-        : role === "MANAGER" || role === "STAFF"
-          ? "EDITOR"
-          : "VIEWER",
-    );
+    const studioRole = role === "ADMIN" || role === "OWNER"
+      ? "ADMIN"
+      : role === "MANAGER" || role === "STAFF"
+        ? "EDITOR"
+        : "VIEWER";
+    memberRoles.set(member.userId, { workspaceRole: studioRole, websiteRole: studioRole });
   }
 
-  for (const [userId, role] of memberRoles) {
+  for (const [userId, roles] of memberRoles) {
     const suffix = hash(`${businessId}:${userId}`);
     await prisma.studioWorkspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: link.workspaceId, userId } },
@@ -96,10 +104,10 @@ export async function ensureDefaultStudioWebsite(
         id: `wsm_${suffix}`,
         workspaceId: link.workspaceId,
         userId,
-        role,
+        role: roles.workspaceRole,
         status: "ACTIVE",
       },
-      update: { role },
+      update: { role: roles.workspaceRole },
     });
     await prisma.studioWebsiteMember.upsert({
       where: { websiteId_userId: { websiteId: website.id, userId } },
@@ -107,10 +115,10 @@ export async function ensureDefaultStudioWebsite(
         id: `wsite_${suffix}`,
         websiteId: website.id,
         userId,
-        role,
+        role: roles.websiteRole,
         status: "ACTIVE",
       },
-      update: { role },
+      update: { role: roles.websiteRole },
     });
   }
 
