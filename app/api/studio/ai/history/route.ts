@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { generationHistory } from "@/lib/ai/generationStore";
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   const params = new URL(req.url).searchParams;
   const businessId = params.get("businessId")?.trim() || "";
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardStudioWebsiteMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
@@ -43,7 +43,7 @@ export async function DELETE(req: Request) {
   try {
     const generation = await prisma.aiGeneration.findUnique({ where: { id }, select: { id: true, businessId: true, assetIds: true } });
     if (!generation) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, generation.businessId);
+    const guard = await guardStudioWebsiteMutation(session, generation.businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const assetIds: string[] = (() => {
