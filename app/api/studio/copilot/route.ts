@@ -16,7 +16,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { draftCursorOf, recordDraftRevision } from "@/lib/experience/history";
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardStudioWebsiteMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   const loaded = await buildContext(businessId);
   if (!loaded) return NextResponse.json({ error: "We couldn't find that website." }, { status: 404 });
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
   }
 
   const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-  const guard = await guardTenantMutation(session, businessId, body?.apply === true ? "configure" : "read");
+  const guard = await guardStudioWebsiteMutation(session, businessId, body?.apply === true ? "edit" : "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const message = typeof body?.message === "string" ? body.message.slice(0, 400) : "";
