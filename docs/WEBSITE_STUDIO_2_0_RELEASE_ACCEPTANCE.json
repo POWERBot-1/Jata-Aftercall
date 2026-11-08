@@ -1,0 +1,245 @@
+{
+  "scope": "Website Studio 2.0 only",
+  "statusVocabulary": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT TESTED"
+  ],
+  "phases": {
+    "p1": [
+      {
+        "id": "tenant-foundation",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "prisma/schema.prisma",
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [],
+        "reason": "Fresh exact-head tenant acceptance is still running."
+      },
+      {
+        "id": "authorization",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "lib/experience/tenant.ts",
+          "app/api/experience/route.ts"
+        ],
+        "acceptanceTest": "tests/unit/repair-guards.test.ts",
+        "evidence": [],
+        "reason": "Fresh exact-head authorization evidence is still running."
+      },
+      {
+        "id": "public-business-regression",
+        "severity": "high",
+        "status": "NOT TESTED",
+        "implementation": [
+          "scripts/browser/studio-authenticated.check.mjs"
+        ],
+        "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
+        "evidence": [],
+        "reason": "Fresh exact-head real-browser regression is still running."
+      },
+      {
+        "id": "migration",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "prisma/migrations"
+        ],
+        "acceptanceTest": "scripts/ci/rehearse-candidate-migrations.mjs",
+        "evidence": [],
+        "reason": "Fresh exact-head migration evidence is still running."
+      }
+    ],
+    "p2": [
+      {
+        "id": "tenant-foundation",
+        "severity": "critical",
+        "status": "BLOCKED",
+        "implementation": [
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [],
+        "reason": "P1 exact-head gate has not yet completed."
+      },
+      {
+        "id": "multi-site",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "app/api/studio/websites/route.ts",
+          "prisma/schema.prisma"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [],
+        "reason": "Corrected exact-head PostgreSQL run is pending."
+      },
+      {
+        "id": "content-management",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "app/api/studio/websites/content/route.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [],
+        "reason": "Corrected exact-head PostgreSQL run is pending."
+      },
+      {
+        "id": "version-history",
+        "severity": "high",
+        "status": "NOT TESTED",
+        "implementation": [
+          "app/api/studio/websites/revisions/route.ts",
+          "lib/experience/site-content.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [],
+        "reason": "Corrected exact-head PostgreSQL run is pending."
+      },
+      {
+        "id": "authorization",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [],
+        "reason": "Corrected exact-head PostgreSQL run is pending."
+      },
+      {
+        "id": "public-experience",
+        "severity": "critical",
+        "status": "BLOCKED",
+        "implementation": [
+          "lib/experience/storefront.ts",
+          "app/api/experience/publish/route.ts"
+        ],
+        "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
+        "evidence": [],
+        "reason": "PR #102 explicitly defers the Studio published-content cutover; its per-site content is not yet the public storefront source."
+      },
+      {
+        "id": "design-experience",
+        "severity": "high",
+        "status": "NOT TESTED",
+        "implementation": [
+          "scripts/browser/studio-authenticated.check.mjs"
+        ],
+        "acceptanceTest": "scripts/browser/studio-authenticated.check.mjs",
+        "evidence": [],
+        "reason": "Exact-head authenticated browser acceptance is pending."
+      },
+      {
+        "id": "media",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Tenant-scoped upload and media lifecycle acceptance is deferred from this data-plane phase; no new upload transport is claimed.",
+        "implementation": [
+          "app/api/media/route.ts"
+        ],
+        "acceptanceTest": "tests/security/media-authorization.test.ts",
+        "evidence": []
+      },
+      {
+        "id": "ai-assistance",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Verified knowledge grounding and user-controlled AI application are not implemented by the multi-site data-plane PR and are deferred to a separately accepted Studio capability phase.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "tests/security/experience-tenant-isolation.test.ts",
+        "evidence": []
+      },
+      {
+        "id": "commerce",
+        "severity": "high",
+        "status": "NOT TESTED",
+        "implementation": [
+          "lib/experience/storefront.ts"
+        ],
+        "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
+        "evidence": [],
+        "reason": "Authoritative commerce non-mutation regression has not passed on the final P2 head."
+      },
+      {
+        "id": "seo-domains",
+        "severity": "low",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Custom domains, DNS and advanced SEO are explicitly deferred; no domain or DNS changes are part of this release.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md",
+        "evidence": []
+      },
+      {
+        "id": "analytics",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "A Studio analytics surface and tenant-scoped measurement are deferred; no analytics feature is claimed as delivered by this data-plane phase.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md",
+        "evidence": []
+      },
+      {
+        "id": "entitlements",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "lib/experience/studio-plan-entitlements.ts"
+        ],
+        "acceptanceTest": "tests/unit/website-studio-plan-entitlements.test.ts",
+        "evidence": [],
+        "reason": "Exact-head entitlement integration tests are pending."
+      },
+      {
+        "id": "operations",
+        "severity": "high",
+        "status": "NOT TESTED",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_ROLLBACK.md"
+        ],
+        "acceptanceTest": "scripts/ci/rehearse-candidate-migrations.mjs",
+        "evidence": [],
+        "reason": "Exact-head rollback and deployment evidence is pending."
+      },
+      {
+        "id": "security",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          "lib/experience/tenant.ts",
+          "app/api/studio/websites/content/route.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [],
+        "reason": "Exact-head cross-tenant denial tests are pending."
+      },
+      {
+        "id": "release",
+        "severity": "critical",
+        "status": "NOT TESTED",
+        "implementation": [
+          ".github/workflows/website-studio-2-0.yml"
+        ],
+        "acceptanceTest": ".github/workflows/website-studio-2-0.yml",
+        "evidence": [],
+        "reason": "All exact-head CI, public rendering and deployment verification gates remain incomplete."
+      }
+    ]
+  }
+}
