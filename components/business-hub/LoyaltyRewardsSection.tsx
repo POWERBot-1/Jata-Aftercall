@@ -19,9 +19,9 @@
  * of `PublicLoyaltyRewards`. The stamp card is a separate section with its own flag and is not
  * touched by this one.
  *
- * Palette: the graphite/lime identity the rest of Loyalty 2.0 already ships with (see
- * `PointsWallet` and the owner's Points board) — `#16181d` on `#b6ff2e`. It is applied with the
- * same Tailwind tokens those surfaces use, so the brand stylesheet keeps its own palette.
+ * Presentation: drawn from the public storefront tokens (`.st-loyalty*` in `app/storefront.css`),
+ * so it reads as a native JATA AFTERCALL feature — graphite structure, lime highlight, the same
+ * radii and rhythm as every other section on the page — rather than an embedded widget.
  */
 
 import { Coins, Gift, ShieldCheck, Sparkles, TicketPercent, Timer } from "lucide-react";
@@ -56,26 +56,19 @@ export function LoyaltyRewardsSection({
       id="loyalty-rewards"
       data-loyalty-state={status}
       aria-labelledby="loyalty-rewards-title"
-      className="relative mt-4 overflow-hidden rounded-3xl border border-[#b6ff2e]/20 bg-[#16181d] p-5 shadow-lg shadow-black/20 sm:p-6"
+      className="st-loyalty"
     >
-      {/* Decorative only: a lime bloom in the corner, so the band reads as a premium surface
-          without an animation a customer has to wait for. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(182,255,46,0.18),rgba(182,255,46,0)_70%)]"
-      />
+      {/* Decorative only: the accent bloom that ties the band to the page's other surfaces. */}
+      <span className="st-loyalty__glow" aria-hidden="true" />
       <div className="relative">
-        <p className="inline-flex items-center gap-1.5 rounded-full bg-[#b6ff2e]/10 px-2.5 py-1 text-[0.68rem] font-extrabold uppercase tracking-[0.16em] text-[#b6ff2e]">
+        <p className="st-loyalty__badge">
           <Sparkles size={13} aria-hidden="true" />
           Loyalty 2.0
         </p>
-        <h2
-          id="loyalty-rewards-title"
-          className="mt-2.5 text-lg font-extrabold uppercase tracking-[0.12em] text-white sm:text-xl"
-        >
+        <h2 id="loyalty-rewards-title" className="st-loyalty__title">
           Loyalty Rewards
         </h2>
-        <p id="loyalty-rewards-subtitle" className="mt-1 text-sm font-semibold text-[#b6ff2e]">
+        <p id="loyalty-rewards-subtitle" className="st-loyalty__subtitle">
           Shop. Earn. Enjoy rewards.
         </p>
 
@@ -100,34 +93,28 @@ function PendingRewards({ businessName, status }: { businessName: string; status
   const unconfirmed = status === "unknown";
   return (
     <div className="mt-4 grid gap-3">
-      <p
-        role="status"
-        className="inline-flex w-fit items-center rounded-full bg-white/10 px-3 py-1 text-[0.72rem] font-extrabold uppercase tracking-[0.08em] text-zinc-200"
-      >
+      <p className="st-loyalty__pill" role="status">
         {unconfirmed ? "Rewards availability unconfirmed" : "Points rewards coming soon"}
       </p>
-      <p className="text-sm leading-6 text-zinc-100">
+      <p className="st-loyalty__lead">
         {unconfirmed
           ? `We can't confirm ${businessName}'s points rewards right now. Please check back soon.`
           : `${businessName} hasn't switched on points rewards yet. This is where your points and rewards will live when they do.`}
       </p>
-      <p className="text-[0.78rem] leading-5 text-zinc-400">
+      <p className="st-loyalty__note">
         {unconfirmed
           ? "Nothing has changed with your points or stamps. If this business runs a stamp card, it is unaffected."
           : "Stamps are separate and unaffected — a stamp card keeps working exactly as it does today."}
       </p>
-      <ul className="mt-0.5 grid gap-2">
+      <ul className="st-loyalty__list">
         {COMING_SOON.map((item) => (
-          <li
-            key={item.text}
-            className="flex items-start gap-2.5 rounded-2xl bg-white/5 p-3 text-[0.82rem] leading-5 text-zinc-200 transition-colors hover:bg-white/[0.07]"
-          >
-            <item.icon size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-[#b6ff2e]" />
+          <li key={item.text} className="st-loyalty__listItem">
+            <item.icon size={15} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--st-accent)" }} />
             <span>{item.text}</span>
           </li>
         ))}
       </ul>
-      <p className="border-t border-white/10 pt-2.5 text-[0.7rem] leading-5 text-zinc-500">
+      <p className="st-loyalty__fine">
         Points are not cash and cannot be withdrawn. Rates, rewards and expiry are set by {businessName} and are not
         published until they switch points on.
       </p>
@@ -151,19 +138,16 @@ function ActiveRewards({
 
   return (
     <div className="mt-4 grid gap-3">
-      <p
-        role="status"
-        className="inline-flex w-fit items-center rounded-full bg-[#b6ff2e]/15 px-3 py-1 text-[0.72rem] font-extrabold uppercase tracking-[0.08em] text-[#b6ff2e]"
-      >
+      <p className="st-loyalty__pill st-loyalty__pill--live" role="status">
         Points rewards are live
       </p>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5">
-        <h3 className="flex items-center gap-2 text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-white">
-          <Coins size={15} aria-hidden="true" className="shrink-0 text-[#b6ff2e]" />
+      <div className="st-loyalty__card">
+        <h3 className="st-loyalty__cardTitle">
+          <Coins size={15} aria-hidden="true" className="shrink-0" style={{ color: "var(--st-accent)" }} />
           How you earn
         </h3>
-        <p className="mt-2 text-sm font-semibold leading-6 text-zinc-100">
+        <p className="st-loyalty__cardLead">
           {hasRate && earning
             ? `Earn ${pointsLabel(earning.pointsPerUnit ?? 0)} for every ${money(earning.kesPerPoint ?? 0)} you spend${
                 earning.minPurchaseKES > 0 ? ` on purchases of ${money(earning.minPurchaseKES)} or more` : ""
@@ -171,76 +155,64 @@ function ActiveRewards({
             : `${businessName} has not published an earning rate yet.`}
         </p>
         <div className="mt-1.5 grid gap-1.5">
-          <p className="text-[0.78rem] leading-5 text-zinc-400">
+          <p className="st-loyalty__note">
             {businessName} adds your points after they verify your purchase. Asking for a quote or sending an order
             request does not earn points, because no payment is taken on this page.
           </p>
-          {earning?.description ? <p className="text-[0.78rem] leading-5 text-zinc-300">{earning.description}</p> : null}
+          {earning?.description ? <p className="st-loyalty__note">{earning.description}</p> : null}
           {earning?.expiryMonths ? (
-            <p className="flex items-start gap-1.5 text-[0.78rem] leading-5 text-zinc-400">
-              <Timer size={13} aria-hidden="true" className="mt-0.5 shrink-0 text-[#b6ff2e]" />
+            <p className="st-loyalty__note" style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start" }}>
+              <Timer size={13} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: "var(--st-accent)" }} />
               Points expire {earning.expiryMonths} month{earning.expiryMonths === 1 ? "" : "s"} after you earn them.
             </p>
           ) : (
-            <p className="text-[0.78rem] leading-5 text-zinc-400">Your points do not expire.</p>
+            <p className="st-loyalty__note">Your points do not expire.</p>
           )}
-          {earning?.terms ? (
-            <p className="whitespace-pre-line text-[0.78rem] leading-5 text-zinc-400">{earning.terms}</p>
-          ) : null}
+          {earning?.terms ? <p className="st-loyalty__note whitespace-pre-line">{earning.terms}</p> : null}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5">
-        <h3 className="flex items-center gap-2 text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-white">
-          <Gift size={15} aria-hidden="true" className="shrink-0 text-[#b6ff2e]" />
+      <div className="st-loyalty__card">
+        <h3 className="st-loyalty__cardTitle">
+          <Gift size={15} aria-hidden="true" className="shrink-0" style={{ color: "var(--st-accent)" }} />
           Rewards
         </h3>
         {rewards.rewards.length === 0 ? (
-          <p className="mt-1.5 text-[0.78rem] leading-5 text-zinc-400">
-            {businessName} has not published any rewards yet.
-          </p>
+          <p className="st-loyalty__note mt-1.5">{businessName} has not published any rewards yet.</p>
         ) : (
-          <ul className="mt-2 grid divide-y divide-white/10">
+          <ul className="st-loyalty__rewards">
             {rewards.rewards.map((reward) => (
-              <li key={reward.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 first:pt-0">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-100">{reward.title}</p>
-                  {reward.description ? (
-                    <p className="mt-0.5 text-[0.78rem] leading-5 text-zinc-400">{reward.description}</p>
-                  ) : null}
-                  {reward.discountKES ? (
-                    <p className="mt-0.5 text-[0.78rem] leading-5 text-zinc-400">
-                      {money(reward.discountKES)} off your purchase.
-                    </p>
-                  ) : null}
+              <li key={reward.id} className="st-loyalty__reward">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <p className="st-loyalty__rewardTitle">{reward.title}</p>
+                  <p className="st-loyalty__rewardCost">{pointsLabel(reward.pointsCost)}</p>
                 </div>
-                <p className="text-sm font-extrabold text-[#b6ff2e]">{pointsLabel(reward.pointsCost)}</p>
+                {reward.description ? <p className="st-loyalty__note mt-1">{reward.description}</p> : null}
+                {reward.discountKES ? (
+                  <p className="st-loyalty__note mt-1">{money(reward.discountKES)} off your purchase.</p>
+                ) : null}
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5">
-        <h3 className="flex items-center gap-2 text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-white">
-          <TicketPercent size={15} aria-hidden="true" className="shrink-0 text-[#b6ff2e]" />
+      <div className="st-loyalty__card">
+        <h3 className="st-loyalty__cardTitle">
+          <TicketPercent size={15} aria-hidden="true" className="shrink-0" style={{ color: "var(--st-accent)" }} />
           Redeeming your points
         </h3>
         <div className="mt-1.5 grid gap-1.5">
-          {redemption?.rules ? (
-            <p className="text-sm font-semibold leading-6 text-zinc-100">{redemption.rules}</p>
-          ) : null}
+          {redemption?.rules ? <p className="st-loyalty__cardLead">{redemption.rules}</p> : null}
           {redemption && redemption.minRedeemPoints > 0 ? (
-            <p className="text-[0.78rem] leading-5 text-zinc-400">
+            <p className="st-loyalty__note">
               You can start redeeming once you hold {pointsLabel(redemption.minRedeemPoints)}.
             </p>
           ) : null}
           {redemption?.pointValueKES ? (
-            <p className="text-[0.78rem] leading-5 text-zinc-400">
-              Each point is worth about {money(redemption.pointValueKES)} of value.
-            </p>
+            <p className="st-loyalty__note">Each point is worth about {money(redemption.pointValueKES)} of value.</p>
           ) : null}
-          <p className="text-[0.78rem] leading-5 text-zinc-400">
+          <p className="st-loyalty__note">
             Points are not cash and cannot be withdrawn. Redeeming records that {businessName} owes you the reward; no
             payment is taken or made on this page.
           </p>

@@ -133,7 +133,11 @@ describe("public page section order", () => {
     expect(at("<EnquiryPanel")).toBeLessThan(at("<LoyaltyCardPanel"));
     expect(at("<LoyaltyCardPanel")).toBeLessThan(at("{/* About */}"));
     expect(at("{/* About */}")).toBeLessThan(at("<QrIdentityBlock"));
-    expect(at("<QrIdentityBlock")).toBeLessThan(at("Powered by JATA AFTERCALL"));
+    // The attribution lives in the shared storefront footer (`StoreFooter`), which renders last.
+    expect(at("<QrIdentityBlock")).toBeLessThan(at("<StoreFooter"));
+    expect(readFileSync(path.join(root, "components/storefront/public/StoreFooter.tsx"), "utf8")).toContain(
+      "Powered by JATA AFTERCALL",
+    );
   });
 
   it("keeps every new section conditional, so an unconfigured business sees no empty widget", () => {

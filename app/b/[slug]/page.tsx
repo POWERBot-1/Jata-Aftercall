@@ -12,7 +12,7 @@ import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
-import { buildDemoShowcase } from "@/lib/demoShowcase";
+import { buildDemoShowcase, DEMO_SHOWCASES } from "@/lib/demoShowcase";
 import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
 import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
@@ -20,6 +20,7 @@ import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
 import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
 import { publicLoyaltyRewards } from "@/lib/business-hub/loyaltyPoints";
+import { accentForLegacyTheme, resolveHeroImage, storefrontThemeFor } from "@/lib/storefront/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -224,7 +225,26 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     }
   }
 
+  // The public storefront inherits the JATA AFTERCALL platform identity from ONE place: the
+  // business keeps its name, imagery, copy and (validated) accent; the platform keeps the
+  // structure. `resolveTheme` stays the legacy business theme for the classic panels; the page's
+  // chrome now comes from the storefront tokens so the page belongs to the product.
   const theme = resolveTheme(business.theme);
+  const storefront = storefrontThemeFor({
+    businessName: business.name,
+    category: business.category,
+    accentHex: accentForLegacyTheme(business.theme),
+  });
+  // IMAGE IS EVERYTHING — with nothing invented. Only imagery the platform actually holds for this
+  // business is used. First choice is the business's own uploaded cover. A verified demo fixture
+  // falls back to its own illustrative photograph, always captioned as illustrative — it is the
+  // platform's asset for that fixture, never a generated stand-in for a real business. Every other
+  // page without a cover gets the intentional fallback composition, not a stock photograph.
+  const demoHero = verifiedDemoFixture(business) ? DEMO_SHOWCASES[business.slug] : undefined;
+  const hero = resolveHeroImage({
+    coverUrl: business.coverUrl,
+    demoImage: demoHero ? { path: demoHero.image, alt: demoHero.imageAlt } : null,
+  });
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
   // suspended) page. The code is minted lazily on first eligible use. Shared with
@@ -324,10 +344,13 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
           aftercallMsg: business.aftercallMsg,
           openingHours: business.openingHours,
           socialLinks: business.socialLinks,
+          logoUrl: business.logoUrl,
         }}
         services={displayedServices}
         offer={displayedOffer}
-        theme={theme}
+        theme={storefront.tokens}
+        artLabel={storefront.art.label}
+        hero={hero}
         referralHref={referralHref}
         aiFrontDeskLive={aiFrontDeskLive}
         demoPage={isDemoBusiness}
