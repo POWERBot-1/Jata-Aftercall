@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CalendarCheck,
+  Coins,
   Eye,
   Gift,
   Home,
@@ -58,7 +59,10 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
     // experience, because the Business Page subscription is what they extend.
     { href: `${base}/customers`, label: "Customers", icon: Users },
     { href: `${base}/promotions`, label: "Promotions", icon: Megaphone },
-    { href: `${base}/loyalty`, label: "Loyalty", icon: Gift },
+    // Loyalty has two independent mechanisms: the stamp card and the points programme. Each is
+    // exact-matched so the two tabs never both light up.
+    { href: `${base}/loyalty`, label: "Loyalty", icon: Gift, exact: true },
+    { href: `${base}/loyalty/points`, label: "Points", icon: Coins },
     { href: `${base}/qr`, label: "QR code", icon: QrCode },
     { href: `${base}/preview`, label: "Preview", icon: Eye },
     { href: `${base}#publish`, label: "Publish", icon: UploadCloud },

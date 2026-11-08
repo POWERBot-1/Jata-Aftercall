@@ -5,7 +5,7 @@ import { loadWorkspace } from "@/lib/experience/workspace";
 import { StudioTabs } from "@/components/dashboard/StudioTabs";
 import { LoyaltyBoard } from "@/components/business-hub/LoyaltyBoard";
 import { getOrCreateProgram, listCards, loyaltyStats } from "@/lib/business-hub/loyalty";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = { title: "Loyalty" };
 export const dynamic = "force-dynamic";
@@ -36,9 +36,15 @@ export default async function LoyaltyPage({ params }: { params: Promise<{ id: st
           Reward repeat customers with a digital stamp card. You verify each qualifying purchase and award the stamp —
           one transaction can only ever be stamped once.
         </p>
-        <Link href={`/b/${workspace.business.slug}`} target="_blank" className="jata-btn jata-btn-secondary">
-          <ExternalLink size={15} aria-hidden="true" /> View my business page
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/b/${workspace.business.slug}`} target="_blank" className="jata-btn jata-btn-secondary">
+            <ExternalLink size={15} aria-hidden="true" /> View my business page
+          </Link>
+          {/* Loyalty 2.0: points run alongside the stamp card, never instead of it. */}
+          <Link href={`/dashboard/businesses/${id}/loyalty/points`} className="jata-btn jata-btn-secondary">
+            <Sparkles size={15} aria-hidden="true" /> Points &amp; rewards
+          </Link>
+        </div>
       </header>
 
       <StudioTabs businessId={id} capabilities={workspace.profile.capabilities} />

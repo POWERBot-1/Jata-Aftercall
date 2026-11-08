@@ -62,7 +62,20 @@ function modelBody(name: string): string {
 }
 
 function parseFields(name: string): Field[] {
-  const known = new Set([...HUB_MODELS, "Business", "Product", "User", "LoyaltyProgram", "LoyaltyCard", "OrderRequest"]);
+  // Types that are models rather than scalars, so a relation field is not mistaken for a column.
+  // `LoyaltyPointsAccount` is here because the points programme (a separate migration) declares a
+  // back-relation ON LoyaltyCard; it adds no column to this migration, and the parser must not
+  // expect one here.
+  const known = new Set([
+    ...HUB_MODELS,
+    "Business",
+    "Product",
+    "User",
+    "LoyaltyProgram",
+    "LoyaltyCard",
+    "OrderRequest",
+    "LoyaltyPointsAccount",
+  ]);
   const fields: Field[] = [];
   for (const raw of modelBody(name).split("\n")) {
     const line = raw.trim();

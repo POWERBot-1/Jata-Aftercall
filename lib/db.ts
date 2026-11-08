@@ -686,6 +686,14 @@ function createFallbackPrisma(): any {
     loyaltyCard: emptyModel(),
     loyaltyStampEvent: emptyModel(),
     loyaltyRedemption: emptyModel(),
+    // Loyalty 2.0 — points and rewards. Reads are empty and writes refuse, exactly like the rest
+    // of the fallback: an offline build must never look like it saved points it did not save.
+    loyaltyPointsProgramme: emptyModel(),
+    loyaltyPointsEligibleItem: emptyModel(),
+    loyaltyPointsAccount: emptyModel(),
+    loyaltyPointsLedger: emptyModel(),
+    loyaltyReward: emptyModel(),
+    loyaltyRewardRedemption: emptyModel(),
     businessHubActivity: emptyModel(),
   };
   return stub;
