@@ -28,14 +28,14 @@ export function QrIdentityBlock({
   const domId = `business-qr-${slug.replace(/[^a-z0-9-]/gi, "")}`;
 
   return (
-    <section id="qr" className="jata-card" aria-labelledby="qr-title">
-      <h2 id="qr-title" className="jata-section-title">
+    <section id="qr" className="st-section st-hub-panel" aria-labelledby="qr-title">
+      <h2 id="qr-title" className="st-sectionTitle st-hub-panel__title">
         Scan to open this page
       </h2>
       <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row sm:items-start">
         <div
           id={domId}
-          className="rounded-2xl border border-zinc-200 bg-white p-2"
+          className="st-hub-qr rounded-2xl p-2"
           // Generated entirely by lib/qr/encoder.ts from the slug: no owner or user input reaches
           // this markup.
           dangerouslySetInnerHTML={{ __html: svg }}
