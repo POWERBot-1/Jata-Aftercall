@@ -354,6 +354,23 @@ if (process.exitCode !== 2) {
     });
     created.otherBusinessId = otherBusiness.id;
 
+    // A card issued by the OTHER business. The public page must refuse it: one business's page can
+    // never open another business's wallet. Synthetic and disposable, like everything else here.
+    const otherStampProgram = await prisma.loyaltyProgram.create({
+      data: { businessId: otherBusiness.id, isEnabled: true, stampGoal: 4, rewardDescription: "Other reward" },
+    });
+    const foreignCard = await prisma.loyaltyCard.create({
+      data: {
+        businessId: otherBusiness.id,
+        programId: otherStampProgram.id,
+        code: `HUBX${runId.slice(0, 6).toUpperCase()}`,
+        customerName: "Foreign Fixture Card",
+        contactMethod: "PHONE",
+        contactValue: "0700000009",
+        status: "ACTIVE",
+      },
+    });
+
     browser = await puppeteer.launch({
       executablePath: chrome,
       headless: true,
@@ -598,8 +615,149 @@ if (process.exitCode !== 2) {
       accountAfterRefusal?.availablePoints === 2,
       `wallet holds ${accountAfterRefusal?.availablePoints ?? "no wallet"}`,
     );
+    // ── the same entry point, when the code is wrong, foreign, or typed badly ───────────────────
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    check("customer: checking another card returns to the code form", true, "the form is back");
+
+    await walletPage.type("#points-card-code", "NOT-A-REAL-CODE");
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /couldn't find that loyalty card/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    const unknownCodeText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: an unknown card code says so, instead of leaving an empty wallet",
+      /couldn't find that loyalty card/i.test(unknownCodeText) && !/available points/i.test(unknownCodeText),
+      "no balance is shown for a code that does not exist",
+    );
+
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    await walletPage.type("#points-card-code", foreignCard.code);
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /couldn't find that loyalty card/i.test(document.body.innerText), {
+      timeout: 30_000,
+    });
+    const foreignCodeText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: another business's card code is refused on this page",
+      /couldn't find that loyalty card/i.test(foreignCodeText) &&
+        !/Other Business/.test(foreignCodeText) &&
+        !/available points/i.test(foreignCodeText),
+      "the refusal names no other business and shows no balance",
+    );
+
+    // The same code typed the way a person types it — lower case, with spaces. It has to resolve to
+    // the one row the business issued.
+    await clickByText(walletPage, "Check another card");
+    await walletPage.waitForSelector("#points-card-code", { timeout: 10_000 });
+    await walletPage.type("#points-card-code", ` ${pointsCard.code.toLowerCase().split("").join(" ")} `);
+    await clickByText(walletPage, "View points");
+    await walletPage.waitForFunction(() => /points wallet/i.test(document.body.innerText), { timeout: 30_000 });
+    const normalisedText = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: a code typed lower-case with spaces still opens the wallet",
+      /points wallet/i.test(normalisedText) && /available points/i.test(normalisedText),
+      "the code is normalised before the lookup",
+    );
+    check(
+      "customer: the refused foreign code left this wallet untouched (2 points)",
+      (await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } }))?.availablePoints === 2,
+      `wallet holds ${(await prisma.loyaltyPointsAccount.findUnique({ where: { cardId: pointsCard.id } }))?.availablePoints ?? "no wallet"}`,
+    );
+
     check("customer: no uncaught page error in the wallet", walletErrors.length === 0, walletErrors.slice(0, 2).join(" | "));
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-redeemed.png"), fullPage: true });
+
+    // ── the four programme combinations, on the same public page ───────────────────────────────
+    // The sections are independent flags on independent tables, so each combination is loaded in a
+    // real browser rather than inferred. Everything here is synthetic and disposable.
+    const programme = await prisma.loyaltyPointsProgramme.findUnique({ where: { businessId: business.id } });
+    if (!programme) throw new Error("the fixture created no points programme to toggle");
+    const stampOffPointsOff = await (async () => {
+      await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: false } });
+      await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: false } });
+      await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
+      return walletPage.evaluate(() => ({
+        points: Boolean(document.querySelector("#points-rewards")),
+        stamps: Boolean(document.querySelector("#loyalty")),
+      }));
+    })();
+    check(
+      "customer: stamps off / points off shows neither section",
+      !stampOffPointsOff.points && !stampOffPointsOff.stamps,
+      `points=${stampOffPointsOff.points} stamps=${stampOffPointsOff.stamps}`,
+    );
+
+    await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: true } });
+    await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
+    const stampsOffPointsOn = await walletPage.evaluate(() => ({
+      points: Boolean(document.querySelector("#points-rewards")),
+      stamps: Boolean(document.querySelector("#loyalty")),
+    }));
+    check(
+      "customer: stamps off / points on shows the points section only",
+      stampsOffPointsOn.points && !stampsOffPointsOn.stamps,
+      `points=${stampsOffPointsOn.points} stamps=${stampsOffPointsOn.stamps}`,
+    );
+
+    await prisma.loyaltyProgram.update({ where: { id: stampProgram.id }, data: { isEnabled: true } });
+    await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: false } });
+    await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
+    const stampsOnPointsOff = await walletPage.evaluate(() => ({
+      points: Boolean(document.querySelector("#points-rewards")),
+      stamps: Boolean(document.querySelector("#loyalty")),
+    }));
+    check(
+      "customer: stamps on / points off shows the stamp card only",
+      stampsOnPointsOff.stamps && !stampsOnPointsOff.points,
+      `points=${stampsOnPointsOff.points} stamps=${stampsOnPointsOff.stamps}`,
+    );
+
+    // Both on again, and the stamp card's own lookup still works beside the points section.
+    await prisma.loyaltyPointsProgramme.update({ where: { id: programme.id }, data: { isActive: true } });
+    await walletPage.reload({ waitUntil: "networkidle2", timeout: 60_000 });
+    const bothOn = await walletPage.evaluate(() => ({
+      points: Boolean(document.querySelector("#points-rewards")),
+      stamps: Boolean(document.querySelector("#loyalty")),
+    }));
+    check(
+      "customer: both programmes are visible side by side",
+      bothOn.points && bothOn.stamps,
+      `points=${bothOn.points} stamps=${bothOn.stamps}`,
+    );
+    await walletPage.type("#loyalty-code", pointsCard.code);
+    await clickByText(walletPage, "Check my card");
+    await walletPage.waitForFunction(
+      () => /more stamps? to go|rewards? ready to collect|stamps\s*\/\s*\d/i.test(document.body.innerText),
+      { timeout: 30_000 },
+    );
+    const stampRegression = await walletPage.evaluate(() => document.body.innerText);
+    check(
+      "customer: the existing stamp-card lookup still works with points switched on",
+      /points & rewards/i.test(stampRegression) && !/points wallet/i.test(stampRegression),
+      "the stamp card answered without opening the points wallet",
+    );
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-both-programmes.png"), fullPage: true });
+
+    // ── a second public business with no points programme ──────────────────────────────────────
+    const otherPageUrl = `${baseUrl}/b/${otherBusiness.slug}`;
+    const otherResponse = await walletPage.goto(otherPageUrl, { waitUntil: "networkidle2", timeout: 60_000 });
+    const otherSections = await walletPage.evaluate(() => ({
+      points: Boolean(document.querySelector("#points-rewards")),
+      stamps: Boolean(document.querySelector("#loyalty")),
+    }));
+    // This fixture business runs a stamp card of its own (the cross-tenant refusal needs a card
+    // from somewhere else), so its stamp section legitimately shows. What must NOT appear is the
+    // points section: it has no points programme, and a second public slug must prove that.
+    check(
+      "customer: a second public business with no points programme shows no points section",
+      otherResponse?.status() === 200 && !otherSections.points,
+      `HTTP ${otherResponse?.status()}, points=${otherSections.points} (its own stamp card: ${otherSections.stamps})`,
+    );
+    await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-other-business.png"), fullPage: true });
+
     await walletContext.close();
 
     // ── guards ────────────────────────────────────────────────────────────────────────────────

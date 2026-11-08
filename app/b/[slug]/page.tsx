@@ -19,7 +19,7 @@ import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
 import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
 import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
-import { findProgramme } from "@/lib/business-hub/loyaltyPoints";
+import { publicPointsEnabled } from "@/lib/business-hub/loyaltyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +106,8 @@ const businessHubExtras = requestCache(async (businessId: string) => {
     loadRequestableCatalogue(businessId, { take: 24 }).catch(() => []),
     listLivePromotions(businessId).catch(() => []),
     isLoyaltyEnabled(businessId).catch(() => false),
-    findProgramme(businessId).then((programme) => programme?.isActive === true).catch(() => false),
+    // Fails closed: no programme, an inactive programme or a lookup failure all mean no section.
+    publicPointsEnabled(businessId),
   ]);
   return { products, promotions, loyaltyEnabled, pointsEnabled };
 });

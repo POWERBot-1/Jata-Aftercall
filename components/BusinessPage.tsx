@@ -300,7 +300,7 @@ export default function BusinessPage({
         {/* Loyalty 2.0 is independently visible; it does not depend on stamp-card activation. */}
         {pointsEnabled ? (
           <div className="mt-4">
-            <PointsWalletLookup businessName={business.name} />
+            <PointsWalletLookup businessName={business.name} businessSlug={business.slug} />
           </div>
         ) : null}
 
