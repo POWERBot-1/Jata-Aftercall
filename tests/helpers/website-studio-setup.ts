@@ -1,0 +1,48 @@
+import { vi } from "vitest";
+
+/**
+ * Legacy Studio route suites mock the business-level tenant guard and use an in-memory
+ * Prisma surface. Delegate the new site guard to that same mock in those tests. The
+ * dedicated Website Studio PostgreSQL tenant suite explicitly un-mocks this module and
+ * exercises the real workspace/site authorization path.
+ */
+vi.mock("@/lib/experience/ensure-default-website", async () => {
+  const tenant = await import("@/lib/tenant");
+  const mapAction = (action: string) => action === "edit" ? "configure" : action;
+  const guardStudioWebsiteMutation = vi.fn(async (
+    session: unknown,
+    businessId: string | null | undefined,
+    action = "read",
+  ) => {
+    if (typeof tenant.guardTenantMutation === "function") {
+      return tenant.guardTenantMutation(session as any, businessId, mapAction(action));
+    }
+    if (typeof tenant.assertBusinessOwnership === "function") {
+      try {
+        await tenant.assertBusinessOwnership(businessId, session as any);
+        return { ok: true as const };
+      } catch (error) {
+        const status = Number((error as { status?: unknown })?.status) || 403;
+        return { ok: false as const, status, error: "You do not have permission to access this Studio website." };
+      }
+    }
+    return { ok: true as const };
+  });
+  const assertDefaultStudioWebsiteAccess = vi.fn(async (
+    businessId: string,
+    session: unknown,
+    action = "read",
+  ) => {
+    if (action === "read" && typeof tenant.assertBusinessOwnership === "function") {
+      await tenant.assertBusinessOwnership(businessId, session as any);
+    }
+    return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
+  });
+  const ensureDefaultStudioWebsite = vi.fn(async (businessId: string, session: unknown) => {
+    if (typeof tenant.assertBusinessOwnership === "function") {
+      await tenant.assertBusinessOwnership(businessId, session as any);
+    }
+    return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
+  });
+  return { guardStudioWebsiteMutation, assertDefaultStudioWebsiteAccess, ensureDefaultStudioWebsite };
+});
