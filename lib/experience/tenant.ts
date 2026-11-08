@@ -1,4 +1,3 @@
-import "server-only";
 import type { SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getBusinessRoleForUser, TenantError, type BusinessRole } from "@/lib/tenant";
