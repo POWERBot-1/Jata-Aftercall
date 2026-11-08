@@ -630,7 +630,6 @@ model Business {
   loyaltyRewardRedemptions LoyaltyRewardRedemption[]
   hubActivities      BusinessHubActivity[]
   studioWorkspaceLink StudioWorkspaceBusiness?
-  studioWebsites StudioWebsite[]
 
   @@index([ownerId])
   @@index([slug])
@@ -4690,7 +4689,6 @@ model StudioWorkspace {
   status      String   @default("ACTIVE")
   members     StudioWorkspaceMember[]
   businesses  StudioWorkspaceBusiness[]
-  websites    StudioWebsite[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
