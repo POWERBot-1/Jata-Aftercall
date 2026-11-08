@@ -26,7 +26,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Determine programme acceptance scope
+        id: scope
+        shell: bash
+        run: |
+          case "$GITHUB_HEAD_REF" in
+            arena/website-studio-2-0-p1-tenant-foundation) echo "phase=p1" >> "$GITHUB_OUTPUT" ;;
+            arena/website-studio-2-0-p2-multi-site-data-plane) echo "phase=p2" >> "$GITHUB_OUTPUT" ;;
+            *) echo "phase=global" >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Test completeness gate
-        run: node --test scripts/admin/tests/programme-readiness.test.mjs
-      - name: Require verified programme acceptance
+        run: |
+          node --test scripts/admin/tests/programme-readiness.test.mjs
+          node --test scripts/admin/tests/website-studio-readiness.test.mjs
+      - name: Require verified repository-wide programme acceptance
+        if: steps.scope.outputs.phase == 'global'
         run: node scripts/admin/check-programme-readiness.mjs
+      - name: Require verified Website Studio acceptance
+        if: steps.scope.outputs.phase != 'global'
+        run: node scripts/admin/check-website-studio-readiness.mjs --phase=${{ steps.scope.outputs.phase }}
